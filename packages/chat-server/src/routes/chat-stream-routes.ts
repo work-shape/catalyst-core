@@ -171,6 +171,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
               runId,
               assistantMessageCount
             );
+            await conversations.generateTitleForFirstExchange(conversationId, user, context);
           }
         }
 

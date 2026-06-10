@@ -8,6 +8,7 @@ export interface DevelopmentAuthUser {
   externalUserId: string;
   displayLabel: string;
   email?: string;
+  emailVerified?: boolean;
   roles: string[];
   permissionRefs: string[];
   authSource?: string;

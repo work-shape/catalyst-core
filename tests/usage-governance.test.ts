@@ -13,7 +13,10 @@ describe("model usage governance", () => {
     const store = new InMemoryPlatformStore();
     const governance = new ModelUsageGovernance({
       store,
-      limits: {
+      budget: {
+        costSafetyMultiplier: 1
+      },
+      safeguards: {
         modelCallsPerDay: 1
       }
     });
@@ -59,7 +62,7 @@ describe("model usage governance", () => {
       governance.runModelCall(clientInstanceId, async () => "third")
     ).rejects.toMatchObject({
       code: "FORBIDDEN",
-      message: "Daily model call usage limit has been reached"
+      message: "Daily model call safeguard has been reached"
     });
     await expect(governance.createSummary({ clientInstanceId })).resolves.toMatchObject({
       today: {
@@ -74,7 +77,10 @@ describe("model usage governance", () => {
     const store = new InMemoryPlatformStore();
     const governance = new ModelUsageGovernance({
       store,
-      limits: {}
+      budget: {
+        costSafetyMultiplier: 1
+      },
+      safeguards: {}
     });
     let activeCalls = 0;
     let maxActiveCalls = 0;
@@ -104,7 +110,10 @@ describe("model usage governance", () => {
     const store = new InMemoryPlatformStore();
     const governance = new ModelUsageGovernance({
       store,
-      limits: {
+      budget: {
+        costSafetyMultiplier: 1
+      },
+      safeguards: {
         modelCallsPerDay: 1
       }
     });
@@ -123,7 +132,10 @@ describe("model usage governance", () => {
     const store = new InMemoryPlatformStore();
     const governance = new ModelUsageGovernance({
       store,
-      limits: {},
+      budget: {
+        costSafetyMultiplier: 1
+      },
+      safeguards: {},
       pricing: {
         currency: "USD",
         models: [
@@ -158,13 +170,105 @@ describe("model usage governance", () => {
       inputCostMicros: 2000,
       outputCostMicros: 4000,
       totalCostMicros: 6000,
+      budgetedCostMicros: 6000,
+      costSafetyMultiplier: 1,
       pricingConfigured: true,
       pricedModelCallCount: 1,
       unpricedModelCallCount: 0
     });
     expect(summary.recentEvents[0]?.cost).toMatchObject({
       totalCostMicros: 6000,
+      budgetedCostMicros: 6000,
       pricingConfigured: true
+    });
+  });
+
+  it("applies the configured safety multiplier to budgeted cost", async () => {
+    const clientInstanceId = asClientInstanceId("client-budgeted-cost-test");
+    const store = new InMemoryPlatformStore();
+    const governance = new ModelUsageGovernance({
+      store,
+      budget: {
+        monthlySpendLimit: 200,
+        costSafetyMultiplier: 1.5
+      },
+      safeguards: {},
+      pricing: {
+        currency: "USD",
+        models: [
+          {
+            providerId: "openai",
+            model: "gpt-4.1",
+            inputPricePerMillionTokens: 2,
+            outputPricePerMillionTokens: 8
+          }
+        ]
+      }
+    });
+
+    await governance.appendModelUsageEvent({
+      clientInstanceId,
+      conversationId: asConversationId("conv_budgeted_cost"),
+      agentRunId: asAgentRunId("run_budgeted_cost"),
+      agentName: "agent",
+      providerId: "openai",
+      model: "gpt-4.1",
+      inputTokens: 1000,
+      outputTokens: 1000,
+      totalTokens: 2000,
+      source: "provider_reported",
+      correlationId: "corr_budgeted_cost"
+    });
+
+    const summary = await governance.createSummary({ clientInstanceId });
+
+    expect(summary.today.cost).toMatchObject({
+      totalCostMicros: 10000,
+      budgetedCostMicros: 15000,
+      costSafetyMultiplier: 1.5
+    });
+  });
+
+  it("blocks new model calls after the monthly spend budget is reached", async () => {
+    const clientInstanceId = asClientInstanceId("client-spend-limit-test");
+    const store = new InMemoryPlatformStore();
+    const governance = new ModelUsageGovernance({
+      store,
+      budget: {
+        monthlySpendLimit: 0.01,
+        costSafetyMultiplier: 1
+      },
+      safeguards: {},
+      pricing: {
+        currency: "USD",
+        models: [
+          {
+            providerId: "openai",
+            model: "gpt-4.1",
+            inputPricePerMillionTokens: 2,
+            outputPricePerMillionTokens: 8
+          }
+        ]
+      }
+    });
+
+    await governance.appendModelUsageEvent({
+      clientInstanceId,
+      conversationId: asConversationId("conv_spend_limit"),
+      agentRunId: asAgentRunId("run_spend_limit"),
+      agentName: "agent",
+      providerId: "openai",
+      model: "gpt-4.1",
+      inputTokens: 1000,
+      outputTokens: 1000,
+      totalTokens: 2000,
+      source: "provider_reported",
+      correlationId: "corr_spend_limit"
+    });
+
+    await expect(governance.runModelCall(clientInstanceId, async () => "blocked")).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "Monthly model spend limit has been reached"
     });
   });
 });

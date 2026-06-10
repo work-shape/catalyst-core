@@ -3,7 +3,6 @@ import { Bot, CircleAlert, Send } from "lucide-react";
 import type { Conversation, Message, SafeConfig } from "@agent-chat-platform/api-client";
 import { currentTitle } from "./conversation-title";
 import { MessageBubble } from "./message-bubble";
-import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/input";
 
@@ -122,10 +121,6 @@ export function ChatPanel({
           </span>
           <strong className="truncate text-sm font-semibold">{config?.agents[0]?.displayName ?? "Agent"}</strong>
         </div>
-        <Badge variant="outline" className="shrink-0 text-muted-foreground">
-          <span className="size-2 rounded-full bg-emerald-600" />
-          Ready
-        </Badge>
       </header>
 
       <div className="grid min-h-0 content-start gap-4 overflow-auto bg-background p-5" aria-live="polite">

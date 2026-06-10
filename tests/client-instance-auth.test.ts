@@ -33,6 +33,34 @@ describe("client instance standalone auth trusted origins", () => {
     expect(origins).toEqual(["http://127.0.0.1:5173"]);
   });
 
+  it("rejects development auth in production config", () => {
+    expect(() =>
+      parseClientInstanceConfig({
+        version: 1,
+        clientInstance: {
+          id: "demo-local",
+          displayName: "Demo",
+          environment: "production"
+        },
+        auth: {
+          development: {
+            enabled: true
+          }
+        },
+        defaultAgentName: "test_agent",
+        agents: [
+          {
+            name: "test_agent",
+            displayName: "Test Agent",
+            instructions: "Use configured tools only.",
+            modelProviderId: "local"
+          }
+        ],
+        modelProviders: [{ id: "local", type: "deterministic", model: "local" }]
+      })
+    ).toThrow(/Development auth must not be enabled in production/u);
+  });
+
   it("rejects development seed passwords in production config", () => {
     expect(() =>
       createTestConfig({
@@ -42,6 +70,7 @@ describe("client instance standalone auth trusted origins", () => {
           {
             displayLabel: "Production User",
             email: "user@example.test",
+            emailEnvName: "USER_EMAIL",
             passwordEnvName: "USER_PASSWORD",
             developmentPassword: "development-password",
             roles: ["user"],
@@ -59,6 +88,7 @@ function createTestConfig(input: {
   seedUsers?: Array<{
     displayLabel: string;
     email: string;
+    emailEnvName?: string;
     passwordEnvName: string;
     developmentPassword?: string;
     roles: string[];

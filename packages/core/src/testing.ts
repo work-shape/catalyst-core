@@ -14,14 +14,28 @@ import {
   type ModelUsageEventInput,
   type ModelUsageEventStore,
   type ModelUsageWindowSummary,
+  type CreateUserInput,
+  type DeleteUserIdentityInput,
+  type ResolveUserIdentityInput,
+  type UpdateUserInput,
+  type UpsertUserIdentityInput,
+  type UserIdentity,
+  type UserRecord,
+  type UserStore,
+  authenticatedUserFromRecord,
+  createUserId,
   createPlatformId
 } from "./index";
 
-export class InMemoryPlatformStore implements ConversationStore, AuditEventStore, ModelUsageEventStore {
+export class InMemoryPlatformStore
+  implements ConversationStore, AuditEventStore, ModelUsageEventStore, UserStore
+{
   private readonly conversations = new Map<string, Conversation>();
   private readonly messages = new Map<string, ChatMessage[]>();
   private readonly auditEvents: AuditEvent[] = [];
   private readonly modelUsageEvents: ModelUsageEvent[] = [];
+  private readonly users = new Map<string, UserRecord>();
+  private readonly identities = new Map<string, UserIdentity>();
 
   async createConversation(input: CreateConversationInput): Promise<Conversation> {
     const now = new Date().toISOString();
@@ -54,16 +68,36 @@ export class InMemoryPlatformStore implements ConversationStore, AuditEventStore
 
   async listConversationsForUser(input: {
     clientInstanceId: ClientInstanceId;
-    ownerExternalUserId: string;
+    ownerUserId: string;
   }): Promise<Conversation[]> {
     return [...this.conversations.values()]
       .filter(
         (conversation) =>
           conversation.clientInstanceId === input.clientInstanceId &&
-          conversation.ownerExternalUserId === input.ownerExternalUserId &&
+          conversation.ownerUserId === input.ownerUserId &&
           conversation.status === "active"
       )
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  }
+
+  async updateConversationTitle(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    title: string;
+    updatedAt: string;
+  }): Promise<Conversation> {
+    const conversation = await this.getConversation(input.clientInstanceId, input.conversationId);
+    if (!conversation || conversation.status !== "active") {
+      throw new AppError("NOT_FOUND", "Conversation is not available");
+    }
+
+    const updated: Conversation = {
+      ...conversation,
+      title: input.title,
+      updatedAt: input.updatedAt
+    };
+    this.conversations.set(input.conversationId, updated);
+    return updated;
   }
 
   async appendMessage(input: CreateMessageInput): Promise<ChatMessage> {
@@ -197,9 +231,283 @@ export class InMemoryPlatformStore implements ConversationStore, AuditEventStore
           (!input.start || event.createdAt >= input.start) &&
           (!input.end || event.createdAt < input.end)
       )
-      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
     return input.limit === undefined ? events : events.slice(0, input.limit);
   }
+
+  async resolveUserIdentity(input: ResolveUserIdentityInput) {
+    const identityKey = createIdentityKey(input);
+    const now = new Date().toISOString();
+    const existingIdentity = this.identities.get(identityKey);
+    if (existingIdentity) {
+      const user = this.users.get(existingIdentity.userId);
+      if (!user || user.clientInstanceId !== input.clientInstanceId) {
+        throw new AppError("INTERNAL", "User identity mapping points to a missing user");
+      }
+      const updatedIdentity: UserIdentity = {
+        ...existingIdentity,
+        displayLabel: input.displayLabel,
+        email: input.email,
+        emailVerified: input.emailVerified ?? false,
+        updatedAt: now,
+        lastAuthenticatedAt: now
+      };
+      const updatedUser: UserRecord = {
+        ...user,
+        updatedAt: now,
+        lastAuthenticatedAt: now,
+        identities: replaceIdentity(user.identities, updatedIdentity)
+      };
+      this.identities.set(identityKey, updatedIdentity);
+      this.users.set(user.id, updatedUser);
+      return authenticatedUserFromRecord({
+        user: updatedUser,
+        identity: updatedIdentity,
+        correlationId: input.correlationId
+      });
+    }
+
+    const { user, linkedByVerifiedEmail } = this.findOrCreateUserForIdentity(input, now);
+    const identity: UserIdentity = {
+      clientInstanceId: input.clientInstanceId,
+      userId: user.id,
+      authSource: input.authSource,
+      externalUserId: input.externalUserId,
+      displayLabel: input.displayLabel,
+      email: input.email,
+      emailVerified: input.emailVerified ?? false,
+      createdAt: now,
+      updatedAt: now,
+      lastAuthenticatedAt: now
+    };
+    if (linkedByVerifiedEmail) {
+      await this.appendAuditEvent({
+        clientInstanceId: input.clientInstanceId,
+        type: "user.identity_linked",
+        status: "success",
+        subject: user.id,
+        correlationId: input.correlationId ?? createPlatformId("corr"),
+        metadata: {
+          authSource: input.authSource,
+          externalUserId: input.externalUserId,
+          matchedBy: "verified-email"
+        }
+      });
+    }
+    const updatedUser: UserRecord = {
+      ...user,
+      updatedAt: now,
+      lastAuthenticatedAt: now,
+      identities: replaceIdentity(user.identities, identity)
+    };
+    this.identities.set(identityKey, identity);
+    this.users.set(updatedUser.id, updatedUser);
+    return authenticatedUserFromRecord({
+      user: updatedUser,
+      identity,
+      correlationId: input.correlationId
+    });
+  }
+
+  async listUsers(input: { clientInstanceId: ClientInstanceId }): Promise<UserRecord[]> {
+    return [...this.users.values()]
+      .filter((user) => user.clientInstanceId === input.clientInstanceId)
+      .map((user) => this.attachIdentities(user))
+      .sort((left, right) => left.displayLabel.localeCompare(right.displayLabel));
+  }
+
+  async createUser(input: CreateUserInput): Promise<UserRecord> {
+    const now = new Date().toISOString();
+    const user: UserRecord = {
+      id: createUserId(),
+      clientInstanceId: input.clientInstanceId,
+      displayLabel: input.displayLabel,
+      email: input.email,
+      roles: input.roles ?? ["user"],
+      permissionRefs: input.permissionRefs ?? [],
+      status: input.status ?? "active",
+      createdAt: now,
+      updatedAt: now,
+      identities: []
+    };
+    this.users.set(user.id, user);
+    return user;
+  }
+
+  async updateUser(input: UpdateUserInput): Promise<UserRecord> {
+    const user = this.users.get(input.userId);
+    if (!user || user.clientInstanceId !== input.clientInstanceId) {
+      throw new AppError("NOT_FOUND", "User is not available");
+    }
+
+    const updated: UserRecord = {
+      ...user,
+      displayLabel: input.displayLabel ?? user.displayLabel,
+      email: input.email === undefined ? user.email : (input.email ?? undefined),
+      roles: input.roles ?? user.roles,
+      permissionRefs: input.permissionRefs ?? user.permissionRefs,
+      status: input.status ?? user.status,
+      updatedAt: new Date().toISOString()
+    };
+    this.users.set(updated.id, updated);
+    return this.attachIdentities(updated);
+  }
+
+  async upsertUserIdentity(input: UpsertUserIdentityInput): Promise<UserRecord> {
+    const user = this.users.get(input.userId);
+    if (!user || user.clientInstanceId !== input.clientInstanceId) {
+      throw new AppError("NOT_FOUND", "User is not available");
+    }
+
+    const now = new Date().toISOString();
+    const identityKey = createIdentityKey(input);
+    const existingIdentity = this.identities.get(identityKey);
+    const identity: UserIdentity = {
+      clientInstanceId: input.clientInstanceId,
+      userId: input.userId,
+      authSource: input.authSource,
+      externalUserId: input.externalUserId,
+      displayLabel: input.displayLabel,
+      email: input.email,
+      emailVerified: input.emailVerified ?? false,
+      createdAt: existingIdentity?.createdAt ?? now,
+      updatedAt: now,
+      lastAuthenticatedAt: existingIdentity?.lastAuthenticatedAt
+    };
+    this.identities.set(identityKey, identity);
+    const updated: UserRecord = {
+      ...user,
+      updatedAt: now,
+      identities: replaceIdentity(this.attachIdentities(user).identities, identity)
+    };
+    this.users.set(updated.id, updated);
+    return updated;
+  }
+
+  async deleteUserIdentity(input: DeleteUserIdentityInput): Promise<UserRecord> {
+    const user = this.users.get(input.userId);
+    if (!user || user.clientInstanceId !== input.clientInstanceId) {
+      throw new AppError("NOT_FOUND", "User is not available");
+    }
+
+    const identityKey = createIdentityKey(input);
+    if (!this.identities.delete(identityKey)) {
+      throw new AppError("NOT_FOUND", "User identity mapping is not available");
+    }
+    const updated: UserRecord = {
+      ...user,
+      updatedAt: new Date().toISOString(),
+      identities: this.getIdentitiesForUser(user)
+    };
+    this.users.set(updated.id, updated);
+    return updated;
+  }
+
+  private findOrCreateUserForIdentity(
+    input: ResolveUserIdentityInput,
+    now: string
+  ): { user: UserRecord; linkedByVerifiedEmail: boolean } {
+    if (input.sourceUserId) {
+      const existing = this.users.get(input.sourceUserId);
+      if (existing?.clientInstanceId === input.clientInstanceId) {
+        return { user: this.attachIdentities(existing), linkedByVerifiedEmail: false };
+      }
+    }
+
+    const matchedByEmail = this.findSingleUserByVerifiedEmail(input);
+    if (matchedByEmail) {
+      return { user: this.attachIdentities(matchedByEmail), linkedByVerifiedEmail: true };
+    }
+
+    const user: UserRecord = {
+      id: createUserId(),
+      clientInstanceId: input.clientInstanceId,
+      displayLabel: input.displayLabel,
+      email: input.email,
+      roles: input.roles,
+      permissionRefs: input.permissionRefs,
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+      lastAuthenticatedAt: now,
+      identities: []
+    };
+    this.users.set(user.id, user);
+    return { user, linkedByVerifiedEmail: false };
+  }
+
+  private findSingleUserByVerifiedEmail(input: ResolveUserIdentityInput): UserRecord | undefined {
+    const normalizedEmail = input.email?.trim().toLowerCase();
+    if (!input.linkByVerifiedEmail || !normalizedEmail || !input.emailVerified) {
+      return undefined;
+    }
+
+    const candidateIds = new Set<string>();
+    for (const identity of this.identities.values()) {
+      if (
+        identity.clientInstanceId === input.clientInstanceId &&
+        identity.emailVerified &&
+        identity.email?.trim().toLowerCase() === normalizedEmail
+      ) {
+        candidateIds.add(identity.userId);
+      }
+    }
+    for (const user of this.users.values()) {
+      if (
+        user.clientInstanceId === input.clientInstanceId &&
+        user.email?.trim().toLowerCase() === normalizedEmail
+      ) {
+        candidateIds.add(user.id);
+      }
+    }
+
+    if (candidateIds.size !== 1) {
+      return undefined;
+    }
+    const candidateId = [...candidateIds][0];
+    return candidateId ? this.users.get(candidateId) : undefined;
+  }
+
+  private attachIdentities(user: UserRecord): UserRecord {
+    return {
+      ...user,
+      identities: this.getIdentitiesForUser(user)
+    };
+  }
+
+  private getIdentitiesForUser(user: UserRecord): UserIdentity[] {
+    return [...this.identities.values()]
+      .filter(
+        (identity) =>
+          identity.clientInstanceId === user.clientInstanceId && identity.userId === user.id
+      )
+      .sort((left, right) =>
+        `${left.authSource}:${left.externalUserId}`.localeCompare(
+          `${right.authSource}:${right.externalUserId}`
+        )
+      );
+  }
+}
+
+function createIdentityKey(input: {
+  clientInstanceId: ClientInstanceId;
+  authSource: string;
+  externalUserId: string;
+}): string {
+  return `${input.clientInstanceId}:${input.authSource}:${input.externalUserId}`;
+}
+
+function replaceIdentity(identities: UserIdentity[], identity: UserIdentity): UserIdentity[] {
+  return [
+    ...identities.filter(
+      (currentIdentity) =>
+        currentIdentity.authSource !== identity.authSource ||
+        currentIdentity.externalUserId !== identity.externalUserId
+    ),
+    identity
+  ].sort((left, right) =>
+    `${left.authSource}:${left.externalUserId}`.localeCompare(`${right.authSource}:${right.externalUserId}`)
+  );
 }
 
 function summarizeEvents(

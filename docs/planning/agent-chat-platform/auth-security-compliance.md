@@ -36,6 +36,12 @@ Recommended v1 fields:
 
 The exact customer token can stay small and customer-specific. The platform should normalize it before authorization, conversation ownership, audit, and tool permission checks.
 
+The product-owned user id is the canonical conversation owner. Auth-source-specific ids are stored as `User Identity Mapping` records so the same person can use standalone chat, embedded chat, or both without duplicating conversation history. A user may have no embedded customer-app identity mapping when that user only uses standalone chat.
+
+Email may be stored on users and identity mappings, but email is not the durable account key. Use verified email as a linking hint or migration aid only when the source is trusted; explicit identity mappings remain the safe way to share context across auth paths.
+
+Automatic linking by verified email is implemented behind `auth.identityLinking.byVerifiedEmail` (default `true`). On first login through a new auth source, the platform attaches the identity to an existing user only when the incoming claims carry a verified email, the email matches exactly one active user (via that user's verified identity emails or the superadmin-managed user email), and the match is unambiguous. Ambiguous matches never link; they create a separate user. Every automatic link is recorded as a `user.identity_linked` audit event. Superadmin identity mapping endpoints remain the manual fallback.
+
 V1 auth adapters:
 
 - **Development auth adapter**: test/local-only configured users for adapter and authorization tests. It must not expose a user-listing HTTP route or become the primary standalone development login path.
@@ -150,6 +156,8 @@ Authenticated User
 ```
 
 Conversation ownership should be based on the stable user identity returned by the auth adapter, not on a browser-local id. If the customer's user id changes, that should be treated as an identity-mapping concern.
+
+When a standalone identity and an embedded customer-app identity should share context, both identities should map to the same product-owned user id. Users without an embedded identity mapping remain standalone-only and should not be forced through the customer application.
 
 Conversation persistence must be retention-aware because the workflow may contain sensitive personal data. The retention duration should be configurable per client instance and should apply to:
 

@@ -82,6 +82,43 @@ export async function runPostgresMigrations(sql: Sql): Promise<void> {
     )
   `;
   await sql`
+    create table if not exists product_users (
+      id text primary key,
+      client_instance_id text not null,
+      display_label text not null,
+      email text,
+      roles jsonb not null default '["user"]'::jsonb,
+      permission_refs jsonb not null default '[]'::jsonb,
+      status text not null default 'active',
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      last_authenticated_at timestamptz
+    )
+  `;
+  await sql`
+    create index if not exists product_users_client_idx
+    on product_users (client_instance_id)
+  `;
+  await sql`
+    create table if not exists user_identities (
+      client_instance_id text not null,
+      user_id text not null references product_users(id) on delete cascade,
+      auth_source text not null,
+      external_user_id text not null,
+      display_label text,
+      email text,
+      email_verified boolean not null default false,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      last_authenticated_at timestamptz,
+      primary key (client_instance_id, auth_source, external_user_id)
+    )
+  `;
+  await sql`
+    create index if not exists user_identities_user_idx
+    on user_identities (client_instance_id, user_id)
+  `;
+  await sql`
     create table if not exists conversations (
       id text primary key,
       client_instance_id text not null,
@@ -98,6 +135,10 @@ export async function runPostgresMigrations(sql: Sql): Promise<void> {
   await sql`
     create index if not exists conversations_owner_idx
     on conversations (client_instance_id, owner_external_user_id, updated_at desc)
+  `;
+  await sql`
+    create index if not exists conversations_owner_user_idx
+    on conversations (client_instance_id, owner_user_id, updated_at desc)
   `;
   await sql`
     create table if not exists messages (

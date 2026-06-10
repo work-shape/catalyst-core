@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { createClientInstanceApp } from "@agent-chat-platform/client-assembly";
-import { parseClientInstanceConfig, type UsageLimitsConfig } from "@agent-chat-platform/config-schema";
+import { parseClientInstanceConfig, type UsageSafeguardsConfig } from "@agent-chat-platform/config-schema";
 import { defineTool, toolSuccess } from "@agent-chat-platform/tool-sdk";
 
 describe("client instance app vertical slice", () => {
@@ -84,7 +84,7 @@ describe("client instance app vertical slice", () => {
   it("rejects messages after the configured daily model call limit is reached", async () => {
     const app = await createClientInstanceApp({
       config: createTestConfig({
-        usageLimits: {
+        usageSafeguards: {
           modelCallsPerDay: 1
         }
       }),
@@ -123,7 +123,7 @@ describe("client instance app vertical slice", () => {
     expect(parseSseChunks(secondMessage.payload)).toContainEqual(
       expect.objectContaining({
         type: "error",
-        errorText: "Daily model call usage limit has been reached"
+        errorText: "Daily model call safeguard has been reached"
       })
     );
 
@@ -133,6 +133,89 @@ describe("client instance app vertical slice", () => {
     });
     expect(audit.statusCode).toBe(200);
     expect((audit.json() as Array<{ type: string }>).some((event) => event.type === "message.failed")).toBe(
+      true
+    );
+
+    await app.close();
+  });
+
+  it("exposes configured agent initial prompts through safe config", async () => {
+    const initialPrompts = [
+      {
+        title: "Review release",
+        prompt: "Summarize release readiness."
+      }
+    ];
+    const app = await createClientInstanceApp({
+      config: createTestConfig({ initialPrompts }),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+
+    const response = await app.server.inject({
+      method: "GET",
+      url: "/api/config"
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      agents: [
+        expect.objectContaining({
+          name: "test_agent",
+          initialPrompts
+        })
+      ]
+    });
+
+    await app.close();
+  });
+
+  it("generates a short conversation headline after the first exchange", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig(),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+    const firstMessage = "Please summarize the release notes";
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      payload: { title: firstMessage }
+    });
+    expect(created.statusCode).toBe(200);
+    const conversation = created.json() as { id: string };
+
+    const sent = await app.server.inject({
+      method: "POST",
+      url: "/api/chat",
+      payload: {
+        conversationId: conversation.id,
+        messages: [createUserUiMessage(firstMessage)]
+      }
+    });
+    expect(sent.statusCode).toBe(200);
+    expect(parseSseChunks(sent.payload).some((chunk) => chunk.type === "finish")).toBe(true);
+
+    const listed = await app.server.inject({
+      method: "GET",
+      url: "/api/conversations"
+    });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json()).toContainEqual(
+      expect.objectContaining({
+        id: conversation.id,
+        title: "Please Summarize The Release Notes"
+      })
+    );
+
+    const audit = await app.server.inject({
+      method: "GET",
+      url: "/api/audit-events"
+    });
+    expect(audit.statusCode).toBe(200);
+    expect((audit.json() as Array<{ type: string }>).some((event) => event.type === "conversation.title_generated")).toBe(
       true
     );
 
@@ -180,7 +263,8 @@ describe("client instance app vertical slice", () => {
     });
     expect(defaultMe.statusCode).toBe(200);
     expect(defaultMe.json()).toMatchObject({
-      id: "superadmin-1",
+      displayLabel: "Superadmin",
+      externalUserId: "superadmin-1",
       roles: ["user", "admin", "superadmin"]
     });
 
@@ -193,7 +277,8 @@ describe("client instance app vertical slice", () => {
     });
     expect(normalMe.statusCode).toBe(200);
     expect(normalMe.json()).toMatchObject({
-      id: "user-1",
+      displayLabel: "Normal User",
+      externalUserId: "user-1",
       roles: ["user"]
     });
 
@@ -214,6 +299,369 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(unknownUser.statusCode).toBe(401);
+
+    await app.close();
+  });
+
+  it("administers users and shares conversations across linked auth identities", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        sessionToken: {
+          issuer: "demo-client-instance",
+          ttlSeconds: 900
+        },
+        developmentAuth: {
+          enabled: true,
+          defaultUserId: "superadmin-1",
+          users: [
+            {
+              id: "superadmin-1",
+              externalUserId: "superadmin-1",
+              displayLabel: "Superadmin",
+              roles: ["user", "admin", "superadmin"],
+              permissionRefs: ["demo-tools"]
+            },
+            {
+              id: "jane-dev-source",
+              externalUserId: "jane-dev",
+              displayLabel: "Jane Standalone",
+              email: "jane@example.test",
+              emailVerified: true,
+              roles: ["user"],
+              permissionRefs: ["demo-tools"]
+            }
+          ]
+        }
+      }),
+      env: {
+        CHAT_SESSION_TOKEN_SECRET: "a-development-session-token-secret",
+        CHAT_SERVER_CREDENTIAL: "server-credential"
+      },
+      storeMode: "memory",
+      tools: []
+    });
+
+    const usersBefore = await app.server.inject({
+      method: "GET",
+      url: "/api/superadmin/users",
+      headers: {
+        "x-dev-user-id": "superadmin-1"
+      }
+    });
+    expect(usersBefore.statusCode).toBe(200);
+    expect(usersBefore.json()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          displayLabel: "Superadmin",
+          identities: [
+            expect.objectContaining({
+              authSource: "development",
+              externalUserId: "superadmin-1"
+            })
+          ]
+        })
+      ])
+    );
+
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/superadmin/users",
+      headers: {
+        "x-dev-user-id": "superadmin-1"
+      },
+      payload: {
+        displayLabel: "Jane Reviewer",
+        email: "jane@example.test",
+        roles: ["user"],
+        permissionRefs: ["demo-tools"]
+      }
+    });
+    expect(created.statusCode).toBe(200);
+    const administeredUser = created.json() as { id: string };
+
+    for (const identity of [
+      {
+        authSource: "session-token",
+        externalUserId: "customer-jane",
+        displayLabel: "Jane Reviewer",
+        email: "jane@example.test",
+        emailVerified: true
+      },
+      {
+        authSource: "development",
+        externalUserId: "jane-dev",
+        displayLabel: "Jane Standalone",
+        email: "jane@example.test",
+        emailVerified: true
+      }
+    ]) {
+      const linked = await app.server.inject({
+        method: "PUT",
+        url: `/api/superadmin/users/${administeredUser.id}/identities`,
+        headers: {
+          "x-dev-user-id": "superadmin-1"
+        },
+        payload: identity
+      });
+      expect(linked.statusCode).toBe(200);
+    }
+
+    const issued = await app.server.inject({
+      method: "POST",
+      url: "/auth/session-token",
+      headers: {
+        "x-server-credential": "server-credential"
+      },
+      payload: {
+        externalUserId: "customer-jane",
+        displayLabel: "Jane Reviewer",
+        email: "jane@example.test",
+        emailVerified: true,
+        roles: ["user"],
+        permissionRefs: ["demo-tools"]
+      }
+    });
+    expect(issued.statusCode).toBe(200);
+    const token = (issued.json() as { chatSessionToken: string }).chatSessionToken;
+
+    const createdConversation = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      payload: {
+        title: "Shared context"
+      }
+    });
+    expect(createdConversation.statusCode).toBe(200);
+    const conversation = createdConversation.json() as { id: string; ownerUserId: string };
+    expect(conversation.ownerUserId).toBe(administeredUser.id);
+
+    const standaloneConversations = await app.server.inject({
+      method: "GET",
+      url: "/api/conversations",
+      headers: {
+        "x-dev-user-id": "jane-dev-source"
+      }
+    });
+    expect(standaloneConversations.statusCode).toBe(200);
+    expect(standaloneConversations.json()).toEqual([
+      expect.objectContaining({
+        id: conversation.id,
+        ownerUserId: administeredUser.id
+      })
+    ]);
+
+    const audit = await app.server.inject({
+      method: "GET",
+      url: "/api/audit-events",
+      headers: {
+        "x-dev-user-id": "superadmin-1"
+      }
+    });
+    expect(audit.statusCode).toBe(200);
+    expect((audit.json() as Array<{ type: string }>).map((event) => event.type)).toEqual(
+      expect.arrayContaining(["user.created", "user.identity_upserted"])
+    );
+
+    await app.close();
+  });
+
+  it("automatically links identities with a matching verified email to one shared user", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        sessionToken: {
+          issuer: "demo-client-instance",
+          ttlSeconds: 900
+        },
+        developmentAuth: {
+          enabled: true,
+          defaultUserId: "superadmin-1",
+          users: [
+            {
+              id: "superadmin-1",
+              externalUserId: "superadmin-1",
+              displayLabel: "Superadmin",
+              roles: ["user", "admin", "superadmin"],
+              permissionRefs: ["demo-tools"]
+            },
+            {
+              id: "jane-dev-source",
+              externalUserId: "jane-dev",
+              displayLabel: "Jane Standalone",
+              email: "jane@example.test",
+              emailVerified: true,
+              roles: ["user"],
+              permissionRefs: ["demo-tools"]
+            }
+          ]
+        }
+      }),
+      env: {
+        CHAT_SESSION_TOKEN_SECRET: "a-development-session-token-secret",
+        CHAT_SERVER_CREDENTIAL: "server-credential"
+      },
+      storeMode: "memory",
+      tools: []
+    });
+
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/superadmin/users",
+      headers: {
+        "x-dev-user-id": "superadmin-1"
+      },
+      payload: {
+        displayLabel: "Jane Reviewer",
+        email: "jane@example.test",
+        roles: ["user"],
+        permissionRefs: ["demo-tools"]
+      }
+    });
+    expect(created.statusCode).toBe(200);
+    const administeredUser = created.json() as { id: string };
+
+    const issued = await app.server.inject({
+      method: "POST",
+      url: "/auth/session-token",
+      headers: {
+        "x-server-credential": "server-credential"
+      },
+      payload: {
+        externalUserId: "customer-jane",
+        displayLabel: "Jane Reviewer",
+        email: "jane@example.test",
+        emailVerified: true,
+        roles: ["user"],
+        permissionRefs: ["demo-tools"]
+      }
+    });
+    expect(issued.statusCode).toBe(200);
+    const token = (issued.json() as { chatSessionToken: string }).chatSessionToken;
+
+    const createdConversation = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      payload: {
+        title: "Shared by verified email"
+      }
+    });
+    expect(createdConversation.statusCode).toBe(200);
+    const conversation = createdConversation.json() as { id: string; ownerUserId: string };
+    expect(conversation.ownerUserId).toBe(administeredUser.id);
+
+    const standaloneConversations = await app.server.inject({
+      method: "GET",
+      url: "/api/conversations",
+      headers: {
+        "x-dev-user-id": "jane-dev-source"
+      }
+    });
+    expect(standaloneConversations.statusCode).toBe(200);
+    expect(standaloneConversations.json()).toEqual([
+      expect.objectContaining({
+        id: conversation.id,
+        ownerUserId: administeredUser.id
+      })
+    ]);
+
+    const audit = await app.server.inject({
+      method: "GET",
+      url: "/api/audit-events",
+      headers: {
+        "x-dev-user-id": "superadmin-1"
+      }
+    });
+    expect(audit.statusCode).toBe(200);
+    expect((audit.json() as Array<{ type: string }>).map((event) => event.type)).toEqual(
+      expect.arrayContaining(["user.identity_linked"])
+    );
+
+    const duplicate = await app.server.inject({
+      method: "POST",
+      url: "/api/superadmin/users",
+      headers: {
+        "x-dev-user-id": "superadmin-1"
+      },
+      payload: {
+        displayLabel: "Jane Duplicate",
+        email: "jane@example.test",
+        roles: ["user"],
+        permissionRefs: ["demo-tools"]
+      }
+    });
+    expect(duplicate.statusCode).toBe(200);
+
+    const ambiguousIssued = await app.server.inject({
+      method: "POST",
+      url: "/auth/session-token",
+      headers: {
+        "x-server-credential": "server-credential"
+      },
+      payload: {
+        externalUserId: "customer-jane-other",
+        displayLabel: "Jane Other",
+        email: "jane@example.test",
+        emailVerified: true,
+        roles: ["user"],
+        permissionRefs: ["demo-tools"]
+      }
+    });
+    expect(ambiguousIssued.statusCode).toBe(200);
+    const ambiguousToken = (ambiguousIssued.json() as { chatSessionToken: string }).chatSessionToken;
+
+    const ambiguousConversation = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      headers: {
+        authorization: `Bearer ${ambiguousToken}`
+      },
+      payload: {
+        title: "Ambiguous email must not share history"
+      }
+    });
+    expect(ambiguousConversation.statusCode).toBe(200);
+    expect((ambiguousConversation.json() as { ownerUserId: string }).ownerUserId).not.toBe(
+      administeredUser.id
+    );
+
+    await app.close();
+  });
+
+  it("rejects password resets when standalone auth is not enabled", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig(),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/superadmin/users",
+      payload: {
+        displayLabel: "Jane Reviewer",
+        roles: ["user"]
+      }
+    });
+    expect(created.statusCode).toBe(200);
+    const administeredUser = created.json() as { id: string };
+
+    const reset = await app.server.inject({
+      method: "POST",
+      url: `/api/superadmin/users/${administeredUser.id}/password`,
+      payload: {
+        password: "replacement-password"
+      }
+    });
+    expect(reset.statusCode).toBe(422);
+    expect((reset.json() as { error: { message: string } }).error.message).toContain(
+      "standalone auth"
+    );
 
     await app.close();
   });
@@ -278,13 +726,62 @@ describe("client instance app vertical slice", () => {
       message: "Client instance assembly is invalid"
     });
   });
+
+  it("rejects spend budgets without pricing for configured provider models", () => {
+    expect(() =>
+      createTestConfig({
+        modelProviders: [
+          {
+            id: "openai",
+            type: "openai-compatible",
+            model: "gpt-4.1",
+            baseUrl: "https://api.openai.com/v1",
+            apiKeyEnvName: "OPENAI_API_KEY"
+          }
+        ],
+        usageBudget: {
+          monthlySpendLimit: 200,
+          costSafetyMultiplier: 1.3
+        },
+        usagePricing: {
+          currency: "USD",
+          models: []
+        }
+      })
+    ).toThrow("Monthly spend budget requires configured pricing for model openai/gpt-4.1");
+  });
 });
 
 function createTestConfig(input: {
   toolNames?: string[];
   tools?: Array<{ name: string; enabled?: boolean }>;
-  usageLimits?: UsageLimitsConfig;
+  initialPrompts?: Array<{ title: string; prompt: string }>;
+  modelProviders?: Array<
+    | { id: string; type: "deterministic"; model: string }
+    | {
+        id: string;
+        type: "openai-compatible";
+        model: string;
+        baseUrl: string;
+        apiKeyEnvName: string;
+      }
+  >;
+  usageBudget?: {
+    monthlySpendLimit?: number;
+    costSafetyMultiplier?: number;
+  };
+  usageSafeguards?: UsageSafeguardsConfig;
+  usagePricing?: {
+    currency: string;
+    models: Array<{
+      providerId: string;
+      model: string;
+      inputPricePerMillionTokens: number;
+      outputPricePerMillionTokens: number;
+    }>;
+  };
   developmentAuth?: unknown;
+  sessionToken?: unknown;
 } = {}) {
   return parseClientInstanceConfig({
     version: 1,
@@ -303,7 +800,8 @@ function createTestConfig(input: {
           roles: ["user", "admin", "superadmin"],
           permissionRefs: ["demo-tools"]
         }
-      }
+      },
+      ...(input.sessionToken ? { sessionToken: input.sessionToken } : {})
     },
     defaultAgentName: "test_agent",
     agents: [
@@ -311,13 +809,16 @@ function createTestConfig(input: {
         name: "test_agent",
         displayName: "Test Agent",
         instructions: "Use configured tools only.",
-        modelProviderId: "local",
-        toolNames: input.toolNames ?? []
+        modelProviderId: input.modelProviders?.[0]?.id ?? "local",
+        toolNames: input.toolNames ?? [],
+        initialPrompts: input.initialPrompts ?? []
       }
     ],
-    modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
+    modelProviders: input.modelProviders ?? [{ id: "local", type: "deterministic", model: "local" }],
     usage: {
-      limits: input.usageLimits ?? {}
+      budget: input.usageBudget ?? {},
+      safeguards: input.usageSafeguards ?? {},
+      pricing: input.usagePricing
     },
     tools: input.tools ?? []
   });

@@ -6,6 +6,7 @@ export type AgentRunId = Brand<string, "AgentRunId">;
 export type ClientInstanceId = Brand<string, "ClientInstanceId">;
 export type ConversationId = Brand<string, "ConversationId">;
 export type MessageId = Brand<string, "MessageId">;
+export type UserId = Brand<string, "UserId">;
 export type ToolCallId = Brand<string, "ToolCallId">;
 export type AuditEventId = Brand<string, "AuditEventId">;
 export type ModelUsageEventId = Brand<string, "ModelUsageEventId">;
@@ -31,6 +32,10 @@ export function asConversationId(value: string): ConversationId {
 
 export function asMessageId(value: string): MessageId {
   return value as MessageId;
+}
+
+export function asUserId(value: string): UserId {
+  return value as UserId;
 }
 
 export function asAgentRunId(value: string): AgentRunId {

@@ -1,4 +1,5 @@
 export * from "./identity";
+export * from "./user";
 export * from "./files";
 export * from "./conversation";
 export * from "./tool-execution";

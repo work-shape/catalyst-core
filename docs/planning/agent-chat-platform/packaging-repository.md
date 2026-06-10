@@ -40,7 +40,7 @@ The repository remains the source of truth. A CLI can validate, test tools, buil
 
 V1 should use release config only.
 
-Release config is version-controlled and deployed with the client assembly app. It defines agent behavior, tool availability, OpenAPI operation selections, built-in tool enablement, model provider options, domain UI output types, retention policy, usage limits, client branding/theme, and default policy bounds.
+Release config is version-controlled and deployed with the client assembly app. It defines agent behavior, tool availability, OpenAPI operation selections, built-in tool enablement, model provider options, domain UI output types, retention policy, usage budget, usage safeguards, client branding/theme, and default policy bounds.
 
 Release config changes through the normal release/publish/deploy flow. The platform should snapshot the active release config at deploy/startup so runtime behavior is explainable.
 
@@ -166,10 +166,13 @@ Usage and branding config are part of the same release-config contract:
 
 ```yaml
 usage:
-  limits:
+  budget:
+    monthlySpendLimit: 200
+    costSafetyMultiplier: 1.3
+  safeguards:
     modelCallsPerDay: 1000
-    tokensPerDay: 500000
-    tokensPerMonth: 10000000
+    tokensPerDay: 2500000
+    tokensPerMonth: 50000000
   pricing:
     currency: USD
     models:

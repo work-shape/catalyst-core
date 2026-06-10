@@ -8,6 +8,7 @@ export function assertClientAssemblyValid(input: {
 }): void {
   const issues = [
     ...findDuplicateToolImplementations(input.tools),
+    ...findModelProviderReferenceIssues(input.config),
     ...findToolReferenceIssues(input.config, input.tools)
   ];
 
@@ -28,6 +29,31 @@ function findDuplicateToolImplementations(tools: AnyToolDefinition[]): string[] 
     seen.add(tool.name);
   }
   return [...duplicates].map((toolName) => `Duplicate tool implementation '${toolName}'`);
+}
+
+function findModelProviderReferenceIssues(config: ClientInstanceConfig): string[] {
+  const issues: string[] = [];
+  const configuredProviderIds = new Set(config.modelProviders.map((provider) => provider.id));
+
+  if (
+    config.conversationTitles.enabled &&
+    config.conversationTitles.modelProviderId &&
+    !configuredProviderIds.has(config.conversationTitles.modelProviderId)
+  ) {
+    issues.push(
+      `Conversation title generation references model provider '${config.conversationTitles.modelProviderId}' that is missing from release config`
+    );
+  }
+
+  for (const agent of config.agents) {
+    if (agent.modelProviderId && !configuredProviderIds.has(agent.modelProviderId)) {
+      issues.push(
+        `Agent '${agent.name}' references model provider '${agent.modelProviderId}' that is missing from release config`
+      );
+    }
+  }
+
+  return issues;
 }
 
 function findToolReferenceIssues(

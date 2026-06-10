@@ -22,6 +22,8 @@ test("standalone login renders the authenticated chat workspace", async ({ page 
 
   await expect(page.getByText("E2E Customer")).toBeVisible();
   await expect(page.getByText("E2E User")).toBeVisible();
+  await expect(page.getByRole("button", { name: "E2E User account" })).toBeVisible();
+  await expect(page.locator("header").getByText("Ready", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Open superadmin panel" })).toHaveCount(0);
 });
 
@@ -169,6 +171,7 @@ test("standalone auth gates superadmin views", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Usage" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Open superadmin panel" })).toBeVisible();
 
+  await page.getByRole("button", { name: "E2E Superadmin account" }).click();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("main", { name: "Sign in" })).toBeVisible();
   await signInViaUi(page, normalUser, { alreadyOnLogin: true });
@@ -198,13 +201,17 @@ test("superadmin can open usage and audit views", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Open superadmin panel" })).toBeVisible();
   await page.getByRole("button", { name: "Open superadmin panel" }).click();
   await expect(page.getByRole("region", { name: "Superadmin panel" })).toBeVisible();
-  await expect(page.getByText("Usage and governance")).toBeVisible();
+  await expect(page.getByText("Administration")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Usage/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Users/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Audit log" })).toBeVisible();
 });
 
 test("standalone chat can run a configured tool", async ({ page }) => {
   await signInViaUi(page, superadminUser);
   const applicantName = `E2E Jane ${Date.now()}`;
   const consoleErrors: string[] = [];
+  let messageHistoryResponses = 0;
   page.on("console", (message) => {
     if (message.type() === "error") {
       consoleErrors.push(message.text());
@@ -212,6 +219,15 @@ test("standalone chat can run a configured tool", async ({ page }) => {
   });
   page.on("pageerror", (error) => {
     consoleErrors.push(error.message);
+  });
+  page.on("response", (response) => {
+    const url = new URL(response.url());
+    if (
+      response.request().method() === "GET" &&
+      /^\/api\/conversations\/[^/]+\/messages$/u.test(url.pathname)
+    ) {
+      messageHistoryResponses += 1;
+    }
   });
 
   await page.goto("/");
@@ -230,24 +246,71 @@ test("standalone chat can run a configured tool", async ({ page }) => {
   await expect(page.getByText("Tool work completed").last()).toBeVisible();
   await expect(page.getByText(applicantName).last()).toBeVisible();
   await expect(page.getByText("No review flags were raised.").last()).toBeVisible();
+  await expect.poll(() => messageHistoryResponses).toBeGreaterThan(0);
+  await expect(toolCallCard).toBeVisible();
+  await expect(toolCallCard).toContainText("Completed");
 
   await page.getByRole("button", { name: "Open superadmin panel" }).click();
   await expect(page.getByRole("region", { name: "Superadmin panel" })).toBeVisible();
-  await expect(page.getByText("Usage and governance")).toBeVisible();
-  await expect(page.getByText("Cost today")).toBeVisible();
+  await expect(page.getByText("Administration")).toBeVisible();
+  await expect(page.getByText("Budgeted cost today")).toBeVisible();
   await expect(page.getByText("Calls today")).toBeVisible();
   await expect(page.getByText("Configured pricing")).toBeVisible();
   await expect(page.getByText("local / deterministic-local")).toBeVisible();
-  await expect(page.getByText("Configured limits")).toBeVisible();
-  const configuredLimits = page.getByTestId("configured-limits");
-  await expect(configuredLimits).toContainText("12");
-  await expect(configuredLimits).toContainText("25,000");
+  await expect(page.getByText("Configured safeguards")).toBeVisible();
+  const configuredSafeguards = page.getByTestId("configured-safeguards");
+  await expect(configuredSafeguards).toContainText("12");
+  await expect(configuredSafeguards).toContainText("25,000");
   await expect(page.getByText("Recent model usage")).toBeVisible();
   await expect(page.getByText("deterministic-local").first()).toBeVisible();
   await expect(page.getByText("not_reported").first()).toBeVisible();
+  await page.getByRole("button", { name: "Audit log" }).click();
   await expect(page.getByText("Recent audit events")).toBeVisible();
   await expect(page.getByText("tool.completed").first()).toBeVisible();
   expect(consoleErrors).toEqual([]);
+});
+
+test("superadmin resets a user's password from the users panel", async ({ page }) => {
+  // Make sure the normal user exists in the platform user store before administering it.
+  await signInViaApi(page, normalUser);
+  await page.request.post(`${apiBaseUrl}/api/auth/sign-out`, { data: {} });
+
+  await signInViaUi(page, superadminUser);
+  await page.getByRole("button", { name: "Open superadmin panel" }).click();
+  await expect(page.getByRole("region", { name: "Superadmin panel" })).toBeVisible();
+
+  await page.getByRole("button", { name: /^Users/ }).click();
+  await page.getByRole("button", { name: `E2E User ${normalUser.email}` }).click();
+  await expect(page.getByText("Sign-in identities")).toBeVisible();
+
+  const temporaryPassword = `e2e-reset-${Date.now()}`;
+  await page.getByLabel("New password").fill(temporaryPassword);
+  await page.getByRole("button", { name: "Reset password" }).click();
+  await expect(page.getByText("Password updated", { exact: false })).toBeVisible();
+
+  await page.getByRole("button", { name: "E2E Superadmin account" }).click();
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByRole("main", { name: "Sign in" })).toBeVisible();
+
+  await signInViaUi(
+    page,
+    { email: normalUser.email, password: temporaryPassword },
+    { alreadyOnLogin: true }
+  );
+  await expect(page.getByText("E2E User")).toBeVisible();
+
+  // Restore the seeded password so reruns against a reused server stay consistent.
+  await signInViaApi(page, superadminUser);
+  const usersResponse = await page.request.get(`${apiBaseUrl}/api/superadmin/users`);
+  expect(usersResponse.ok()).toBe(true);
+  const administeredUsers = (await usersResponse.json()) as Array<{ id: string; email?: string }>;
+  const target = administeredUsers.find((candidate) => candidate.email === normalUser.email);
+  expect(target).toBeDefined();
+  const restored = await page.request.post(
+    `${apiBaseUrl}/api/superadmin/users/${target?.id}/password`,
+    { data: { password: normalUser.password } }
+  );
+  expect(restored.ok()).toBe(true);
 });
 
 async function signInViaUi(

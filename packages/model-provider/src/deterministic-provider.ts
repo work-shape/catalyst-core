@@ -27,6 +27,14 @@ export class DeterministicModelProvider implements ModelProvider {
 
     const lastUserMessage = [...request.messages].reverse().find((message) => message.role === "user");
     const content = lastUserMessage?.content.trim() ?? "";
+    if (isConversationTitleRequest(request)) {
+      return {
+        text: createDeterministicConversationTitle(content),
+        toolCalls: [],
+        usage: noReportedUsage()
+      };
+    }
+
     const toolCall = parseToolCommand(content, request.tools);
 
     if (toolCall) {
@@ -63,6 +71,34 @@ export class DeterministicModelProvider implements ModelProvider {
       completion
     };
   }
+}
+
+function isConversationTitleRequest(request: ModelCompletionRequest): boolean {
+  return request.messages.some(
+    (message) =>
+      message.role === "system" &&
+      /short neutral headline/u.test(message.content) &&
+      /conversation list/u.test(message.content)
+  );
+}
+
+function createDeterministicConversationTitle(content: string): string {
+  const userMessage = content.match(/User message:\n([\s\S]*?)(?:\n\nAssistant response:|$)/u)?.[1] ?? content;
+  const source = userMessage.toLowerCase();
+  if (source.includes("tool")) {
+    return "Tool result review";
+  }
+
+  const words = userMessage
+    .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+    .split(/\s+/u)
+    .filter(Boolean)
+    .slice(0, 5);
+  return words.length > 0 ? toTitleCase(words.join(" ")) : "Conversation review";
+}
+
+function toTitleCase(value: string): string {
+  return value.replace(/\b\p{L}/gu, (letter) => letter.toLocaleUpperCase());
 }
 
 function noReportedUsage() {

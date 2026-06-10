@@ -19,7 +19,7 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
 
   await app.register(cors, {
     origin: options.corsOrigin ?? true,
-    methods: ["GET", "POST", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
     allowedHeaders: ["authorization", "content-type", "x-correlation-id", "x-server-credential"]
   });

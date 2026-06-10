@@ -18,10 +18,10 @@ V1 should include:
 - config files for agents, tools, and basic UI settings
 - typed UI extension points for domain outputs, especially document analysis panels/tool-result renderers
 - basic control-plane/governance surface for config visibility, retention status, audit views, deletion workflows, and sensitive admin actions
-- superadmin panel for model cost, model usage, configured pricing/usage limits, recent usage events, and audit metadata
+- superadmin panel for budgeted model cost, model usage, configured pricing, spend budget, usage safeguards, recent usage events, and audit metadata
 - minimized audit event layer with a product-owned event schema/recorder for auth, conversations, tools, documents, config, deletion, and admin actions
 - model usage event layer for provider, model, token counts when reported by the provider, and correlation metadata
-- configurable pricing and usage limits for model calls and model tokens in release config
+- configurable pricing, spend budget, cost safety multiplier, and late usage safeguards for model calls and model tokens in release config
 - client branding and theme config for customer name, logo, and colors
 - startup validation that proves release-config tool references are implemented and enabled consistently
 - document processing interfaces for Markdown conversion and structured extraction

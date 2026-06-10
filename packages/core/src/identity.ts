@@ -7,6 +7,7 @@ export interface AuthenticatedUser {
   externalUserId: string;
   displayLabel: string;
   email?: string;
+  emailVerified?: boolean;
   roles: UserRole[];
   permissionRefs: string[];
   clientInstanceId: ClientInstanceId;

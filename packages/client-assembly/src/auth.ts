@@ -3,10 +3,11 @@ import {
   DevelopmentAuthAdapter,
   HmacSessionTokenAuthAdapter,
   HmacSessionTokenIssuer,
+  IdentityResolvingAuthAdapter,
   createStandaloneAuthRuntime,
   type AuthAdapter
 } from "@agent-chat-platform/auth";
-import { AppError, type ClientInstanceId } from "@agent-chat-platform/core";
+import { AppError, type ClientInstanceId, type UserStore } from "@agent-chat-platform/core";
 import { getDevelopmentAuthUsers, type ClientInstanceConfig } from "@agent-chat-platform/config-schema";
 import type { ClientInstanceEnv } from "./env";
 
@@ -23,10 +24,12 @@ export async function createClientInstanceAuth(input: {
   config: ClientInstanceConfig;
   env: ClientInstanceEnv;
   clientInstanceId: ClientInstanceId;
+  userStore: UserStore;
   corsOrigin?: string | string[];
 }): Promise<ClientInstanceAuth> {
   const adapters: AuthAdapter[] = [];
   let standaloneAuth: ClientInstanceAuth["standaloneAuth"];
+  let sessionToken: ClientInstanceAuth["sessionToken"];
 
   if (input.config.auth.standalone?.enabled) {
     const databaseUrl = input.env.DATABASE_URL;
@@ -51,7 +54,7 @@ export async function createClientInstanceAuth(input: {
       baseUrl: resolveBetterAuthUrl(input),
       trustedOrigins: resolveTrustedOrigins(input),
       seedUsers: input.config.auth.standalone.seedUsers.map((seedUser) => ({
-        email: seedUser.email,
+        email: resolveSeedEmail(seedUser, input),
         displayLabel: seedUser.displayLabel,
         password: resolveSeedPassword(seedUser, input),
         roles: seedUser.roles,
@@ -59,6 +62,22 @@ export async function createClientInstanceAuth(input: {
       }))
     });
     adapters.push(standaloneAuth.authAdapter);
+  }
+
+  const tokenSecret = input.env.CHAT_SESSION_TOKEN_SECRET;
+  const serverCredential = input.env.CHAT_SERVER_CREDENTIAL;
+  if (tokenSecret && serverCredential && input.config.auth.sessionToken) {
+    const tokenOptions = {
+      secret: tokenSecret,
+      clientInstanceId: input.clientInstanceId,
+      issuer: input.config.auth.sessionToken.issuer,
+      ttlSeconds: input.config.auth.sessionToken.ttlSeconds
+    };
+    adapters.push(new HmacSessionTokenAuthAdapter(tokenOptions));
+    sessionToken = {
+      issuer: new HmacSessionTokenIssuer(tokenOptions),
+      serverCredential
+    };
   }
 
   const development = getDevelopmentAuthUsers(input.config);
@@ -72,33 +91,16 @@ export async function createClientInstanceAuth(input: {
     );
   }
 
-  const tokenSecret = input.env.CHAT_SESSION_TOKEN_SECRET;
-  const serverCredential = input.env.CHAT_SERVER_CREDENTIAL;
-  if (tokenSecret && serverCredential && input.config.auth.sessionToken) {
-    const tokenOptions = {
-      secret: tokenSecret,
-      clientInstanceId: input.clientInstanceId,
-      issuer: input.config.auth.sessionToken.issuer,
-      ttlSeconds: input.config.auth.sessionToken.ttlSeconds
-    };
-    adapters.push(new HmacSessionTokenAuthAdapter(tokenOptions));
-    return {
-      authAdapter: new CompositeAuthAdapter(adapters),
-      standaloneAuth,
-      sessionToken: {
-        issuer: new HmacSessionTokenIssuer(tokenOptions),
-        serverCredential
-      }
-    };
-  }
-
   if (adapters.length === 0) {
     throw new AppError("VALIDATION_FAILED", "No auth adapter is configured");
   }
 
   return {
-    authAdapter: new CompositeAuthAdapter(adapters),
-    standaloneAuth
+    authAdapter: new IdentityResolvingAuthAdapter(new CompositeAuthAdapter(adapters), input.userStore, {
+      linkByVerifiedEmail: input.config.auth.identityLinking.byVerifiedEmail
+    }),
+    standaloneAuth,
+    sessionToken
   };
 }
 
@@ -184,6 +186,17 @@ function getLoopbackHostAliases(hostname: string): string[] {
 function formatOrigin(url: URL, hostname: string): string {
   const formattedHost = hostname.includes(":") ? `[${hostname}]` : hostname;
   return `${url.protocol}//${formattedHost}${url.port ? `:${url.port}` : ""}`;
+}
+
+function resolveSeedEmail(
+  seedUser: NonNullable<ClientInstanceConfig["auth"]["standalone"]>["seedUsers"][number],
+  input: {
+    env: ClientInstanceEnv;
+  }
+): string {
+  return seedUser.emailEnvName
+    ? (input.env[seedUser.emailEnvName] ?? seedUser.email)
+    : seedUser.email;
 }
 
 function resolveSeedPassword(

@@ -5,15 +5,27 @@ import {
   type ClientInstanceId,
   type Conversation,
   type ModelUsageEvent,
+  type UserIdentity,
+  type UserRecord,
   asConversationId,
-  asMessageId
+  asMessageId,
+  asUserId
 } from "@agent-chat-platform/core";
-import type { auditEvents, conversations, messages, modelUsageEvents } from "./schema";
+import type {
+  auditEvents,
+  conversations,
+  messages,
+  modelUsageEvents,
+  productUsers,
+  userIdentities
+} from "./schema";
 
 export type ConversationRow = typeof conversations.$inferSelect;
 export type MessageRow = typeof messages.$inferSelect;
 export type AuditEventRow = typeof auditEvents.$inferSelect;
 export type ModelUsageEventRow = typeof modelUsageEvents.$inferSelect;
+export type ProductUserRow = typeof productUsers.$inferSelect;
+export type UserIdentityRow = typeof userIdentities.$inferSelect;
 
 export function mapConversation(row: ConversationRow | undefined): Conversation {
   if (!row) {
@@ -84,5 +96,45 @@ export function mapModelUsageEvent(row: ModelUsageEventRow | undefined): ModelUs
     source: row.source,
     correlationId: row.correlationId,
     createdAt: row.createdAt.toISOString()
+  };
+}
+
+export function mapUserIdentity(row: UserIdentityRow | undefined): UserIdentity {
+  if (!row) {
+    throw new AppError("INTERNAL", "Expected user identity row");
+  }
+  return {
+    clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    userId: asUserId(row.userId),
+    authSource: row.authSource,
+    externalUserId: row.externalUserId,
+    displayLabel: row.displayLabel ?? undefined,
+    email: row.email ?? undefined,
+    emailVerified: row.emailVerified,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    lastAuthenticatedAt: row.lastAuthenticatedAt?.toISOString()
+  };
+}
+
+export function mapUserRecord(
+  row: ProductUserRow | undefined,
+  identities: UserIdentity[] = []
+): UserRecord {
+  if (!row) {
+    throw new AppError("INTERNAL", "Expected user row");
+  }
+  return {
+    id: asUserId(row.id),
+    clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    displayLabel: row.displayLabel,
+    email: row.email ?? undefined,
+    roles: row.roles,
+    permissionRefs: row.permissionRefs,
+    status: row.status,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    lastAuthenticatedAt: row.lastAuthenticatedAt?.toISOString(),
+    identities
   };
 }

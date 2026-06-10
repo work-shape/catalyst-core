@@ -1,3 +1,8 @@
+export interface AgentInitialPromptConfig {
+  title: string;
+  prompt: string;
+}
+
 export interface DeterministicModelProviderConfig {
   id: string;
   type: "deterministic";
@@ -23,9 +28,15 @@ export interface AgentConfig {
   instructions: string;
   modelProviderId?: string;
   toolNames: string[];
+  initialPrompts: AgentInitialPromptConfig[];
 }
 
-export interface UsageLimitsConfig {
+export interface UsageBudgetConfig {
+  monthlySpendLimit?: number;
+  costSafetyMultiplier: number;
+}
+
+export interface UsageSafeguardsConfig {
   modelCallsPerDay?: number;
   tokensPerDay?: number;
   tokensPerMonth?: number;

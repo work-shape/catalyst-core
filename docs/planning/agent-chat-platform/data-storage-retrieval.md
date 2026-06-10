@@ -29,6 +29,7 @@ Baseline rules:
 
 - A conversation belongs to the stable user identity returned by the auth adapter.
 - Users see only their own conversations by default.
+- A conversation may have a generated title for navigation after the first user/assistant exchange.
 - Admin/support visibility requires explicit roles or permissions.
 - Conversation history is retained only for a configured duration.
 - Retention applies to messages, model inputs/outputs, tool call records, document analysis outputs, and related file references.

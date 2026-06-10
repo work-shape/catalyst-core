@@ -5,6 +5,7 @@ export const apiUserSchema = z.object({
   externalUserId: z.string(),
   displayLabel: z.string(),
   email: z.string().optional(),
+  emailVerified: z.boolean().optional(),
   roles: z.array(z.string()),
   permissionRefs: z.array(z.string()),
   clientInstanceId: z.string(),
@@ -34,6 +35,23 @@ export const messageSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional()
 });
 
+export const clientBrandingSchema = z.object({
+  clientName: z.string(),
+  logoUrl: z.string().optional(),
+  title: z.string(),
+  welcomeMessage: z.string(),
+  accentColor: z.string(),
+  theme: z.object({
+    accentColor: z.string(),
+    accentStrongColor: z.string(),
+    backgroundColor: z.string(),
+    surfaceColor: z.string(),
+    textColor: z.string(),
+    mutedTextColor: z.string(),
+    borderColor: z.string()
+  })
+});
+
 export const safeConfigSchema = z.object({
   clientInstance: z.object({
     id: z.string(),
@@ -46,7 +64,11 @@ export const safeConfigSchema = z.object({
     allowUserDelete: z.boolean()
   }),
   usage: z.object({
-    limits: z.object({
+    budget: z.object({
+      monthlySpendLimit: z.number().optional(),
+      costSafetyMultiplier: z.number()
+    }),
+    safeguards: z.object({
       modelCallsPerDay: z.number().optional(),
       tokensPerDay: z.number().optional(),
       tokensPerMonth: z.number().optional()
@@ -56,25 +78,16 @@ export const safeConfigSchema = z.object({
   agents: z.array(
     z.object({
       name: z.string(),
-      displayName: z.string()
+      displayName: z.string(),
+      initialPrompts: z.array(
+        z.object({
+          title: z.string(),
+          prompt: z.string()
+        })
+      )
     })
   ),
-  ui: z.object({
-    clientName: z.string(),
-    logoUrl: z.string().optional(),
-    title: z.string(),
-    welcomeMessage: z.string(),
-    accentColor: z.string(),
-    theme: z.object({
-      accentColor: z.string(),
-      accentStrongColor: z.string(),
-      backgroundColor: z.string(),
-      surfaceColor: z.string(),
-      textColor: z.string(),
-      mutedTextColor: z.string(),
-      borderColor: z.string()
-    })
-  })
+  ui: clientBrandingSchema
 });
 
 export const createConversationRequestSchema = z.object({
@@ -288,6 +301,7 @@ export const issueSessionTokenRequestSchema = z.object({
   externalUserId: z.string().min(1),
   displayLabel: z.string().min(1),
   email: z.string().email().optional(),
+  emailVerified: z.boolean().optional(),
   roles: z.array(z.string()).optional(),
   permissionRefs: z.array(z.string()).optional(),
   correlationId: z.string().optional()
@@ -296,6 +310,67 @@ export const issueSessionTokenRequestSchema = z.object({
 export const issueSessionTokenResponseSchema = z.object({
   chatSessionToken: z.string(),
   expiresAt: z.string()
+});
+
+export const userStatusSchema = z.enum(["active", "disabled"]);
+
+export const administeredUserIdentitySchema = z.object({
+  clientInstanceId: z.string(),
+  userId: z.string(),
+  authSource: z.string(),
+  externalUserId: z.string(),
+  displayLabel: z.string().optional(),
+  email: z.string().optional(),
+  emailVerified: z.boolean(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  lastAuthenticatedAt: z.string().optional()
+});
+
+export const administeredUserSchema = z.object({
+  id: z.string(),
+  clientInstanceId: z.string(),
+  displayLabel: z.string(),
+  email: z.string().optional(),
+  roles: z.array(z.string()),
+  permissionRefs: z.array(z.string()),
+  status: userStatusSchema,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  lastAuthenticatedAt: z.string().optional(),
+  identities: z.array(administeredUserIdentitySchema)
+});
+
+export const createAdministeredUserRequestSchema = z.object({
+  displayLabel: z.string().min(1),
+  email: z.string().email().optional(),
+  roles: z.array(z.string()).optional(),
+  permissionRefs: z.array(z.string()).optional(),
+  status: userStatusSchema.optional()
+});
+
+export const updateAdministeredUserRequestSchema = z.object({
+  displayLabel: z.string().min(1).optional(),
+  email: z.string().email().nullable().optional(),
+  roles: z.array(z.string()).optional(),
+  permissionRefs: z.array(z.string()).optional(),
+  status: userStatusSchema.optional()
+});
+
+export const upsertAdministeredUserIdentityRequestSchema = z.object({
+  authSource: z.string().min(1),
+  externalUserId: z.string().min(1),
+  displayLabel: z.string().min(1).optional(),
+  email: z.string().email().optional(),
+  emailVerified: z.boolean().optional()
+});
+
+export const resetAdministeredUserPasswordRequestSchema = z.object({
+  password: z.string().min(8)
+});
+
+export const resetAdministeredUserPasswordResponseSchema = z.object({
+  ok: z.literal(true)
 });
 
 export const auditActorSchema = z.object({
@@ -323,6 +398,8 @@ export const modelUsageCostSchema = z.object({
   inputCostMicros: z.number().int().nonnegative(),
   outputCostMicros: z.number().int().nonnegative(),
   totalCostMicros: z.number().int().nonnegative(),
+  budgetedCostMicros: z.number().int().nonnegative(),
+  costSafetyMultiplier: z.number(),
   pricingConfigured: z.boolean()
 });
 
@@ -372,7 +449,8 @@ export const usagePricingSchema = z.object({
 
 export const usageSummarySchema = z.object({
   generatedAt: z.string(),
-  limits: safeConfigSchema.shape.usage.shape.limits,
+  budget: safeConfigSchema.shape.usage.shape.budget,
+  safeguards: safeConfigSchema.shape.usage.shape.safeguards,
   pricing: usagePricingSchema,
   today: modelUsageWindowSummarySchema,
   currentMonth: modelUsageWindowSummarySchema,
@@ -383,7 +461,18 @@ export const usageSummarySchema = z.object({
 export type ApiUser = z.infer<typeof apiUserSchema>;
 export type Conversation = z.infer<typeof conversationSchema>;
 export type Message = z.infer<typeof messageSchema>;
+export type ClientBranding = z.infer<typeof clientBrandingSchema>;
 export type SafeConfig = z.infer<typeof safeConfigSchema>;
+export type AdministeredUser = z.infer<typeof administeredUserSchema>;
+export type AdministeredUserIdentity = z.infer<typeof administeredUserIdentitySchema>;
+export type CreateAdministeredUserRequest = z.infer<typeof createAdministeredUserRequestSchema>;
+export type UpdateAdministeredUserRequest = z.infer<typeof updateAdministeredUserRequestSchema>;
+export type UpsertAdministeredUserIdentityRequest = z.infer<
+  typeof upsertAdministeredUserIdentityRequestSchema
+>;
+export type ResetAdministeredUserPasswordRequest = z.infer<
+  typeof resetAdministeredUserPasswordRequestSchema
+>;
 export type ChatStreamRequest = z.infer<typeof chatStreamRequestSchema>;
 export type ChatStreamChunk = z.infer<typeof chatStreamChunkSchema>;
 export type AgentRuntimeEvent = z.infer<typeof agentRuntimeEventSchema>;

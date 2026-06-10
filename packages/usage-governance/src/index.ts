@@ -5,14 +5,16 @@ import {
   type ModelUsageEventInput,
   type ModelUsageEventStore,
   type ModelUsageWindowSummary,
-  type UsageLimitsConfig,
+  type UsageBudgetConfig,
   type UsagePricingConfig,
+  type UsageSafeguardsConfig,
   createModelUsageWindowBounds
 } from "@agent-chat-platform/core";
 
 export interface ModelUsageGovernanceOptions {
   store: ModelUsageEventStore;
-  limits: UsageLimitsConfig;
+  budget: UsageBudgetConfig;
+  safeguards: UsageSafeguardsConfig;
   pricing?: UsagePricingConfig;
 }
 
@@ -21,6 +23,8 @@ export interface ModelUsageCost {
   inputCostMicros: number;
   outputCostMicros: number;
   totalCostMicros: number;
+  budgetedCostMicros: number;
+  costSafetyMultiplier: number;
   pricingConfigured: boolean;
 }
 
@@ -39,7 +43,8 @@ export interface CostedModelUsageEvent extends ModelUsageEvent {
 
 export interface UsageSummary {
   generatedAt: string;
-  limits: UsageLimitsConfig;
+  budget: UsageBudgetConfig;
+  safeguards: UsageSafeguardsConfig;
   pricing: UsagePricingConfig;
   today: CostedModelUsageWindowSummary;
   currentMonth: CostedModelUsageWindowSummary;
@@ -49,14 +54,16 @@ export interface UsageSummary {
 
 export class ModelUsageGovernance implements ModelUsageEventStore {
   private readonly store: ModelUsageEventStore;
-  private readonly limits: UsageLimitsConfig;
+  private readonly budget: UsageBudgetConfig;
+  private readonly safeguards: UsageSafeguardsConfig;
   private readonly pricing: UsagePricingConfig;
   private readonly clientLocks = new Map<string, Promise<void>>();
   private readonly inFlightModelCalls = new Map<string, number>();
 
   constructor(options: ModelUsageGovernanceOptions) {
     this.store = options.store;
-    this.limits = options.limits;
+    this.budget = options.budget;
+    this.safeguards = options.safeguards;
     this.pricing = options.pricing ?? {
       currency: "USD",
       models: []
@@ -107,11 +114,12 @@ export class ModelUsageGovernance implements ModelUsageEventStore {
     });
     const todayEvents = filterEventsByWindow(allEvents, todayStart);
     const currentMonthEvents = filterEventsByWindow(allEvents, currentMonthStart);
-    const pricingCatalog = new UsagePricingCatalog(this.pricing);
+    const pricingCatalog = new UsagePricingCatalog(this.pricing, this.budget);
 
     return {
       generatedAt: now.toISOString(),
-      limits: this.limits,
+      budget: this.budget,
+      safeguards: this.safeguards,
       pricing: this.pricing,
       today: summarizeCostedEvents(todayEvents, todayStart, undefined, pricingCatalog),
       currentMonth: summarizeCostedEvents(currentMonthEvents, currentMonthStart, undefined, pricingCatalog),
@@ -124,7 +132,12 @@ export class ModelUsageGovernance implements ModelUsageEventStore {
   }
 
   private async assertAllowed(clientInstanceId: ClientInstanceId): Promise<void> {
-    if (!this.limits.modelCallsPerDay && !this.limits.tokensPerDay && !this.limits.tokensPerMonth) {
+    if (
+      !this.safeguards.modelCallsPerDay &&
+      !this.safeguards.tokensPerDay &&
+      !this.safeguards.tokensPerMonth &&
+      !this.budget.monthlySpendLimit
+    ) {
       return;
     }
 
@@ -133,15 +146,33 @@ export class ModelUsageGovernance implements ModelUsageEventStore {
       clientInstanceId,
       start: todayStart
     });
-    assertDailyLimits(today, this.limits, this.countInFlightModelCalls(clientInstanceId));
+    assertDailySafeguards(today, this.safeguards, this.countInFlightModelCalls(clientInstanceId));
 
-    if (this.limits.tokensPerMonth) {
+    if (this.safeguards.tokensPerMonth || this.budget.monthlySpendLimit) {
       const currentMonth = await this.store.summarizeModelUsageEvents({
         clientInstanceId,
         start: currentMonthStart
       });
-      if (currentMonth.totalTokens >= this.limits.tokensPerMonth) {
-        throw new AppError("FORBIDDEN", "Monthly model token usage limit has been reached");
+      if (
+        this.safeguards.tokensPerMonth &&
+        currentMonth.totalTokens >= this.safeguards.tokensPerMonth
+      ) {
+        throw new AppError("FORBIDDEN", "Monthly model token safeguard has been reached");
+      }
+
+      if (this.budget.monthlySpendLimit) {
+        const currentMonthEvents = await this.store.listModelUsageEvents({
+          clientInstanceId,
+          start: currentMonthStart
+        });
+        const pricingCatalog = new UsagePricingCatalog(this.pricing, this.budget);
+        const costedMonth = summarizeCostedEvents(
+          currentMonthEvents,
+          currentMonthStart,
+          undefined,
+          pricingCatalog
+        );
+        assertMonthlySpendBudget(costedMonth.cost, this.budget);
       }
     }
   }
@@ -199,20 +230,37 @@ export class ModelUsageGovernance implements ModelUsageEventStore {
   }
 }
 
-function assertDailyLimits(
+function assertDailySafeguards(
   summary: ModelUsageWindowSummary,
-  limits: UsageLimitsConfig,
+  safeguards: UsageSafeguardsConfig,
   inFlightModelCallCount: number
 ): void {
   if (
-    limits.modelCallsPerDay &&
-    summary.modelCallCount + inFlightModelCallCount >= limits.modelCallsPerDay
+    safeguards.modelCallsPerDay &&
+    summary.modelCallCount + inFlightModelCallCount >= safeguards.modelCallsPerDay
   ) {
-    throw new AppError("FORBIDDEN", "Daily model call usage limit has been reached");
+    throw new AppError("FORBIDDEN", "Daily model call safeguard has been reached");
   }
 
-  if (limits.tokensPerDay && summary.totalTokens >= limits.tokensPerDay) {
-    throw new AppError("FORBIDDEN", "Daily model token usage limit has been reached");
+  if (safeguards.tokensPerDay && summary.totalTokens >= safeguards.tokensPerDay) {
+    throw new AppError("FORBIDDEN", "Daily model token safeguard has been reached");
+  }
+}
+
+function assertMonthlySpendBudget(cost: ModelUsageCostSummary, budget: UsageBudgetConfig): void {
+  if (!budget.monthlySpendLimit) {
+    return;
+  }
+
+  if (cost.unpricedModelCallCount > 0) {
+    throw new AppError(
+      "FORBIDDEN",
+      "Monthly model spend limit cannot be enforced because model pricing is missing"
+    );
+  }
+
+  if (cost.budgetedCostMicros >= toMicros(budget.monthlySpendLimit)) {
+    throw new AppError("FORBIDDEN", "Monthly model spend limit has been reached");
   }
 }
 
@@ -246,6 +294,7 @@ function summarizeCostedEvents(
           inputCostMicros: summary.cost.inputCostMicros + cost.inputCostMicros,
           outputCostMicros: summary.cost.outputCostMicros + cost.outputCostMicros,
           totalCostMicros: summary.cost.totalCostMicros + cost.totalCostMicros,
+          budgetedCostMicros: summary.cost.budgetedCostMicros + cost.budgetedCostMicros,
           pricingConfigured: summary.cost.pricingConfigured || cost.pricingConfigured,
           pricedModelCallCount:
             summary.cost.pricedModelCallCount + (cost.pricingConfigured ? 1 : 0),
@@ -269,7 +318,10 @@ function summarizeCostedEvents(
 class UsagePricingCatalog {
   private readonly prices: UsagePricingConfig["models"];
 
-  constructor(private readonly pricing: UsagePricingConfig) {
+  constructor(
+    private readonly pricing: UsagePricingConfig,
+    private readonly budget: UsageBudgetConfig
+  ) {
     this.prices = pricing.models;
   }
 
@@ -289,13 +341,16 @@ class UsagePricingCatalog {
       return this.createEmptyCost(false);
     }
 
-    const inputCostMicros = Math.round(event.inputTokens * price.inputPricePerMillionTokens);
-    const outputCostMicros = Math.round(event.outputTokens * price.outputPricePerMillionTokens);
+    const inputCostMicros = Math.ceil(event.inputTokens * price.inputPricePerMillionTokens);
+    const outputCostMicros = Math.ceil(event.outputTokens * price.outputPricePerMillionTokens);
+    const totalCostMicros = inputCostMicros + outputCostMicros;
     return {
       currency: this.pricing.currency,
       inputCostMicros,
       outputCostMicros,
-      totalCostMicros: inputCostMicros + outputCostMicros,
+      totalCostMicros,
+      budgetedCostMicros: Math.ceil(totalCostMicros * this.budget.costSafetyMultiplier),
+      costSafetyMultiplier: this.budget.costSafetyMultiplier,
       pricingConfigured: true
     };
   }
@@ -306,7 +361,13 @@ class UsagePricingCatalog {
       inputCostMicros: 0,
       outputCostMicros: 0,
       totalCostMicros: 0,
+      budgetedCostMicros: 0,
+      costSafetyMultiplier: this.budget.costSafetyMultiplier,
       pricingConfigured
     };
   }
+}
+
+function toMicros(value: number): number {
+  return Math.floor(value * 1_000_000);
 }

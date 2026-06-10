@@ -1,15 +1,32 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, createApiClient, type Conversation, type Message } from "@agent-chat-platform/api-client";
+import {
+  ApiError,
+  createApiClient,
+  type AdministeredUserIdentity,
+  type Conversation,
+  type CreateAdministeredUserRequest,
+  type Message,
+  type UpdateAdministeredUserRequest,
+  type UpsertAdministeredUserIdentityRequest
+} from "@agent-chat-platform/api-client";
 import { AssistantChatPanel } from "./assistant-chat-panel";
 import { signOut } from "./auth-client";
 import type { ChatShellProps } from "./chat-shell";
 import { LoginPanel } from "./login-panel";
 import { createThemeStyle } from "./theme";
 import { cn } from "./ui/cn";
+import { UserMenu } from "./user-menu";
 import { type WorkspaceView, WorkspaceRail } from "./workspace-rail";
 
-export function ChatWorkspace({ apiBaseUrl, token, getToken, adminPanel, className }: ChatShellProps) {
+export function ChatWorkspace({
+  apiBaseUrl,
+  token,
+  getToken,
+  adminPanel,
+  manageDocumentTitle,
+  className
+}: ChatShellProps) {
   const queryClient = useQueryClient();
   const [selectedConversationId, setSelectedConversationId] = useState<string | undefined>();
   const [draftsByTarget, setDraftsByTarget] = useState<Record<string, string>>({});
@@ -60,6 +77,11 @@ export function ChatWorkspace({ apiBaseUrl, token, getToken, adminPanel, classNa
     queryFn: client.auditEvents,
     enabled: isSuperadmin && view === "superadmin"
   });
+  const usersQuery = useQuery({
+    queryKey: ["superadmin-users", apiBaseUrl, authScope],
+    queryFn: client.users,
+    enabled: isSuperadmin && view === "superadmin"
+  });
 
   const deleteConversation = useMutation({
     mutationFn: (conversationId: string) => client.deleteConversation(conversationId),
@@ -89,9 +111,23 @@ export function ChatWorkspace({ apiBaseUrl, token, getToken, adminPanel, classNa
   });
 
   const conversations = conversationsQuery.data ?? [];
-  const messages = messagesQuery.data ?? [];
+  const messages = selectedConversationId ? messagesQuery.data : [];
+  const messagesLoaded = !selectedConversationId || messagesQuery.data !== undefined;
   const config = configQuery.data;
   const themeStyle = createThemeStyle(config?.ui);
+
+  useEffect(() => {
+    if (!manageDocumentTitle || !config?.ui.title) {
+      return undefined;
+    }
+    const previousTitle = document.title;
+    document.title = config.ui.title;
+    return () => {
+      if (document.title === config.ui.title) {
+        document.title = previousTitle;
+      }
+    };
+  }, [config?.ui.title, manageDocumentTitle]);
 
   const signOutMutation = useMutation({
     mutationFn: () => signOut(apiBaseUrl),
@@ -103,6 +139,51 @@ export function ChatWorkspace({ apiBaseUrl, token, getToken, adminPanel, classNa
       void queryClient.invalidateQueries({ queryKey: ["me", apiBaseUrl] });
     }
   });
+  const createUser = useMutation({
+    mutationFn: (input: CreateAdministeredUserRequest) => client.createUser(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["superadmin-users", apiBaseUrl, authScope] });
+      void queryClient.invalidateQueries({ queryKey: ["audit-events", apiBaseUrl, authScope] });
+    }
+  });
+  const updateUser = useMutation({
+    mutationFn: (input: { userId: string; update: UpdateAdministeredUserRequest }) =>
+      client.updateUser(input.userId, input.update),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["superadmin-users", apiBaseUrl, authScope] });
+      void queryClient.invalidateQueries({ queryKey: ["audit-events", apiBaseUrl, authScope] });
+    }
+  });
+  const upsertUserIdentity = useMutation({
+    mutationFn: (input: { userId: string; identity: UpsertAdministeredUserIdentityRequest }) =>
+      client.upsertUserIdentity(input.userId, input.identity),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["superadmin-users", apiBaseUrl, authScope] });
+      void queryClient.invalidateQueries({ queryKey: ["audit-events", apiBaseUrl, authScope] });
+    }
+  });
+  const deleteUserIdentity = useMutation({
+    mutationFn: (input: { userId: string; identity: AdministeredUserIdentity }) =>
+      client.deleteUserIdentity(input.userId, input.identity.authSource, input.identity.externalUserId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["superadmin-users", apiBaseUrl, authScope] });
+      void queryClient.invalidateQueries({ queryKey: ["audit-events", apiBaseUrl, authScope] });
+    }
+  });
+  const resetUserPassword = useMutation({
+    mutationFn: (input: { userId: string; password: string }) =>
+      client.resetUserPassword(input.userId, { password: input.password }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["audit-events", apiBaseUrl, authScope] });
+    }
+  });
+  const userMenu = (
+    <UserMenu
+      user={meQuery.data}
+      signingOut={signOutMutation.isPending}
+      onSignOut={() => signOutMutation.mutate()}
+    />
+  );
 
   function onCreateConversation() {
     setSelectedConversationId(undefined);
@@ -146,6 +227,7 @@ export function ChatWorkspace({ apiBaseUrl, token, getToken, adminPanel, classNa
     return (
       <LoginPanel
         apiBaseUrl={apiBaseUrl}
+        manageDocumentTitle={manageDocumentTitle}
         onSignedIn={() => {
           void queryClient.invalidateQueries({ queryKey: ["me", apiBaseUrl] });
         }}
@@ -171,7 +253,6 @@ export function ChatWorkspace({ apiBaseUrl, token, getToken, adminPanel, classNa
         creatingConversation={false}
         deletingConversation={deleteConversation.isPending}
         onViewChange={setView}
-        onSignOut={() => signOutMutation.mutate()}
         onCreateConversation={onCreateConversation}
         onSelectConversation={setSelectedConversationId}
         onDeleteConversation={(conversationId) => deleteConversation.mutate(conversationId)}
@@ -181,13 +262,31 @@ export function ChatWorkspace({ apiBaseUrl, token, getToken, adminPanel, classNa
         adminPanel?.renderPanel({
           usage: usageQuery.data,
           auditEvents: auditQuery.data ?? [],
+          users: usersQuery.data ?? [],
           loading: usageQuery.isLoading || auditQuery.isLoading,
+          usersLoading: usersQuery.isLoading,
           error:
             usageQuery.error instanceof ApiError
               ? usageQuery.error.message
               : auditQuery.error instanceof ApiError
                 ? auditQuery.error.message
-                : undefined
+                : undefined,
+          usersError: usersQuery.error instanceof ApiError ? usersQuery.error.message : undefined,
+          usersMutating:
+            createUser.isPending ||
+            updateUser.isPending ||
+            upsertUserIdentity.isPending ||
+            deleteUserIdentity.isPending ||
+            resetUserPassword.isPending,
+          onCreateUser: (input) => createUser.mutateAsync(input),
+          onUpdateUser: (userId, update) => updateUser.mutateAsync({ userId, update }),
+          onUpsertUserIdentity: (userId, identity) =>
+            upsertUserIdentity.mutateAsync({ userId, identity }),
+          onDeleteUserIdentity: (userId, identity) =>
+            deleteUserIdentity.mutateAsync({ userId, identity }),
+          onResetUserPassword: (userId, password) =>
+            resetUserPassword.mutateAsync({ userId, password }),
+          headerActions: userMenu
         })
       ) : (
         <AssistantChatPanel
@@ -197,8 +296,10 @@ export function ChatWorkspace({ apiBaseUrl, token, getToken, adminPanel, classNa
           conversations={conversations}
           selectedConversationId={selectedConversationId}
           messages={messages}
+          messagesLoaded={messagesLoaded}
           notice={notice}
           draft={draft}
+          headerActions={userMenu}
           onDraftChange={(value) => setDraftForKey(draftKey, value)}
           onConversationStarted={onConversationStarted}
           onStreamFinished={onStreamFinished}

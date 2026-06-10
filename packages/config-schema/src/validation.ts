@@ -11,12 +11,20 @@ export function parseClientInstanceConfig(input: unknown): ClientInstanceConfig 
 
   assertProductionSafeAuthConfig(parsed.data);
   assertConfigReferences(parsed.data);
+  assertSpendBudgetPricingCoverage(parsed.data);
   return parsed.data;
 }
 
 function assertProductionSafeAuthConfig(config: ClientInstanceConfig): void {
   if (config.clientInstance.environment !== "production") {
     return;
+  }
+
+  if (config.auth.development?.enabled) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "Development auth must not be enabled in production config"
+    );
   }
 
   const seedUserWithDevelopmentPassword = config.auth.standalone?.seedUsers.find(
@@ -50,4 +58,43 @@ function assertConfigReferences(config: ClientInstanceConfig): void {
       );
     }
   }
+}
+
+function assertSpendBudgetPricingCoverage(config: ClientInstanceConfig): void {
+  if (!config.usage.budget.monthlySpendLimit) {
+    return;
+  }
+
+  const priceKeys = new Set(
+    config.usage.pricing.models.map((price) => createPricingKey(price.providerId, price.model))
+  );
+  const requiredPrices = new Set<string>();
+
+  for (const provider of config.modelProviders) {
+    if (provider.type !== "deterministic") {
+      requiredPrices.add(createPricingKey(provider.id, provider.model));
+    }
+  }
+
+  if (config.conversationTitles.enabled && config.conversationTitles.model) {
+    const providerId = config.conversationTitles.modelProviderId ?? config.modelProviders[0]?.id;
+    const provider = config.modelProviders.find((candidate) => candidate.id === providerId);
+    if (provider && provider.type !== "deterministic") {
+      requiredPrices.add(createPricingKey(provider.id, config.conversationTitles.model));
+    }
+  }
+
+  const missingPrices = [...requiredPrices].filter((priceKey) => !priceKeys.has(priceKey));
+  if (missingPrices.length === 0) {
+    return;
+  }
+
+  throw new AppError(
+    "VALIDATION_FAILED",
+    `Monthly spend budget requires configured pricing for model ${missingPrices.join(", ")}`
+  );
+}
+
+function createPricingKey(providerId: string, model: string): string {
+  return `${providerId}/${model}`;
 }

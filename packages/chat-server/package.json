@@ -20,6 +20,7 @@
     "@agent-chat-platform/auth": "workspace:*",
     "@agent-chat-platform/core": "workspace:*",
     "@agent-chat-platform/config-schema": "workspace:*",
+    "@agent-chat-platform/model-provider": "workspace:*",
     "@agent-chat-platform/usage-governance": "workspace:*",
     "@fastify/cors": "^11.2.0",
     "ai": "^6.0.199",

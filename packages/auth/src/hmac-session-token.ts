@@ -12,6 +12,7 @@ export interface SessionTokenInput {
   externalUserId: string;
   displayLabel: string;
   email?: string;
+  emailVerified?: boolean;
   roles?: string[];
   permissionRefs?: string[];
   correlationId?: string;
@@ -21,6 +22,7 @@ interface SessionTokenClaims {
   sub: string;
   displayLabel: string;
   email?: string;
+  emailVerified?: boolean;
   roles: string[];
   permissionRefs: string[];
   clientInstanceId: string;
@@ -56,6 +58,7 @@ export class HmacSessionTokenIssuer {
       sub: input.externalUserId,
       displayLabel: input.displayLabel,
       email: input.email,
+      emailVerified: input.emailVerified,
       roles: input.roles ?? ["user"],
       permissionRefs: input.permissionRefs ?? [],
       clientInstanceId: String(this.options.clientInstanceId),
@@ -103,6 +106,7 @@ export class HmacSessionTokenAuthAdapter implements AuthAdapter {
       externalUserId: claims.sub,
       displayLabel: claims.displayLabel,
       email: claims.email,
+      emailVerified: claims.emailVerified,
       roles: claims.roles,
       permissionRefs: claims.permissionRefs,
       clientInstanceId: asClientInstanceId(claims.clientInstanceId),

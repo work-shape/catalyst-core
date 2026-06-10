@@ -31,10 +31,11 @@ Paste an OpenAI API key into `.env` before using the default demo config. The de
 
 Default standalone login users:
 
-- `superadmin@example.test` / `demo-superadmin-password`
-- `user@example.test` / `demo-user-password`
+- `DEMO_SUPERADMIN_EMAIL` / `DEMO_SUPERADMIN_PASSWORD`
+- `DEMO_USER_EMAIL` / `DEMO_USER_PASSWORD`
 
-If `DEMO_SUPERADMIN_PASSWORD` or `DEMO_USER_PASSWORD` is set in `.env`, use those values instead.
+The example values are `superadmin@example.test` / `demo-superadmin-password` and
+`user@example.test` / `demo-user-password`.
 
 Useful checks:
 

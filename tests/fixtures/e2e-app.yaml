@@ -11,6 +11,7 @@ auth:
       - http://127.0.0.1:5273
     seedUsers:
       - email: e2e-superadmin@example.test
+        emailEnvName: E2E_SUPERADMIN_EMAIL
         displayLabel: E2E Superadmin
         passwordEnvName: E2E_SUPERADMIN_PASSWORD
         developmentPassword: e2e-superadmin-password
@@ -21,6 +22,7 @@ auth:
         permissionRefs:
           - demo-tools
       - email: e2e-user@example.test
+        emailEnvName: E2E_USER_EMAIL
         displayLabel: E2E User
         passwordEnvName: E2E_USER_PASSWORD
         developmentPassword: e2e-user-password
@@ -37,7 +39,9 @@ modelProviders:
     type: deterministic
     model: deterministic-local
 usage:
-  limits:
+  budget:
+    costSafetyMultiplier: 1
+  safeguards:
     modelCallsPerDay: 12
     tokensPerDay: 25000
     tokensPerMonth: 250000
@@ -57,6 +61,9 @@ agents:
       You help users work through sensitive application and document review workflows.
     toolNames:
       - document.application_summary
+    initialPrompts:
+      - title: Find review risks
+        prompt: List the most important application or document review risks I should check first.
 tools:
   - name: document.application_summary
     enabled: true

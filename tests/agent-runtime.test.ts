@@ -63,7 +63,8 @@ describe("local agent runtime", () => {
           displayName: "History Agent",
           instructions: "Use conversation history.",
           modelProviderId: "test-provider",
-          toolNames: []
+          toolNames: [],
+          initialPrompts: []
         }
       ],
       modelProviders: [providerConfig],
@@ -78,7 +79,10 @@ describe("local agent runtime", () => {
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
         store: new InMemoryPlatformStore(),
-        limits: {}
+        budget: {
+          costSafetyMultiplier: 1
+        },
+        safeguards: {}
       })
     });
 

@@ -39,5 +39,5 @@ function StandaloneRoot() {
 }
 
 function StandaloneChatRoute() {
-  return <ChatShell apiBaseUrl={apiBaseUrl} adminPanel={superadminPanel} />;
+  return <ChatShell apiBaseUrl={apiBaseUrl} adminPanel={superadminPanel} manageDocumentTitle />;
 }

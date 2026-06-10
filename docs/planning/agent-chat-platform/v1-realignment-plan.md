@@ -102,7 +102,7 @@ interface ConversationHistoryReader {
 
 **Steps.**
 
-1. Move `UsageLimitsConfig`, `UsagePricingConfig`, agent definition, and model provider option types into the contracts package as product types (usage types partially exist there already; merge rather than duplicate).
+1. Move `UsageBudgetConfig`, `UsageSafeguardsConfig`, `UsagePricingConfig`, agent definition, and model provider option types into the contracts package as product types (usage types partially exist there already; merge rather than duplicate).
 2. `config-schema` keeps the zod schemas, YAML loading, and helpers (`getAgentConfig`, `getEnabledToolNames`), all returning contract types.
 3. Narrow constructor inputs: `LocalAgentRuntime` takes the resolved agent map and default provider lookup it needs, not `ClientInstanceConfig`.
 4. Verify with the dependency graph: only `client-instance` (and `chat-server` for safe-config exposure) may depend on `config-schema`.

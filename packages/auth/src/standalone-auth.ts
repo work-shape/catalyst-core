@@ -13,6 +13,7 @@ import {
 } from "@agent-chat-platform/core";
 import {
   authAccounts,
+  authSessions,
   authUsers,
   standaloneAuthProfiles,
   standaloneAuthSchema
@@ -36,11 +37,19 @@ export interface StandaloneAuthOptions {
   seedUsers?: StandaloneAuthSeedUser[];
 }
 
+export const STANDALONE_AUTH_SOURCE = "better-auth";
+
+export interface SetStandalonePasswordInput {
+  externalUserId: string;
+  password: string;
+}
+
 export interface StandaloneAuthRuntime {
   handleRequest(request: Request): Promise<Response>;
   authAdapter: AuthAdapter;
   baseUrl: string;
   seedUsers(): Promise<void>;
+  setPassword(input: SetStandalonePasswordInput): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -55,6 +64,7 @@ interface BetterAuthSessionApi {
           user: {
             id: string;
             email: string;
+            emailVerified?: boolean;
           };
         }
       | null
@@ -97,6 +107,7 @@ export async function createStandaloneAuthRuntime(
     authAdapter: new BetterAuthAdapter(auth, profileStore),
     baseUrl: options.baseUrl,
     seedUsers,
+    setPassword: (input) => profileStore.setPassword(input),
     async close() {
       await sql.end();
     }
@@ -104,7 +115,7 @@ export async function createStandaloneAuthRuntime(
 }
 
 class BetterAuthAdapter implements AuthAdapter {
-  readonly id = "better-auth";
+  readonly id = STANDALONE_AUTH_SOURCE;
 
   constructor(
     private readonly auth: BetterAuthSessionApi,
@@ -129,6 +140,7 @@ class BetterAuthAdapter implements AuthAdapter {
       externalUserId: profile.externalUserId,
       displayLabel: profile.displayLabel,
       email: session.user.email,
+      emailVerified: session.user.emailVerified ?? false,
       roles: profile.roles,
       permissionRefs: profile.permissionRefs,
       clientInstanceId: request.clientInstanceId,
@@ -156,6 +168,24 @@ class StandaloneAuthProfileStore {
       )
       .limit(1);
     return row;
+  }
+
+  async setPassword(input: SetStandalonePasswordInput): Promise<void> {
+    const [profile] = await this.db
+      .select()
+      .from(standaloneAuthProfiles)
+      .where(
+        and(
+          eq(standaloneAuthProfiles.clientInstanceId, this.clientInstanceId),
+          eq(standaloneAuthProfiles.externalUserId, input.externalUserId)
+        )
+      )
+      .limit(1);
+    if (!profile) {
+      throw new AppError("NOT_FOUND", "No standalone auth account exists for this user");
+    }
+    await this.upsertCredentialAccount(profile.authUserId, input.password);
+    await this.db.delete(authSessions).where(eq(authSessions.userId, profile.authUserId));
   }
 
   async seedUser(seedUser: StandaloneAuthSeedUser): Promise<void> {

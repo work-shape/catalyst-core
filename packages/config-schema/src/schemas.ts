@@ -2,8 +2,9 @@ import { z } from "zod";
 import type {
   AgentConfig,
   ModelProviderConfig,
-  UsageLimitsConfig,
-  UsagePricingConfig
+  UsageBudgetConfig,
+  UsagePricingConfig,
+  UsageSafeguardsConfig
 } from "@agent-chat-platform/core";
 
 export const userIdentitySchema = z.object({
@@ -11,6 +12,7 @@ export const userIdentitySchema = z.object({
   externalUserId: z.string().min(1).default("dev-user"),
   displayLabel: z.string().min(1).default("Development User"),
   email: z.string().email().optional(),
+  emailVerified: z.boolean().optional(),
   roles: z.array(z.string().min(1)).default(["user", "admin"]),
   permissionRefs: z.array(z.string().min(1)).default(["demo-tools"]),
   authSource: z.string().min(1).default("development")
@@ -34,6 +36,7 @@ const developmentAuthConfigSchema = z.object({
 
 const standaloneSeedUserSchema = z.object({
   email: z.string().email(),
+  emailEnvName: z.string().min(1).optional(),
   displayLabel: z.string().min(1),
   passwordEnvName: z.string().min(1),
   developmentPassword: z.string().min(8).optional(),
@@ -73,10 +76,27 @@ export const agentConfigSchema = z.object({
   displayName: z.string().min(1),
   instructions: z.string().min(1),
   modelProviderId: z.string().min(1).optional(),
-  toolNames: z.array(z.string().min(1)).default([])
+  toolNames: z.array(z.string().min(1)).default([]),
+  initialPrompts: z
+    .array(
+      z.object({
+        title: z.string().min(1),
+        prompt: z.string().min(1)
+      })
+    )
+    .default([])
 });
 
-export const usageLimitsConfigSchema = z
+export const usageBudgetConfigSchema = z
+  .object({
+    monthlySpendLimit: z.number().positive().optional(),
+    costSafetyMultiplier: z.number().min(1).default(1)
+  })
+  .default({
+    costSafetyMultiplier: 1
+  });
+
+export const usageSafeguardsConfigSchema = z
   .object({
     modelCallsPerDay: z.number().int().positive().optional(),
     tokensPerDay: z.number().int().positive().optional(),
@@ -101,6 +121,16 @@ export const usagePricingConfigSchema = z
   .default({
     currency: "USD",
     models: []
+  });
+
+export const conversationTitleConfigSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    modelProviderId: z.string().min(1).optional(),
+    model: z.string().min(1).optional()
+  })
+  .default({
+    enabled: true
   });
 
 const uiThemeSchema = z
@@ -143,9 +173,16 @@ export const clientInstanceConfigSchema = z.object({
           issuer: z.string().min(1).default("agent-chat-platform"),
           ttlSeconds: z.number().int().positive().max(3600).default(900)
         })
-        .optional()
+        .optional(),
+      identityLinking: z
+        .object({
+          byVerifiedEmail: z.boolean().default(true)
+        })
+        .default({ byVerifiedEmail: true })
     })
-    .default({}),
+    .default({
+      identityLinking: { byVerifiedEmail: true }
+    }),
   retention: z
     .object({
       conversationDays: z.number().int().positive().max(3650).default(30),
@@ -161,13 +198,18 @@ export const clientInstanceConfigSchema = z.object({
     .array(modelProviderConfigSchema)
     .min(1)
     .default([{ id: "local", type: "deterministic", model: "deterministic-local" }]),
+  conversationTitles: conversationTitleConfigSchema,
   usage: z
     .object({
-      limits: usageLimitsConfigSchema,
+      budget: usageBudgetConfigSchema,
+      safeguards: usageSafeguardsConfigSchema,
       pricing: usagePricingConfigSchema
     })
     .default({
-      limits: {},
+      budget: {
+        costSafetyMultiplier: 1
+      },
+      safeguards: {},
       pricing: {
         currency: "USD",
         models: []
@@ -222,7 +264,8 @@ export type StandaloneSeedUserConfig = z.infer<typeof standaloneSeedUserSchema>;
 export type {
   AgentConfig,
   ModelProviderConfig,
-  UsageLimitsConfig,
-  UsagePricingConfig
+  UsageBudgetConfig,
+  UsagePricingConfig,
+  UsageSafeguardsConfig
 };
 export type ClientInstanceConfig = z.infer<typeof clientInstanceConfigSchema>;

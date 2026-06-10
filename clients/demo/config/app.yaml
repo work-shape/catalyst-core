@@ -1,7 +1,7 @@
 version: 1
 clientInstance:
   id: demo-local
-  displayName: Demo Client Instance
+  displayName: Musterbau Demo
   environment: development
 auth:
   standalone:
@@ -15,6 +15,7 @@ auth:
     seedUsers:
       - displayLabel: Demo Superadmin
         email: superadmin@example.test
+        emailEnvName: DEMO_SUPERADMIN_EMAIL
         passwordEnvName: DEMO_SUPERADMIN_PASSWORD
         developmentPassword: demo-superadmin-password
         roles:
@@ -25,6 +26,7 @@ auth:
           - demo-tools
       - displayLabel: Demo User
         email: user@example.test
+        emailEnvName: DEMO_USER_EMAIL
         passwordEnvName: DEMO_USER_PASSWORD
         developmentPassword: demo-user-password
         roles:
@@ -44,11 +46,18 @@ modelProviders:
     model: gpt-4.1
     baseUrl: https://api.openai.com/v1
     apiKeyEnvName: OPENAI_API_KEY
+conversationTitles:
+  enabled: true
+  modelProviderId: openai
+  model: gpt-5-nano
 usage:
-  limits:
-    modelCallsPerDay: 100
-    tokensPerDay: 250000
-    tokensPerMonth: 2000000
+  budget:
+    monthlySpendLimit: 200
+    costSafetyMultiplier: 1.3
+  safeguards:
+    modelCallsPerDay: 1000
+    tokensPerDay: 2500000
+    tokensPerMonth: 50000000
   pricing:
     currency: USD
     models:
@@ -56,6 +65,10 @@ usage:
         model: gpt-4.1
         inputPricePerMillionTokens: 2
         outputPricePerMillionTokens: 8
+      - providerId: openai
+        model: gpt-5-nano
+        inputPricePerMillionTokens: 0.05
+        outputPricePerMillionTokens: 0.4
 defaultAgentName: application_assistant
 agentFiles:
   - ../agents/application-assistant.agent.yaml
@@ -63,15 +76,16 @@ tools:
   - name: document.application_summary
     enabled: true
 ui:
-  clientName: Demo Customer
-  title: Agent Chat
-  welcomeMessage: Start a conversation about an application or document review workflow.
-  accentColor: "#0f766e"
+  clientName: Musterbau
+  logoUrl: https://www.musterbau.de/wp-content/uploads/2023/03/Logo_Musterbau_schwarz.png
+  title: Musterbau Chat
+  welcomeMessage: Wie kann ich beim Immobilien- oder Finanzierungsworkflow helfen?
+  accentColor: "#00a6e3"
   theme:
-    accentColor: "#0f766e"
-    accentStrongColor: "#0b5f59"
-    backgroundColor: "#f4f1e8"
-    surfaceColor: "#fffdfa"
-    textColor: "#17201d"
-    mutedTextColor: "#68746f"
-    borderColor: "#d8d3c7"
+    accentColor: "#00a6e3"
+    accentStrongColor: "#103258"
+    backgroundColor: "#f7f9fb"
+    surfaceColor: "#ffffff"
+    textColor: "#17252a"
+    mutedTextColor: "#5f6b76"
+    borderColor: "#dce2e7"

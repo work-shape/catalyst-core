@@ -25,6 +25,15 @@ export function getModelProviderForAgent(
   return provider;
 }
 
+export function getModelProviderForConversationTitles(config: ClientInstanceConfig): ModelProviderConfig {
+  const providerId = config.conversationTitles.modelProviderId ?? config.modelProviders[0]?.id;
+  const provider = config.modelProviders.find((candidate) => candidate.id === providerId);
+  if (!provider) {
+    throw new AppError("NOT_FOUND", `Model provider '${providerId}' is not defined`);
+  }
+  return provider;
+}
+
 export function getEnabledToolNames(config: ClientInstanceConfig): Set<string> {
   return new Set(config.tools.filter((tool) => tool.enabled).map((tool) => tool.name));
 }

@@ -10,12 +10,14 @@ export function createSafeConfigView(config: ClientInstanceConfig) {
     },
     retention: config.retention,
     usage: {
-      limits: config.usage.limits
+      budget: config.usage.budget,
+      safeguards: config.usage.safeguards
     },
     defaultAgentName: config.defaultAgentName,
     agents: config.agents.map((agent) => ({
       name: agent.name,
-      displayName: agent.displayName
+      displayName: agent.displayName,
+      initialPrompts: agent.initialPrompts
     })),
     ui: createClientBranding(config)
   };

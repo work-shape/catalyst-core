@@ -1,4 +1,4 @@
-import { LogOut, Plus, Settings, ShieldCheck } from "lucide-react";
+import { Plus, Settings, ShieldCheck } from "lucide-react";
 import type { ApiUser, Conversation, SafeConfig } from "@agent-chat-platform/api-client";
 import { ConversationButton } from "./conversation-button";
 import { Button } from "./ui/button";
@@ -15,7 +15,6 @@ export function WorkspaceRail({
   creatingConversation,
   deletingConversation,
   onViewChange,
-  onSignOut,
   onCreateConversation,
   onSelectConversation,
   onDeleteConversation
@@ -29,53 +28,56 @@ export function WorkspaceRail({
   creatingConversation: boolean;
   deletingConversation: boolean;
   onViewChange: (view: WorkspaceView) => void;
-  onSignOut: () => void;
   onCreateConversation: () => void;
   onSelectConversation: (conversationId: string) => void;
   onDeleteConversation: (conversationId: string) => void;
 }) {
+  const clientLabel = config?.ui.clientName ?? config?.ui.title ?? "Agent Chat";
+  const userLabel = user?.displayLabel ?? "Loading";
+  const superadminButton = isSuperadmin ? (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className={view === "superadmin" ? "bg-sidebar-accent text-primary" : "text-muted-foreground"}
+      aria-label={view === "superadmin" ? "Return to chat" : "Open superadmin panel"}
+      title={view === "superadmin" ? "Return to chat" : "Open superadmin panel"}
+      onClick={() => onViewChange(view === "superadmin" ? "chat" : "superadmin")}
+    >
+      <Settings size={16} aria-hidden="true" />
+    </Button>
+  ) : null;
+
   return (
     <aside
       className="grid h-full min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-4 overflow-hidden border-r bg-sidebar p-4 text-sidebar-foreground max-md:grid-cols-[minmax(0,1fr)_5.5rem] max-md:grid-rows-[auto_auto] max-md:border-r-0 max-md:border-b"
       aria-label="Conversations"
     >
-      <div className="grid min-w-0 grid-cols-[2.25rem_minmax(0,1fr)_auto_auto] items-center gap-2.5 max-md:col-start-1 max-md:row-start-1">
-        <div className="grid size-9 place-items-center overflow-hidden rounded-lg border bg-card text-primary">
-          {config?.ui.logoUrl ? (
-            <img className="size-full object-cover" src={config.ui.logoUrl} alt="" />
-          ) : (
+      {config?.ui.logoUrl ? (
+        <div className="grid min-w-0 gap-2 max-md:col-start-1 max-md:row-start-1">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5">
+            <div className="flex h-10 min-w-0 max-w-[11.5rem] items-center justify-center overflow-hidden rounded-lg border bg-card px-3 text-primary">
+              <img className="max-h-7 w-full object-contain" src={config.ui.logoUrl} alt="" />
+            </div>
+            {superadminButton}
+          </div>
+          <div className="grid min-w-0 gap-0.5">
+            <strong className="truncate text-sm">{clientLabel}</strong>
+            <span className="truncate text-xs text-muted-foreground">{userLabel}</span>
+          </div>
+        </div>
+      ) : (
+        <div className="grid min-w-0 grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-2.5 max-md:col-start-1 max-md:row-start-1">
+          <div className="grid size-9 place-items-center overflow-hidden rounded-lg border bg-card text-primary">
             <ShieldCheck size={18} aria-hidden="true" />
-          )}
+          </div>
+          <div className="grid min-w-0 gap-0.5">
+            <strong className="truncate text-sm">{clientLabel}</strong>
+            <span className="truncate text-xs text-muted-foreground">{userLabel}</span>
+          </div>
+          {superadminButton}
         </div>
-        <div className="grid min-w-0 gap-0.5">
-          <strong className="truncate text-sm">{config?.ui.clientName ?? config?.ui.title ?? "Agent Chat"}</strong>
-          <span className="truncate text-xs text-muted-foreground">{user?.displayLabel ?? "Loading"}</span>
-        </div>
-        {isSuperadmin ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className={view === "superadmin" ? "bg-sidebar-accent text-primary" : "text-muted-foreground"}
-            aria-label={view === "superadmin" ? "Return to chat" : "Open superadmin panel"}
-            title={view === "superadmin" ? "Return to chat" : "Open superadmin panel"}
-            onClick={() => onViewChange(view === "superadmin" ? "chat" : "superadmin")}
-          >
-            <Settings size={16} aria-hidden="true" />
-          </Button>
-        ) : null}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="text-muted-foreground"
-          aria-label="Sign out"
-          title="Sign out"
-          onClick={onSignOut}
-        >
-          <LogOut size={16} aria-hidden="true" />
-        </Button>
-      </div>
+      )}
 
       <Button
         className="h-10 w-full justify-center shadow-xs max-md:col-start-2 max-md:row-start-1"

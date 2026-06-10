@@ -41,8 +41,9 @@ V1 control-plane candidates:
 - view active client-instance release config and config snapshots
 - view own conversations
 - delete own conversations where allowed
-- superadmin usage panel led by model cost summaries, with model calls, provider-reported tokens, configured pricing/limits, and recent model usage events as supporting context
+- superadmin usage panel led by budgeted model cost summaries, with model calls, provider-reported tokens, configured pricing, spend budget, late safeguards, and recent model usage events as supporting context
 - admin/superadmin view for governance tasks
+- superadmin user administration for product-owned users, roles, permission refs, status, and user identity mappings
 - inspect/delete conversations and related data where legally/contractually permitted
 - view audit and retention-job status
 
@@ -50,9 +51,13 @@ Admin/superadmin access must be explicit, permissioned, and audited. Sensitive-d
 
 By default, admin/superadmin views should show metadata, deletion workflows, export/request-handling tools, and audit status. Full conversation message access should require an explicit config flag, a permission check, and an audit reason.
 
+User administration manages product-owned user records and identity mappings. It is not a general auth-provider console in v1: password reset, invite, and credential lifecycle flows should be added only when a concrete standalone-account workflow requires them.
+
 The normal chat rail should stay focused on conversations and a single New action. Superadmin/control-plane access should not appear as a primary Chat/Usage segmented control; it should be tucked behind a secondary superadmin-only action because most users will never see or need it.
 
 Composer drafts belong to the active conversation target. Switching conversations should restore that conversation's unsent draft or show an empty composer. The unsaved New conversation screen should have its own draft state and should not create a persisted conversation until the first message is sent.
+
+Conversation rows should show a short generated title after the first user/assistant exchange. The backend owns title generation, persistence, usage accounting, and audit events; assistant-ui may render thread titles, but Assistant Cloud auto-title behavior is not used because conversation storage remains in our backend/Postgres. Title generation is navigation metadata only, not a retained conversation summary for model context. The first implementation uses a temporary first-message title immediately, then refreshes the conversation list after the stream finishes so the generated title appears without a separate UI control.
 
 ## Domain UI Outputs
 
@@ -76,6 +81,8 @@ Vercel AI SDK is the default v1 internal candidate for model calls, streaming, p
 Current v1 implementation status: the backend persists the submitted user message, runs the agent, streams Vercel AI SDK UI message chunks over `/api/chat`, persists assistant messages from runtime completion events, and records minimized run/tool audit metadata. assistant-ui consumes that stream through `@assistant-ui/react-ai-sdk` inside `chat-ui`; API/auth/persistence remain product-owned.
 
 Current chat-ui implementation status: the active chat surface wraps assistant-ui primitives behind `AssistantChatPanel` and product-owned components. The first polished assistant-ui pass includes Thread/Viewport, Composer, ActionBar copy, markdown/GFM rendering, syntax-highlighted code blocks, error rendering, suggestion prompts, generic tool-call/data part rendering, a visible stop/cancel action while running, and disabled attachment/edit/regenerate affordances where the backend workflow is not complete yet.
+
+Current title implementation status: conversation rows store `title` in Postgres. New conversations start with a local first-message title, then the conversation workflow performs one best-effort model call after the first assistant response when the title still looks temporary. The title prompt is capped to the first user and assistant texts and asks the model to avoid personal data in the headline. Success writes `conversation.title_generated`; failure writes `conversation.title_generation_failed` and does not fail the chat turn.
 
 Deferred v1 UI controls: feedback/export and branch picker are intentionally out of scope for the next polish pass. Attachment acquisition/upload, dropzone enablement, message editing, and regeneration should move from disabled affordances to active controls only when the corresponding backend contracts and audit semantics are implemented.
 
@@ -117,7 +124,7 @@ The API contract package should be the shared module. The server should not impo
 
 The generated API client should cover normal request/response operations such as conversations, config, authenticated user state, file metadata, feedback, audit views, and superadmin usage summaries. The live chat stream may use assistant-ui/Vercel AI SDK transport primitives instead of being treated as a normal TanStack Query request.
 
-Usage routes must return minimized metadata only: provider id, model id, token counts, derived cost metadata from release-config pricing, timestamps, correlation ids, and configured pricing/limits. They must not return prompt or completion payloads.
+Usage routes must return minimized metadata only: provider id, model id, token counts, derived cost metadata from release-config pricing and the cost safety multiplier, timestamps, correlation ids, configured pricing, spend budget, and late safeguards. They must not return prompt or completion payloads.
 
 The conversation list must be user-scoped by the backend. The frontend should not filter another user's conversations out of a shared response.
 

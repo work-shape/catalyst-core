@@ -2,11 +2,18 @@ import { z } from "zod";
 import { ApiError } from "./errors";
 import {
   apiUserSchema,
+  administeredUserSchema,
   auditEventSchema,
+  clientBrandingSchema,
+  createAdministeredUserRequestSchema,
   conversationSchema,
   createConversationRequestSchema,
   messageSchema,
+  resetAdministeredUserPasswordRequestSchema,
+  resetAdministeredUserPasswordResponseSchema,
   safeConfigSchema,
+  updateAdministeredUserRequestSchema,
+  upsertAdministeredUserIdentityRequestSchema,
   usageSummarySchema
 } from "./schemas";
 
@@ -45,6 +52,7 @@ export function createApiClient(options: ApiClientOptions) {
 
   return {
     me: () => request("GET", "/api/me", apiUserSchema),
+    branding: () => request("GET", "/api/branding", clientBrandingSchema),
     config: () => request("GET", "/api/config", safeConfigSchema),
     conversations: () => request("GET", "/api/conversations", z.array(conversationSchema)),
     createConversation: (input: z.infer<typeof createConversationRequestSchema> = {}) =>
@@ -54,7 +62,40 @@ export function createApiClient(options: ApiClientOptions) {
     deleteConversation: (conversationId: string) =>
       request("DELETE", `/api/conversations/${encodeURIComponent(conversationId)}`, conversationSchema),
     auditEvents: () => request("GET", "/api/audit-events", z.array(auditEventSchema)),
-    usageSummary: () => request("GET", "/api/superadmin/usage", usageSummarySchema)
+    usageSummary: () => request("GET", "/api/superadmin/usage", usageSummarySchema),
+    users: () => request("GET", "/api/superadmin/users", z.array(administeredUserSchema)),
+    createUser: (input: z.infer<typeof createAdministeredUserRequestSchema>) =>
+      request("POST", "/api/superadmin/users", administeredUserSchema, createAdministeredUserRequestSchema.parse(input)),
+    updateUser: (userId: string, input: z.infer<typeof updateAdministeredUserRequestSchema>) =>
+      request(
+        "PATCH",
+        `/api/superadmin/users/${encodeURIComponent(userId)}`,
+        administeredUserSchema,
+        updateAdministeredUserRequestSchema.parse(input)
+      ),
+    upsertUserIdentity: (
+      userId: string,
+      input: z.infer<typeof upsertAdministeredUserIdentityRequestSchema>
+    ) =>
+      request(
+        "PUT",
+        `/api/superadmin/users/${encodeURIComponent(userId)}/identities`,
+        administeredUserSchema,
+        upsertAdministeredUserIdentityRequestSchema.parse(input)
+      ),
+    resetUserPassword: (userId: string, input: z.infer<typeof resetAdministeredUserPasswordRequestSchema>) =>
+      request(
+        "POST",
+        `/api/superadmin/users/${encodeURIComponent(userId)}/password`,
+        resetAdministeredUserPasswordResponseSchema,
+        resetAdministeredUserPasswordRequestSchema.parse(input)
+      ),
+    deleteUserIdentity: (userId: string, authSource: string, externalUserId: string) =>
+      request(
+        "DELETE",
+        `/api/superadmin/users/${encodeURIComponent(userId)}/identities/${encodeURIComponent(authSource)}/${encodeURIComponent(externalUserId)}`,
+        administeredUserSchema
+      )
   };
 }
 

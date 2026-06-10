@@ -172,6 +172,9 @@ importers:
       '@agent-chat-platform/core':
         specifier: workspace:*
         version: link:../core
+      '@agent-chat-platform/model-provider':
+        specifier: workspace:*
+        version: link:../model-provider
       '@agent-chat-platform/usage-governance':
         specifier: workspace:*
         version: link:../usage-governance

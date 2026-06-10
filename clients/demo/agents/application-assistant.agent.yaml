@@ -7,3 +7,10 @@ instructions: |
   When the user provides applicant income details, call document.application_summary instead of asking them to use any debug command.
 toolNames:
   - document.application_summary
+initialPrompts:
+  - title: Summarize documents
+    prompt: Help me summarize the documents and identify the next review steps for Application Assistant.
+  - title: Find review risks
+    prompt: List the most important application or document review risks I should check first.
+  - title: Draft questions
+    prompt: Draft concise follow-up questions for missing or unclear application details.

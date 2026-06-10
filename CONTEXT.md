@@ -16,6 +16,10 @@ _Avoid_: End user, employee
 The product-owned user identity resolved by an auth adapter for one request.
 _Avoid_: Customer session, browser user
 
+**User Identity Mapping**:
+A persisted link between a product-owned user and one auth-source-specific external user id, such as a standalone login id or a customer application user id. New identities may auto-attach to an existing user via an unambiguous verified-email match (`auth.identityLinking.byVerifiedEmail`); the mapping record stays the durable key.
+_Avoid_: Email match as account key, duplicate account
+
 **Client Instance**:
 A separately deployed product instance for one customer, with its own infrastructure and operational boundary.
 _Avoid_: Tenant, workspace, account
@@ -144,12 +148,16 @@ _Avoid_: Application log, full transcript
 A minimized record of one model provider call, including provider, model, token counts when reported, and correlation metadata.
 _Avoid_: Billing log, full prompt log
 
-**Usage Limit**:
-A release-config policy that caps model calls or model tokens for a client instance over a defined period.
-_Avoid_: Provider rate limit, spend cap
+**Usage Budget**:
+A release-config policy that caps conservative estimated model spend for a client instance over a defined period, using configured pricing and a safety multiplier.
+_Avoid_: Provider invoice, exact billing record
+
+**Usage Safeguard**:
+A late-catching release-config policy that caps model calls or model tokens for a client instance over a defined period.
+_Avoid_: Provider rate limit, spend budget
 
 **Usage Governance**:
-The product module that enforces usage limits, serializes v1 model-call accounting, and produces minimized usage summaries for governance views.
+The product module that enforces usage budgets and safeguards, serializes v1 model-call accounting, and produces minimized usage summaries for governance views.
 _Avoid_: Billing service, analytics tracker
 
 **Audit Retention**:
@@ -175,6 +183,10 @@ _Avoid_: Standalone chat UI, admin-only app
 **Superadmin Panel**:
 The control-plane view restricted to superadmins for sensitive governance state such as usage, audit, retention, and deletion operations.
 _Avoid_: Admin dashboard, analytics app
+
+**User Administration**:
+A superadmin control-plane workflow for viewing product-owned users, editing their roles and permissions, and managing optional user identity mappings.
+_Avoid_: Auth provider console, password administration
 
 **Governance Action**:
 A permissioned action that exposes or changes sensitive operational state, such as viewing audit status, changing retention policy, exporting data, or deleting user data.

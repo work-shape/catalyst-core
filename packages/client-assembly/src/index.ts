@@ -54,7 +54,8 @@ export async function createClientInstanceApp(
   });
   const usageGovernance = new ModelUsageGovernance({
     store,
-    limits: config.usage.limits,
+    budget: config.usage.budget,
+    safeguards: config.usage.safeguards,
     pricing: config.usage.pricing
   });
   const toolRegistry = new ToolRegistry({
@@ -90,6 +91,7 @@ export async function createClientInstanceApp(
     config,
     env,
     clientInstanceId,
+    userStore: store,
     corsOrigin: input.corsOrigin
   });
   const server = await createChatServer({
@@ -98,9 +100,11 @@ export async function createClientInstanceApp(
     authAdapter,
     conversationStore: store,
     auditEventStore: store,
+    userStore: store,
     usageGovernance,
     auditRecorder,
     agentRuntime,
+    modelProvider,
     corsOrigin: input.corsOrigin,
     standaloneAuth,
     sessionToken

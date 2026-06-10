@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { issueSessionTokenRequestSchema } from "@agent-chat-platform/api-contract";
 import { AppError } from "@agent-chat-platform/core";
@@ -10,7 +11,7 @@ export function registerSessionTokenRoutes(app: FastifyInstance, options: ChatSe
       throw new AppError("NOT_FOUND", "Session token issuing is not configured");
     }
     const credential = request.headers["x-server-credential"];
-    if (credential !== options.sessionToken.serverCredential) {
+    if (typeof credential !== "string" || !safeEqual(credential, options.sessionToken.serverCredential)) {
       throw new AppError("FORBIDDEN", "Invalid server credential");
     }
     const body = parseBody(issueSessionTokenRequestSchema, request.body);
@@ -27,4 +28,10 @@ export function registerSessionTokenRoutes(app: FastifyInstance, options: ChatSe
     });
     return issued;
   });
+}
+
+function safeEqual(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
 }

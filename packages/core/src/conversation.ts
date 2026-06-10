@@ -45,6 +45,13 @@ export interface CreateMessageInput {
   metadata?: JsonObject;
 }
 
+export interface UpdateConversationTitleInput {
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  title: string;
+  updatedAt: ISODateString;
+}
+
 export interface ConversationStore {
   createConversation(input: CreateConversationInput): Promise<Conversation>;
   getConversation(
@@ -53,8 +60,9 @@ export interface ConversationStore {
   ): Promise<Conversation | undefined>;
   listConversationsForUser(input: {
     clientInstanceId: ClientInstanceId;
-    ownerExternalUserId: string;
+    ownerUserId: string;
   }): Promise<Conversation[]>;
+  updateConversationTitle(input: UpdateConversationTitleInput): Promise<Conversation>;
   appendMessage(input: CreateMessageInput): Promise<ChatMessage>;
   listMessages(input: {
     clientInstanceId: ClientInstanceId;

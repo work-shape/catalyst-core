@@ -1,24 +1,26 @@
 import { AuiIf, ThreadPrimitive } from "@assistant-ui/react";
 import { ArrowDown, Bot, CircleAlert, Sparkles } from "lucide-react";
+import type { ReactNode } from "react";
 import type { Conversation, SafeConfig } from "@agent-chat-platform/api-client";
 import { AssistantComposer } from "./assistant-composer";
 import { ThreadMessage } from "./assistant-message";
 import { currentTitle } from "./conversation-title";
-import { Badge } from "./ui/badge";
 import { cn } from "./ui/cn";
 
 export function AssistantThread({
   config,
   conversations,
   selectedConversationId,
-  notice
+  notice,
+  headerActions
 }: {
   config: SafeConfig | undefined;
   conversations: Conversation[];
   selectedConversationId: string | undefined;
   notice: string | undefined;
+  headerActions?: ReactNode;
 }) {
-  const suggestions = createSuggestions(config);
+  const initialPrompts = getInitialPrompts(config);
 
   return (
     <section
@@ -32,10 +34,7 @@ export function AssistantThread({
           </span>
           <strong className="truncate text-sm font-semibold">{config?.agents[0]?.displayName ?? "Agent"}</strong>
         </div>
-        <Badge variant="outline" className="shrink-0 text-muted-foreground">
-          <span className="size-2 rounded-full bg-emerald-600" />
-          Ready
-        </Badge>
+        {headerActions}
       </header>
 
       <ThreadPrimitive.Root
@@ -52,7 +51,7 @@ export function AssistantThread({
             ) : null}
 
             <AuiIf condition={(state) => state.thread.isEmpty}>
-              <ThreadWelcome config={config} suggestions={suggestions} />
+              <ThreadWelcome config={config} initialPrompts={initialPrompts} />
             </AuiIf>
 
             <div className="flex flex-col gap-5 pb-6 empty:hidden">
@@ -74,10 +73,10 @@ export function AssistantThread({
 
 function ThreadWelcome({
   config,
-  suggestions
+  initialPrompts
 }: {
   config: SafeConfig | undefined;
-  suggestions: Array<{ title: string; prompt: string }>;
+  initialPrompts: Array<{ title: string; prompt: string }>;
 }) {
   return (
     <div className="my-auto grid min-h-[20rem] content-center gap-5 py-8">
@@ -92,21 +91,23 @@ function ThreadWelcome({
           </p>
         </div>
       </div>
-      <div className="grid gap-2 sm:grid-cols-3">
-        {suggestions.map((suggestion) => (
-          <ThreadPrimitive.Suggestion
-            key={suggestion.title}
-            prompt={suggestion.prompt}
-            className={cn(
-              "group/suggestion grid min-h-20 content-between rounded-md border bg-card p-3 text-left text-sm shadow-xs transition-colors",
-              "hover:border-primary/40 hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
-            )}
-          >
-            <span className="font-medium">{suggestion.title}</span>
-            <Sparkles size={15} className="mt-2 text-muted-foreground group-hover/suggestion:text-primary" aria-hidden="true" />
-          </ThreadPrimitive.Suggestion>
-        ))}
-      </div>
+      {initialPrompts.length > 0 ? (
+        <div className="grid gap-2 sm:grid-cols-3">
+          {initialPrompts.map((initialPrompt) => (
+            <ThreadPrimitive.Suggestion
+              key={`${initialPrompt.title}:${initialPrompt.prompt}`}
+              prompt={initialPrompt.prompt}
+              className={cn(
+                "group/suggestion grid min-h-20 content-between rounded-md border bg-card p-3 text-left text-sm shadow-xs transition-colors",
+                "hover:border-primary/40 hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
+              )}
+            >
+              <span className="font-medium">{initialPrompt.title}</span>
+              <Sparkles size={15} className="mt-2 text-muted-foreground group-hover/suggestion:text-primary" aria-hidden="true" />
+            </ThreadPrimitive.Suggestion>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -123,20 +124,7 @@ function ThreadScrollToBottom() {
   );
 }
 
-function createSuggestions(config: SafeConfig | undefined): Array<{ title: string; prompt: string }> {
-  const agentName = config?.agents[0]?.displayName ?? "agent";
-  return [
-    {
-      title: "Summarize documents",
-      prompt: `Help me summarize the documents and identify the next review steps for ${agentName}.`
-    },
-    {
-      title: "Find review risks",
-      prompt: "List the most important application or document review risks I should check first."
-    },
-    {
-      title: "Draft questions",
-      prompt: "Draft concise follow-up questions for missing or unclear application details."
-    }
-  ];
+function getInitialPrompts(config: SafeConfig | undefined): Array<{ title: string; prompt: string }> {
+  const agent = config?.agents.find((candidate) => candidate.name === config.defaultAgentName) ?? config?.agents[0];
+  return agent?.initialPrompts ?? [];
 }

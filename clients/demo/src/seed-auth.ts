@@ -34,7 +34,7 @@ const authRuntime = await createStandaloneAuthRuntime({
   baseUrl: standaloneAuth.baseUrl ?? process.env.BETTER_AUTH_URL ?? "http://127.0.0.1:4100/api/auth",
   trustedOrigins: resolveTrustedOrigins(config),
   seedUsers: standaloneAuth.seedUsers.map((seedUser) => ({
-    email: seedUser.email,
+    email: resolveSeedEmail(seedUser),
     displayLabel: seedUser.displayLabel,
     password: resolveSeedPassword(seedUser),
     roles: seedUser.roles,
@@ -60,6 +60,14 @@ function resolveTrustedOrigins(config: ClientInstanceConfig): string[] {
       ...(config.auth.standalone?.trustedOrigins ?? [])
     ])
   ];
+}
+
+function resolveSeedEmail(
+  seedUser: NonNullable<ClientInstanceConfig["auth"]["standalone"]>["seedUsers"][number]
+): string {
+  return seedUser.emailEnvName
+    ? (process.env[seedUser.emailEnvName] ?? seedUser.email)
+    : seedUser.email;
 }
 
 function resolveSeedPassword(seedUser: NonNullable<ClientInstanceConfig["auth"]["standalone"]>["seedUsers"][number]): string {

@@ -43,7 +43,7 @@ This is not legal advice. The customer/legal owner still needs to decide lawful 
 V1 should audit:
 
 - auth events: successful/failed token exchange, dev auth use, role resolution
-- conversation events: created, renamed, deleted, retention-expired
+- conversation events: created, title-generated, title-generation-failed, renamed, deleted, retention-expired
 - message events: message created and model response completed, without storing full text in the audit event
 - tool events: tool requested, allowed/denied, started, completed, failed, timeout/cancelled
 - document events: uploaded/acquired, converted, extracted, deleted
@@ -61,7 +61,7 @@ The implementation target should be small and concrete:
 - audit writes for tool authorization checks, including denials and approval-required decisions
 - correlation ids that connect API requests, model calls, tool calls, and audit events
 - control-plane screens for audit event search/filtering, retention status, and deletion actions
-- superadmin usage screen led by model cost summaries, with model-call counts, provider-reported token usage, configured pricing/limits, and recent usage events as supporting context
+- superadmin usage screen led by budgeted model cost summaries, with model-call counts, provider-reported token usage, configured pricing, spend budget, late safeguards, and recent usage events as supporting context
 - a governance action layer that centralizes permission checks and read-audit events for admin/superadmin routes
 - reason-required flow for sensitive admin/superadmin actions
 - integration tests that prove sensitive actions create audit events
@@ -113,13 +113,17 @@ Model usage is governance metadata. V1 should record one Model Usage Event per m
 - agent run id
 - correlation id
 
+Automatic conversation title generation is also a model provider call. It should be counted by usage governance, use a minimized prompt bounded to the first user/assistant exchange, and write only minimized audit metadata such as provider id, model id, correlation id, title lengths, and success/failure status. It must not store the prompt, completion, or generated title text in the audit event.
+
 Provider-reported token usage is the source of truth where available. OpenAI-compatible chat responses expose prompt, completion, and total token usage for non-streaming calls. Other providers may omit usage; in that case the platform should record the call with `not_reported` instead of inventing billing-grade numbers.
 
 Cost summaries are derived governance metadata, not provider billing records. They should use provider-reported input/output token counts plus explicit release-config pricing for the matching provider/model. If pricing is missing, the usage view should show the call as unpriced instead of inventing a cost.
 
-Usage limits are release-config policy, not provider rate limits. Provider rate limits still apply separately and may be lower or higher than the client instance's configured governance limits.
+The spend budget is the primary release-config governance control. It is enforced against budgeted cost, which is the local provider-cost estimate after applying the configured safety multiplier. It is still not an exact provider invoice; production deployments should also use provider-side project budgets or billing alerts as the external backstop.
 
-Usage Governance should own model-call limit checks and summaries. In v1 it should serialize model-call accounting per client instance inside the running process so daily call limits cannot be raced by concurrent local agent runs. Multi-process or horizontally scaled deployments should deepen the Postgres adapter with atomic reservation semantics before relying on strict limits across processes.
+Usage safeguards are late-catching release-config policies, not provider rate limits. Provider rate limits still apply separately and may be lower or higher than the client instance's configured governance safeguards.
+
+Usage Governance should own spend-budget checks, safeguard checks, and summaries. In v1 it should serialize model-call accounting per client instance inside the running process so daily call safeguards cannot be raced by concurrent local agent runs. Multi-process or horizontally scaled deployments should deepen the Postgres adapter with atomic reservation semantics before relying on strict safeguards across processes.
 
 Viewing usage summaries is itself a governance action. The superadmin usage route should verify the superadmin role and write a minimized `governance.usage_viewed` audit event before returning usage metadata.
 

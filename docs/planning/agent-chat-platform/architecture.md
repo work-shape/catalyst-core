@@ -37,7 +37,7 @@ The deployment flow should stay the same regardless of who operates the client i
 - **Execution runtime**: concrete backend that performs agent work, such as an in-process chat loop, background worker, or isolated coding-agent machine.
 - **Tool execution interface**: executes one validated tool call with caller context, deadlines, cancellation, and audit output.
 - **Model provider adapter**: abstracts Azure OpenAI, OpenAI, or other model providers.
-- **Usage governance**: owns model usage limit checks, usage summaries, and serialized v1 model-call accounting for a client instance.
+- **Usage governance**: owns spend-budget checks, late usage safeguard checks, usage summaries, and serialized v1 model-call accounting for a client instance.
 - **Tool adapter layer**: normalizes custom code tools, OpenAPI API tools, built-in platform tools, and future MCP tools.
 - **Knowledge adapter layer**: connects document stores, vector search, file search, and customer knowledge sources.
 - **Config registry**: stores and validates client-instance configuration.

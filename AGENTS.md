@@ -21,6 +21,7 @@ This repo is planning and eventually implementing a reusable AI agent chat platf
 - Keep project decisions in planning docs or ADRs, not in `AGENTS.md`.
 - Prefer an essential design: hide complexity behind strong defaults and expose only the fields, settings, UI controls, and extension points that the workflow truly needs.
 - Keep platform code reusable and client-specific code thin.
+- Keep customer-specific labels, prompts, tool names, examples, and workflow copy out of `packages/*`; put them in `clients/*`, fixtures, release config, or agent config.
 - Prefer narrow, documented extension surfaces over ad hoc code paths.
 - Do not add broad abstractions unless tied to a concrete extension, deployment, or testing need.
 - Do not add knobs because they might be useful later; make release config and UI surfaces earn every field.
