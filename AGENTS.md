@@ -29,6 +29,8 @@ This repo is planning and eventually implementing a reusable AI agent chat platf
 - For sensitive data flows, document retention, audit, authorization, and provider-region assumptions before implementation.
 - Treat audit as minimized governance events, not full payload logging.
 - Build meaningful tests around stable interfaces and workflows; coverage percentage is secondary.
+- Proactively commit your work steps as coherent, reviewable units, without mixing unrelated changes.
+- Format commit messages as Conventional Commits, such as `fix(scope): ...` or `feat(scope): ...`; add an optional body for larger changes that need rationale or context.
 - Split large source files by concern; treat 1000+ line non-generated files as architecture friction unless there is a strong reason.
 - Use `.agents/skills/improve-codebase-architecture/SKILL.md` periodically during implementation to find shallow modules and deepening opportunities.
 
