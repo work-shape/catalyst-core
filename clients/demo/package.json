@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "tsup src/server.ts --format esm --out-dir dist",
-    "dev": "pnpm dev:db && pnpm -r --filter './packages/*' build && concurrently -n api,ui -c cyan,green \"pnpm dev:api\" \"pnpm --filter @agent-chat-platform/chat-standalone dev\"",
-    "dev:api": "tsx src/server.ts",
+    "dev": "pnpm dev:db && concurrently -n api,ui -c cyan,green \"pnpm dev:api\" \"pnpm --filter @agent-chat-platform/chat-standalone dev\"",
+    "dev:api": "tsx watch --conditions=development --clear-screen=false --include ../../packages --include ../tools --include ../agents --include ../config --include ../../.env --include .env src/server.ts",
     "dev:db": "docker compose up -d postgres",
     "seed:auth": "pnpm dev:db && tsx src/seed-auth.ts",
     "start": "node dist/server.js",

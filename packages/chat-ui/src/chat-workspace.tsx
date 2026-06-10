@@ -4,9 +4,11 @@ import {
   ApiError,
   createApiClient,
   type AdministeredUserIdentity,
+  type ChangeCurrentUserPasswordRequest,
   type Conversation,
   type CreateAdministeredUserRequest,
   type Message,
+  type UpdateCurrentUserRequest,
   type UpdateAdministeredUserRequest,
   type UpsertAdministeredUserIdentityRequest
 } from "@agent-chat-platform/api-client";
@@ -17,7 +19,10 @@ import { LoginPanel } from "./login-panel";
 import { createThemeStyle } from "./theme";
 import { cn } from "./ui/cn";
 import { UserMenu } from "./user-menu";
+import { UserSettingsPanel } from "./user-settings-panel";
 import { type WorkspaceView, WorkspaceRail } from "./workspace-rail";
+
+const STANDALONE_AUTH_SOURCE = "better-auth";
 
 export function ChatWorkspace({
   apiBaseUrl,
@@ -139,6 +144,19 @@ export function ChatWorkspace({
       void queryClient.invalidateQueries({ queryKey: ["me", apiBaseUrl] });
     }
   });
+  const updateCurrentUser = useMutation({
+    mutationFn: (input: UpdateCurrentUserRequest) => client.updateMe(input),
+    onSuccess: (updatedUser) => {
+      queryClient.setQueryData(["me", apiBaseUrl], updatedUser);
+      void queryClient.invalidateQueries({ queryKey: ["audit-events", apiBaseUrl, authScope] });
+    }
+  });
+  const changeCurrentUserPassword = useMutation({
+    mutationFn: (input: ChangeCurrentUserPasswordRequest) => client.changeMyPassword(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["audit-events", apiBaseUrl, authScope] });
+    }
+  });
   const createUser = useMutation({
     mutationFn: (input: CreateAdministeredUserRequest) => client.createUser(input),
     onSuccess: () => {
@@ -181,6 +199,7 @@ export function ChatWorkspace({
     <UserMenu
       user={meQuery.data}
       signingOut={signOutMutation.isPending}
+      onOpenSettings={() => setView("settings")}
       onSignOut={() => signOutMutation.mutate()}
     />
   );
@@ -223,6 +242,12 @@ export function ChatWorkspace({
     void queryClient.invalidateQueries({ queryKey: ["audit-events", apiBaseUrl, authScope] });
   }
 
+  function onSelectConversation(conversationId: string) {
+    setSelectedConversationId(conversationId);
+    setView("chat");
+    setNotice(undefined);
+  }
+
   if (meQuery.error instanceof ApiError && meQuery.error.status === 401) {
     return (
       <LoginPanel
@@ -232,6 +257,28 @@ export function ChatWorkspace({
           void queryClient.invalidateQueries({ queryKey: ["me", apiBaseUrl] });
         }}
       />
+    );
+  }
+
+  if (!meQuery.data) {
+    return (
+      <main
+        className={cn(
+          "grid h-dvh w-full place-items-center overflow-hidden bg-sidebar p-5 text-foreground",
+          className
+        )}
+      >
+        <div className="grid w-full max-w-[380px] gap-2 rounded-lg border bg-card p-5 text-card-foreground shadow-xs">
+          <strong className="text-sm font-semibold">
+            {meQuery.error ? "Could not verify your session" : "Checking session"}
+          </strong>
+          <p className="text-sm text-muted-foreground">
+            {meQuery.error instanceof ApiError
+              ? meQuery.error.message
+              : "Your account is being checked before the chat loads."}
+          </p>
+        </div>
+      </main>
     );
   }
 
@@ -254,7 +301,7 @@ export function ChatWorkspace({
         deletingConversation={deleteConversation.isPending}
         onViewChange={setView}
         onCreateConversation={onCreateConversation}
-        onSelectConversation={setSelectedConversationId}
+        onSelectConversation={onSelectConversation}
         onDeleteConversation={(conversationId) => deleteConversation.mutate(conversationId)}
       />
 
@@ -288,6 +335,16 @@ export function ChatWorkspace({
             resetUserPassword.mutateAsync({ userId, password }),
           headerActions: userMenu
         })
+      ) : view === "settings" ? (
+        <UserSettingsPanel
+          user={meQuery.data}
+          canChangePassword={meQuery.data?.authSource === STANDALONE_AUTH_SOURCE}
+          updatingProfile={updateCurrentUser.isPending}
+          changingPassword={changeCurrentUserPassword.isPending}
+          onUpdateProfile={(input) => updateCurrentUser.mutateAsync(input)}
+          onChangePassword={(input) => changeCurrentUserPassword.mutateAsync(input)}
+          headerActions={userMenu}
+        />
       ) : (
         <AssistantChatPanel
           apiBaseUrl={apiBaseUrl}

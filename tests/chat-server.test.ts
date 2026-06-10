@@ -303,6 +303,94 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
+  it("lets a user update their own profile without changing authorization fields", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        developmentAuth: {
+          enabled: true,
+          defaultUserId: "superadmin-1",
+          users: [
+            {
+              id: "superadmin-1",
+              externalUserId: "superadmin-1",
+              displayLabel: "Superadmin",
+              roles: ["user", "admin", "superadmin"],
+              permissionRefs: ["demo-tools"]
+            },
+            {
+              id: "user-1",
+              externalUserId: "user-1",
+              displayLabel: "Normal User",
+              roles: ["user"],
+              permissionRefs: ["demo-tools"]
+            }
+          ]
+        }
+      }),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+
+    const updated = await app.server.inject({
+      method: "PATCH",
+      url: "/api/me",
+      headers: {
+        "x-dev-user-id": "user-1"
+      },
+      payload: {
+        displayLabel: "Updated User",
+        email: "escalation@example.test",
+        roles: ["superadmin"]
+      }
+    });
+    expect(updated.statusCode).toBe(200);
+    const updatedBody = updated.json() as { displayLabel: string; email?: string; roles: string[] };
+    expect(updatedBody).toMatchObject({
+      displayLabel: "Updated User",
+      roles: ["user"]
+    });
+    expect(updatedBody.email).not.toBe("escalation@example.test");
+
+    const audit = await app.server.inject({
+      method: "GET",
+      url: "/api/audit-events",
+      headers: {
+        "x-dev-user-id": "superadmin-1"
+      }
+    });
+    expect(audit.statusCode).toBe(200);
+    expect((audit.json() as Array<{ type: string }>).map((event) => event.type)).toEqual(
+      expect.arrayContaining(["user.profile_updated"])
+    );
+
+    await app.close();
+  });
+
+  it("rejects self-service password changes outside standalone auth", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig(),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+
+    const changed = await app.server.inject({
+      method: "POST",
+      url: "/api/me/password",
+      payload: {
+        currentPassword: "old-password",
+        newPassword: "new-password"
+      }
+    });
+    expect(changed.statusCode).toBe(422);
+    expect((changed.json() as { error: { message: string } }).error.message).toContain(
+      "standalone auth"
+    );
+
+    await app.close();
+  });
+
   it("administers users and shares conversations across linked auth identities", async () => {
     const app = await createClientInstanceApp({
       config: createTestConfig({

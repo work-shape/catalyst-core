@@ -8,6 +8,7 @@ import { registerConfigRoutes } from "./routes/config-routes";
 import { registerConversationRoutes } from "./routes/conversation-routes";
 import { registerSessionTokenRoutes } from "./routes/session-token-routes";
 import { registerSuperadminRoutes } from "./routes/superadmin-routes";
+import { registerUserAccountRoutes } from "./routes/user-account-routes";
 import type { ChatServerOptions } from "./types";
 
 export type { ChatServerOptions } from "./types";
@@ -36,6 +37,7 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
   registerSessionTokenRoutes(app, options);
   registerChatStreamRoutes(app, options);
   registerConfigRoutes(app, options);
+  registerUserAccountRoutes(app, options);
   registerConversationRoutes(app, options);
   registerAuditRoutes(app, options);
   registerSuperadminRoutes(app, options);

@@ -8,6 +8,7 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "development": "./src/index.tsx",
       "import": "./dist/index.js"
     }
   },
@@ -27,4 +28,3 @@
     "typescript": "^6.0.3"
   }
 }
-

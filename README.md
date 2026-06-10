@@ -22,9 +22,9 @@ Paste an OpenAI API key into `.env` before using the default demo config. The de
 `pnpm dev` runs the demo client stack:
 
 - `clients/demo` starts Postgres with `docker compose up -d postgres`.
-- Workspace packages are built once so local package exports resolve from `dist/`.
-- The API starts from `clients/demo/src/server.ts`.
-- The standalone UI starts with Vite from `packages/chat-standalone`.
+- Workspace packages resolve from `src` through the local `development` export condition.
+- The API starts from `clients/demo/src/server.ts` with `tsx watch` and restarts when client, config, tool, env, or platform package source changes.
+- The standalone UI starts with Vite from `packages/chat-standalone` and hot reloads standalone and shared chat UI/package source changes.
 - API startup runs idempotent migrations when `RUN_MIGRATIONS` is not `false`.
 - Standalone Better Auth users from `clients/demo/config/app.yaml` are seeded into Postgres on startup.
 - You can seed those users explicitly with `pnpm --filter @agent-chat-platform/demo seed:auth`.

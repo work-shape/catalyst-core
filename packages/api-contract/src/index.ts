@@ -357,6 +357,19 @@ export const updateAdministeredUserRequestSchema = z.object({
   status: userStatusSchema.optional()
 });
 
+export const updateCurrentUserRequestSchema = z.object({
+  displayLabel: z.string().min(1)
+});
+
+export const changeCurrentUserPasswordRequestSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8)
+});
+
+export const changeCurrentUserPasswordResponseSchema = z.object({
+  ok: z.literal(true)
+});
+
 export const upsertAdministeredUserIdentityRequestSchema = z.object({
   authSource: z.string().min(1),
   externalUserId: z.string().min(1),
@@ -467,6 +480,10 @@ export type AdministeredUser = z.infer<typeof administeredUserSchema>;
 export type AdministeredUserIdentity = z.infer<typeof administeredUserIdentitySchema>;
 export type CreateAdministeredUserRequest = z.infer<typeof createAdministeredUserRequestSchema>;
 export type UpdateAdministeredUserRequest = z.infer<typeof updateAdministeredUserRequestSchema>;
+export type UpdateCurrentUserRequest = z.infer<typeof updateCurrentUserRequestSchema>;
+export type ChangeCurrentUserPasswordRequest = z.infer<
+  typeof changeCurrentUserPasswordRequestSchema
+>;
 export type UpsertAdministeredUserIdentityRequest = z.infer<
   typeof upsertAdministeredUserIdentityRequestSchema
 >;

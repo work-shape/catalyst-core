@@ -3,7 +3,7 @@ import type { ApiUser, Conversation, SafeConfig } from "@agent-chat-platform/api
 import { ConversationButton } from "./conversation-button";
 import { Button } from "./ui/button";
 
-export type WorkspaceView = "chat" | "superadmin";
+export type WorkspaceView = "chat" | "settings" | "superadmin";
 
 export function WorkspaceRail({
   config,

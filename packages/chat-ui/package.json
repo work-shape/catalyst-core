@@ -8,14 +8,17 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "development": "./src/index.tsx",
       "import": "./dist/index.js"
     },
     "./shell": {
       "types": "./dist/shell.d.ts",
+      "development": "./src/shell.tsx",
       "import": "./dist/shell.js"
     },
     "./admin": {
       "types": "./dist/admin.d.ts",
+      "development": "./src/admin.tsx",
       "import": "./dist/admin.js"
     },
     "./styles.css": "./src/styles.css"

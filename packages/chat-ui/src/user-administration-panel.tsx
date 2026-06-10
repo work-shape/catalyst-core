@@ -3,6 +3,7 @@ import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   KeyRound,
   Link2,
@@ -28,6 +29,7 @@ import { Dialog } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Select } from "./ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { avatarGradient } from "./avatar-gradient";
 
 /** Auth source id of the standalone Better Auth adapter; only those identities have passwords. */
 const STANDALONE_AUTH_SOURCE = "better-auth";
@@ -81,6 +83,11 @@ const emptyIdentityForm: IdentityFormState = {
   emailVerified: false
 };
 
+type UserStatusFilter = "all" | AdministeredUser["status"];
+
+const DEFAULT_ROWS_PER_PAGE = 10;
+const ROLE_ORDER = ["superadmin", "admin", "user"];
+
 export function UserAdministrationPanel({
   users,
   loading,
@@ -93,9 +100,26 @@ export function UserAdministrationPanel({
   onResetPassword
 }: UserAdministrationPanelProps) {
   const [selectedUserId, setSelectedUserId] = useState<string | undefined>();
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(() => new Set());
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<UserStatusFilter>("all");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_ROWS_PER_PAGE);
   const [createOpen, setCreateOpen] = useState(false);
   const selectedUser = users.find((user) => user.id === selectedUserId);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, roleFilter, rowsPerPage]);
+
+  useEffect(() => {
+    const liveUserIds = new Set(users.map((user) => user.id));
+    setSelectedRowIds((currentIds) => {
+      const nextIds = new Set([...currentIds].filter((id) => liveUserIds.has(id)));
+      return nextIds.size === currentIds.size ? currentIds : nextIds;
+    });
+  }, [users]);
 
   if (selectedUser) {
     return (
@@ -111,12 +135,59 @@ export function UserAdministrationPanel({
     );
   }
 
-  const visibleUsers = filterUsers(users, search);
+  const roleOptions = roleFilterOptions(users);
+  const visibleUsers = filterUsers(users, { search, statusFilter, roleFilter });
+  const pageCount = Math.max(1, Math.ceil(visibleUsers.length / rowsPerPage));
+  const currentPage = Math.min(page, pageCount);
+  const pageStart = (currentPage - 1) * rowsPerPage;
+  const pageUsers = visibleUsers.slice(pageStart, pageStart + rowsPerPage);
+  const selectedPageCount = pageUsers.filter((user) => selectedRowIds.has(user.id)).length;
+  const allPageRowsSelected = pageUsers.length > 0 && selectedPageCount === pageUsers.length;
+  const activeUserCount = users.filter((user) => user.status === "active").length;
+
+  function toggleRowSelection(userId: string, checked: boolean) {
+    setSelectedRowIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+      if (checked) {
+        nextIds.add(userId);
+      } else {
+        nextIds.delete(userId);
+      }
+      return nextIds;
+    });
+  }
+
+  function togglePageSelection(checked: boolean) {
+    setSelectedRowIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+      for (const user of pageUsers) {
+        if (checked) {
+          nextIds.add(user.id);
+        } else {
+          nextIds.delete(user.id);
+        }
+      }
+      return nextIds;
+    });
+  }
 
   return (
     <div className="grid content-start gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="relative w-full max-w-72">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="grid min-w-0 gap-1">
+          <h1 className="text-[22px] font-semibold tracking-normal text-slate-950">Users</h1>
+          <p className="text-sm text-slate-500">
+            {users.length.toLocaleString()} users · {activeUserCount.toLocaleString()} active
+          </p>
+        </div>
+        <Button type="button" onClick={() => setCreateOpen(true)}>
+          <UserPlus size={16} aria-hidden="true" />
+          New user
+        </Button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-56 flex-1">
           <Search
             size={15}
             aria-hidden="true"
@@ -131,15 +202,52 @@ export function UserAdministrationPanel({
             onChange={(event) => setSearch(event.target.value)}
           />
         </div>
-        <Button type="button" onClick={() => setCreateOpen(true)}>
-          <UserPlus size={16} aria-hidden="true" />
-          New user
-        </Button>
+        <Select
+          className="h-10 w-full bg-white font-medium text-slate-600 sm:w-40"
+          aria-label="Filter by status"
+          value={statusFilter}
+          onChange={(event) => setStatusFilter(event.target.value as UserStatusFilter)}
+        >
+          <option value="all">All statuses</option>
+          <option value="active">Active</option>
+          <option value="disabled">Disabled</option>
+        </Select>
+        <Select
+          className="h-10 w-full bg-white font-medium text-slate-600 sm:w-40"
+          aria-label="Filter by role"
+          value={roleFilter}
+          onChange={(event) => setRoleFilter(event.target.value)}
+        >
+          <option value="all">All roles</option>
+          {roleOptions.map((role) => (
+            <option key={role} value={role}>
+              {role}
+            </option>
+          ))}
+        </Select>
       </div>
 
       {error ? <FormNotice notice={{ kind: "error", text: error }} /> : null}
 
-      <Card>
+      <Card className="overflow-hidden border-slate-200 bg-white">
+        {selectedRowIds.size > 0 ? (
+          <div className="flex flex-wrap items-center gap-3 border-b border-sky-100 bg-sky-50 px-4 py-2.5">
+            <span className="text-sm font-semibold text-sky-900">
+              {selectedRowIds.size.toLocaleString()} selected
+            </span>
+            <div className="flex-1" />
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="text-sky-900 hover:bg-sky-100"
+              onClick={() => setSelectedRowIds(new Set())}
+            >
+              Clear
+            </Button>
+          </div>
+        ) : null}
+
         {loading ? (
           <CardContent className="p-4 text-sm text-muted-foreground">Loading users…</CardContent>
         ) : visibleUsers.length === 0 ? (
@@ -158,23 +266,51 @@ export function UserAdministrationPanel({
         ) : (
           <Table>
             <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>User</TableHead>
-                <TableHead>Roles</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Sign-in methods</TableHead>
-                <TableHead>Last active</TableHead>
+              <TableRow className="border-slate-200 bg-slate-50 hover:bg-slate-50">
+                <TableHead className="w-10 px-4">
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-sky-600"
+                    aria-label="Select visible users"
+                    checked={allPageRowsSelected}
+                    onChange={(event) => togglePageSelection(event.target.checked)}
+                  />
+                </TableHead>
+                <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] text-slate-400 uppercase">
+                  User
+                </TableHead>
+                <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] text-slate-400 uppercase">
+                  Roles
+                </TableHead>
+                <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] text-slate-400 uppercase">
+                  Status
+                </TableHead>
+                <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] text-slate-400 uppercase">
+                  Sign-in methods
+                </TableHead>
+                <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] text-slate-400 uppercase">
+                  Last active
+                </TableHead>
                 <TableHead className="w-8" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {visibleUsers.map((user) => (
+              {pageUsers.map((user) => (
                 <TableRow
                   key={user.id}
-                  className="cursor-pointer"
+                  className="cursor-pointer border-slate-200 hover:bg-slate-50"
                   onClick={() => setSelectedUserId(user.id)}
                 >
-                  <TableCell>
+                  <TableCell className="px-4" onClick={(event) => event.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-sky-600"
+                      aria-label={`Select ${user.displayLabel}`}
+                      checked={selectedRowIds.has(user.id)}
+                      onChange={(event) => toggleRowSelection(user.id, event.target.checked)}
+                    />
+                  </TableCell>
+                  <TableCell className="px-4">
                     <button
                       type="button"
                       className="flex min-w-0 items-center gap-3 text-left outline-none"
@@ -192,7 +328,7 @@ export function UserAdministrationPanel({
                       </span>
                     </button>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="px-4">
                     <span className="flex flex-wrap gap-1">
                       {user.roles.length > 0 ? (
                         user.roles.map((role) => (
@@ -205,18 +341,18 @@ export function UserAdministrationPanel({
                       )}
                     </span>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="px-4">
                     <StatusBadge status={user.status} />
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell className="px-4 text-muted-foreground">
                     {user.identities.length > 0
                       ? distinctAuthSources(user.identities).join(", ")
                       : "None"}
                   </TableCell>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">
+                  <TableCell className="px-4 whitespace-nowrap text-muted-foreground">
                     {formatDateTime(user.lastAuthenticatedAt) ?? "Never"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell className="px-4 text-muted-foreground">
                     <ChevronRight size={15} aria-hidden="true" />
                   </TableCell>
                 </TableRow>
@@ -224,6 +360,53 @@ export function UserAdministrationPanel({
             </TableBody>
           </Table>
         )}
+
+        {!loading && visibleUsers.length > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3">
+            <div className="text-sm text-slate-500">
+              {pageStart + 1}-{Math.min(pageStart + rowsPerPage, visibleUsers.length)} of{" "}
+              {visibleUsers.length.toLocaleString()}
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2 text-sm text-slate-500">
+                Rows
+                <Select
+                  className="h-8 w-20 bg-white px-2 text-sm"
+                  aria-label="Rows per page"
+                  value={String(rowsPerPage)}
+                  onChange={(event) => setRowsPerPage(Number(event.target.value))}
+                >
+                  <option value="10">10</option>
+                  <option value="25">25</option>
+                  <option value="50">50</option>
+                </Select>
+              </label>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="size-8"
+                aria-label="Previous page"
+                disabled={currentPage <= 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                <ChevronLeft size={15} aria-hidden="true" />
+              </Button>
+              <span className="min-w-7 text-center text-sm font-semibold text-slate-700">{currentPage}</span>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="size-8"
+                aria-label="Next page"
+                disabled={currentPage >= pageCount}
+                onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+              >
+                <ChevronRight size={15} aria-hidden="true" />
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </Card>
 
       <CreateUserDialog
@@ -800,9 +983,10 @@ function UserAvatar({ displayLabel, size = "md" }: { displayLabel: string; size?
   return (
     <span
       aria-hidden="true"
+      style={{ background: avatarGradient(displayLabel) }}
       className={cn(
-        "grid shrink-0 place-items-center rounded-full bg-accent font-medium text-primary",
-        size === "lg" ? "size-11 text-sm" : "size-8 text-xs"
+        "grid shrink-0 place-items-center font-semibold text-white shadow-sm ring-1 ring-white/45",
+        size === "lg" ? "size-11 rounded-[11px] text-sm" : "size-8 rounded-[9px] text-xs"
       )}
     >
       {initials(displayLabel)}
@@ -818,17 +1002,40 @@ function StatusBadge({ status }: { status: AdministeredUser["status"] }) {
   );
 }
 
-function filterUsers(users: AdministeredUser[], search: string): AdministeredUser[] {
-  const query = search.trim().toLowerCase();
-  if (!query) {
-    return users;
+function filterUsers(
+  users: AdministeredUser[],
+  filters: {
+    search: string;
+    statusFilter: UserStatusFilter;
+    roleFilter: string;
   }
-  return users.filter((user) =>
-    [user.displayLabel, user.email ?? "", ...user.roles]
-      .join(" ")
-      .toLowerCase()
-      .includes(query)
-  );
+): AdministeredUser[] {
+  const query = filters.search.trim().toLowerCase();
+  return users.filter((user) => {
+    if (query && ![user.displayLabel, user.email ?? "", ...user.roles].join(" ").toLowerCase().includes(query)) {
+      return false;
+    }
+    if (filters.statusFilter !== "all" && user.status !== filters.statusFilter) {
+      return false;
+    }
+    if (filters.roleFilter !== "all" && !user.roles.includes(filters.roleFilter)) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function roleFilterOptions(users: AdministeredUser[]): string[] {
+  return [...new Set(users.flatMap((user) => user.roles))].sort((left, right) => {
+    const leftIndex = ROLE_ORDER.indexOf(left);
+    const rightIndex = ROLE_ORDER.indexOf(right);
+
+    if (leftIndex !== -1 || rightIndex !== -1) {
+      return (leftIndex === -1 ? ROLE_ORDER.length : leftIndex) - (rightIndex === -1 ? ROLE_ORDER.length : rightIndex);
+    }
+
+    return left.localeCompare(right);
+  });
 }
 
 function distinctAuthSources(identities: AdministeredUserIdentity[]): string[] {

@@ -4,6 +4,8 @@ import {
   apiUserSchema,
   administeredUserSchema,
   auditEventSchema,
+  changeCurrentUserPasswordRequestSchema,
+  changeCurrentUserPasswordResponseSchema,
   clientBrandingSchema,
   createAdministeredUserRequestSchema,
   conversationSchema,
@@ -13,6 +15,7 @@ import {
   resetAdministeredUserPasswordResponseSchema,
   safeConfigSchema,
   updateAdministeredUserRequestSchema,
+  updateCurrentUserRequestSchema,
   upsertAdministeredUserIdentityRequestSchema,
   usageSummarySchema
 } from "./schemas";
@@ -52,6 +55,15 @@ export function createApiClient(options: ApiClientOptions) {
 
   return {
     me: () => request("GET", "/api/me", apiUserSchema),
+    updateMe: (input: z.infer<typeof updateCurrentUserRequestSchema>) =>
+      request("PATCH", "/api/me", apiUserSchema, updateCurrentUserRequestSchema.parse(input)),
+    changeMyPassword: (input: z.infer<typeof changeCurrentUserPasswordRequestSchema>) =>
+      request(
+        "POST",
+        "/api/me/password",
+        changeCurrentUserPasswordResponseSchema,
+        changeCurrentUserPasswordRequestSchema.parse(input)
+      ),
     branding: () => request("GET", "/api/branding", clientBrandingSchema),
     config: () => request("GET", "/api/config", safeConfigSchema),
     conversations: () => request("GET", "/api/conversations", z.array(conversationSchema)),

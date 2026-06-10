@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { LogOut } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
 import type { ApiUser } from "@agent-chat-platform/api-client";
+import { avatarGradient } from "./avatar-gradient";
 import { Button } from "./ui/button";
 
 export function UserMenu({
   user,
   signingOut,
+  onOpenSettings,
   onSignOut
 }: {
   user: ApiUser | undefined;
   signingOut: boolean;
+  onOpenSettings: () => void;
   onSignOut: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -47,7 +50,8 @@ export function UserMenu({
     <div ref={rootRef} className="relative flex shrink-0 items-center">
       <button
         type="button"
-        className="grid size-9 place-items-center rounded-full border border-primary/30 bg-primary text-sm font-semibold text-primary-foreground shadow-xs transition-colors outline-none hover:bg-primary/90 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40"
+        style={{ background: avatarGradient(label) }}
+        className="grid size-9 place-items-center rounded-full border border-white/45 text-sm font-semibold text-white shadow-xs transition-[filter,box-shadow] outline-none hover:brightness-95 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40"
         aria-label={`${label} account`}
         aria-expanded={open}
         aria-haspopup="dialog"
@@ -65,7 +69,19 @@ export function UserMenu({
           <Button
             type="button"
             variant="ghost"
-            className="mt-2 h-9 w-full justify-start text-muted-foreground hover:text-destructive"
+            className="mt-2 h-9 w-full justify-start text-muted-foreground"
+            onClick={() => {
+              setOpen(false);
+              onOpenSettings();
+            }}
+          >
+            <Settings size={16} aria-hidden="true" />
+            <span>Settings</span>
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-9 w-full justify-start text-muted-foreground hover:text-destructive"
             onClick={() => {
               setOpen(false);
               onSignOut();

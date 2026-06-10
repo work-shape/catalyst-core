@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { hashPassword } from "better-auth/crypto";
+import { hashPassword, verifyPassword } from "better-auth/crypto";
 import { fromNodeHeaders } from "better-auth/node";
 import postgres from "postgres";
 import {
@@ -44,12 +44,19 @@ export interface SetStandalonePasswordInput {
   password: string;
 }
 
+export interface ChangeStandalonePasswordInput {
+  externalUserId: string;
+  currentPassword: string;
+  newPassword: string;
+}
+
 export interface StandaloneAuthRuntime {
   handleRequest(request: Request): Promise<Response>;
   authAdapter: AuthAdapter;
   baseUrl: string;
   seedUsers(): Promise<void>;
   setPassword(input: SetStandalonePasswordInput): Promise<void>;
+  changePassword(input: ChangeStandalonePasswordInput): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -108,6 +115,7 @@ export async function createStandaloneAuthRuntime(
     baseUrl: options.baseUrl,
     seedUsers,
     setPassword: (input) => profileStore.setPassword(input),
+    changePassword: (input) => profileStore.changePassword(input),
     async close() {
       await sql.end();
     }
@@ -171,21 +179,40 @@ class StandaloneAuthProfileStore {
   }
 
   async setPassword(input: SetStandalonePasswordInput): Promise<void> {
-    const [profile] = await this.db
-      .select()
-      .from(standaloneAuthProfiles)
-      .where(
-        and(
-          eq(standaloneAuthProfiles.clientInstanceId, this.clientInstanceId),
-          eq(standaloneAuthProfiles.externalUserId, input.externalUserId)
-        )
-      )
-      .limit(1);
+    const profile = await this.getProfileByExternalUserId(input.externalUserId);
     if (!profile) {
       throw new AppError("NOT_FOUND", "No standalone auth account exists for this user");
     }
     await this.upsertCredentialAccount(profile.authUserId, input.password);
     await this.db.delete(authSessions).where(eq(authSessions.userId, profile.authUserId));
+  }
+
+  async changePassword(input: ChangeStandalonePasswordInput): Promise<void> {
+    const profile = await this.getProfileByExternalUserId(input.externalUserId);
+    if (!profile) {
+      throw new AppError("NOT_FOUND", "No standalone auth account exists for this user");
+    }
+    const [account] = await this.db
+      .select()
+      .from(authAccounts)
+      .where(
+        and(
+          eq(authAccounts.accountId, profile.authUserId),
+          eq(authAccounts.providerId, "credential")
+        )
+      )
+      .limit(1);
+    if (!account?.password) {
+      throw new AppError("VALIDATION_FAILED", "No credential password exists for this user");
+    }
+    const currentPasswordMatches = await verifyPassword({
+      hash: account.password,
+      password: input.currentPassword
+    });
+    if (!currentPasswordMatches) {
+      throw new AppError("FORBIDDEN", "Current password is incorrect");
+    }
+    await this.upsertCredentialAccount(profile.authUserId, input.newPassword);
   }
 
   async seedUser(seedUser: StandaloneAuthSeedUser): Promise<void> {
@@ -226,6 +253,22 @@ class StandaloneAuthProfileStore {
       throw new AppError("INTERNAL", `Failed to seed standalone auth user '${email}'`);
     }
     return row;
+  }
+
+  private async getProfileByExternalUserId(
+    externalUserId: string
+  ): Promise<StandaloneProfileRow | undefined> {
+    const [profile] = await this.db
+      .select()
+      .from(standaloneAuthProfiles)
+      .where(
+        and(
+          eq(standaloneAuthProfiles.clientInstanceId, this.clientInstanceId),
+          eq(standaloneAuthProfiles.externalUserId, externalUserId)
+        )
+      )
+      .limit(1);
+    return profile;
   }
 
   private async upsertCredentialAccount(authUserId: string, password: string): Promise<void> {

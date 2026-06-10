@@ -24,7 +24,10 @@ export interface ChatServerOptions {
   agentRuntime: AgentRuntime;
   modelProvider: ModelProvider;
   corsOrigin?: string | string[];
-  standaloneAuth?: Pick<StandaloneAuthRuntime, "handleRequest" | "baseUrl" | "setPassword">;
+  standaloneAuth?: Pick<
+    StandaloneAuthRuntime,
+    "handleRequest" | "baseUrl" | "setPassword" | "changePassword"
+  >;
   sessionToken?: {
     issuer: HmacSessionTokenIssuer;
     serverCredential: string;

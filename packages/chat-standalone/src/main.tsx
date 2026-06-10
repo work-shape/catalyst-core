@@ -5,7 +5,7 @@ import { superadminPanel } from "@agent-chat-platform/chat-ui/admin";
 import { ChatShell } from "@agent-chat-platform/chat-ui/shell";
 import "@agent-chat-platform/chat-ui/styles.css";
 
-const apiBaseUrl = import.meta.env.VITE_CHAT_API_URL ?? "http://127.0.0.1:4100";
+const apiBaseUrl = import.meta.env.VITE_CHAT_API_URL ?? defaultLocalApiBaseUrl();
 const rootRoute = createRootRoute({
   component: StandaloneRoot
 });
@@ -40,4 +40,8 @@ function StandaloneRoot() {
 
 function StandaloneChatRoute() {
   return <ChatShell apiBaseUrl={apiBaseUrl} adminPanel={superadminPanel} manageDocumentTitle />;
+}
+
+function defaultLocalApiBaseUrl(): string {
+  return `${window.location.protocol}//${window.location.hostname}:4100`;
 }
