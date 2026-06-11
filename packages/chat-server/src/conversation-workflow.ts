@@ -1,4 +1,4 @@
-import { auditActorFromUser } from "@vivd-stage/core";
+import { auditActorFromUser } from "@vivd-catalyst/core";
 import {
   AppError,
   type AgentRunId,
@@ -12,9 +12,9 @@ import {
   addDays,
   createPlatformId,
   isAppError
-} from "@vivd-stage/core";
-import { getModelProviderForConversationTitles } from "@vivd-stage/config-schema";
-import type { ModelMessage } from "@vivd-stage/model-provider";
+} from "@vivd-catalyst/core";
+import { getModelProviderForConversationTitles } from "@vivd-catalyst/config-schema";
+import type { ModelMessage } from "@vivd-catalyst/model-provider";
 import {
   isTemporaryConversationTitle,
   normalizeGeneratedConversationTitle

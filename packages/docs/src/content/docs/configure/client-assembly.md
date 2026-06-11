@@ -40,7 +40,7 @@ client-instance/
 The server imports platform packages, loads release config, registers tools, validates the assembly, and starts the chat API.
 
 ```ts
-import { createChatServer } from "@vivd-stage/chat-server";
+import { createChatServer } from "@vivd-catalyst/chat-server";
 import { loadClientConfig } from "./config";
 import { tools } from "./tool-registry";
 

@@ -78,7 +78,7 @@ tools:
     enabled: true
 ui:
   clientName: E2E Customer
-  title: Vivd Stage E2E
+  title: Vivd Catalyst E2E
   welcomeMessage: E2E ready.
   accentColor: "#0f766e"
   theme:

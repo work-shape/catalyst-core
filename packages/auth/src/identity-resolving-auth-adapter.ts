@@ -1,4 +1,4 @@
-import type { UserStore } from "@vivd-stage/core";
+import type { UserStore } from "@vivd-catalyst/core";
 import type { AuthAdapter, AuthRequest } from "./types";
 
 export interface IdentityResolvingAuthAdapterOptions {

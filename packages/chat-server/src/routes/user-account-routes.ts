@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import {
   changeCurrentUserPasswordRequestSchema,
   updateCurrentUserRequestSchema
-} from "@vivd-stage/api-contract";
+} from "@vivd-catalyst/api-contract";
 import type { ChatServerOptions } from "../types";
 import { authenticateRequest, parseBody } from "../request-context";
 import { UserAccountWorkflow } from "../user-account-workflow";

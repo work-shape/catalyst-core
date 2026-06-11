@@ -1,9 +1,9 @@
 ---
 title: Overview
-description: How Vivd Stage is meant to be used by teams configuring their own agent chat.
+description: How Vivd Catalyst is meant to be used by teams configuring their own agent chat.
 ---
 
-Vivd Stage gives an organization a dedicated agent chat instance without asking that organization to fork the platform.
+Vivd Catalyst gives an organization a dedicated agent chat instance without asking that organization to fork the platform.
 
 The platform provides the reusable pieces:
 

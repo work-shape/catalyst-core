@@ -87,7 +87,7 @@ interface ConversationHistoryReader {
 **Steps.**
 
 1. **Fold `audit` into `chat-core`.** `AuditEventStore` already lives there; move `AuditRecorder`, the store-backed and noop recorders, and `auditActorFromUser` next to it. Update imports in `tool-execution`, `chat-server`, `client-instance`.
-2. **Demote `memory-store`.** Move `InMemoryPlatformStore` to a subpath export of the contracts package (`@vivd-stage/core/testing` after the rename). It is a reference implementation and test fake, not a storage choice, and must not appear in a customer dependency list as a peer of `postgres-store`.
+2. **Demote `memory-store`.** Move `InMemoryPlatformStore` to a subpath export of the contracts package (`@vivd-catalyst/core/testing` after the rename). It is a reference implementation and test fake, not a storage choice, and must not appear in a customer dependency list as a peer of `postgres-store`.
 3. **Remove the silent in-memory fallback.** `createPlatformStore` currently falls back to memory when `DATABASE_URL` is unset, which silently discards conversations, audit events, and usage records on restart. Missing `DATABASE_URL` should fail startup, consistent with assembly validation. Memory mode becomes explicit opt-in (`STORE=memory` or an explicit option on `CreateClientInstanceAppInput`).
 4. **Apply the renames (decision 4).** `chat-core` becomes `core`; `client-instance` becomes `client-assembly`. Do both in one pass together with the audit fold and memory-store demotion so imports churn once.
 5. **Keep the standing rule.** No new package without a consumer; `retrieval` stays unbuilt until retrieval work starts.
@@ -125,7 +125,7 @@ interface ConversationHistoryReader {
 
 **Problem.** `chat-ui` exports only `ChatShell`, but the package contains login, governance client, and the superadmin panel. The embedded widget builds against control-plane code it must never show.
 
-**Target state.** One package, split entry points: `@vivd-stage/chat-ui/shell` (chat + login) and `@vivd-stage/chat-ui/admin` (superadmin/governance). `chat-widget` imports only the shell entry. The full control-plane package split stays deferred per the working notes, until governance grows beyond the current panel.
+**Target state.** One package, split entry points: `@vivd-catalyst/chat-ui/shell` (chat + login) and `@vivd-catalyst/chat-ui/admin` (superadmin/governance). `chat-widget` imports only the shell entry. The full control-plane package split stays deferred per the working notes, until governance grows beyond the current panel.
 
 **Acceptance.** The widget bundle contains no superadmin or governance module. The standalone app imports both entries explicitly.
 

@@ -4,8 +4,8 @@ import {
   resetAdministeredUserPasswordRequestSchema,
   updateAdministeredUserRequestSchema,
   upsertAdministeredUserIdentityRequestSchema
-} from "@vivd-stage/api-contract";
-import { AppError, asUserId } from "@vivd-stage/core";
+} from "@vivd-catalyst/api-contract";
+import { AppError, asUserId } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "../types";
 import { authorizeGovernanceAction } from "../governance-actions";
 import { authenticateRequest, parseBody } from "../request-context";

@@ -4,8 +4,8 @@ import {
   type ModelUsageEventStore,
   type RuntimeCallContext,
   type StartAgentRunInput
-} from "@vivd-stage/core";
-import type { ModelCompletion } from "@vivd-stage/model-provider";
+} from "@vivd-catalyst/core";
+import type { ModelCompletion } from "@vivd-catalyst/model-provider";
 
 export async function recordModelUsage(input: {
   usageStore: ModelUsageEventStore;

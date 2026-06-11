@@ -1,6 +1,6 @@
-import { AppError } from "@vivd-stage/core";
-import type { ClientInstanceConfig } from "@vivd-stage/config-schema";
-import type { AnyToolDefinition } from "@vivd-stage/tool-sdk";
+import { AppError } from "@vivd-catalyst/core";
+import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
 
 export function assertClientAssemblyValid(input: {
   config: ClientInstanceConfig;

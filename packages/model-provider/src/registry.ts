@@ -1,4 +1,4 @@
-import { AppError, type RuntimeCallContext } from "@vivd-stage/core";
+import { AppError, type RuntimeCallContext } from "@vivd-catalyst/core";
 import type {
   ModelCompletion,
   ModelCompletionRequest,

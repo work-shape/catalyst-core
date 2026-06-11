@@ -1,4 +1,4 @@
-import type { Conversation } from "@vivd-stage/api-client";
+import type { Conversation } from "@vivd-catalyst/api-client";
 
 export function currentTitle(
   conversations: Conversation[],

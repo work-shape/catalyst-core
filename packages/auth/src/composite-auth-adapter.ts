@@ -1,4 +1,4 @@
-import { AppError, type AuthenticatedUser } from "@vivd-stage/core";
+import { AppError, type AuthenticatedUser } from "@vivd-catalyst/core";
 import type { AuthAdapter, AuthRequest } from "./types";
 
 export class CompositeAuthAdapter implements AuthAdapter {

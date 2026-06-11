@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { dirname, extname, resolve } from "node:path";
 import yaml from "js-yaml";
-import { AppError } from "@vivd-stage/core";
+import { AppError } from "@vivd-catalyst/core";
 import {
   agentConfigSchema,
   clientInstanceConfigFileSchema,

@@ -1,7 +1,7 @@
 version: 1
 clientInstance:
   id: demo-local
-  displayName: Vivd Stage Demo
+  displayName: Vivd Catalyst Demo
   environment: development
 auth:
   standalone:

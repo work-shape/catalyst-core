@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ShieldCheck } from "lucide-react";
-import { createApiClient, type LocaleCode } from "@vivd-stage/api-client";
+import { createApiClient, type LocaleCode } from "@vivd-catalyst/api-client";
 import { signInWithEmail } from "./auth-client";
 import { useTranslation } from "./i18n";
 import { LocaleSelector } from "./locale-selector";
@@ -41,7 +41,7 @@ export function LoginPanel({
     retry: false
   });
   const branding = brandingQuery.data;
-  const clientName = branding?.clientName ?? "Vivd Stage";
+  const clientName = branding?.clientName ?? "Vivd Catalyst";
   const logoUrl = branding?.logoUrl;
   const logoUrlDark = branding?.logoUrlDark;
   const invertLogoOnDark = Boolean(branding?.logoInvertOnDark && !logoUrlDark);

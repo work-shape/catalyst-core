@@ -1,5 +1,5 @@
 {
-  "name": "@vivd-stage/config-schema",
+  "name": "@vivd-catalyst/config-schema",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -17,7 +17,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@vivd-stage/core": "workspace:*",
+    "@vivd-catalyst/core": "workspace:*",
     "js-yaml": "^4.2.0",
     "zod": "^4.4.3"
   },

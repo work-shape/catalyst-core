@@ -7,12 +7,12 @@ import {
   type ModelProviderConfig,
   type RuntimeCallContext,
   type ToolExecution
-} from "@vivd-stage/core";
-import { InMemoryPlatformStore } from "@vivd-stage/core/testing";
-import { LocalAgentRuntime } from "@vivd-stage/agent-runtime";
-import type { ModelMessage, ModelProvider } from "@vivd-stage/model-provider";
-import { ToolRegistry } from "@vivd-stage/tool-execution";
-import { ModelUsageGovernance } from "@vivd-stage/usage-governance";
+} from "@vivd-catalyst/core";
+import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
+import type { ModelMessage, ModelProvider } from "@vivd-catalyst/model-provider";
+import { ToolRegistry } from "@vivd-catalyst/tool-execution";
+import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 
 describe("local agent runtime", () => {
   it("loads recent conversation history before the new user message", async () => {

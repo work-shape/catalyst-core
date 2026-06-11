@@ -9,7 +9,7 @@ import type {
   UpdateAdministeredUserRequest,
   UpsertAdministeredUserIdentityRequest,
   UsageSummary
-} from "@vivd-stage/api-client";
+} from "@vivd-catalyst/api-client";
 import { ChatWorkspace } from "./chat-workspace";
 
 export interface ChatShellAdminPanel {

@@ -3,9 +3,9 @@ import {
   asAgentRunId,
   asClientInstanceId,
   asConversationId
-} from "@vivd-stage/core";
-import { InMemoryPlatformStore } from "@vivd-stage/core/testing";
-import { ModelUsageGovernance } from "@vivd-stage/usage-governance";
+} from "@vivd-catalyst/core";
+import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 
 describe("model usage governance", () => {
   it("reserves model calls so daily call limits cannot be raced in one process", async () => {

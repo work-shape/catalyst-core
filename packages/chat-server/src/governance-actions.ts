@@ -1,5 +1,5 @@
-import { auditActorFromUser } from "@vivd-stage/core";
-import { AppError, type AuthenticatedUser, type RuntimeCallContext } from "@vivd-stage/core";
+import { auditActorFromUser } from "@vivd-catalyst/core";
+import { AppError, type AuthenticatedUser, type RuntimeCallContext } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "./types";
 
 type GovernanceRoleRequirement = "admin" | "superadmin";

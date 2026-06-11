@@ -2,16 +2,16 @@
 
 ## Project Purpose
 
-This repo is planning and eventually implementing Vivd Stage, a reusable AI agent chat platform for sensitive customer workflows.
+This repo is planning and eventually implementing Vivd Catalyst, a reusable AI agent chat platform for sensitive customer workflows.
 
-`Vivd Stage` is the product title and package identity for this codebase.
+`Vivd Catalyst` is the product title and package identity for this codebase.
 
 ## Start Here
 
 - Read `CONTEXT.md` first for project terminology.
-- Read `docs/planning/vivd-stage.md` before changing architecture or scope.
-- Read the relevant focused planning file under `docs/planning/vivd-stage/` before implementing or reviewing a feature.
-- Read `docs/planning/vivd-stage/implementation-guide.md` before implementation work.
+- Read `docs/planning/vivd-catalyst.md` before changing architecture or scope.
+- Read the relevant focused planning file under `docs/planning/vivd-catalyst/` before implementing or reviewing a feature.
+- Read `docs/planning/vivd-catalyst/implementation-guide.md` before implementation work.
 - Read `docs/research/open-source-landscape.md` before choosing AI SDKs, agent frameworks, chat UI libraries, MCP libraries, auth libraries, or comparable platform dependencies.
 - Read `application-preprocessing-compliance-analysis.md` when working on compliance, privacy, provider choice, or sensitive document processing.
 
@@ -38,5 +38,5 @@ This repo is planning and eventually implementing Vivd Stage, a reusable AI agen
 
 - Update `CONTEXT.md` only when project terminology is clarified.
 - Keep `CONTEXT.md` as a glossary only; implementation decisions belong in planning docs or ADRs.
-- Use `docs/planning/vivd-stage.md` as the planning index and decision map.
+- Use `docs/planning/vivd-catalyst.md` as the planning index and decision map.
 - Add ADRs only for hard-to-reverse architecture decisions with real trade-offs.

@@ -1,4 +1,4 @@
-import { AppError, type ModelTokenUsage } from "@vivd-stage/core";
+import { AppError, type ModelTokenUsage } from "@vivd-catalyst/core";
 import type { ModelMessage, ModelTool } from "./types";
 import type {
   OpenAiCompatibleMessage,

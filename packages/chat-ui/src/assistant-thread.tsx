@@ -1,6 +1,6 @@
 import { AuiIf, ThreadPrimitive } from "@assistant-ui/react";
 import { ArrowDown, Bot, CircleAlert, Sparkles } from "lucide-react";
-import type { SafeConfig } from "@vivd-stage/api-client";
+import type { SafeConfig } from "@vivd-catalyst/api-client";
 import { AssistantComposer } from "./assistant-composer";
 import { ThreadMessage } from "./assistant-message";
 import { useTranslation } from "./i18n";

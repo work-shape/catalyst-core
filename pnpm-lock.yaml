@@ -35,34 +35,34 @@ importers:
 
   clients/demo:
     dependencies:
-      '@vivd-stage/agent-runtime':
+      '@vivd-catalyst/agent-runtime':
         specifier: workspace:*
         version: link:../../packages/agent-runtime
-      '@vivd-stage/auth':
+      '@vivd-catalyst/auth':
         specifier: workspace:*
         version: link:../../packages/auth
-      '@vivd-stage/chat-server':
+      '@vivd-catalyst/chat-server':
         specifier: workspace:*
         version: link:../../packages/chat-server
-      '@vivd-stage/client-assembly':
+      '@vivd-catalyst/client-assembly':
         specifier: workspace:*
         version: link:../../packages/client-assembly
-      '@vivd-stage/config-schema':
+      '@vivd-catalyst/config-schema':
         specifier: workspace:*
         version: link:../../packages/config-schema
-      '@vivd-stage/core':
+      '@vivd-catalyst/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@vivd-stage/model-provider':
+      '@vivd-catalyst/model-provider':
         specifier: workspace:*
         version: link:../../packages/model-provider
-      '@vivd-stage/postgres-store':
+      '@vivd-catalyst/postgres-store':
         specifier: workspace:*
         version: link:../../packages/postgres-store
-      '@vivd-stage/tool-execution':
+      '@vivd-catalyst/tool-execution':
         specifier: workspace:*
         version: link:../../packages/tool-execution
-      '@vivd-stage/tool-sdk':
+      '@vivd-catalyst/tool-sdk':
         specifier: workspace:*
         version: link:../../packages/tool-sdk
       dotenv:
@@ -87,34 +87,34 @@ importers:
 
   clients/musterbau:
     dependencies:
-      '@vivd-stage/agent-runtime':
+      '@vivd-catalyst/agent-runtime':
         specifier: workspace:*
         version: link:../../packages/agent-runtime
-      '@vivd-stage/auth':
+      '@vivd-catalyst/auth':
         specifier: workspace:*
         version: link:../../packages/auth
-      '@vivd-stage/chat-server':
+      '@vivd-catalyst/chat-server':
         specifier: workspace:*
         version: link:../../packages/chat-server
-      '@vivd-stage/client-assembly':
+      '@vivd-catalyst/client-assembly':
         specifier: workspace:*
         version: link:../../packages/client-assembly
-      '@vivd-stage/config-schema':
+      '@vivd-catalyst/config-schema':
         specifier: workspace:*
         version: link:../../packages/config-schema
-      '@vivd-stage/core':
+      '@vivd-catalyst/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@vivd-stage/model-provider':
+      '@vivd-catalyst/model-provider':
         specifier: workspace:*
         version: link:../../packages/model-provider
-      '@vivd-stage/postgres-store':
+      '@vivd-catalyst/postgres-store':
         specifier: workspace:*
         version: link:../../packages/postgres-store
-      '@vivd-stage/tool-execution':
+      '@vivd-catalyst/tool-execution':
         specifier: workspace:*
         version: link:../../packages/tool-execution
-      '@vivd-stage/tool-sdk':
+      '@vivd-catalyst/tool-sdk':
         specifier: workspace:*
         version: link:../../packages/tool-sdk
       dotenv:
@@ -139,16 +139,16 @@ importers:
 
   packages/agent-runtime:
     dependencies:
-      '@vivd-stage/core':
+      '@vivd-catalyst/core':
         specifier: workspace:*
         version: link:../core
-      '@vivd-stage/model-provider':
+      '@vivd-catalyst/model-provider':
         specifier: workspace:*
         version: link:../model-provider
-      '@vivd-stage/tool-execution':
+      '@vivd-catalyst/tool-execution':
         specifier: workspace:*
         version: link:../tool-execution
-      '@vivd-stage/usage-governance':
+      '@vivd-catalyst/usage-governance':
         specifier: workspace:*
         version: link:../usage-governance
     devDependencies:
@@ -161,7 +161,7 @@ importers:
 
   packages/api-client:
     dependencies:
-      '@vivd-stage/api-contract':
+      '@vivd-catalyst/api-contract':
         specifier: workspace:*
         version: link:../api-contract
       zod:
@@ -190,7 +190,7 @@ importers:
 
   packages/auth:
     dependencies:
-      '@vivd-stage/core':
+      '@vivd-catalyst/core':
         specifier: workspace:*
         version: link:../core
       better-auth:
@@ -215,22 +215,22 @@ importers:
       '@fastify/cors':
         specifier: ^11.2.0
         version: 11.2.0
-      '@vivd-stage/api-contract':
+      '@vivd-catalyst/api-contract':
         specifier: workspace:*
         version: link:../api-contract
-      '@vivd-stage/auth':
+      '@vivd-catalyst/auth':
         specifier: workspace:*
         version: link:../auth
-      '@vivd-stage/config-schema':
+      '@vivd-catalyst/config-schema':
         specifier: workspace:*
         version: link:../config-schema
-      '@vivd-stage/core':
+      '@vivd-catalyst/core':
         specifier: workspace:*
         version: link:../core
-      '@vivd-stage/model-provider':
+      '@vivd-catalyst/model-provider':
         specifier: workspace:*
         version: link:../model-provider
-      '@vivd-stage/usage-governance':
+      '@vivd-catalyst/usage-governance':
         specifier: workspace:*
         version: link:../usage-governance
       ai:
@@ -255,7 +255,7 @@ importers:
       '@tanstack/react-router':
         specifier: ^1.170.15
         version: 1.170.15(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@vivd-stage/chat-ui':
+      '@vivd-catalyst/chat-ui':
         specifier: workspace:*
         version: link:../chat-ui
       react:
@@ -313,7 +313,7 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.101.0
         version: 5.101.0(react@19.2.7)
-      '@vivd-stage/api-client':
+      '@vivd-catalyst/api-client':
         specifier: workspace:*
         version: link:../api-client
       ai:
@@ -362,7 +362,7 @@ importers:
 
   packages/chat-widget:
     dependencies:
-      '@vivd-stage/chat-ui':
+      '@vivd-catalyst/chat-ui':
         specifier: workspace:*
         version: link:../chat-ui
       react:
@@ -387,34 +387,34 @@ importers:
 
   packages/client-assembly:
     dependencies:
-      '@vivd-stage/agent-runtime':
+      '@vivd-catalyst/agent-runtime':
         specifier: workspace:*
         version: link:../agent-runtime
-      '@vivd-stage/auth':
+      '@vivd-catalyst/auth':
         specifier: workspace:*
         version: link:../auth
-      '@vivd-stage/chat-server':
+      '@vivd-catalyst/chat-server':
         specifier: workspace:*
         version: link:../chat-server
-      '@vivd-stage/config-schema':
+      '@vivd-catalyst/config-schema':
         specifier: workspace:*
         version: link:../config-schema
-      '@vivd-stage/core':
+      '@vivd-catalyst/core':
         specifier: workspace:*
         version: link:../core
-      '@vivd-stage/model-provider':
+      '@vivd-catalyst/model-provider':
         specifier: workspace:*
         version: link:../model-provider
-      '@vivd-stage/postgres-store':
+      '@vivd-catalyst/postgres-store':
         specifier: workspace:*
         version: link:../postgres-store
-      '@vivd-stage/tool-execution':
+      '@vivd-catalyst/tool-execution':
         specifier: workspace:*
         version: link:../tool-execution
-      '@vivd-stage/tool-sdk':
+      '@vivd-catalyst/tool-sdk':
         specifier: workspace:*
         version: link:../tool-sdk
-      '@vivd-stage/usage-governance':
+      '@vivd-catalyst/usage-governance':
         specifier: workspace:*
         version: link:../usage-governance
       fastify:
@@ -430,7 +430,7 @@ importers:
 
   packages/config-schema:
     dependencies:
-      '@vivd-stage/core':
+      '@vivd-catalyst/core':
         specifier: workspace:*
         version: link:../core
       js-yaml:
@@ -480,7 +480,7 @@ importers:
 
   packages/model-provider:
     dependencies:
-      '@vivd-stage/core':
+      '@vivd-catalyst/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -493,7 +493,7 @@ importers:
 
   packages/postgres-store:
     dependencies:
-      '@vivd-stage/core':
+      '@vivd-catalyst/core':
         specifier: workspace:*
         version: link:../core
       drizzle-orm:
@@ -512,10 +512,10 @@ importers:
 
   packages/tool-execution:
     dependencies:
-      '@vivd-stage/core':
+      '@vivd-catalyst/core':
         specifier: workspace:*
         version: link:../core
-      '@vivd-stage/tool-sdk':
+      '@vivd-catalyst/tool-sdk':
         specifier: workspace:*
         version: link:../tool-sdk
       zod:
@@ -531,7 +531,7 @@ importers:
 
   packages/tool-sdk:
     dependencies:
-      '@vivd-stage/core':
+      '@vivd-catalyst/core':
         specifier: workspace:*
         version: link:../core
       zod:
@@ -547,7 +547,7 @@ importers:
 
   packages/usage-governance:
     dependencies:
-      '@vivd-stage/core':
+      '@vivd-catalyst/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:

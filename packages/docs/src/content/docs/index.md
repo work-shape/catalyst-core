@@ -1,9 +1,9 @@
 ---
-title: Run Vivd Stage
+title: Run Vivd Catalyst
 description: Configure, extend, and operate a dedicated AI agent chat instance.
 ---
 
-Vivd Stage is a reusable AI agent chat platform for sensitive workflows.
+Vivd Catalyst is a reusable AI agent chat platform for sensitive workflows.
 
 The platform is not a shared marketplace and not a forkable one-off app. Each organization runs through a dedicated client instance assembled from reusable platform packages, release config, and a thin layer of customer-specific code.
 

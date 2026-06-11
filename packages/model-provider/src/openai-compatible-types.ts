@@ -1,4 +1,4 @@
-import type { JsonObject } from "@vivd-stage/core";
+import type { JsonObject } from "@vivd-catalyst/core";
 
 export interface OpenAiCompatibleUsage {
   prompt_tokens: number;

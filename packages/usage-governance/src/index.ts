@@ -9,7 +9,7 @@ import {
   type UsagePricingConfig,
   type UsageSafeguardsConfig,
   createModelUsageWindowBounds
-} from "@vivd-stage/core";
+} from "@vivd-catalyst/core";
 
 export interface ModelUsageGovernanceOptions {
   store: ModelUsageEventStore;

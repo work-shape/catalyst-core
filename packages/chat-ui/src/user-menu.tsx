@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { LogOut, Settings } from "lucide-react";
-import type { ApiUser } from "@vivd-stage/api-client";
+import type { ApiUser } from "@vivd-catalyst/api-client";
 import { avatarGradient } from "./avatar-gradient";
 import { useTranslation } from "./i18n";
 import { Button } from "./ui/button";

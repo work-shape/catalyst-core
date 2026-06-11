@@ -1,4 +1,4 @@
-import { AppError } from "@vivd-stage/core";
+import { AppError } from "@vivd-catalyst/core";
 import type { ModelCompletionStreamEvent } from "./types";
 import { noReportedUsage, parseJsonObject, toModelUsage } from "./openai-compatible-mapping";
 import type { OpenAiCompatibleResponse } from "./openai-compatible-types";

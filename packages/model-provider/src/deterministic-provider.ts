@@ -1,4 +1,4 @@
-import { AppError, createPlatformId } from "@vivd-stage/core";
+import { AppError, createPlatformId } from "@vivd-catalyst/core";
 import type {
   ModelCompletion,
   ModelCompletionRequest,

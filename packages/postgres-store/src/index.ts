@@ -29,7 +29,7 @@ import {
   authenticatedUserFromRecord,
   createUserId,
   createPlatformId
-} from "@vivd-stage/core";
+} from "@vivd-catalyst/core";
 import { runPostgresMigrations } from "./migrations";
 import {
   mapAuditEvent,

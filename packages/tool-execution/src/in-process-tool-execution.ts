@@ -7,8 +7,8 @@ import {
   type ToolExecutionContext,
   type ToolExecutionRequest,
   type ToolExecutionResult
-} from "@vivd-stage/core";
-import { auditActorFromUser, type AuditRecorder } from "@vivd-stage/core";
+} from "@vivd-catalyst/core";
+import { auditActorFromUser, type AuditRecorder } from "@vivd-catalyst/core";
 import type { ToolRegistry } from "./tool-registry";
 import { failed, toPreview } from "./tool-results";
 

@@ -5,7 +5,7 @@ import {
   type ClientInstanceId,
   type ISODateString,
   asClientInstanceId
-} from "@vivd-stage/core";
+} from "@vivd-catalyst/core";
 import type { AuthAdapter, AuthRequest, AuthRequestHeaders } from "./types";
 
 export interface SessionTokenInput {

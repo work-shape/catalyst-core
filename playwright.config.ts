@@ -28,7 +28,7 @@ export default defineConfig({
     },
     {
       command:
-        "pnpm --filter @vivd-stage/chat-standalone preview --host 127.0.0.1 --port 5273",
+        "pnpm --filter @vivd-catalyst/chat-standalone preview --host 127.0.0.1 --port 5273",
       url: "http://127.0.0.1:5273",
       reuseExistingServer: false,
       timeout: 30_000

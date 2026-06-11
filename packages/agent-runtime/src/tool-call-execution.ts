@@ -7,8 +7,8 @@ import {
   type ToolAuthorizationDecision,
   type ToolExecution,
   asToolCallId
-} from "@vivd-stage/core";
-import type { ModelToolCall } from "@vivd-stage/model-provider";
+} from "@vivd-catalyst/core";
+import type { ModelToolCall } from "@vivd-catalyst/model-provider";
 import type { RunState } from "./run-state";
 
 export async function executeToolCall(input: {

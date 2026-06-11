@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { asClientInstanceId } from "@vivd-stage/core";
+import { asClientInstanceId } from "@vivd-catalyst/core";
 import {
   HmacSessionTokenAuthAdapter,
   HmacSessionTokenIssuer
-} from "@vivd-stage/auth";
+} from "@vivd-catalyst/auth";
 
 describe("HMAC chat session tokens", () => {
   it("normalizes signed token claims into an authenticated user", async () => {

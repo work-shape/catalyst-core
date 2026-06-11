@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import type { FastifyInstance } from "fastify";
-import { issueSessionTokenRequestSchema } from "@vivd-stage/api-contract";
-import { AppError } from "@vivd-stage/core";
+import { issueSessionTokenRequestSchema } from "@vivd-catalyst/api-contract";
+import { AppError } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "../types";
 import { createCorrelationId, parseBody } from "../request-context";
 

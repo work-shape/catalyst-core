@@ -1,4 +1,4 @@
-import type { ApiUser } from "@vivd-stage/api-client";
+import type { ApiUser } from "@vivd-catalyst/api-client";
 
 export function canViewSuperadminPanel(user: ApiUser | undefined): boolean {
   return Boolean(user?.roles.includes("superadmin"));

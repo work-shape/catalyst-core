@@ -20,7 +20,7 @@ import type {
   CreateAdministeredUserRequest,
   UpdateAdministeredUserRequest,
   UpsertAdministeredUserIdentityRequest
-} from "@vivd-stage/api-client";
+} from "@vivd-catalyst/api-client";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";

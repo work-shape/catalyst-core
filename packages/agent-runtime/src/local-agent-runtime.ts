@@ -14,10 +14,10 @@ import {
   type ToolExecution,
   asAgentRunId,
   createPlatformId
-} from "@vivd-stage/core";
-import type { ModelCompletion, ModelMessage, ModelProvider } from "@vivd-stage/model-provider";
-import type { ToolRegistry } from "@vivd-stage/tool-execution";
-import type { ModelUsageGovernance } from "@vivd-stage/usage-governance";
+} from "@vivd-catalyst/core";
+import type { ModelCompletion, ModelMessage, ModelProvider } from "@vivd-catalyst/model-provider";
+import type { ToolRegistry } from "@vivd-catalyst/tool-execution";
+import type { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { RunState } from "./run-state";
 import { createSystemInstructions } from "./system-instructions";
 import { executeToolCall } from "./tool-call-execution";

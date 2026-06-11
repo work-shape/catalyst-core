@@ -3,7 +3,7 @@ import {
   type AgentRunId,
   type AgentRunStatus,
   type AgentRuntimeEvent
-} from "@vivd-stage/core";
+} from "@vivd-catalyst/core";
 
 type AgentRuntimeEventDraft = AgentRuntimeEvent extends infer TEvent
   ? TEvent extends AgentRuntimeEvent

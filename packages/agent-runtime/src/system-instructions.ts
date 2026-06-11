@@ -1,4 +1,4 @@
-import type { LocaleCode } from "@vivd-stage/core";
+import type { LocaleCode } from "@vivd-catalyst/core";
 
 export function createSystemInstructions(
   instructions: string,

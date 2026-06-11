@@ -14,7 +14,7 @@ import type {
   Conversation,
   ModelUsageEvent,
   UserRecord
-} from "@vivd-stage/core";
+} from "@vivd-catalyst/core";
 
 export const productUsers = pgTable(
   "product_users",

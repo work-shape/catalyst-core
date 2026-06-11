@@ -1,5 +1,5 @@
 import { MessageSquare, Trash2 } from "lucide-react";
-import type { Conversation } from "@vivd-stage/api-client";
+import type { Conversation } from "@vivd-catalyst/api-client";
 import { useTranslation } from "./i18n";
 import { Button } from "./ui/button";
 import { cn } from "./ui/cn";

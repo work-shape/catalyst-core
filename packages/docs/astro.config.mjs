@@ -4,9 +4,9 @@ import starlight from "@astrojs/starlight";
 export default defineConfig({
   integrations: [
     starlight({
-      title: "Vivd Stage Operator Docs",
+      title: "Vivd Catalyst Operator Docs",
       description:
-        "Documentation for configuring, extending, and running dedicated Vivd Stage client instances.",
+        "Documentation for configuring, extending, and running dedicated Vivd Catalyst client instances.",
       sidebar: [
         {
           label: "Start Here",

@@ -1,6 +1,6 @@
 import { PanelLeft, Plus, Shield } from "lucide-react";
 import type { ReactNode } from "react";
-import type { Conversation, SafeConfig } from "@vivd-stage/api-client";
+import type { Conversation, SafeConfig } from "@vivd-catalyst/api-client";
 import { ConversationButton } from "./conversation-button";
 import { useTranslation } from "./i18n";
 import { Button } from "./ui/button";
@@ -38,7 +38,7 @@ export function WorkspaceRail({
   onDeleteConversation: (conversationId: string) => void;
 }) {
   const { t } = useTranslation();
-  const clientLabel = config?.ui.clientName ?? config?.ui.title ?? "Vivd Stage";
+  const clientLabel = config?.ui.clientName ?? config?.ui.title ?? "Vivd Catalyst";
   const logoUrl = config?.ui.logoUrl;
   const logoUrlDark = config?.ui.logoUrlDark;
   const invertLogoOnDark = Boolean(config?.ui.logoInvertOnDark && !logoUrlDark);

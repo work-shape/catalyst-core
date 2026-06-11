@@ -6,9 +6,9 @@ import {
   IdentityResolvingAuthAdapter,
   createStandaloneAuthRuntime,
   type AuthAdapter
-} from "@vivd-stage/auth";
-import { AppError, type ClientInstanceId, type UserStore } from "@vivd-stage/core";
-import { getDevelopmentAuthUsers, type ClientInstanceConfig } from "@vivd-stage/config-schema";
+} from "@vivd-catalyst/auth";
+import { AppError, type ClientInstanceId, type UserStore } from "@vivd-catalyst/core";
+import { getDevelopmentAuthUsers, type ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { ClientInstanceEnv } from "./env";
 
 export interface ClientInstanceAuth {

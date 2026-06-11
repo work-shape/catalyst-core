@@ -1,5 +1,5 @@
 {
-  "name": "@vivd-stage/agent-runtime",
+  "name": "@vivd-catalyst/agent-runtime",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -17,10 +17,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@vivd-stage/core": "workspace:*",
-    "@vivd-stage/model-provider": "workspace:*",
-    "@vivd-stage/tool-execution": "workspace:*",
-    "@vivd-stage/usage-governance": "workspace:*"
+    "@vivd-catalyst/core": "workspace:*",
+    "@vivd-catalyst/model-provider": "workspace:*",
+    "@vivd-catalyst/tool-execution": "workspace:*",
+    "@vivd-catalyst/usage-governance": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.5.1",

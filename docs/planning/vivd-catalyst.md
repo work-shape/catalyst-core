@@ -1,28 +1,28 @@
-# Vivd Stage Planning
+# Vivd Catalyst Planning
 
 Date: 2026-06-04
 
-This is the planning index for Vivd Stage, the reusable AI agent chat platform for sensitive customer workflows.
+This is the planning index for Vivd Catalyst, the reusable AI agent chat platform for sensitive customer workflows.
 
 The first use case is a sensitive document and payslip workflow embedded into a customer application. The product should become a reusable, code-deployed, self-hostable foundation for future client instances.
 
 ## Planning Docs
 
-- [Architecture](./vivd-stage/architecture.md)
-- [Extension Model](./vivd-stage/extension-model.md)
-- [Frontend, UI, And API Client](./vivd-stage/frontend-ui-api.md)
-- [Agent Capabilities](./vivd-stage/agent-capabilities.md)
-- [Document Text Extraction](./vivd-stage/document-text-extraction.md)
-- [Data, Storage, And Retrieval](./vivd-stage/data-storage-retrieval.md)
-- [Infrastructure](./vivd-stage/infrastructure.md)
-- [Auth, Security, And Compliance](./vivd-stage/auth-security-compliance.md)
-- [Audit And Governance](./vivd-stage/audit-governance.md)
-- [Packaging And Repository Strategy](./vivd-stage/packaging-repository.md)
-- [Reference Patterns](./vivd-stage/reference-patterns.md)
-- [Implementation Guide](./vivd-stage/implementation-guide.md)
-- [V1 Scope](./vivd-stage/v1-scope.md)
-- [V1 Realignment Plan](./vivd-stage/v1-realignment-plan.md)
-- [Open Questions](./vivd-stage/open-questions.md)
+- [Architecture](./vivd-catalyst/architecture.md)
+- [Extension Model](./vivd-catalyst/extension-model.md)
+- [Frontend, UI, And API Client](./vivd-catalyst/frontend-ui-api.md)
+- [Agent Capabilities](./vivd-catalyst/agent-capabilities.md)
+- [Document Text Extraction](./vivd-catalyst/document-text-extraction.md)
+- [Data, Storage, And Retrieval](./vivd-catalyst/data-storage-retrieval.md)
+- [Infrastructure](./vivd-catalyst/infrastructure.md)
+- [Auth, Security, And Compliance](./vivd-catalyst/auth-security-compliance.md)
+- [Audit And Governance](./vivd-catalyst/audit-governance.md)
+- [Packaging And Repository Strategy](./vivd-catalyst/packaging-repository.md)
+- [Reference Patterns](./vivd-catalyst/reference-patterns.md)
+- [Implementation Guide](./vivd-catalyst/implementation-guide.md)
+- [V1 Scope](./vivd-catalyst/v1-scope.md)
+- [V1 Realignment Plan](./vivd-catalyst/v1-realignment-plan.md)
+- [Open Questions](./vivd-catalyst/open-questions.md)
 
 Related research:
 

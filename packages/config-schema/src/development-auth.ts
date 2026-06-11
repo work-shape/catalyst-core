@@ -1,4 +1,4 @@
-import { AppError } from "@vivd-stage/core";
+import { AppError } from "@vivd-catalyst/core";
 import type { ClientInstanceConfig, UserIdentityConfig } from "./schemas";
 
 export interface DevelopmentAuthUsers {

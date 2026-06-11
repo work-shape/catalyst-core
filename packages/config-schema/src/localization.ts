@@ -5,7 +5,7 @@ import {
   type LocaleCode,
   type LocalizationConfig,
   type LocalizedStringConfig
-} from "@vivd-stage/core";
+} from "@vivd-catalyst/core";
 
 export const localeCodeSchema = z.enum(localeCodes);
 

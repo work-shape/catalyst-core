@@ -1,5 +1,5 @@
-import { AppError, type ToolDescriptor } from "@vivd-stage/core";
-import type { AnyToolDefinition } from "@vivd-stage/tool-sdk";
+import { AppError, type ToolDescriptor } from "@vivd-catalyst/core";
+import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
 
 export interface ToolRegistryOptions {
   tools: AnyToolDefinition[];

@@ -1,4 +1,4 @@
-import { AppError, type ModelProviderConfig } from "@vivd-stage/core";
+import { AppError, type ModelProviderConfig } from "@vivd-catalyst/core";
 import { DeterministicModelProvider } from "./deterministic-provider";
 import { OpenAiCompatibleChatProvider } from "./openai-compatible-provider";
 import { ModelProviderRegistry } from "./registry";

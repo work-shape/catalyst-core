@@ -1,4 +1,4 @@
-import type { AuthenticatedUser, ClientInstanceId } from "@vivd-stage/core";
+import type { AuthenticatedUser, ClientInstanceId } from "@vivd-catalyst/core";
 
 export type AuthRequestHeaders = Record<string, string | string[] | undefined>;
 

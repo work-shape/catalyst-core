@@ -1,4 +1,4 @@
-import type { JsonObject, ModelTokenUsage, RuntimeCallContext } from "@vivd-stage/core";
+import type { JsonObject, ModelTokenUsage, RuntimeCallContext } from "@vivd-catalyst/core";
 
 export interface ModelTool {
   name: string;

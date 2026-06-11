@@ -8,7 +8,7 @@ COPY packages ./packages
 COPY clients/demo ./clients/demo
 
 RUN pnpm install --frozen-lockfile
-RUN pnpm -r --filter './packages/*' build && pnpm --filter @vivd-stage/demo build
+RUN pnpm -r --filter './packages/*' build && pnpm --filter @vivd-catalyst/demo build
 
 FROM node:23-alpine AS runtime
 

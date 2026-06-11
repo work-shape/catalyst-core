@@ -1,4 +1,4 @@
-import { AppError } from "@vivd-stage/core";
+import { AppError } from "@vivd-catalyst/core";
 import { clientInstanceConfigSchema, type ClientInstanceConfig } from "./schemas";
 
 export function parseClientInstanceConfig(input: unknown): ClientInstanceConfig {

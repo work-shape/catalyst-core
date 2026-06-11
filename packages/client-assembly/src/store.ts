@@ -1,6 +1,6 @@
-import { InMemoryPlatformStore } from "@vivd-stage/core/testing";
-import { PostgresPlatformStore } from "@vivd-stage/postgres-store";
-import { AppError, type PlatformStore } from "@vivd-stage/core";
+import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+import { PostgresPlatformStore } from "@vivd-catalyst/postgres-store";
+import { AppError, type PlatformStore } from "@vivd-catalyst/core";
 import type { ClientInstanceEnv } from "./env";
 
 export type PlatformStoreMode = "postgres" | "memory";

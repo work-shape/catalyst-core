@@ -1,4 +1,4 @@
-import { createClientInstanceApp } from "@vivd-stage/client-assembly";
+import { createClientInstanceApp } from "@vivd-catalyst/client-assembly";
 import { loadClientEnvironment, resolveConfigPath } from "./environment";
 import { tools } from "./tool-registry";
 

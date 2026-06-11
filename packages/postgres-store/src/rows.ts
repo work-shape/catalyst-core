@@ -10,7 +10,7 @@ import {
   asConversationId,
   asMessageId,
   asUserId
-} from "@vivd-stage/core";
+} from "@vivd-catalyst/core";
 import type {
   auditEvents,
   conversations,

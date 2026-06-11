@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import type { AuditRecorder } from "@vivd-stage/core";
+import type { AuditRecorder } from "@vivd-catalyst/core";
 import {
   asAgentRunId,
   asClientInstanceId,
@@ -8,9 +8,9 @@ import {
   asToolCallId,
   type AuditEvent,
   type ToolExecutionContext
-} from "@vivd-stage/core";
-import { InProcessToolExecution, ToolRegistry } from "@vivd-stage/tool-execution";
-import { defineTool, toolSuccess } from "@vivd-stage/tool-sdk";
+} from "@vivd-catalyst/core";
+import { InProcessToolExecution, ToolRegistry } from "@vivd-catalyst/tool-execution";
+import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 
 describe("in-process tool execution", () => {
   it("authorizes, validates, and executes a registered tool through the product interface", async () => {

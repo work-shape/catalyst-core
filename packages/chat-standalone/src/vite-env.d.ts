@@ -1,4 +1,4 @@
 /// <reference types="vite/client" />
 
-declare module "@vivd-stage/chat-ui/styles.css";
+declare module "@vivd-catalyst/chat-ui/styles.css";
 

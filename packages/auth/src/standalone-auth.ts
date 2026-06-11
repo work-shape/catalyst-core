@@ -10,7 +10,7 @@ import {
   AppError,
   type AuthenticatedUser,
   type ClientInstanceId
-} from "@vivd-stage/core";
+} from "@vivd-catalyst/core";
 import {
   authAccounts,
   authSessions,

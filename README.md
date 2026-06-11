@@ -1,4 +1,4 @@
-# Vivd Stage
+# Vivd Catalyst
 
 This repository is a greenfield foundation for reusable, code-deployed AI agent chat client instances.
 
@@ -34,9 +34,9 @@ pnpm dev:musterbau
 - The standalone UI starts with Vite from `packages/chat-standalone` and hot reloads standalone and shared chat UI/package source changes.
 - API startup runs idempotent migrations when `RUN_MIGRATIONS` is not `false`.
 - Standalone Better Auth users from `clients/demo/config/app.yaml` are seeded into Postgres on startup.
-- You can seed those users explicitly with `pnpm --filter @vivd-stage/demo seed:auth`.
+- You can seed those users explicitly with `pnpm --filter @vivd-catalyst/demo seed:auth`.
 
-The Musterbau client follows the same local shape from `clients/musterbau` and can seed users with `pnpm --filter @vivd-stage/musterbau seed:auth`.
+The Musterbau client follows the same local shape from `clients/musterbau` and can seed users with `pnpm --filter @vivd-catalyst/musterbau seed:auth`.
 
 Default standalone login users:
 

@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { asClientInstanceId } from "@vivd-stage/core";
+import { asClientInstanceId } from "@vivd-catalyst/core";
 import {
   DeterministicModelProvider,
   ModelProviderRegistry,
   OpenAiCompatibleChatProvider,
   type ModelCompletionStreamEvent
-} from "@vivd-stage/model-provider";
+} from "@vivd-catalyst/model-provider";
 
 describe("OpenAI-compatible model provider", () => {
   afterEach(() => {

@@ -1,1 +1,1 @@
-export * from "@vivd-stage/api-contract";
+export * from "@vivd-catalyst/api-contract";

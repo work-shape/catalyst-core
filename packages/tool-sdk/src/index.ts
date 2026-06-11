@@ -4,7 +4,7 @@ import type {
   ToolHandlerResult,
   ToolPermissionPolicy,
   ToolRuntimeContext
-} from "@vivd-stage/core";
+} from "@vivd-catalyst/core";
 
 export interface ToolDefinition<TInput = unknown, TOutput = unknown> {
   name: string;

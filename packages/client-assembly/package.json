@@ -1,5 +1,5 @@
 {
-  "name": "@vivd-stage/client-assembly",
+  "name": "@vivd-catalyst/client-assembly",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -17,16 +17,16 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@vivd-stage/agent-runtime": "workspace:*",
-    "@vivd-stage/auth": "workspace:*",
-    "@vivd-stage/core": "workspace:*",
-    "@vivd-stage/chat-server": "workspace:*",
-    "@vivd-stage/config-schema": "workspace:*",
-    "@vivd-stage/model-provider": "workspace:*",
-    "@vivd-stage/postgres-store": "workspace:*",
-    "@vivd-stage/tool-execution": "workspace:*",
-    "@vivd-stage/tool-sdk": "workspace:*",
-    "@vivd-stage/usage-governance": "workspace:*",
+    "@vivd-catalyst/agent-runtime": "workspace:*",
+    "@vivd-catalyst/auth": "workspace:*",
+    "@vivd-catalyst/core": "workspace:*",
+    "@vivd-catalyst/chat-server": "workspace:*",
+    "@vivd-catalyst/config-schema": "workspace:*",
+    "@vivd-catalyst/model-provider": "workspace:*",
+    "@vivd-catalyst/postgres-store": "workspace:*",
+    "@vivd-catalyst/tool-execution": "workspace:*",
+    "@vivd-catalyst/tool-sdk": "workspace:*",
+    "@vivd-catalyst/usage-governance": "workspace:*",
     "fastify": "^5.8.5"
   },
   "devDependencies": {

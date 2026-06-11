@@ -1,11 +1,11 @@
-import { createStandaloneAuthRuntime } from "@vivd-stage/auth";
-import { AppError } from "@vivd-stage/core";
+import { createStandaloneAuthRuntime } from "@vivd-catalyst/auth";
+import { AppError } from "@vivd-catalyst/core";
 import {
   getClientInstanceId,
   loadClientInstanceConfigFromFile,
   type ClientInstanceConfig
-} from "@vivd-stage/config-schema";
-import { PostgresPlatformStore } from "@vivd-stage/postgres-store";
+} from "@vivd-catalyst/config-schema";
+import { PostgresPlatformStore } from "@vivd-catalyst/postgres-store";
 import { loadClientEnvironment, resolveConfigPath } from "./environment";
 
 loadClientEnvironment();

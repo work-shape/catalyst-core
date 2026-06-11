@@ -1,9 +1,9 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Outlet, RouterProvider, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
-import { superadminPanel } from "@vivd-stage/chat-ui/admin";
-import { ChatShell } from "@vivd-stage/chat-ui/shell";
-import "@vivd-stage/chat-ui/styles.css";
+import { superadminPanel } from "@vivd-catalyst/chat-ui/admin";
+import { ChatShell } from "@vivd-catalyst/chat-ui/shell";
+import "@vivd-catalyst/chat-ui/styles.css";
 
 const apiBaseUrl = import.meta.env.VITE_CHAT_API_URL ?? defaultLocalApiBaseUrl();
 const rootRoute = createRootRoute({

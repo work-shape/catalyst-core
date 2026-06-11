@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { SafeConfig } from "@vivd-stage/api-client";
+import type { SafeConfig } from "@vivd-catalyst/api-client";
 
 export type ResolvedThemeMode = "light" | "dark";
 export type ThemeModePreference = ResolvedThemeMode | "system";

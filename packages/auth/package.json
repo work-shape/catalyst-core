@@ -1,5 +1,5 @@
 {
-  "name": "@vivd-stage/auth",
+  "name": "@vivd-catalyst/auth",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -17,7 +17,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@vivd-stage/core": "workspace:*",
+    "@vivd-catalyst/core": "workspace:*",
     "better-auth": "^1.6.15",
     "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.9"
