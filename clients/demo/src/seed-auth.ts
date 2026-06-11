@@ -1,11 +1,11 @@
-import { createStandaloneAuthRuntime } from "@agent-chat-platform/auth";
-import { AppError } from "@agent-chat-platform/core";
+import { createStandaloneAuthRuntime } from "@vivd-stage/auth";
+import { AppError } from "@vivd-stage/core";
 import {
   getClientInstanceId,
   loadClientInstanceConfigFromFile,
   type ClientInstanceConfig
-} from "@agent-chat-platform/config-schema";
-import { PostgresPlatformStore } from "@agent-chat-platform/postgres-store";
+} from "@vivd-stage/config-schema";
+import { PostgresPlatformStore } from "@vivd-stage/postgres-store";
 import { loadDemoEnvironment, resolveConfigPath } from "./environment";
 
 loadDemoEnvironment();

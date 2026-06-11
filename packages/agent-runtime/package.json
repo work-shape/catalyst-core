@@ -1,5 +1,5 @@
 {
-  "name": "@agent-chat-platform/agent-runtime",
+  "name": "@vivd-stage/agent-runtime",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -17,10 +17,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@agent-chat-platform/core": "workspace:*",
-    "@agent-chat-platform/model-provider": "workspace:*",
-    "@agent-chat-platform/tool-execution": "workspace:*",
-    "@agent-chat-platform/usage-governance": "workspace:*"
+    "@vivd-stage/core": "workspace:*",
+    "@vivd-stage/model-provider": "workspace:*",
+    "@vivd-stage/tool-execution": "workspace:*",
+    "@vivd-stage/usage-governance": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.5.1",

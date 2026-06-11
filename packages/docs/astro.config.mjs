@@ -4,9 +4,9 @@ import starlight from "@astrojs/starlight";
 export default defineConfig({
   integrations: [
     starlight({
-      title: "Data Chat Operator Docs",
+      title: "Vivd Stage Operator Docs",
       description:
-        "Documentation for configuring, extending, and running dedicated Data Chat client instances.",
+        "Documentation for configuring, extending, and running dedicated Vivd Stage client instances.",
       sidebar: [
         {
           label: "Start Here",

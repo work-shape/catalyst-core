@@ -1,6 +1,6 @@
-import { InMemoryPlatformStore } from "@agent-chat-platform/core/testing";
-import { PostgresPlatformStore } from "@agent-chat-platform/postgres-store";
-import { AppError, type PlatformStore } from "@agent-chat-platform/core";
+import { InMemoryPlatformStore } from "@vivd-stage/core/testing";
+import { PostgresPlatformStore } from "@vivd-stage/postgres-store";
+import { AppError, type PlatformStore } from "@vivd-stage/core";
 import type { ClientInstanceEnv } from "./env";
 
 export type PlatformStoreMode = "postgres" | "memory";

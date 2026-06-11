@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseClientInstanceConfig } from "@agent-chat-platform/config-schema";
+import { parseClientInstanceConfig } from "@vivd-stage/config-schema";
 import { resolveTrustedOrigins } from "../packages/client-assembly/src/auth";
 
 describe("client instance standalone auth trusted origins", () => {

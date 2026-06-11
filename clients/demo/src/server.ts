@@ -1,4 +1,4 @@
-import { createClientInstanceApp } from "@agent-chat-platform/client-assembly";
+import { createClientInstanceApp } from "@vivd-stage/client-assembly";
 import { loadDemoEnvironment, resolveConfigPath } from "./environment";
 import { tools } from "./tool-registry";
 

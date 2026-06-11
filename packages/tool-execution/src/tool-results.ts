@@ -2,7 +2,7 @@ import {
   type JsonObject,
   type ToolExecutionErrorCode,
   type ToolHandlerFailureResult
-} from "@agent-chat-platform/core";
+} from "@vivd-stage/core";
 
 export function failed(
   code: ToolExecutionErrorCode,

@@ -1,4 +1,4 @@
-import type { LocaleCode } from "@agent-chat-platform/core";
+import type { LocaleCode } from "@vivd-stage/core";
 
 export function createSystemInstructions(
   instructions: string,

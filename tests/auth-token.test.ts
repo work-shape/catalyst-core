@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { asClientInstanceId } from "@agent-chat-platform/core";
+import { asClientInstanceId } from "@vivd-stage/core";
 import {
   HmacSessionTokenAuthAdapter,
   HmacSessionTokenIssuer
-} from "@agent-chat-platform/auth";
+} from "@vivd-stage/auth";
 
 describe("HMAC chat session tokens", () => {
   it("normalizes signed token claims into an authenticated user", async () => {

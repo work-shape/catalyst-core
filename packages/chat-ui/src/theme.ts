@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { SafeConfig } from "@agent-chat-platform/api-client";
+import type { SafeConfig } from "@vivd-stage/api-client";
 
 export type ResolvedThemeMode = "light" | "dark";
 export type ThemeModePreference = ResolvedThemeMode | "system";

@@ -1,5 +1,5 @@
 {
-  "name": "@agent-chat-platform/chat-widget",
+  "name": "@vivd-stage/chat-widget",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -17,7 +17,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@agent-chat-platform/chat-ui": "workspace:*",
+    "@vivd-stage/chat-ui": "workspace:*",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },

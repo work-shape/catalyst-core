@@ -1,19 +1,19 @@
 import type { FastifyInstance } from "fastify";
-import { LocalAgentRuntime } from "@agent-chat-platform/agent-runtime";
-import { StoreBackedAuditRecorder } from "@agent-chat-platform/core";
-import { createChatServer } from "@agent-chat-platform/chat-server";
-import { AppError } from "@agent-chat-platform/core";
+import { LocalAgentRuntime } from "@vivd-stage/agent-runtime";
+import { StoreBackedAuditRecorder } from "@vivd-stage/core";
+import { createChatServer } from "@vivd-stage/chat-server";
+import { AppError } from "@vivd-stage/core";
 import {
   type ClientInstanceConfig,
   getAgentConfig,
   getClientInstanceId,
   getEnabledToolNames,
   loadClientInstanceConfigFromFile
-} from "@agent-chat-platform/config-schema";
-import { createModelProviderRegistry } from "@agent-chat-platform/model-provider";
-import { InProcessToolExecution, ToolRegistry } from "@agent-chat-platform/tool-execution";
-import type { AnyToolDefinition } from "@agent-chat-platform/tool-sdk";
-import { ModelUsageGovernance } from "@agent-chat-platform/usage-governance";
+} from "@vivd-stage/config-schema";
+import { createModelProviderRegistry } from "@vivd-stage/model-provider";
+import { InProcessToolExecution, ToolRegistry } from "@vivd-stage/tool-execution";
+import type { AnyToolDefinition } from "@vivd-stage/tool-sdk";
+import { ModelUsageGovernance } from "@vivd-stage/usage-governance";
 import { assertClientAssemblyValid } from "./assembly-validation";
 import { createClientInstanceAuth } from "./auth";
 import type { ClientInstanceEnv } from "./env";

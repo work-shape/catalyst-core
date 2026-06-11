@@ -1,4 +1,4 @@
-import { STANDALONE_AUTH_SOURCE } from "@agent-chat-platform/auth";
+import { STANDALONE_AUTH_SOURCE } from "@vivd-stage/auth";
 import {
   AppError,
   auditActorFromUser,
@@ -8,7 +8,7 @@ import {
   type UserRecord,
   type UserRole,
   type UserStatus
-} from "@agent-chat-platform/core";
+} from "@vivd-stage/core";
 import type { ChatServerOptions } from "./types";
 import { authorizeGovernanceAction } from "./governance-actions";
 

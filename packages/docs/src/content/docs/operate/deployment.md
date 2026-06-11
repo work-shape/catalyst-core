@@ -3,7 +3,7 @@ title: Deployment
 description: Package and run a dedicated client instance.
 ---
 
-Data Chat runtime services are packaged as Docker images. Docker Compose is the default local and first production-friendly deployment target.
+Vivd Stage runtime services are packaged as Docker images. Docker Compose is the default local and first production-friendly deployment target.
 
 ## First Production Shape
 

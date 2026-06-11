@@ -6,9 +6,9 @@ import {
   IdentityResolvingAuthAdapter,
   createStandaloneAuthRuntime,
   type AuthAdapter
-} from "@agent-chat-platform/auth";
-import { AppError, type ClientInstanceId, type UserStore } from "@agent-chat-platform/core";
-import { getDevelopmentAuthUsers, type ClientInstanceConfig } from "@agent-chat-platform/config-schema";
+} from "@vivd-stage/auth";
+import { AppError, type ClientInstanceId, type UserStore } from "@vivd-stage/core";
+import { getDevelopmentAuthUsers, type ClientInstanceConfig } from "@vivd-stage/config-schema";
 import type { ClientInstanceEnv } from "./env";
 
 export interface ClientInstanceAuth {

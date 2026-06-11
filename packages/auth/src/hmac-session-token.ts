@@ -5,7 +5,7 @@ import {
   type ClientInstanceId,
   type ISODateString,
   asClientInstanceId
-} from "@agent-chat-platform/core";
+} from "@vivd-stage/core";
 import type { AuthAdapter, AuthRequest, AuthRequestHeaders } from "./types";
 
 export interface SessionTokenInput {

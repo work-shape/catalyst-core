@@ -8,8 +8,8 @@ import {
   type RuntimeCallContext,
   asConversationId,
   createPlatformId
-} from "@agent-chat-platform/core";
-import { resolveConfigLocale } from "@agent-chat-platform/config-schema";
+} from "@vivd-stage/core";
+import { resolveConfigLocale } from "@vivd-stage/config-schema";
 import type { ChatServerOptions } from "./types";
 
 export async function authenticateRequest(

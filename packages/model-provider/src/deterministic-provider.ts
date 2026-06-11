@@ -1,4 +1,4 @@
-import { AppError, createPlatformId } from "@agent-chat-platform/core";
+import { AppError, createPlatformId } from "@vivd-stage/core";
 import type {
   ModelCompletion,
   ModelCompletionRequest,

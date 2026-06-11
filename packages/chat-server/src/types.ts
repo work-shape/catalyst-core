@@ -1,16 +1,16 @@
-import type { HmacSessionTokenIssuer, StandaloneAuthRuntime } from "@agent-chat-platform/auth";
+import type { HmacSessionTokenIssuer, StandaloneAuthRuntime } from "@vivd-stage/auth";
 import type {
   AgentRuntime,
   AuditEventStore,
   ClientInstanceId,
   ConversationStore,
   UserStore
-} from "@agent-chat-platform/core";
-import type { AuditRecorder } from "@agent-chat-platform/core";
-import type { AuthAdapter } from "@agent-chat-platform/auth";
-import type { ClientInstanceConfig } from "@agent-chat-platform/config-schema";
-import type { ModelProvider } from "@agent-chat-platform/model-provider";
-import type { ModelUsageGovernance } from "@agent-chat-platform/usage-governance";
+} from "@vivd-stage/core";
+import type { AuditRecorder } from "@vivd-stage/core";
+import type { AuthAdapter } from "@vivd-stage/auth";
+import type { ClientInstanceConfig } from "@vivd-stage/config-schema";
+import type { ModelProvider } from "@vivd-stage/model-provider";
+import type { ModelUsageGovernance } from "@vivd-stage/usage-governance";
 
 export interface ChatServerOptions {
   config: ClientInstanceConfig;

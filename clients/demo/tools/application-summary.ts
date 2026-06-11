@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { defineTool, toolSuccess } from "@agent-chat-platform/tool-sdk";
+import { defineTool, toolSuccess } from "@vivd-stage/tool-sdk";
 
 const inputSchema = z.object({
   applicantName: z.string().min(1),

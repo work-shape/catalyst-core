@@ -5,7 +5,7 @@ import {
   type ChangeCurrentUserPasswordRequest,
   type LocaleCode,
   type UpdateCurrentUserRequest
-} from "@agent-chat-platform/api-client";
+} from "@vivd-stage/api-client";
 import { useTranslation } from "./i18n";
 import { LocaleSelector } from "./locale-selector";
 import { Button } from "./ui/button";

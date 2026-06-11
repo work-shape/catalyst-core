@@ -35,34 +35,34 @@ importers:
 
   clients/demo:
     dependencies:
-      '@agent-chat-platform/agent-runtime':
+      '@vivd-stage/agent-runtime':
         specifier: workspace:*
         version: link:../../packages/agent-runtime
-      '@agent-chat-platform/auth':
+      '@vivd-stage/auth':
         specifier: workspace:*
         version: link:../../packages/auth
-      '@agent-chat-platform/chat-server':
+      '@vivd-stage/chat-server':
         specifier: workspace:*
         version: link:../../packages/chat-server
-      '@agent-chat-platform/client-assembly':
+      '@vivd-stage/client-assembly':
         specifier: workspace:*
         version: link:../../packages/client-assembly
-      '@agent-chat-platform/config-schema':
+      '@vivd-stage/config-schema':
         specifier: workspace:*
         version: link:../../packages/config-schema
-      '@agent-chat-platform/core':
+      '@vivd-stage/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@agent-chat-platform/model-provider':
+      '@vivd-stage/model-provider':
         specifier: workspace:*
         version: link:../../packages/model-provider
-      '@agent-chat-platform/postgres-store':
+      '@vivd-stage/postgres-store':
         specifier: workspace:*
         version: link:../../packages/postgres-store
-      '@agent-chat-platform/tool-execution':
+      '@vivd-stage/tool-execution':
         specifier: workspace:*
         version: link:../../packages/tool-execution
-      '@agent-chat-platform/tool-sdk':
+      '@vivd-stage/tool-sdk':
         specifier: workspace:*
         version: link:../../packages/tool-sdk
       dotenv:
@@ -87,16 +87,16 @@ importers:
 
   packages/agent-runtime:
     dependencies:
-      '@agent-chat-platform/core':
+      '@vivd-stage/core':
         specifier: workspace:*
         version: link:../core
-      '@agent-chat-platform/model-provider':
+      '@vivd-stage/model-provider':
         specifier: workspace:*
         version: link:../model-provider
-      '@agent-chat-platform/tool-execution':
+      '@vivd-stage/tool-execution':
         specifier: workspace:*
         version: link:../tool-execution
-      '@agent-chat-platform/usage-governance':
+      '@vivd-stage/usage-governance':
         specifier: workspace:*
         version: link:../usage-governance
     devDependencies:
@@ -109,7 +109,7 @@ importers:
 
   packages/api-client:
     dependencies:
-      '@agent-chat-platform/api-contract':
+      '@vivd-stage/api-contract':
         specifier: workspace:*
         version: link:../api-contract
       zod:
@@ -138,7 +138,7 @@ importers:
 
   packages/auth:
     dependencies:
-      '@agent-chat-platform/core':
+      '@vivd-stage/core':
         specifier: workspace:*
         version: link:../core
       better-auth:
@@ -160,22 +160,22 @@ importers:
 
   packages/chat-server:
     dependencies:
-      '@agent-chat-platform/api-contract':
+      '@vivd-stage/api-contract':
         specifier: workspace:*
         version: link:../api-contract
-      '@agent-chat-platform/auth':
+      '@vivd-stage/auth':
         specifier: workspace:*
         version: link:../auth
-      '@agent-chat-platform/config-schema':
+      '@vivd-stage/config-schema':
         specifier: workspace:*
         version: link:../config-schema
-      '@agent-chat-platform/core':
+      '@vivd-stage/core':
         specifier: workspace:*
         version: link:../core
-      '@agent-chat-platform/model-provider':
+      '@vivd-stage/model-provider':
         specifier: workspace:*
         version: link:../model-provider
-      '@agent-chat-platform/usage-governance':
+      '@vivd-stage/usage-governance':
         specifier: workspace:*
         version: link:../usage-governance
       '@fastify/cors':
@@ -200,7 +200,7 @@ importers:
 
   packages/chat-standalone:
     dependencies:
-      '@agent-chat-platform/chat-ui':
+      '@vivd-stage/chat-ui':
         specifier: workspace:*
         version: link:../chat-ui
       '@tanstack/react-router':
@@ -240,7 +240,7 @@ importers:
 
   packages/chat-ui:
     dependencies:
-      '@agent-chat-platform/api-client':
+      '@vivd-stage/api-client':
         specifier: workspace:*
         version: link:../api-client
       '@ai-sdk/react':
@@ -310,7 +310,7 @@ importers:
 
   packages/chat-widget:
     dependencies:
-      '@agent-chat-platform/chat-ui':
+      '@vivd-stage/chat-ui':
         specifier: workspace:*
         version: link:../chat-ui
       react:
@@ -335,34 +335,34 @@ importers:
 
   packages/client-assembly:
     dependencies:
-      '@agent-chat-platform/agent-runtime':
+      '@vivd-stage/agent-runtime':
         specifier: workspace:*
         version: link:../agent-runtime
-      '@agent-chat-platform/auth':
+      '@vivd-stage/auth':
         specifier: workspace:*
         version: link:../auth
-      '@agent-chat-platform/chat-server':
+      '@vivd-stage/chat-server':
         specifier: workspace:*
         version: link:../chat-server
-      '@agent-chat-platform/config-schema':
+      '@vivd-stage/config-schema':
         specifier: workspace:*
         version: link:../config-schema
-      '@agent-chat-platform/core':
+      '@vivd-stage/core':
         specifier: workspace:*
         version: link:../core
-      '@agent-chat-platform/model-provider':
+      '@vivd-stage/model-provider':
         specifier: workspace:*
         version: link:../model-provider
-      '@agent-chat-platform/postgres-store':
+      '@vivd-stage/postgres-store':
         specifier: workspace:*
         version: link:../postgres-store
-      '@agent-chat-platform/tool-execution':
+      '@vivd-stage/tool-execution':
         specifier: workspace:*
         version: link:../tool-execution
-      '@agent-chat-platform/tool-sdk':
+      '@vivd-stage/tool-sdk':
         specifier: workspace:*
         version: link:../tool-sdk
-      '@agent-chat-platform/usage-governance':
+      '@vivd-stage/usage-governance':
         specifier: workspace:*
         version: link:../usage-governance
       fastify:
@@ -378,7 +378,7 @@ importers:
 
   packages/config-schema:
     dependencies:
-      '@agent-chat-platform/core':
+      '@vivd-stage/core':
         specifier: workspace:*
         version: link:../core
       js-yaml:
@@ -428,7 +428,7 @@ importers:
 
   packages/model-provider:
     dependencies:
-      '@agent-chat-platform/core':
+      '@vivd-stage/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -441,7 +441,7 @@ importers:
 
   packages/postgres-store:
     dependencies:
-      '@agent-chat-platform/core':
+      '@vivd-stage/core':
         specifier: workspace:*
         version: link:../core
       drizzle-orm:
@@ -460,10 +460,10 @@ importers:
 
   packages/tool-execution:
     dependencies:
-      '@agent-chat-platform/core':
+      '@vivd-stage/core':
         specifier: workspace:*
         version: link:../core
-      '@agent-chat-platform/tool-sdk':
+      '@vivd-stage/tool-sdk':
         specifier: workspace:*
         version: link:../tool-sdk
       zod:
@@ -479,7 +479,7 @@ importers:
 
   packages/tool-sdk:
     dependencies:
-      '@agent-chat-platform/core':
+      '@vivd-stage/core':
         specifier: workspace:*
         version: link:../core
       zod:
@@ -495,7 +495,7 @@ importers:
 
   packages/usage-governance:
     dependencies:
-      '@agent-chat-platform/core':
+      '@vivd-stage/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:

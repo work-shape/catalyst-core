@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Languages } from "lucide-react";
-import type { LocaleCode } from "@agent-chat-platform/api-client";
+import type { LocaleCode } from "@vivd-stage/api-client";
 import { useTranslation } from "./i18n";
 import { cn } from "./ui/cn";
 

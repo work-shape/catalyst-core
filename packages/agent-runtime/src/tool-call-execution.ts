@@ -7,8 +7,8 @@ import {
   type ToolAuthorizationDecision,
   type ToolExecution,
   asToolCallId
-} from "@agent-chat-platform/core";
-import type { ModelToolCall } from "@agent-chat-platform/model-provider";
+} from "@vivd-stage/core";
+import type { ModelToolCall } from "@vivd-stage/model-provider";
 import type { RunState } from "./run-state";
 
 export async function executeToolCall(input: {

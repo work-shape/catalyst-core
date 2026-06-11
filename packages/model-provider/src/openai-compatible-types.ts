@@ -1,4 +1,4 @@
-import type { JsonObject } from "@agent-chat-platform/core";
+import type { JsonObject } from "@vivd-stage/core";
 
 export interface OpenAiCompatibleUsage {
   prompt_tokens: number;

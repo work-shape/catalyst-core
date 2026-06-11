@@ -14,7 +14,7 @@ import {
   type UpdateCurrentUserRequest,
   type UpdateAdministeredUserRequest,
   type UpsertAdministeredUserIdentityRequest
-} from "@agent-chat-platform/api-client";
+} from "@vivd-stage/api-client";
 import { AgentSelector } from "./agent-selector";
 import { AssistantChatPanel } from "./assistant-chat-panel";
 import { signOut } from "./auth-client";
@@ -34,8 +34,8 @@ import { UserSettingsPanel } from "./user-settings-panel";
 import { type WorkspaceView, WorkspaceRail } from "./workspace-rail";
 
 const STANDALONE_AUTH_SOURCE = "better-auth";
-const THEME_STORAGE_KEY = "agent-chat-platform:theme";
-const LOCALE_STORAGE_KEY = "agent-chat-platform:locale";
+const THEME_STORAGE_KEY = "vivd-stage:theme";
+const LOCALE_STORAGE_KEY = "vivd-stage:locale";
 const DEFAULT_LOCALES: LocaleCode[] = ["en", "de"];
 
 export function ChatWorkspace({

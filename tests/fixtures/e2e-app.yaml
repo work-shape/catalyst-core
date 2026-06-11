@@ -78,7 +78,7 @@ tools:
     enabled: true
 ui:
   clientName: E2E Customer
-  title: Agent Chat E2E
+  title: Vivd Stage E2E
   welcomeMessage: E2E ready.
   accentColor: "#0f766e"
   theme:

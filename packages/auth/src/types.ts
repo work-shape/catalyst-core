@@ -1,4 +1,4 @@
-import type { AuthenticatedUser, ClientInstanceId } from "@agent-chat-platform/core";
+import type { AuthenticatedUser, ClientInstanceId } from "@vivd-stage/core";
 
 export type AuthRequestHeaders = Record<string, string | string[] | undefined>;
 

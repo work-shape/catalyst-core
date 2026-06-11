@@ -3,7 +3,7 @@ title: Operating Models
 description: Choose whether the dedicated instance is operated for you or by you.
 ---
 
-Every Data Chat deployment is a dedicated client instance. The main decision is who operates it.
+Every Vivd Stage deployment is a dedicated client instance. The main decision is who operates it.
 
 ## Operated Dedicated Instance
 
@@ -47,7 +47,7 @@ The same platform package boundaries apply. Self-operation should not mean forki
 
 ## Customer-Hosted Integrations
 
-Some systems remain outside Data Chat even when the instance is operated for the customer.
+Some systems remain outside Vivd Stage even when the instance is operated for the customer.
 
 Examples:
 
@@ -55,7 +55,7 @@ Examples:
 - an internal document system called by a custom code tool
 - a customer endpoint that exchanges an existing app session for a short-lived chat session token
 
-These are customer-hosted integrations. They are not part of the Data Chat runtime, but the instance must document how it authenticates to them, what data it sends, and what failures look like.
+These are customer-hosted integrations. They are not part of the Vivd Stage runtime, but the instance must document how it authenticates to them, what data it sends, and what failures look like.
 
 ## Choosing A Path
 

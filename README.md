@@ -1,4 +1,4 @@
-# Agent Chat Platform
+# Vivd Stage
 
 This repository is a greenfield foundation for reusable, code-deployed AI agent chat client instances.
 
@@ -27,7 +27,7 @@ Paste an OpenAI API key into `.env` before using the default demo config. The de
 - The standalone UI starts with Vite from `packages/chat-standalone` and hot reloads standalone and shared chat UI/package source changes.
 - API startup runs idempotent migrations when `RUN_MIGRATIONS` is not `false`.
 - Standalone Better Auth users from `clients/demo/config/app.yaml` are seeded into Postgres on startup.
-- You can seed those users explicitly with `pnpm --filter @agent-chat-platform/demo seed:auth`.
+- You can seed those users explicitly with `pnpm --filter @vivd-stage/demo seed:auth`.
 
 Default standalone login users:
 

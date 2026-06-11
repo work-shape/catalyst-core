@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { createConversationRequestSchema } from "@agent-chat-platform/api-contract";
+import { createConversationRequestSchema } from "@vivd-stage/api-contract";
 import { ConversationWorkflow } from "../conversation-workflow";
 import type { ChatServerOptions } from "../types";
 import { authenticateRequest, getConversationId, parseBody, withRequestLocale } from "../request-context";

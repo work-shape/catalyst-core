@@ -28,7 +28,7 @@ export default defineConfig({
     },
     {
       command:
-        "pnpm --filter @agent-chat-platform/chat-standalone preview --host 127.0.0.1 --port 5273",
+        "pnpm --filter @vivd-stage/chat-standalone preview --host 127.0.0.1 --port 5273",
       url: "http://127.0.0.1:5273",
       reuseExistingServer: false,
       timeout: 30_000

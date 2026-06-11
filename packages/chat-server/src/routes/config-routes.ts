@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { createClientBranding, createSafeConfigView } from "@agent-chat-platform/config-schema";
+import { createClientBranding, createSafeConfigView } from "@vivd-stage/config-schema";
 import type { ChatServerOptions } from "../types";
 import { authenticateRequest, resolveRequestLocale } from "../request-context";
 

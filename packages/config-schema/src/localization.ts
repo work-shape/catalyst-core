@@ -5,7 +5,7 @@ import {
   type LocaleCode,
   type LocalizationConfig,
   type LocalizedStringConfig
-} from "@agent-chat-platform/core";
+} from "@vivd-stage/core";
 
 export const localeCodeSchema = z.enum(localeCodes);
 

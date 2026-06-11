@@ -1,4 +1,4 @@
-import { AppError, type RuntimeCallContext } from "@agent-chat-platform/core";
+import { AppError, type RuntimeCallContext } from "@vivd-stage/core";
 import type {
   ModelCompletion,
   ModelCompletionRequest,

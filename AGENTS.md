@@ -2,16 +2,16 @@
 
 ## Project Purpose
 
-This repo is planning and eventually implementing a reusable AI agent chat platform for sensitive customer workflows.
+This repo is planning and eventually implementing Vivd Stage, a reusable AI agent chat platform for sensitive customer workflows.
 
-`Data Chat` is a working title. Do not treat it as a final brand, package scope, or product boundary.
+`Vivd Stage` is the product title and package identity for this codebase.
 
 ## Start Here
 
 - Read `CONTEXT.md` first for project terminology.
-- Read `docs/planning/agent-chat-platform.md` before changing architecture or scope.
-- Read the relevant focused planning file under `docs/planning/agent-chat-platform/` before implementing or reviewing a feature.
-- Read `docs/planning/agent-chat-platform/implementation-guide.md` before implementation work.
+- Read `docs/planning/vivd-stage.md` before changing architecture or scope.
+- Read the relevant focused planning file under `docs/planning/vivd-stage/` before implementing or reviewing a feature.
+- Read `docs/planning/vivd-stage/implementation-guide.md` before implementation work.
 - Read `docs/research/open-source-landscape.md` before choosing AI SDKs, agent frameworks, chat UI libraries, MCP libraries, auth libraries, or comparable platform dependencies.
 - Read `application-preprocessing-compliance-analysis.md` when working on compliance, privacy, provider choice, or sensitive document processing.
 
@@ -38,5 +38,5 @@ This repo is planning and eventually implementing a reusable AI agent chat platf
 
 - Update `CONTEXT.md` only when project terminology is clarified.
 - Keep `CONTEXT.md` as a glossary only; implementation decisions belong in planning docs or ADRs.
-- Use `docs/planning/agent-chat-platform.md` as the planning index and decision map.
+- Use `docs/planning/vivd-stage.md` as the planning index and decision map.
 - Add ADRs only for hard-to-reverse architecture decisions with real trade-offs.

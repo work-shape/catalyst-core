@@ -29,7 +29,7 @@ import {
   authenticatedUserFromRecord,
   createUserId,
   createPlatformId
-} from "@agent-chat-platform/core";
+} from "@vivd-stage/core";
 import { runPostgresMigrations } from "./migrations";
 import {
   mapAuditEvent,

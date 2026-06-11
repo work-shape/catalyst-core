@@ -4,8 +4,8 @@ import {
   type ModelUsageEventStore,
   type RuntimeCallContext,
   type StartAgentRunInput
-} from "@agent-chat-platform/core";
-import type { ModelCompletion } from "@agent-chat-platform/model-provider";
+} from "@vivd-stage/core";
+import type { ModelCompletion } from "@vivd-stage/model-provider";
 
 export async function recordModelUsage(input: {
   usageStore: ModelUsageEventStore;

@@ -1,5 +1,5 @@
 {
-  "name": "@agent-chat-platform/chat-server",
+  "name": "@vivd-stage/chat-server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -17,12 +17,12 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@agent-chat-platform/api-contract": "workspace:*",
-    "@agent-chat-platform/auth": "workspace:*",
-    "@agent-chat-platform/core": "workspace:*",
-    "@agent-chat-platform/config-schema": "workspace:*",
-    "@agent-chat-platform/model-provider": "workspace:*",
-    "@agent-chat-platform/usage-governance": "workspace:*",
+    "@vivd-stage/api-contract": "workspace:*",
+    "@vivd-stage/auth": "workspace:*",
+    "@vivd-stage/core": "workspace:*",
+    "@vivd-stage/config-schema": "workspace:*",
+    "@vivd-stage/model-provider": "workspace:*",
+    "@vivd-stage/usage-governance": "workspace:*",
     "@fastify/cors": "^11.2.0",
     "ai": "^6.0.199",
     "fastify": "^5.8.5",

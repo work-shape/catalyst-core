@@ -1,5 +1,5 @@
 {
-  "name": "@agent-chat-platform/api-client",
+  "name": "@vivd-stage/api-client",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -17,7 +17,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@agent-chat-platform/api-contract": "workspace:*",
+    "@vivd-stage/api-contract": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

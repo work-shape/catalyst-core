@@ -1,11 +1,11 @@
 ---
 title: Auth And Embedding
-description: Connect Data Chat to users in an existing customer application.
+description: Connect Vivd Stage to users in an existing customer application.
 ---
 
 The embedded chat path should rely on the customer application as the login authority.
 
-Data Chat receives a short-lived chat session token and maps it into a product-owned authenticated user.
+Vivd Stage receives a short-lived chat session token and maps it into a product-owned authenticated user.
 
 ## Recommended Embedded Flow
 

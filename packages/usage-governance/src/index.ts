@@ -9,7 +9,7 @@ import {
   type UsagePricingConfig,
   type UsageSafeguardsConfig,
   createModelUsageWindowBounds
-} from "@agent-chat-platform/core";
+} from "@vivd-stage/core";
 
 export interface ModelUsageGovernanceOptions {
   store: ModelUsageEventStore;

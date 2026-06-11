@@ -1,5 +1,5 @@
 {
-  "name": "@agent-chat-platform/usage-governance",
+  "name": "@vivd-stage/usage-governance",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -17,7 +17,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@agent-chat-platform/core": "workspace:*"
+    "@vivd-stage/core": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.5.1",

@@ -1,9 +1,9 @@
 ---
 title: Overview
-description: How Data Chat is meant to be used by teams configuring their own agent chat.
+description: How Vivd Stage is meant to be used by teams configuring their own agent chat.
 ---
 
-Data Chat gives an organization a dedicated agent chat instance without asking that organization to fork the platform.
+Vivd Stage gives an organization a dedicated agent chat instance without asking that organization to fork the platform.
 
 The platform provides the reusable pieces:
 

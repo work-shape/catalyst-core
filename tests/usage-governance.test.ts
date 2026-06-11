@@ -3,9 +3,9 @@ import {
   asAgentRunId,
   asClientInstanceId,
   asConversationId
-} from "@agent-chat-platform/core";
-import { InMemoryPlatformStore } from "@agent-chat-platform/core/testing";
-import { ModelUsageGovernance } from "@agent-chat-platform/usage-governance";
+} from "@vivd-stage/core";
+import { InMemoryPlatformStore } from "@vivd-stage/core/testing";
+import { ModelUsageGovernance } from "@vivd-stage/usage-governance";
 
 describe("model usage governance", () => {
   it("reserves model calls so daily call limits cannot be raced in one process", async () => {

@@ -10,7 +10,7 @@ import {
   AppError,
   type AuthenticatedUser,
   type ClientInstanceId
-} from "@agent-chat-platform/core";
+} from "@vivd-stage/core";
 import {
   authAccounts,
   authSessions,

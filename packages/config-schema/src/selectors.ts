@@ -1,4 +1,4 @@
-import { AppError, asClientInstanceId } from "@agent-chat-platform/core";
+import { AppError, asClientInstanceId } from "@vivd-stage/core";
 import type { AgentConfig, ClientInstanceConfig, ModelProviderConfig } from "./schemas";
 
 export function getClientInstanceId(config: ClientInstanceConfig) {

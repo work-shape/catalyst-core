@@ -5,7 +5,7 @@ description: Expose selected external API operations as agent tools.
 
 OpenAPI API tools let an instance expose selected operations from an existing customer or third-party API.
 
-The backing API runs outside Data Chat. Data Chat validates and calls selected operations through a tool adapter.
+The backing API runs outside Vivd Stage. Vivd Stage validates and calls selected operations through a tool adapter.
 
 ## When To Use OpenAPI Tools
 

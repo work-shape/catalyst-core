@@ -1,4 +1,4 @@
-import type { JsonObject, ModelTokenUsage, RuntimeCallContext } from "@agent-chat-platform/core";
+import type { JsonObject, ModelTokenUsage, RuntimeCallContext } from "@vivd-stage/core";
 
 export interface ModelTool {
   name: string;

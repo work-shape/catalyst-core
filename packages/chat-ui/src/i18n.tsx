@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
-import type { LocaleCode } from "@agent-chat-platform/api-client";
+import type { LocaleCode } from "@vivd-stage/api-client";
 
 type TranslationValues = Record<string, string | number>;
 

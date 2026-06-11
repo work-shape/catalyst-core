@@ -20,7 +20,7 @@ import type {
   CreateAdministeredUserRequest,
   UpdateAdministeredUserRequest,
   UpsertAdministeredUserIdentityRequest
-} from "@agent-chat-platform/api-client";
+} from "@vivd-stage/api-client";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";

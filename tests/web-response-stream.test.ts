@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createClientInstanceApp } from "@agent-chat-platform/client-assembly";
-import { parseClientInstanceConfig } from "@agent-chat-platform/config-schema";
-import { defineTool, toolSuccess } from "@agent-chat-platform/tool-sdk";
+import { createClientInstanceApp } from "@vivd-stage/client-assembly";
+import { parseClientInstanceConfig } from "@vivd-stage/config-schema";
+import { defineTool, toolSuccess } from "@vivd-stage/tool-sdk";
 import { sendWebResponse } from "../packages/chat-server/src/routes/better-auth-routes";
 
 describe("web response bridge", () => {

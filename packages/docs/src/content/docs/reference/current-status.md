@@ -3,7 +3,7 @@ title: Current Status
 description: What exists now and what is still a target shape.
 ---
 
-Data Chat is early. These docs describe the intended product model and the current repository shape, not a finished commercial platform.
+Vivd Stage is early. These docs describe the intended product model and the current repository shape, not a finished commercial platform.
 
 ## Implemented Or In Progress
 

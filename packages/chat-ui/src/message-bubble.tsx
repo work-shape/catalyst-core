@@ -1,5 +1,5 @@
 import { Bot, User } from "lucide-react";
-import type { Message } from "@agent-chat-platform/api-client";
+import type { Message } from "@vivd-stage/api-client";
 import { cn } from "./ui/cn";
 
 export function MessageBubble({ message }: { message: Message }) {

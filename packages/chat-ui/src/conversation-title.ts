@@ -1,4 +1,4 @@
-import type { Conversation } from "@agent-chat-platform/api-client";
+import type { Conversation } from "@vivd-stage/api-client";
 
 export function currentTitle(
   conversations: Conversation[],

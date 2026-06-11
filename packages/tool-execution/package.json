@@ -1,5 +1,5 @@
 {
-  "name": "@agent-chat-platform/tool-execution",
+  "name": "@vivd-stage/tool-execution",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -17,8 +17,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@agent-chat-platform/core": "workspace:*",
-    "@agent-chat-platform/tool-sdk": "workspace:*",
+    "@vivd-stage/core": "workspace:*",
+    "@vivd-stage/tool-sdk": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

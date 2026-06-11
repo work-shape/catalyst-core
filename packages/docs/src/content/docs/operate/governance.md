@@ -86,4 +86,4 @@ Deletion should cover:
 - related document outputs and file references
 - minimal retained audit records where legally or contractually required
 
-The customer or legal owner decides the lawful basis and exact retention durations. Data Chat provides the mechanisms and evidence path.
+The customer or legal owner decides the lawful basis and exact retention durations. Vivd Stage provides the mechanisms and evidence path.

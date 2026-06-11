@@ -7,12 +7,12 @@ import {
   type ModelProviderConfig,
   type RuntimeCallContext,
   type ToolExecution
-} from "@agent-chat-platform/core";
-import { InMemoryPlatformStore } from "@agent-chat-platform/core/testing";
-import { LocalAgentRuntime } from "@agent-chat-platform/agent-runtime";
-import type { ModelMessage, ModelProvider } from "@agent-chat-platform/model-provider";
-import { ToolRegistry } from "@agent-chat-platform/tool-execution";
-import { ModelUsageGovernance } from "@agent-chat-platform/usage-governance";
+} from "@vivd-stage/core";
+import { InMemoryPlatformStore } from "@vivd-stage/core/testing";
+import { LocalAgentRuntime } from "@vivd-stage/agent-runtime";
+import type { ModelMessage, ModelProvider } from "@vivd-stage/model-provider";
+import { ToolRegistry } from "@vivd-stage/tool-execution";
+import { ModelUsageGovernance } from "@vivd-stage/usage-governance";
 
 describe("local agent runtime", () => {
   it("loads recent conversation history before the new user message", async () => {

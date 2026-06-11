@@ -1,6 +1,6 @@
 import { type FormEvent, useLayoutEffect, useRef } from "react";
 import { Bot, CircleAlert, Send } from "lucide-react";
-import type { Message, SafeConfig } from "@agent-chat-platform/api-client";
+import type { Message, SafeConfig } from "@vivd-stage/api-client";
 import { useTranslation } from "./i18n";
 import { MessageBubble } from "./message-bubble";
 import { Button } from "./ui/button";

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Bot, Check, ChevronDown } from "lucide-react";
-import type { SafeConfig } from "@agent-chat-platform/api-client";
+import type { SafeConfig } from "@vivd-stage/api-client";
 import { useTranslation } from "./i18n";
 import { cn } from "./ui/cn";
 

@@ -3,7 +3,7 @@ title: Custom Code Tools
 description: Write source-controlled tools that run inside a client instance.
 ---
 
-Custom code tools are the primary extension point for a Data Chat client instance.
+Custom code tools are the primary extension point for a Vivd Stage client instance.
 
 A tool lets the agent do a bounded action: look up a record, create a ticket, fetch a document, send a draft to review, or call an internal service.
 
@@ -12,7 +12,7 @@ A tool lets the agent do a bounded action: look up a record, create a ticket, fe
 Use the public tool SDK and product-owned types.
 
 ```ts
-import { defineTool } from "@agent-chat-platform/tool-sdk";
+import { defineTool } from "@vivd-stage/tool-sdk";
 import { z } from "zod";
 
 export const lookupTicket = defineTool({

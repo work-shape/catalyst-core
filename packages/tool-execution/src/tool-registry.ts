@@ -1,5 +1,5 @@
-import { AppError, type ToolDescriptor } from "@agent-chat-platform/core";
-import type { AnyToolDefinition } from "@agent-chat-platform/tool-sdk";
+import { AppError, type ToolDescriptor } from "@vivd-stage/core";
+import type { AnyToolDefinition } from "@vivd-stage/tool-sdk";
 
 export interface ToolRegistryOptions {
   tools: AnyToolDefinition[];

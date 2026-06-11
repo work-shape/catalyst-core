@@ -1,6 +1,6 @@
-# Data Chat
+# Vivd Stage
 
-Data Chat is the current working title for a reusable AI agent chat platform for sensitive customer workflows. The context language focuses on the product and domain concepts, not implementation details.
+Vivd Stage is a reusable AI agent chat platform for sensitive customer workflows. The context language focuses on the product and domain concepts, not implementation details.
 
 ## Language
 
@@ -24,7 +24,7 @@ _Avoid_: Email match as account key, duplicate account
 A separately deployed product instance for one customer, with its own infrastructure and operational boundary.
 _Avoid_: Tenant, workspace, account
 
-**Agent Chat Platform**:
+**Vivd Stage**:
 The reusable product foundation that provides embeddable chat, agent execution, tool integration, configuration, and operational controls.
 _Avoid_: Starter kit, template
 

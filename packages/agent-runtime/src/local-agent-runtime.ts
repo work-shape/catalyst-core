@@ -14,10 +14,10 @@ import {
   type ToolExecution,
   asAgentRunId,
   createPlatformId
-} from "@agent-chat-platform/core";
-import type { ModelCompletion, ModelMessage, ModelProvider } from "@agent-chat-platform/model-provider";
-import type { ToolRegistry } from "@agent-chat-platform/tool-execution";
-import type { ModelUsageGovernance } from "@agent-chat-platform/usage-governance";
+} from "@vivd-stage/core";
+import type { ModelCompletion, ModelMessage, ModelProvider } from "@vivd-stage/model-provider";
+import type { ToolRegistry } from "@vivd-stage/tool-execution";
+import type { ModelUsageGovernance } from "@vivd-stage/usage-governance";
 import { RunState } from "./run-state";
 import { createSystemInstructions } from "./system-instructions";
 import { executeToolCall } from "./tool-call-execution";

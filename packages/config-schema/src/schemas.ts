@@ -6,7 +6,7 @@ import type {
   UsageBudgetConfig,
   UsagePricingConfig,
   UsageSafeguardsConfig
-} from "@agent-chat-platform/core";
+} from "@vivd-stage/core";
 import { localizationConfigSchema, localizedStringSchema } from "./localization";
 
 export const userIdentitySchema = z.object({
@@ -179,7 +179,7 @@ export const uiConfigSchema = z
     logoUrl: z.string().url().optional(),
     logoUrlDark: z.string().url().optional(),
     logoInvertOnDark: z.boolean().default(false),
-    title: localizedStringSchema.default("Agent Chat"),
+    title: localizedStringSchema.default("Vivd Stage"),
     welcomeMessage: localizedStringSchema.default("How can I help?"),
     accentColor: z.string().min(1).default("#0f766e"),
     theme: lightUiThemeSchema,
@@ -187,7 +187,7 @@ export const uiConfigSchema = z
     defaultThemeMode: z.enum(["light", "dark", "system"]).default("system")
   })
   .default({
-    title: "Agent Chat",
+    title: "Vivd Stage",
     welcomeMessage: "How can I help?",
     accentColor: "#0f766e",
     logoInvertOnDark: false,
@@ -213,7 +213,7 @@ export const clientInstanceConfigSchema = z.object({
         .optional(),
       sessionToken: z
         .object({
-          issuer: z.string().min(1).default("agent-chat-platform"),
+          issuer: z.string().min(1).default("vivd-stage"),
           ttlSeconds: z.number().int().positive().max(3600).default(900)
         })
         .optional(),

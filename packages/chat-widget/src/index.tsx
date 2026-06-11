@@ -1,5 +1,5 @@
 import { createRoot, type Root } from "react-dom/client";
-import { ChatShell, type ChatShellProps } from "@agent-chat-platform/chat-ui/shell";
+import { ChatShell, type ChatShellProps } from "@vivd-stage/chat-ui/shell";
 
 export interface MountChatWidgetOptions extends ChatShellProps {
   container: HTMLElement;

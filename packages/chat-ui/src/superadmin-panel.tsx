@@ -17,7 +17,7 @@ import type {
   UpdateAdministeredUserRequest,
   UpsertAdministeredUserIdentityRequest,
   UsageSummary
-} from "@agent-chat-platform/api-client";
+} from "@vivd-stage/api-client";
 import { Badge } from "./ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { cn } from "./ui/cn";

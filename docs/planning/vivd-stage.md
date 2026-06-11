@@ -1,28 +1,28 @@
-# Agent Chat Platform Planning
+# Vivd Stage Planning
 
 Date: 2026-06-04
 
-This is the planning index for the reusable AI agent chat platform. Data Chat is a working title; future names might be closer to Agent Chat, Agent Orchestrator, or another product name that better matches the final scope.
+This is the planning index for Vivd Stage, the reusable AI agent chat platform for sensitive customer workflows.
 
 The first use case is a sensitive document and payslip workflow embedded into a customer application. The product should become a reusable, code-deployed, self-hostable foundation for future client instances.
 
 ## Planning Docs
 
-- [Architecture](./agent-chat-platform/architecture.md)
-- [Extension Model](./agent-chat-platform/extension-model.md)
-- [Frontend, UI, And API Client](./agent-chat-platform/frontend-ui-api.md)
-- [Agent Capabilities](./agent-chat-platform/agent-capabilities.md)
-- [Document Text Extraction](./agent-chat-platform/document-text-extraction.md)
-- [Data, Storage, And Retrieval](./agent-chat-platform/data-storage-retrieval.md)
-- [Infrastructure](./agent-chat-platform/infrastructure.md)
-- [Auth, Security, And Compliance](./agent-chat-platform/auth-security-compliance.md)
-- [Audit And Governance](./agent-chat-platform/audit-governance.md)
-- [Packaging And Repository Strategy](./agent-chat-platform/packaging-repository.md)
-- [Reference Patterns](./agent-chat-platform/reference-patterns.md)
-- [Implementation Guide](./agent-chat-platform/implementation-guide.md)
-- [V1 Scope](./agent-chat-platform/v1-scope.md)
-- [V1 Realignment Plan](./agent-chat-platform/v1-realignment-plan.md)
-- [Open Questions](./agent-chat-platform/open-questions.md)
+- [Architecture](./vivd-stage/architecture.md)
+- [Extension Model](./vivd-stage/extension-model.md)
+- [Frontend, UI, And API Client](./vivd-stage/frontend-ui-api.md)
+- [Agent Capabilities](./vivd-stage/agent-capabilities.md)
+- [Document Text Extraction](./vivd-stage/document-text-extraction.md)
+- [Data, Storage, And Retrieval](./vivd-stage/data-storage-retrieval.md)
+- [Infrastructure](./vivd-stage/infrastructure.md)
+- [Auth, Security, And Compliance](./vivd-stage/auth-security-compliance.md)
+- [Audit And Governance](./vivd-stage/audit-governance.md)
+- [Packaging And Repository Strategy](./vivd-stage/packaging-repository.md)
+- [Reference Patterns](./vivd-stage/reference-patterns.md)
+- [Implementation Guide](./vivd-stage/implementation-guide.md)
+- [V1 Scope](./vivd-stage/v1-scope.md)
+- [V1 Realignment Plan](./vivd-stage/v1-realignment-plan.md)
+- [Open Questions](./vivd-stage/open-questions.md)
 
 Related research:
 

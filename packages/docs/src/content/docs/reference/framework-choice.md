@@ -28,6 +28,6 @@ Starlight keeps the dependency small and content-focused while leaving room for 
 
 ## Package Boundary
 
-The docs live in `packages/docs` as `@agent-chat-platform/docs`.
+The docs live in `packages/docs` as `@vivd-stage/docs`.
 
 This keeps operator docs close to the platform packages while leaving the existing `docs/planning` folder as the internal architecture and decision map.

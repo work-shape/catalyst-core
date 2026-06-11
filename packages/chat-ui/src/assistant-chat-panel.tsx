@@ -6,7 +6,7 @@ import {
 } from "@assistant-ui/react";
 import { AssistantChatTransport, useChatRuntime } from "@assistant-ui/react-ai-sdk";
 import type { UIMessage } from "ai";
-import type { ApiClient, LocaleCode, Message, SafeConfig } from "@agent-chat-platform/api-client";
+import type { ApiClient, LocaleCode, Message, SafeConfig } from "@vivd-stage/api-client";
 import { AssistantThread } from "./assistant-thread";
 import { firstLineTitle } from "./conversation-title";
 

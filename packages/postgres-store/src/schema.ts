@@ -14,7 +14,7 @@ import type {
   Conversation,
   ModelUsageEvent,
   UserRecord
-} from "@agent-chat-platform/core";
+} from "@vivd-stage/core";
 
 export const productUsers = pgTable(
   "product_users",

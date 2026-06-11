@@ -1,6 +1,6 @@
-import { AppError } from "@agent-chat-platform/core";
-import type { ClientInstanceConfig } from "@agent-chat-platform/config-schema";
-import type { AnyToolDefinition } from "@agent-chat-platform/tool-sdk";
+import { AppError } from "@vivd-stage/core";
+import type { ClientInstanceConfig } from "@vivd-stage/config-schema";
+import type { AnyToolDefinition } from "@vivd-stage/tool-sdk";
 
 export function assertClientAssemblyValid(input: {
   config: ClientInstanceConfig;

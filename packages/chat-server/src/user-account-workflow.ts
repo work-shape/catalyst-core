@@ -1,4 +1,4 @@
-import { STANDALONE_AUTH_SOURCE } from "@agent-chat-platform/auth";
+import { STANDALONE_AUTH_SOURCE } from "@vivd-stage/auth";
 import {
   AppError,
   asUserId,
@@ -6,7 +6,7 @@ import {
   authenticatedUserFromRecord,
   type AuthenticatedUser,
   type RuntimeCallContext
-} from "@agent-chat-platform/core";
+} from "@vivd-stage/core";
 import type { ChatServerOptions } from "./types";
 
 interface UpdateCurrentUserCommand {

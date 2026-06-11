@@ -10,7 +10,7 @@ import {
   asConversationId,
   asMessageId,
   asUserId
-} from "@agent-chat-platform/core";
+} from "@vivd-stage/core";
 import type {
   auditEvents,
   conversations,

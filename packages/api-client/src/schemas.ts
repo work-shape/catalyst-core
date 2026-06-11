@@ -1,1 +1,1 @@
-export * from "@agent-chat-platform/api-contract";
+export * from "@vivd-stage/api-contract";

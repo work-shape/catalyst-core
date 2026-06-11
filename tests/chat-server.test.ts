@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createClientInstanceApp } from "@agent-chat-platform/client-assembly";
-import { parseClientInstanceConfig, type UsageSafeguardsConfig } from "@agent-chat-platform/config-schema";
-import { defineTool, toolSuccess } from "@agent-chat-platform/tool-sdk";
+import { createClientInstanceApp } from "@vivd-stage/client-assembly";
+import { parseClientInstanceConfig, type UsageSafeguardsConfig } from "@vivd-stage/config-schema";
+import { defineTool, toolSuccess } from "@vivd-stage/tool-sdk";
 
 describe("client instance app vertical slice", () => {
   it("creates a user-scoped conversation and runs a configured tool", async () => {

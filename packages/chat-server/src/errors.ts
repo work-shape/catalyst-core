@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { isAppError } from "@agent-chat-platform/core";
+import { isAppError } from "@vivd-stage/core";
 
 export function installErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler((error, _request, reply) => {

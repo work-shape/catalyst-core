@@ -5,14 +5,14 @@ import {
   chatStreamRequestSchema,
   type ChatStreamChunk,
   type ChatStreamRequest
-} from "@agent-chat-platform/api-contract";
+} from "@vivd-stage/api-contract";
 import {
   AppError,
   type AgentRunId,
   type AgentRuntimeEvent,
   type ChatMessage,
   asConversationId
-} from "@agent-chat-platform/core";
+} from "@vivd-stage/core";
 import { ConversationWorkflow } from "../conversation-workflow";
 import { createConversationTitle } from "../conversation-title";
 import { authenticateRequest, parseBody, withRequestLocale } from "../request-context";
