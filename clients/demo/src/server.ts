@@ -1,8 +1,8 @@
 import { createClientInstanceApp } from "@vivd-stage/client-assembly";
-import { loadDemoEnvironment, resolveConfigPath } from "./environment";
+import { loadClientEnvironment, resolveConfigPath } from "./environment";
 import { tools } from "./tool-registry";
 
-loadDemoEnvironment();
+loadClientEnvironment();
 
 const configPath = resolveConfigPath(process.env.CLIENT_CONFIG_PATH);
 

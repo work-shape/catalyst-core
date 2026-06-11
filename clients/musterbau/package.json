@@ -1,0 +1,35 @@
+{
+  "name": "@vivd-stage/musterbau",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsup src/server.ts --format esm --out-dir dist",
+    "dev": "pnpm dev:db && concurrently -n api,ui -c cyan,green \"pnpm dev:api\" \"pnpm --filter @vivd-stage/chat-standalone dev\"",
+    "dev:api": "tsx watch --conditions=development --clear-screen=false --include ../../packages --include tools --include agents --include config --include ../../.env --include .env src/server.ts",
+    "dev:db": "docker compose up -d postgres",
+    "seed:auth": "pnpm dev:db && tsx src/seed-auth.ts",
+    "start": "node dist/server.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@vivd-stage/agent-runtime": "workspace:*",
+    "@vivd-stage/auth": "workspace:*",
+    "@vivd-stage/core": "workspace:*",
+    "@vivd-stage/client-assembly": "workspace:*",
+    "@vivd-stage/chat-server": "workspace:*",
+    "@vivd-stage/config-schema": "workspace:*",
+    "@vivd-stage/model-provider": "workspace:*",
+    "@vivd-stage/postgres-store": "workspace:*",
+    "@vivd-stage/tool-execution": "workspace:*",
+    "@vivd-stage/tool-sdk": "workspace:*",
+    "dotenv": "^17.4.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3",
+    "tsup": "^8.5.1",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  }
+}

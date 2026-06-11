@@ -1,0 +1,26 @@
+clientName:
+  de: Musterbau
+  en: Musterbau
+logoUrl: https://www.musterbau.de/wp-content/uploads/2023/03/Logo_Musterbau_schwarz.png
+logoInvertOnDark: true
+title:
+  de: Musterbau Chat
+  en: Musterbau Chat
+accentColor: "#00a6e3"
+defaultThemeMode: system
+theme:
+  accentColor: "#00a6e3"
+  accentStrongColor: "#103258"
+  backgroundColor: "#f7f9fb"
+  surfaceColor: "#ffffff"
+  textColor: "#17252a"
+  mutedTextColor: "#5f6b76"
+  borderColor: "#dce2e7"
+darkTheme:
+  accentColor: "#00a6e3"
+  accentStrongColor: "#8adcf5"
+  backgroundColor: "#101615"
+  surfaceColor: "#171f1e"
+  textColor: "#eef7f6"
+  mutedTextColor: "#a5afad"
+  borderColor: "#2b3634"

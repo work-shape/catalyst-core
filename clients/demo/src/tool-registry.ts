@@ -1,4 +1,3 @@
-import { applicationSummaryTool } from "../tools/application-summary";
+import { workflowSummaryTool } from "../tools/workflow-summary";
 
-export const tools = [applicationSummaryTool];
-
+export const tools = [workflowSummaryTool];

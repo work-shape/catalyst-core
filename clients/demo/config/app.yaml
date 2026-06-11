@@ -1,7 +1,7 @@
 version: 1
 clientInstance:
   id: demo-local
-  displayName: Musterbau Demo
+  displayName: Vivd Stage Demo
   environment: development
 auth:
   standalone:
@@ -47,7 +47,7 @@ modelProviders:
     baseUrl: https://api.openai.com/v1
     apiKeyEnvName: OPENAI_API_KEY
 localization:
-  defaultLocale: de
+  defaultLocale: en
   supportedLocales:
     - de
     - en
@@ -74,10 +74,10 @@ usage:
         model: gpt-5-nano
         inputPricePerMillionTokens: 0.05
         outputPricePerMillionTokens: 0.4
-defaultAgentName: application_assistant
+defaultAgentName: workflow_assistant
 agentFiles:
-  - ../agents/application-assistant.agent.yaml
+  - ../agents/workflow-assistant.agent.yaml
 tools:
-  - name: document.application_summary
+  - name: demo.workflow_summary
     enabled: true
 uiFile: ./ui.yaml

@@ -85,6 +85,58 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  clients/musterbau:
+    dependencies:
+      '@vivd-stage/agent-runtime':
+        specifier: workspace:*
+        version: link:../../packages/agent-runtime
+      '@vivd-stage/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@vivd-stage/chat-server':
+        specifier: workspace:*
+        version: link:../../packages/chat-server
+      '@vivd-stage/client-assembly':
+        specifier: workspace:*
+        version: link:../../packages/client-assembly
+      '@vivd-stage/config-schema':
+        specifier: workspace:*
+        version: link:../../packages/config-schema
+      '@vivd-stage/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@vivd-stage/model-provider':
+        specifier: workspace:*
+        version: link:../../packages/model-provider
+      '@vivd-stage/postgres-store':
+        specifier: workspace:*
+        version: link:../../packages/postgres-store
+      '@vivd-stage/tool-execution':
+        specifier: workspace:*
+        version: link:../../packages/tool-execution
+      '@vivd-stage/tool-sdk':
+        specifier: workspace:*
+        version: link:../../packages/tool-sdk
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      concurrently:
+        specifier: ^10.0.3
+        version: 10.0.3
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.4)(typescript@6.0.3)(yaml@2.9.0)
+      tsx:
+        specifier: ^4.22.4
+        version: 4.22.4
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/agent-runtime:
     dependencies:
       '@vivd-stage/core':
@@ -160,6 +212,9 @@ importers:
 
   packages/chat-server:
     dependencies:
+      '@fastify/cors':
+        specifier: ^11.2.0
+        version: 11.2.0
       '@vivd-stage/api-contract':
         specifier: workspace:*
         version: link:../api-contract
@@ -178,9 +233,6 @@ importers:
       '@vivd-stage/usage-governance':
         specifier: workspace:*
         version: link:../usage-governance
-      '@fastify/cors':
-        specifier: ^11.2.0
-        version: 11.2.0
       ai:
         specifier: ^6.0.199
         version: 6.0.199(zod@4.4.3)
@@ -200,12 +252,12 @@ importers:
 
   packages/chat-standalone:
     dependencies:
-      '@vivd-stage/chat-ui':
-        specifier: workspace:*
-        version: link:../chat-ui
       '@tanstack/react-router':
         specifier: ^1.170.15
         version: 1.170.15(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@vivd-stage/chat-ui':
+        specifier: workspace:*
+        version: link:../chat-ui
       react:
         specifier: ^19.2.7
         version: 19.2.7
@@ -240,9 +292,6 @@ importers:
 
   packages/chat-ui:
     dependencies:
-      '@vivd-stage/api-client':
-        specifier: workspace:*
-        version: link:../api-client
       '@ai-sdk/react':
         specifier: ^3.0.201
         version: 3.0.201(react@19.2.7)(zod@4.4.3)
@@ -264,6 +313,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.101.0
         version: 5.101.0(react@19.2.7)
+      '@vivd-stage/api-client':
+        specifier: workspace:*
+        version: link:../api-client
       ai:
         specifier: ^6.0.199
         version: 6.0.199(zod@4.4.3)

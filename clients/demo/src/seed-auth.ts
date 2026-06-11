@@ -6,9 +6,9 @@ import {
   type ClientInstanceConfig
 } from "@vivd-stage/config-schema";
 import { PostgresPlatformStore } from "@vivd-stage/postgres-store";
-import { loadDemoEnvironment, resolveConfigPath } from "./environment";
+import { loadClientEnvironment, resolveConfigPath } from "./environment";
 
-loadDemoEnvironment();
+loadClientEnvironment();
 
 const configPath = resolveConfigPath(process.env.CLIENT_CONFIG_PATH);
 const config = await loadClientInstanceConfigFromFile(configPath);

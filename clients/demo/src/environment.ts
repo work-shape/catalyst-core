@@ -6,7 +6,7 @@ import { config as loadDotenv } from "dotenv";
 export const clientRoot = fileURLToPath(new URL("..", import.meta.url));
 export const workspaceRoot = resolve(clientRoot, "../..");
 
-export function loadDemoEnvironment(): void {
+export function loadClientEnvironment(): void {
   loadDotenv({ path: resolve(workspaceRoot, ".env"), quiet: true });
   loadDotenv({ path: resolve(clientRoot, ".env"), override: true, quiet: true });
 }
@@ -25,4 +25,3 @@ export function resolveConfigPath(configPath: string | undefined): string {
   }
   return resolve(clientRoot, configPath);
 }
-

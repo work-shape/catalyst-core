@@ -5,7 +5,8 @@ This repository is a greenfield foundation for reusable, code-deployed AI agent 
 The first implementation keeps product-owned contracts separate from adapters and client assembly code:
 
 - `packages/` contains reusable platform packages.
-- `clients/demo/` is a thin client instance that imports platform packages, defines release config, and registers custom tools.
+- `clients/demo/` is the generic reference client instance.
+- `clients/musterbau/` is the first customer-shaped client assembly and should move to a private deployments repo before the platform repository is opened.
 - `docs/` keeps product planning and architecture decisions.
 
 Run the local vertical slice:
@@ -19,7 +20,13 @@ pnpm dev
 
 Paste an OpenAI API key into `.env` before using the default demo config. The demo API listens on `http://127.0.0.1:4100` and the standalone chat UI listens on `http://127.0.0.1:5173`.
 
-`pnpm dev` runs the demo client stack:
+`pnpm dev` is an alias for `pnpm dev:demo`. To run the Musterbau client instead:
+
+```bash
+pnpm dev:musterbau
+```
+
+`pnpm dev:demo` runs the demo client stack:
 
 - `clients/demo` starts Postgres with `docker compose up -d postgres`.
 - Workspace packages resolve from `src` through the local `development` export condition.
@@ -28,6 +35,8 @@ Paste an OpenAI API key into `.env` before using the default demo config. The de
 - API startup runs idempotent migrations when `RUN_MIGRATIONS` is not `false`.
 - Standalone Better Auth users from `clients/demo/config/app.yaml` are seeded into Postgres on startup.
 - You can seed those users explicitly with `pnpm --filter @vivd-stage/demo seed:auth`.
+
+The Musterbau client follows the same local shape from `clients/musterbau` and can seed users with `pnpm --filter @vivd-stage/musterbau seed:auth`.
 
 Default standalone login users:
 

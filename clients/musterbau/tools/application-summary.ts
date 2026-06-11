@@ -38,7 +38,7 @@ export const applicationSummaryTool = defineTool({
   },
   permission: {
     mode: "allow",
-    requiredPermissionRefs: ["demo-tools"]
+    requiredPermissionRefs: ["application-review"]
   },
   async execute(input, context) {
     const riskFlags: string[] = [];
@@ -48,7 +48,7 @@ export const applicationSummaryTool = defineTool({
     if (input.netMonthlyPay && input.netMonthlyPay > input.grossMonthlyPay) {
       riskFlags.push("net_exceeds_gross");
     }
-    if (!context.user.permissionRefs.includes("demo-tools")) {
+    if (!context.user.permissionRefs.includes("application-review")) {
       riskFlags.push("unexpected_permission_context");
     }
 
@@ -100,4 +100,3 @@ function formatMoney(amount: number, currency: string): string {
     maximumFractionDigits: 0
   }).format(amount);
 }
-
