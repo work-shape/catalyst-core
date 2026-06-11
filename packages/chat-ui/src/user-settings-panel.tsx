@@ -1,10 +1,13 @@
-import { type FormEvent, useEffect, useState, type ReactNode } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import {
   ApiError,
   type ApiUser,
   type ChangeCurrentUserPasswordRequest,
+  type LocaleCode,
   type UpdateCurrentUserRequest
 } from "@agent-chat-platform/api-client";
+import { useTranslation } from "./i18n";
+import { LocaleSelector } from "./locale-selector";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
@@ -14,18 +17,23 @@ export function UserSettingsPanel({
   canChangePassword,
   updatingProfile,
   changingPassword,
+  locales,
+  locale,
   onUpdateProfile,
   onChangePassword,
-  headerActions
+  onSelectLocale
 }: {
   user: ApiUser | undefined;
   canChangePassword: boolean;
   updatingProfile: boolean;
   changingPassword: boolean;
+  locales: LocaleCode[];
+  locale: LocaleCode;
   onUpdateProfile(input: UpdateCurrentUserRequest): Promise<ApiUser>;
   onChangePassword(input: ChangeCurrentUserPasswordRequest): Promise<unknown>;
-  headerActions?: ReactNode;
+  onSelectLocale(locale: LocaleCode): void;
 }) {
+  const { t, localeName } = useTranslation();
   const [displayLabel, setDisplayLabel] = useState(user?.displayLabel ?? "");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -48,15 +56,15 @@ export function UserSettingsPanel({
     setProfileMessage(undefined);
     setProfileError(undefined);
     if (!normalizedDisplayLabel) {
-      setProfileError("Display name is required");
+      setProfileError(t("displayNameRequired"));
       return;
     }
 
     try {
       await onUpdateProfile({ displayLabel: normalizedDisplayLabel });
-      setProfileMessage("Profile updated");
+      setProfileMessage(t("profileUpdated"));
     } catch (error) {
-      setProfileError(getErrorMessage(error, "Profile update failed"));
+      setProfileError(getErrorMessage(error, t("profileUpdateFailed")));
     }
   }
 
@@ -65,15 +73,15 @@ export function UserSettingsPanel({
     setPasswordMessage(undefined);
     setPasswordError(undefined);
     if (!canChangePassword) {
-      setPasswordError("Password changes are not available for this account");
+      setPasswordError(t("passwordChangeUnavailable"));
       return;
     }
     if (newPassword.length < 8) {
-      setPasswordError("New password must be at least 8 characters");
+      setPasswordError(t("newPasswordTooShort"));
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordError("New passwords do not match");
+      setPasswordError(t("newPasswordsDoNotMatch"));
       return;
     }
 
@@ -85,35 +93,40 @@ export function UserSettingsPanel({
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      setPasswordMessage("Password updated");
+      setPasswordMessage(t("passwordUpdated"));
     } catch (error) {
-      setPasswordError(getErrorMessage(error, "Password update failed"));
+      setPasswordError(getErrorMessage(error, t("passwordUpdateFailed")));
     }
   }
 
   return (
     <section
-      className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background"
-      aria-label="User settings"
+      className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)] overflow-hidden bg-background"
+      aria-label={t("userSettings")}
     >
-      <header className="flex min-h-16 min-w-0 items-center justify-between gap-4 border-b px-5 py-3">
-        <div className="grid min-w-0 gap-0.5">
-          <span className="truncate text-xs text-muted-foreground">Settings</span>
-          <strong className="truncate text-sm font-semibold">Account</strong>
-        </div>
-        {headerActions ? <div className="flex shrink-0 items-center gap-2">{headerActions}</div> : null}
-      </header>
-
-      <div className="grid min-h-0 content-start gap-4 overflow-auto bg-background p-5">
+      <div className="grid min-h-0 content-start gap-4 overflow-auto bg-background px-5 pb-5 pt-20">
         <div className="grid w-full max-w-2xl gap-4">
+          <div className="grid gap-1">
+            <span className="text-xs text-muted-foreground">{t("settings")}</span>
+            <h1 className="text-xl font-semibold tracking-normal">{t("account")}</h1>
+          </div>
           <Card>
             <CardHeader className="p-4 pb-2">
-              <CardTitle className="text-base">Profile</CardTitle>
+              <CardTitle className="text-base">{t("language")}</CardTitle>
+            </CardHeader>
+            <CardContent className="flex items-center justify-between gap-3 p-4 pt-2">
+              <span className="text-sm text-muted-foreground">{localeName(locale)}</span>
+              <LocaleSelector locales={locales} selectedLocale={locale} onSelectLocale={onSelectLocale} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="p-4 pb-2">
+              <CardTitle className="text-base">{t("profile")}</CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-2">
               <form className="grid gap-4" onSubmit={onProfileSubmit}>
                 <label className="grid gap-1.5 text-sm font-medium">
-                  <span>Display name</span>
+                  <span>{t("displayName")}</span>
                   <Input
                     autoComplete="name"
                     value={displayLabel}
@@ -126,14 +139,14 @@ export function UserSettingsPanel({
                 </label>
                 {user?.email ? (
                   <label className="grid gap-1.5 text-sm font-medium">
-                    <span>Email</span>
+                    <span>{t("email")}</span>
                     <Input value={user.email} disabled />
                   </label>
                 ) : null}
                 <FormMessage message={profileMessage} error={profileError} />
                 <div className="flex justify-end">
                   <Button type="submit" disabled={updatingProfile || !profileChanged}>
-                    {updatingProfile ? "Saving" : "Save profile"}
+                    {updatingProfile ? t("saving") : t("saveProfile")}
                   </Button>
                 </div>
               </form>
@@ -142,13 +155,13 @@ export function UserSettingsPanel({
 
           <Card>
             <CardHeader className="p-4 pb-2">
-              <CardTitle className="text-base">Password</CardTitle>
+              <CardTitle className="text-base">{t("password")}</CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-2">
               {canChangePassword ? (
                 <form className="grid gap-4" onSubmit={onPasswordSubmit}>
                   <label className="grid gap-1.5 text-sm font-medium">
-                    <span>Current password</span>
+                    <span>{t("currentPassword")}</span>
                     <Input
                       autoComplete="current-password"
                       type="password"
@@ -162,7 +175,7 @@ export function UserSettingsPanel({
                   </label>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="grid gap-1.5 text-sm font-medium">
-                      <span>New password</span>
+                      <span>{t("newPassword")}</span>
                       <Input
                         autoComplete="new-password"
                         type="password"
@@ -175,7 +188,7 @@ export function UserSettingsPanel({
                       />
                     </label>
                     <label className="grid gap-1.5 text-sm font-medium">
-                      <span>Confirm password</span>
+                      <span>{t("confirmPassword")}</span>
                       <Input
                         autoComplete="new-password"
                         type="password"
@@ -194,13 +207,13 @@ export function UserSettingsPanel({
                       type="submit"
                       disabled={changingPassword || !currentPassword || !newPassword || !confirmPassword}
                     >
-                      {changingPassword ? "Updating" : "Update password"}
+                      {changingPassword ? t("updating") : t("updatePassword")}
                     </Button>
                   </div>
                 </form>
               ) : (
                 <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-                  Password is managed outside this chat.
+                  {t("passwordManagedExternally")}
                 </p>
               )}
             </CardContent>

@@ -35,7 +35,6 @@ export function SuperadminPanel({
   error,
   usersError,
   usersMutating,
-  headerActions,
   onCreateUser,
   onUpdateUser,
   onUpsertUserIdentity,
@@ -50,7 +49,6 @@ export function SuperadminPanel({
   error?: string;
   usersError?: string;
   usersMutating: boolean;
-  headerActions?: ReactNode;
   onCreateUser(input: CreateAdministeredUserRequest): Promise<AdministeredUser>;
   onUpdateUser(userId: string, input: UpdateAdministeredUserRequest): Promise<AdministeredUser>;
   onUpsertUserIdentity(
@@ -64,38 +62,37 @@ export function SuperadminPanel({
 
   return (
     <section
-      className="grid min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden bg-background"
+      className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background"
       aria-label="Superadmin panel"
     >
-      <header className="flex min-h-16 min-w-0 items-center justify-between gap-4 px-5 pt-3 pb-1">
-        <div className="grid min-w-0 gap-0.5">
-          <span className="truncate text-xs text-muted-foreground">Superadmin</span>
-          <strong className="truncate text-sm font-semibold">Administration</strong>
+      <div className="grid gap-3 border-b px-5 pt-20">
+        <div className="grid min-w-0 gap-1">
+          <span className="text-xs text-muted-foreground">Superadmin</span>
+          <h1 className="text-xl font-semibold tracking-normal">Administration</h1>
         </div>
-        <div className="flex shrink-0 items-center gap-2">{headerActions}</div>
-      </header>
 
-      <nav className="flex items-end gap-1 overflow-x-auto border-b px-4" aria-label="Superadmin sections">
-        <TabButton
-          active={tab === "usage"}
-          icon={<Activity size={15} aria-hidden="true" />}
-          label="Usage"
-          onClick={() => setTab("usage")}
-        />
-        <TabButton
-          active={tab === "users"}
-          icon={<Users size={15} aria-hidden="true" />}
-          label="Users"
-          badge={users.length > 0 ? users.length : undefined}
-          onClick={() => setTab("users")}
-        />
-        <TabButton
-          active={tab === "audit"}
-          icon={<ScrollText size={15} aria-hidden="true" />}
-          label="Audit log"
-          onClick={() => setTab("audit")}
-        />
-      </nav>
+        <nav className="flex items-end gap-1 overflow-x-auto" aria-label="Superadmin sections">
+          <TabButton
+            active={tab === "usage"}
+            icon={<Activity size={15} aria-hidden="true" />}
+            label="Usage"
+            onClick={() => setTab("usage")}
+          />
+          <TabButton
+            active={tab === "users"}
+            icon={<Users size={15} aria-hidden="true" />}
+            label="Users"
+            badge={users.length > 0 ? users.length : undefined}
+            onClick={() => setTab("users")}
+          />
+          <TabButton
+            active={tab === "audit"}
+            icon={<ScrollText size={15} aria-hidden="true" />}
+            label="Audit log"
+            onClick={() => setTab("audit")}
+          />
+        </nav>
+      </div>
 
       <div className="grid min-h-0 content-start gap-4 overflow-auto bg-background p-5">
         {tab !== "users" && error ? <ErrorBanner message={error} /> : null}

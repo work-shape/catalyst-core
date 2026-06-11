@@ -23,8 +23,45 @@ test("standalone login renders the authenticated chat workspace", async ({ page 
   await expect(page.getByText("E2E Customer")).toBeVisible();
   await expect(page.getByText("E2E User")).toBeVisible();
   await expect(page.getByRole("button", { name: "E2E User account" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Select agent" })).toContainText("Application Assistant");
+  await expect(page.getByRole("button", { name: "Close sidebar" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Switch to (dark|light) theme/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Language" })).toHaveCount(0);
   await expect(page.locator("header").getByText("Ready", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Open superadmin panel" })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "E2E User account" }).click();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await expect(page.getByRole("region", { name: "User settings" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Language" })).toBeVisible();
+});
+
+test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
+  await signInViaUi(page, normalUser);
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Close sidebar" }).click();
+  await expect(page.getByText("E2E Customer")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Open sidebar" })).toBeVisible();
+  await page.getByRole("button", { name: "Open sidebar" }).click();
+  await expect(page.getByText("E2E Customer")).toBeVisible();
+
+  await page.getByRole("button", { name: "Select agent" }).click();
+  await expect(page.getByRole("option", { name: /Research Assistant/ })).toBeVisible();
+  await page.getByRole("option", { name: /Research Assistant/ }).click();
+  await expect(page.getByRole("button", { name: "Select agent" })).toContainText("Research Assistant");
+  await expect(page.getByText("Research Assistant is ready for this conversation.")).toBeVisible();
+
+  const appShell = page.locator("main").first();
+  const backgroundBefore = await appShell.evaluate((element) =>
+    getComputedStyle(element).getPropertyValue("--background")
+  );
+  await page.getByRole("button", { name: /Switch to (dark|light) theme/ }).click();
+  await expect
+    .poll(() =>
+      appShell.evaluate((element) => getComputedStyle(element).getPropertyValue("--background"))
+    )
+    .not.toBe(backgroundBefore);
 });
 
 test("composer grows for multiline input", async ({ page }) => {
@@ -89,7 +126,7 @@ test("new conversation action opens an unsaved draft screen", async ({ page }) =
   await page.goto("/");
   const newConversationButton = page.getByRole("button", { name: "New", exact: true });
   await expect(newConversationButton).toBeVisible();
-  await expect(page.getByText("New conversation")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Select agent" })).toContainText("Application Assistant");
   await expect(page.getByRole("button", { name: "Add attachment" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Find review risks" })).toBeVisible();
 
@@ -198,12 +235,21 @@ test("workspace and superadmin keep page scroll locked", async ({ page }) => {
 
 test("superadmin can open usage and audit views", async ({ page }) => {
   await signInViaUi(page, superadminUser);
+  await ensureDarkMode(page);
   await expect(page.getByRole("button", { name: "Open superadmin panel" })).toBeVisible();
   await page.getByRole("button", { name: "Open superadmin panel" }).click();
   await expect(page.getByRole("region", { name: "Superadmin panel" })).toBeVisible();
   await expect(page.getByText("Administration")).toBeVisible();
   await expect(page.getByRole("button", { name: /^Usage/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Users/ })).toBeVisible();
+  await page.getByRole("button", { name: /^Users/ }).click();
+  await expect
+    .poll(() =>
+      page
+        .getByLabel("Filter by status")
+        .evaluate((element) => getComputedStyle(element).backgroundColor)
+    )
+    .not.toBe("rgb(255, 255, 255)");
   await expect(page.getByRole("button", { name: "Audit log" })).toBeVisible();
 });
 
@@ -273,7 +319,10 @@ test("standalone chat can run a configured tool", async ({ page }) => {
 test("superadmin resets a user's password from the users panel", async ({ page }) => {
   // Make sure the normal user exists in the platform user store before administering it.
   await signInViaApi(page, normalUser);
+  const normalMe = await page.request.get(`${apiBaseUrl}/api/me`);
+  expect(normalMe.ok()).toBe(true);
   await page.request.post(`${apiBaseUrl}/api/auth/sign-out`, { data: {} });
+  await page.context().clearCookies();
 
   await signInViaUi(page, superadminUser);
   await page.getByRole("button", { name: "Open superadmin panel" }).click();
@@ -300,6 +349,8 @@ test("superadmin resets a user's password from the users panel", async ({ page }
   await expect(page.getByText("E2E User")).toBeVisible();
 
   // Restore the seeded password so reruns against a reused server stay consistent.
+  await page.request.post(`${apiBaseUrl}/api/auth/sign-out`, { data: {} });
+  await page.context().clearCookies();
   await signInViaApi(page, superadminUser);
   const usersResponse = await page.request.get(`${apiBaseUrl}/api/superadmin/users`);
   expect(usersResponse.ok()).toBe(true);
@@ -344,6 +395,14 @@ async function signInViaApi(page: Page, user: { email: string; password: string 
     }
   });
   expect(response.ok()).toBe(true);
+}
+
+async function ensureDarkMode(page: Page): Promise<void> {
+  const isDark = await page.locator("main").first().evaluate((element) => element.classList.contains("dark"));
+  if (!isDark) {
+    await page.getByRole("button", { name: "Switch to dark theme" }).click();
+  }
+  await expect.poll(() => page.locator("main").first().evaluate((element) => element.classList.contains("dark"))).toBe(true);
 }
 
 async function expectDocumentScrollLocked(page: Page): Promise<void> {

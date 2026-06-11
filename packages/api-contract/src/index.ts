@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+export const localeCodeSchema = z.enum(["en", "de"]);
+
+export const localizationSchema = z.object({
+  locale: localeCodeSchema,
+  defaultLocale: localeCodeSchema,
+  supportedLocales: z.array(localeCodeSchema)
+});
+
 export const apiUserSchema = z.object({
   id: z.string(),
   externalUserId: z.string(),
@@ -36,8 +44,11 @@ export const messageSchema = z.object({
 });
 
 export const clientBrandingSchema = z.object({
+  localization: localizationSchema,
   clientName: z.string(),
   logoUrl: z.string().optional(),
+  logoUrlDark: z.string().optional(),
+  logoInvertOnDark: z.boolean(),
   title: z.string(),
   welcomeMessage: z.string(),
   accentColor: z.string(),
@@ -49,7 +60,17 @@ export const clientBrandingSchema = z.object({
     textColor: z.string(),
     mutedTextColor: z.string(),
     borderColor: z.string()
-  })
+  }),
+  darkTheme: z.object({
+    accentColor: z.string(),
+    accentStrongColor: z.string(),
+    backgroundColor: z.string(),
+    surfaceColor: z.string(),
+    textColor: z.string(),
+    mutedTextColor: z.string(),
+    borderColor: z.string()
+  }),
+  defaultThemeMode: z.enum(["light", "dark", "system"])
 });
 
 export const safeConfigSchema = z.object({
@@ -58,6 +79,7 @@ export const safeConfigSchema = z.object({
     displayName: z.string(),
     environment: z.string()
   }),
+  localization: localizationSchema,
   retention: z.object({
     conversationDays: z.number(),
     auditDays: z.number(),
@@ -79,6 +101,7 @@ export const safeConfigSchema = z.object({
     z.object({
       name: z.string(),
       displayName: z.string(),
+      welcomeMessage: z.string().optional(),
       initialPrompts: z.array(
         z.object({
           title: z.string(),
@@ -91,7 +114,8 @@ export const safeConfigSchema = z.object({
 });
 
 export const createConversationRequestSchema = z.object({
-  title: z.string().min(1).optional()
+  title: z.string().min(1).optional(),
+  locale: localeCodeSchema.optional()
 });
 
 const uiMessagePartSchema = z
@@ -113,6 +137,7 @@ export const chatStreamRequestSchema = z
   .object({
     conversationId: z.string().min(1).optional(),
     agentName: z.string().min(1).optional(),
+    locale: localeCodeSchema.optional(),
     messages: z.array(uiMessageSchema).min(1)
   })
   .passthrough();
@@ -476,6 +501,7 @@ export type Conversation = z.infer<typeof conversationSchema>;
 export type Message = z.infer<typeof messageSchema>;
 export type ClientBranding = z.infer<typeof clientBrandingSchema>;
 export type SafeConfig = z.infer<typeof safeConfigSchema>;
+export type LocaleCode = z.infer<typeof localeCodeSchema>;
 export type AdministeredUser = z.infer<typeof administeredUserSchema>;
 export type AdministeredUserIdentity = z.infer<typeof administeredUserIdentitySchema>;
 export type CreateAdministeredUserRequest = z.infer<typeof createAdministeredUserRequestSchema>;

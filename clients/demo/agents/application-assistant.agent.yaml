@@ -1,5 +1,10 @@
 name: application_assistant
-displayName: Application Assistant
+displayName:
+  de: Antragsassistent
+  en: Application Assistant
+welcomeMessage:
+  de: Wie kann ich beim Immobilien- oder Finanzierungsworkflow helfen?
+  en: How can I help with the real estate or financing workflow?
 modelProviderId: openai
 instructions: |
   You help users work through sensitive application and document review workflows.
@@ -8,9 +13,21 @@ instructions: |
 toolNames:
   - document.application_summary
 initialPrompts:
-  - title: Summarize documents
-    prompt: Help me summarize the documents and identify the next review steps for Application Assistant.
-  - title: Find review risks
-    prompt: List the most important application or document review risks I should check first.
-  - title: Draft questions
-    prompt: Draft concise follow-up questions for missing or unclear application details.
+  - title:
+      de: Dokumente zusammenfassen
+      en: Summarize documents
+    prompt:
+      de: Fasse die Dokumente zusammen und identifiziere die nächsten Prüfschritte.
+      en: Help me summarize the documents and identify the next review steps for Application Assistant.
+  - title:
+      de: Prüfrisiken finden
+      en: Find review risks
+    prompt:
+      de: Liste die wichtigsten Antrags- oder Dokumentenrisiken auf, die ich zuerst prüfen sollte.
+      en: List the most important application or document review risks I should check first.
+  - title:
+      de: Rückfragen entwerfen
+      en: Draft questions
+    prompt:
+      de: Entwirf knappe Rückfragen zu fehlenden oder unklaren Antragsdetails.
+      en: Draft concise follow-up questions for missing or unclear application details.

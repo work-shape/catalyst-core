@@ -8,6 +8,7 @@ import {
 } from "@assistant-ui/react";
 import { Check, Copy, FileText, Pencil, RefreshCw, User } from "lucide-react";
 import { AttachmentPreview } from "./attachment-preview";
+import { useTranslation } from "./i18n";
 import { MarkdownText } from "./markdown-text";
 import { DataPart, ToolCallPart } from "./tool-call";
 import { TooltipIconButton, tooltipIconButtonClassName } from "./tooltip-icon-button";
@@ -30,6 +31,8 @@ export function ThreadMessage() {
 }
 
 function AssistantMessage() {
+  const { t } = useTranslation();
+
   return (
     <MessagePrimitive.Root
       className="group/message mx-auto w-full max-w-3xl animate-in fade-in slide-in-from-bottom-1 duration-150"
@@ -51,10 +54,10 @@ function AssistantMessage() {
         <MessageError />
       </div>
       <div className="mt-1 flex min-h-8 items-center gap-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
-        <ActionBarPrimitive.Copy className={tooltipIconButtonClassName} title="Copy" aria-label="Copy">
+        <ActionBarPrimitive.Copy className={tooltipIconButtonClassName} title={t("copy")} aria-label={t("copy")}>
           <CopiedState />
         </ActionBarPrimitive.Copy>
-        <TooltipIconButton tooltip="Regenerate response" disabled>
+        <TooltipIconButton tooltip={t("regenerateResponse")} disabled>
           <RefreshCw aria-hidden="true" />
         </TooltipIconButton>
       </div>
@@ -63,6 +66,8 @@ function AssistantMessage() {
 }
 
 function UserMessage() {
+  const { t } = useTranslation();
+
   return (
     <MessagePrimitive.Root
       className="group/message mx-auto grid w-full max-w-3xl justify-items-end gap-1 animate-in fade-in slide-in-from-bottom-1 duration-150"
@@ -73,10 +78,10 @@ function UserMessage() {
         <MessagePrimitive.Parts components={{ Text: UserTextPart, File: FilePart }} />
       </div>
       <div className="flex min-h-8 items-center gap-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
-        <ActionBarPrimitive.Copy className={tooltipIconButtonClassName} title="Copy" aria-label="Copy">
+        <ActionBarPrimitive.Copy className={tooltipIconButtonClassName} title={t("copy")} aria-label={t("copy")}>
           <CopiedState />
         </ActionBarPrimitive.Copy>
-        <TooltipIconButton tooltip="Edit message" disabled>
+        <TooltipIconButton tooltip={t("editMessage")} disabled>
           <Pencil aria-hidden="true" />
         </TooltipIconButton>
       </div>
@@ -117,6 +122,8 @@ function MessageError() {
 }
 
 function DisabledEditComposer() {
+  const { t } = useTranslation();
+
   return (
     <MessagePrimitive.Root className="mx-auto w-full max-w-3xl">
       <ComposerPrimitive.Root className="grid gap-2 rounded-md border bg-muted/50 p-3">
@@ -127,11 +134,11 @@ function DisabledEditComposer() {
         <div className="flex justify-end gap-2">
           <ComposerPrimitive.Cancel asChild>
             <Button variant="ghost" size="sm">
-              Cancel
+              {t("cancel")}
             </Button>
           </ComposerPrimitive.Cancel>
           <Button size="sm" disabled>
-            Update
+            {t("update")}
           </Button>
         </div>
       </ComposerPrimitive.Root>

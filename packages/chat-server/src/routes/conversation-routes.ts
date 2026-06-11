@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { createConversationRequestSchema } from "@agent-chat-platform/api-contract";
 import { ConversationWorkflow } from "../conversation-workflow";
 import type { ChatServerOptions } from "../types";
-import { authenticateRequest, getConversationId, parseBody } from "../request-context";
+import { authenticateRequest, getConversationId, parseBody, withRequestLocale } from "../request-context";
 
 export function registerConversationRoutes(app: FastifyInstance, options: ChatServerOptions): void {
   const conversations = new ConversationWorkflow(options);
@@ -15,7 +15,11 @@ export function registerConversationRoutes(app: FastifyInstance, options: ChatSe
   app.post("/api/conversations", async (request) => {
     const { user, context } = await authenticateRequest(options, request);
     const body = parseBody(createConversationRequestSchema, request.body);
-    return conversations.createConversation(user, context, body);
+    return conversations.createConversation(
+      user,
+      withRequestLocale(context, options, request, body.locale),
+      body
+    );
   });
 
   app.get("/api/conversations/:conversationId/messages", async (request) => {

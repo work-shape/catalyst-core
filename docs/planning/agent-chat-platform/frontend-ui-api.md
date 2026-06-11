@@ -133,12 +133,19 @@ The conversation list must be user-scoped by the backend. The frontend should no
 Release config should carry customer-specific branding for a client instance:
 
 - client name
-- optional logo URL
+- optional logo URL and dark-mode logo URL; transparent monochrome marks may instead opt into dark-mode inversion
 - theme colors for accent, background, surface, text, muted text, and borders
+- optional dedicated `uiFile` so client presentation config can live beside, but outside, the main release config
 
 The standalone surface and embed surface should consume the same safe config view. Customer-specific branding should not require forking `chat-ui`.
 
 The safe config view should expose normalized Client Branding. UI code should not know release-config fallback rules such as defaulting the client name from the client instance display name or resolving theme accent aliases.
+
+## Localization
+
+English and German are first-class product locales in v1. Release config owns the supported locale list and default locale. Customer/workflow copy such as agent display names, welcome messages, and suggested prompts stays in client/agent config and may be either a legacy string or an `en`/`de` map. The safe config endpoint resolves those maps server-side for the requested locale, so UI packages consume plain strings and do not know release-config fallback rules.
+
+Product-owned UI chrome such as buttons, placeholders, auth labels, and settings labels lives in typed `chat-ui` dictionaries. Runtime request context carries the resolved locale so agent runs receive one product-owned instruction to answer in the selected language unless the user asks otherwise.
 
 API client generator:
 

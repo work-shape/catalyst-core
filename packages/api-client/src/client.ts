@@ -19,6 +19,7 @@ import {
   upsertAdministeredUserIdentityRequestSchema,
   usageSummarySchema
 } from "./schemas";
+import type { LocaleCode } from "./schemas";
 
 export interface ApiClientOptions {
   baseUrl: string;
@@ -64,8 +65,8 @@ export function createApiClient(options: ApiClientOptions) {
         changeCurrentUserPasswordResponseSchema,
         changeCurrentUserPasswordRequestSchema.parse(input)
       ),
-    branding: () => request("GET", "/api/branding", clientBrandingSchema),
-    config: () => request("GET", "/api/config", safeConfigSchema),
+    branding: (locale?: LocaleCode) => request("GET", withLocale("/api/branding", locale), clientBrandingSchema),
+    config: (locale?: LocaleCode) => request("GET", withLocale("/api/config", locale), safeConfigSchema),
     conversations: () => request("GET", "/api/conversations", z.array(conversationSchema)),
     createConversation: (input: z.infer<typeof createConversationRequestSchema> = {}) =>
       request("POST", "/api/conversations", conversationSchema, createConversationRequestSchema.parse(input)),
@@ -112,3 +113,7 @@ export function createApiClient(options: ApiClientOptions) {
 }
 
 export type ApiClient = ReturnType<typeof createApiClient>;
+
+function withLocale(path: string, locale: LocaleCode | undefined): string {
+  return locale ? `${path}?locale=${encodeURIComponent(locale)}` : path;
+}

@@ -4,10 +4,12 @@ import {
   AppError,
   type AuthenticatedUser,
   type ConversationId,
+  type LocaleCode,
   type RuntimeCallContext,
   asConversationId,
   createPlatformId
 } from "@agent-chat-platform/core";
+import { resolveConfigLocale } from "@agent-chat-platform/config-schema";
 import type { ChatServerOptions } from "./types";
 
 export async function authenticateRequest(
@@ -47,6 +49,30 @@ export function parseBody<T>(schema: z.ZodType<T>, body: unknown): T {
     });
   }
   return parsed.data;
+}
+
+export function resolveRequestLocale(
+  options: ChatServerOptions,
+  request: FastifyRequest,
+  requestedLocale?: string
+): LocaleCode {
+  const query = request.query as { locale?: string } | undefined;
+  return resolveConfigLocale(options.config.localization, {
+    requestedLocale: requestedLocale ?? query?.locale,
+    acceptLanguageHeader: request.headers["accept-language"]
+  });
+}
+
+export function withRequestLocale(
+  context: RuntimeCallContext,
+  options: ChatServerOptions,
+  request: FastifyRequest,
+  requestedLocale?: string
+): RuntimeCallContext {
+  return {
+    ...context,
+    locale: resolveRequestLocale(options, request, requestedLocale)
+  };
 }
 
 export function createCorrelationId(request: FastifyRequest): string {

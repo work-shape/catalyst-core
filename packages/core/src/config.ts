@@ -1,6 +1,8 @@
+import type { LocalizationConfig, LocalizedStringConfig } from "./localization";
+
 export interface AgentInitialPromptConfig {
-  title: string;
-  prompt: string;
+  title: LocalizedStringConfig;
+  prompt: LocalizedStringConfig;
 }
 
 export interface DeterministicModelProviderConfig {
@@ -24,12 +26,15 @@ export type ModelProviderConfig =
 
 export interface AgentConfig {
   name: string;
-  displayName: string;
+  displayName: LocalizedStringConfig;
+  welcomeMessage?: LocalizedStringConfig;
   instructions: string;
   modelProviderId?: string;
   toolNames: string[];
   initialPrompts: AgentInitialPromptConfig[];
 }
+
+export type { LocalizationConfig, LocalizedStringConfig };
 
 export interface UsageBudgetConfig {
   monthlySpendLimit?: number;

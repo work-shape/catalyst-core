@@ -34,7 +34,6 @@ export interface ChatShellAdminPanel {
       identity: AdministeredUserIdentity
     ): Promise<AdministeredUser>;
     onResetUserPassword(userId: string, password: string): Promise<unknown>;
-    headerActions?: ReactNode;
   }): ReactNode;
 }
 

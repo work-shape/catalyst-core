@@ -183,6 +183,8 @@ usage:
 ui:
   clientName: Example Customer
   logoUrl: https://example.com/logo.png
+  logoUrlDark: https://example.com/logo-dark.png
+  logoInvertOnDark: false
   theme:
     accentColor: "#0f766e"
     backgroundColor: "#f5f3ee"

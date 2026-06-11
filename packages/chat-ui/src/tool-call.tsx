@@ -1,4 +1,5 @@
 import { CheckCircle2, CircleAlert, Loader2, Wrench } from "lucide-react";
+import { useTranslation } from "./i18n";
 import { cn } from "./ui/cn";
 
 interface ToolCallPartProps {
@@ -15,6 +16,7 @@ interface DataPartProps {
 }
 
 export function ToolCallPart({ toolName, toolCallId, argsText, result, isError }: ToolCallPartProps) {
+  const { t } = useTranslation();
   const state = isError ? "failed" : result === undefined ? "running" : "completed";
   const Icon = state === "running" ? Loader2 : state === "failed" ? CircleAlert : CheckCircle2;
   const details = formatDetails(result ?? argsText);
@@ -37,14 +39,14 @@ export function ToolCallPart({ toolName, toolCallId, argsText, result, isError }
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{toolName}</p>
-          <p className="truncate text-xs text-muted-foreground">{toolStatusLabel(state)}</p>
+          <p className="truncate text-xs text-muted-foreground">{toolStatusLabel(state, t)}</p>
         </div>
         <Wrench size={15} className="shrink-0 text-muted-foreground" aria-hidden="true" />
       </div>
       {details ? (
         <details className="group/tool text-xs" open={state === "failed"}>
           <summary className="cursor-pointer px-3 py-2 text-muted-foreground outline-none transition-colors hover:text-foreground">
-            Details
+            {t("toolDetails")}
           </summary>
           <pre className="max-h-56 overflow-auto border-t bg-muted/50 px-3 py-2 font-mono text-[0.75rem] leading-5 [overflow-wrap:anywhere]">
             {details}
@@ -57,12 +59,13 @@ export function ToolCallPart({ toolName, toolCallId, argsText, result, isError }
 }
 
 export function DataPart({ name, data }: DataPartProps) {
+  const { t } = useTranslation();
   const details = formatDetails(data);
   return (
     <div className="my-2 max-w-3xl rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
       <div className="flex items-center gap-2 text-muted-foreground">
         <Wrench size={14} aria-hidden="true" />
-        <span>Structured output: {name}</span>
+        <span>{t("structuredOutput", { name })}</span>
       </div>
       {details ? (
         <pre className="mt-2 max-h-56 overflow-auto rounded-md bg-muted px-3 py-2 font-mono text-xs leading-5 [overflow-wrap:anywhere]">
@@ -73,14 +76,17 @@ export function DataPart({ name, data }: DataPartProps) {
   );
 }
 
-function toolStatusLabel(state: "running" | "completed" | "failed"): string {
+function toolStatusLabel(
+  state: "running" | "completed" | "failed",
+  t: ReturnType<typeof useTranslation>["t"]
+): string {
   if (state === "running") {
-    return "Running";
+    return t("toolRunning");
   }
   if (state === "failed") {
-    return "Failed";
+    return t("toolFailed");
   }
-  return "Completed";
+  return t("toolCompleted");
 }
 
 function formatDetails(value: unknown): string | undefined {

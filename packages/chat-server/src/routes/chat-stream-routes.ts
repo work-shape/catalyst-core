@@ -15,7 +15,7 @@ import {
 } from "@agent-chat-platform/core";
 import { ConversationWorkflow } from "../conversation-workflow";
 import { createConversationTitle } from "../conversation-title";
-import { authenticateRequest, parseBody } from "../request-context";
+import { authenticateRequest, parseBody, withRequestLocale } from "../request-context";
 import type { ChatServerOptions } from "../types";
 import { sendWebResponse } from "./better-auth-routes";
 
@@ -25,10 +25,11 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
   app.post("/api/chat", async (request, reply) => {
     const { user, context } = await authenticateRequest(options, request);
     const body = parseBody(chatStreamRequestSchema, request.body);
+    const localizedContext = withRequestLocale(context, options, request, body.locale);
     const text = extractSubmittedUserText(body.messages);
     const conversation =
       body.conversationId === undefined
-        ? await conversations.createConversation(user, context, {
+        ? await conversations.createConversation(user, localizedContext, {
             title: createConversationTitle(text)
           })
         : undefined;
@@ -37,7 +38,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
       throw new AppError("BAD_REQUEST", "Missing conversation id");
     }
 
-    const { runId } = await conversations.startMessageRun(conversationId, user, context, {
+    const { runId } = await conversations.startMessageRun(conversationId, user, localizedContext, {
       agentName: body.agentName,
       text
     });
@@ -87,7 +88,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
           type: "start-step"
         });
 
-        for await (const event of conversations.observeRun(runId, context)) {
+        for await (const event of conversations.observeRun(runId, localizedContext)) {
           if (event.type === "message_delta") {
             const activeTextPartId = ensureTextPart();
             writeChunk({
@@ -151,7 +152,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
             await conversations.recordRunFailed(
               conversationId,
               user,
-              context,
+              localizedContext,
               runId,
               assistantMessageCount,
               event
@@ -167,11 +168,11 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
             await conversations.recordRunCompleted(
               conversationId,
               user,
-              context,
+              localizedContext,
               runId,
               assistantMessageCount
             );
-            await conversations.generateTitleForFirstExchange(conversationId, user, context);
+            await conversations.generateTitleForFirstExchange(conversationId, user, localizedContext);
           }
         }
 

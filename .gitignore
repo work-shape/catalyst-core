@@ -3,6 +3,7 @@ dist/
 build/
 .turbo/
 .vite/
+.astro/
 coverage/
 playwright-report/
 test-results/

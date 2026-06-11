@@ -175,8 +175,8 @@ export function UserAdministrationPanel({
     <div className="grid content-start gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="grid min-w-0 gap-1">
-          <h1 className="text-[22px] font-semibold tracking-normal text-slate-950">Users</h1>
-          <p className="text-sm text-slate-500">
+          <h1 className="text-[22px] font-semibold tracking-normal text-foreground">Users</h1>
+          <p className="text-sm text-muted-foreground">
             {users.length.toLocaleString()} users · {activeUserCount.toLocaleString()} active
           </p>
         </div>
@@ -203,7 +203,7 @@ export function UserAdministrationPanel({
           />
         </div>
         <Select
-          className="h-10 w-full bg-white font-medium text-slate-600 sm:w-40"
+          className="h-10 w-full font-medium sm:w-40"
           aria-label="Filter by status"
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value as UserStatusFilter)}
@@ -213,7 +213,7 @@ export function UserAdministrationPanel({
           <option value="disabled">Disabled</option>
         </Select>
         <Select
-          className="h-10 w-full bg-white font-medium text-slate-600 sm:w-40"
+          className="h-10 w-full font-medium sm:w-40"
           aria-label="Filter by role"
           value={roleFilter}
           onChange={(event) => setRoleFilter(event.target.value)}
@@ -229,10 +229,10 @@ export function UserAdministrationPanel({
 
       {error ? <FormNotice notice={{ kind: "error", text: error }} /> : null}
 
-      <Card className="overflow-hidden border-slate-200 bg-white">
+      <Card className="overflow-hidden">
         {selectedRowIds.size > 0 ? (
-          <div className="flex flex-wrap items-center gap-3 border-b border-sky-100 bg-sky-50 px-4 py-2.5">
-            <span className="text-sm font-semibold text-sky-900">
+          <div className="flex flex-wrap items-center gap-3 border-b bg-primary/10 px-4 py-2.5">
+            <span className="text-sm font-semibold text-primary">
               {selectedRowIds.size.toLocaleString()} selected
             </span>
             <div className="flex-1" />
@@ -240,7 +240,7 @@ export function UserAdministrationPanel({
               type="button"
               size="sm"
               variant="ghost"
-              className="text-sky-900 hover:bg-sky-100"
+              className="text-primary hover:bg-primary/15"
               onClick={() => setSelectedRowIds(new Set())}
             >
               Clear
@@ -266,7 +266,7 @@ export function UserAdministrationPanel({
         ) : (
           <Table>
             <TableHeader>
-              <TableRow className="border-slate-200 bg-slate-50 hover:bg-slate-50">
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
                 <TableHead className="w-10 px-4">
                   <input
                     type="checkbox"
@@ -276,19 +276,19 @@ export function UserAdministrationPanel({
                     onChange={(event) => togglePageSelection(event.target.checked)}
                   />
                 </TableHead>
-                <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] text-slate-400 uppercase">
+                <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] uppercase">
                   User
                 </TableHead>
-                <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] text-slate-400 uppercase">
+                <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] uppercase">
                   Roles
                 </TableHead>
-                <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] text-slate-400 uppercase">
+                <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] uppercase">
                   Status
                 </TableHead>
-                <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] text-slate-400 uppercase">
+                <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] uppercase">
                   Sign-in methods
                 </TableHead>
-                <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] text-slate-400 uppercase">
+                <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] uppercase">
                   Last active
                 </TableHead>
                 <TableHead className="w-8" />
@@ -298,7 +298,7 @@ export function UserAdministrationPanel({
               {pageUsers.map((user) => (
                 <TableRow
                   key={user.id}
-                  className="cursor-pointer border-slate-200 hover:bg-slate-50"
+                  className="cursor-pointer hover:bg-muted/50"
                   onClick={() => setSelectedUserId(user.id)}
                 >
                   <TableCell className="px-4" onClick={(event) => event.stopPropagation()}>
@@ -362,16 +362,16 @@ export function UserAdministrationPanel({
         )}
 
         {!loading && visibleUsers.length > 0 ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3">
-            <div className="text-sm text-slate-500">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3">
+            <div className="text-sm text-muted-foreground">
               {pageStart + 1}-{Math.min(pageStart + rowsPerPage, visibleUsers.length)} of{" "}
               {visibleUsers.length.toLocaleString()}
             </div>
             <div className="flex items-center gap-2">
-              <label className="flex items-center gap-2 text-sm text-slate-500">
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
                 Rows
                 <Select
-                  className="h-8 w-20 bg-white px-2 text-sm"
+                  className="h-8 w-20 px-2 text-sm"
                   aria-label="Rows per page"
                   value={String(rowsPerPage)}
                   onChange={(event) => setRowsPerPage(Number(event.target.value))}
@@ -392,7 +392,7 @@ export function UserAdministrationPanel({
               >
                 <ChevronLeft size={15} aria-hidden="true" />
               </Button>
-              <span className="min-w-7 text-center text-sm font-semibold text-slate-700">{currentPage}</span>
+              <span className="min-w-7 text-center text-sm font-semibold text-foreground">{currentPage}</span>
               <Button
                 type="button"
                 size="icon"

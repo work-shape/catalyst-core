@@ -6,8 +6,7 @@ import {
 } from "@assistant-ui/react";
 import { AssistantChatTransport, useChatRuntime } from "@assistant-ui/react-ai-sdk";
 import type { UIMessage } from "ai";
-import type { ReactNode } from "react";
-import type { ApiClient, Conversation, Message, SafeConfig } from "@agent-chat-platform/api-client";
+import type { ApiClient, LocaleCode, Message, SafeConfig } from "@agent-chat-platform/api-client";
 import { AssistantThread } from "./assistant-thread";
 import { firstLineTitle } from "./conversation-title";
 
@@ -15,13 +14,13 @@ export function AssistantChatPanel({
   apiBaseUrl,
   client,
   config,
-  conversations,
   selectedConversationId,
   messages,
   messagesLoaded,
   notice,
   draft,
-  headerActions,
+  locale,
+  selectedAgentName,
   onDraftChange,
   onConversationStarted,
   onStreamFinished,
@@ -30,13 +29,13 @@ export function AssistantChatPanel({
   apiBaseUrl: string;
   client: ApiClient;
   config: SafeConfig | undefined;
-  conversations: Conversation[];
   selectedConversationId: string | undefined;
   messages: Message[] | undefined;
   messagesLoaded: boolean;
   notice: string | undefined;
   draft: string;
-  headerActions?: ReactNode;
+  locale: LocaleCode;
+  selectedAgentName: string | undefined;
   onDraftChange: (value: string) => void;
   onConversationStarted: (conversationId: string, messages?: Message[]) => void;
   onStreamFinished: () => void;
@@ -50,14 +49,14 @@ export function AssistantChatPanel({
       apiBaseUrl={apiBaseUrl}
       client={client}
       config={config}
-      conversations={conversations}
       selectedConversationId={selectedConversationId}
       initialMessages={initialMessages}
       messagesLoaded={messagesLoaded}
       pendingConversationIdRef={pendingConversationIdRef}
       notice={notice}
       draft={draft}
-      headerActions={headerActions}
+      locale={locale}
+      selectedAgentName={selectedAgentName}
       onDraftChange={onDraftChange}
       onConversationStarted={onConversationStarted}
       onStreamFinished={onStreamFinished}
@@ -70,14 +69,14 @@ function AssistantRuntimePane({
   apiBaseUrl,
   client,
   config,
-  conversations,
   selectedConversationId,
   initialMessages,
   messagesLoaded,
   pendingConversationIdRef,
   notice,
   draft,
-  headerActions,
+  locale,
+  selectedAgentName,
   onDraftChange,
   onConversationStarted,
   onStreamFinished,
@@ -86,14 +85,14 @@ function AssistantRuntimePane({
   apiBaseUrl: string;
   client: ApiClient;
   config: SafeConfig | undefined;
-  conversations: Conversation[];
   selectedConversationId: string | undefined;
   initialMessages: UIMessage[];
   messagesLoaded: boolean;
   pendingConversationIdRef: MutableRefObject<string | undefined>;
   notice: string | undefined;
   draft: string;
-  headerActions?: ReactNode;
+  locale: LocaleCode;
+  selectedAgentName: string | undefined;
   onDraftChange: (value: string) => void;
   onConversationStarted: (conversationId: string, messages?: Message[]) => void;
   onStreamFinished: () => void;
@@ -109,14 +108,16 @@ function AssistantRuntimePane({
         credentials: "include",
         body: {
           conversationId: selectedConversationId,
-          agentName: config?.defaultAgentName
+          locale,
+          agentName: selectedAgentName
         },
         prepareSendMessagesRequest: async (options) => {
           const text = extractLastUserText(options.messages);
           let conversationId = selectedConversationId;
           if (!conversationId) {
             const conversation = await client.createConversation({
-              title: firstLineTitle(text)
+              title: firstLineTitle(text),
+              locale
             });
             conversationId = conversation.id;
             pendingConversationIdRef.current = conversation.id;
@@ -127,13 +128,14 @@ function AssistantRuntimePane({
             body: {
               ...options.body,
               conversationId,
-              agentName: config?.defaultAgentName,
+              locale,
+              agentName: selectedAgentName,
               messages: options.messages
             }
           };
         }
       }),
-    [apiBaseUrl, client, config?.defaultAgentName, pendingConversationIdRef, selectedConversationId]
+    [apiBaseUrl, client, locale, pendingConversationIdRef, selectedAgentName, selectedConversationId]
   );
   async function selectPendingConversation(): Promise<void> {
     const conversationId = pendingConversationIdRef.current;
@@ -197,10 +199,8 @@ function AssistantRuntimePane({
       <DraftBridge draftKey={selectedConversationId ?? "new"} draft={draft} onDraftChange={onDraftChange} />
       <AssistantThread
         config={config}
-        conversations={conversations}
-        selectedConversationId={selectedConversationId}
+        selectedAgentName={selectedAgentName}
         notice={notice}
-        headerActions={headerActions}
       />
     </AssistantRuntimeProvider>
   );

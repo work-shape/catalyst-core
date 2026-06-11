@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { createClientBranding, createSafeConfigView } from "@agent-chat-platform/config-schema";
 import type { ChatServerOptions } from "../types";
-import { authenticateRequest } from "../request-context";
+import { authenticateRequest, resolveRequestLocale } from "../request-context";
 
 export function registerConfigRoutes(app: FastifyInstance, options: ChatServerOptions): void {
   app.get("/api/me", async (request) => {
@@ -9,10 +9,16 @@ export function registerConfigRoutes(app: FastifyInstance, options: ChatServerOp
     return user;
   });
 
-  app.get("/api/branding", async () => createClientBranding(options.config));
+  app.get("/api/branding", async (request) =>
+    createClientBranding(options.config, {
+      requestedLocale: resolveRequestLocale(options, request)
+    })
+  );
 
   app.get("/api/config", async (request) => {
     await authenticateRequest(options, request);
-    return createSafeConfigView(options.config);
+    return createSafeConfigView(options.config, {
+      requestedLocale: resolveRequestLocale(options, request)
+    });
   });
 }

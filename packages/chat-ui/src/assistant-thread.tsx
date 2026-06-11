@@ -1,48 +1,35 @@
 import { AuiIf, ThreadPrimitive } from "@assistant-ui/react";
 import { ArrowDown, Bot, CircleAlert, Sparkles } from "lucide-react";
-import type { ReactNode } from "react";
-import type { Conversation, SafeConfig } from "@agent-chat-platform/api-client";
+import type { SafeConfig } from "@agent-chat-platform/api-client";
 import { AssistantComposer } from "./assistant-composer";
 import { ThreadMessage } from "./assistant-message";
-import { currentTitle } from "./conversation-title";
+import { useTranslation } from "./i18n";
 import { cn } from "./ui/cn";
 
 export function AssistantThread({
   config,
-  conversations,
-  selectedConversationId,
-  notice,
-  headerActions
+  selectedAgentName,
+  notice
 }: {
   config: SafeConfig | undefined;
-  conversations: Conversation[];
-  selectedConversationId: string | undefined;
+  selectedAgentName: string | undefined;
   notice: string | undefined;
-  headerActions?: ReactNode;
 }) {
-  const initialPrompts = getInitialPrompts(config);
+  const { t } = useTranslation();
+  const agent = getSelectedAgent(config, selectedAgentName);
+  const initialPrompts = agent?.initialPrompts ?? [];
 
   return (
     <section
-      className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background"
+      className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)] overflow-hidden bg-background"
       aria-label="Chat"
     >
-      <header className="flex min-h-16 min-w-0 items-center justify-between gap-4 border-b bg-background/95 px-5 py-3">
-        <div className="grid min-w-0 gap-1">
-          <span className="truncate text-xs text-muted-foreground">
-            {currentTitle(conversations, selectedConversationId)}
-          </span>
-          <strong className="truncate text-sm font-semibold">{config?.agents[0]?.displayName ?? "Agent"}</strong>
-        </div>
-        {headerActions}
-      </header>
-
       <ThreadPrimitive.Root
         className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)] overflow-hidden"
         style={{ ["--thread-max-width" as string]: "48rem" }}
       >
         <ThreadPrimitive.Viewport className="relative flex min-h-0 flex-col overflow-y-auto overflow-x-hidden scroll-smooth">
-          <div className="mx-auto flex w-full max-w-[var(--thread-max-width)] flex-1 flex-col px-5 pt-5">
+          <div className="mx-auto flex w-full max-w-[var(--thread-max-width)] flex-1 flex-col px-5 pt-20">
             {notice ? (
               <div className="mb-4 inline-flex w-fit max-w-full items-center gap-2 rounded-md border border-amber-300/70 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                 <CircleAlert size={17} aria-hidden="true" />
@@ -51,7 +38,11 @@ export function AssistantThread({
             ) : null}
 
             <AuiIf condition={(state) => state.thread.isEmpty}>
-              <ThreadWelcome config={config} initialPrompts={initialPrompts} />
+              <ThreadWelcome
+                agent={agent}
+                fallbackWelcomeMessage={config?.ui.welcomeMessage ?? t("genericWelcome")}
+                initialPrompts={initialPrompts}
+              />
             </AuiIf>
 
             <div className="flex flex-col gap-5 pb-6 empty:hidden">
@@ -72,12 +63,16 @@ export function AssistantThread({
 }
 
 function ThreadWelcome({
-  config,
+  agent,
+  fallbackWelcomeMessage,
   initialPrompts
 }: {
-  config: SafeConfig | undefined;
+  agent: SafeConfig["agents"][number] | undefined;
+  fallbackWelcomeMessage: string | undefined;
   initialPrompts: Array<{ title: string; prompt: string }>;
 }) {
+  const { t } = useTranslation();
+
   return (
     <div className="my-auto grid min-h-[20rem] content-center gap-5 py-8">
       <div className="grid gap-3">
@@ -85,9 +80,11 @@ function ThreadWelcome({
           <Bot size={20} aria-hidden="true" />
         </span>
         <div className="grid gap-1">
-          <h2 className="text-xl font-semibold tracking-normal">{config?.ui.welcomeMessage ?? "How can I help?"}</h2>
+          <h2 className="text-xl font-semibold tracking-normal">
+            {agent?.welcomeMessage ?? fallbackWelcomeMessage ?? "How can I help?"}
+          </h2>
           <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-            {config?.agents[0]?.displayName ?? "The agent"} is ready for this conversation.
+            {t("agentReady", { agent: agent?.displayName ?? t("agentFallback") })}
           </p>
         </div>
       </div>
@@ -113,18 +110,26 @@ function ThreadWelcome({
 }
 
 function ThreadScrollToBottom() {
+  const { t } = useTranslation();
+
   return (
     <ThreadPrimitive.ScrollToBottom
       className="absolute -top-5 left-1/2 z-10 grid size-9 -translate-x-1/2 place-items-center rounded-full border bg-background text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground disabled:invisible"
-      aria-label="Scroll to bottom"
-      title="Scroll to bottom"
+      aria-label={t("scrollToBottom")}
+      title={t("scrollToBottom")}
     >
       <ArrowDown size={16} aria-hidden="true" />
     </ThreadPrimitive.ScrollToBottom>
   );
 }
 
-function getInitialPrompts(config: SafeConfig | undefined): Array<{ title: string; prompt: string }> {
-  const agent = config?.agents.find((candidate) => candidate.name === config.defaultAgentName) ?? config?.agents[0];
-  return agent?.initialPrompts ?? [];
+function getSelectedAgent(
+  config: SafeConfig | undefined,
+  selectedAgentName: string | undefined
+): SafeConfig["agents"][number] | undefined {
+  return (
+    config?.agents.find((candidate) => candidate.name === selectedAgentName) ??
+    config?.agents.find((candidate) => candidate.name === config.defaultAgentName) ??
+    config?.agents[0]
+  );
 }

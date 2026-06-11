@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { PanelLeft } from "lucide-react";
 import {
   ApiError,
   createApiClient,
@@ -7,22 +8,35 @@ import {
   type ChangeCurrentUserPasswordRequest,
   type Conversation,
   type CreateAdministeredUserRequest,
+  type LocaleCode,
   type Message,
+  type SafeConfig,
   type UpdateCurrentUserRequest,
   type UpdateAdministeredUserRequest,
   type UpsertAdministeredUserIdentityRequest
 } from "@agent-chat-platform/api-client";
+import { AgentSelector } from "./agent-selector";
 import { AssistantChatPanel } from "./assistant-chat-panel";
 import { signOut } from "./auth-client";
 import type { ChatShellProps } from "./chat-shell";
+import { readBrowserLocale, TranslationProvider, useTranslation } from "./i18n";
 import { LoginPanel } from "./login-panel";
-import { createThemeStyle } from "./theme";
+import {
+  createThemeStyle,
+  readSystemThemeMode,
+  resolveThemeModePreference,
+  type ResolvedThemeMode
+} from "./theme";
+import { ThemeToggle } from "./theme-toggle";
 import { cn } from "./ui/cn";
 import { UserMenu } from "./user-menu";
 import { UserSettingsPanel } from "./user-settings-panel";
 import { type WorkspaceView, WorkspaceRail } from "./workspace-rail";
 
 const STANDALONE_AUTH_SOURCE = "better-auth";
+const THEME_STORAGE_KEY = "agent-chat-platform:theme";
+const LOCALE_STORAGE_KEY = "agent-chat-platform:locale";
+const DEFAULT_LOCALES: LocaleCode[] = ["en", "de"];
 
 export function ChatWorkspace({
   apiBaseUrl,
@@ -37,6 +51,14 @@ export function ChatWorkspace({
   const [draftsByTarget, setDraftsByTarget] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<string | undefined>();
   const [view, setView] = useState<WorkspaceView>("chat");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [selectedAgentName, setSelectedAgentName] = useState<string | undefined>();
+  const [browserLocale] = useState<LocaleCode | undefined>(() => readBrowserLocale());
+  const [localePreference, setLocalePreference] = useState<LocaleCode | undefined>(() => readStoredLocale());
+  const [themeOverride, setThemeOverride] = useState<ResolvedThemeMode | undefined>(() =>
+    readStoredThemeMode()
+  );
+  const [systemThemeMode, setSystemThemeMode] = useState<ResolvedThemeMode>(() => readSystemThemeMode());
   const authScope = "standalone";
   const draftKey = createDraftKey(authScope, selectedConversationId);
   const draft = draftsByTarget[draftKey] ?? "";
@@ -57,8 +79,8 @@ export function ChatWorkspace({
   });
   const isAuthenticated = Boolean(meQuery.data);
   const configQuery = useQuery({
-    queryKey: ["config", apiBaseUrl, authScope],
-    queryFn: client.config,
+    queryKey: ["config", apiBaseUrl, authScope, localePreference ?? "auto"],
+    queryFn: () => client.config(localePreference),
     enabled: isAuthenticated
   });
   const conversationsQuery = useQuery({
@@ -119,7 +141,44 @@ export function ChatWorkspace({
   const messages = selectedConversationId ? messagesQuery.data : [];
   const messagesLoaded = !selectedConversationId || messagesQuery.data !== undefined;
   const config = configQuery.data;
-  const themeStyle = createThemeStyle(config?.ui);
+  const activeLocale = config?.localization.locale ?? localePreference ?? browserLocale ?? "en";
+  const supportedLocales = config?.localization.supportedLocales ?? DEFAULT_LOCALES;
+  const resolvedThemeMode =
+    themeOverride ?? resolveThemeModePreference(config?.ui.defaultThemeMode, systemThemeMode);
+  const themeStyle = createThemeStyle(config?.ui, resolvedThemeMode);
+  const workspaceStyle = {
+    ...(themeStyle ?? {})
+  } as CSSProperties;
+  const activeAgentName = selectedAgentName ?? config?.defaultAgentName ?? config?.agents[0]?.name;
+
+  useEffect(() => {
+    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!media) {
+      return undefined;
+    }
+
+    function onChange(event: MediaQueryListEvent) {
+      setSystemThemeMode(event.matches ? "dark" : "light");
+    }
+
+    media.addEventListener("change", onChange);
+    return () => {
+      media.removeEventListener("change", onChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!config?.agents.length) {
+      return;
+    }
+
+    setSelectedAgentName((currentAgentName) => {
+      if (currentAgentName && config.agents.some((agent) => agent.name === currentAgentName)) {
+        return currentAgentName;
+      }
+      return config.agents.find((agent) => agent.name === config.defaultAgentName)?.name ?? config.agents[0]?.name;
+    });
+  }, [config]);
 
   useEffect(() => {
     if (!manageDocumentTitle || !config?.ui.title) {
@@ -201,8 +260,21 @@ export function ChatWorkspace({
       signingOut={signOutMutation.isPending}
       onOpenSettings={() => setView("settings")}
       onSignOut={() => signOutMutation.mutate()}
+      placement="top"
+      align="start"
     />
   );
+
+  function onToggleTheme() {
+    const nextThemeMode = resolvedThemeMode === "dark" ? "light" : "dark";
+    setThemeOverride(nextThemeMode);
+    writeStoredThemeMode(nextThemeMode);
+  }
+
+  function onSelectLocale(locale: LocaleCode) {
+    setLocalePreference(locale);
+    writeStoredLocale(locale);
+  }
 
   function onCreateConversation() {
     setSelectedConversationId(undefined);
@@ -250,59 +322,80 @@ export function ChatWorkspace({
 
   if (meQuery.error instanceof ApiError && meQuery.error.status === 401) {
     return (
-      <LoginPanel
-        apiBaseUrl={apiBaseUrl}
-        manageDocumentTitle={manageDocumentTitle}
-        onSignedIn={() => {
-          void queryClient.invalidateQueries({ queryKey: ["me", apiBaseUrl] });
-        }}
-      />
+      <TranslationProvider locale={activeLocale}>
+        <LoginPanel
+          apiBaseUrl={apiBaseUrl}
+          localePreference={localePreference}
+          fallbackLocale={activeLocale}
+          onLocaleChange={onSelectLocale}
+          manageDocumentTitle={manageDocumentTitle}
+          onSignedIn={() => {
+            void queryClient.invalidateQueries({ queryKey: ["me", apiBaseUrl] });
+          }}
+        />
+      </TranslationProvider>
     );
   }
 
   if (!meQuery.data) {
     return (
-      <main
-        className={cn(
-          "grid h-dvh w-full place-items-center overflow-hidden bg-sidebar p-5 text-foreground",
-          className
-        )}
-      >
-        <div className="grid w-full max-w-[380px] gap-2 rounded-lg border bg-card p-5 text-card-foreground shadow-xs">
-          <strong className="text-sm font-semibold">
-            {meQuery.error ? "Could not verify your session" : "Checking session"}
-          </strong>
-          <p className="text-sm text-muted-foreground">
-            {meQuery.error instanceof ApiError
-              ? meQuery.error.message
-              : "Your account is being checked before the chat loads."}
-          </p>
-        </div>
-      </main>
+      <TranslationProvider locale={activeLocale}>
+        <SessionCheckPanel
+          className={className}
+          error={meQuery.error instanceof ApiError ? meQuery.error.message : undefined}
+        />
+      </TranslationProvider>
     );
   }
 
   return (
-    <main
-      className={cn(
-        "grid h-dvh w-full min-h-0 overflow-hidden bg-background text-foreground md:grid-cols-[minmax(230px,286px)_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)] max-md:grid-cols-1 max-md:grid-rows-[auto_minmax(0,1fr)]",
-        className
-      )}
-      style={themeStyle}
-    >
-      <WorkspaceRail
-        config={config}
-        user={meQuery.data}
-        conversations={conversations}
-        selectedConversationId={selectedConversationId}
-        isSuperadmin={isSuperadmin}
-        view={view}
-        creatingConversation={false}
-        deletingConversation={deleteConversation.isPending}
-        onViewChange={setView}
-        onCreateConversation={onCreateConversation}
-        onSelectConversation={onSelectConversation}
-        onDeleteConversation={(conversationId) => deleteConversation.mutate(conversationId)}
+    <TranslationProvider locale={activeLocale}>
+      <main
+        className={cn(
+          "relative grid h-dvh w-full min-h-0 overflow-hidden bg-background text-foreground transition-colors md:grid-rows-[minmax(0,1fr)] max-md:grid-cols-1",
+          sidebarOpen ? "md:grid-cols-[18rem_minmax(0,1fr)]" : "md:grid-cols-[minmax(0,1fr)]",
+          resolvedThemeMode === "dark" && "dark",
+          className
+        )}
+        style={workspaceStyle}
+      >
+      {sidebarOpen ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-30 bg-black/35 backdrop-blur-[1px] md:hidden"
+          aria-label="Close sidebar"
+          onClick={() => setSidebarOpen(false)}
+        />
+      ) : null}
+
+      {sidebarOpen ? (
+        <div className="fixed inset-y-0 left-0 z-40 w-[min(18rem,calc(100vw-2rem))] min-w-0 translate-x-0 transition-transform duration-200 md:static md:z-auto md:w-auto md:translate-x-0">
+          <WorkspaceRail
+            config={config}
+            conversations={conversations}
+            selectedConversationId={selectedConversationId}
+            isSuperadmin={isSuperadmin}
+            view={view}
+            creatingConversation={false}
+            deletingConversation={deleteConversation.isPending}
+            userMenu={userMenu}
+            onToggleSidebar={() => setSidebarOpen(false)}
+            onViewChange={setView}
+            onCreateConversation={onCreateConversation}
+            onSelectConversation={onSelectConversation}
+            onDeleteConversation={(conversationId) => deleteConversation.mutate(conversationId)}
+          />
+        </div>
+      ) : null}
+
+      <WorkspaceChrome
+        agents={config?.agents ?? []}
+        sidebarOpen={sidebarOpen}
+        selectedAgentName={activeAgentName}
+        themeMode={resolvedThemeMode}
+        onSelectAgent={setSelectedAgentName}
+        onToggleSidebar={() => setSidebarOpen((currentOpen) => !currentOpen)}
+        onToggleTheme={onToggleTheme}
       />
 
       {view === "superadmin" && isSuperadmin ? (
@@ -332,8 +425,7 @@ export function ChatWorkspace({
           onDeleteUserIdentity: (userId, identity) =>
             deleteUserIdentity.mutateAsync({ userId, identity }),
           onResetUserPassword: (userId, password) =>
-            resetUserPassword.mutateAsync({ userId, password }),
-          headerActions: userMenu
+            resetUserPassword.mutateAsync({ userId, password })
         })
       ) : view === "settings" ? (
         <UserSettingsPanel
@@ -341,32 +433,141 @@ export function ChatWorkspace({
           canChangePassword={meQuery.data?.authSource === STANDALONE_AUTH_SOURCE}
           updatingProfile={updateCurrentUser.isPending}
           changingPassword={changeCurrentUserPassword.isPending}
+          locales={supportedLocales}
+          locale={activeLocale}
           onUpdateProfile={(input) => updateCurrentUser.mutateAsync(input)}
           onChangePassword={(input) => changeCurrentUserPassword.mutateAsync(input)}
-          headerActions={userMenu}
+          onSelectLocale={onSelectLocale}
         />
       ) : (
         <AssistantChatPanel
           apiBaseUrl={apiBaseUrl}
           client={client}
           config={config}
-          conversations={conversations}
           selectedConversationId={selectedConversationId}
           messages={messages}
           messagesLoaded={messagesLoaded}
           notice={notice}
           draft={draft}
-          headerActions={userMenu}
+          locale={activeLocale}
+          selectedAgentName={activeAgentName}
           onDraftChange={(value) => setDraftForKey(draftKey, value)}
           onConversationStarted={onConversationStarted}
           onStreamFinished={onStreamFinished}
           onStreamError={setNotice}
         />
       )}
+      </main>
+    </TranslationProvider>
+  );
+}
+
+function SessionCheckPanel({
+  className,
+  error
+}: {
+  className: string | undefined;
+  error: string | undefined;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <main
+      className={cn(
+        "grid h-dvh w-full place-items-center overflow-hidden bg-sidebar p-5 text-foreground",
+        className
+      )}
+    >
+      <div className="grid w-full max-w-[380px] gap-2 rounded-lg border bg-card p-5 text-card-foreground shadow-xs">
+        <strong className="text-sm font-semibold">
+          {error ? t("couldNotVerifySession") : t("checkingSession")}
+        </strong>
+        <p className="text-sm text-muted-foreground">{error ?? t("sessionCheckingDescription")}</p>
+      </div>
     </main>
+  );
+}
+
+function WorkspaceChrome({
+  agents,
+  sidebarOpen,
+  selectedAgentName,
+  themeMode,
+  onSelectAgent,
+  onToggleSidebar,
+  onToggleTheme
+}: {
+  agents: SafeConfig["agents"];
+  sidebarOpen: boolean;
+  selectedAgentName: string | undefined;
+  themeMode: ResolvedThemeMode;
+  onSelectAgent: (agentName: string) => void;
+  onToggleSidebar: () => void;
+  onToggleTheme: () => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <>
+      <div
+        className={cn(
+          "pointer-events-none absolute left-4 top-3 z-50 flex min-w-0 items-center gap-2 transition-[left] duration-200",
+          sidebarOpen && "max-md:hidden md:left-[19rem]"
+        )}
+      >
+        {!sidebarOpen ? (
+          <button
+            type="button"
+            className={cn(
+              "pointer-events-auto inline-flex size-10 shrink-0 items-center justify-center rounded-md bg-background/95 text-muted-foreground shadow-sm backdrop-blur transition-colors outline-none",
+              "hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40"
+            )}
+            aria-label={t("openSidebar")}
+            title={t("openSidebar")}
+            aria-pressed="false"
+            onClick={onToggleSidebar}
+          >
+            <PanelLeft size={17} aria-hidden="true" />
+          </button>
+        ) : null}
+        {agents.length > 0 ? (
+          <div className="pointer-events-auto min-w-0">
+            <AgentSelector
+              agents={agents}
+              selectedAgentName={selectedAgentName}
+              onSelectAgent={onSelectAgent}
+            />
+          </div>
+        ) : null}
+      </div>
+
+      <div className="pointer-events-none absolute right-4 top-3 z-50 flex items-center gap-2">
+        <div className="pointer-events-auto">
+          <ThemeToggle mode={themeMode} onToggle={onToggleTheme} />
+        </div>
+      </div>
+    </>
   );
 }
 
 function createDraftKey(authScope: string, conversationId: string | undefined): string {
   return `${authScope}:${conversationId ?? "new"}`;
+}
+
+function readStoredThemeMode(): ResolvedThemeMode | undefined {
+  const storedThemeMode = window.localStorage.getItem(THEME_STORAGE_KEY);
+  return storedThemeMode === "dark" || storedThemeMode === "light" ? storedThemeMode : undefined;
+}
+
+function writeStoredThemeMode(themeMode: ResolvedThemeMode): void {
+  window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+}
+
+function readStoredLocale(): LocaleCode | undefined {
+  const storedLocale = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+  return storedLocale === "en" || storedLocale === "de" ? storedLocale : undefined;
+}
+
+function writeStoredLocale(locale: LocaleCode): void {
+  window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
 }

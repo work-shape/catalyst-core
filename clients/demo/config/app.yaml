@@ -46,6 +46,11 @@ modelProviders:
     model: gpt-4.1
     baseUrl: https://api.openai.com/v1
     apiKeyEnvName: OPENAI_API_KEY
+localization:
+  defaultLocale: de
+  supportedLocales:
+    - de
+    - en
 conversationTitles:
   enabled: true
   modelProviderId: openai
@@ -75,17 +80,4 @@ agentFiles:
 tools:
   - name: document.application_summary
     enabled: true
-ui:
-  clientName: Musterbau
-  logoUrl: https://www.musterbau.de/wp-content/uploads/2023/03/Logo_Musterbau_schwarz.png
-  title: Musterbau Chat
-  welcomeMessage: Wie kann ich beim Immobilien- oder Finanzierungsworkflow helfen?
-  accentColor: "#00a6e3"
-  theme:
-    accentColor: "#00a6e3"
-    accentStrongColor: "#103258"
-    backgroundColor: "#f7f9fb"
-    surfaceColor: "#ffffff"
-    textColor: "#17252a"
-    mutedTextColor: "#5f6b76"
-    borderColor: "#dce2e7"
+uiFile: ./ui.yaml

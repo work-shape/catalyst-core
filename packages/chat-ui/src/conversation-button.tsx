@@ -1,5 +1,6 @@
 import { MessageSquare, Trash2 } from "lucide-react";
 import type { Conversation } from "@agent-chat-platform/api-client";
+import { useTranslation } from "./i18n";
 import { Button } from "./ui/button";
 import { cn } from "./ui/cn";
 
@@ -16,6 +17,8 @@ export function ConversationButton({
   onDelete: () => void;
   deleting: boolean;
 }) {
+  const { locale, t } = useTranslation();
+
   return (
     <div
       data-testid="conversation-row"
@@ -34,7 +37,9 @@ export function ConversationButton({
         <MessageSquare size={16} className="mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
         <span className="grid min-w-0 gap-0.5">
           <span className="truncate text-sm font-medium">{conversation.title}</span>
-          <span className="truncate text-xs text-muted-foreground">{formatConversationDate(conversation.updatedAt)}</span>
+          <span className="truncate text-xs text-muted-foreground">
+            {formatConversationDate(conversation.updatedAt, locale, t("updatedRecently"))}
+          </span>
         </span>
       </Button>
       <Button
@@ -44,7 +49,7 @@ export function ConversationButton({
         size="icon"
         onClick={onDelete}
         disabled={deleting}
-        aria-label={`Delete conversation ${conversation.title}`}
+        aria-label={t("deleteConversation", { title: conversation.title })}
       >
         <Trash2 size={15} aria-hidden="true" />
       </Button>
@@ -52,12 +57,12 @@ export function ConversationButton({
   );
 }
 
-function formatConversationDate(value: string): string {
+function formatConversationDate(value: string, locale: string, fallback: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return "Updated recently";
+    return fallback;
   }
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
     hour: "2-digit",

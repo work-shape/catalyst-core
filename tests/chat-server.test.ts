@@ -139,15 +139,16 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
-  it("exposes configured agent initial prompts through safe config", async () => {
+  it("exposes configured agent welcome message and initial prompts through safe config", async () => {
     const initialPrompts = [
       {
         title: "Review release",
         prompt: "Summarize release readiness."
       }
     ];
+    const welcomeMessage = "What should we review first?";
     const app = await createClientInstanceApp({
-      config: createTestConfig({ initialPrompts }),
+      config: createTestConfig({ welcomeMessage, initialPrompts }),
       env: {},
       storeMode: "memory",
       tools: []
@@ -163,7 +164,66 @@ describe("client instance app vertical slice", () => {
       agents: [
         expect.objectContaining({
           name: "test_agent",
+          welcomeMessage,
           initialPrompts
+        })
+      ]
+    });
+
+    await app.close();
+  });
+
+  it("resolves localized agent content in safe config", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        displayName: {
+          en: "Application Assistant",
+          de: "Antragsassistent"
+        },
+        welcomeMessage: {
+          en: "How can I help with the financing workflow?",
+          de: "Wie kann ich beim Finanzierungsworkflow helfen?"
+        },
+        initialPrompts: [
+          {
+            title: {
+              en: "Summarize documents",
+              de: "Dokumente zusammenfassen"
+            },
+            prompt: {
+              en: "Summarize the documents.",
+              de: "Fasse die Dokumente zusammen."
+            }
+          }
+        ]
+      }),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+
+    const response = await app.server.inject({
+      method: "GET",
+      url: "/api/config?locale=de"
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      localization: {
+        locale: "de",
+        defaultLocale: "en",
+        supportedLocales: ["en", "de"]
+      },
+      agents: [
+        expect.objectContaining({
+          displayName: "Antragsassistent",
+          welcomeMessage: "Wie kann ich beim Finanzierungsworkflow helfen?",
+          initialPrompts: [
+            {
+              title: "Dokumente zusammenfassen",
+              prompt: "Fasse die Dokumente zusammen."
+            }
+          ]
         })
       ]
     });
@@ -840,10 +900,19 @@ describe("client instance app vertical slice", () => {
   });
 });
 
+type LocalizedTestString =
+  | string
+  | {
+      en?: string;
+      de?: string;
+    };
+
 function createTestConfig(input: {
   toolNames?: string[];
   tools?: Array<{ name: string; enabled?: boolean }>;
-  initialPrompts?: Array<{ title: string; prompt: string }>;
+  displayName?: LocalizedTestString;
+  welcomeMessage?: LocalizedTestString;
+  initialPrompts?: Array<{ title: LocalizedTestString; prompt: LocalizedTestString }>;
   modelProviders?: Array<
     | { id: string; type: "deterministic"; model: string }
     | {
@@ -895,7 +964,8 @@ function createTestConfig(input: {
     agents: [
       {
         name: "test_agent",
-        displayName: "Test Agent",
+        displayName: input.displayName ?? "Test Agent",
+        ...(input.welcomeMessage ? { welcomeMessage: input.welcomeMessage } : {}),
         instructions: "Use configured tools only.",
         modelProviderId: input.modelProviders?.[0]?.id ?? "local",
         toolNames: input.toolNames ?? [],

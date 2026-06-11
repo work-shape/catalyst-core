@@ -1,8 +1,20 @@
 import type { ClientInstanceConfig } from "./schemas";
+import {
+  resolveConfigLocale,
+  resolveLocalizedString,
+  type ConfigLocaleInput
+} from "./localization";
 
 export interface ClientBranding {
+  localization: {
+    locale: string;
+    defaultLocale: string;
+    supportedLocales: string[];
+  };
   clientName: string;
   logoUrl?: string;
+  logoUrlDark?: string;
+  logoInvertOnDark: boolean;
   title: string;
   welcomeMessage: string;
   accentColor: string;
@@ -15,19 +27,48 @@ export interface ClientBranding {
     mutedTextColor: string;
     borderColor: string;
   };
+  darkTheme: {
+    accentColor: string;
+    accentStrongColor: string;
+    backgroundColor: string;
+    surfaceColor: string;
+    textColor: string;
+    mutedTextColor: string;
+    borderColor: string;
+  };
+  defaultThemeMode: "light" | "dark" | "system";
 }
 
-export function createClientBranding(config: ClientInstanceConfig): ClientBranding {
+export function createClientBranding(
+  config: ClientInstanceConfig,
+  localeInput: ConfigLocaleInput = {}
+): ClientBranding {
+  const locale = resolveConfigLocale(config.localization, localeInput);
   const accentColor = config.ui.theme.accentColor ?? config.ui.accentColor;
   return {
-    clientName: config.ui.clientName ?? config.clientInstance.displayName,
+    localization: {
+      locale,
+      defaultLocale: config.localization.defaultLocale,
+      supportedLocales: config.localization.supportedLocales
+    },
+    clientName:
+      resolveLocalizedString(config.ui.clientName, locale, config.localization.defaultLocale) ??
+      config.clientInstance.displayName,
     logoUrl: config.ui.logoUrl,
-    title: config.ui.title,
-    welcomeMessage: config.ui.welcomeMessage,
+    logoUrlDark: config.ui.logoUrlDark,
+    logoInvertOnDark: config.ui.logoInvertOnDark,
+    title: resolveLocalizedString(config.ui.title, locale, config.localization.defaultLocale),
+    welcomeMessage: resolveLocalizedString(
+      config.ui.welcomeMessage,
+      locale,
+      config.localization.defaultLocale
+    ),
     accentColor,
     theme: {
       ...config.ui.theme,
       accentColor
-    }
+    },
+    darkTheme: config.ui.darkTheme,
+    defaultThemeMode: config.ui.defaultThemeMode
   };
 }

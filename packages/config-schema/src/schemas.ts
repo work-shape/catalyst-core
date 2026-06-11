@@ -1,11 +1,13 @@
 import { z } from "zod";
 import type {
   AgentConfig,
+  LocalizationConfig,
   ModelProviderConfig,
   UsageBudgetConfig,
   UsagePricingConfig,
   UsageSafeguardsConfig
 } from "@agent-chat-platform/core";
+import { localizationConfigSchema, localizedStringSchema } from "./localization";
 
 export const userIdentitySchema = z.object({
   id: z.string().min(1).default("dev-user"),
@@ -73,15 +75,16 @@ export const modelProviderConfigSchema = z.discriminatedUnion("type", [
 
 export const agentConfigSchema = z.object({
   name: z.string().min(1),
-  displayName: z.string().min(1),
+  displayName: localizedStringSchema,
+  welcomeMessage: localizedStringSchema.optional(),
   instructions: z.string().min(1),
   modelProviderId: z.string().min(1).optional(),
   toolNames: z.array(z.string().min(1)).default([]),
   initialPrompts: z
     .array(
       z.object({
-        title: z.string().min(1),
-        prompt: z.string().min(1)
+        title: localizedStringSchema,
+        prompt: localizedStringSchema
       })
     )
     .default([])
@@ -133,24 +136,64 @@ export const conversationTitleConfigSchema = z
     enabled: true
   });
 
-const uiThemeSchema = z
+const defaultLightUiTheme = {
+  accentColor: "#0f766e",
+  accentStrongColor: "#0b5f59",
+  backgroundColor: "#f5f3ee",
+  surfaceColor: "#fffdfa",
+  textColor: "#17201d",
+  mutedTextColor: "#6b746f",
+  borderColor: "#d8d3c7"
+};
+
+const defaultDarkUiTheme = {
+  accentColor: "#2dd4bf",
+  accentStrongColor: "#7dd3fc",
+  backgroundColor: "#0f1514",
+  surfaceColor: "#171f1d",
+  textColor: "#eef6f3",
+  mutedTextColor: "#9eaaa5",
+  borderColor: "#2b3734"
+};
+
+function createUiThemeSchema(defaultTheme: typeof defaultLightUiTheme) {
+  return z
+    .object({
+      accentColor: z.string().min(1).default(defaultTheme.accentColor),
+      accentStrongColor: z.string().min(1).default(defaultTheme.accentStrongColor),
+      backgroundColor: z.string().min(1).default(defaultTheme.backgroundColor),
+      surfaceColor: z.string().min(1).default(defaultTheme.surfaceColor),
+      textColor: z.string().min(1).default(defaultTheme.textColor),
+      mutedTextColor: z.string().min(1).default(defaultTheme.mutedTextColor),
+      borderColor: z.string().min(1).default(defaultTheme.borderColor)
+    })
+    .default(defaultTheme);
+}
+
+const lightUiThemeSchema = createUiThemeSchema(defaultLightUiTheme);
+const darkUiThemeSchema = createUiThemeSchema(defaultDarkUiTheme);
+
+export const uiConfigSchema = z
   .object({
+    clientName: localizedStringSchema.optional(),
+    logoUrl: z.string().url().optional(),
+    logoUrlDark: z.string().url().optional(),
+    logoInvertOnDark: z.boolean().default(false),
+    title: localizedStringSchema.default("Agent Chat"),
+    welcomeMessage: localizedStringSchema.default("How can I help?"),
     accentColor: z.string().min(1).default("#0f766e"),
-    accentStrongColor: z.string().min(1).default("#0b5f59"),
-    backgroundColor: z.string().min(1).default("#f5f3ee"),
-    surfaceColor: z.string().min(1).default("#fffdfa"),
-    textColor: z.string().min(1).default("#17201d"),
-    mutedTextColor: z.string().min(1).default("#6b746f"),
-    borderColor: z.string().min(1).default("#d8d3c7")
+    theme: lightUiThemeSchema,
+    darkTheme: darkUiThemeSchema,
+    defaultThemeMode: z.enum(["light", "dark", "system"]).default("system")
   })
   .default({
+    title: "Agent Chat",
+    welcomeMessage: "How can I help?",
     accentColor: "#0f766e",
-    accentStrongColor: "#0b5f59",
-    backgroundColor: "#f5f3ee",
-    surfaceColor: "#fffdfa",
-    textColor: "#17201d",
-    mutedTextColor: "#6b746f",
-    borderColor: "#d8d3c7"
+    logoInvertOnDark: false,
+    theme: defaultLightUiTheme,
+    darkTheme: defaultDarkUiTheme,
+    defaultThemeMode: "system"
   });
 
 export const clientInstanceConfigSchema = z.object({
@@ -198,6 +241,7 @@ export const clientInstanceConfigSchema = z.object({
     .array(modelProviderConfigSchema)
     .min(1)
     .default([{ id: "local", type: "deterministic", model: "deterministic-local" }]),
+  localization: localizationConfigSchema,
   conversationTitles: conversationTitleConfigSchema,
   usage: z
     .object({
@@ -225,44 +269,26 @@ export const clientInstanceConfigSchema = z.object({
       })
     )
     .default([]),
-  ui: z
-    .object({
-      clientName: z.string().min(1).optional(),
-      logoUrl: z.string().url().optional(),
-      title: z.string().min(1).default("Agent Chat"),
-      welcomeMessage: z.string().min(1).default("How can I help?"),
-      accentColor: z.string().min(1).default("#0f766e"),
-      theme: uiThemeSchema
-    })
-    .default({
-      title: "Agent Chat",
-      welcomeMessage: "How can I help?",
-      accentColor: "#0f766e",
-      theme: {
-        accentColor: "#0f766e",
-        accentStrongColor: "#0b5f59",
-        backgroundColor: "#f5f3ee",
-        surfaceColor: "#fffdfa",
-        textColor: "#17201d",
-        mutedTextColor: "#6b746f",
-        borderColor: "#d8d3c7"
-      }
-    })
+  ui: uiConfigSchema
 });
 
 export const clientInstanceConfigFileSchema = clientInstanceConfigSchema
   .omit({
-    agents: true
+    agents: true,
+    ui: true
   })
   .extend({
     agents: z.array(agentConfigSchema).default([]),
-    agentFiles: z.array(z.string().min(1)).default([])
+    agentFiles: z.array(z.string().min(1)).default([]),
+    ui: uiConfigSchema.optional(),
+    uiFile: z.string().min(1).optional()
   });
 
 export type UserIdentityConfig = z.infer<typeof userIdentitySchema>;
 export type StandaloneSeedUserConfig = z.infer<typeof standaloneSeedUserSchema>;
 export type {
   AgentConfig,
+  LocalizationConfig,
   ModelProviderConfig,
   UsageBudgetConfig,
   UsagePricingConfig,

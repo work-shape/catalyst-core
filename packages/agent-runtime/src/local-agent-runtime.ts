@@ -103,7 +103,7 @@ export class LocalAgentRuntime implements AgentRuntime {
     const tools = this.options.toolRegistry.listDescriptorsForAgent(agent.toolNames);
     const historyMessages = await this.loadModelHistory(input, context);
     const messages: ModelMessage[] = [
-      { role: "system", content: createSystemInstructions(agent.instructions, tools.length) },
+      { role: "system", content: createSystemInstructions(agent.instructions, tools.length, context.locale) },
       ...historyMessages,
       { role: "user", content: input.message.text }
     ];

@@ -92,9 +92,17 @@ _Avoid_: Tool, feature
 The process of turning an uploaded file, email attachment, or URL into a managed file stored by the client instance.
 _Avoid_: Web scraping, document extraction
 
+**Managed File**:
+A file stored under platform control after upload, handoff, or acquisition, identified by a file id and governed by authorization, audit, and retention policy.
+_Avoid_: Browser file object, raw attachment, local path
+
 **Document Processing**:
 The process of converting, extracting, comparing, or redacting document content after a file has been acquired.
 _Avoid_: File acquisition, retrieval
+
+**Document Text Extraction**:
+A document processing action that converts a managed file into readable text or Markdown for agent use, without interpreting fields, comparing facts, or making workflow judgments.
+_Avoid_: Document analysis, OCR, retrieval
 
 **Browser Automation**:
 The use of a real browser environment to navigate pages, click controls, submit forms, or download files when simple HTTP fetching is insufficient.

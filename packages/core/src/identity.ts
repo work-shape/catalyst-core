@@ -1,4 +1,5 @@
 import type { ClientInstanceId } from "./ids";
+import type { LocaleCode } from "./localization";
 
 export type UserRole = "user" | "admin" | "superadmin" | string;
 
@@ -19,6 +20,7 @@ export interface RuntimeCallContext {
   user: AuthenticatedUser;
   clientInstanceId: ClientInstanceId;
   correlationId: string;
+  locale?: LocaleCode;
   deadline?: Date;
   signal?: AbortSignal;
 }

@@ -12,6 +12,7 @@ The first use case is a sensitive document and payslip workflow embedded into a 
 - [Extension Model](./agent-chat-platform/extension-model.md)
 - [Frontend, UI, And API Client](./agent-chat-platform/frontend-ui-api.md)
 - [Agent Capabilities](./agent-chat-platform/agent-capabilities.md)
+- [Document Text Extraction](./agent-chat-platform/document-text-extraction.md)
 - [Data, Storage, And Retrieval](./agent-chat-platform/data-storage-retrieval.md)
 - [Infrastructure](./agent-chat-platform/infrastructure.md)
 - [Auth, Security, And Compliance](./agent-chat-platform/auth-security-compliance.md)
