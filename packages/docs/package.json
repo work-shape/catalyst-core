@@ -1,0 +1,21 @@
+{
+  "name": "@agent-chat-platform/docs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "astro build",
+    "dev": "astro dev --host 127.0.0.1 --port 4321",
+    "preview": "astro preview --host 127.0.0.1 --port 4321",
+    "typecheck": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.40.0",
+    "astro": "^6.4.6"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.9",
+    "typescript": "^6.0.3",
+    "vite": "^7.3.5"
+  }
+}
