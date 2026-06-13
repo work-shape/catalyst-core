@@ -13,7 +13,6 @@ import type {
 import { ChatWorkspace } from "./chat-workspace";
 import {
   DomainUiWidgetProvider,
-  type DomainUiRenderer,
   type DomainUiWidgetRegistry
 } from "./domain-ui-widgets";
 
@@ -48,17 +47,16 @@ export interface ChatShellProps {
   getToken?: () => string | undefined | Promise<string | undefined>;
   adminPanel?: ChatShellAdminPanel;
   domainUiWidgets?: DomainUiWidgetRegistry;
-  domainUiRenderer?: DomainUiRenderer;
   manageDocumentTitle?: boolean;
   className?: string;
 }
 
-export function ChatShell({ domainUiRenderer, domainUiWidgets, ...workspaceProps }: ChatShellProps) {
+export function ChatShell({ domainUiWidgets, ...workspaceProps }: ChatShellProps) {
   const [queryClient] = useState(() => new QueryClient());
 
   return (
     <QueryClientProvider client={queryClient}>
-      <DomainUiWidgetProvider renderer={domainUiRenderer} widgets={domainUiWidgets}>
+      <DomainUiWidgetProvider widgets={domainUiWidgets}>
         <ChatWorkspace {...workspaceProps} />
       </DomainUiWidgetProvider>
     </QueryClientProvider>

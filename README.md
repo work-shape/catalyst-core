@@ -6,7 +6,7 @@ The first implementation keeps product-owned contracts separate from adapters an
 
 - `packages/` contains reusable platform packages.
 - `clients/demo/` is the generic reference client instance.
-- `clients/musterbau/` is the first customer-shaped client assembly and should move to a private deployments repo before the platform repository is opened.
+- Customer assemblies such as Musterbau live outside this repo under `../deployments/<customer>/`.
 - `docs/` keeps product planning and architecture decisions.
 
 Run the local vertical slice:
@@ -20,9 +20,10 @@ pnpm dev
 
 Paste an OpenAI API key into `.env` before using the default demo config. The demo API listens on `http://127.0.0.1:4100` and the standalone chat UI listens on `http://127.0.0.1:5173`.
 
-`pnpm dev` is an alias for `pnpm dev:demo`. To run the Musterbau client instead:
+`pnpm dev` is an alias for `pnpm dev:demo`. To run the Musterbau customer assembly from the top-level workspace instead:
 
 ```bash
+cd ..
 pnpm dev:musterbau
 ```
 
@@ -36,7 +37,7 @@ pnpm dev:musterbau
 - Standalone Better Auth users from `clients/demo/config/app.yaml` are seeded into Postgres on startup.
 - You can seed those users explicitly with `pnpm --filter @vivd-catalyst/demo seed:auth`.
 
-The Musterbau client follows the same local shape from `clients/musterbau` and can seed users with `pnpm --filter @vivd-catalyst/musterbau seed:auth`.
+The Musterbau client follows the same local shape from `../deployments/musterbau` and can seed users from the top-level workspace with `pnpm --filter @vivd-catalyst/musterbau seed:auth`.
 
 Default standalone login users:
 
