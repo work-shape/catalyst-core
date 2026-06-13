@@ -68,6 +68,12 @@ const openAiCompatibleModelProviderSchema = z.object({
   organizationEnvName: z.string().min(1).optional()
 });
 
+const toolInstanceConfigSchema = z.object({
+  name: z.string().min(1),
+  enabled: z.boolean().default(true),
+  config: z.record(z.string(), z.unknown()).default({})
+});
+
 export const modelProviderConfigSchema = z.discriminatedUnion("type", [
   deterministicModelProviderSchema,
   openAiCompatibleModelProviderSchema
@@ -262,12 +268,7 @@ export const clientInstanceConfigSchema = z.object({
   defaultAgentName: z.string().min(1),
   agents: z.array(agentConfigSchema).min(1),
   tools: z
-    .array(
-      z.object({
-        name: z.string().min(1),
-        enabled: z.boolean().default(true)
-      })
-    )
+    .array(toolInstanceConfigSchema)
     .default([]),
   ui: uiConfigSchema
 });
@@ -286,6 +287,7 @@ export const clientInstanceConfigFileSchema = clientInstanceConfigSchema
 
 export type UserIdentityConfig = z.infer<typeof userIdentitySchema>;
 export type StandaloneSeedUserConfig = z.infer<typeof standaloneSeedUserSchema>;
+export type ToolInstanceConfig = z.infer<typeof toolInstanceConfigSchema>;
 export type {
   AgentConfig,
   LocalizationConfig,

@@ -1,4 +1,15 @@
-import { CheckCircle2, CircleAlert, Loader2, Wrench } from "lucide-react";
+import {
+  CheckCircle2,
+  CircleAlert,
+  Loader2,
+  Wrench
+} from "lucide-react";
+import type { ReactNode } from "react";
+import {
+  isDomainUiPayload,
+  readDomainUiPayloadFromToolResult,
+  useDomainUiWidget
+} from "./domain-ui-widgets";
 import { useTranslation } from "./i18n";
 import { cn } from "./ui/cn";
 
@@ -16,9 +27,22 @@ interface DataPartProps {
 }
 
 export function ToolCallPart({ toolName, toolCallId, argsText, result, isError }: ToolCallPartProps) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
+  const domainUiWidget = useDomainUiWidget();
   const state = isError ? "failed" : result === undefined ? "running" : "completed";
   const Icon = state === "running" ? Loader2 : state === "failed" ? CircleAlert : CheckCircle2;
+  const domainUi = readDomainUiPayloadFromToolResult(result);
+  const renderedDomainUi =
+    domainUi && domainUiWidget
+      ? domainUiWidget({
+          domainUi,
+          locale,
+          source: "tool-result",
+          toolName,
+          toolCallId,
+          result
+        })
+      : undefined;
   const details = formatDetails(result ?? argsText);
 
   return (
@@ -43,6 +67,11 @@ export function ToolCallPart({ toolName, toolCallId, argsText, result, isError }
         </div>
         <Wrench size={15} className="shrink-0 text-muted-foreground" aria-hidden="true" />
       </div>
+      {hasRenderedNode(renderedDomainUi) ? (
+        <div className="border-b">{renderedDomainUi}</div>
+      ) : (
+        <ToolSummary result={result} />
+      )}
       {details ? (
         <details className="group/tool text-xs" open={state === "failed"}>
           <summary className="cursor-pointer px-3 py-2 text-muted-foreground outline-none transition-colors hover:text-foreground">
@@ -59,8 +88,22 @@ export function ToolCallPart({ toolName, toolCallId, argsText, result, isError }
 }
 
 export function DataPart({ name, data }: DataPartProps) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
+  const domainUiWidget = useDomainUiWidget();
+  const renderedDomainUi =
+    isDomainUiPayload(data) && domainUiWidget
+      ? domainUiWidget({
+          domainUi: data,
+          locale,
+          source: "message-metadata"
+        })
+      : undefined;
   const details = formatDetails(data);
+
+  if (hasRenderedNode(renderedDomainUi)) {
+    return <div className="my-2 max-w-3xl rounded-md border bg-card shadow-xs">{renderedDomainUi}</div>;
+  }
+
   return (
     <div className="my-2 max-w-3xl rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
       <div className="flex items-center gap-2 text-muted-foreground">
@@ -101,4 +144,31 @@ function formatDetails(value: unknown): string | undefined {
   } catch {
     return String(value);
   }
+}
+
+function ToolSummary({ result }: { result: unknown }) {
+  const summary = getToolSummary(result);
+  if (!summary) {
+    return null;
+  }
+  return (
+    <div className="border-b px-3 py-2 text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]">
+      {summary}
+    </div>
+  );
+}
+
+function getToolSummary(result: unknown): string | undefined {
+  if (!isRecord(result) || typeof result.summary !== "string") {
+    return undefined;
+  }
+  return result.summary;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function hasRenderedNode(value: ReactNode): boolean {
+  return value !== undefined && value !== null && value !== false;
 }

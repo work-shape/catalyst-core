@@ -60,7 +60,8 @@ agents:
     instructions: |
       You help users work through sensitive application and document review workflows.
     toolNames:
-      - document.application_summary
+      - demo.workflow_summary
+      - demo.weather_forecast
     initialPrompts:
       - title: Find review risks
         prompt: List the most important application or document review risks I should check first.
@@ -74,7 +75,9 @@ agents:
       - title: Summarize policy
         prompt: Summarize the policy context I should consider first.
 tools:
-  - name: document.application_summary
+  - name: demo.workflow_summary
+    enabled: true
+  - name: demo.weather_forecast
     enabled: true
 ui:
   clientName: E2E Customer

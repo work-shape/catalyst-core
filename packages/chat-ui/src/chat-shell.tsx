@@ -11,6 +11,11 @@ import type {
   UsageSummary
 } from "@vivd-catalyst/api-client";
 import { ChatWorkspace } from "./chat-workspace";
+import {
+  DomainUiWidgetProvider,
+  type DomainUiRenderer,
+  type DomainUiWidgetRegistry
+} from "./domain-ui-widgets";
 
 export interface ChatShellAdminPanel {
   canView(user: ApiUser | undefined): boolean;
@@ -42,16 +47,20 @@ export interface ChatShellProps {
   token?: string;
   getToken?: () => string | undefined | Promise<string | undefined>;
   adminPanel?: ChatShellAdminPanel;
+  domainUiWidgets?: DomainUiWidgetRegistry;
+  domainUiRenderer?: DomainUiRenderer;
   manageDocumentTitle?: boolean;
   className?: string;
 }
 
-export function ChatShell(props: ChatShellProps) {
+export function ChatShell({ domainUiRenderer, domainUiWidgets, ...workspaceProps }: ChatShellProps) {
   const [queryClient] = useState(() => new QueryClient());
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ChatWorkspace {...props} />
+      <DomainUiWidgetProvider renderer={domainUiRenderer} widgets={domainUiWidgets}>
+        <ChatWorkspace {...workspaceProps} />
+      </DomainUiWidgetProvider>
     </QueryClientProvider>
   );
 }

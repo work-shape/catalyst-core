@@ -23,12 +23,13 @@ pnpm build
 pnpm dev
 ```
 
-Add your OpenAI API key to `.env` before using the model-backed demo.
+Add your OpenAI API key to `.env` before using the model-backed demo. The demo client owns
+its configured tools, prompts, and domain-specific tool result widgets under `clients/demo`.
 
 The demo starts:
 
 - chat API on `http://127.0.0.1:4100`
-- standalone chat UI on `http://127.0.0.1:5173`
+- demo chat UI on `http://127.0.0.1:5173`
 - Postgres through `clients/demo/docker-compose.yml`
 
 ## Default Standalone Users

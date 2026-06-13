@@ -1,0 +1,4 @@
+@import "@vivd-catalyst/chat-ui/styles.css";
+
+@source "./**/*.{ts,tsx}";
+@source "../widgets/**/*.{ts,tsx}";

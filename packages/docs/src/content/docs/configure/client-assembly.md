@@ -16,9 +16,8 @@ client-instance/
   docker-compose.yml
   .env.example
   src/
+    client.ts
     server.ts
-    tool-registry.ts
-    config.ts
   agents/
     support-agent.yaml
     instructions/
@@ -37,21 +36,23 @@ client-instance/
 
 ## Assembly Code
 
-The server imports platform packages, loads release config, registers tools, validates the assembly, and starts the chat API.
+The client object imports platform packages, points at release config, registers tool factories, validates the assembly, and starts the chat API.
 
 ```ts
-import { createChatServer } from "@vivd-catalyst/chat-server";
-import { loadClientConfig } from "./config";
-import { tools } from "./tool-registry";
+import { defineClientInstance } from "@vivd-catalyst/client-assembly";
+import { lookupOrderToolFactory } from "../tools/lookup-order";
+import { updateTicketToolFactory } from "../tools/update-ticket";
 
-const config = await loadClientConfig();
-
-const server = await createChatServer({
-  config,
-  tools,
+export default defineClientInstance({
+  rootDir: new URL("..", import.meta.url),
+  tools: [lookupOrderToolFactory, updateTicketToolFactory]
 });
+```
 
-await server.listen({ host: "0.0.0.0", port: 4100 });
+```ts
+import client from "./client";
+
+await client.listen();
 ```
 
 Exact APIs may evolve while the platform is still early. The boundary should remain the same: platform packages provide reusable behavior, and the client assembly app provides source-controlled customer choices.

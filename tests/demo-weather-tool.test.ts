@@ -1,0 +1,93 @@
+import { describe, expect, it } from "vitest";
+import {
+  asAgentRunId,
+  asClientInstanceId,
+  asConversationId,
+  asToolCallId,
+  type LocaleCode,
+  type ToolExecutionContext,
+  type ToolExecutionResult
+} from "@vivd-catalyst/core";
+import { InProcessToolExecution, ToolRegistry } from "@vivd-catalyst/tool-execution";
+import { weatherForecastTool } from "../clients/demo/tools/weather-forecast";
+
+describe("demo weather forecast tool", () => {
+  it("returns a structured forecast with a weather domain UI payload", async () => {
+    const result = await runWeatherTool();
+    expect(result.status).toBe("success");
+    if (result.status !== "success") {
+      throw new Error("Expected weather tool to succeed");
+    }
+
+    expect(result.output).toMatchObject({
+      location: "Oslo",
+      unit: "celsius"
+    });
+    expect((result.output as { days: unknown[] }).days).toHaveLength(3);
+    expect(result.modelSummary).toContain("Forecast for Oslo");
+    expect(result.domainUi).toMatchObject({
+      kind: "weather.forecast",
+      version: 1,
+      data: {
+        location: "Oslo"
+      }
+    });
+  });
+
+  it("localizes forecast summaries from the runtime locale", async () => {
+    const result = await runWeatherTool("de");
+    expect(result.status).toBe("success");
+    if (result.status !== "success") {
+      throw new Error("Expected weather tool to succeed");
+    }
+
+    expect(result.modelSummary).toContain("Vorhersage für Oslo");
+    expect(JSON.stringify(result.output)).toContain("Regenschutz");
+  });
+});
+
+async function runWeatherTool(locale?: LocaleCode): Promise<ToolExecutionResult> {
+  const context = createToolContext(locale);
+  const execution = new InProcessToolExecution({
+    registry: new ToolRegistry({ tools: [weatherForecastTool] }),
+    getAgentToolNames: () => ["demo.weather_forecast"]
+  });
+  const request = {
+    toolName: "demo.weather_forecast",
+    toolCallId: asToolCallId("toolcall_weather"),
+    agentRunId: asAgentRunId("run_weather"),
+    conversationId: asConversationId("conv_weather"),
+    agentName: "workflow_assistant",
+    input: {
+      location: "Oslo",
+      days: 3,
+      startDate: "2026-06-13"
+    }
+  };
+
+  const decision = await execution.authorize(request, context);
+  expect(decision.status).toBe("allowed");
+  if (decision.status !== "allowed") {
+    throw new Error("Expected weather tool to be allowed");
+  }
+
+  return execution.execute({ ...request, authorization: decision }, context);
+}
+
+function createToolContext(locale?: LocaleCode): ToolExecutionContext {
+  const clientInstanceId = asClientInstanceId("demo-local");
+  return {
+    clientInstanceId,
+    locale,
+    correlationId: "corr_weather",
+    user: {
+      id: "user-weather",
+      externalUserId: "user-weather",
+      displayLabel: "Weather User",
+      roles: ["user"],
+      permissionRefs: ["demo-tools"],
+      clientInstanceId,
+      authSource: "test"
+    }
+  };
+}

@@ -1,5 +1,5 @@
 import { AuiIf, ThreadPrimitive } from "@assistant-ui/react";
-import { ArrowDown, Bot, CircleAlert, Sparkles } from "lucide-react";
+import { ArrowDown, Bot, CircleAlert, Loader2, Sparkles } from "lucide-react";
 import type { SafeConfig } from "@vivd-catalyst/api-client";
 import { AssistantComposer } from "./assistant-composer";
 import { ThreadMessage } from "./assistant-message";
@@ -47,6 +47,7 @@ export function AssistantThread({
 
             <div className="flex flex-col gap-5 pb-6 empty:hidden">
               <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
+              <ThreadWorkingIndicator />
             </div>
 
             <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto bg-gradient-to-t from-background via-background to-background/80 pb-4 pt-5">
@@ -59,6 +60,24 @@ export function AssistantThread({
         </ThreadPrimitive.Viewport>
       </ThreadPrimitive.Root>
     </section>
+  );
+}
+
+function ThreadWorkingIndicator() {
+  const { t } = useTranslation();
+
+  return (
+    <AuiIf condition={(state) => state.thread.isRunning}>
+      <div
+        className="flex w-fit max-w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm text-muted-foreground shadow-xs"
+        role="status"
+        aria-live="polite"
+        data-testid="assistant-working-indicator"
+      >
+        <Loader2 size={15} className="animate-spin text-primary" aria-hidden="true" />
+        <span>{t("thinking")}</span>
+      </div>
+    </AuiIf>
   );
 }
 

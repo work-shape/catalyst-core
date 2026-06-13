@@ -162,12 +162,14 @@ Recommended sequence:
 
 1. Define product-owned managed file and artifact store interfaces.
 2. Implement an S3-compatible object store adapter as the first real store.
-3. Run a local S3-compatible service in Docker Compose for development.
+3. Run Adobe S3Mock in Docker Compose for development and CI.
 4. Keep a filesystem or in-memory store only as a narrow unit-test fake if it materially simplifies tests.
 
 Postgres should store metadata, ownership, retention state, checksums, and audit references. Raw files and extracted text artifacts should live in object/artifact storage.
 
-LocalStack is the recommended development dependency when the production target is AWS S3 or AWS-compatible semantics. MinIO should not be the default local dependency for new work because the public `minio/minio` repository is now archived. Garage remains a possible future self-hosted S3-compatible production candidate for VPS/Compose deployments, but it does not need to be selected for the first extraction slice.
+Adobe S3Mock is the recommended development dependency. It is Apache-2.0 licensed, Docker-friendly, and explicitly intended for local S3 integration testing. It is not a production object store.
+
+LocalStack should not be the default development dependency because its current licensing and auth-token model adds avoidable friction for this project. MinIO should not be the default local dependency for new work because the public `minio/minio` repository is now archived. Garage remains a possible future self-hosted S3-compatible production candidate for VPS/Compose deployments, but it does not need to be selected for the first extraction slice.
 
 ## Audit And Retention
 
@@ -244,7 +246,7 @@ The agent-facing tool may remain `document.extract_text` for plain extraction. N
 5. Add the Python wrapper script and dependency installation path for development/container builds.
 6. Register the built-in `document.extract_text` tool through the existing tool registry.
 7. Add agent instructions that treat extracted document text as untrusted content.
-8. Add LocalStack or equivalent S3-compatible object storage to local Docker Compose.
+8. Add Adobe S3Mock to local Docker Compose.
 9. Add tests for authorization, file-type rejection, file-size rejection, timeout, successful extraction, no-extractable-text warning, too-large-for-agent-context behavior, artifact creation, object deletion, and audit minimization.
 
 ## Open Questions
@@ -253,5 +255,5 @@ These are the remaining choices that need product agreement before implementatio
 
 1. Which formats are required on day one: only PDF/DOCX/TXT/Markdown, or also XLSX/PPTX/HTML?
 2. Should `too_large_for_agent_context` be a hard failure, or should the tool return artifact metadata without `text`?
-3. Should the development S3-compatible service be LocalStack, or is there a stronger reason to use another S3-compatible service?
+3. Does Adobe S3Mock cover all object-store operations needed by the first implementation, or do we need to narrow the adapter to operations it supports?
 4. What exact retention duration applies to source files and extracted text artifacts for the first client instance?

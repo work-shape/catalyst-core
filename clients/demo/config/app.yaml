@@ -80,4 +80,13 @@ agentFiles:
 tools:
   - name: demo.workflow_summary
     enabled: true
+    config:
+      permissionRef: demo-tools
+      defaultCurrency: EUR
+  - name: demo.weather_forecast
+    enabled: true
+    config:
+      permissionRef: demo-tools
+      defaultDays: 3
+      maxDays: 5
 uiFile: ./ui.yaml

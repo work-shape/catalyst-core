@@ -68,13 +68,23 @@ For custom code tools, the customer/client assembly app should explicitly import
 Example:
 
 ```ts
-import { defineTool } from "@product/tool-sdk";
+import { defineConfiguredTool, defineTool } from "@product/tool-sdk";
 
-export default defineTool({
+export const payslipSummaryToolFactory = defineConfiguredTool({
   name: "payslip.summarize",
-  inputSchema,
-  async execute(input, context) {
-    // customer-specific implementation
+  configSchema,
+  create(config) {
+    return defineTool({
+      name: "payslip.summarize",
+      inputSchema,
+      permission: {
+        mode: "allow",
+        requiredPermissionRefs: [config.permissionRef]
+      },
+      async execute(input, context) {
+        // customer-specific implementation
+      }
+    });
   },
 });
 ```
@@ -90,9 +100,8 @@ client-assembly/
   Dockerfile
   .env.example
   src/
+    client.ts
     server.ts
-    tool-registry.ts
-    config.ts
     domain-ui.ts
   agents/
     payslip-agent.yaml
@@ -113,16 +122,20 @@ client-assembly/
 Imports happen in the client assembly app at build time. The deployed image contains the selected versions of platform packages plus that client's tools, agents, config, and server wiring.
 
 ```ts
-import { createChatServer } from "@product/chat-server";
-import { tools } from "./tool-registry";
-import { loadClientConfig } from "./config";
+import { defineClientInstance } from "@product/client-assembly";
+import { payslipSummaryToolFactory } from "../tools/payslip-summary";
+import { lookupEmployeeToolFactory } from "../tools/lookup-employee";
 
-const config = await loadClientConfig();
+export default defineClientInstance({
+  rootDir: new URL("..", import.meta.url),
+  tools: [payslipSummaryToolFactory, lookupEmployeeToolFactory]
+});
+```
 
-createChatServer({
-  config,
-  tools,
-}).listen();
+```ts
+import client from "./client";
+
+await client.listen();
 ```
 
 The platform assembly should validate the closure between release config and code before listening:
@@ -250,8 +263,8 @@ customer-chat/
   Dockerfile
   docker-compose.yml
   src/
+    client.ts
     server.ts
-    tool-registry.ts
     domain-ui.ts
   agents/
   tools/

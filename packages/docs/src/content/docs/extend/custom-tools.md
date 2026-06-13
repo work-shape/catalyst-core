@@ -7,57 +7,83 @@ Custom code tools are the primary extension point for a Vivd Catalyst client ins
 
 A tool lets the agent do a bounded action: look up a record, create a ticket, fetch a document, send a draft to review, or call an internal service.
 
-## Tool Shape
+## Configured Tool Shape
 
-Use the public tool SDK and product-owned types.
+Use the public tool SDK and product-owned types. Prefer configured tool factories when customer-specific values should live in release config.
 
 ```ts
-import { defineTool } from "@vivd-catalyst/tool-sdk";
+import { defineConfiguredTool, defineTool } from "@vivd-catalyst/tool-sdk";
 import { z } from "zod";
 
-export const lookupTicket = defineTool({
+export const lookupTicketToolFactory = defineConfiguredTool({
   name: "support.lookup_ticket",
-  description: "Look up a support ticket by its public ticket id.",
-  inputSchema: z.object({
-    ticketId: z.string().min(1),
+  configSchema: z.object({
+    permissionRef: z.string().min(1).default("support-ticket-reader"),
   }),
-  outputSchema: z.object({
-    status: z.string(),
-    summary: z.string(),
-  }),
-  async execute(input, context) {
-    const ticket = await context.secrets
-      .get("support-api")
-      .then((secret) => fetchTicket(secret, input.ticketId));
+  create(config) {
+    return defineTool({
+      name: "support.lookup_ticket",
+      description: "Look up a support ticket by its public ticket id.",
+      inputSchema: z.object({
+        ticketId: z.string().min(1),
+      }),
+      outputSchema: z.object({
+        status: z.string(),
+        summary: z.string(),
+      }),
+      permission: {
+        mode: "allow",
+        requiredPermissionRefs: [config.permissionRef],
+      },
+      async execute(input, context) {
+        const ticket = await context.secrets
+          .get("support-api")
+          .then((secret) => fetchTicket(secret, input.ticketId));
 
-    return {
-      status: "success",
-      output: {
-        status: ticket.status,
-        summary: ticket.summary,
+        return {
+          status: "success",
+          output: {
+            status: ticket.status,
+            summary: ticket.summary,
+          },
+          auditSummary: {
+            message: "Ticket metadata returned to agent.",
+          },
+        };
       },
-      auditSummary: {
-        message: "Ticket metadata returned to agent.",
-      },
-    };
+    });
   },
 });
 ```
 
-## Tool Registry
+Plain `defineTool(...)` exports are still useful for tests or fixed tools that do not need release-config parameters.
 
-Register tools explicitly.
+## Client Assembly Registration
+
+Register tool factories explicitly in `src/client.ts`.
 
 ```ts
-import { lookupTicket } from "../tools/lookup-ticket";
-import { createEscalation } from "../tools/create-escalation";
+import { defineClientInstance } from "@vivd-catalyst/client-assembly";
+import { createEscalationToolFactory } from "../tools/create-escalation";
+import { lookupTicketToolFactory } from "../tools/lookup-ticket";
 
-export const tools = [lookupTicket, createEscalation];
+export default defineClientInstance({
+  rootDir: new URL("..", import.meta.url),
+  tools: [lookupTicketToolFactory, createEscalationToolFactory],
+});
 ```
 
 Agents reference stable tool names in release config. They do not reference file paths.
 
 ```yaml
+tools:
+  - name: support.lookup_ticket
+    enabled: true
+    config:
+      permissionRef: support-ticket-reader
+  - name: support.create_escalation
+    enabled: true
+
 agents:
   support_agent:
     tools:
@@ -76,6 +102,11 @@ Return structured output.
 Use `modelSummary` when the full output is too large or sensitive for model context.
 
 Use `domainUi` for typed UI outputs.
+
+When `domainUi` needs a polished visual treatment, register a client-owned widget for the
+returned `domainUi.kind`. Concrete widgets belong in `clients/*/widgets` for reference
+clients or in deployment-owned code for customer assemblies. Platform packages only provide
+the generic widget registry, tool frame, and fallback rendering.
 
 Use `auditSummary` for minimized governance metadata, not raw sensitive payloads.
 

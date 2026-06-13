@@ -253,9 +253,9 @@ test("superadmin can open usage and audit views", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Audit log" })).toBeVisible();
 });
 
-test("standalone chat can run a configured tool", async ({ page }) => {
+test("demo chat can run a configured tool widget", async ({ page }) => {
   await signInViaUi(page, superadminUser);
-  const applicantName = `E2E Jane ${Date.now()}`;
+  const forecastLocation = `Oslo ${Date.now()}`;
   const consoleErrors: string[] = [];
   let messageHistoryResponses = 0;
   page.on("console", (message) => {
@@ -281,17 +281,21 @@ test("standalone chat can run a configured tool", async ({ page }) => {
   await page
     .getByPlaceholder("Message")
     .fill(
-      `/tool document.application_summary {"applicantName":"${applicantName}","grossMonthlyPay":5200,"currency":"EUR"}`
+      `/tool demo.weather_forecast {"location":"${forecastLocation}","days":3,"unit":"celsius","startDate":"2026-06-13"}`
     );
   await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page.getByTestId("assistant-working-indicator")).toBeVisible();
 
   const toolCallCard = page.getByTestId("tool-call-card").last();
   await expect(toolCallCard).toBeVisible();
-  await expect(toolCallCard).toContainText("document.application_summary");
+  await expect(toolCallCard).toContainText("demo.weather_forecast");
   await expect(toolCallCard).toContainText("Completed");
+  await expect(toolCallCard).toContainText("Weather forecast");
+  await expect(toolCallCard).toContainText(forecastLocation);
+  await expect(toolCallCard).toContainText("3-day forecast");
   await expect(page.getByText("Tool work completed").last()).toBeVisible();
-  await expect(page.getByText(applicantName).last()).toBeVisible();
-  await expect(page.getByText("No review flags were raised.").last()).toBeVisible();
+  await expect(page.getByText(`Forecast for ${forecastLocation}`).last()).toBeVisible();
+  await expect(page.getByTestId("assistant-working-indicator")).toHaveCount(0);
   await expect.poll(() => messageHistoryResponses).toBeGreaterThan(0);
   await expect(toolCallCard).toBeVisible();
   await expect(toolCallCard).toContainText("Completed");

@@ -20,47 +20,21 @@ export interface ClientInstanceAuth {
   };
 }
 
-export async function createClientInstanceAuth(input: {
+export interface CreateClientInstanceAuthInput {
   config: ClientInstanceConfig;
   env: ClientInstanceEnv;
   clientInstanceId: ClientInstanceId;
   userStore: UserStore;
   corsOrigin?: string | string[];
-}): Promise<ClientInstanceAuth> {
+}
+
+export async function createClientInstanceAuth(input: CreateClientInstanceAuthInput): Promise<ClientInstanceAuth> {
   const adapters: AuthAdapter[] = [];
   let standaloneAuth: ClientInstanceAuth["standaloneAuth"];
   let sessionToken: ClientInstanceAuth["sessionToken"];
 
   if (input.config.auth.standalone?.enabled) {
-    const databaseUrl = input.env.DATABASE_URL;
-    const secret = input.env.BETTER_AUTH_SECRET;
-    if (!databaseUrl) {
-      throw new AppError(
-        "VALIDATION_FAILED",
-        "Standalone Better Auth requires DATABASE_URL; start Postgres or set DATABASE_URL"
-      );
-    }
-    if (!secret || secret.length < 32) {
-      throw new AppError(
-        "VALIDATION_FAILED",
-        "Standalone Better Auth requires BETTER_AUTH_SECRET with at least 32 characters"
-      );
-    }
-
-    standaloneAuth = await createStandaloneAuthRuntime({
-      clientInstanceId: input.clientInstanceId,
-      databaseUrl,
-      secret,
-      baseUrl: resolveBetterAuthUrl(input),
-      trustedOrigins: resolveTrustedOrigins(input),
-      seedUsers: input.config.auth.standalone.seedUsers.map((seedUser) => ({
-        email: resolveSeedEmail(seedUser, input),
-        displayLabel: seedUser.displayLabel,
-        password: resolveSeedPassword(seedUser, input),
-        roles: seedUser.roles,
-        permissionRefs: seedUser.permissionRefs
-      }))
-    });
+    standaloneAuth = await createStandaloneAuthRuntimeForClientInstance(input);
     adapters.push(standaloneAuth.authAdapter);
   }
 
@@ -102,6 +76,47 @@ export async function createClientInstanceAuth(input: {
     standaloneAuth,
     sessionToken
   };
+}
+
+export async function createStandaloneAuthRuntimeForClientInstance(input: {
+  config: ClientInstanceConfig;
+  env: ClientInstanceEnv;
+  clientInstanceId: ClientInstanceId;
+  corsOrigin?: string | string[];
+}): Promise<NonNullable<ClientInstanceAuth["standaloneAuth"]>> {
+  if (!input.config.auth.standalone?.enabled) {
+    throw new AppError("VALIDATION_FAILED", "Standalone auth is not enabled for this client instance");
+  }
+
+  const databaseUrl = input.env.DATABASE_URL;
+  const secret = input.env.BETTER_AUTH_SECRET;
+  if (!databaseUrl) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "Standalone Better Auth requires DATABASE_URL; start Postgres or set DATABASE_URL"
+    );
+  }
+  if (!secret || secret.length < 32) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "Standalone Better Auth requires BETTER_AUTH_SECRET with at least 32 characters"
+    );
+  }
+
+  return createStandaloneAuthRuntime({
+    clientInstanceId: input.clientInstanceId,
+    databaseUrl,
+    secret,
+    baseUrl: resolveBetterAuthUrl(input),
+    trustedOrigins: resolveTrustedOrigins(input),
+    seedUsers: input.config.auth.standalone.seedUsers.map((seedUser) => ({
+      email: resolveSeedEmail(seedUser, input),
+      displayLabel: seedUser.displayLabel,
+      password: resolveSeedPassword(seedUser, input),
+      roles: seedUser.roles,
+      permissionRefs: seedUser.permissionRefs
+    }))
+  });
 }
 
 function resolveBetterAuthUrl(input: {
