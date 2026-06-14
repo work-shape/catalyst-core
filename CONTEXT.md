@@ -116,6 +116,10 @@ _Avoid_: Custom code tool, external API tool
 The product layer that normalizes different tool sources into a common callable interface for agents.
 _Avoid_: Tool wrapper, connector
 
+**Private Tool Output**:
+Tool result data that the platform may store, render, hydrate, or export, but must never inject into agent-visible history or model context.
+_Avoid_: Hidden prompt context, model output
+
 **Knowledge Source**:
 Customer-approved data that an agent may retrieve from while answering or acting.
 _Avoid_: Knowledge base, context store
@@ -135,6 +139,14 @@ _Avoid_: Vector store, search client
 **Conversation**:
 A persisted chat history owned by an authenticated user and retained according to the client instance's retention policy.
 _Avoid_: Session, chat session
+
+**Agent-Visible History**:
+The durable replayable transcript for a conversation as seen by future model turns, including user messages, assistant messages, tool-call requests, tool inputs, model-visible tool outputs, and tool execution errors.
+_Avoid_: UI stream, audit log, model summary
+
+**Model Context Projection**:
+The provider-specific request content assembled from agent-visible history for one model call. It may apply private-output omission, explicit output bounding, or future compaction without mutating the durable transcript.
+_Avoid_: Conversation history, audit log
 
 **Conversation Workflow**:
 The product module that owns user-scoped conversation access, retention-aware creation/deletion, chat-turn persistence, agent-run observation, and conversation/message audit outcomes.

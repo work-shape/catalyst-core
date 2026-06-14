@@ -69,13 +69,10 @@ export const workflowSummaryToolFactory = defineConfiguredTool({
             riskFlags
           },
           {
-            modelSummary:
-              riskFlags.length > 0
-                ? `${summary} Review flags: ${riskFlags.join(", ")}.`
-                : `${summary} No review flags were raised.`,
-            domainUi: {
+            display: {
               kind: "document.analysis",
               version: 1,
+              mode: "inline",
               data: {
                 applicantName: input.applicantName,
                 grossMonthlyPay: input.grossMonthlyPay,

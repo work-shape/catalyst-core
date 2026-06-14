@@ -14,15 +14,20 @@ export interface DeterministicModelProviderConfig {
 export interface OpenAiCompatibleModelProviderConfig {
   id: string;
   type: "openai-compatible";
+  api?: OpenAiCompatibleModelProviderApiConfig;
   model: string;
   baseUrl: string;
   apiKeyEnvName: string;
   organizationEnvName?: string;
+  reasoningEffort?: ReasoningEffortConfig;
 }
 
 export type ModelProviderConfig =
   | DeterministicModelProviderConfig
   | OpenAiCompatibleModelProviderConfig;
+
+export type OpenAiCompatibleModelProviderApiConfig = "chat_completions" | "responses";
+export type ReasoningEffortConfig = "none" | "low" | "medium" | "high" | "xhigh";
 
 export interface AgentConfig {
   name: string;
@@ -30,6 +35,7 @@ export interface AgentConfig {
   welcomeMessage?: LocalizedStringConfig;
   instructions: string;
   modelProviderId?: string;
+  maxSteps?: number;
   toolNames: string[];
   initialPrompts: AgentInitialPromptConfig[];
 }
@@ -58,3 +64,40 @@ export interface UsagePricingConfig {
   currency: string;
   models: UsagePricingModelConfig[];
 }
+
+export interface ModelContextToolOutputBoundsConfig {
+  maxTokens: number;
+  maxBytes?: number;
+}
+
+export interface AgentRuntimeConfig {
+  maxSteps: number;
+  repeatedToolCallLimit: number;
+}
+
+export interface ModelContextConfig {
+  toolOutput: ModelContextToolOutputBoundsConfig;
+}
+
+export interface PostgresDataSourceConfig {
+  kind: "postgres";
+  connectionRef: string;
+  description: string;
+  sql: {
+    dialect: "postgres";
+    access: "read_only";
+    statementTimeoutMs: number;
+    maxRows: number;
+    allowedSchemas: string[];
+    schemaDescription?: string;
+  };
+  tools?: {
+    renderView?: {
+      enabled: boolean;
+      name?: string;
+      modelVisibleOutput: "zero_data_ack";
+    };
+  };
+}
+
+export type DataSourceConfig = PostgresDataSourceConfig;

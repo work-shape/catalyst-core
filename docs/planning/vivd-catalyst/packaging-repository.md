@@ -40,7 +40,7 @@ The repository remains the source of truth. A CLI can validate, test tools, buil
 
 V1 should use release config only.
 
-Release config is version-controlled and deployed with the client assembly app. It defines agent behavior, tool availability, OpenAPI operation selections, built-in tool enablement, model provider options, domain UI output types, retention policy, usage budget, usage safeguards, client branding/theme, and default policy bounds.
+Release config is version-controlled and deployed with the client assembly app. It defines agent behavior, tool availability, OpenAPI operation selections, built-in tool enablement, configured data-source connections, model provider options, domain UI output types, retention policy, usage budget, usage safeguards, client branding/theme, and default policy bounds.
 
 Release config changes through the normal release/publish/deploy flow. The platform should snapshot the active release config at deploy/startup so runtime behavior is explainable.
 

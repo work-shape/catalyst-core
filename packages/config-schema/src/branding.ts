@@ -15,6 +15,7 @@ export interface ClientBranding {
   logoUrl?: string;
   logoUrlDark?: string;
   logoInvertOnDark: boolean;
+  faviconUrl?: string;
   title: string;
   welcomeMessage: string;
   accentColor: string;
@@ -57,6 +58,7 @@ export function createClientBranding(
     logoUrl: config.ui.logoUrl,
     logoUrlDark: config.ui.logoUrlDark,
     logoInvertOnDark: config.ui.logoInvertOnDark,
+    faviconUrl: config.ui.faviconUrl,
     title: resolveLocalizedString(config.ui.title, locale, config.localization.defaultLocale),
     welcomeMessage: resolveLocalizedString(
       config.ui.welcomeMessage,

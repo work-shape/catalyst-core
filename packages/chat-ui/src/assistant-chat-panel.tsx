@@ -259,32 +259,160 @@ function DraftBridge({
   return null;
 }
 
-function toUiMessages(messages: Message[]): UIMessage[] {
+export function toUiMessages(messages: Message[]): UIMessage[] {
+  const toolResultsByToolCallId = new Map<string, PersistedToolResult>();
+  for (const message of messages) {
+    const toolResult = readPersistedToolResult(message);
+    if (toolResult) {
+      toolResultsByToolCallId.set(toolResult.toolCallId, toolResult);
+    }
+  }
+
   return messages
     .filter((message) => message.role === "user" || message.role === "assistant" || message.role === "system")
     .map((message) => ({
       id: message.id,
       role: message.role as UIMessage["role"],
-      parts: toUiMessageParts(message)
+      parts: toUiMessageParts(message, toolResultsByToolCallId)
     }));
 }
 
-function toUiMessageParts(message: Message): UIMessage["parts"] {
-  const parts: UIMessage["parts"] = [
-    {
+function toUiMessageParts(
+  message: Message,
+  toolResultsByToolCallId: Map<string, PersistedToolResult>
+): UIMessage["parts"] {
+  const parts: UIMessage["parts"] = [];
+  if (message.text || message.role !== "assistant") {
+    parts.push({
       type: "text",
       text: message.text,
       state: "done"
-    }
-  ];
-  const domainUi = message.metadata?.domainUi;
-  if (domainUi !== undefined) {
+    });
+  }
+
+  const toolCalls = readAssistantToolCalls(message);
+  for (const toolCall of toolCalls) {
+    const toolResult = toolResultsByToolCallId.get(toolCall.toolCallId);
     parts.push({
-      type: "data-domain-ui",
-      data: domainUi
+      type: "dynamic-tool",
+      toolName: toolCall.toolName,
+      toolCallId: toolCall.toolCallId,
+      title: toolCall.toolName,
+      state: toolResult?.status === "failed" ? "output-error" : toolResult ? "output-available" : "input-available",
+      input: toolCall.input,
+      ...(toolResult?.status === "failed"
+        ? { errorText: toolResult.errorText }
+        : toolResult
+          ? { output: toolResult.output }
+          : {})
     } as UIMessage["parts"][number]);
   }
-  return parts;
+
+  const display = message.metadata?.display;
+  if (display !== undefined) {
+    parts.push({
+      type: "data-display",
+      data: display
+    } as UIMessage["parts"][number]);
+  }
+  return parts.length > 0
+    ? parts
+    : [
+        {
+          type: "text",
+          text: "",
+          state: "done"
+        }
+      ];
+}
+
+interface PersistedToolCall {
+  toolCallId: string;
+  toolName: string;
+  input: unknown;
+}
+
+type PersistedToolResult =
+  | {
+      status: "success";
+      toolCallId: string;
+      output: unknown;
+    }
+  | {
+      status: "failed";
+      toolCallId: string;
+      errorText: string;
+    };
+
+function readAssistantToolCalls(message: Message): PersistedToolCall[] {
+  if (message.role !== "assistant") {
+    return [];
+  }
+  const runtime = readAgentRuntimeMetadata(message.metadata);
+  if (runtime?.kind !== "assistant_tool_calls" || !Array.isArray(runtime.toolCalls)) {
+    return [];
+  }
+  return runtime.toolCalls.flatMap((value): PersistedToolCall[] => {
+    if (!isRecord(value)) {
+      return [];
+    }
+    const toolCallId = typeof value.toolCallId === "string" ? value.toolCallId : undefined;
+    const toolName = typeof value.toolName === "string" ? value.toolName : undefined;
+    if (!toolCallId || !toolName) {
+      return [];
+    }
+    return [
+      {
+        toolCallId,
+        toolName,
+        input: value.input
+      }
+    ];
+  });
+}
+
+function readPersistedToolResult(message: Message): PersistedToolResult | undefined {
+  if (message.role !== "tool") {
+    return undefined;
+  }
+  const runtime = readAgentRuntimeMetadata(message.metadata);
+  if (runtime?.kind !== "tool_result" || typeof runtime.toolCallId !== "string") {
+    return undefined;
+  }
+  const result = isRecord(runtime.result) ? runtime.result : undefined;
+  if (result?.status === "success") {
+    return {
+      status: "success",
+      toolCallId: runtime.toolCallId,
+      output: {
+        status: "success",
+        output: result.output,
+        display: result.display,
+        artifacts: result.artifacts,
+        projectionNotice: runtime.projectionNotice
+      }
+    };
+  }
+  if (
+    (result?.status === "failed" || result?.status === "cancelled" || result?.status === "timed_out") &&
+    isRecord(result.error)
+  ) {
+    return {
+      status: "failed",
+      toolCallId: runtime.toolCallId,
+      errorText: typeof result.error.message === "string" ? result.error.message : "Tool call failed"
+    };
+  }
+  return undefined;
+}
+
+function readAgentRuntimeMetadata(metadata: Message["metadata"]): Record<string, unknown> | undefined {
+  const runtime = isRecord(metadata?.agentRuntime) ? metadata.agentRuntime : undefined;
+  return runtime?.version === 1 ? runtime : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function extractLastUserText(messages: UIMessage[]): string {

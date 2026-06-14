@@ -99,12 +99,18 @@ Validate inputs with schemas.
 
 Return structured output.
 
-Use `modelSummary` when the full output is too large or sensitive for model context.
+Use `output` for data the model should see in later agent-visible history.
 
-Use `domainUi` for typed UI outputs.
+Use `privateOutput` for data the platform may store, hydrate, or render but must never send to the model.
 
-When `domainUi` needs a polished visual treatment, register a client-owned widget for the
-returned `domainUi.kind`. Concrete widgets belong in `clients/*/widgets` for reference
+Use `display` for typed UI outputs.
+
+Built-in HTML displays provide Tailwind CSS and Lucide icons inside the rendered iframe. For
+model-authored or private hydrated HTML, use Tailwind utility classes and Lucide markers such
+as `<i data-lucide="chart-column"></i>` instead of bundling those libraries into every result.
+
+When `display` needs a polished visual treatment, register a client-owned widget for the
+returned `display.kind`. Concrete widgets belong in `clients/*/widgets` for reference
 clients or in deployment-owned code for customer assemblies. Platform packages only provide
 the generic widget registry, tool frame, and fallback rendering.
 

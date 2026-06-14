@@ -193,6 +193,13 @@ export function ChatWorkspace({
     };
   }, [config?.ui.title, manageDocumentTitle]);
 
+  useEffect(() => {
+    if (!manageDocumentTitle) {
+      return;
+    }
+    applyFavicon(config?.ui.faviconUrl ?? "/favicon.svg");
+  }, [config?.ui.faviconUrl, manageDocumentTitle]);
+
   const signOutMutation = useMutation({
     mutationFn: () => signOut(apiBaseUrl),
     onSuccess: () => {
@@ -570,4 +577,19 @@ function readStoredLocale(): LocaleCode | undefined {
 
 function writeStoredLocale(locale: LocaleCode): void {
   window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+}
+
+function applyFavicon(href: string): void {
+  const selector = "link[rel~='icon'][data-vivd-favicon='true']";
+  const existing =
+    document.head.querySelector<HTMLLinkElement>(selector) ??
+    document.head.querySelector<HTMLLinkElement>("link[rel~='icon']");
+  const link = existing ?? document.createElement("link");
+  link.rel = "icon";
+  link.type = href.endsWith(".svg") ? "image/svg+xml" : "image/png";
+  link.href = href;
+  link.dataset.vivdFavicon = "true";
+  if (!existing) {
+    document.head.appendChild(link);
+  }
 }

@@ -1,14 +1,16 @@
 import { createContext, useContext, type ReactNode } from "react";
 import type { LocaleCode } from "@vivd-catalyst/api-client";
 
-export interface DomainUiPayload {
+export interface ToolDisplayPayload {
   kind?: unknown;
   version?: unknown;
+  mode?: unknown;
+  displayId?: unknown;
   data?: unknown;
 }
 
-export interface DomainUiRenderInput {
-  domainUi: DomainUiPayload;
+export interface ToolDisplayRenderInput {
+  display: ToolDisplayPayload;
   locale: LocaleCode;
   source: "tool-result" | "message-metadata";
   toolName?: string;
@@ -16,50 +18,50 @@ export interface DomainUiRenderInput {
   result?: unknown;
 }
 
-export type DomainUiWidget = (input: DomainUiRenderInput) => ReactNode;
-export type DomainUiWidgetRegistry = Record<string, DomainUiWidget>;
+export type ToolDisplayWidget = (input: ToolDisplayRenderInput) => ReactNode;
+export type ToolDisplayWidgetRegistry = Record<string, ToolDisplayWidget>;
 
-interface DomainUiWidgetContextValue {
-  widgets?: DomainUiWidgetRegistry;
+interface ToolDisplayWidgetContextValue {
+  widgets?: ToolDisplayWidgetRegistry;
 }
 
-const DomainUiWidgetContext = createContext<DomainUiWidgetContextValue>({});
+const ToolDisplayWidgetContext = createContext<ToolDisplayWidgetContextValue>({});
 
-export function DomainUiWidgetProvider({
+export function ToolDisplayWidgetProvider({
   widgets,
   children
 }: {
-  widgets?: DomainUiWidgetRegistry;
+  widgets?: ToolDisplayWidgetRegistry;
   children: ReactNode;
 }) {
   return (
-    <DomainUiWidgetContext.Provider value={{ widgets }}>
+    <ToolDisplayWidgetContext.Provider value={{ widgets }}>
       {children}
-    </DomainUiWidgetContext.Provider>
+    </ToolDisplayWidgetContext.Provider>
   );
 }
 
-export function useDomainUiWidget(): DomainUiWidget | undefined {
-  const { widgets } = useContext(DomainUiWidgetContext);
+export function useToolDisplayWidget(): ToolDisplayWidget | undefined {
+  const { widgets } = useContext(ToolDisplayWidgetContext);
   if (!widgets) {
     return undefined;
   }
 
   return (input) => {
-    const kind = typeof input.domainUi.kind === "string" ? input.domainUi.kind : undefined;
+    const kind = typeof input.display.kind === "string" ? input.display.kind : undefined;
     const widget = kind ? widgets?.[kind] : undefined;
     return widget?.(input);
   };
 }
 
-export function readDomainUiPayloadFromToolResult(result: unknown): DomainUiPayload | undefined {
+export function readToolDisplayPayloadFromToolResult(result: unknown): ToolDisplayPayload | undefined {
   if (!isRecord(result)) {
     return undefined;
   }
-  return isDomainUiPayload(result.domainUi) ? result.domainUi : undefined;
+  return isToolDisplayPayload(result.display) ? result.display : undefined;
 }
 
-export function isDomainUiPayload(value: unknown): value is DomainUiPayload {
+export function isToolDisplayPayload(value: unknown): value is ToolDisplayPayload {
   return isRecord(value);
 }
 

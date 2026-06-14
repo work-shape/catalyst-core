@@ -237,14 +237,17 @@ function toToolUiOutput(event: Extract<AgentRuntimeEvent, { type: "tool_call_com
   if (event.result.status === "success") {
     return {
       status: "success",
-      summary: event.result.modelSummary,
-      domainUi: event.result.domainUi
+      output: event.result.output,
+      display: event.result.display,
+      artifacts: event.result.artifacts,
+      projectionNotice: event.projectionNotice
     };
   }
 
   return {
     status: "failed",
-    error: event.result.error
+    error: event.result.error,
+    projectionNotice: event.projectionNotice
   };
 }
 

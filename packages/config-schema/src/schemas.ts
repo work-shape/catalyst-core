@@ -1,7 +1,10 @@
 import { z } from "zod";
 import type {
   AgentConfig,
+  DataSourceConfig,
   LocalizationConfig,
+  AgentRuntimeConfig,
+  ModelContextConfig,
   ModelProviderConfig,
   UsageBudgetConfig,
   UsagePricingConfig,
@@ -62,16 +65,43 @@ const deterministicModelProviderSchema = z.object({
 const openAiCompatibleModelProviderSchema = z.object({
   id: z.string().min(1),
   type: z.literal("openai-compatible"),
+  api: z.enum(["chat_completions", "responses"]).default("chat_completions"),
   model: z.string().min(1),
   baseUrl: z.string().url().default("https://api.openai.com/v1"),
   apiKeyEnvName: z.string().min(1).default("OPENAI_API_KEY"),
-  organizationEnvName: z.string().min(1).optional()
+  organizationEnvName: z.string().min(1).optional(),
+  reasoningEffort: z.enum(["none", "low", "medium", "high", "xhigh"]).optional()
 });
 
 const toolInstanceConfigSchema = z.object({
   name: z.string().min(1),
   enabled: z.boolean().default(true),
   config: z.record(z.string(), z.unknown()).default({})
+});
+
+const dataSourceConfigSchema = z.object({
+  kind: z.literal("postgres"),
+  connectionRef: z.string().min(1),
+  description: z.string().min(1),
+  sql: z.object({
+    dialect: z.literal("postgres").default("postgres"),
+    access: z.literal("read_only").default("read_only"),
+    statementTimeoutMs: z.number().int().positive().default(10000),
+    maxRows: z.number().int().positive().max(50000).default(5000),
+    allowedSchemas: z.array(z.string().min(1)).default([]),
+    schemaDescription: z.string().min(1).optional()
+  }),
+  tools: z
+    .object({
+      renderView: z
+        .object({
+          enabled: z.boolean().default(false),
+          name: z.string().min(1).optional(),
+          modelVisibleOutput: z.literal("zero_data_ack").default("zero_data_ack")
+        })
+        .optional()
+    })
+    .optional()
 });
 
 export const modelProviderConfigSchema = z.discriminatedUnion("type", [
@@ -85,6 +115,7 @@ export const agentConfigSchema = z.object({
   welcomeMessage: localizedStringSchema.optional(),
   instructions: z.string().min(1),
   modelProviderId: z.string().min(1).optional(),
+  maxSteps: z.number().int().positive().optional(),
   toolNames: z.array(z.string().min(1)).default([]),
   initialPrompts: z
     .array(
@@ -142,6 +173,33 @@ export const conversationTitleConfigSchema = z
     enabled: true
   });
 
+export const agentRuntimeConfigSchema = z
+  .object({
+    maxSteps: z.number().int().positive().default(64),
+    repeatedToolCallLimit: z.number().int().positive().default(3)
+  })
+  .default({
+    maxSteps: 64,
+    repeatedToolCallLimit: 3
+  });
+
+export const modelContextConfigSchema = z
+  .object({
+    toolOutput: z
+      .object({
+        maxTokens: z.number().int().positive().default(60000),
+        maxBytes: z.number().int().positive().optional()
+      })
+      .default({
+        maxTokens: 60000
+      })
+  })
+  .default({
+    toolOutput: {
+      maxTokens: 60000
+    }
+  });
+
 const defaultLightUiTheme = {
   accentColor: "#0f766e",
   accentStrongColor: "#0b5f59",
@@ -185,6 +243,7 @@ export const uiConfigSchema = z
     logoUrl: z.string().url().optional(),
     logoUrlDark: z.string().url().optional(),
     logoInvertOnDark: z.boolean().default(false),
+    faviconUrl: z.string().url().or(z.string().startsWith("/")).optional(),
     title: localizedStringSchema.default("Vivd Catalyst"),
     welcomeMessage: localizedStringSchema.default("How can I help?"),
     accentColor: z.string().min(1).default("#0f766e"),
@@ -249,6 +308,8 @@ export const clientInstanceConfigSchema = z.object({
     .default([{ id: "local", type: "deterministic", model: "deterministic-local" }]),
   localization: localizationConfigSchema,
   conversationTitles: conversationTitleConfigSchema,
+  runtime: agentRuntimeConfigSchema,
+  modelContext: modelContextConfigSchema,
   usage: z
     .object({
       budget: usageBudgetConfigSchema,
@@ -270,6 +331,7 @@ export const clientInstanceConfigSchema = z.object({
   tools: z
     .array(toolInstanceConfigSchema)
     .default([]),
+  dataSources: z.record(z.string(), dataSourceConfigSchema).default({}),
   ui: uiConfigSchema
 });
 
@@ -290,9 +352,12 @@ export type StandaloneSeedUserConfig = z.infer<typeof standaloneSeedUserSchema>;
 export type ToolInstanceConfig = z.infer<typeof toolInstanceConfigSchema>;
 export type {
   AgentConfig,
+  DataSourceConfig,
   LocalizationConfig,
   ModelProviderConfig,
   UsageBudgetConfig,
+  AgentRuntimeConfig,
+  ModelContextConfig,
   UsagePricingConfig,
   UsageSafeguardsConfig
 };

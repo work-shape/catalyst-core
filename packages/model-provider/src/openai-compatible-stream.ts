@@ -1,6 +1,11 @@
 import { AppError } from "@vivd-catalyst/core";
 import type { ModelCompletionStreamEvent } from "./types";
-import { noReportedUsage, parseJsonObject, toModelUsage } from "./openai-compatible-mapping";
+import {
+  noReportedUsage,
+  parseJsonObject,
+  toModelUsage,
+  toResponsesModelUsage
+} from "./openai-compatible-mapping";
 import type { OpenAiCompatibleResponse } from "./openai-compatible-types";
 
 interface OpenAiCompatibleStreamChunk {
@@ -25,6 +30,30 @@ interface OpenAiCompatibleStreamingToolCall {
   id: string;
   name: string;
   arguments: string;
+}
+
+interface OpenAiResponsesStreamEvent {
+  type: string;
+  delta?: string;
+  response?: {
+    usage?: {
+      input_tokens: number;
+      output_tokens: number;
+      total_tokens: number;
+    };
+    error?: {
+      message?: string;
+    } | null;
+  };
+  item?: {
+    type?: string;
+    call_id?: string;
+    name?: string;
+    arguments?: string;
+  };
+  error?: {
+    message?: string;
+  };
 }
 
 export async function* streamOpenAiCompatibleCompletion(
@@ -88,11 +117,82 @@ export async function* streamOpenAiCompatibleCompletion(
   };
 }
 
+export async function* streamOpenAiResponsesCompletion(
+  body: ReadableStream<Uint8Array>,
+  toolNameMap: Map<string, string>
+): AsyncIterable<ModelCompletionStreamEvent> {
+  let text = "";
+  let usage = noReportedUsage();
+  const toolCalls: OpenAiCompatibleStreamingToolCall[] = [];
+
+  for await (const data of readServerSentEventData(body)) {
+    if (data === "[DONE]") {
+      break;
+    }
+    const payload = parseResponsesStreamEvent(data);
+
+    if (payload.type === "response.output_text.delta" && payload.delta) {
+      text += payload.delta;
+      yield {
+        type: "text_delta",
+        delta: payload.delta
+      };
+      continue;
+    }
+
+    if (
+      payload.type === "response.output_item.done" &&
+      payload.item?.type === "function_call" &&
+      payload.item.call_id &&
+      payload.item.name
+    ) {
+      toolCalls.push({
+        id: payload.item.call_id,
+        name: payload.item.name,
+        arguments: payload.item.arguments ?? "{}"
+      });
+      continue;
+    }
+
+    if (payload.type === "response.completed") {
+      usage = toResponsesModelUsage(payload.response?.usage);
+      continue;
+    }
+
+    if (payload.type === "response.failed" || payload.type === "error") {
+      const message =
+        payload.response?.error?.message ?? payload.error?.message ?? "Model provider stream failed";
+      throw new AppError("INTERNAL", message);
+    }
+  }
+
+  yield {
+    type: "completed",
+    completion: {
+      text,
+      toolCalls: toolCalls.map((toolCall) => ({
+        toolCallId: toolCall.id,
+        toolName: toolNameMap.get(toolCall.name) ?? toolCall.name,
+        input: parseJsonObject(toolCall.arguments)
+      })),
+      usage
+    }
+  };
+}
+
 function parseStreamChunk(data: string): OpenAiCompatibleStreamChunk {
   try {
     return JSON.parse(data) as OpenAiCompatibleStreamChunk;
   } catch {
     throw new AppError("INTERNAL", "Model provider returned invalid stream JSON");
+  }
+}
+
+function parseResponsesStreamEvent(data: string): OpenAiResponsesStreamEvent {
+  try {
+    return JSON.parse(data) as OpenAiResponsesStreamEvent;
+  } catch {
+    throw new AppError("INTERNAL", "Model provider returned invalid Responses stream JSON");
   }
 }
 

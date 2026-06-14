@@ -24,7 +24,7 @@ describe("in-process tool execution", () => {
         requiredPermissionRefs: ["demo-tools"]
       },
       async execute(input) {
-        return toolSuccess({ echoed: input.text }, { modelSummary: input.text });
+        return toolSuccess({ echoed: input.text });
       }
     });
     const context: ToolExecutionContext = {
@@ -76,7 +76,6 @@ describe("in-process tool execution", () => {
     expect(result.status).toBe("success");
     if (result.status === "success") {
       expect(result.output).toEqual({ echoed: "hello" });
-      expect(result.modelSummary).toBe("hello");
     }
     expect(auditEvents.map((event) => event.type)).toEqual([
       "tool.authorization_checked",

@@ -1,7 +1,7 @@
-import type { AgentRunId, ConversationId, ToolCallId } from "./ids";
+import type { AgentRunId, ConversationId, MessageId, ToolCallId } from "./ids";
 import type { JsonObject } from "./json";
 import type { ISODateString } from "./time";
-import type { DomainUiOutput, ManagedFileRef } from "./files";
+import type { ManagedFileRef } from "./files";
 import type { RuntimeCallContext } from "./identity";
 import type { ToolExecutionResult } from "./tool-execution";
 
@@ -52,9 +52,10 @@ export type AgentRuntimeEvent =
       sequence: number;
       createdAt: ISODateString;
       message: {
+        id: MessageId;
         role: "assistant";
         text: string;
-        domainUi?: DomainUiOutput;
+        metadata?: JsonObject;
       };
     }
   | {
@@ -64,6 +65,7 @@ export type AgentRuntimeEvent =
       createdAt: ISODateString;
       toolCallId: ToolCallId;
       toolName: string;
+      input: unknown;
     }
   | {
       type: "tool_permission_requested";
@@ -83,6 +85,8 @@ export type AgentRuntimeEvent =
       toolCallId: ToolCallId;
       toolName: string;
       result: ToolExecutionResult;
+      modelOutput: string;
+      projectionNotice?: JsonObject;
     }
   | {
       type: "tool_call_failed";
@@ -92,6 +96,8 @@ export type AgentRuntimeEvent =
       toolCallId: ToolCallId;
       toolName: string;
       result: ToolExecutionResult;
+      modelOutput: string;
+      projectionNotice?: JsonObject;
     }
   | {
       type: "run_completed";

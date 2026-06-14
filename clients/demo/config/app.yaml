@@ -43,7 +43,9 @@ retention:
 modelProviders:
   - id: openai
     type: openai-compatible
-    model: gpt-4.1
+    api: responses
+    model: gpt-5.5
+    reasoningEffort: high
     baseUrl: https://api.openai.com/v1
     apiKeyEnvName: OPENAI_API_KEY
 localization:
@@ -67,17 +69,25 @@ usage:
     currency: USD
     models:
       - providerId: openai
-        model: gpt-4.1
-        inputPricePerMillionTokens: 2
-        outputPricePerMillionTokens: 8
+        model: gpt-5.5
+        inputPricePerMillionTokens: 5
+        outputPricePerMillionTokens: 30
       - providerId: openai
         model: gpt-5-nano
         inputPricePerMillionTokens: 0.05
         outputPricePerMillionTokens: 0.4
+runtime:
+  maxSteps: 64
+  repeatedToolCallLimit: 3
+modelContext:
+  toolOutput:
+    maxTokens: 60000
 defaultAgentName: workflow_assistant
 agentFiles:
   - ../agents/workflow-assistant.agent.yaml
 tools:
+  - name: renderHtml
+    enabled: true
   - name: demo.workflow_summary
     enabled: true
     config:

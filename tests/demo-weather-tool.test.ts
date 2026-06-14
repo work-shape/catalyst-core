@@ -12,7 +12,7 @@ import { InProcessToolExecution, ToolRegistry } from "@vivd-catalyst/tool-execut
 import { weatherForecastTool } from "../clients/demo/tools/weather-forecast";
 
 describe("demo weather forecast tool", () => {
-  it("returns a structured forecast with a weather domain UI payload", async () => {
+  it("returns a structured forecast with a weather display payload", async () => {
     const result = await runWeatherTool();
     expect(result.status).toBe("success");
     if (result.status !== "success") {
@@ -24,10 +24,10 @@ describe("demo weather forecast tool", () => {
       unit: "celsius"
     });
     expect((result.output as { days: unknown[] }).days).toHaveLength(3);
-    expect(result.modelSummary).toContain("Forecast for Oslo");
-    expect(result.domainUi).toMatchObject({
+    expect(result.display).toMatchObject({
       kind: "weather.forecast",
       version: 1,
+      mode: "inline",
       data: {
         location: "Oslo"
       }
@@ -41,8 +41,8 @@ describe("demo weather forecast tool", () => {
       throw new Error("Expected weather tool to succeed");
     }
 
-    expect(result.modelSummary).toContain("Vorhersage für Oslo");
     expect(JSON.stringify(result.output)).toContain("Regenschutz");
+    expect(JSON.stringify(result.display)).toContain("Regenschutz");
   });
 });
 

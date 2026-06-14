@@ -1,19 +1,19 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ChatShell, type ChatShellAdminPanel } from "./chat-shell";
-import type { DomainUiWidgetRegistry } from "./domain-ui-widgets";
+import type { ToolDisplayWidgetRegistry } from "./domain-ui-widgets";
 
 export interface StandaloneChatAppOptions {
   apiBaseUrl?: string;
   adminPanel?: ChatShellAdminPanel;
-  domainUiWidgets?: DomainUiWidgetRegistry;
+  displayWidgets?: ToolDisplayWidgetRegistry;
   rootElement?: HTMLElement | null;
 }
 
 export function renderStandaloneChatApp({
   apiBaseUrl,
   adminPanel,
-  domainUiWidgets,
+  displayWidgets,
   rootElement = document.getElementById("root")
 }: StandaloneChatAppOptions): void {
   if (!rootElement) {
@@ -25,7 +25,7 @@ export function renderStandaloneChatApp({
       <ChatShell
         apiBaseUrl={apiBaseUrl ?? defaultLocalApiBaseUrl()}
         adminPanel={adminPanel}
-        domainUiWidgets={domainUiWidgets}
+        displayWidgets={displayWidgets}
         manageDocumentTitle
       />
     </StrictMode>

@@ -271,6 +271,57 @@ describe("model usage governance", () => {
       message: "Monthly model spend limit has been reached"
     });
   });
+
+  it("does not block new model calls only because older monthly usage has no matching price", async () => {
+    const clientInstanceId = asClientInstanceId("client-stale-unpriced-usage-test");
+    const store = new InMemoryPlatformStore();
+    const governance = new ModelUsageGovernance({
+      store,
+      budget: {
+        monthlySpendLimit: 200,
+        costSafetyMultiplier: 1
+      },
+      safeguards: {},
+      pricing: {
+        currency: "USD",
+        models: [
+          {
+            providerId: "openai",
+            model: "gpt-5.5",
+            inputPricePerMillionTokens: 5,
+            outputPricePerMillionTokens: 30
+          }
+        ]
+      }
+    });
+
+    await governance.appendModelUsageEvent({
+      clientInstanceId,
+      conversationId: asConversationId("conv_stale_unpriced"),
+      agentRunId: asAgentRunId("run_stale_unpriced"),
+      agentName: "agent",
+      providerId: "openai",
+      model: "old-demo-model",
+      inputTokens: 1000,
+      outputTokens: 1000,
+      totalTokens: 2000,
+      source: "provider_reported",
+      correlationId: "corr_stale_unpriced"
+    });
+
+    await expect(governance.runModelCall(clientInstanceId, async () => "allowed")).resolves.toBe(
+      "allowed"
+    );
+    await expect(governance.createSummary({ clientInstanceId })).resolves.toMatchObject({
+      currentMonth: {
+        cost: {
+          pricingConfigured: true,
+          pricedModelCallCount: 0,
+          unpricedModelCallCount: 1
+        }
+      }
+    });
+  });
 });
 
 function delay(ms: number): Promise<void> {

@@ -8,7 +8,7 @@ import {
   ThermometerSun,
   Wind
 } from "lucide-react";
-import type { DomainUiRenderInput, DomainUiWidget } from "@vivd-catalyst/chat-ui/shell";
+import type { ToolDisplayRenderInput, ToolDisplayWidget } from "@vivd-catalyst/chat-ui/shell";
 
 const translations = {
   en: {
@@ -25,13 +25,13 @@ const translations = {
   }
 } as const;
 
-export const weatherForecastWidget: DomainUiWidget = (input) => {
-  if (input.domainUi.version !== 1) {
+export const weatherForecastWidget: ToolDisplayWidget = (input) => {
+  if (input.display.version !== 1) {
     return undefined;
   }
 
-  return isWeatherForecast(input.domainUi.data) ? (
-    <WeatherForecastPreview forecast={input.domainUi.data} input={input} />
+  return isWeatherForecast(input.display.data) ? (
+    <WeatherForecastPreview forecast={input.display.data} input={input} />
   ) : undefined;
 };
 
@@ -40,7 +40,7 @@ function WeatherForecastPreview({
   input
 }: {
   forecast: WeatherForecast;
-  input: DomainUiRenderInput;
+  input: ToolDisplayRenderInput;
 }) {
   const locale = input.locale === "de" ? "de" : "en";
   const unitLabel = forecast.unit === "fahrenheit" ? "F" : "C";

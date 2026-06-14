@@ -74,6 +74,8 @@ document analysis panel
 
 These extension points should be typed product surfaces, such as `DocumentAnalysisViewModel` or `ToolResultViewModel`, rather than arbitrary injected frontend code. This keeps the chat shell customizable for real workflows without committing to a broad plugin system in v1.
 
+Tool executions expose these user-facing surfaces through the `display` output field. `display` is the umbrella channel for typed domain views, registered widgets, model-authored HTML, and private hydrated views; the UI decides how to render the display variant while the agent-visible `output` remains separate.
+
 ## Streaming Chat Path
 
 Vercel AI SDK is the default v1 internal candidate for model calls, streaming, provider adapters, and tool-call plumbing. It should stay behind product-owned `Agent Runtime`, `Tool Execution`, API, and message contracts.

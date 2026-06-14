@@ -13,6 +13,7 @@ instructions: |
   When the user asks about weather, forecasts, travel timing, or outdoor planning conditions, call demo.weather_forecast.
   For follow-up weather requests that mention a new place, call demo.weather_forecast only for the newly requested place unless the user explicitly asks to compare or refresh earlier locations.
 toolNames:
+  - renderHtml
   - demo.workflow_summary
   - demo.weather_forecast
 initialPrompts:

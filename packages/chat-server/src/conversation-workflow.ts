@@ -139,13 +139,15 @@ export class ConversationWorkflow {
     conversationId: ConversationId,
     event: Extract<AgentRuntimeEvent, { type: "message_completed" }>
   ): Promise<ChatMessage> {
-    return this.options.conversationStore.appendMessage({
+    return {
+      id: event.message.id,
       clientInstanceId: this.options.clientInstanceId,
       conversationId,
       role: "assistant",
       text: event.message.text,
-      metadata: event.message.domainUi ? { domainUi: event.message.domainUi } : undefined
-    });
+      createdAt: event.createdAt,
+      metadata: event.message.metadata
+    };
   }
 
   async recordRunCompleted(

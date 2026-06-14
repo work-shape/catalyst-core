@@ -86,14 +86,12 @@ export const weatherForecastToolFactory = defineConfiguredTool({
       async execute(input, context) {
         const locale = context.locale === "de" ? "de" : "en";
         const forecast = createForecast(input, locale);
-        const firstDay = forecast.days[0];
-        const modelSummary = createModelSummary(forecast, firstDay, locale);
 
         return toolSuccess(forecast, {
-          modelSummary,
-          domainUi: {
+          display: {
             kind: "weather.forecast",
             version: 1,
+            mode: "inline",
             data: forecast
           },
           auditSummary: {
@@ -239,34 +237,6 @@ function createAdvisory(days: WeatherForecastOutput["days"], locale: WeatherLoca
   return locale === "de"
     ? "Die Bedingungen wirken stabil für normale Planung."
     : "Conditions look stable for normal planning.";
-}
-
-function createModelSummary(
-  forecast: WeatherForecastOutput,
-  firstDay: WeatherForecastOutput["days"][number] | undefined,
-  locale: WeatherLocale
-): string {
-  if (!firstDay) {
-    return locale === "de"
-      ? `Vorhersage für ${forecast.location}: keine Tage angefragt.`
-      : `Forecast for ${forecast.location}: no days requested.`;
-  }
-
-  const temperatureRange = `${formatTemperature(firstDay.low, forecast.unit)}-${formatTemperature(
-    firstDay.high,
-    forecast.unit
-  )}`;
-  if (locale === "de") {
-    return `Vorhersage für ${forecast.location}: ${temperatureRange} und ${describeCondition(
-      firstDay.condition,
-      locale
-    ).toLowerCase()} heute. ${forecast.advisory}`;
-  }
-
-  return `Forecast for ${forecast.location}: ${temperatureRange} with ${describeCondition(
-    firstDay.condition,
-    locale
-  ).toLowerCase()} today. ${forecast.advisory}`;
 }
 
 function describeCondition(condition: (typeof forecastConditions)[number], locale: WeatherLocale): string {

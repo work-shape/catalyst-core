@@ -109,6 +109,10 @@ Minimum v1 event types:
 - `run_cancelled`
 - `run_failed`
 
+The runtime should preserve agent-visible history durably, including assistant tool-call requests, normalized tool inputs, full model-visible tool outputs, and tool errors. The browser stream may choose what to show, but the model-context replay path must be able to reconstruct prior tool calls and results accurately. Context bounding or future compaction should happen only when projecting durable history into a provider request.
+
+`ModelContextProjection` should be a dedicated deep module inside the runtime implementation. It owns the data-critical rules for turning durable agent-visible history into provider messages: excluding `privateOutput` and `display`, replaying tool inputs/results/errors, applying configurable output bounds, inserting future compaction artifacts, and adapting to provider-specific message formats. Keep the agentic loop itself internal to the local runtime adapter unless a second runtime implementation makes a broader seam real.
+
 ## V1 Tool Definition And Execution Contract
 
 The v1 tool contract should follow the common pattern used by OpenCode, LangChain, Mastra, Vercel AI SDK, and OpenAI Agents SDK:
@@ -193,9 +197,9 @@ Do not pass raw database handles, global environment secrets, or broad service c
 type ToolExecutionResult =
   | {
       status: "success";
-      output: unknown;
-      modelSummary?: string;
-      domainUi?: DomainUiOutput;
+      output?: unknown;
+      privateOutput?: unknown;
+      display?: ToolDisplayOutput;
       artifacts?: ManagedArtifactRef[];
       auditSummary?: AuditSafeSummary;
     }
@@ -206,7 +210,13 @@ type ToolExecutionResult =
     };
 ```
 
-`output` is the structured result available to the agent. `modelSummary` is an optional compact/sanitized text representation when the raw structured output is too large or not appropriate to send back into the model. `domainUi` is for typed UI outputs such as document analysis panels. `auditSummary` must avoid raw sensitive payloads.
+`output` is the durable structured result available to the agent and should contain the model-relevant result. Do not use a `modelSummary` field to silently replace tool output. If an oversized result must be bounded for a provider request, the model-context projection layer should create a bounded preview while retaining the full durable output or artifact reference.
+
+`privateOutput` is never sent to the model and never becomes agent-visible history. It is for customer data that the platform can use for deterministic rendering, hydration, storage, export, or other non-model workflows.
+
+`display` is the umbrella field for user-facing rendered output or renderable view data, including typed tool-result renderers, model-authored HTML, registered widgets, and private hydrated visualizations. Platform packages own generic display contracts and fallback frames; customer/demo widgets live in client assembly or deployment code. Private hydrated visualizations return zero-data model-visible acknowledgements by default; query tools that intentionally expose data to the model should be separate tools using normal `output`.
+
+`auditSummary` must avoid raw sensitive payloads.
 
 ## Type Boundary
 

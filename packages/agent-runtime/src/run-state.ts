@@ -2,7 +2,8 @@ import {
   AppError,
   type AgentRunId,
   type AgentRunStatus,
-  type AgentRuntimeEvent
+  type AgentRuntimeEvent,
+  type ChatMessage
 } from "@vivd-catalyst/core";
 
 type AgentRuntimeEventDraft = AgentRuntimeEvent extends infer TEvent
@@ -42,22 +43,24 @@ export class RunState {
     }
   }
 
-  message(text: string): void {
+  message(message: ChatMessage): void {
     this.emit({
       type: "message_delta",
       runId: this.runId,
-      delta: text
+      delta: message.text
     });
-    this.completeMessage(text);
+    this.completeMessage(message);
   }
 
-  completeMessage(text: string): void {
+  completeMessage(message: ChatMessage): void {
     this.emit({
       type: "message_completed",
       runId: this.runId,
       message: {
+        id: message.id,
         role: "assistant",
-        text
+        text: message.text,
+        metadata: message.metadata
       }
     });
   }

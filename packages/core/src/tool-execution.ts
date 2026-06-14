@@ -1,7 +1,7 @@
 import type { AgentRunId, ConversationId, ToolCallId } from "./ids";
 import type { JsonObject, JsonValue } from "./json";
 import type { ISODateString } from "./time";
-import type { AuditSafeSummary, DomainUiOutput, ManagedArtifactRef } from "./files";
+import type { AuditSafeSummary, ManagedArtifactRef, ToolDisplayOutput } from "./files";
 import type { RuntimeCallContext } from "./identity";
 
 export type ToolPermissionMode = "allow" | "deny" | "approval_required";
@@ -72,7 +72,8 @@ export type ToolExecutionErrorCode =
   | "validation_failed"
   | "handler_failed"
   | "cancelled"
-  | "timed_out";
+  | "timed_out"
+  | "repeated_tool_call";
 
 export interface ToolExecutionError {
   code: ToolExecutionErrorCode;
@@ -82,9 +83,9 @@ export interface ToolExecutionError {
 
 export interface ToolHandlerSuccessResult<TOutput = unknown> {
   status: "success";
-  output: TOutput;
-  modelSummary?: string;
-  domainUi?: DomainUiOutput;
+  output?: TOutput;
+  privateOutput?: unknown;
+  display?: ToolDisplayOutput;
   artifacts?: ManagedArtifactRef[];
   auditSummary?: AuditSafeSummary;
 }

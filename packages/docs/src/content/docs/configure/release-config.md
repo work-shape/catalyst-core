@@ -12,7 +12,7 @@ V1 does not rely on runtime mutation for agent behavior, tool availability, mode
 Release config should cover:
 
 - agents and instructions
-- tool enablement and agent tool allowlists
+- tool enablement, tool parameters, and agent tool allowlists
 - model provider choices
 - supported locales and default locale
 - client branding and theme
@@ -40,6 +40,7 @@ agents:
 
 ui:
   clientName: Example Company
+  faviconUrl: /favicon.svg
   defaultLocale: en
   supportedLocales: [en, de]
   welcomeMessage:
@@ -63,6 +64,53 @@ usage:
   safeguards:
     modelCallsPerDay: 1000
     tokensPerDay: 2500000
+```
+
+## Tool Configuration
+
+Each tool entry controls whether a stable tool name is available in the client instance. The optional `config` object is passed to the matching configured tool factory and validated by that factory's schema during startup.
+
+```yaml
+tools:
+  - name: support.lookup_ticket
+    enabled: true
+    config:
+      permissionRef: support-ticket-reader
+      endpointEnvName: SUPPORT_API_URL
+  - name: support.create_escalation
+    enabled: false
+```
+
+Use `config` for customer-specific values such as permission references, default currencies, endpoint names, model-facing labels, allowlists, and secret environment variable names.
+
+Do not put secret values in `config`. Put secret values in environment files or a secret manager, and reference them by name.
+
+Startup validation fails when:
+
+- an enabled tool has no registered implementation
+- a configured tool's `config` does not match its schema
+- an agent references a disabled or missing tool
+- an enabled tool requires approval before approval resume is implemented
+
+## UI Branding
+
+The platform shell provides `/favicon.svg` as the default favicon. Set `ui.faviconUrl` when a client needs its own icon; the value may be an absolute URL or a root-relative path served by that client.
+
+## Model Provider Configuration
+
+OpenAI-compatible providers keep API-specific request shapes behind the model-provider boundary. Agents and tools still see Vivd Catalyst's provider-neutral messages, tools, tool calls, tool results, and usage.
+
+Use `api: responses` for OpenAI reasoning models that combine reasoning, tool calling, or multi-turn workflows. Leave the field unset, or set `api: chat_completions`, for legacy OpenAI-compatible endpoints that still expect `/chat/completions`.
+
+```yaml
+modelProviders:
+  - id: openai
+    type: openai-compatible
+    api: responses
+    model: gpt-5.5
+    reasoningEffort: high
+    baseUrl: https://api.openai.com/v1
+    apiKeyEnvName: OPENAI_API_KEY
 ```
 
 ## Config Is Not A Secret Store

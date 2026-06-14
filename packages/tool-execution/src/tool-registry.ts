@@ -46,10 +46,10 @@ export class ToolRegistry {
 }
 
 function assertValidToolName(name: string): void {
-  if (!/^[a-z][a-z0-9_.-]*$/u.test(name)) {
+  if (!/^[A-Za-z][A-Za-z0-9_.-]*$/u.test(name)) {
     throw new AppError(
       "VALIDATION_FAILED",
-      `Tool name '${name}' must start with a lowercase letter and contain only lowercase letters, numbers, dots, underscores, or hyphens`
+      `Tool name '${name}' must start with a letter and contain only letters, numbers, dots, underscores, or hyphens`
     );
   }
 }

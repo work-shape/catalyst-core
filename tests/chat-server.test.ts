@@ -16,7 +16,7 @@ describe("client instance app vertical slice", () => {
       inputSchema: z.object({ text: z.string() }),
       outputSchema: z.object({ echoed: z.string() }),
       async execute(input) {
-        return toolSuccess({ echoed: input.text }, { modelSummary: `Echoed ${input.text}` });
+        return toolSuccess({ echoed: input.text });
       }
     });
     const app = await createClientInstanceApp({
@@ -52,7 +52,14 @@ describe("client instance app vertical slice", () => {
     });
     expect(messages.statusCode).toBe(200);
     const persistedMessages = messages.json() as Array<{ role: string; text: string }>;
-    expect(persistedMessages.map((message) => message.text).join("\n")).toContain("Echoed hello");
+    expect(persistedMessages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "tool",
+          text: expect.stringContaining('"echoed": "hello"')
+        })
+      ])
+    );
 
     const audit = await app.server.inject({
       method: "GET",

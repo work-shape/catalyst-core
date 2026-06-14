@@ -23,10 +23,12 @@ export function createModelProviderRegistry(input: {
 
       return new OpenAiCompatibleChatProvider({
         id: config.id,
+        api: config.api,
         model: config.model,
         baseUrl: config.baseUrl,
         apiKey,
-        organization: config.organizationEnvName ? input.env[config.organizationEnvName] : undefined
+        organization: config.organizationEnvName ? input.env[config.organizationEnvName] : undefined,
+        reasoningEffort: config.reasoningEffort
       });
     })
   );

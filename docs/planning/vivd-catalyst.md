@@ -12,6 +12,7 @@ The first use case is a sensitive document and payslip workflow embedded into a 
 - [Extension Model](./vivd-catalyst/extension-model.md)
 - [Frontend, UI, And API Client](./vivd-catalyst/frontend-ui-api.md)
 - [Agent Capabilities](./vivd-catalyst/agent-capabilities.md)
+- [Agent History And Tool Outputs](./vivd-catalyst/agent-history-tool-outputs.md)
 - [Document Text Extraction](./vivd-catalyst/document-text-extraction.md)
 - [Data, Storage, And Retrieval](./vivd-catalyst/data-storage-retrieval.md)
 - [Infrastructure](./vivd-catalyst/infrastructure.md)
@@ -57,6 +58,14 @@ Related research:
 - Admin/superadmin views default to metadata, deletion, export/request-handling, audit, and retention status; full message access requires explicit configuration, permission, and audit reason.
 - Vercel AI SDK is the default v1 internal model/tool streaming candidate, behind product-owned runtime contracts.
 - Agent capabilities should be explicit tool groups; URL/file fetch and document processing should precede browser automation.
+- Agent-visible history preserves tool calls, tool inputs, complete tool outputs, and tool execution errors durably; context compaction or output bounding changes only the active model context projection, not the stored transcript.
+- `ModelContextProjection` should be the deep module that owns data-critical model visibility rules, output bounding, future compaction insertion, and provider message adaptation.
+- Tools expose model-facing name, description, and input schema by default; output schemas are runtime validation contracts, not prompt context.
+- Tool results use `output` as the default model-visible result. `modelSummary` should not replace tool output; private tool data must use explicit non-model-visible output channels.
+- `display` is the umbrella tool-output field for user-facing surfaces, including model-authored HTML, registered widgets, typed view models, and private hydrated views.
+- Private data visualization tools return zero-data acknowledgements to the model by default; if the agent should see non-critical query data, expose a separate normal query tool whose `output` enters agent-visible history.
+- The agent runtime should keep looping after tool results until the model produces a final response or the run is cancelled, stopped by policy/deadline, or hits a generous configurable step/doom-loop guard. The current small fixed model-round cap is not product direction.
+- Whole-session compaction is the next context-management step; v1 model-projection output bounds should be configurable, start around a moderate document-friendly default such as 60k tokens, and emit clear logs plus user/model feedback when a tool output is only partially projected.
 - V1 preparation for v2 capabilities means interface-only preparation.
 - assistant-ui is the default candidate for shared chat UI primitives/runtime, without Assistant Cloud.
 - The chat backend is a separate Node API service, not a Next.js/full-stack backend.

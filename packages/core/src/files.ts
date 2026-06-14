@@ -14,10 +14,14 @@ export interface ManagedArtifactRef {
   mimeType?: string;
 }
 
-export type DomainUiOutput = JsonObject & {
+export type ToolDisplayMode = "inline" | "side_panel" | "fullscreen";
+
+export type ToolDisplayOutput = JsonObject & {
   kind: string;
   version: number;
-  data: JsonObject;
+  mode?: ToolDisplayMode;
+  displayId?: string;
+  data?: JsonObject;
 };
 
 export interface AuditSafeSummary {

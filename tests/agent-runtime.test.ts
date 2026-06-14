@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   asClientInstanceId,
-  asConversationId,
   type ChatMessage,
-  type ConversationHistoryReader,
   type ModelProviderConfig,
   type RuntimeCallContext,
   type ToolExecution
@@ -17,7 +15,6 @@ import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 describe("local agent runtime", () => {
   it("loads recent conversation history before the new user message", async () => {
     const clientInstanceId = asClientInstanceId("history-client");
-    const conversationId = asConversationId("conv_history");
     const context: RuntimeCallContext = {
       clientInstanceId,
       correlationId: "corr-history",
@@ -31,6 +28,15 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
+    const store = new InMemoryPlatformStore();
+    const conversationId = await createConversationWithMessages(store, {
+      clientInstanceId,
+      messages: [
+        { role: "user", text: "My favorite color is blue." },
+        { role: "assistant", text: "I will remember that." },
+        { role: "user", text: "What is my favorite color?" }
+      ]
+    });
     let providerMessages: ModelMessage[] = [];
     const providerConfig: ModelProviderConfig = {
       id: "test-provider",
@@ -69,16 +75,12 @@ describe("local agent runtime", () => {
       ],
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
-      conversationHistory: createHistoryReader([
-        createMessage("msg_1", conversationId, clientInstanceId, "user", "My favorite color is blue."),
-        createMessage("msg_2", conversationId, clientInstanceId, "assistant", "I will remember that."),
-        createMessage("msg_3", conversationId, clientInstanceId, "user", "What is my favorite color?")
-      ]),
+      conversationHistory: store,
       modelProvider,
       toolRegistry: new ToolRegistry({ tools: [] }),
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
-        store: new InMemoryPlatformStore(),
+        store,
         budget: {
           costSafetyMultiplier: 1
         },
@@ -115,7 +117,6 @@ describe("local agent runtime", () => {
 
   it("adds the resolved locale to system instructions", async () => {
     const clientInstanceId = asClientInstanceId("locale-client");
-    const conversationId = asConversationId("conv_locale");
     const context: RuntimeCallContext = {
       clientInstanceId,
       correlationId: "corr-locale",
@@ -130,6 +131,11 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
+    const store = new InMemoryPlatformStore();
+    const conversationId = await createConversationWithMessages(store, {
+      clientInstanceId,
+      messages: []
+    });
     let providerMessages: ModelMessage[] = [];
     const providerConfig: ModelProviderConfig = {
       id: "test-provider",
@@ -165,12 +171,12 @@ describe("local agent runtime", () => {
       ],
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
-      conversationHistory: createHistoryReader([]),
+      conversationHistory: store,
       modelProvider,
       toolRegistry: new ToolRegistry({ tools: [] }),
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
-        store: new InMemoryPlatformStore(),
+        store,
         budget: {
           costSafetyMultiplier: 1
         },
@@ -202,29 +208,29 @@ describe("local agent runtime", () => {
   });
 });
 
-function createHistoryReader(messages: ChatMessage[]): ConversationHistoryReader {
-  return {
-    async listRecentMessages(input) {
-      return messages.slice(-input.limit);
-    }
-  };
-}
-
-function createMessage(
-  id: string,
-  conversationId: ChatMessage["conversationId"],
-  clientInstanceId: ChatMessage["clientInstanceId"],
-  role: ChatMessage["role"],
-  text: string
-): ChatMessage {
-  return {
-    id: id as ChatMessage["id"],
-    conversationId,
-    clientInstanceId,
-    role,
-    text,
-    createdAt: new Date().toISOString()
-  };
+async function createConversationWithMessages(
+  store: InMemoryPlatformStore,
+  input: {
+    clientInstanceId: ChatMessage["clientInstanceId"];
+    messages: Array<{ role: ChatMessage["role"]; text: string }>;
+  }
+): Promise<ChatMessage["conversationId"]> {
+  const conversation = await store.createConversation({
+    clientInstanceId: input.clientInstanceId,
+    ownerUserId: "user-1",
+    ownerExternalUserId: "user-1",
+    title: "Test conversation",
+    retainedUntil: new Date(Date.now() + 86_400_000).toISOString()
+  });
+  for (const message of input.messages) {
+    await store.appendMessage({
+      clientInstanceId: input.clientInstanceId,
+      conversationId: conversation.id,
+      role: message.role,
+      text: message.text
+    });
+  }
+  return conversation.id;
 }
 
 function createUnusedToolExecution(): ToolExecution {

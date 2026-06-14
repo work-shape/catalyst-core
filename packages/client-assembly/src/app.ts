@@ -11,7 +11,11 @@ import {
   loadClientInstanceConfigFromFile
 } from "@vivd-catalyst/config-schema";
 import { createModelProviderRegistry } from "@vivd-catalyst/model-provider";
-import { InProcessToolExecution, ToolRegistry } from "@vivd-catalyst/tool-execution";
+import {
+  createBuiltInToolDefinitions,
+  InProcessToolExecution,
+  ToolRegistry
+} from "@vivd-catalyst/tool-execution";
 import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { assertClientAssemblyValid } from "./assembly-validation";
@@ -43,7 +47,13 @@ export async function createClientInstanceApp(
   const config = input.config ?? (await loadConfig(input.configPath));
   const tools = createToolDefinitions({
     config,
-    tools: input.tools
+    tools: [
+      ...createBuiltInToolDefinitions({
+        dataSources: config.dataSources,
+        env
+      }),
+      ...input.tools
+    ]
   });
   assertClientAssemblyValid({
     config,
@@ -88,7 +98,10 @@ export async function createClientInstanceApp(
     modelProvider,
     toolRegistry,
     toolExecution,
-    usageGovernance
+    usageGovernance,
+    maxSteps: config.runtime.maxSteps,
+    repeatedToolCallLimit: config.runtime.repeatedToolCallLimit,
+    modelContext: config.modelContext
   });
   const { authAdapter, standaloneAuth, sessionToken } = await createClientInstanceAuth({
     config,

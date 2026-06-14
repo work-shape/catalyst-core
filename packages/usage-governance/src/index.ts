@@ -252,7 +252,7 @@ function assertMonthlySpendBudget(cost: ModelUsageCostSummary, budget: UsageBudg
     return;
   }
 
-  if (cost.unpricedModelCallCount > 0) {
+  if (!cost.pricingConfigured) {
     throw new AppError(
       "FORBIDDEN",
       "Monthly model spend limit cannot be enforced because model pricing is missing"

@@ -49,6 +49,7 @@ export const clientBrandingSchema = z.object({
   logoUrl: z.string().optional(),
   logoUrlDark: z.string().optional(),
   logoInvertOnDark: z.boolean(),
+  faviconUrl: z.string().optional(),
   title: z.string(),
   welcomeMessage: z.string(),
   accentColor: z.string(),
@@ -249,9 +250,10 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     sequence: z.number(),
     createdAt: z.string(),
     message: z.object({
+      id: z.string(),
       role: z.literal("assistant"),
       text: z.string(),
-      domainUi: z.unknown().optional()
+      metadata: z.record(z.string(), z.unknown()).optional()
     })
   }),
   z.object({
@@ -260,7 +262,8 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     sequence: z.number(),
     createdAt: z.string(),
     toolCallId: z.string(),
-    toolName: z.string()
+    toolName: z.string(),
+    input: z.unknown()
   }),
   z.object({
     type: z.literal("tool_permission_requested"),
@@ -279,7 +282,9 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     createdAt: z.string(),
     toolCallId: z.string(),
     toolName: z.string(),
-    result: z.unknown()
+    result: z.unknown(),
+    modelOutput: z.string(),
+    projectionNotice: z.record(z.string(), z.unknown()).optional()
   }),
   z.object({
     type: z.literal("tool_call_failed"),
@@ -288,7 +293,9 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     createdAt: z.string(),
     toolCallId: z.string(),
     toolName: z.string(),
-    result: z.unknown()
+    result: z.unknown(),
+    modelOutput: z.string(),
+    projectionNotice: z.record(z.string(), z.unknown()).optional()
   }),
   z.object({
     type: z.literal("run_completed"),

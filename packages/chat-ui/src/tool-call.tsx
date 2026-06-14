@@ -6,9 +6,9 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import {
-  isDomainUiPayload,
-  readDomainUiPayloadFromToolResult,
-  useDomainUiWidget
+  isToolDisplayPayload,
+  readToolDisplayPayloadFromToolResult,
+  useToolDisplayWidget
 } from "./domain-ui-widgets";
 import { useTranslation } from "./i18n";
 import { cn } from "./ui/cn";
@@ -28,14 +28,14 @@ interface DataPartProps {
 
 export function ToolCallPart({ toolName, toolCallId, argsText, result, isError }: ToolCallPartProps) {
   const { locale, t } = useTranslation();
-  const domainUiWidget = useDomainUiWidget();
+  const displayWidget = useToolDisplayWidget();
   const state = isError ? "failed" : result === undefined ? "running" : "completed";
   const Icon = state === "running" ? Loader2 : state === "failed" ? CircleAlert : CheckCircle2;
-  const domainUi = readDomainUiPayloadFromToolResult(result);
-  const renderedDomainUi =
-    domainUi && domainUiWidget
-      ? domainUiWidget({
-          domainUi,
+  const display = readToolDisplayPayloadFromToolResult(result);
+  const renderedDisplay =
+    display && displayWidget
+      ? displayWidget({
+          display,
           locale,
           source: "tool-result",
           toolName,
@@ -43,6 +43,7 @@ export function ToolCallPart({ toolName, toolCallId, argsText, result, isError }
           result
         })
       : undefined;
+  const builtInDisplay = display && !hasRenderedNode(renderedDisplay) ? renderBuiltInDisplay(display) : undefined;
   const details = formatDetails(result ?? argsText);
 
   return (
@@ -67,8 +68,8 @@ export function ToolCallPart({ toolName, toolCallId, argsText, result, isError }
         </div>
         <Wrench size={15} className="shrink-0 text-muted-foreground" aria-hidden="true" />
       </div>
-      {hasRenderedNode(renderedDomainUi) ? (
-        <div className="border-b">{renderedDomainUi}</div>
+      {hasRenderedNode(renderedDisplay) || hasRenderedNode(builtInDisplay) ? (
+        <div className="border-b">{renderedDisplay ?? builtInDisplay}</div>
       ) : (
         <ToolSummary result={result} />
       )}
@@ -89,19 +90,21 @@ export function ToolCallPart({ toolName, toolCallId, argsText, result, isError }
 
 export function DataPart({ name, data }: DataPartProps) {
   const { locale, t } = useTranslation();
-  const domainUiWidget = useDomainUiWidget();
-  const renderedDomainUi =
-    isDomainUiPayload(data) && domainUiWidget
-      ? domainUiWidget({
-          domainUi: data,
+  const displayWidget = useToolDisplayWidget();
+  const renderedDisplay =
+    isToolDisplayPayload(data) && displayWidget
+      ? displayWidget({
+          display: data,
           locale,
           source: "message-metadata"
         })
       : undefined;
+  const builtInDisplay =
+    isToolDisplayPayload(data) && !hasRenderedNode(renderedDisplay) ? renderBuiltInDisplay(data) : undefined;
   const details = formatDetails(data);
 
-  if (hasRenderedNode(renderedDomainUi)) {
-    return <div className="my-2 max-w-3xl rounded-md border bg-card shadow-xs">{renderedDomainUi}</div>;
+  if (hasRenderedNode(renderedDisplay) || hasRenderedNode(builtInDisplay)) {
+    return <div className="my-2 max-w-3xl rounded-md border bg-card shadow-xs">{renderedDisplay ?? builtInDisplay}</div>;
   }
 
   return (
@@ -159,10 +162,45 @@ function ToolSummary({ result }: { result: unknown }) {
 }
 
 function getToolSummary(result: unknown): string | undefined {
-  if (!isRecord(result) || typeof result.summary !== "string") {
+  if (!isRecord(result)) {
     return undefined;
   }
-  return result.summary;
+  const notice = isRecord(result.projectionNotice) ? result.projectionNotice : undefined;
+  if (notice?.type === "tool_output_bounded") {
+    return "This tool output was partially loaded into the agent context. The full output is stored with the conversation.";
+  }
+  if (typeof result.output === "string") {
+    return result.output;
+  }
+  return undefined;
+}
+
+function renderBuiltInDisplay(display: { kind?: unknown; mode?: unknown; data?: unknown }): ReactNode {
+  if (
+    (display.kind !== "html.rendered" && display.kind !== "private_hydrated_view") ||
+    !isRecord(display.data) ||
+    typeof display.data.html !== "string"
+  ) {
+    return undefined;
+  }
+  const title = typeof display.data.title === "string" ? display.data.title : "Rendered HTML";
+  const mode = display.mode === "side_panel" || display.mode === "fullscreen" ? display.mode : "inline";
+  return (
+    <div className="bg-background">
+      <div className="border-b px-3 py-2 text-xs font-medium text-muted-foreground">{title}</div>
+      <iframe
+        title={title}
+        sandbox="allow-scripts"
+        srcDoc={display.data.html}
+        className={cn(
+          "w-full border-0 bg-white",
+          mode === "inline" && "h-80",
+          mode === "side_panel" && "h-[32rem]",
+          mode === "fullscreen" && "h-[70vh]"
+        )}
+      />
+    </div>
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

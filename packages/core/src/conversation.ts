@@ -87,3 +87,7 @@ export interface ConversationHistoryReader {
     limit: number;
   }): Promise<ChatMessage[]>;
 }
+
+export interface ConversationHistoryStore extends ConversationHistoryReader {
+  appendMessage(input: CreateMessageInput): Promise<ChatMessage>;
+}

@@ -1,6 +1,6 @@
-import type { DomainUiWidgetRegistry } from "@vivd-catalyst/chat-ui/shell";
+import type { ToolDisplayWidgetRegistry } from "@vivd-catalyst/chat-ui/shell";
 import { weatherForecastWidget } from "./weather-forecast-widget";
 
-export const demoDomainUiWidgets = {
+export const demoDisplayWidgets = {
   "weather.forecast": weatherForecastWidget
-} satisfies DomainUiWidgetRegistry;
+} satisfies ToolDisplayWidgetRegistry;

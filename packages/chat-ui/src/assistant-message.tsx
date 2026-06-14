@@ -41,7 +41,7 @@ function AssistantMessage() {
       <div className="min-w-0 rounded-md px-1 py-1 text-sm leading-6">
         <MessagePrimitive.Parts
           components={{
-            Text: MarkdownText,
+            Text: AssistantTextPart,
             File: FilePart,
             tools: {
               Override: ToolCallPart
@@ -91,6 +91,41 @@ function UserMessage() {
 
 function UserTextPart() {
   return <MarkdownText />;
+}
+
+function AssistantTextPart() {
+  const showThinking = useAuiState(
+    (state) =>
+      state.part.type === "text" &&
+      state.part.status.type === "running" &&
+      state.part.text.length === 0
+  );
+
+  if (showThinking) {
+    return <AssistantThinking />;
+  }
+
+  return <MarkdownText />;
+}
+
+function AssistantThinking() {
+  const { t } = useTranslation();
+
+  return (
+    <div
+      className="inline-flex items-center gap-2 text-sm text-muted-foreground"
+      role="status"
+      aria-live="polite"
+      data-testid="assistant-working-indicator"
+    >
+      <span>{t("thinking")}</span>
+      <span className="inline-flex items-center gap-1" aria-hidden="true">
+        <span className="size-1.5 rounded-full bg-primary/55 animate-pulse" />
+        <span className="size-1.5 rounded-full bg-primary/55 animate-pulse [animation-delay:150ms]" />
+        <span className="size-1.5 rounded-full bg-primary/55 animate-pulse [animation-delay:300ms]" />
+      </span>
+    </div>
+  );
 }
 
 function CopiedState() {

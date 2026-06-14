@@ -51,7 +51,7 @@ describe("web response bridge", () => {
       description: "Echo text for tests.",
       inputSchema: z.object({ text: z.string() }),
       async execute(input) {
-        return toolSuccess({ text: input.text }, { modelSummary: input.text });
+        return toolSuccess({ text: input.text });
       }
     });
     const app = await createClientInstanceApp({

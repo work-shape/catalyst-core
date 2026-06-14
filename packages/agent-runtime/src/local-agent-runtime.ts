@@ -7,35 +7,56 @@ import {
   type AgentRuntimeCommand,
   type AgentRuntimeEvent,
   type ChatMessage,
-  type ConversationHistoryReader,
+  type ConversationHistoryStore,
   type ModelProviderConfig,
   type RuntimeCallContext,
   type StartAgentRunInput,
   type ToolExecution,
+  type ToolExecutionResult,
   asAgentRunId,
   createPlatformId
 } from "@vivd-catalyst/core";
-import type { ModelCompletion, ModelMessage, ModelProvider } from "@vivd-catalyst/model-provider";
+import type { ModelCompletion, ModelMessage, ModelProvider, ModelToolCall } from "@vivd-catalyst/model-provider";
 import type { ToolRegistry } from "@vivd-catalyst/tool-execution";
 import type { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { RunState } from "./run-state";
 import { createSystemInstructions } from "./system-instructions";
 import { executeToolCall } from "./tool-call-execution";
 import { recordModelUsage } from "./usage-recording";
+import {
+  createAssistantFinalMetadata,
+  createAssistantToolCallsMetadata,
+  createToolResultMetadata,
+  dropCurrentSubmittedMessage,
+  projectAgentVisibleHistory,
+  stableStringify,
+  type ModelOutputProjection,
+  type ModelContextProjectionOptions
+} from "./model-context-projection";
 
 export interface LocalAgentRuntimeOptions {
   agents: AgentConfig[];
   modelProviders: ModelProviderConfig[];
   defaultModelProvider: ModelProviderConfig;
-  conversationHistory: ConversationHistoryReader;
+  conversationHistory: ConversationHistoryStore;
   modelProvider: ModelProvider;
   toolRegistry: ToolRegistry;
   toolExecution: ToolExecution;
   usageGovernance: ModelUsageGovernance;
   historyMessageLimit?: number;
+  maxSteps?: number;
+  repeatedToolCallLimit?: number;
+  modelContext?: ModelContextProjectionOptions;
 }
 
 const DEFAULT_CONVERSATION_HISTORY_LIMIT = 20;
+const DEFAULT_MAX_STEPS = 64;
+const DEFAULT_REPEATED_TOOL_CALL_LIMIT = 3;
+const DEFAULT_MODEL_CONTEXT: ModelContextProjectionOptions = {
+  toolOutput: {
+    maxTokens: 60000
+  }
+};
 
 export class LocalAgentRuntime implements AgentRuntime {
   private readonly options: LocalAgentRuntimeOptions;
@@ -109,8 +130,10 @@ export class LocalAgentRuntime implements AgentRuntime {
     ];
 
     let emittedAssistantText = "";
+    const repeatedToolCalls = new Map<string, number>();
+    const maxSteps = agent.maxSteps ?? this.options.maxSteps ?? DEFAULT_MAX_STEPS;
 
-    for (let round = 0; round < 4; round += 1) {
+    for (let step = 0; step < maxSteps; step += 1) {
       const { completion, emittedDeltas } = await this.options.usageGovernance.runModelCall(
         context.clientInstanceId,
         async () => {
@@ -140,10 +163,17 @@ export class LocalAgentRuntime implements AgentRuntime {
       if (completion.toolCalls.length === 0) {
         const assistantText = completion.text || "I completed the request.";
         const visibleAssistantText = `${emittedAssistantText}${assistantText}`;
+        const persisted = await this.options.conversationHistory.appendMessage({
+          clientInstanceId: context.clientInstanceId,
+          conversationId: input.conversationId,
+          role: "assistant",
+          text: visibleAssistantText,
+          metadata: createAssistantFinalMetadata({ runId })
+        });
         if (emittedDeltas) {
-          state.completeMessage(visibleAssistantText);
+          state.completeMessage(persisted);
         } else {
-          state.message(visibleAssistantText);
+          state.message(persisted);
         }
         state.complete();
         return;
@@ -158,25 +188,45 @@ export class LocalAgentRuntime implements AgentRuntime {
         content: completion.text,
         toolCalls: completion.toolCalls
       });
+      await this.options.conversationHistory.appendMessage({
+        clientInstanceId: context.clientInstanceId,
+        conversationId: input.conversationId,
+        role: "assistant",
+        text: completion.text,
+        metadata: createAssistantToolCallsMetadata({
+          runId,
+          toolCalls: completion.toolCalls
+        })
+      });
 
       for (const toolCall of completion.toolCalls) {
-        const resultContent = await executeToolCall({
+        const result = await executeToolCall({
           runId,
           startInput: input,
           context,
           state,
           toolCall,
-          toolExecution: this.options.toolExecution
+          toolExecution: this.options.toolExecution,
+          modelContext: this.modelContextOptions(),
+          repeatedToolCall: this.registerToolCall(repeatedToolCalls, toolCall.input, toolCall.toolName)
+        });
+        await this.persistToolResult({
+          runId,
+          input,
+          context,
+          toolCall,
+          result: result.result,
+          modelOutput: result.modelOutput
         });
         messages.push({
           role: "tool",
           toolCallId: toolCall.toolCallId,
-          content: resultContent
+          content: result.modelOutput.content
         });
       }
     }
 
-    state.fail(new AppError("CONFLICT", "Agent exceeded the maximum tool-call rounds"));
+    state.fail(new AppError("CONFLICT", `Agent exceeded the maximum step limit of ${maxSteps}`));
   }
 
   private getRun(runId: AgentRunId): RunState {
@@ -213,9 +263,52 @@ export class LocalAgentRuntime implements AgentRuntime {
       conversationId: input.conversationId,
       limit: this.options.historyMessageLimit ?? DEFAULT_CONVERSATION_HISTORY_LIMIT
     });
-    return dropCurrentSubmittedMessage(recentMessages, input.message.text)
-      .map(toModelHistoryMessage)
-      .filter((message): message is ModelMessage => message !== undefined);
+    return projectAgentVisibleHistory(
+      dropCurrentSubmittedMessage(recentMessages, input.message.text),
+      this.modelContextOptions()
+    );
+  }
+
+  private async persistToolResult(input: {
+    runId: AgentRunId;
+    input: StartAgentRunInput;
+    context: RuntimeCallContext;
+    toolCall: ModelToolCall;
+    result: ToolExecutionResult;
+    modelOutput: ModelOutputProjection;
+  }): Promise<ChatMessage> {
+    return this.options.conversationHistory.appendMessage({
+      clientInstanceId: input.context.clientInstanceId,
+      conversationId: input.input.conversationId,
+      role: "tool",
+      text: input.modelOutput.content,
+      metadata: createToolResultMetadata({
+        runId: input.runId,
+        toolCall: input.toolCall,
+        result: input.result,
+        modelOutput: input.modelOutput
+      })
+    });
+  }
+
+  private registerToolCall(
+    calls: Map<string, number>,
+    toolInput: unknown,
+    toolName: string
+  ): { repeated: boolean; count: number; limit: number } {
+    const key = `${toolName}:${stableStringify(toolInput)}`;
+    const count = (calls.get(key) ?? 0) + 1;
+    calls.set(key, count);
+    const limit = this.options.repeatedToolCallLimit ?? DEFAULT_REPEATED_TOOL_CALL_LIMIT;
+    return {
+      repeated: count > limit,
+      count,
+      limit
+    };
+  }
+
+  private modelContextOptions(): ModelContextProjectionOptions {
+    return this.options.modelContext ?? DEFAULT_MODEL_CONTEXT;
   }
 
   private async completeWithProvider(
@@ -261,22 +354,4 @@ export class LocalAgentRuntime implements AgentRuntime {
 
 export function asRuntimeRunId(value: string): AgentRunId {
   return asAgentRunId(value);
-}
-
-function dropCurrentSubmittedMessage(messages: ChatMessage[], text: string): ChatMessage[] {
-  const lastMessage = messages.at(-1);
-  if (lastMessage?.role === "user" && lastMessage.text === text) {
-    return messages.slice(0, -1);
-  }
-  return messages;
-}
-
-function toModelHistoryMessage(message: ChatMessage): ModelMessage | undefined {
-  if (message.role === "user" || message.role === "assistant") {
-    return {
-      role: message.role,
-      content: message.text
-    };
-  }
-  return undefined;
 }
