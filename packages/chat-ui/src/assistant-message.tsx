@@ -112,7 +112,7 @@ function UserTextPart() {
 
 function AssistantTextPart() {
   return (
-    <div className="max-w-3xl">
+    <div className="chat-assistant-text max-w-3xl">
       <MarkdownText />
     </div>
   );

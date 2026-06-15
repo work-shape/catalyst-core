@@ -106,6 +106,10 @@
     margin-bottom: 0;
   }
 
+  .chat-tool-part + .chat-assistant-text {
+    margin-top: 1rem;
+  }
+
   .chat-markdown p,
   .chat-markdown ul,
   .chat-markdown ol,

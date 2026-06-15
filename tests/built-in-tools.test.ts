@@ -4,11 +4,11 @@ import {
   type DataSourceConfig,
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
-import { createBuiltInToolDefinitions, renderHtmlTool } from "@vivd-catalyst/tool-execution";
+import { createBuiltInToolDefinitions, showViewTool } from "@vivd-catalyst/tool-execution";
 
 describe("built-in platform tools", () => {
   it("renders model-authored HTML through display without echoing HTML into model-visible output", async () => {
-    const result = await renderHtmlTool.execute(
+    const result = await showViewTool.execute(
       {
         html: "<section><h1>Dashboard</h1></section>",
         mode: "inline",
@@ -19,7 +19,7 @@ describe("built-in platform tools", () => {
 
     expect(result.status).toBe("success");
     if (result.status !== "success") {
-      throw new Error("Expected renderHtml to succeed");
+      throw new Error("Expected show_view to succeed");
     }
 
     expect(JSON.stringify(result.output)).not.toContain("<section>");

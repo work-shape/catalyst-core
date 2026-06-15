@@ -225,11 +225,11 @@ describe("OpenAI-compatible model provider", () => {
           {
             role: "assistant",
             content: "",
-            toolCalls: [{ toolCallId: "call_previous", toolName: "renderHtml", input: { html: "" } }]
+            toolCalls: [{ toolCallId: "call_previous", toolName: "show_view", input: { html: "" } }]
           },
           { role: "tool", toolCallId: "call_previous", content: "{\"status\":\"displayed\"}" }
         ],
-        tools: [{ name: "renderHtml", description: "Render HTML" }]
+        tools: [{ name: "show_view", description: "Show view" }]
       },
       {
         clientInstanceId,
@@ -272,7 +272,7 @@ describe("OpenAI-compatible model provider", () => {
       toolCalls: [
         {
           toolCallId: "call_render",
-          toolName: "renderHtml",
+          toolName: "show_view",
           input: { html: "<p>Hello</p>" }
         }
       ],
@@ -438,7 +438,7 @@ describe("OpenAI-compatible model provider", () => {
         providerId: "openai",
         model: "gpt-5.5",
         messages: [{ role: "user", content: "hello" }],
-        tools: [{ name: "renderHtml", description: "Render HTML" }]
+        tools: [{ name: "show_view", description: "Show view" }]
       },
       {
         clientInstanceId,
@@ -473,7 +473,7 @@ describe("OpenAI-compatible model provider", () => {
       toolCalls: [
         {
           toolCallId: "call_1",
-          toolName: "renderHtml",
+          toolName: "show_view",
           input: { html: "<p>Hello</p>" }
         }
       ],

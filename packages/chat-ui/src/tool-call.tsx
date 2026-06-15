@@ -88,7 +88,7 @@ export function ToolCallPart({ toolName, toolCallId, argsText, result, isError }
   return (
     <div
       className={cn(
-        "my-2 rounded-md border bg-card shadow-xs",
+        "chat-tool-part my-2 rounded-md border bg-card shadow-xs",
         hasDisplay ? "max-w-5xl" : "max-w-3xl",
         state === "failed" && "border-destructive/40 bg-destructive/5"
       )}
@@ -145,11 +145,15 @@ export function DataPart({ name, data }: DataPartProps) {
   const details = formatDetails(data);
 
   if (hasDisplay) {
-    return <div className="my-2 max-w-5xl rounded-md border bg-card shadow-xs">{renderedDisplay ?? builtInDisplay}</div>;
+    return (
+      <div className="chat-tool-part my-2 max-w-5xl rounded-md border bg-card shadow-xs">
+        {renderedDisplay ?? builtInDisplay}
+      </div>
+    );
   }
 
   return (
-    <div className="my-2 max-w-3xl rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
+    <div className="chat-tool-part my-2 max-w-3xl rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
       <div className="flex items-center gap-2 text-muted-foreground">
         <Wrench size={14} aria-hidden="true" />
         <span>{t("structuredOutput", { name })}</span>

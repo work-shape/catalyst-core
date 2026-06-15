@@ -94,7 +94,7 @@ The live tool architecture already has the right outer shape:
 
 `read_document` should therefore be a normal built-in platform tool using this contract. Its model-visible `output` contains the prepared text and is persisted as durable agent-visible tool history. The prepared text artifact should also be returned through `artifacts` so retention, deletion, UI references, and future workflows can use the durable object without parsing model-visible output.
 
-The current client assembly creates built-in tool definitions before creating the platform store. That works for stateless built-ins such as `renderHtml`, but `read_document` needs managed file/artifact storage. The cleanest implementation is to create the platform store and storage-backed platform services before creating built-in tool definitions, then pass those services into the built-in factory:
+The current client assembly creates built-in tool definitions before creating the platform store. That works for stateless built-ins such as `show_view`, but `read_document` needs managed file/artifact storage. The cleanest implementation is to create the platform store and storage-backed platform services before creating built-in tool definitions, then pass those services into the built-in factory:
 
 ```text
 load config

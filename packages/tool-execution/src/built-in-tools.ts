@@ -109,13 +109,13 @@ const visualizationRuntimeHead = [
   `<script>${displayHeightBootstrapScript}</script>`
 ].join("\n");
 
-const renderHtmlInputSchema = z.object({
+const showViewInputSchema = z.object({
   html: z.string().min(1).max(200_000),
   mode: z.enum(["inline", "side_panel", "fullscreen"]).default("inline"),
   title: z.string().min(1).max(160).optional()
 });
 
-const renderHtmlOutputSchema = z.object({
+const showViewOutputSchema = z.object({
   displayed: z.literal(true),
   displayId: z.string(),
   mode: z.enum(["inline", "side_panel", "fullscreen"])
@@ -128,19 +128,19 @@ export interface BuiltInToolDefinitionOptions {
 
 export function createBuiltInToolDefinitions(options: BuiltInToolDefinitionOptions = {}): AnyToolDefinition[] {
   return [
-    renderHtmlTool,
+    showViewTool,
     ...Object.entries(options.dataSources ?? {}).flatMap(([sourceName, source]) =>
       createDataSourceRenderViewTool(sourceName, source, options.env ?? {})
     )
   ];
 }
 
-export const renderHtmlTool = defineTool({
-  name: "renderHtml",
+export const showViewTool = defineTool({
+  name: "show_view",
   description:
-    "Render model-authored HTML for the user as a visual display. Use this when a table, widget, chart, dashboard, or richer visual explanation would help. Tailwind CSS, Lucide icons, and shadcn-style app theme classes are available in the rendered iframe. Prefer theme classes such as bg-background text-foreground, bg-card border-border, text-muted-foreground, and bg-primary text-primary-foreground over hard-coded color palettes.",
-  inputSchema: renderHtmlInputSchema,
-  outputSchema: renderHtmlOutputSchema,
+    "Show model-authored HTML to the user as a visual view. Use this when a table, widget, chart, dashboard, or richer visual explanation would help. Tailwind CSS, Lucide icons, and shadcn-style app theme classes are available in the rendered iframe. Prefer theme classes such as bg-background text-foreground, bg-card border-border, text-muted-foreground, and bg-primary text-primary-foreground over hard-coded color palettes.",
+  inputSchema: showViewInputSchema,
+  outputSchema: showViewOutputSchema,
   inputJsonSchema: {
     type: "object",
     additionalProperties: false,
@@ -186,7 +186,7 @@ export const renderHtmlTool = defineTool({
         }
       },
       auditSummary: {
-        action: "renderHtml",
+        action: "show_view",
         subject: displayId,
         metadata: {
           mode: input.mode,

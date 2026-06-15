@@ -92,7 +92,7 @@ describe("chat UI message history projection", () => {
             toolCalls: [
               {
                 toolCallId: "call_render",
-                toolName: "renderHtml",
+                toolName: "show_view",
                 input: {
                   html: "<section>Dashboard</section>"
                 }
@@ -114,7 +114,7 @@ describe("chat UI message history projection", () => {
             kind: "tool_result",
             runId: "run_test",
             toolCallId: "call_render",
-            toolName: "renderHtml",
+            toolName: "show_view",
             input: {
               html: "<section>Dashboard</section>"
             },
@@ -155,7 +155,7 @@ describe("chat UI message history projection", () => {
       parts: [
         {
           type: "dynamic-tool",
-          toolName: "renderHtml",
+          toolName: "show_view",
           toolCallId: "call_render",
           state: "output-available",
           output: {

@@ -183,7 +183,7 @@ Compaction direction:
 
 Two platform tools are planned:
 
-1. `renderHtml`
+1. `show_view`
    - Built-in platform tool.
    - Input includes HTML and a display mode such as `inline` or `side_panel`.
    - Rendered HTML should have Tailwind CSS and Lucide icons available by default, so agents can use Tailwind utility classes and Lucide `data-lucide` icon markers without bundling those libraries into every tool call.
@@ -195,7 +195,7 @@ Two platform tools are planned:
    - The tool description explains the configured data source and allowed query surface.
    - Input includes a query and an HTML/template or registered view reference.
    - The tool runs the query, hydrates the view deterministically, and renders it for the user.
-   - Hydrated views use the same visualization runtime as `renderHtml`: Tailwind CSS and Lucide icons are available in the rendered iframe.
+   - Hydrated views use the same visualization runtime as `show_view`: Tailwind CSS and Lucide icons are available in the rendered iframe.
    - Raw rows and hydrated private data go into `privateOutput` or managed storage, never into agent-visible history.
    - Model-visible `output` defaults to a zero-data acknowledgement only, such as display id and display mode. It must not include row counts, column names, query-result shape, aggregates, examples, or plain-language facts derived from private rows unless explicitly configured for a non-private tool.
 
@@ -218,7 +218,7 @@ The implementation should make this boundary obvious in code. Put a short commen
 // a zero-data acknowledgement unless the tool is explicitly a non-private query tool.
 ```
 
-For non-critical data, use a separate normal query tool. That tool can return rows or summaries through `output`, making the data part of agent-visible history. The agent can then use `renderHtml` to create a visualization from data it is allowed to see.
+For non-critical data, use a separate normal query tool. That tool can return rows or summaries through `output`, making the data part of agent-visible history. The agent can then use `show_view` to create a visualization from data it is allowed to see.
 
 ### Data Source Configuration
 
@@ -269,4 +269,4 @@ Prebuilt widgets remain first-class by using `display` with registered view type
 - Runtime step guard defaults to 64 model steps and is configurable through release config, with an optional per-agent override.
 - Repeated identical tool calls default to a limit of 3 allowed repeats before the runtime returns a model-visible `repeated_tool_call` error.
 - Tool-output projection bounds default to about 60k estimated tokens, with an optional byte limit.
-- V1 ships `renderHtml` and private `data.<source>.render_view` platform tools. It does not ship a generic non-private query tool by default; add explicit query tools only when that data is intended to become model-visible `output`.
+- V1 ships `show_view` and private `data.<source>.render_view` platform tools. It does not ship a generic non-private query tool by default; add explicit query tools only when that data is intended to become model-visible `output`.

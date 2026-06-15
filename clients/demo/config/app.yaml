@@ -108,7 +108,7 @@ defaultAgentName: workflow_assistant
 agentFiles:
   - ../agents/workflow-assistant.agent.yaml
 tools:
-  - name: renderHtml
+  - name: show_view
     enabled: true
   - name: read_document
     enabled: true
