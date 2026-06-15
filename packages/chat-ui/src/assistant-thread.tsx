@@ -61,7 +61,7 @@ export function AssistantThread({
               <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
             </div>
 
-            <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto bg-gradient-to-t from-background via-background to-background/80 pb-4 pt-5">
+            <ThreadPrimitive.ViewportFooter className="relative sticky bottom-0 mt-auto bg-background pb-4 pt-5 before:pointer-events-none before:absolute before:-top-16 before:inset-x-0 before:h-16 before:bg-gradient-to-t before:from-background before:to-background/0 before:content-['']">
               <AuiIf condition={(state) => !state.thread.isEmpty}>
                 <ThreadScrollToBottom />
               </AuiIf>
