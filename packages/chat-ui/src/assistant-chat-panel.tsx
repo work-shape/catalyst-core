@@ -1,15 +1,20 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, type MutableRefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type MutableRefObject } from "react";
 import {
   AssistantRuntimeProvider,
   useComposer,
   useComposerRuntime,
 } from "@assistant-ui/react";
-import { AssistantChatTransport, useChatRuntime } from "@assistant-ui/react-ai-sdk";
+import {
+  AssistantChatTransport,
+  useChatRuntime,
+  type UseChatRuntimeOptions
+} from "@assistant-ui/react-ai-sdk";
 import type { UIMessage } from "ai";
 import type { ApiClient, DraftAttachment, LocaleCode, Message, SafeConfig } from "@vivd-catalyst/api-client";
 import { AssistantThread } from "./assistant-thread";
 import type { LocalUploadingAttachment } from "./assistant-composer";
 import { firstLineTitle } from "./conversation-title";
+import { useTranslation } from "./i18n";
 
 export function AssistantChatPanel({
   apiBaseUrl,
@@ -30,6 +35,7 @@ export function AssistantChatPanel({
   onRemoveDraftAttachment,
   onRetryDraftAttachment,
   onConversationStarted,
+  onMessageSubmitted,
   onStreamFinished,
   onStreamError
 }: {
@@ -51,6 +57,7 @@ export function AssistantChatPanel({
   onRemoveDraftAttachment: (attachmentId: string) => void;
   onRetryDraftAttachment: (attachmentId: string) => void;
   onConversationStarted: (conversationId: string, messages?: Message[]) => void;
+  onMessageSubmitted: (conversationId: string) => void;
   onStreamFinished: () => void;
   onStreamError: (message: string) => void;
 }) {
@@ -78,6 +85,7 @@ export function AssistantChatPanel({
       onRemoveDraftAttachment={onRemoveDraftAttachment}
       onRetryDraftAttachment={onRetryDraftAttachment}
       onConversationStarted={onConversationStarted}
+      onMessageSubmitted={onMessageSubmitted}
       onStreamFinished={onStreamFinished}
       onStreamError={onStreamError}
     />
@@ -104,6 +112,7 @@ function AssistantRuntimePane({
   onRemoveDraftAttachment,
   onRetryDraftAttachment,
   onConversationStarted,
+  onMessageSubmitted,
   onStreamFinished,
   onStreamError
 }: {
@@ -126,12 +135,36 @@ function AssistantRuntimePane({
   onRemoveDraftAttachment: (attachmentId: string) => void;
   onRetryDraftAttachment: (attachmentId: string) => void;
   onConversationStarted: (conversationId: string, messages?: Message[]) => void;
+  onMessageSubmitted: (conversationId: string) => void;
   onStreamFinished: () => void;
   onStreamError: (message: string) => void;
 }) {
+  const { t } = useTranslation();
   const importedTargetRef = useRef<string | undefined>(undefined);
   const clearedTargetRef = useRef<string | undefined>(undefined);
   const streamedConversationIdRef = useRef<string | undefined>(undefined);
+  const sendDisabledReason = sendBlockedReason ?? (!messagesLoaded ? t("loadingConversation") : undefined);
+  const documentFileParts = useMemo(
+    () =>
+      draftAttachments
+        .filter((attachment) => attachment.status === "ready")
+        .map(toDocumentFilePart),
+    [draftAttachments]
+  );
+  const toCreateMessageWithDocumentAttachments = useCallback(
+    ((message: ComposerAppendMessage) => {
+      const parts = toOutgoingUiMessageParts(message);
+      if (message.role === "user" && documentFileParts.length > 0) {
+        parts.push(...documentFileParts);
+      }
+      return {
+        role: message.role,
+        parts,
+        metadata: message.metadata
+      };
+    }) as NonNullable<UseChatRuntimeOptions<UIMessage>["toCreateMessage"]>,
+    [documentFileParts]
+  );
   const transport = useMemo(
     () =>
       new AssistantChatTransport<UIMessage>({
@@ -143,8 +176,8 @@ function AssistantRuntimePane({
           agentName: selectedAgentName
         },
         prepareSendMessagesRequest: async (options) => {
-          if (sendBlockedReason) {
-            throw new Error(sendBlockedReason);
+          if (sendDisabledReason) {
+            throw new Error(sendDisabledReason);
           }
           const text = extractLastUserText(options.messages);
           let conversationId = selectedConversationId;
@@ -156,6 +189,7 @@ function AssistantRuntimePane({
             conversationId = conversation.id;
             pendingConversationIdRef.current = conversation.id;
           }
+          onMessageSubmitted(conversationId);
 
           return {
             credentials: "include",
@@ -173,10 +207,11 @@ function AssistantRuntimePane({
       apiBaseUrl,
       client,
       locale,
+      onMessageSubmitted,
       pendingConversationIdRef,
       selectedAgentName,
       selectedConversationId,
-      sendBlockedReason
+      sendDisabledReason
     ]
   );
   async function selectPendingConversation(): Promise<void> {
@@ -193,6 +228,8 @@ function AssistantRuntimePane({
   const runtime = useChatRuntime({
     messages: initialMessages,
     transport,
+    isSendDisabled: Boolean(sendDisabledReason),
+    toCreateMessage: toCreateMessageWithDocumentAttachments,
     async onFinish() {
       await selectPendingConversation();
       onStreamFinished();
@@ -245,7 +282,7 @@ function AssistantRuntimePane({
         notice={notice}
         draftAttachments={draftAttachments}
         localUploadingAttachments={localUploadingAttachments}
-        sendBlockedReason={sendBlockedReason}
+        sendBlockedReason={sendDisabledReason}
         onFilesSelected={onFilesSelected}
         onRemoveDraftAttachment={onRemoveDraftAttachment}
         onRetryDraftAttachment={onRetryDraftAttachment}
@@ -307,6 +344,74 @@ function DraftBridge({
   return null;
 }
 
+type ComposerAppendMessage = Parameters<NonNullable<UseChatRuntimeOptions<UIMessage>["toCreateMessage"]>>[0];
+
+function toOutgoingUiMessageParts(message: ComposerAppendMessage): UIMessage["parts"] {
+  const parts: UIMessage["parts"] = [];
+  const contentParts = [
+    ...message.content.filter((part) => part.type !== "file"),
+    ...(message.attachments?.flatMap((attachment) =>
+      attachment.content.map((content) => ({
+        ...content,
+        filename: attachment.name
+      }))
+    ) ?? [])
+  ];
+
+  for (const part of contentParts) {
+    appendOutgoingUiMessagePart(parts, part);
+  }
+  return parts;
+}
+
+function appendOutgoingUiMessagePart(
+  parts: UIMessage["parts"],
+  part: {
+    type: string;
+    text?: string;
+    image?: string;
+    data?: unknown;
+    mimeType?: string;
+    filename?: string;
+    name?: string;
+  }
+): void {
+  if (part.type === "text") {
+    parts.push({
+      type: "text",
+      text: part.text ?? ""
+    });
+    return;
+  }
+
+  if (part.type === "image") {
+    parts.push({
+      type: "file",
+      url: part.image ?? "",
+      mediaType: "image/png",
+      ...(part.filename ? { filename: part.filename } : {})
+    });
+    return;
+  }
+
+  if (part.type === "file") {
+    parts.push({
+      type: "file",
+      url: typeof part.data === "string" ? part.data : "",
+      mediaType: part.mimeType ?? "application/octet-stream",
+      ...(part.filename ? { filename: part.filename } : {})
+    });
+    return;
+  }
+
+  if (part.type === "data" && part.name) {
+    parts.push({
+      type: `data-${part.name}`,
+      data: part.data
+    } as UIMessage["parts"][number]);
+  }
+}
+
 export function toUiMessages(messages: Message[]): UIMessage[] {
   const toolResultsByToolCallId = new Map<string, PersistedToolResult>();
   for (const message of messages) {
@@ -336,6 +441,9 @@ function toUiMessageParts(
       text: message.text,
       state: "done"
     });
+  }
+  if (message.role === "user") {
+    parts.push(...readUserDocumentFileParts(message));
   }
 
   const toolCalls = readAssistantToolCalls(message);
@@ -372,6 +480,46 @@ function toUiMessageParts(
           state: "done"
         }
       ];
+}
+
+function readUserDocumentFileParts(message: Message): UIMessage["parts"] {
+  const runtime = readAgentRuntimeMetadata(message.metadata);
+  if (runtime?.kind !== "user_message") {
+    return [];
+  }
+  const manifest = isRecord(runtime.attachmentManifest) ? runtime.attachmentManifest : undefined;
+  if (manifest?.version !== 1 || !Array.isArray(manifest.attachments)) {
+    return [];
+  }
+  return manifest.attachments.flatMap((value): UIMessage["parts"] => {
+    if (!isRecord(value)) {
+      return [];
+    }
+    const fileId = typeof value.fileId === "string" ? value.fileId : undefined;
+    const filename = typeof value.filename === "string" ? value.filename : undefined;
+    if (!fileId || !filename) {
+      return [];
+    }
+    const mimeType = typeof value.mimeType === "string" ? value.mimeType : undefined;
+    return [
+      toDocumentFilePart({
+        fileId,
+        filename,
+        ...(mimeType ? { mimeType } : {})
+      })
+    ];
+  });
+}
+
+function toDocumentFilePart(
+  attachment: Pick<DraftAttachment, "fileId" | "filename" | "mimeType">
+): UIMessage["parts"][number] {
+  return {
+    type: "file",
+    mediaType: attachment.mimeType ?? "application/octet-stream",
+    filename: attachment.filename,
+    url: `vivd-document://${encodeURIComponent(attachment.fileId)}`
+  };
 }
 
 interface PersistedToolCall {

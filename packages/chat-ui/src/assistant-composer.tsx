@@ -34,7 +34,18 @@ export function AssistantComposer({
   const hasAttachments = attachments.length > 0 || localUploadingAttachments.length > 0;
 
   return (
-    <ComposerPrimitive.Root className="relative w-full">
+    <ComposerPrimitive.Root className="relative grid w-full gap-2">
+      <ComposerPrimitive.Attachments>
+        {() => <AttachmentPreview removable />}
+      </ComposerPrimitive.Attachments>
+      {hasAttachments ? (
+        <DraftAttachmentList
+          attachments={attachments}
+          localUploadingAttachments={localUploadingAttachments}
+          onRemoveAttachment={onRemoveAttachment}
+          onRetryAttachment={onRetryAttachment}
+        />
+      ) : null}
       <ComposerPrimitive.AttachmentDropzone disabled asChild>
         <div
           className={cn(
@@ -42,17 +53,6 @@ export function AssistantComposer({
             "focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/30"
           )}
         >
-          <ComposerPrimitive.Attachments>
-            {() => <AttachmentPreview removable />}
-          </ComposerPrimitive.Attachments>
-          {hasAttachments ? (
-            <DraftAttachmentList
-              attachments={attachments}
-              localUploadingAttachments={localUploadingAttachments}
-              onRemoveAttachment={onRemoveAttachment}
-              onRetryAttachment={onRetryAttachment}
-            />
-          ) : null}
           <ComposerPrimitive.Input
             className="max-h-40 min-h-12 w-full resize-none bg-transparent px-2 py-1.5 text-sm leading-6 outline-none placeholder:text-muted-foreground"
             placeholder={t("messagePlaceholder")}
@@ -105,7 +105,7 @@ function DraftAttachmentList({
   onRetryAttachment: (attachmentId: string) => void;
 }) {
   return (
-    <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto rounded-md bg-muted/35 p-2">
+    <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto">
       {localUploadingAttachments.map((attachment) => (
         <AttachmentChip
           key={attachment.id}

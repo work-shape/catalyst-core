@@ -359,6 +359,12 @@ export function ChatWorkspace({
     void queryClient.invalidateQueries({ queryKey: ["conversations", apiBaseUrl, authScope] });
   }
 
+  function onMessageSubmitted(conversationId: string) {
+    setDraftForKey(createDraftKey(authScope, conversationId), "");
+    queryClient.setQueryData(draftAttachmentsQueryKey(apiBaseUrl, authScope, conversationId), []);
+    draftAttachmentController.clearConversationUploads(conversationId);
+  }
+
   function onStreamFinished() {
     setNotice(undefined);
     void queryClient.invalidateQueries({ queryKey: ["conversations", apiBaseUrl, authScope] });
@@ -366,6 +372,13 @@ export function ChatWorkspace({
     void queryClient.invalidateQueries({ queryKey: ["draft-attachments", apiBaseUrl, authScope] });
     void queryClient.invalidateQueries({ queryKey: ["usage", apiBaseUrl, authScope] });
     void queryClient.invalidateQueries({ queryKey: ["audit-events", apiBaseUrl, authScope] });
+  }
+
+  function onStreamError(message: string) {
+    setNotice(message);
+    void queryClient.invalidateQueries({ queryKey: ["conversations", apiBaseUrl, authScope] });
+    void queryClient.invalidateQueries({ queryKey: ["messages", apiBaseUrl, authScope] });
+    void queryClient.invalidateQueries({ queryKey: ["draft-attachments", apiBaseUrl, authScope] });
   }
 
   function onSelectConversation(conversationId: string) {
@@ -520,8 +533,9 @@ export function ChatWorkspace({
             onRemoveDraftAttachment={draftAttachmentController.onRemoveDraftAttachment}
             onRetryDraftAttachment={draftAttachmentController.onRetryDraftAttachment}
             onConversationStarted={onConversationStarted}
+            onMessageSubmitted={onMessageSubmitted}
             onStreamFinished={onStreamFinished}
-            onStreamError={setNotice}
+            onStreamError={onStreamError}
           />
           {fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
         </section>

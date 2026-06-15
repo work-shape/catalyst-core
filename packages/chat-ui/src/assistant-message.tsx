@@ -32,6 +32,18 @@ export function ThreadMessage() {
 
 function AssistantMessage() {
   const { t } = useTranslation();
+  const showPendingIndicator = useAuiState((state) => {
+    if (state.message.role !== "assistant" || state.message.status?.type !== "running") {
+      return false;
+    }
+
+    return !state.message.parts.some((part) => {
+      if (part.type === "text" || part.type === "reasoning") {
+        return part.text.trim().length > 0;
+      }
+      return false;
+    });
+  });
 
   return (
     <MessagePrimitive.Root
@@ -51,6 +63,11 @@ function AssistantMessage() {
             }
           }}
         />
+        {showPendingIndicator ? (
+          <div className="mt-3">
+            <AssistantThinking />
+          </div>
+        ) : null}
         <MessageError />
       </div>
       <div className="mt-1 flex min-h-8 items-center gap-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
@@ -94,17 +111,6 @@ function UserTextPart() {
 }
 
 function AssistantTextPart() {
-  const showThinking = useAuiState(
-    (state) =>
-      state.part.type === "text" &&
-      state.part.status.type === "running" &&
-      state.part.text.length === 0
-  );
-
-  if (showThinking) {
-    return <AssistantThinking />;
-  }
-
   return (
     <div className="max-w-3xl">
       <MarkdownText />
@@ -117,7 +123,7 @@ function AssistantThinking() {
 
   return (
     <div
-      className="inline-flex items-center gap-2 text-sm text-muted-foreground"
+      className="inline-flex items-center gap-2 rounded-full border bg-muted/50 px-3 py-2 text-sm text-muted-foreground shadow-xs"
       role="status"
       aria-live="polite"
       data-testid="assistant-working-indicator"
