@@ -5,11 +5,9 @@ import { cn } from "./ui/cn";
 export function AttachmentPreview({ removable }: { removable: boolean }) {
   return (
     <AttachmentPrimitive.Root className="group/attachment relative max-w-72">
-      <div className="grid min-w-0 grid-cols-[2.25rem_minmax(0,1fr)] items-center gap-2 rounded-md border bg-card px-2 py-1.5 shadow-xs">
-        <AttachmentPrimitive.unstable_Thumb className="grid size-9 place-items-center rounded bg-muted text-[0.625rem] font-medium uppercase text-muted-foreground">
-          <FileText size={15} aria-hidden="true" />
-        </AttachmentPrimitive.unstable_Thumb>
-        <span className="truncate text-sm">
+      <div className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-muted/45 px-2 py-1 text-xs text-muted-foreground">
+        <FileText size={13} aria-hidden="true" className="shrink-0" />
+        <span className="min-w-0 truncate">
           <AttachmentPrimitive.Name />
         </span>
       </div>

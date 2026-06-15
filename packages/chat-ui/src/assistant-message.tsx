@@ -123,16 +123,16 @@ function AssistantThinking() {
 
   return (
     <div
-      className="inline-flex items-center gap-2 rounded-full border bg-muted/50 px-3 py-2 text-sm text-muted-foreground shadow-xs"
+      className="inline-flex items-center gap-2 px-1 py-1 text-sm text-muted-foreground"
       role="status"
       aria-live="polite"
       data-testid="assistant-working-indicator"
     >
       <span>{t("thinking")}</span>
-      <span className="inline-flex items-center gap-1" aria-hidden="true">
-        <span className="size-1.5 rounded-full bg-primary/55 animate-pulse" />
-        <span className="size-1.5 rounded-full bg-primary/55 animate-pulse [animation-delay:150ms]" />
-        <span className="size-1.5 rounded-full bg-primary/55 animate-pulse [animation-delay:300ms]" />
+      <span className="inline-flex h-4 items-end gap-1" aria-hidden="true">
+        <span className="size-1.5 animate-bounce rounded-full bg-primary/50 [animation-duration:850ms] motion-reduce:animate-none" />
+        <span className="size-1.5 animate-bounce rounded-full bg-primary/50 [animation-delay:120ms] [animation-duration:850ms] motion-reduce:animate-none" />
+        <span className="size-1.5 animate-bounce rounded-full bg-primary/50 [animation-delay:240ms] [animation-duration:850ms] motion-reduce:animate-none" />
       </span>
     </div>
   );
