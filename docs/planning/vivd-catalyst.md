@@ -13,7 +13,7 @@ The first use case is a sensitive document and payslip workflow embedded into a 
 - [Frontend, UI, And API Client](./vivd-catalyst/frontend-ui-api.md)
 - [Agent Capabilities](./vivd-catalyst/agent-capabilities.md)
 - [Agent History And Tool Outputs](./vivd-catalyst/agent-history-tool-outputs.md)
-- [Document Text Extraction](./vivd-catalyst/document-text-extraction.md)
+- [Document Preprocessing And Reading](./vivd-catalyst/document-text-extraction.md)
 - [Data, Storage, And Retrieval](./vivd-catalyst/data-storage-retrieval.md)
 - [Infrastructure](./vivd-catalyst/infrastructure.md)
 - [Auth, Security, And Compliance](./vivd-catalyst/auth-security-compliance.md)

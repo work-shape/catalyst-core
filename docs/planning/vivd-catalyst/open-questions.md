@@ -16,9 +16,8 @@ Resolve these in order. Questions in the first section block the first vertical 
 3. Which governance actions require admin or superadmin roles?
 4. Which admin/superadmin actions require an explicit reason?
 5. What audit event types and audit retention policy are required for the first workflow?
-6. What document formats must v1 process?
-7. Which structured extraction provider should be used after the provider-agnostic interface exists?
-8. What UI customizations are necessary for the first workflow, and which are deliberately unsupported?
+6. Which structured extraction provider should be used after the provider-agnostic interface exists?
+7. What UI customizations are necessary for the first workflow, and which are deliberately unsupported?
 
 ## Parked For V2 Or Later
 

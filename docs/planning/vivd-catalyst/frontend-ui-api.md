@@ -55,7 +55,7 @@ User administration manages product-owned user records and identity mappings. It
 
 The normal chat rail should stay focused on conversations and a single New action. Superadmin/control-plane access should not appear as a primary Chat/Usage segmented control; it should be tucked behind a secondary superadmin-only action because most users will never see or need it.
 
-Composer drafts belong to the active conversation target. Switching conversations should restore that conversation's unsent draft or show an empty composer. The unsaved New conversation screen should have its own draft state and should not create a persisted conversation until the first message is sent.
+Composer text drafts belong to the active conversation target in frontend state. V1 should not persist every keystroke to the backend. Dropped files are different: they become persisted Draft Attachments with upload/preprocessing state because preprocessing may outlive the current browser view and must survive refreshes.
 
 Conversation rows should show a short generated title after the first user/assistant exchange. The backend owns title generation, persistence, usage accounting, and audit events; assistant-ui may render thread titles, but Assistant Cloud auto-title behavior is not used because conversation storage remains in our backend/Postgres. Title generation is navigation metadata only, not a retained conversation summary for model context. The first implementation uses a temporary first-message title immediately, then refreshes the conversation list after the stream finishes so the generated title appears without a separate UI control.
 
@@ -87,6 +87,28 @@ Current chat-ui implementation status: the active chat surface wraps assistant-u
 Current title implementation status: conversation rows store `title` in Postgres. New conversations start with a local first-message title, then the conversation workflow performs one best-effort model call after the first assistant response when the title still looks temporary. The title prompt is capped to the first user and assistant texts and asks the model to avoid personal data in the headline. Success writes `conversation.title_generated`; failure writes `conversation.title_generation_failed` and does not fail the chat turn.
 
 Deferred v1 UI controls: feedback/export and branch picker are intentionally out of scope for the next polish pass. Attachment acquisition/upload, dropzone enablement, message editing, and regeneration should move from disabled affordances to active controls only when the corresponding backend contracts and audit semantics are implemented.
+
+## File Attachment Dropzone
+
+When managed file upload is enabled, the drop target should be the whole active chat area, not only the composer. In the standalone shell this means the entire surface to the right of the conversation/sidebar rail: thread viewport, empty state, composer area, and any chat-level chrome. The sidebar should not become a file drop target because dragging over conversation navigation should not accidentally attach files to the active draft.
+
+Expected behavior:
+
+- dragging files over the chat area shows one clear full-surface drop overlay for the active conversation or new-message draft
+- dropping files anywhere in that area starts the managed file acquisition/upload flow
+- dropping files on the unsent New conversation screen creates a persisted Conversation shell first, so Draft Attachments always have a `conversationId` owner
+- conversations created by file drop use a temporary file-based title, such as the filename for one file or "`n` attached files" for multiple files
+- the browser's default file-open behavior is prevented while files are dragged over the chat surface
+- unsupported file types, too-large files, and upload failures are reported in the composer attachment area without sending a message
+- supported text-related files enter document preprocessing immediately after upload; the user can keep typing and dropping more files, but message submission is blocked while any attachment is uploading, queued, preprocessing, failed, or unsupported
+- preprocessing concurrency is configurable; queued Draft Attachments show pending processing state until capacity is available
+- failed or unsupported Draft Attachments must be removed or retried successfully before sending
+- likely duplicate files, such as matching filename and size in the same conversation, may show a confirmation hint before uploading again; continuing creates a separate Draft Attachment rather than deduplicating
+- upload/preprocessing state is persisted as Draft Attachments so switching conversations or refreshing the browser restores each attachment's status
+- successfully processed files are represented as managed file references and preprocessing metadata attached to the conversation draft, not as raw bytes or full text in UI state
+- pre-send attachment chips should stay minimal: filename, status, and file size; do not show extracted text, and do not require word/page counts in this UI
+- sending the message passes text plus managed file refs to the backend; the agent sees an Attachment Manifest and can choose `read_document` when document contents are needed
+- drag/drop should work consistently in embedded and standalone chat shells, with the drop scope adapted to each shell's main chat container
 
 ```text
 assistant-ui

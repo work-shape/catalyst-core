@@ -1,36 +1,59 @@
-# Document Text Extraction
+# Document Preprocessing And Reading
 
 Date: 2026-06-10
+Updated: 2026-06-15
 
-This note defines the first platform-native document processing tool. It is intentionally narrow: convert a managed file into text/Markdown so an agent can read it. It does not extract structured fields, compare claims, perform OCR, retrieve from a knowledge source, or acquire files from URLs.
+This note defines the first platform-native document preprocessing and reading path. It is intentionally narrow: after file acquisition, supported text-related documents are converted into reusable text/Markdown artifacts and safe metadata. The agent then uses a normal tool to read the prepared text. This does not extract structured fields, compare claims, perform OCR, retrieve from a knowledge source, or acquire files from URLs.
 
 ## Shared Understanding
 
-The first tool is:
+The v1 flow is:
 
 ```text
-document.extract_text
+file upload or handoff
+  -> File Acquisition creates a Managed File
+  -> DocumentPreprocessingService runs for supported text-related files
+  -> text/Markdown artifact and metadata are persisted
+  -> send persists an Attachment Manifest snapshot with file refs plus preprocessing metadata
+  -> agent calls read_document when it needs the text
+  -> read_document returns prepared text as persisted model-visible tool output
 ```
 
-It is a built-in platform tool, not a client-specific custom code tool. Client instances can enable or disable it through normal agent/tool configuration and permissions, but the conversion behavior, storage handling, audit behavior, and safeguards live in platform code.
+Document preprocessing is automatic for supported uploaded/attached documents in v1. The agent does not trigger extraction itself. The agent only chooses whether and when to call `read_document`.
 
-The tool operates on a `Managed File`. It does not accept raw bytes, local paths, browser file objects, or URLs. Upload, handoff from a customer application, and future URL fetching are separate file acquisition concerns.
+The first agent-facing tool is:
 
-The output is extracted document text, preferably Markdown when the converter can preserve useful structure. For the first version, the agent should usually receive the full extracted text as-is. The platform still stores the extracted text as a managed artifact so retention, deletion, audit, and future UI references have a durable object to point at.
+```text
+read_document
+```
+
+It is a built-in platform tool, not a client-specific custom code tool. Client instances can enable or disable it through normal agent/tool configuration and permissions, but the preprocessing behavior, storage handling, audit behavior, and safeguards live in platform code.
+
+`read_document` operates on a prepared `Managed File`. It does not accept raw bytes, local paths, browser file objects, or URLs. Upload, handoff from a customer application, and future URL fetching are separate file acquisition concerns.
+
+In v1, `read_document` is conversation-scoped. The tool may read only files attached to the current conversation, either as current Draft Attachments or as attachments on sent messages in that conversation. User-level file ownership is necessary but not sufficient; a file from another conversation must not be readable unless future explicit file-library behavior is added.
+
+Prepared text artifacts are also conversation-scoped in v1. Even if the same source file is attached in multiple conversations, each conversation attachment may get its own prepared artifact. This avoids cross-conversation cache/version semantics when the preprocessing pipeline changes. A future file-library or deduplication feature can introduce reusable prepared artifacts with explicit versioning.
+
+V1 should not deduplicate preprocessing even when the same file appears to be attached twice in the same conversation. Each Draft Attachment has its own preprocessing state and prepared artifact. The UI may warn on likely duplicates, such as matching filename and size, and ask whether the user wants to upload again; if the user continues, treat it as a separate attachment.
+
+The output is prepared document text, preferably Markdown when the converter can preserve useful structure. For v1, supported documents should normally be read in full. The platform also stores the extracted text as a managed artifact so retention, deletion, audit, future page-range reads, and future UI references have a durable object to point at.
 
 ## Non-Goals
 
-Do not include these in the first version:
+Do not include these in v1:
 
 - structured field extraction
 - payslip-specific schemas
 - comparison against application statements
-- summarization as the primary output
+- summarization as a primary output
+- table-of-contents generation
+- page-range reading
 - OCR or Gemini fallback
 - browser automation
 - URL/file fetching
 - vector ingestion or retrieval
-- arbitrary document-analysis UI beyond the normal tool result surface
+- arbitrary document-analysis UI beyond normal processing status and tool result surfaces
 
 These are future document processing capabilities that can build on the same managed file and artifact foundation.
 
@@ -39,21 +62,159 @@ These are future document processing capabilities that can build on the same man
 Recommended first implementation:
 
 ```text
-agent
-  -> document.extract_text
-  -> tool authorization and audit envelope
-  -> DocumentTextExtractionService
+chat UI drop/upload
+  -> create Conversation shell if the user is on the unsent New conversation screen
+  -> upload/acquisition API stores raw file as Managed File
+  -> persistent Draft Attachment is created for the conversation
+  -> DocumentPreprocessingService
   -> ManagedFileStore reads source file
   -> MarkItDownRunner converts file through a child process
   -> ManagedArtifactStore writes extracted Markdown/text
-  -> tool returns full text plus metadata
+  -> Postgres stores preprocessing status, counts, warnings, artifact refs
+  -> send persists an Attachment Manifest snapshot on the user message
+  -> agent chooses read_document(fileId)
+  -> InProcessToolExecution authorization, input validation, and generic tool audit envelope
+  -> read_document ToolDefinition loads prepared artifact
+  -> tool returns ToolHandlerResult output plus artifact/audit metadata
+  -> ModelContextProjection sends model-visible output to the agent
 ```
 
-MarkItDown should be treated as the conversion engine behind the platform service, not as the product boundary. The product boundary remains `document.extract_text` and the product-owned extraction result types.
+MarkItDown should be treated as the conversion engine behind the platform service, not as the product boundary. The product boundaries are Document Preprocessing and `read_document`, using product-owned result types.
+
+## Alignment With Live Tool Runtime
+
+The live tool architecture already has the right outer shape:
+
+- tools are `ToolDefinition`s created with the tool SDK
+- client assembly combines platform built-ins and customer tools
+- release config enables/disables tools and agents reference enabled tool names
+- `InProcessToolExecution` authorizes tools, validates input/output schemas, executes handlers, and records generic `tool.*` audit events
+- `ToolHandlerResult` separates model-visible `output`, non-model `privateOutput`, user-facing `display`, managed `artifacts`, and minimized `auditSummary`
+- `ModelContextProjection` serializes only `output` into model-visible history and applies a configurable tool-output bound
+
+`read_document` should therefore be a normal built-in platform tool using this contract. Its model-visible `output` contains the prepared text and is persisted as durable agent-visible tool history. The prepared text artifact should also be returned through `artifacts` so retention, deletion, UI references, and future workflows can use the durable object without parsing model-visible output.
+
+The current client assembly creates built-in tool definitions before creating the platform store. That works for stateless built-ins such as `renderHtml`, but `read_document` needs managed file/artifact storage. The cleanest implementation is to create the platform store and storage-backed platform services before creating built-in tool definitions, then pass those services into the built-in factory:
+
+```text
+load config
+create platform store
+create managed file/artifact stores
+create DocumentPreprocessingService
+create DocumentReadService
+create built-in tool definitions with service dependencies
+create customer tool definitions
+validate assembly
+create ToolRegistry and InProcessToolExecution
+```
+
+This keeps `read_document` as a normal tool while keeping storage access in runtime dependencies instead of model-visible tool input. Avoid a special lazy lookup inside the tool handler unless the assembly order becomes circular; explicit construction is easier to validate and test.
+
+## Upload-Time Processing State
+
+When a file is dropped or otherwise attached to a conversation, the chat surface should block message submission until preprocessing reaches a terminal state for all files that require preprocessing.
+
+Draft Attachments must be persisted, not kept only in component memory. Switching conversations, navigating away, refreshing the browser, or reopening the standalone surface should restore upload and preprocessing state. Composer text can remain frontend state in v1; the backend should not persist every keystroke.
+
+If the user drops a file on the unsent New conversation screen, the frontend should create a persisted Conversation shell first. Draft Attachments are always owned by `conversationId`; do not introduce a separate draft-owner id in v1.
+
+Conversations created by file drop should use a temporary file-based title. For one file, use the filename; for multiple files, use a generic count such as `3 attached files`. Filename-based titles are acceptable in the user's own conversation list because the user uploaded the file and needs to recognize the conversation. Do not put filename-derived titles into audit metadata unless there is a specific governance reason. After the first real user message and assistant response, the normal backend title-generation flow can replace the title if it still looks temporary.
+
+Preprocessing should start immediately after each file drop/upload, but it must not block the user from dropping additional files or typing the message. Only message submission is blocked while any Draft Attachment is still uploading, queued, preprocessing, failed, or unsupported. The backend should persist status transitions so the UI can refetch or poll attachment state after refresh or conversation switches.
+
+Suggested statuses:
+
+```text
+uploading
+uploaded
+queued
+preprocessing
+ready
+unsupported
+failed
+deleted
+```
+
+The UI should show a clear processing state in the chat/composer area. Pre-send attachment chips should stay minimal: filename, status, and file size. Do not show extracted text, and do not require word/page counts in this UI. The user should not be able to send a message with a file that is still `uploading`, `queued`, or `preprocessing`. A failed or unsupported file should remain visible with a clear error and a remove/retry path. For v1, sending is disabled until every failed or unsupported Draft Attachment is removed or retried successfully; unavailable files should not enter the Attachment Manifest.
+
+Preprocessing should start immediately after each file drop/upload, but it must not block the user from dropping additional files or typing the message. Multiple Draft Attachments may preprocess independently, but concurrency must be bounded and configurable. Recommended initial defaults:
+
+```text
+per-conversation preprocessing concurrency: 2
+global preprocessing concurrency: implementation-defined, conservative default
+```
+
+When concurrency is exhausted, additional ready-to-process Draft Attachments should stay in `queued` until capacity is available. The backend should persist status transitions so the UI can refetch or poll attachment state after refresh or conversation switches.
+
+Preprocessing policy should live in release config, not agent config:
+
+```yaml
+documents:
+  preprocessing:
+    enabled: true
+    perConversationConcurrency: 2
+    globalConcurrency: 4
+    maxSourceFileSizeMb: 20
+    maxPreparedTextCharacters: 200000
+    timeoutSeconds: 30
+    supportedFormats:
+      - pdf
+      - docx
+      - txt
+      - md
+```
+
+The default global concurrency should be conservative, but operated client instances can raise it after sizing the VPS/container CPU, memory, and child-process behavior. The first customer deployment should choose a value explicitly during infrastructure sizing rather than relying on an accidental code default.
+
+Preprocessing enablement does not automatically grant agent read access. `read_document` remains an explicit tool that must be enabled in release config and referenced by each agent that may read prepared document text:
+
+```yaml
+tools:
+  - name: read_document
+    enabled: true
+
+agents:
+  - name: workflow_assistant
+    toolNames:
+      - read_document
+```
+
+On send, the backend should attach the conversation's ready Draft Attachments to the new user message, persist an Attachment Manifest snapshot on that message, and clear those Draft Attachments from the conversation. Because v1 blocks send until every included Draft Attachment is ready, the manifest should not need to change after it enters conversation history. This gives the persisted conversation a clear record of which prepared files the model saw as available for that message. Retention/deletion workflows should handle removed, abandoned, failed, or orphaned Draft Attachments and their managed files/artifacts.
+
+Queued-send is out of scope for v1. A future version may let the user press send while files are still processing, show the message as waiting, and release it to the agent only after preprocessing succeeds. V1 keeps the simpler rule: no user message is created until all included attachments are ready and the user explicitly sends.
+
+## Attachment Manifest
+
+The model-visible Attachment Manifest should expose metadata, not raw document text.
+
+Suggested manifest entry:
+
+```ts
+type AttachmentManifestEntry = {
+  fileId: string;
+  filename?: string;
+  mimeType?: string;
+  byteSize?: number;
+  checksum?: string;
+  preprocessing: {
+    status: "ready";
+    format?: "markdown" | "text";
+    pageCount?: number;
+    wordCount?: number;
+    characterCount?: number;
+    warnings: string[];
+    readable: boolean;
+  };
+};
+```
+
+For v1, the manifest should include word/character counts from the prepared text. `pageCount` is best-effort optional metadata: include it only when the source format or converter exposes a reliable page count. If page count is not reliable for a format, omit it rather than inventing an estimate.
+
+The manifest is there so the agent can decide whether to call `read_document`. It must not include full prepared text. In v1, the manifest includes only sendable ready files; unsupported or failed Draft Attachments block send until removed or retried. Empty or near-empty prepared text is still sendable as `ready` with a `no_extractable_text` warning and zero or near-zero counts.
 
 ## MarkItDown Execution Model
 
-Decision: for the first implementation, run MarkItDown through a child process from the Node backend/container. Do not introduce a separate document-worker container until OCR dependencies, scaling needs, memory isolation, or operational reliability justify it.
+Decision: for the first implementation, run preprocessing in the API process and run MarkItDown through a child process from the Node backend/container. Do not introduce a separate document-worker process or container in v1. Revisit that only when OCR dependencies, scaling needs, memory isolation, or operational reliability justify it.
 
 Reasons:
 
@@ -88,18 +249,18 @@ The wrapper must not fetch URLs or resolve remote resources. URL acquisition is 
 
 ## Tool Contract
 
-Suggested input:
+V1 input is intentionally only full-document reading:
 
 ```ts
-type DocumentExtractTextInput = {
+type ReadDocumentInput = {
   fileId: string;
 };
 ```
 
-Suggested output:
+V1 model-visible output:
 
 ```ts
-type DocumentExtractTextOutput = {
+type ReadDocumentOutput = {
   file: {
     fileId: string;
     filename?: string;
@@ -112,43 +273,114 @@ type DocumentExtractTextOutput = {
     artifactId: string;
     mimeType: "text/markdown" | "text/plain";
     characterCount: number;
+    wordCount?: number;
+    pageCount?: number;
     checksum?: string;
   };
-  extraction: {
+  preprocessing: {
     engine: "markitdown";
+    completedAt: string;
     durationMs: number;
     warnings: string[];
   };
 };
 ```
 
-The agent receives `text` directly when it is within the configured agent-context limit. The platform must not silently truncate text. If extracted text is too large to safely return to the agent, the tool should fail with a clear error such as `too_large_for_agent_context`, while preserving the managed text artifact for later workflows.
+The output should keep structured metadata beside the raw prepared text. Do not prepend a prose metadata header to `text`; `text` should remain only the prepared document content.
+
+The successful tool result should also include:
+
+```ts
+{
+  artifacts: [
+    {
+      artifactId,
+      kind: "document.prepared_text",
+      mimeType: "text/markdown" | "text/plain",
+      filename
+    }
+  ],
+  auditSummary: {
+    action: "read_document",
+    subject: fileId,
+    metadata: {
+      artifactId,
+      characterCount,
+      wordCount,
+      pageCount,
+      warningCount
+    }
+  }
+}
+```
+
+The agent receives `text` directly and the full model-visible output is persisted in durable conversation/tool history. The platform must not silently truncate document text inside the read tool result. If a later model request needs context management, session compaction or model-context projection can bound the active provider request without rewriting the durable transcript.
+
+## V2 Table Of Contents And Page-Aware Reads
+
+V2 should build on the preprocessing state instead of changing the upload/read boundary.
+
+Future preprocessing artifacts:
+
+- page-indexed prepared text, when the source format supports stable page boundaries
+- per-page or per-section text chunks
+- page-aware word/character counts
+- a generated table-of-contents artifact
+- optional summaries over page ranges or sections
+
+Future `read_document` input can extend v1:
+
+```ts
+type ReadDocumentInput = {
+  fileId: string;
+  mode?: "full" | "pages";
+  pages?: {
+    from: number;
+    to: number;
+  };
+};
+```
+
+Do not expose page-range parameters in v1 unless the preprocessing pipeline actually persists page-indexed text. A parameter that implies page precision without page-indexed artifacts would create false confidence.
+
+As of 2026-06-15, MarkItDown's main documentation supports general PDF/DOCX conversion to Markdown, but page-level extraction is not a stable mainline capability. There is an open upstream PR for `extract_pages` and page JSON output for PDF/PPTX/DOCX. If that lands and proves reliable, v2 can adopt it. If not, v2 page-aware reads need a platform-owned page-indexing strategy, likely starting with PDFs and treating DOCX pagination as less reliable.
 
 ## Safeguards
 
-The first version should include safeguards that protect boundaries without changing the extracted content.
+The first version should include safeguards that protect boundaries without changing the prepared content.
 
 Required safeguards:
 
 - verify the authenticated user may access the `fileId`
+- verify the file is attached to the current conversation
 - accept only configured MIME types and file extensions
 - enforce source file size limits
-- enforce conversion wall-clock timeout
-- cancel or kill the child process when the tool call is cancelled
+- enforce preprocessing wall-clock timeout
+- cancel or kill the child process when preprocessing is cancelled or abandoned
 - run conversion in a temporary working directory
 - pass paths as process arguments, never through shell string interpolation
 - disable URL conversion and remote fetching
-- store extracted text as a retention-managed artifact
-- avoid full extracted text in audit events, logs, and usage records
-- mark document text as untrusted content in the agent system instructions or tool-result handling
-- enforce a maximum returned text size for agent context
+- store prepared text as a retention-managed artifact
+- avoid full prepared text in audit events, logs, usage records, and Attachment Manifests
+- mark prepared document text as untrusted content in agent system instructions or tool-result handling
+- enforce a generous maximum persisted prepared text size to prevent pathological tool outputs
+- persist Draft Attachment preprocessing state so refresh/conversation switching cannot lose attachment readiness
+
+V1 supported formats:
+
+- PDF
+- DOCX
+- TXT
+- Markdown
+
+HTML, XLSX, and PPTX are out of scope for v1 unless a concrete first-customer document requires changing the scope.
 
 Recommended initial defaults:
 
 ```text
 max source file size: 20 MB
-max returned text size: 200,000 characters
-conversion timeout: 30 seconds
+max persisted prepared text size: 200,000 characters
+preprocessing timeout: 30 seconds
 supported first formats: PDF, DOCX, TXT, Markdown
 ```
 
@@ -156,18 +388,18 @@ These defaults are intentionally conservative and should be adjusted only when a
 
 ## Storage
 
-Document text extraction needs managed object/artifact storage. Development should use an S3-compatible bucket as the normal path so file ids, object keys, metadata, checksums, streaming reads/writes, and deletion behavior are exercised early.
+Document preprocessing needs managed object/artifact storage. Development should use an S3-compatible bucket as the normal path so file ids, object keys, metadata, checksums, streaming reads/writes, and deletion behavior are exercised early.
 
 Recommended sequence:
 
-1. Define product-owned managed file and artifact store interfaces.
+1. Define product-owned managed file, prepared document, and artifact store interfaces if the current `ManagedFileRef` and `ManagedArtifactRef` types are not enough.
 2. Implement an S3-compatible object store adapter as the first real store.
 3. Run Adobe S3Mock in Docker Compose for development and CI.
 4. Keep a filesystem or in-memory store only as a narrow unit-test fake if it materially simplifies tests.
 
-Postgres should store metadata, ownership, retention state, checksums, and audit references. Raw files and extracted text artifacts should live in object/artifact storage.
+Postgres should store metadata, ownership, conversation attachment links, retention state, preprocessing status, counts, warnings, checksums, preprocessing version metadata, and audit references. Raw files and prepared text artifacts should live in object/artifact storage. In v1, prepared text artifact metadata should point to the conversation attachment it was created for, not only to the source file.
 
-Adobe S3Mock is the recommended development dependency. It is Apache-2.0 licensed, Docker-friendly, and explicitly intended for local S3 integration testing. It is not a production object store.
+Adobe S3Mock is the selected development and CI object-store dependency for the first implementation. It is Apache-2.0 licensed, Docker-friendly, and explicitly intended for local S3 integration testing. It is not a production object store.
 
 LocalStack should not be the default development dependency because its current licensing and auth-token model adds avoidable friction for this project. MinIO should not be the default local dependency for new work because the public `minio/minio` repository is now archived. Garage remains a possible future self-hosted S3-compatible production candidate for VPS/Compose deployments, but it does not need to be selected for the first extraction slice.
 
@@ -175,85 +407,90 @@ LocalStack should not be the default development dependency because its current 
 
 Audit events should record metadata, not document content.
 
+The live runtime already records generic `tool.authorization_checked`, `tool.started`, `tool.completed`, and `tool.failed` events. `read_document` should not bypass that envelope. Document-specific preprocessing metadata should be recorded directly by the preprocessing service or through a minimized audit-summary path.
+
 Recommended document events:
 
-- `document.text_extraction_started`
-- `document.text_extraction_completed`
-- `document.text_extraction_failed`
+- `document.preprocessing_started`
+- `document.preprocessing_completed`
+- `document.preprocessing_failed`
+- `document.read_completed`
+- `document.read_failed`
 
 Useful audit metadata:
 
 - file id
-- artifact id when created
+- artifact id when created or read
 - source MIME type
 - source byte size
-- extracted character count
+- prepared character count
+- prepared word count
+- page count when reliable
 - converter id and version when available
 - warning count
 - duration
 - correlation id
-- conversation id and tool call id through the existing tool audit envelope
+- conversation id and tool call id where a read happened through the tool envelope
 
-Do not put extracted text, raw file bytes, prompts, or full converter stderr in audit events.
+Do not put prepared text, raw file bytes, prompts, or full converter stderr in audit events.
 
 Retention and deletion should cover:
 
 - source managed file
-- extracted text artifact
+- prepared text artifact
+- conversation attachment links
+- preprocessing metadata
 - tool call record
-- any future page-image or OCR artifacts
+- any future page-index, TOC, summary, page-image, or OCR artifacts
+
+Exact retention durations are release-config policy and do not block this design. The important v1 requirement is that raw files, Draft Attachments, prepared artifacts, preprocessing metadata, and message/tool references all participate in the configured retention and deletion workflows.
 
 ## Error Semantics
 
-The tool should distinguish platform failures from conversion outcomes.
+Preprocessing failures:
 
-Platform failures:
+- unsupported file type
+- source file too large
+- preprocessing timed out
+- conversion process failed
+- prepared text exceeds the configured maximum persisted prepared text size
+
+Read failures:
 
 - file not found
 - user not authorized for file
-- unsupported file type
-- source file too large
-- conversion timed out
-- conversion process failed
-- extracted text too large for agent context
+- file is not attached to the current conversation
+- preprocessing not completed
+- preprocessing failed or unsupported
+- prepared text artifact missing
 
 Conversion outcomes:
 
-- empty or near-empty text can be a successful conversion with a `no_extractable_text` warning
-- partially extracted text can be a successful conversion with converter warnings
-- scanned documents without OCR should return a warning, not trigger Gemini in the first version
-
-## Future Extensions
-
-Future capabilities should stay behind the same product concepts:
-
-- OCR fallback for scanned PDFs or images
-- provider-backed extraction through Vertex Gemini or another approved enterprise model provider
-- structured field extraction as a separate capability
-- comparison tools for application statements versus document facts
-- document analysis UI panels
-- S3-compatible artifact storage adapter
-- isolated document-processing worker container
-
-The agent-facing tool may remain `document.extract_text` for plain extraction. New interpretation behavior should be separate, for example `document.extract_structured` or a domain-specific analysis tool.
+- empty or near-empty text can be successful preprocessing with a `no_extractable_text` warning
+- partially prepared text can be successful preprocessing with converter warnings
+- scanned documents without OCR should return a warning, not trigger Gemini in v1
 
 ## Implementation Checklist
 
-1. Add product-owned managed file/artifact store interfaces if the current `ManagedFileRef` and `ManagedArtifactRef` types are not enough.
+1. Add product-owned managed file/artifact/prepared-document store interfaces if the current types are not enough.
 2. Add an S3-compatible managed file/artifact store implementation.
-3. Add a document processing package/module with `DocumentTextExtractionService`.
-4. Add a MarkItDown child-process runner with timeout and cancellation support.
-5. Add the Python wrapper script and dependency installation path for development/container builds.
-6. Register the built-in `document.extract_text` tool through the existing tool registry.
-7. Add agent instructions that treat extracted document text as untrusted content.
-8. Add Adobe S3Mock to local Docker Compose.
-9. Add tests for authorization, file-type rejection, file-size rejection, timeout, successful extraction, no-extractable-text warning, too-large-for-agent-context behavior, artifact creation, object deletion, and audit minimization.
+3. Add a document processing package/module with `DocumentPreprocessingService` and `DocumentReadService`.
+4. Add persistent Draft Attachment state for conversation attachments so refresh and conversation switching restore status.
+5. Create a Conversation shell on first file drop when no `conversationId` exists yet.
+6. Add a MarkItDown child-process runner with timeout and cancellation support.
+7. Add the Python wrapper script and dependency installation path for development/container builds.
+8. Add `documents.preprocessing` release config for enablement, supported formats, size/text limits, timeout, and concurrency.
+9. Wire file upload/acquisition finalization to start non-blocking preprocessing for supported text-related files.
+10. Add configurable preprocessing concurrency with queued Draft Attachments when capacity is exhausted.
+11. Block chat submission while attached files are uploading, queued, preprocessing, failed, or unsupported.
+12. Persist an Attachment Manifest snapshot on the user message at send time.
+13. Project the persisted Attachment Manifest into model-visible user messages.
+14. Add a service-backed built-in `read_document` tool definition through the existing tool registry and client assembly path.
+15. Adjust client assembly construction so the platform store and storage-backed services are created before built-in tool definitions that depend on them.
+16. Add agent instructions that treat prepared document text as untrusted content.
+17. Add Adobe S3Mock to local Docker Compose.
+18. Add tests for upload-time preprocessing, persisted Draft Attachment state, conversation-scoped prepared artifacts, duplicate-file warning without deduplication, release-config validation, configurable concurrency/queueing, new-conversation file drop, refresh/conversation restoration, send-time clearing, persisted Attachment Manifest snapshots, send blocking for uploading/queued/preprocessing/failed/unsupported attachments, authorization, conversation-scoped read access, file-type rejection, file-size rejection, timeout, successful full-text read, no-extractable-text warning, oversized prepared text failure, artifact creation, object deletion, Attachment Manifest projection, model-context projection boundaries, and audit minimization.
 
 ## Open Questions
 
-These are the remaining choices that need product agreement before implementation:
-
-1. Which formats are required on day one: only PDF/DOCX/TXT/Markdown, or also XLSX/PPTX/HTML?
-2. Should `too_large_for_agent_context` be a hard failure, or should the tool return artifact metadata without `text`?
-3. Does Adobe S3Mock cover all object-store operations needed by the first implementation, or do we need to narrow the adapter to operations it supports?
-4. What exact retention duration applies to source files and extracted text artifacts for the first client instance?
+No document-preprocessing-specific product blockers remain before implementation. Exact retention durations and first-client concurrency values are release/deployment configuration decisions.

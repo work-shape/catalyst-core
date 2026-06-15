@@ -4,7 +4,7 @@ import {
   Loader2,
   Wrench
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   isToolDisplayPayload,
   readToolDisplayPayloadFromToolResult,
@@ -12,6 +12,44 @@ import {
 } from "./domain-ui-widgets";
 import { useTranslation } from "./i18n";
 import { cn } from "./ui/cn";
+
+const DISPLAY_HEIGHT_MESSAGE_TYPE = "vivd-catalyst:display-height";
+const RUNTIME_THEME_STYLE_ID = "vivd-catalyst-runtime-theme";
+const THEME_CSS_VARIABLE_NAMES = [
+  "--radius",
+  "--background",
+  "--foreground",
+  "--card",
+  "--card-foreground",
+  "--popover",
+  "--popover-foreground",
+  "--primary",
+  "--primary-foreground",
+  "--secondary",
+  "--secondary-foreground",
+  "--muted",
+  "--muted-foreground",
+  "--accent",
+  "--accent-foreground",
+  "--destructive",
+  "--border",
+  "--input",
+  "--ring",
+  "--sidebar",
+  "--sidebar-foreground",
+  "--sidebar-primary",
+  "--sidebar-primary-foreground",
+  "--sidebar-accent",
+  "--sidebar-accent-foreground",
+  "--sidebar-border",
+  "--sidebar-ring"
+] as const;
+
+const FRAME_HEIGHT_LIMITS = {
+  inline: { fallback: 512, min: 220, max: 1400 },
+  side_panel: { fallback: 640, min: 320, max: 1800 },
+  fullscreen: { fallback: 720, min: 420, max: 2400 }
+} as const;
 
 interface ToolCallPartProps {
   toolName: string;
@@ -44,12 +82,14 @@ export function ToolCallPart({ toolName, toolCallId, argsText, result, isError }
         })
       : undefined;
   const builtInDisplay = display && !hasRenderedNode(renderedDisplay) ? renderBuiltInDisplay(display) : undefined;
+  const hasDisplay = hasRenderedNode(renderedDisplay) || hasRenderedNode(builtInDisplay);
   const details = formatDetails(result ?? argsText);
 
   return (
     <div
       className={cn(
-        "my-2 max-w-3xl rounded-md border bg-card shadow-xs",
+        "my-2 rounded-md border bg-card shadow-xs",
+        hasDisplay ? "max-w-5xl" : "max-w-3xl",
         state === "failed" && "border-destructive/40 bg-destructive/5"
       )}
       data-testid="tool-call-card"
@@ -68,7 +108,7 @@ export function ToolCallPart({ toolName, toolCallId, argsText, result, isError }
         </div>
         <Wrench size={15} className="shrink-0 text-muted-foreground" aria-hidden="true" />
       </div>
-      {hasRenderedNode(renderedDisplay) || hasRenderedNode(builtInDisplay) ? (
+      {hasDisplay ? (
         <div className="border-b">{renderedDisplay ?? builtInDisplay}</div>
       ) : (
         <ToolSummary result={result} />
@@ -101,10 +141,11 @@ export function DataPart({ name, data }: DataPartProps) {
       : undefined;
   const builtInDisplay =
     isToolDisplayPayload(data) && !hasRenderedNode(renderedDisplay) ? renderBuiltInDisplay(data) : undefined;
+  const hasDisplay = hasRenderedNode(renderedDisplay) || hasRenderedNode(builtInDisplay);
   const details = formatDetails(data);
 
-  if (hasRenderedNode(renderedDisplay) || hasRenderedNode(builtInDisplay)) {
-    return <div className="my-2 max-w-3xl rounded-md border bg-card shadow-xs">{renderedDisplay ?? builtInDisplay}</div>;
+  if (hasDisplay) {
+    return <div className="my-2 max-w-5xl rounded-md border bg-card shadow-xs">{renderedDisplay ?? builtInDisplay}</div>;
   }
 
   return (
@@ -185,22 +226,110 @@ function renderBuiltInDisplay(display: { kind?: unknown; mode?: unknown; data?: 
   }
   const title = typeof display.data.title === "string" ? display.data.title : "Rendered HTML";
   const mode = display.mode === "side_panel" || display.mode === "fullscreen" ? display.mode : "inline";
+  return <RenderedHtmlDisplay html={display.data.html} mode={mode} title={title} />;
+}
+
+function RenderedHtmlDisplay({
+  html,
+  mode,
+  title
+}: {
+  html: string;
+  mode: "inline" | "side_panel" | "fullscreen";
+  title: string;
+}) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [frameDocument, setFrameDocument] = useState<{ key: number; srcDoc?: string }>({ key: 0 });
+  const [contentHeight, setContentHeight] = useState<number | undefined>(undefined);
+  const heightLimit = FRAME_HEIGHT_LIMITS[mode];
+  const frameHeight = clampNumber(contentHeight ?? heightLimit.fallback, heightLimit.min, heightLimit.max);
+  const frameStyle: CSSProperties = { height: `${frameHeight}px` };
+
+  useEffect(() => {
+    setContentHeight(undefined);
+  }, [html]);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    const nextSrcDoc = host ? injectRuntimeThemeStyle(html, readThemeDeclarations(host)) : html;
+    setFrameDocument((currentDocument) =>
+      currentDocument.srcDoc === nextSrcDoc
+        ? currentDocument
+        : { key: currentDocument.key + 1, srcDoc: nextSrcDoc }
+    );
+  });
+
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      if (event.source !== iframeRef.current?.contentWindow || !isRecord(event.data)) {
+        return;
+      }
+      if (event.data.type !== DISPLAY_HEIGHT_MESSAGE_TYPE || typeof event.data.height !== "number") {
+        return;
+      }
+      if (!Number.isFinite(event.data.height) || event.data.height <= 0) {
+        return;
+      }
+      setContentHeight(Math.ceil(event.data.height));
+    }
+
+    window.addEventListener("message", onMessage);
+    return () => {
+      window.removeEventListener("message", onMessage);
+    };
+  }, []);
+
   return (
-    <div className="bg-background">
+    <div ref={hostRef} className="bg-background">
       <div className="border-b px-3 py-2 text-xs font-medium text-muted-foreground">{title}</div>
-      <iframe
-        title={title}
-        sandbox="allow-scripts"
-        srcDoc={display.data.html}
-        className={cn(
-          "w-full border-0 bg-white",
-          mode === "inline" && "h-80",
-          mode === "side_panel" && "h-[32rem]",
-          mode === "fullscreen" && "h-[70vh]"
-        )}
-      />
+      {frameDocument.srcDoc ? (
+        <iframe
+          key={frameDocument.key}
+          ref={iframeRef}
+          title={title}
+          sandbox="allow-scripts"
+          srcDoc={frameDocument.srcDoc}
+          className="w-full border-0 bg-background"
+          style={frameStyle}
+        />
+      ) : (
+        <div className="w-full bg-background" style={frameStyle} aria-hidden="true" />
+      )}
     </div>
   );
+}
+
+function readThemeDeclarations(element: HTMLElement): string {
+  const style = window.getComputedStyle(element);
+  return THEME_CSS_VARIABLE_NAMES.flatMap((name) => {
+    const value = toSafeCssCustomPropertyValue(style.getPropertyValue(name));
+    return value ? [`  ${name}: ${value};`] : [];
+  }).join("\n");
+}
+
+function injectRuntimeThemeStyle(html: string, declarations: string): string {
+  if (!declarations) {
+    return html;
+  }
+
+  const themeStyle = `<style id="${RUNTIME_THEME_STYLE_ID}">\n:root {\n${declarations}\n}\n</style>`;
+  if (/<\/head>/iu.test(html)) {
+    return html.replace(/<\/head>/iu, `${themeStyle}\n</head>`);
+  }
+  return `${themeStyle}\n${html}`;
+}
+
+function toSafeCssCustomPropertyValue(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed || /[<>{}]/u.test(trimmed)) {
+    return undefined;
+  }
+  return trimmed.replaceAll(";", "");
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -31,7 +31,7 @@ For email links to files, the first real implementation should be a deterministi
 ```yaml
 tools:
   - file.fetch_url
-  - file.extract_document
+  - read_document
 ```
 
 `file.fetch_url` should:
@@ -103,21 +103,22 @@ Document processing should be a pipeline, not one monolithic tool:
 ```text
 file.fetch_url / upload
   -> file storage
-  -> document.convert_to_markdown
+  -> document preprocessing
+  -> read_document
   -> document.extract_structured
   -> validation / human review
 ```
 
 Suggested tools:
 
-- `document.convert_to_markdown`: converts supported files to Markdown/text plus metadata.
+- `read_document`: reads prepared document text from a managed file whose upload-time preprocessing has completed.
 - `document.extract_structured`: extracts schema-bound fields from a file or Markdown result.
 - `document.compare_fields`: compares extracted facts with application/email statements.
 - `document.redact`: removes or masks sensitive fields where needed.
 
 ## MarkItDown
 
-Microsoft MarkItDown is a strong candidate for `document.convert_to_markdown`.
+Microsoft MarkItDown is a strong candidate conversion engine for upload-time document preprocessing.
 
 Relevant current capabilities:
 
@@ -161,8 +162,9 @@ Sources:
 
 V1 should include:
 
-- `document.convert_to_markdown` interface
-- MarkItDown evaluation as the default conversion backend
+- upload-time document preprocessing for supported text-related documents
+- `read_document` as the first agent-facing document reading tool
+- MarkItDown evaluation as the default conversion backend behind preprocessing
 - `document.extract_structured` interface
 - provider-agnostic structured extraction evaluation, with Gemini on Vertex AI as one candidate when compliance requirements allow it
 

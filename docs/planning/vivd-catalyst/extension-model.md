@@ -19,7 +19,7 @@ The product should be configurable and extensible without becoming a live-mutate
 3. **Built-in platform tools**
    - Platform-provided capabilities enabled and configured through YAML/JSON.
    - No customer runtime code.
-   - Examples: `file.fetch_url`, `document.convert_to_markdown`, `document.extract_structured`, `knowledge.search`.
+   - Examples: `file.fetch_url`, `read_document`, `document.extract_structured`, `knowledge.search`.
    - Agent instructions, model settings, and prompts are configuration, but they are not tools.
 
 ### Future Sources

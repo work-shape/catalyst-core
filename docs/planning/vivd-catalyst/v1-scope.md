@@ -24,7 +24,8 @@ V1 should include:
 - configurable pricing, spend budget, cost safety multiplier, and late usage safeguards for model calls and model tokens in release config
 - client branding and theme config for customer name, logo, and colors
 - startup validation that proves release-config tool references are implemented and enabled consistently
-- document processing interfaces for Markdown conversion and structured extraction
+- upload-time document preprocessing for supported text-related files, plus `read_document` for prepared text
+- document processing interfaces for structured extraction
 - Docker images for runtime services
 - Docker Compose for local development
 - first production deployment path using Docker Compose on a VPS/VM
@@ -47,6 +48,7 @@ Recommended order:
 10. Customer-backed token auth.
 11. Embeddable widget reusing the same chat core.
 12. Domain UI output for the first document analysis workflow.
+13. Managed file attachment flow with persisted upload/preprocessing state.
 
 This sequencing keeps the architecture reusable while avoiding early work on extension surfaces that have not yet been exercised by a real workflow.
 

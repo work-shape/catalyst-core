@@ -1,13 +1,95 @@
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import postgres from "postgres";
 import { createPlatformId, type DataSourceConfig } from "@vivd-catalyst/core";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
 
+const visualizationThemeColorNames = [
+  "background",
+  "foreground",
+  "card",
+  "card-foreground",
+  "popover",
+  "popover-foreground",
+  "primary",
+  "primary-foreground",
+  "secondary",
+  "secondary-foreground",
+  "muted",
+  "muted-foreground",
+  "accent",
+  "accent-foreground",
+  "destructive",
+  "border",
+  "input",
+  "ring",
+  "sidebar",
+  "sidebar-foreground",
+  "sidebar-primary",
+  "sidebar-primary-foreground",
+  "sidebar-accent",
+  "sidebar-accent-foreground",
+  "sidebar-border",
+  "sidebar-ring"
+] as const;
 const lucideBootstrapScript =
   'document.addEventListener("DOMContentLoaded",function(){if(window.lucide){window.lucide.createIcons();}});';
+const tailwindThemeBootstrapScript = [
+  "function vcThemeColor(name){return function({opacityValue}){if(opacityValue===undefined){return `var(${name})`}const value=Number(opacityValue);return Number.isFinite(value)?`color-mix(in srgb, var(${name}) ${value*100}%, transparent)`:`var(${name})`}}",
+  `const vcThemeColorNames=${JSON.stringify(visualizationThemeColorNames)};`,
+  'const vcThemeColors=Object.fromEntries(vcThemeColorNames.map((name)=>[name,vcThemeColor("--"+name)]));',
+  'tailwind.config={theme:{extend:{colors:vcThemeColors,borderRadius:{lg:"var(--radius)",md:"calc(var(--radius) - 2px)",sm:"calc(var(--radius) - 4px)"}}}};'
+].join("");
+const displayHeightBootstrapScript = `(()=>{const t="vivd-catalyst:display-height";let e=0;function n(){const t=document.documentElement,n=document.body;return Math.ceil(Math.max(t?.scrollHeight??0,t?.offsetHeight??0,n?.scrollHeight??0,n?.offsetHeight??0))}function o(){const o=n();o>0&&Math.abs(o-e)>1&&(e=o,parent.postMessage({type:t,height:o},"*"))}document.addEventListener("DOMContentLoaded",()=>{o();if("ResizeObserver"in window&&document.body){window.__vivdCatalystResizeObserver=new ResizeObserver(o);window.__vivdCatalystResizeObserver.observe(document.body)}setTimeout(o,50);setTimeout(o,250);setTimeout(o,1000)});window.addEventListener("load",o)})();`;
+const visualizationDefaultThemeStyle = `<style id="vivd-catalyst-default-theme">
+:root {
+  --radius: 0.5rem;
+  --background: #fffdfa;
+  --foreground: #17201d;
+  --card: #fffdfa;
+  --card-foreground: #17201d;
+  --popover: #fffdfa;
+  --popover-foreground: #17201d;
+  --primary: #0f766e;
+  --primary-foreground: #ffffff;
+  --secondary: #ebe7dc;
+  --secondary-foreground: #17201d;
+  --muted: #ebe7dc;
+  --muted-foreground: #68746f;
+  --accent: #e5f3ef;
+  --accent-foreground: #0b5f59;
+  --destructive: #b42318;
+  --border: #d8d3c7;
+  --input: #d8d3c7;
+  --ring: #0f766e;
+  --sidebar: #f4f1e8;
+  --sidebar-foreground: #17201d;
+  --sidebar-primary: #0f766e;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e5f3ef;
+  --sidebar-accent-foreground: #0b5f59;
+  --sidebar-border: #d8d3c7;
+  --sidebar-ring: #0f766e;
+}
+html,
+body {
+  min-height: 100%;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+body {
+  margin: 0;
+}
+*,
+::before,
+::after {
+  border-color: var(--border);
+}
+</style>`;
 const visualizationContentSecurityPolicy = [
   "default-src 'none'",
-  "script-src https://cdn.tailwindcss.com https://unpkg.com 'unsafe-eval' 'sha256-6V/TXttL4T6O1ic9V4Qr2TeTi2T/kaP+KRIwPzbDt6M='",
+  `script-src https://cdn.tailwindcss.com https://unpkg.com 'unsafe-eval' ${scriptHashSource(tailwindThemeBootstrapScript)} ${scriptHashSource(lucideBootstrapScript)} ${scriptHashSource(displayHeightBootstrapScript)}`,
   "style-src 'unsafe-inline'",
   "img-src data: blob:",
   "font-src data:",
@@ -19,9 +101,12 @@ const visualizationRuntimeHead = [
   '<meta charset="utf-8">',
   '<meta name="viewport" content="width=device-width, initial-scale=1">',
   `<meta http-equiv="Content-Security-Policy" content="${visualizationContentSecurityPolicy}">`,
+  visualizationDefaultThemeStyle,
   '<script src="https://cdn.tailwindcss.com"></script>',
+  `<script>${tailwindThemeBootstrapScript}</script>`,
   '<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>',
-  `<script>${lucideBootstrapScript}</script>`
+  `<script>${lucideBootstrapScript}</script>`,
+  `<script>${displayHeightBootstrapScript}</script>`
 ].join("\n");
 
 const renderHtmlInputSchema = z.object({
@@ -53,7 +138,7 @@ export function createBuiltInToolDefinitions(options: BuiltInToolDefinitionOptio
 export const renderHtmlTool = defineTool({
   name: "renderHtml",
   description:
-    "Render model-authored HTML for the user as a visual display. Use this when a table, widget, chart, dashboard, or richer visual explanation would help. Tailwind CSS and Lucide icons are available in the rendered iframe.",
+    "Render model-authored HTML for the user as a visual display. Use this when a table, widget, chart, dashboard, or richer visual explanation would help. Tailwind CSS, Lucide icons, and shadcn-style app theme classes are available in the rendered iframe. Prefer theme classes such as bg-background text-foreground, bg-card border-border, text-muted-foreground, and bg-primary text-primary-foreground over hard-coded color palettes.",
   inputSchema: renderHtmlInputSchema,
   outputSchema: renderHtmlOutputSchema,
   inputJsonSchema: {
@@ -66,7 +151,7 @@ export const renderHtmlTool = defineTool({
         minLength: 1,
         maxLength: 200000,
         description:
-          'Complete standalone HTML fragment or document to render for the user. Use Tailwind utility classes for styling and Lucide icons with elements such as <i data-lucide="chart-column"></i>.'
+          'Complete standalone HTML fragment or document to render for the user. Use Tailwind utility classes with shadcn-style theme classes such as bg-background, bg-card, text-foreground, text-muted-foreground, border-border, bg-primary, and text-primary-foreground. Lucide icons are available with elements such as <i data-lucide="chart-column"></i>.'
       },
       mode: {
         type: "string",
@@ -288,11 +373,15 @@ function prepareVisualizationHtml(html: string): string {
     "<head>",
     visualizationRuntimeHead,
     "</head>",
-    '<body class="bg-white text-slate-950 antialiased">',
+    '<body class="bg-background text-foreground antialiased">',
     html,
     "</body>",
     "</html>"
   ].join("\n");
+}
+
+function scriptHashSource(source: string): string {
+  return `'sha256-${createHash("sha256").update(source).digest("base64")}'`;
 }
 
 function hydrateHtmlTemplate(template: string, data: unknown): string {

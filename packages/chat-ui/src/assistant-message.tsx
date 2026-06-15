@@ -35,7 +35,7 @@ function AssistantMessage() {
 
   return (
     <MessagePrimitive.Root
-      className="group/message mx-auto w-full max-w-3xl animate-in fade-in slide-in-from-bottom-1 duration-150"
+      className="group/message mx-auto w-full max-w-5xl animate-in fade-in slide-in-from-bottom-1 duration-150"
       data-role="assistant"
     >
       <div className="min-w-0 rounded-md px-1 py-1 text-sm leading-6">
@@ -105,7 +105,11 @@ function AssistantTextPart() {
     return <AssistantThinking />;
   }
 
-  return <MarkdownText />;
+  return (
+    <div className="max-w-3xl">
+      <MarkdownText />
+    </div>
+  );
 }
 
 function AssistantThinking() {

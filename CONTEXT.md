@@ -96,13 +96,29 @@ _Avoid_: Web scraping, document extraction
 A file stored under platform control after upload, handoff, or acquisition, identified by a file id and governed by authorization, audit, and retention policy.
 _Avoid_: Browser file object, raw attachment, local path
 
+**Attachment Manifest**:
+An agent-visible list of managed file references attached to a user message, including safe file metadata and document preprocessing status when available.
+_Avoid_: Raw file content, full extracted text
+
+**Draft Attachment**:
+A managed file attached to a conversation before it is sent in a user message, including upload and preprocessing state.
+_Avoid_: Text draft, browser file object
+
 **Document Processing**:
 The process of converting, extracting, comparing, or redacting document content after a file has been acquired.
 _Avoid_: File acquisition, retrieval
 
+**Document Preprocessing**:
+An automatic document processing step that prepares reusable document artifacts and metadata before an agent reads the document.
+_Avoid_: File acquisition, document analysis, final review
+
 **Document Text Extraction**:
 A document processing action that converts a managed file into readable text or Markdown for agent use, without interpreting fields, comparing facts, or making workflow judgments.
 _Avoid_: Document analysis, OCR, retrieval
+
+**Document Reading**:
+An agent action that reads prepared document text from a managed file or artifact.
+_Avoid_: Document preprocessing, file upload, structured extraction
 
 **Browser Automation**:
 The use of a real browser environment to navigate pages, click controls, submit forms, or download files when simple HTTP fetching is insufficient.
