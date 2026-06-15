@@ -16,7 +16,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 RUN corepack enable
 RUN apk add --no-cache python3 py3-pip \
-  && python3 -m pip install --break-system-packages --no-cache-dir markitdown==0.1.6
+  && python3 -m pip install --break-system-packages --no-cache-dir 'markitdown[pdf,docx]==0.1.6'
 
 COPY --from=build /app/package.json /app/pnpm-workspace.yaml ./
 COPY --from=build /app/node_modules ./node_modules
