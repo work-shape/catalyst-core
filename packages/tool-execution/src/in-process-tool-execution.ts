@@ -110,7 +110,7 @@ export class InProcessToolExecution implements ToolExecution {
     await this.audit("tool.started", "success", request, context);
     try {
       const input = tool.inputSchema.parse(request.input);
-      const result = await tool.execute(input, context);
+      const result = await tool.execute(input, { ...context, toolRequest: request });
       const validated =
         result.status === "success" && tool.outputSchema
           ? {

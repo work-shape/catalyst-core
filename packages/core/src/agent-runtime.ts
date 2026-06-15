@@ -2,6 +2,7 @@ import type { AgentRunId, ConversationId, MessageId, ToolCallId } from "./ids";
 import type { JsonObject } from "./json";
 import type { ISODateString } from "./time";
 import type { ManagedFileRef } from "./files";
+import type { AttachmentManifest } from "./files";
 import type { RuntimeCallContext } from "./identity";
 import type { ToolExecutionResult } from "./tool-execution";
 
@@ -11,6 +12,7 @@ export interface StartAgentRunInput {
   message: {
     text: string;
     files?: ManagedFileRef[];
+    attachmentManifest?: AttachmentManifest;
   };
 }
 

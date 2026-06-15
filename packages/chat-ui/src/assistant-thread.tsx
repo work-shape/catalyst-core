@@ -1,7 +1,7 @@
 import { AuiIf, ThreadPrimitive } from "@assistant-ui/react";
 import { ArrowDown, Bot, CircleAlert, Sparkles } from "lucide-react";
-import type { SafeConfig } from "@vivd-catalyst/api-client";
-import { AssistantComposer } from "./assistant-composer";
+import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
+import { AssistantComposer, type LocalUploadingAttachment } from "./assistant-composer";
 import { ThreadMessage } from "./assistant-message";
 import { useTranslation } from "./i18n";
 import { cn } from "./ui/cn";
@@ -9,11 +9,23 @@ import { cn } from "./ui/cn";
 export function AssistantThread({
   config,
   selectedAgentName,
-  notice
+  notice,
+  draftAttachments,
+  localUploadingAttachments,
+  sendBlockedReason,
+  onFilesSelected,
+  onRemoveDraftAttachment,
+  onRetryDraftAttachment
 }: {
   config: SafeConfig | undefined;
   selectedAgentName: string | undefined;
   notice: string | undefined;
+  draftAttachments: DraftAttachment[];
+  localUploadingAttachments: LocalUploadingAttachment[];
+  sendBlockedReason?: string;
+  onFilesSelected: (files: File[]) => void;
+  onRemoveDraftAttachment: (attachmentId: string) => void;
+  onRetryDraftAttachment: (attachmentId: string) => void;
 }) {
   const { t } = useTranslation();
   const agent = getSelectedAgent(config, selectedAgentName);
@@ -21,15 +33,15 @@ export function AssistantThread({
 
   return (
     <section
-      className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)] overflow-hidden bg-background"
+      className="grid h-full min-h-0 min-w-0 overflow-hidden bg-background"
       aria-label="Chat"
     >
       <ThreadPrimitive.Root
-        className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)] overflow-hidden"
+        className="grid h-full min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden"
         style={{ ["--thread-max-width" as string]: "64rem" }}
       >
-        <ThreadPrimitive.Viewport className="relative flex min-h-0 flex-col overflow-y-auto overflow-x-hidden scroll-smooth">
-          <div className="mx-auto flex w-full max-w-[var(--thread-max-width)] flex-1 flex-col px-5 pt-20">
+        <ThreadPrimitive.Viewport className="relative min-h-0 overflow-y-auto overflow-x-hidden scroll-smooth">
+          <div className="mx-auto flex min-h-full w-full max-w-[var(--thread-max-width)] flex-col px-5 pt-20">
             {notice ? (
               <div className="mb-4 inline-flex w-fit max-w-full items-center gap-2 rounded-md border border-amber-300/70 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                 <CircleAlert size={17} aria-hidden="true" />
@@ -48,15 +60,23 @@ export function AssistantThread({
             <div className="flex flex-col gap-5 pb-6 empty:hidden">
               <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
             </div>
-
-            <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto bg-gradient-to-t from-background via-background to-background/80 pb-4 pt-5">
-              <AuiIf condition={(state) => !state.thread.isEmpty}>
-                <ThreadScrollToBottom />
-              </AuiIf>
-              <AssistantComposer />
-            </ThreadPrimitive.ViewportFooter>
           </div>
         </ThreadPrimitive.Viewport>
+        <div className="relative bg-gradient-to-t from-background via-background to-background/80 px-5 pb-4 pt-5">
+          <div className="relative mx-auto w-full max-w-[var(--thread-max-width)]">
+            <AuiIf condition={(state) => !state.thread.isEmpty}>
+              <ThreadScrollToBottom />
+            </AuiIf>
+            <AssistantComposer
+              attachments={draftAttachments}
+              localUploadingAttachments={localUploadingAttachments}
+              sendBlockedReason={sendBlockedReason}
+              onFilesSelected={onFilesSelected}
+              onRemoveAttachment={onRemoveDraftAttachment}
+              onRetryAttachment={onRetryDraftAttachment}
+            />
+          </div>
+        </div>
       </ThreadPrimitive.Root>
     </section>
   );

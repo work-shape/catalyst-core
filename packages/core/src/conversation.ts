@@ -38,6 +38,7 @@ export interface CreateConversationInput {
 }
 
 export interface CreateMessageInput {
+  id?: MessageId;
   clientInstanceId: ClientInstanceId;
   conversationId: ConversationId;
   role: ChatMessageRole;

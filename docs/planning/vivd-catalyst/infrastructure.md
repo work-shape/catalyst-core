@@ -34,7 +34,7 @@ Minimum requirements for VPS-hosted Postgres:
 - encrypted bucket or provider-side encryption
 - least-privilege bucket credentials
 - monitoring for failed backups
-- migration procedure separated from app startup where practical
+- committed migration procedure; startup migrations are acceptable for first single-instance Compose deployments, but run a separate migration step where practical
 
 Cron-based backups are acceptable for v1. Prefer a simple, inspectable setup such as scheduled `pg_dump` or volume-level backups uploaded to an S3-compatible bucket. If recovery point objectives become stricter, add WAL archiving or managed Postgres.
 
@@ -111,6 +111,8 @@ npm run publish pushes a tag
 ```
 
 The deploy script should also be runnable manually from a developer machine with the right credentials. This avoids duplicating deployment logic between local emergency operations and CI.
+
+For the first single-instance Compose target, the app may also run committed migrations on startup so a pulled image and database stay in sync. Once there are multiple app replicas, separate worker processes, zero-downtime requirements, or riskier data migrations, the deploy script should run migrations exactly once before starting app containers and app containers should disable startup migrations.
 
 GitHub Actions is the preferred automation wrapper for operated instances. Deployment should be a manual `workflow_dispatch` action in v1, with inputs for the client instance and image/release tag. Use GitHub Environments for production approvals and an audit trail.
 

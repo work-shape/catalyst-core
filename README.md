@@ -33,7 +33,7 @@ pnpm dev:musterbau
 - Workspace packages resolve from `src` through the local `development` export condition.
 - The API starts from `clients/demo/src/server.ts` with `tsx watch` and restarts when client, config, tool, env, or platform package source changes.
 - The standalone UI starts with Vite from `packages/chat-standalone` and hot reloads standalone and shared chat UI/package source changes.
-- API startup runs idempotent migrations when `RUN_MIGRATIONS` is not `false`.
+- API startup runs committed Drizzle migrations when `RUN_MIGRATIONS` is not `false`.
 - Standalone Better Auth users from `clients/demo/config/app.yaml` are seeded into Postgres on startup.
 - You can seed those users explicitly with `pnpm --filter @vivd-catalyst/demo seed:auth`.
 
@@ -62,3 +62,5 @@ pnpm test:e2e
 The deterministic model provider is kept for local tests and repeatable debugging. The demo client config uses OpenAI by default and lets the model call registered tools automatically.
 
 Storage code uses product-owned store interfaces at package boundaries. The Postgres-backed adapters use Drizzle internally for typed database interactions; Drizzle table/query types should not leak into public platform APIs.
+
+Database schema changes must go through committed migrations. Use `pnpm db:generate` after changing Drizzle schema files, review the generated SQL, and commit the schema and migration together. Do not use `drizzle-kit push` or any `db push` workflow.

@@ -5,7 +5,10 @@ export type Brand<TValue, TBrand extends string> = TValue & {
 export type AgentRunId = Brand<string, "AgentRunId">;
 export type ClientInstanceId = Brand<string, "ClientInstanceId">;
 export type ConversationId = Brand<string, "ConversationId">;
+export type ConversationAttachmentId = Brand<string, "ConversationAttachmentId">;
 export type MessageId = Brand<string, "MessageId">;
+export type ManagedFileId = Brand<string, "ManagedFileId">;
+export type PreparedDocumentId = Brand<string, "PreparedDocumentId">;
 export type UserId = Brand<string, "UserId">;
 export type ToolCallId = Brand<string, "ToolCallId">;
 export type AuditEventId = Brand<string, "AuditEventId">;
@@ -30,8 +33,20 @@ export function asConversationId(value: string): ConversationId {
   return value as ConversationId;
 }
 
+export function asConversationAttachmentId(value: string): ConversationAttachmentId {
+  return value as ConversationAttachmentId;
+}
+
 export function asMessageId(value: string): MessageId {
   return value as MessageId;
+}
+
+export function asManagedFileId(value: string): ManagedFileId {
+  return value as ManagedFileId;
+}
+
+export function asPreparedDocumentId(value: string): PreparedDocumentId {
+  return value as PreparedDocumentId;
 }
 
 export function asUserId(value: string): UserId {

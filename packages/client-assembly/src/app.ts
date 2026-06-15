@@ -16,6 +16,13 @@ import {
   InProcessToolExecution,
   ToolRegistry
 } from "@vivd-catalyst/tool-execution";
+import {
+  createReadDocumentTool,
+  DocumentPreprocessingService,
+  InMemoryObjectStore,
+  MarkItDownDocumentTextConverter,
+  S3ObjectStore
+} from "@vivd-catalyst/document-processing";
 import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { assertClientAssemblyValid } from "./assembly-validation";
@@ -45,6 +52,27 @@ export async function createClientInstanceApp(
 ): Promise<ClientInstanceApp> {
   const env = input.env ?? process.env;
   const config = input.config ?? (await loadConfig(input.configPath));
+  const clientInstanceId = getClientInstanceId(config);
+  const store = await createPlatformStore({ env, storeMode: input.storeMode });
+  const objectStore =
+    (input.storeMode ?? env.STORE) === "memory"
+      ? new InMemoryObjectStore()
+      : new S3ObjectStore({
+          config: {
+            ...config.documents.objectStorage,
+            bucket: env.DOCUMENT_OBJECT_STORE_BUCKET ?? config.documents.objectStorage.bucket,
+            region: env.DOCUMENT_OBJECT_STORE_REGION ?? config.documents.objectStorage.region,
+            endpoint: env.DOCUMENT_OBJECT_STORE_ENDPOINT ?? config.documents.objectStorage.endpoint
+          },
+          env
+        });
+  const documentPreprocessing = new DocumentPreprocessingService({
+    clientInstanceId,
+    store,
+    objectStore,
+    converter: new MarkItDownDocumentTextConverter(config.documents.preprocessing),
+    config: config.documents.preprocessing
+  });
   const tools = createToolDefinitions({
     config,
     tools: [
@@ -52,6 +80,7 @@ export async function createClientInstanceApp(
         dataSources: config.dataSources,
         env
       }),
+      createReadDocumentTool(documentPreprocessing),
       ...input.tools
     ]
   });
@@ -59,8 +88,6 @@ export async function createClientInstanceApp(
     config,
     tools
   });
-  const clientInstanceId = getClientInstanceId(config);
-  const store = await createPlatformStore({ env, storeMode: input.storeMode });
   const auditRecorder = new StoreBackedAuditRecorder({
     clientInstanceId,
     store
@@ -120,6 +147,7 @@ export async function createClientInstanceApp(
     usageGovernance,
     auditRecorder,
     agentRuntime,
+    documentPreprocessing,
     modelProvider,
     corsOrigin: input.corsOrigin,
     standaloneAuth,

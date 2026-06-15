@@ -10,6 +10,7 @@ import {
   type ConversationStore,
   type CreateConversationInput,
   type CreateMessageInput,
+  type DocumentAttachmentStore,
   type ModelUsageEvent,
   type ModelUsageEventInput,
   type ModelUsageEventStore,
@@ -26,12 +27,22 @@ import {
   createUserId,
   createPlatformId
 } from "./index";
+import {
+  createInMemoryDocumentAttachmentStore,
+  type InMemoryDocumentAttachmentStore
+} from "./testing-in-memory-document-attachment-store";
 
 export class InMemoryPlatformStore
-  implements ConversationStore, AuditEventStore, ModelUsageEventStore, UserStore
+  implements ConversationStore, DocumentAttachmentStore, AuditEventStore, ModelUsageEventStore, UserStore
 {
   private readonly conversations = new Map<string, Conversation>();
   private readonly messages = new Map<string, ChatMessage[]>();
+  private readonly documentAttachments: InMemoryDocumentAttachmentStore =
+    createInMemoryDocumentAttachmentStore({
+      requireActiveConversation: (clientInstanceId, conversationId) =>
+        this.requireActiveConversation(clientInstanceId, conversationId),
+      touchConversation: (conversationId, updatedAt) => this.touchConversation(conversationId, updatedAt)
+    });
   private readonly auditEvents: AuditEvent[] = [];
   private readonly modelUsageEvents: ModelUsageEvent[] = [];
   private readonly users = new Map<string, UserRecord>();
@@ -107,7 +118,7 @@ export class InMemoryPlatformStore
     }
 
     const message: ChatMessage = {
-      id: createPlatformId("msg"),
+      id: input.id ?? createPlatformId("msg"),
       clientInstanceId: input.clientInstanceId,
       conversationId: input.conversationId,
       role: input.role,
@@ -147,6 +158,52 @@ export class InMemoryPlatformStore
     return messages.slice(-input.limit);
   }
 
+  async createManagedFile(input: Parameters<DocumentAttachmentStore["createManagedFile"]>[0]) {
+    return this.documentAttachments.createManagedFile(input);
+  }
+
+  async getManagedFile(input: Parameters<DocumentAttachmentStore["getManagedFile"]>[0]) {
+    return this.documentAttachments.getManagedFile(input);
+  }
+
+  async createConversationAttachment(
+    input: Parameters<DocumentAttachmentStore["createConversationAttachment"]>[0]
+  ) {
+    return this.documentAttachments.createConversationAttachment(input);
+  }
+
+  async getConversationAttachment(
+    input: Parameters<DocumentAttachmentStore["getConversationAttachment"]>[0]
+  ) {
+    return this.documentAttachments.getConversationAttachment(input);
+  }
+
+  async listDraftAttachments(input: Parameters<DocumentAttachmentStore["listDraftAttachments"]>[0]) {
+    return this.documentAttachments.listDraftAttachments(input);
+  }
+
+  async updateConversationAttachment(
+    input: Parameters<DocumentAttachmentStore["updateConversationAttachment"]>[0]
+  ) {
+    return this.documentAttachments.updateConversationAttachment(input);
+  }
+
+  async deleteDraftAttachment(input: Parameters<DocumentAttachmentStore["deleteDraftAttachment"]>[0]) {
+    return this.documentAttachments.deleteDraftAttachment(input);
+  }
+
+  async claimReadyDraftAttachmentsForMessage(
+    input: Parameters<DocumentAttachmentStore["claimReadyDraftAttachmentsForMessage"]>[0]
+  ) {
+    return this.documentAttachments.claimReadyDraftAttachmentsForMessage(input);
+  }
+
+  async findReadableDocumentAttachment(
+    input: Parameters<DocumentAttachmentStore["findReadableDocumentAttachment"]>[0]
+  ) {
+    return this.documentAttachments.findReadableDocumentAttachment(input);
+  }
+
   async deleteConversation(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
@@ -165,6 +222,7 @@ export class InMemoryPlatformStore
     };
     this.conversations.set(input.conversationId, deleted);
     this.messages.set(input.conversationId, []);
+    this.documentAttachments.deleteAttachmentsForConversation(input);
     return deleted;
   }
 
@@ -401,6 +459,27 @@ export class InMemoryPlatformStore
     };
     this.users.set(updated.id, updated);
     return updated;
+  }
+
+  private touchConversation(conversationId: ConversationId, updatedAt: string): void {
+    const conversation = this.conversations.get(conversationId);
+    if (!conversation) {
+      return;
+    }
+    this.conversations.set(conversationId, {
+      ...conversation,
+      updatedAt
+    });
+  }
+
+  private async requireActiveConversation(
+    clientInstanceId: ClientInstanceId,
+    conversationId: ConversationId
+  ): Promise<void> {
+    const conversation = await this.getConversation(clientInstanceId, conversationId);
+    if (!conversation || conversation.status !== "active") {
+      throw new AppError("NOT_FOUND", "Conversation is not available");
+    }
   }
 
   private findOrCreateUserForIdentity(

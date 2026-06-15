@@ -1,6 +1,7 @@
 import { auditActorFromUser } from "@vivd-catalyst/core";
 import {
   AppError,
+  type AttachmentManifest,
   type AgentRunId,
   type AgentRuntimeEvent,
   type AuthenticatedUser,
@@ -13,6 +14,10 @@ import {
   createPlatformId,
   isAppError
 } from "@vivd-catalyst/core";
+import {
+  blockingDraftAttachmentMessage,
+  createAttachmentManifest
+} from "@vivd-catalyst/document-processing";
 import { getModelProviderForConversationTitles } from "@vivd-catalyst/config-schema";
 import type { ModelMessage } from "@vivd-catalyst/model-provider";
 import {
@@ -96,12 +101,35 @@ export class ConversationWorkflow {
     command: SendConversationMessageCommand
   ): Promise<StartedConversationMessageRun> {
     await this.requireOwnedActiveConversation(conversationId, user);
+    const draftAttachments = await this.options.conversationStore.listDraftAttachments({
+      clientInstanceId: this.options.clientInstanceId,
+      conversationId
+    });
+    const blockMessage = blockingDraftAttachmentMessage(draftAttachments);
+    if (blockMessage) {
+      throw new AppError("CONFLICT", blockMessage);
+    }
+    const attachmentManifest = createAttachmentManifest(
+      draftAttachments,
+      this.options.config.documents.preprocessing.preprocessingVersion
+    );
+    const userMessageId = createPlatformId<"MessageId">("msg");
     const userMessage = await this.options.conversationStore.appendMessage({
+      id: userMessageId,
       clientInstanceId: this.options.clientInstanceId,
       conversationId,
       role: "user",
-      text: command.text
+      text: command.text,
+      metadata: createUserMessageMetadata(attachmentManifest)
     });
+    if (attachmentManifest.attachments.length > 0) {
+      await this.options.conversationStore.claimReadyDraftAttachmentsForMessage({
+        clientInstanceId: this.options.clientInstanceId,
+        conversationId,
+        messageId: userMessage.id,
+        claimedAt: userMessage.createdAt
+      });
+    }
 
     await this.options.auditRecorder.record({
       type: "message.created",
@@ -110,7 +138,8 @@ export class ConversationWorkflow {
       subject: userMessage.id,
       correlationId: context.correlationId,
       metadata: {
-        conversationId
+        conversationId,
+        attachmentCount: attachmentManifest.attachments.length
       }
     });
 
@@ -119,7 +148,9 @@ export class ConversationWorkflow {
         agentName: command.agentName ?? this.options.config.defaultAgentName,
         conversationId,
         message: {
-          text: command.text
+          text: command.text,
+          attachmentManifest:
+            attachmentManifest.attachments.length > 0 ? attachmentManifest : undefined
         }
       },
       context
@@ -309,7 +340,7 @@ export class ConversationWorkflow {
     return deleted;
   }
 
-  private async requireOwnedActiveConversation(
+  async requireOwnedActiveConversation(
     conversationId: ConversationId,
     user: AuthenticatedUser
   ): Promise<Conversation> {
@@ -326,6 +357,54 @@ export class ConversationWorkflow {
     return conversation;
   }
 
+}
+
+function createUserMessageMetadata(attachmentManifest: AttachmentManifest): JsonObject | undefined {
+  if (attachmentManifest.attachments.length === 0) {
+    return undefined;
+  }
+  return {
+    agentRuntime: {
+      version: 1,
+      kind: "user_message",
+      attachmentManifest: toJsonAttachmentManifest(attachmentManifest)
+    }
+  };
+}
+
+function toJsonAttachmentManifest(attachmentManifest: AttachmentManifest): JsonObject {
+  return {
+    version: attachmentManifest.version,
+    attachments: attachmentManifest.attachments.map((attachment) => ({
+      fileId: attachment.fileId,
+      attachmentId: attachment.attachmentId,
+      filename: attachment.filename,
+      ...(attachment.mimeType ? { mimeType: attachment.mimeType } : {}),
+      byteSize: attachment.byteSize,
+      status: attachment.status,
+      readable: attachment.readable,
+      readToolName: attachment.readToolName,
+      metadata: {
+        fileId: attachment.metadata.fileId,
+        filename: attachment.metadata.filename,
+        ...(attachment.metadata.mimeType ? { mimeType: attachment.metadata.mimeType } : {}),
+        byteSize: attachment.metadata.byteSize,
+        ...(attachment.metadata.format ? { format: attachment.metadata.format } : {}),
+        ...(attachment.metadata.characterCount !== undefined
+          ? { characterCount: attachment.metadata.characterCount }
+          : {}),
+        ...(attachment.metadata.wordCount !== undefined ? { wordCount: attachment.metadata.wordCount } : {}),
+        ...(attachment.metadata.pageCount !== undefined ? { pageCount: attachment.metadata.pageCount } : {}),
+        warnings: attachment.metadata.warnings.map((warning) => ({
+          code: warning.code,
+          message: warning.message
+        })),
+        ...(attachment.metadata.preprocessingVersion
+          ? { preprocessingVersion: attachment.metadata.preprocessingVersion }
+          : {})
+      }
+    }))
+  };
 }
 
 function findFirstExchange(messages: ChatMessage[]): { user: ChatMessage; assistant: ChatMessage } | undefined {

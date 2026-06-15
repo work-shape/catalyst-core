@@ -10,9 +10,12 @@ import {
   createAdministeredUserRequestSchema,
   conversationSchema,
   createConversationRequestSchema,
+  draftAttachmentSchema,
+  draftAttachmentUploadResponseSchema,
   messageSchema,
   resetAdministeredUserPasswordRequestSchema,
   resetAdministeredUserPasswordResponseSchema,
+  retryDraftAttachmentResponseSchema,
   safeConfigSchema,
   updateAdministeredUserRequestSchema,
   updateCurrentUserRequestSchema,
@@ -54,6 +57,28 @@ export function createApiClient(options: ApiClientOptions) {
     return schema.parse(payload);
   }
 
+  async function formRequest<T>(
+    method: string,
+    path: string,
+    schema: z.ZodType<T>,
+    formData?: FormData
+  ): Promise<T> {
+    const token = await options.getToken?.();
+    const response = await fetchImpl(`${baseUrl}${path}`, {
+      method,
+      credentials: "include",
+      headers: {
+        ...(token ? { authorization: `Bearer ${token}` } : {})
+      },
+      body: formData
+    });
+    const payload = await response.json().catch(() => undefined);
+    if (!response.ok) {
+      throw new ApiError(response.status, payload?.error?.message ?? "API request failed", payload);
+    }
+    return schema.parse(payload);
+  }
+
   return {
     me: () => request("GET", "/api/me", apiUserSchema),
     updateMe: (input: z.infer<typeof updateCurrentUserRequestSchema>) =>
@@ -72,6 +97,34 @@ export function createApiClient(options: ApiClientOptions) {
       request("POST", "/api/conversations", conversationSchema, createConversationRequestSchema.parse(input)),
     messages: (conversationId: string) =>
       request("GET", `/api/conversations/${encodeURIComponent(conversationId)}/messages`, z.array(messageSchema)),
+    draftAttachments: (conversationId: string) =>
+      request(
+        "GET",
+        `/api/conversations/${encodeURIComponent(conversationId)}/draft-attachments`,
+        z.array(draftAttachmentSchema)
+      ),
+    uploadDraftAttachment: (conversationId: string, file: File) => {
+      const formData = new FormData();
+      formData.set("file", file, file.name);
+      return formRequest(
+        "POST",
+        `/api/conversations/${encodeURIComponent(conversationId)}/draft-attachments`,
+        draftAttachmentUploadResponseSchema,
+        formData
+      );
+    },
+    retryDraftAttachment: (conversationId: string, attachmentId: string) =>
+      request(
+        "POST",
+        `/api/conversations/${encodeURIComponent(conversationId)}/draft-attachments/${encodeURIComponent(attachmentId)}/retry`,
+        retryDraftAttachmentResponseSchema
+      ),
+    deleteDraftAttachment: (conversationId: string, attachmentId: string) =>
+      request(
+        "DELETE",
+        `/api/conversations/${encodeURIComponent(conversationId)}/draft-attachments/${encodeURIComponent(attachmentId)}`,
+        draftAttachmentSchema
+      ),
     deleteConversation: (conversationId: string) =>
       request("DELETE", `/api/conversations/${encodeURIComponent(conversationId)}`, conversationSchema),
     auditEvents: () => request("GET", "/api/audit-events", z.array(auditEventSchema)),

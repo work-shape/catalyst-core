@@ -66,6 +66,10 @@ Minimum requirements:
 - monitoring for failed backups
 - least-privilege backup credentials
 
+Database schema changes must be shipped as committed Drizzle migration files. Do not use `drizzle-kit push` or any direct schema-push workflow.
+
+For the first single-instance Docker Compose production deployment, running committed migrations on API startup is acceptable and keeps a newly pulled image aligned with the database. For multi-replica deployments, zero-downtime deploys, or migrations with data backfills, run migrations as one explicit deploy step before app containers start.
+
 ## Production Readiness Checklist
 
 Before a real deployment:

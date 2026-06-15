@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type {
   JsonObject,
+  ToolExecutionErrorCode,
   ToolHandlerResult,
   ToolPermissionPolicy,
   ToolRuntimeContext
@@ -60,7 +61,7 @@ export function toolSuccess<TOutput>(
 }
 
 export function toolFailed(
-  code: Extract<ToolHandlerResult, { status: "failed" }>["error"]["code"],
+  code: ToolExecutionErrorCode,
   message: string
 ): ToolHandlerResult<never> {
   return {

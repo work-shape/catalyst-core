@@ -4,11 +4,13 @@ import type {
   AuditEventStore,
   ClientInstanceId,
   ConversationStore,
+  DocumentAttachmentStore,
   UserStore
 } from "@vivd-catalyst/core";
 import type { AuditRecorder } from "@vivd-catalyst/core";
 import type { AuthAdapter } from "@vivd-catalyst/auth";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import type { DocumentPreprocessingService } from "@vivd-catalyst/document-processing";
 import type { ModelProvider } from "@vivd-catalyst/model-provider";
 import type { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 
@@ -16,12 +18,13 @@ export interface ChatServerOptions {
   config: ClientInstanceConfig;
   clientInstanceId: ClientInstanceId;
   authAdapter: AuthAdapter;
-  conversationStore: ConversationStore;
+  conversationStore: ConversationStore & DocumentAttachmentStore;
   auditEventStore: AuditEventStore;
   userStore: UserStore;
   usageGovernance: ModelUsageGovernance;
   auditRecorder: AuditRecorder;
   agentRuntime: AgentRuntime;
+  documentPreprocessing?: DocumentPreprocessingService;
   modelProvider: ModelProvider;
   corsOrigin?: string | string[];
   standaloneAuth?: Pick<

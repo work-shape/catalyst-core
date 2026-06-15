@@ -43,6 +43,48 @@ export const messageSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional()
 });
 
+export const draftAttachmentStatusSchema = z.enum([
+  "queued",
+  "preprocessing",
+  "ready",
+  "failed",
+  "unsupported",
+  "deleted"
+]);
+
+export const draftAttachmentSchema = z.object({
+  id: z.string(),
+  conversationId: z.string(),
+  fileId: z.string(),
+  filename: z.string(),
+  mimeType: z.string().optional(),
+  byteSize: z.number(),
+  status: draftAttachmentStatusSchema,
+  format: z.enum(["pdf", "docx", "txt", "md"]).optional(),
+  characterCount: z.number().optional(),
+  wordCount: z.number().optional(),
+  pageCount: z.number().optional(),
+  warnings: z.array(
+    z.object({
+      code: z.string(),
+      message: z.string()
+    })
+  ),
+  error: z.record(z.string(), z.unknown()).optional(),
+  createdAt: z.string(),
+  updatedAt: z.string()
+});
+
+export const draftAttachmentUploadResponseSchema = z.object({
+  attachment: draftAttachmentSchema,
+  attachments: z.array(draftAttachmentSchema)
+});
+
+export const retryDraftAttachmentResponseSchema = draftAttachmentUploadResponseSchema;
+
+export type DraftAttachment = z.infer<typeof draftAttachmentSchema>;
+export type DraftAttachmentUploadResponse = z.infer<typeof draftAttachmentUploadResponseSchema>;
+
 export const clientBrandingSchema = z.object({
   localization: localizationSchema,
   clientName: z.string(),

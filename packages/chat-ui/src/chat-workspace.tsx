@@ -19,6 +19,11 @@ import { AgentSelector } from "./agent-selector";
 import { AssistantChatPanel } from "./assistant-chat-panel";
 import { signOut } from "./auth-client";
 import type { ChatShellProps } from "./chat-shell";
+import { ChatDropOverlay, useChatFileDropzone } from "./chat-file-dropzone";
+import {
+  draftAttachmentsQueryKey,
+  useDraftAttachmentController
+} from "./draft-attachment-controller";
 import { readBrowserLocale, TranslationProvider, useTranslation } from "./i18n";
 import { LoginPanel } from "./login-panel";
 import {
@@ -128,6 +133,10 @@ export function ChatWorkspace({
         }
       );
       queryClient.removeQueries({ queryKey: ["messages", apiBaseUrl, authScope, deletedConversation.id] });
+      queryClient.removeQueries({
+        queryKey: draftAttachmentsQueryKey(apiBaseUrl, authScope, deletedConversation.id)
+      });
+      draftAttachmentController.clearConversationUploads(deletedConversation.id);
       setSelectedConversationId(nextSelectedConversationId);
       setNotice(undefined);
       void queryClient.invalidateQueries({ queryKey: ["conversations", apiBaseUrl, authScope] });
@@ -142,6 +151,43 @@ export function ChatWorkspace({
   const messagesLoaded = !selectedConversationId || messagesQuery.data !== undefined;
   const config = configQuery.data;
   const activeLocale = config?.localization.locale ?? localePreference ?? browserLocale ?? "en";
+  async function ensureConversationForFiles(files: File[]): Promise<string> {
+    if (selectedConversationId) {
+      return selectedConversationId;
+    }
+    const title = files.length === 1 ? files[0]?.name ?? "Attached file" : `${files.length} attached files`;
+    const conversation = await client.createConversation({
+      title,
+      locale: activeLocale
+    });
+    setDraftsByTarget((currentDrafts) => {
+      const nextDrafts = { ...currentDrafts };
+      const currentDraft = nextDrafts[draftKey];
+      delete nextDrafts[draftKey];
+      if (currentDraft) {
+        nextDrafts[createDraftKey(authScope, conversation.id)] = currentDraft;
+      }
+      return nextDrafts;
+    });
+    setSelectedConversationId(conversation.id);
+    setView("chat");
+    setNotice(undefined);
+    void queryClient.invalidateQueries({ queryKey: ["conversations", apiBaseUrl, authScope] });
+    return conversation.id;
+  }
+
+  const draftAttachmentController = useDraftAttachmentController({
+    apiBaseUrl,
+    authScope,
+    client,
+    selectedConversationId,
+    isAuthenticated,
+    ensureConversationForFiles,
+    onError: setNotice
+  });
+  const fileDropzone = useChatFileDropzone({
+    onFilesSelected: draftAttachmentController.onFilesSelected
+  });
   const supportedLocales = config?.localization.supportedLocales ?? DEFAULT_LOCALES;
   const resolvedThemeMode =
     themeOverride ?? resolveThemeModePreference(config?.ui.defaultThemeMode, systemThemeMode);
@@ -317,6 +363,7 @@ export function ChatWorkspace({
     setNotice(undefined);
     void queryClient.invalidateQueries({ queryKey: ["conversations", apiBaseUrl, authScope] });
     void queryClient.invalidateQueries({ queryKey: ["messages", apiBaseUrl, authScope] });
+    void queryClient.invalidateQueries({ queryKey: ["draft-attachments", apiBaseUrl, authScope] });
     void queryClient.invalidateQueries({ queryKey: ["usage", apiBaseUrl, authScope] });
     void queryClient.invalidateQueries({ queryKey: ["audit-events", apiBaseUrl, authScope] });
   }
@@ -447,22 +494,37 @@ export function ChatWorkspace({
           onSelectLocale={onSelectLocale}
         />
       ) : (
-        <AssistantChatPanel
-          apiBaseUrl={apiBaseUrl}
-          client={client}
-          config={config}
-          selectedConversationId={selectedConversationId}
-          messages={messages}
-          messagesLoaded={messagesLoaded}
-          notice={notice}
-          draft={draft}
-          locale={activeLocale}
-          selectedAgentName={activeAgentName}
-          onDraftChange={(value) => setDraftForKey(draftKey, value)}
-          onConversationStarted={onConversationStarted}
-          onStreamFinished={onStreamFinished}
-          onStreamError={setNotice}
-        />
+        <section
+          className="relative h-full min-h-0 min-w-0"
+          onDragEnter={fileDropzone.onChatDragEnter}
+          onDragOver={fileDropzone.onChatDragOver}
+          onDragLeave={fileDropzone.onChatDragLeave}
+          onDrop={fileDropzone.onChatDrop}
+        >
+          <AssistantChatPanel
+            apiBaseUrl={apiBaseUrl}
+            client={client}
+            config={config}
+            selectedConversationId={selectedConversationId}
+            messages={messages}
+            messagesLoaded={messagesLoaded}
+            notice={notice}
+            draft={draft}
+            locale={activeLocale}
+            selectedAgentName={activeAgentName}
+            draftAttachments={draftAttachmentController.draftAttachments}
+            localUploadingAttachments={draftAttachmentController.visibleUploadingAttachments}
+            sendBlockedReason={draftAttachmentController.sendBlockedReason}
+            onDraftChange={(value) => setDraftForKey(draftKey, value)}
+            onFilesSelected={draftAttachmentController.onFilesSelected}
+            onRemoveDraftAttachment={draftAttachmentController.onRemoveDraftAttachment}
+            onRetryDraftAttachment={draftAttachmentController.onRetryDraftAttachment}
+            onConversationStarted={onConversationStarted}
+            onStreamFinished={onStreamFinished}
+            onStreamError={setNotice}
+          />
+          {fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
+        </section>
       )}
       </main>
     </TranslationProvider>

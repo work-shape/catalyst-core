@@ -3,7 +3,10 @@ import {
   asAgentRunId,
   asClientInstanceId,
   asConversationId,
+  asConversationAttachmentId,
+  asManagedFileId,
   asMessageId,
+  type AttachmentManifest,
   type ChatMessage,
   type JsonObject,
   type ToolExecutionResult
@@ -129,6 +132,47 @@ describe("model context projection", () => {
     });
     expect(projected[1]?.content).toContain("validation_failed");
     expect(projected[1]?.content).toContain("Expected string");
+  });
+
+  it("projects user attachment manifests without embedding document text", () => {
+    const manifest: AttachmentManifest = {
+      version: 1,
+      attachments: [
+        {
+          fileId: asManagedFileId("file_contract"),
+          attachmentId: asConversationAttachmentId("att_contract"),
+          filename: "contract.pdf",
+          byteSize: 1200,
+          status: "ready",
+          readable: true,
+          readToolName: "read_document",
+          metadata: {
+            fileId: asManagedFileId("file_contract"),
+            filename: "contract.pdf",
+            byteSize: 1200,
+            format: "pdf",
+            wordCount: 250,
+            warnings: []
+          }
+        }
+      ]
+    };
+    const projected = projectAgentVisibleHistory(
+      [
+        createMessage("user", "Summarize the attachment", {
+          agentRuntime: {
+            version: 1,
+            kind: "user_message",
+            attachmentManifest: manifest as unknown as JsonObject
+          }
+        })
+      ],
+      modelContextOptions()
+    );
+
+    expect(projected[0]?.content).toContain("contract.pdf");
+    expect(projected[0]?.content).toContain('read_document({ "fileId": "file_contract" })');
+    expect(projected[0]?.content).not.toContain("Raw contract body");
   });
 });
 

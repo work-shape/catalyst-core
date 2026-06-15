@@ -1,5 +1,6 @@
 import type {
   AgentRunId,
+  AttachmentManifest,
   ChatMessage,
   JsonObject,
   JsonValue,
@@ -51,6 +52,21 @@ export function createAssistantToolCallsMetadata(input: {
         toolName: toolCall.toolName,
         input: unknownToJsonValue(toolCall.input)
       }))
+    }
+  };
+}
+
+export function createUserMessageMetadata(input: {
+  attachmentManifest?: AttachmentManifest;
+}): JsonObject | undefined {
+  if (!input.attachmentManifest || input.attachmentManifest.attachments.length === 0) {
+    return undefined;
+  }
+  return {
+    agentRuntime: {
+      version: METADATA_VERSION,
+      kind: "user_message",
+      attachmentManifest: unknownToJsonValue(input.attachmentManifest)
     }
   };
 }
@@ -108,6 +124,13 @@ export function dropCurrentSubmittedMessage(messages: ChatMessage[], text: strin
   return messages;
 }
 
+export function createSubmittedUserMessageContent(
+  text: string,
+  attachmentManifest: AttachmentManifest | undefined
+): string {
+  return appendAttachmentManifestForModel(text, attachmentManifest);
+}
+
 export function stableStringify(value: unknown): string {
   return JSON.stringify(sortForStableStringify(unknownToJsonValue(value)));
 }
@@ -117,7 +140,13 @@ function toModelHistoryMessage(
   options: ModelContextProjectionOptions
 ): ModelMessage | undefined {
   if (message.role === "user" || message.role === "system") {
-    return { role: message.role, content: message.text };
+    return {
+      role: message.role,
+      content:
+        message.role === "user"
+          ? appendAttachmentManifestForModel(message.text, readUserAttachmentManifest(message.metadata))
+          : message.text
+    };
   }
 
   if (message.role === "assistant") {
@@ -204,6 +233,89 @@ function readToolResultMetadata(metadata: JsonObject | undefined):
 function readRuntimeMetadata(metadata: JsonObject | undefined): JsonObject | undefined {
   const runtime = metadata?.agentRuntime;
   return isJsonObject(runtime) && runtime.version === METADATA_VERSION ? runtime : undefined;
+}
+
+function readUserAttachmentManifest(metadata: JsonObject | undefined): AttachmentManifest | undefined {
+  const runtime = readRuntimeMetadata(metadata);
+  if (runtime?.kind !== "user_message" || !isJsonObject(runtime.attachmentManifest)) {
+    return undefined;
+  }
+  const manifest = runtime.attachmentManifest;
+  if (manifest.version !== 1 || !Array.isArray(manifest.attachments)) {
+    return undefined;
+  }
+  const attachments = manifest.attachments.flatMap((value): AttachmentManifest["attachments"] => {
+    if (!isJsonObject(value)) {
+      return [];
+    }
+    const fileId = typeof value.fileId === "string" ? value.fileId : undefined;
+    const attachmentId = typeof value.attachmentId === "string" ? value.attachmentId : undefined;
+    const filename = typeof value.filename === "string" ? value.filename : undefined;
+    const byteSize = typeof value.byteSize === "number" ? value.byteSize : undefined;
+    const metadata = isJsonObject(value.metadata) ? value.metadata : undefined;
+    if (!fileId || !attachmentId || !filename || byteSize === undefined || !metadata) {
+      return [];
+    }
+    return [
+      {
+        fileId: fileId as AttachmentManifest["attachments"][number]["fileId"],
+        attachmentId: attachmentId as AttachmentManifest["attachments"][number]["attachmentId"],
+        filename,
+        mimeType: typeof value.mimeType === "string" ? value.mimeType : undefined,
+        byteSize,
+        status: "ready",
+        readable: true,
+        readToolName: "read_document",
+        metadata: {
+          fileId: fileId as AttachmentManifest["attachments"][number]["metadata"]["fileId"],
+          filename,
+          mimeType: typeof metadata.mimeType === "string" ? metadata.mimeType : undefined,
+          byteSize,
+          format:
+            metadata.format === "pdf" ||
+            metadata.format === "docx" ||
+            metadata.format === "txt" ||
+            metadata.format === "md"
+              ? metadata.format
+              : undefined,
+          characterCount: typeof metadata.characterCount === "number" ? metadata.characterCount : undefined,
+          wordCount: typeof metadata.wordCount === "number" ? metadata.wordCount : undefined,
+          pageCount: typeof metadata.pageCount === "number" ? metadata.pageCount : undefined,
+          warnings: [],
+          preprocessingVersion:
+            typeof metadata.preprocessingVersion === "string" ? metadata.preprocessingVersion : undefined
+        }
+      }
+    ];
+  });
+  return attachments.length > 0 ? { version: 1, attachments } : undefined;
+}
+
+function appendAttachmentManifestForModel(
+  text: string,
+  attachmentManifest: AttachmentManifest | undefined
+): string {
+  if (!attachmentManifest || attachmentManifest.attachments.length === 0) {
+    return text;
+  }
+  const lines = [
+    text,
+    "",
+    "[Attached documents]",
+    ...attachmentManifest.attachments.map((attachment) => {
+      const metadata = attachment.metadata;
+      const details = [
+        `fileId: ${attachment.fileId}`,
+        `status: ${attachment.status}`,
+        `size: ${attachment.byteSize} bytes`,
+        metadata.format ? `format: ${metadata.format}` : undefined,
+        metadata.wordCount !== undefined ? `words: ${metadata.wordCount}` : undefined,
+        metadata.pageCount !== undefined ? `pages: ${metadata.pageCount}` : undefined
+      ].filter((value): value is string => value !== undefined);
+      return `- ${attachment.filename} (${details.join(", ")}). Use read_document({ "fileId": "${attachment.fileId}" }) to read the full prepared text.`;
+    })
+  ];
+  return lines.join("\n");
 }
 
 function readToolExecutionResult(value: JsonValue | undefined): ToolExecutionResult | undefined {

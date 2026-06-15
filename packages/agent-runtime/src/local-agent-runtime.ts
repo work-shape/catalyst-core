@@ -26,6 +26,7 @@ import { recordModelUsage } from "./usage-recording";
 import {
   createAssistantFinalMetadata,
   createAssistantToolCallsMetadata,
+  createSubmittedUserMessageContent,
   createToolResultMetadata,
   dropCurrentSubmittedMessage,
   projectAgentVisibleHistory,
@@ -123,10 +124,14 @@ export class LocalAgentRuntime implements AgentRuntime {
     const provider = this.getModelProviderForAgent(agent);
     const tools = this.options.toolRegistry.listDescriptorsForAgent(agent.toolNames);
     const historyMessages = await this.loadModelHistory(input, context);
+    const userContent = createSubmittedUserMessageContent(
+      input.message.text,
+      input.message.attachmentManifest
+    );
     const messages: ModelMessage[] = [
       { role: "system", content: createSystemInstructions(agent.instructions, tools.length, context.locale) },
       ...historyMessages,
-      { role: "user", content: input.message.text }
+      { role: "user", content: userContent }
     ];
 
     let emittedAssistantText = "";

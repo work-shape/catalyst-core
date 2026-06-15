@@ -61,6 +61,7 @@ export interface ScopedSecretResolver {
 export interface ToolExecutionContext extends RuntimeCallContext {
   permissionDecision?: ToolPermissionDecision;
   secrets?: ScopedSecretResolver;
+  toolRequest?: ToolExecutionRequest;
 }
 
 export type ToolRuntimeContext = ToolExecutionContext;

@@ -1,4 +1,5 @@
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
 import Fastify, { type FastifyInstance } from "fastify";
 import { installErrorHandler } from "./errors";
 import { registerAuditRoutes } from "./routes/audit-routes";
@@ -6,6 +7,7 @@ import { registerBetterAuthRoutes } from "./routes/better-auth-routes";
 import { registerChatStreamRoutes } from "./routes/chat-stream-routes";
 import { registerConfigRoutes } from "./routes/config-routes";
 import { registerConversationRoutes } from "./routes/conversation-routes";
+import { registerDraftAttachmentRoutes } from "./routes/draft-attachment-routes";
 import { registerSessionTokenRoutes } from "./routes/session-token-routes";
 import { registerSuperadminRoutes } from "./routes/superadmin-routes";
 import { registerUserAccountRoutes } from "./routes/user-account-routes";
@@ -24,6 +26,11 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
     credentials: true,
     allowedHeaders: ["authorization", "content-type", "x-correlation-id", "x-server-credential"]
   });
+  await app.register(multipart, {
+    limits: {
+      fileSize: options.config.documents.preprocessing.maxFileBytes
+    }
+  });
 
   installErrorHandler(app);
 
@@ -39,6 +46,7 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
   registerConfigRoutes(app, options);
   registerUserAccountRoutes(app, options);
   registerConversationRoutes(app, options);
+  registerDraftAttachmentRoutes(app, options);
   registerAuditRoutes(app, options);
   registerSuperadminRoutes(app, options);
 

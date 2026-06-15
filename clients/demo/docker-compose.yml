@@ -16,6 +16,13 @@ services:
       timeout: 5s
       retries: 12
 
+  s3mock:
+    image: adobe/s3mock:${S3MOCK_VERSION:-latest}
+    environment:
+      initialBuckets: vivd-catalyst-documents
+    ports:
+      - "${S3MOCK_HOST_PORT:-9090}:9090"
+
   api:
     build:
       context: ../..
@@ -23,12 +30,18 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      s3mock:
+        condition: service_started
     environment:
       HOST: 0.0.0.0
       PORT: 4100
       CLIENT_CONFIG_PATH: clients/demo/config/app.yaml
       DATABASE_URL: postgres://agent_chat:agent_chat@postgres:5432/agent_chat
       RUN_MIGRATIONS: "true"
+      DOCUMENT_OBJECT_STORE_ENDPOINT: http://s3mock:9090
+      DOCUMENT_OBJECT_STORE_BUCKET: vivd-catalyst-documents
+      AWS_ACCESS_KEY_ID: s3mock
+      AWS_SECRET_ACCESS_KEY: s3mock
     ports:
       - "4100:4100"
 

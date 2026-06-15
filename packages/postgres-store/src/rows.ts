@@ -4,16 +4,23 @@ import {
   type ChatMessage,
   type ClientInstanceId,
   type Conversation,
+  type ConversationAttachment,
   type ModelUsageEvent,
+  type ManagedFileRecord,
   type UserIdentity,
   type UserRecord,
+  asConversationAttachmentId,
   asConversationId,
+  asManagedFileId,
   asMessageId,
+  asPreparedDocumentId,
   asUserId
 } from "@vivd-catalyst/core";
 import type {
   auditEvents,
+  conversationAttachments,
   conversations,
+  managedFiles,
   messages,
   modelUsageEvents,
   productUsers,
@@ -22,6 +29,8 @@ import type {
 
 export type ConversationRow = typeof conversations.$inferSelect;
 export type MessageRow = typeof messages.$inferSelect;
+export type ManagedFileRow = typeof managedFiles.$inferSelect;
+export type ConversationAttachmentRow = typeof conversationAttachments.$inferSelect;
 export type AuditEventRow = typeof auditEvents.$inferSelect;
 export type ModelUsageEventRow = typeof modelUsageEvents.$inferSelect;
 export type ProductUserRow = typeof productUsers.$inferSelect;
@@ -57,6 +66,58 @@ export function mapMessage(row: MessageRow | undefined): ChatMessage {
     text: row.text,
     createdAt: row.createdAt.toISOString(),
     metadata: row.metadata
+  };
+}
+
+export function mapManagedFile(row: ManagedFileRow | undefined): ManagedFileRecord {
+  if (!row) {
+    throw new AppError("INTERNAL", "Expected managed file row");
+  }
+  return {
+    id: asManagedFileId(row.id),
+    clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    ownerUserId: row.ownerUserId,
+    filename: row.filename,
+    mimeType: row.mimeType ?? undefined,
+    byteSize: row.byteSize,
+    checksum: row.checksum,
+    objectKey: row.objectKey,
+    status: row.status,
+    createdAt: row.createdAt.toISOString(),
+    deletedAt: row.deletedAt?.toISOString()
+  };
+}
+
+export function mapConversationAttachment(
+  row: ConversationAttachmentRow | undefined
+): ConversationAttachment {
+  if (!row) {
+    throw new AppError("INTERNAL", "Expected conversation attachment row");
+  }
+  return {
+    id: asConversationAttachmentId(row.id),
+    clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    conversationId: asConversationId(row.conversationId),
+    messageId: row.messageId ? asMessageId(row.messageId) : undefined,
+    fileId: asManagedFileId(row.fileId),
+    filename: row.filename,
+    mimeType: row.mimeType ?? undefined,
+    byteSize: row.byteSize,
+    checksum: row.checksum,
+    status: row.status,
+    format: row.format ?? undefined,
+    preparedDocumentId: row.preparedDocumentId ? asPreparedDocumentId(row.preparedDocumentId) : undefined,
+    preparedObjectKey: row.preparedObjectKey ?? undefined,
+    characterCount: row.characterCount ?? undefined,
+    wordCount: row.wordCount ?? undefined,
+    pageCount: row.pageCount ?? undefined,
+    warnings: row.warnings,
+    error: row.error ?? undefined,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    preprocessingStartedAt: row.preprocessingStartedAt?.toISOString(),
+    preprocessingCompletedAt: row.preprocessingCompletedAt?.toISOString(),
+    deletedAt: row.deletedAt?.toISOString()
   };
 }
 

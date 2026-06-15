@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, lt, sql as drizzleSql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, sql as drizzleSql } from "drizzle-orm";
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import type { Notice, Sql } from "postgres";
@@ -14,6 +14,7 @@ import {
   type ConversationStore,
   type CreateConversationInput,
   type CreateMessageInput,
+  type DocumentAttachmentStore,
   type ModelUsageEvent,
   type ModelUsageEventInput,
   type ModelUsageEventStore,
@@ -43,6 +44,7 @@ import {
 } from "./rows";
 import {
   auditEvents,
+  conversationAttachments,
   conversations,
   messages,
   modelUsageEvents,
@@ -50,6 +52,7 @@ import {
   schema,
   userIdentities
 } from "./schema";
+import { createPostgresDocumentAttachmentStore } from "./postgres-document-attachment-store";
 
 export interface PostgresPlatformStoreOptions {
   databaseUrl: string;
@@ -57,11 +60,13 @@ export interface PostgresPlatformStoreOptions {
 }
 
 const DUPLICATE_RELATION_NOTICE_CODE = "42P07";
+const DUPLICATE_SCHEMA_NOTICE_CODE = "42P06";
 type PostgresDatabase = PostgresJsDatabase<typeof schema>;
 
 function handlePostgresNotice(notice: Notice): void {
   if (
-    notice.code === DUPLICATE_RELATION_NOTICE_CODE &&
+    (notice.code === DUPLICATE_RELATION_NOTICE_CODE ||
+      notice.code === DUPLICATE_SCHEMA_NOTICE_CODE) &&
     notice.message?.includes("already exists, skipping")
   ) {
     return;
@@ -71,14 +76,21 @@ function handlePostgresNotice(notice: Notice): void {
 }
 
 export class PostgresPlatformStore
-  implements ConversationStore, AuditEventStore, ModelUsageEventStore, UserStore
+  implements ConversationStore, DocumentAttachmentStore, AuditEventStore, ModelUsageEventStore, UserStore
 {
-  private readonly sql: Sql;
+  private readonly postgresClient: Sql;
   private readonly db: PostgresDatabase;
+  private readonly documentAttachments: DocumentAttachmentStore;
 
   private constructor(sql: Sql) {
-    this.sql = sql;
+    this.postgresClient = sql;
     this.db = drizzle(sql, { schema });
+    this.documentAttachments = createPostgresDocumentAttachmentStore(this.db, {
+      requireActiveConversation: (clientInstanceId, conversationId) =>
+        this.requireActiveConversation(clientInstanceId, conversationId),
+      touchConversation: (clientInstanceId, conversationId, updatedAt) =>
+        this.touchConversation(clientInstanceId, conversationId, updatedAt)
+    });
   }
 
   static async connect(options: PostgresPlatformStoreOptions): Promise<PostgresPlatformStore> {
@@ -95,11 +107,11 @@ export class PostgresPlatformStore
   }
 
   async close(): Promise<void> {
-    await this.sql.end();
+    await this.postgresClient.end();
   }
 
   async migrate(): Promise<void> {
-    await runPostgresMigrations(this.sql);
+    await runPostgresMigrations(this.postgresClient, this.db);
   }
 
   async resolveUserIdentity(input: ResolveUserIdentityInput) {
@@ -552,7 +564,7 @@ export class PostgresPlatformStore
       throw new AppError("NOT_FOUND", "Conversation is not available");
     }
 
-    const id = createPlatformId<"MessageId">("msg");
+    const id = input.id ?? createPlatformId<"MessageId">("msg");
     const createdAt = new Date();
     const [row] = await this.db
       .insert(messages)
@@ -624,11 +636,72 @@ export class PostgresPlatformStore
     return rows.map(mapMessage).reverse();
   }
 
+  async createManagedFile(input: Parameters<DocumentAttachmentStore["createManagedFile"]>[0]) {
+    return this.documentAttachments.createManagedFile(input);
+  }
+
+  async getManagedFile(input: Parameters<DocumentAttachmentStore["getManagedFile"]>[0]) {
+    return this.documentAttachments.getManagedFile(input);
+  }
+
+  async createConversationAttachment(
+    input: Parameters<DocumentAttachmentStore["createConversationAttachment"]>[0]
+  ) {
+    return this.documentAttachments.createConversationAttachment(input);
+  }
+
+  async getConversationAttachment(
+    input: Parameters<DocumentAttachmentStore["getConversationAttachment"]>[0]
+  ) {
+    return this.documentAttachments.getConversationAttachment(input);
+  }
+
+  async listDraftAttachments(input: Parameters<DocumentAttachmentStore["listDraftAttachments"]>[0]) {
+    return this.documentAttachments.listDraftAttachments(input);
+  }
+
+  async updateConversationAttachment(
+    input: Parameters<DocumentAttachmentStore["updateConversationAttachment"]>[0]
+  ) {
+    return this.documentAttachments.updateConversationAttachment(input);
+  }
+
+  async deleteDraftAttachment(input: Parameters<DocumentAttachmentStore["deleteDraftAttachment"]>[0]) {
+    return this.documentAttachments.deleteDraftAttachment(input);
+  }
+
+  async claimReadyDraftAttachmentsForMessage(
+    input: Parameters<DocumentAttachmentStore["claimReadyDraftAttachmentsForMessage"]>[0]
+  ) {
+    return this.documentAttachments.claimReadyDraftAttachmentsForMessage(input);
+  }
+
+  async findReadableDocumentAttachment(
+    input: Parameters<DocumentAttachmentStore["findReadableDocumentAttachment"]>[0]
+  ) {
+    return this.documentAttachments.findReadableDocumentAttachment(input);
+  }
+
   async deleteConversation(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
     deletedAt: string;
   }): Promise<Conversation> {
+    const deletedAt = new Date(input.deletedAt);
+    await this.db
+      .update(conversationAttachments)
+      .set({
+        status: "deleted",
+        deletedAt,
+        updatedAt: deletedAt
+      })
+      .where(
+        and(
+          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
+          eq(conversationAttachments.conversationId, input.conversationId),
+          ne(conversationAttachments.status, "deleted")
+        )
+      );
     await this.db
       .delete(messages)
       .where(
@@ -637,7 +710,6 @@ export class PostgresPlatformStore
           eq(messages.conversationId, input.conversationId)
         )
       );
-    const deletedAt = new Date(input.deletedAt);
     const [row] = await this.db
       .update(conversations)
       .set({
@@ -786,6 +858,27 @@ export class PostgresPlatformStore
       throw new AppError("NOT_FOUND", "User is not available");
     }
     return user;
+  }
+
+  private async requireActiveConversation(
+    clientInstanceId: ClientInstanceId,
+    conversationId: ConversationId
+  ): Promise<void> {
+    const conversation = await this.getConversation(clientInstanceId, conversationId);
+    if (!conversation || conversation.status !== "active") {
+      throw new AppError("NOT_FOUND", "Conversation is not available");
+    }
+  }
+
+  private async touchConversation(
+    clientInstanceId: ClientInstanceId,
+    conversationId: ConversationId,
+    updatedAt: Date
+  ): Promise<void> {
+    await this.db
+      .update(conversations)
+      .set({ updatedAt })
+      .where(and(eq(conversations.clientInstanceId, clientInstanceId), eq(conversations.id, conversationId)));
   }
 }
 

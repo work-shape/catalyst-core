@@ -6,8 +6,9 @@ import {
 } from "@assistant-ui/react";
 import { AssistantChatTransport, useChatRuntime } from "@assistant-ui/react-ai-sdk";
 import type { UIMessage } from "ai";
-import type { ApiClient, LocaleCode, Message, SafeConfig } from "@vivd-catalyst/api-client";
+import type { ApiClient, DraftAttachment, LocaleCode, Message, SafeConfig } from "@vivd-catalyst/api-client";
 import { AssistantThread } from "./assistant-thread";
+import type { LocalUploadingAttachment } from "./assistant-composer";
 import { firstLineTitle } from "./conversation-title";
 
 export function AssistantChatPanel({
@@ -21,7 +22,13 @@ export function AssistantChatPanel({
   draft,
   locale,
   selectedAgentName,
+  draftAttachments,
+  localUploadingAttachments,
+  sendBlockedReason,
   onDraftChange,
+  onFilesSelected,
+  onRemoveDraftAttachment,
+  onRetryDraftAttachment,
   onConversationStarted,
   onStreamFinished,
   onStreamError
@@ -36,7 +43,13 @@ export function AssistantChatPanel({
   draft: string;
   locale: LocaleCode;
   selectedAgentName: string | undefined;
+  draftAttachments: DraftAttachment[];
+  localUploadingAttachments: LocalUploadingAttachment[];
+  sendBlockedReason?: string;
   onDraftChange: (value: string) => void;
+  onFilesSelected: (files: File[]) => void;
+  onRemoveDraftAttachment: (attachmentId: string) => void;
+  onRetryDraftAttachment: (attachmentId: string) => void;
   onConversationStarted: (conversationId: string, messages?: Message[]) => void;
   onStreamFinished: () => void;
   onStreamError: (message: string) => void;
@@ -57,7 +70,13 @@ export function AssistantChatPanel({
       draft={draft}
       locale={locale}
       selectedAgentName={selectedAgentName}
+      draftAttachments={draftAttachments}
+      localUploadingAttachments={localUploadingAttachments}
+      sendBlockedReason={sendBlockedReason}
       onDraftChange={onDraftChange}
+      onFilesSelected={onFilesSelected}
+      onRemoveDraftAttachment={onRemoveDraftAttachment}
+      onRetryDraftAttachment={onRetryDraftAttachment}
       onConversationStarted={onConversationStarted}
       onStreamFinished={onStreamFinished}
       onStreamError={onStreamError}
@@ -77,7 +96,13 @@ function AssistantRuntimePane({
   draft,
   locale,
   selectedAgentName,
+  draftAttachments,
+  localUploadingAttachments,
+  sendBlockedReason,
   onDraftChange,
+  onFilesSelected,
+  onRemoveDraftAttachment,
+  onRetryDraftAttachment,
   onConversationStarted,
   onStreamFinished,
   onStreamError
@@ -93,7 +118,13 @@ function AssistantRuntimePane({
   draft: string;
   locale: LocaleCode;
   selectedAgentName: string | undefined;
+  draftAttachments: DraftAttachment[];
+  localUploadingAttachments: LocalUploadingAttachment[];
+  sendBlockedReason?: string;
   onDraftChange: (value: string) => void;
+  onFilesSelected: (files: File[]) => void;
+  onRemoveDraftAttachment: (attachmentId: string) => void;
+  onRetryDraftAttachment: (attachmentId: string) => void;
   onConversationStarted: (conversationId: string, messages?: Message[]) => void;
   onStreamFinished: () => void;
   onStreamError: (message: string) => void;
@@ -112,6 +143,9 @@ function AssistantRuntimePane({
           agentName: selectedAgentName
         },
         prepareSendMessagesRequest: async (options) => {
+          if (sendBlockedReason) {
+            throw new Error(sendBlockedReason);
+          }
           const text = extractLastUserText(options.messages);
           let conversationId = selectedConversationId;
           if (!conversationId) {
@@ -135,7 +169,15 @@ function AssistantRuntimePane({
           };
         }
       }),
-    [apiBaseUrl, client, locale, pendingConversationIdRef, selectedAgentName, selectedConversationId]
+    [
+      apiBaseUrl,
+      client,
+      locale,
+      pendingConversationIdRef,
+      selectedAgentName,
+      selectedConversationId,
+      sendBlockedReason
+    ]
   );
   async function selectPendingConversation(): Promise<void> {
     const conversationId = pendingConversationIdRef.current;
@@ -201,6 +243,12 @@ function AssistantRuntimePane({
         config={config}
         selectedAgentName={selectedAgentName}
         notice={notice}
+        draftAttachments={draftAttachments}
+        localUploadingAttachments={localUploadingAttachments}
+        sendBlockedReason={sendBlockedReason}
+        onFilesSelected={onFilesSelected}
+        onRemoveDraftAttachment={onRemoveDraftAttachment}
+        onRetryDraftAttachment={onRetryDraftAttachment}
       />
     </AssistantRuntimeProvider>
   );

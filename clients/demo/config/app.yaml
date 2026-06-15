@@ -82,11 +82,35 @@ runtime:
 modelContext:
   toolOutput:
     maxTokens: 60000
+documents:
+  preprocessing:
+    enabled: true
+    supportedFormats:
+      - pdf
+      - docx
+      - txt
+      - md
+    maxFileBytes: 26214400
+    maxExtractedTextBytes: 4194304
+    timeoutMs: 120000
+    perConversationConcurrency: 2
+    globalConcurrency: 8
+    converterCommand: markitdown
+    converterArgs: []
+    preprocessingVersion: document-preprocessing-v1
+  objectStorage:
+    kind: s3
+    bucket: vivd-catalyst-documents
+    region: us-east-1
+    endpoint: http://127.0.0.1:9090
+    forcePathStyle: true
 defaultAgentName: workflow_assistant
 agentFiles:
   - ../agents/workflow-assistant.agent.yaml
 tools:
   - name: renderHtml
+    enabled: true
+  - name: read_document
     enabled: true
   - name: demo.workflow_summary
     enabled: true
