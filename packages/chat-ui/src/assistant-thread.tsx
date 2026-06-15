@@ -38,7 +38,7 @@ export function AssistantThread({
     >
       <ThreadPrimitive.Root
         className="grid h-full min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden"
-        style={{ ["--thread-max-width" as string]: "64rem" }}
+        style={{ ["--thread-max-width" as string]: "52rem" }}
       >
         <ThreadPrimitive.Viewport className="relative min-h-0 overflow-y-auto overflow-x-hidden scroll-smooth">
           <div className="mx-auto flex min-h-full w-full max-w-[var(--thread-max-width)] flex-col px-5 pt-20">

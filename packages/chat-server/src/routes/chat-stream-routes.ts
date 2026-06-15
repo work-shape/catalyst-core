@@ -172,7 +172,14 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
               runId,
               assistantMessageCount
             );
-            await conversations.generateTitleForFirstExchange(conversationId, user, localizedContext);
+            void conversations
+              .generateTitleForFirstExchange(conversationId, user, localizedContext)
+              .catch((error: unknown) => {
+                request.log.warn(
+                  { err: error, conversationId, runId },
+                  "Conversation title generation failed after chat stream completion"
+                );
+              });
           }
         }
 
