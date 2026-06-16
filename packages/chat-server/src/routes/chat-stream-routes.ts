@@ -104,7 +104,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
               type: "tool-input-available",
               toolCallId: event.toolCallId,
               toolName: event.toolName,
-              input: {},
+              input: event.input,
               dynamic: true,
               title: event.toolName
             });

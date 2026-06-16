@@ -136,7 +136,6 @@ export class LocalAgentRuntime implements AgentRuntime {
       { role: "user", content: userContent }
     ];
 
-    let emittedAssistantText = "";
     const repeatedToolCalls = new Map<string, number>();
     const maxSteps = agent.maxSteps ?? this.options.maxSteps ?? DEFAULT_MAX_STEPS;
 
@@ -169,12 +168,11 @@ export class LocalAgentRuntime implements AgentRuntime {
 
       if (completion.toolCalls.length === 0) {
         const assistantText = completion.text || "I completed the request.";
-        const visibleAssistantText = `${emittedAssistantText}${assistantText}`;
         const persisted = await this.options.conversationHistory.appendMessage({
           clientInstanceId: context.clientInstanceId,
           conversationId: input.conversationId,
           role: "assistant",
-          text: visibleAssistantText,
+          text: assistantText,
           metadata: createAssistantFinalMetadata({ runId })
         });
         if (emittedDeltas) {
@@ -184,10 +182,6 @@ export class LocalAgentRuntime implements AgentRuntime {
         }
         state.complete();
         return;
-      }
-
-      if (emittedDeltas) {
-        emittedAssistantText += completion.text;
       }
 
       messages.push({
@@ -337,10 +331,12 @@ export class LocalAgentRuntime implements AgentRuntime {
 
     let completion: ModelCompletion | undefined;
     let emittedDeltas = false;
+    let streamedText = "";
     for await (const event of this.options.modelProvider.stream(request, context)) {
       if (event.type === "text_delta") {
         if (event.delta.length > 0) {
           emittedDeltas = true;
+          streamedText += event.delta;
           state.emit({
             type: "message_delta",
             runId: state.runId,
@@ -356,11 +352,35 @@ export class LocalAgentRuntime implements AgentRuntime {
       throw new AppError("INTERNAL", "Model provider stream ended without a completion");
     }
 
+    const unstreamedText = getUnstreamedCompletionText(completion.text, streamedText, emittedDeltas);
+    if (unstreamedText.length > 0) {
+      emittedDeltas = true;
+      state.emit({
+        type: "message_delta",
+        runId: state.runId,
+        delta: unstreamedText
+      });
+    }
+
     return {
       completion,
       emittedDeltas
     };
   }
+}
+
+function getUnstreamedCompletionText(
+  completionText: string,
+  streamedText: string,
+  emittedDeltas: boolean
+): string {
+  if (completionText.length === 0) {
+    return "";
+  }
+  if (!emittedDeltas) {
+    return completionText;
+  }
+  return completionText.startsWith(streamedText) ? completionText.slice(streamedText.length) : "";
 }
 
 export function asRuntimeRunId(value: string): AgentRunId {

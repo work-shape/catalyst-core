@@ -120,15 +120,88 @@ describe("web response bridge", () => {
       await app.close();
     }
   });
+
+  it("streams model text and tool inputs for tool-call turns", async () => {
+    const tool = defineTool({
+      name: "demo.echo",
+      description: "Echo text for tests.",
+      inputSchema: z.object({ text: z.string() }),
+      async execute(input) {
+        return toolSuccess({ text: input.text });
+      }
+    });
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        toolNames: ["demo.echo"],
+        tools: [{ name: "demo.echo", enabled: true }]
+      }),
+      env: {},
+      storeMode: "memory",
+      tools: [tool]
+    });
+
+    await app.listen({ host: "127.0.0.1", port: 0 });
+    try {
+      const address = app.server.server.address();
+      if (!address || typeof address === "string") {
+        throw new Error("Expected Fastify to listen on a TCP port");
+      }
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+      const conversationResponse = await fetch(`${baseUrl}/api/conversations`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: "Tool streaming test" })
+      });
+      expect(conversationResponse.ok).toBe(true);
+      const conversation = (await conversationResponse.json()) as { id: string };
+
+      const chatResponse = await fetch(`${baseUrl}/api/chat`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          conversationId: conversation.id,
+          messages: [
+            {
+              id: "user-message-1",
+              role: "user",
+              parts: [
+                {
+                  type: "text",
+                  text: '/tool demo.echo {"text":"hello"}'
+                }
+              ]
+            }
+          ]
+        })
+      });
+
+      expect(chatResponse.ok).toBe(true);
+      const reader = chatResponse.body?.getReader();
+      expect(reader).toBeDefined();
+      const streamText = await readRemaining(reader!);
+      const chunks = parseSseChunks(streamText);
+      const textDeltas = chunks
+        .filter((chunk) => chunk.type === "text-delta")
+        .map((chunk) => chunk.delta);
+      const toolInputs = chunks
+        .filter((chunk) => chunk.type === "tool-input-available")
+        .map((chunk) => chunk.input);
+
+      expect(textDeltas.join("")).toContain("I will run demo.echo with the provided input.");
+      expect(toolInputs).toEqual([{ text: "hello" }]);
+    } finally {
+      await app.close();
+    }
+  });
 });
 
-function parseSseChunks(text: string): Array<{ type?: string; delta?: string }> {
+function parseSseChunks(text: string): Array<{ type?: string; delta?: string; input?: unknown }> {
   return text
     .split("\n")
     .filter((line) => line.startsWith("data:"))
     .map((line) => line.slice("data:".length).trim())
     .filter((line) => line !== "[DONE]")
-    .map((line) => JSON.parse(line) as { type?: string; delta?: string });
+    .map((line) => JSON.parse(line) as { type?: string; delta?: string; input?: unknown });
 }
 
 function createTestConfig(input: {
