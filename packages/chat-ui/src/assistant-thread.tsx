@@ -61,18 +61,20 @@ export function AssistantThread({
               <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
             </div>
 
-            <ThreadPrimitive.ViewportFooter className="relative sticky bottom-0 mt-auto bg-background pb-4 pt-5 before:pointer-events-none before:absolute before:-top-16 before:inset-x-0 before:h-16 before:bg-gradient-to-t before:from-background before:to-background/0 before:content-['']">
+            <ThreadPrimitive.ViewportFooter className="relative sticky bottom-0 z-10 mt-auto pb-4 pt-5 before:pointer-events-none before:absolute before:-top-11 before:inset-x-0 before:z-0 before:h-16 before:bg-gradient-to-t before:from-background before:to-background/0 before:content-[''] after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:top-5 after:z-0 after:bg-background after:content-['']">
               <AuiIf condition={(state) => !state.thread.isEmpty}>
                 <ThreadScrollToBottom />
               </AuiIf>
-              <AssistantComposer
-                attachments={draftAttachments}
-                localUploadingAttachments={localUploadingAttachments}
-                sendBlockedReason={sendBlockedReason}
-                onFilesSelected={onFilesSelected}
-                onRemoveAttachment={onRemoveDraftAttachment}
-                onRetryAttachment={onRetryDraftAttachment}
-              />
+              <div className="relative z-10">
+                <AssistantComposer
+                  attachments={draftAttachments}
+                  localUploadingAttachments={localUploadingAttachments}
+                  sendBlockedReason={sendBlockedReason}
+                  onFilesSelected={onFilesSelected}
+                  onRemoveAttachment={onRemoveDraftAttachment}
+                  onRetryAttachment={onRetryDraftAttachment}
+                />
+              </div>
             </ThreadPrimitive.ViewportFooter>
           </div>
         </ThreadPrimitive.Viewport>
