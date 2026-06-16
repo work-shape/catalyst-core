@@ -79,6 +79,22 @@ export function createApiClient(options: ApiClientOptions) {
     return schema.parse(payload);
   }
 
+  async function blobRequest(path: string): Promise<Blob> {
+    const token = await options.getToken?.();
+    const response = await fetchImpl(`${baseUrl}${path}`, {
+      method: "GET",
+      credentials: "include",
+      headers: {
+        ...(token ? { authorization: `Bearer ${token}` } : {})
+      }
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => undefined);
+      throw new ApiError(response.status, payload?.error?.message ?? "API request failed", payload);
+    }
+    return response.blob();
+  }
+
   return {
     me: () => request("GET", "/api/me", apiUserSchema),
     updateMe: (input: z.infer<typeof updateCurrentUserRequestSchema>) =>
@@ -95,6 +111,8 @@ export function createApiClient(options: ApiClientOptions) {
     conversations: () => request("GET", "/api/conversations", z.array(conversationSchema)),
     createConversation: (input: z.infer<typeof createConversationRequestSchema> = {}) =>
       request("POST", "/api/conversations", conversationSchema, createConversationRequestSchema.parse(input)),
+    generateConversationTitle: (conversationId: string) =>
+      request("POST", `/api/conversations/${encodeURIComponent(conversationId)}/title`, conversationSchema),
     messages: (conversationId: string) =>
       request("GET", `/api/conversations/${encodeURIComponent(conversationId)}/messages`, z.array(messageSchema)),
     draftAttachments: (conversationId: string) =>
@@ -124,6 +142,10 @@ export function createApiClient(options: ApiClientOptions) {
         "DELETE",
         `/api/conversations/${encodeURIComponent(conversationId)}/draft-attachments/${encodeURIComponent(attachmentId)}`,
         draftAttachmentSchema
+      ),
+    conversationFileContent: (conversationId: string, fileId: string) =>
+      blobRequest(
+        `/api/conversations/${encodeURIComponent(conversationId)}/files/${encodeURIComponent(fileId)}/content`
       ),
     deleteConversation: (conversationId: string) =>
       request("DELETE", `/api/conversations/${encodeURIComponent(conversationId)}`, conversationSchema),

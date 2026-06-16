@@ -230,6 +230,7 @@ describe("model context projection", () => {
       version: 1,
       attachments: [
         {
+          kind: "document",
           fileId: asManagedFileId("file_contract"),
           attachmentId: asConversationAttachmentId("att_contract"),
           filename: "contract.pdf",
@@ -266,6 +267,63 @@ describe("model context projection", () => {
     expect(content).toContain('read_document({ "fileId": "file_contract", "mode": "full" })');
     expect(content).toContain("view_document_page");
     expect(content).not.toContain("Raw contract body");
+  });
+
+  it("projects user image attachments into visual context without embedding bytes in metadata", async () => {
+    const imageBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    const manifest: AttachmentManifest = {
+      version: 1,
+      attachments: [
+        {
+          kind: "image",
+          fileId: asManagedFileId("file_receipt"),
+          attachmentId: asConversationAttachmentId("att_receipt"),
+          filename: "receipt.png",
+          mimeType: "image/png",
+          byteSize: imageBytes.byteLength,
+          status: "ready",
+          readable: false,
+          modelVisibility: {
+            type: "image",
+            mimeType: "image/png"
+          },
+          metadata: {
+            fileId: asManagedFileId("file_receipt"),
+            filename: "receipt.png",
+            mimeType: "image/png",
+            byteSize: imageBytes.byteLength,
+            format: "png",
+            checksum: "checksum"
+          }
+        }
+      ]
+    };
+    const metadata: JsonObject = {
+      agentRuntime: {
+        version: 1,
+        kind: "user_message",
+        attachmentManifest: manifest as unknown as JsonObject
+      }
+    };
+    const projected = await projectAgentVisibleHistory(
+      [createMessage("user", "What does the receipt show?", metadata)],
+      {
+        ...modelContextOptions(),
+        clientInstanceId: asClientInstanceId("projection-client"),
+        fileReader: {
+          async readFile() {
+            return {
+              bytes: imageBytes,
+              mimeType: "image/png"
+            };
+          }
+        }
+      }
+    );
+
+    expect(modelContentText(projected[0]?.content ?? "")).toContain("[Attached images]");
+    expect(modelContentImages(projected[0]?.content ?? "")[0]?.data).toEqual(imageBytes);
+    expect(JSON.stringify(metadata)).not.toContain("iVBOR");
   });
 
   it("loads model-visible image artifacts without storing base64 in history metadata", async () => {

@@ -21,9 +21,15 @@ export type ManagedArtifactKind =
   | "document.pages_json"
   | "document.page_image";
 
+export type SupportedImageMimeType =
+  | "image/png"
+  | "image/jpeg"
+  | "image/webp"
+  | "image/gif";
+
 export interface ModelVisibleArtifactHint {
   type: "image";
-  mimeType: "image/png";
+  mimeType: SupportedImageMimeType;
 }
 
 export interface ManagedArtifactRef {
@@ -55,6 +61,8 @@ export type ManagedFileStatus = "available" | "deleted";
 export type ManagedArtifactStatus = "available" | "deleted";
 
 export type DocumentFileFormat = "pdf" | "docx" | "txt" | "md";
+export type ImageFileFormat = "png" | "jpeg" | "webp" | "gif";
+export type FileAttachmentFormat = DocumentFileFormat | ImageFileFormat;
 
 export type ConversationAttachmentStatus =
   | "queued"
@@ -124,6 +132,15 @@ export interface PreparedDocumentMetadata {
   preprocessingEngine?: string;
 }
 
+export interface ImageAttachmentMetadata {
+  fileId: ManagedFileId;
+  filename: string;
+  mimeType: SupportedImageMimeType;
+  byteSize: number;
+  format: ImageFileFormat;
+  checksum: string;
+}
+
 export interface ConversationAttachment {
   id: ConversationAttachmentId;
   clientInstanceId: ClientInstanceId;
@@ -135,7 +152,7 @@ export interface ConversationAttachment {
   byteSize: number;
   checksum: string;
   status: ConversationAttachmentStatus;
-  format?: DocumentFileFormat;
+  format?: FileAttachmentFormat;
   preparedTextArtifactId?: ManagedArtifactId | null;
   preparedPagesArtifactId?: ManagedArtifactId | null;
   preprocessingEngine?: string;
@@ -155,7 +172,8 @@ export type DraftAttachment = ConversationAttachment & {
   messageId?: undefined;
 };
 
-export interface AttachmentManifestEntry {
+export interface DocumentAttachmentManifestEntry {
+  kind: "document";
   fileId: ManagedFileId;
   attachmentId: ConversationAttachmentId;
   filename: string;
@@ -166,6 +184,23 @@ export interface AttachmentManifestEntry {
   readToolName: "read_document";
   metadata: PreparedDocumentMetadata;
 }
+
+export interface ImageAttachmentManifestEntry {
+  kind: "image";
+  fileId: ManagedFileId;
+  attachmentId: ConversationAttachmentId;
+  filename: string;
+  mimeType: SupportedImageMimeType;
+  byteSize: number;
+  status: "ready";
+  readable: false;
+  modelVisibility: ModelVisibleArtifactHint;
+  metadata: ImageAttachmentMetadata;
+}
+
+export type AttachmentManifestEntry =
+  | DocumentAttachmentManifestEntry
+  | ImageAttachmentManifestEntry;
 
 export interface AttachmentManifest {
   version: 1;
@@ -190,8 +225,8 @@ export interface CreateConversationAttachmentInput {
   mimeType?: string;
   byteSize: number;
   checksum: string;
-  status: Exclude<ConversationAttachmentStatus, "preprocessing" | "ready" | "deleted">;
-  format?: DocumentFileFormat;
+  status: Exclude<ConversationAttachmentStatus, "preprocessing" | "deleted">;
+  format?: FileAttachmentFormat;
   warnings?: DocumentAttachmentWarning[];
   error?: JsonObject;
 }
@@ -200,7 +235,7 @@ export interface UpdateConversationAttachmentInput {
   clientInstanceId: ClientInstanceId;
   attachmentId: ConversationAttachmentId;
   status?: ConversationAttachmentStatus;
-  format?: DocumentFileFormat;
+  format?: FileAttachmentFormat;
   preparedTextArtifactId?: ManagedArtifactId | null;
   preparedPagesArtifactId?: ManagedArtifactId | null;
   preprocessingEngine?: string;
@@ -271,6 +306,11 @@ export interface DocumentAttachmentStore {
     claimedAt: ISODateString;
   }): Promise<ConversationAttachment[]>;
   findReadableDocumentAttachment(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    fileId: ManagedFileId;
+  }): Promise<ConversationAttachment | undefined>;
+  findConversationAttachmentByFile(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
     fileId: ManagedFileId;

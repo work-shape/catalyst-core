@@ -34,6 +34,7 @@ import {
   stableStringify,
   type ModelOutputProjection,
   type ModelContextArtifactReader,
+  type ModelContextFileReader,
   type ModelContextProjectionOptions,
   type StoredReasoningSummary
 } from "./model-context-projection";
@@ -52,6 +53,7 @@ export interface LocalAgentRuntimeOptions {
   repeatedToolCallLimit?: number;
   modelContext?: ModelContextProjectionOptions;
   artifactReader?: ModelContextArtifactReader;
+  fileReader?: ModelContextFileReader;
 }
 
 const DEFAULT_CONVERSATION_HISTORY_LIMIT = 20;
@@ -128,9 +130,10 @@ export class LocalAgentRuntime implements AgentRuntime {
     const provider = this.getModelProviderForAgent(agent);
     const tools = this.options.toolRegistry.listDescriptorsForAgent(agent.toolNames);
     const historyMessages = await this.loadModelHistory(input, context);
-    const userContent = createSubmittedUserMessageContent(
+    const userContent = await createSubmittedUserMessageContent(
       input.message.text,
-      input.message.attachmentManifest
+      input.message.attachmentManifest,
+      this.modelContextOptions(context)
     );
     const messages: ModelMessage[] = [
       { role: "system", content: createSystemInstructions(agent.instructions, context.locale) },
@@ -318,7 +321,8 @@ export class LocalAgentRuntime implements AgentRuntime {
     return {
       ...(this.options.modelContext ?? DEFAULT_MODEL_CONTEXT),
       clientInstanceId: context.clientInstanceId,
-      artifactReader: this.options.artifactReader
+      artifactReader: this.options.artifactReader,
+      fileReader: this.options.fileReader
     };
   }
 

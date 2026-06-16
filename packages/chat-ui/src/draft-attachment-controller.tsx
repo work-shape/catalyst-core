@@ -81,6 +81,7 @@ export function useDraftAttachmentController(
       conversationId,
       filename: file.name,
       byteSize: file.size,
+      mimeType: file.type || undefined,
       status: "uploading"
     };
     setLocalUploadingAttachments((currentAttachments) => [...currentAttachments, localAttachment]);

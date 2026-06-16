@@ -196,6 +196,54 @@ describe("document preprocessing", () => {
     ]);
   });
 
+  it("keeps uploaded images as ready visual attachments", async () => {
+    const { service, conversationId } = await createDocumentFixture();
+    const attachment = await service.uploadDraftAttachment({
+      conversationId,
+      ownerUserId: "user-1",
+      filename: "receipt.png",
+      mimeType: "image/png; charset=binary",
+      bytes: createPngHeader()
+    });
+
+    expect(attachment).toMatchObject({
+      filename: "receipt.png",
+      status: "ready",
+      mimeType: "image/png",
+      format: "png"
+    });
+    expect(attachment.preparedTextArtifactId).toBeUndefined();
+    await expect(
+      service.readConversationFile({
+        conversationId,
+        fileId: attachment.fileId
+      })
+    ).resolves.toMatchObject({
+      mimeType: "image/png",
+      byteSize: 8
+    });
+
+    const manifest = createAttachmentManifest([attachment], "test-preprocessing");
+
+    expect(manifest.attachments).toEqual([
+      expect.objectContaining({
+        kind: "image",
+        fileId: attachment.fileId,
+        filename: "receipt.png",
+        mimeType: "image/png",
+        readable: false,
+        modelVisibility: {
+          type: "image",
+          mimeType: "image/png"
+        },
+        metadata: expect.objectContaining({
+          format: "png",
+          checksum: attachment.checksum
+        })
+      })
+    ]);
+  });
+
   it("uses deterministic dummy credentials for local S3Mock endpoints", () => {
     expect(
       resolveS3Credentials(
@@ -447,6 +495,10 @@ sys.stdout.buffer.write(buffer.getvalue())
 
 function createDocxZipHeader(): Uint8Array {
   return new Uint8Array([0x50, 0x4b, 0x03, 0x04]);
+}
+
+function createPngHeader(): Uint8Array {
+  return new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 }
 
 const DEFAULT_DOCUMENT_COMMANDS = {

@@ -84,7 +84,7 @@ function isConversationTitleRequest(request: ModelCompletionRequest): boolean {
 }
 
 function createDeterministicConversationTitle(content: string): string {
-  const userMessage = content.match(/User message:\n([\s\S]*?)(?:\n\nAssistant response:|$)/u)?.[1] ?? content;
+  const userMessage = content.match(/Initial user message:\n([\s\S]*?)$/u)?.[1] ?? content;
   const source = userMessage.toLowerCase();
   if (source.includes("tool")) {
     return "Tool result review";

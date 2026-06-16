@@ -57,6 +57,7 @@ export function ChatWorkspace({
   const [notice, setNotice] = useState<string | undefined>();
   const [view, setView] = useState<WorkspaceView>("chat");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [composerFocusRequestId, setComposerFocusRequestId] = useState(0);
   const [selectedAgentName, setSelectedAgentName] = useState<string | undefined>();
   const [browserLocale] = useState<LocaleCode | undefined>(() => readBrowserLocale());
   const [localePreference, setLocalePreference] = useState<LocaleCode | undefined>(() => readStoredLocale());
@@ -333,6 +334,7 @@ export function ChatWorkspace({
     setSelectedConversationId(undefined);
     setView("chat");
     setNotice(undefined);
+    setComposerFocusRequestId((currentRequestId) => currentRequestId + 1);
   }
 
   function setDraftForKey(key: string, value: string) {
@@ -363,6 +365,27 @@ export function ChatWorkspace({
     setDraftForKey(createDraftKey(authScope, conversationId), "");
     queryClient.setQueryData(draftAttachmentsQueryKey(apiBaseUrl, authScope, conversationId), []);
     draftAttachmentController.clearConversationUploads(conversationId);
+  }
+
+  function onChatRequestAccepted(conversationId: string) {
+    void client
+      .generateConversationTitle(conversationId)
+      .then((updatedConversation) => {
+        queryClient.setQueryData<Conversation[]>(
+          ["conversations", apiBaseUrl, authScope],
+          (currentConversations = []) => {
+            if (currentConversations.some((conversation) => conversation.id === updatedConversation.id)) {
+              return currentConversations.map((conversation) =>
+                conversation.id === updatedConversation.id ? updatedConversation : conversation
+              );
+            }
+            return [updatedConversation, ...currentConversations];
+          }
+        );
+      })
+      .catch(() => {
+        void queryClient.invalidateQueries({ queryKey: ["conversations", apiBaseUrl, authScope] });
+      });
   }
 
   function onStreamFinished() {
@@ -523,6 +546,7 @@ export function ChatWorkspace({
             messagesLoaded={messagesLoaded}
             notice={notice}
             draft={draft}
+            composerFocusRequestId={composerFocusRequestId}
             locale={activeLocale}
             selectedAgentName={activeAgentName}
             draftAttachments={draftAttachmentController.draftAttachments}
@@ -534,6 +558,7 @@ export function ChatWorkspace({
             onRetryDraftAttachment={draftAttachmentController.onRetryDraftAttachment}
             onConversationStarted={onConversationStarted}
             onMessageSubmitted={onMessageSubmitted}
+            onChatRequestAccepted={onChatRequestAccepted}
             onStreamFinished={onStreamFinished}
             onStreamError={onStreamError}
           />

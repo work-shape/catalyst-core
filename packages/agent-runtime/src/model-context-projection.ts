@@ -1,13 +1,21 @@
 import type {
   AgentRunId,
   AttachmentManifest,
+  AttachmentManifestEntry,
   ChatMessage,
   ClientInstanceId,
   JsonObject,
   JsonValue,
+  ManagedFileId,
+  SupportedImageMimeType,
   ToolExecutionResult
 } from "@vivd-catalyst/core";
-import type { ModelContent, ModelMessage, ModelToolCall } from "@vivd-catalyst/model-provider";
+import type {
+  ModelContent,
+  ModelContentPart,
+  ModelMessage,
+  ModelToolCall
+} from "@vivd-catalyst/model-provider";
 import {
   projectModelVisibleArtifacts,
   type ModelContextArtifactReader
@@ -25,6 +33,17 @@ export interface ModelContextProjectionOptions {
   };
   clientInstanceId?: ClientInstanceId;
   artifactReader?: ModelContextArtifactReader;
+  fileReader?: ModelContextFileReader;
+}
+
+export interface ModelContextFileReader {
+  readFile(input: {
+    clientInstanceId: ClientInstanceId;
+    fileId: ManagedFileId;
+  }): Promise<{
+    bytes: Uint8Array;
+    mimeType?: string;
+  }>;
 }
 
 export interface ModelOutputProjection {
@@ -214,11 +233,12 @@ export function dropCurrentSubmittedMessage(messages: ChatMessage[], text: strin
   return messages;
 }
 
-export function createSubmittedUserMessageContent(
+export async function createSubmittedUserMessageContent(
   text: string,
-  attachmentManifest: AttachmentManifest | undefined
-): string {
-  return appendAttachmentManifestForModel(text, attachmentManifest);
+  attachmentManifest: AttachmentManifest | undefined,
+  options: ModelContextProjectionOptions
+): Promise<ModelContent> {
+  return createUserMessageContent(text, attachmentManifest, options);
 }
 
 export function stableStringify(value: unknown): string {
@@ -234,7 +254,7 @@ async function toModelHistoryMessage(
       role: message.role,
       content:
         message.role === "user"
-          ? appendAttachmentManifestForModel(message.text, readUserAttachmentManifest(message.metadata))
+          ? await createUserMessageContent(message.text, readUserAttachmentManifest(message.metadata), options)
           : message.text
     };
   }
@@ -468,12 +488,48 @@ function readUserAttachmentManifest(metadata: JsonObject | undefined): Attachmen
     if (!fileId || !attachmentId || !filename || byteSize === undefined || !metadata) {
       return [];
     }
+    const mimeType = typeof value.mimeType === "string" ? value.mimeType : undefined;
+    const kind = typeof value.kind === "string" ? value.kind : undefined;
+    const manifestImageMimeType =
+      mimeType !== undefined && isSupportedImageMimeType(mimeType) ? mimeType : undefined;
+    if (kind === "image" || manifestImageMimeType !== undefined) {
+      const imageMimeType = manifestImageMimeType ?? readImageMimeType(metadata.mimeType);
+      const format = readImageFormat(metadata.format);
+      if (!imageMimeType || !format) {
+        return [];
+      }
+      return [
+        {
+          kind: "image",
+          fileId: fileId as AttachmentManifest["attachments"][number]["fileId"],
+          attachmentId: attachmentId as AttachmentManifest["attachments"][number]["attachmentId"],
+          filename,
+          mimeType: imageMimeType,
+          byteSize,
+          status: "ready",
+          readable: false,
+          modelVisibility: {
+            type: "image",
+            mimeType: imageMimeType
+          },
+          metadata: {
+            fileId: fileId as ManagedFileId,
+            filename,
+            mimeType: imageMimeType,
+            byteSize,
+            format,
+            checksum: typeof metadata.checksum === "string" ? metadata.checksum : ""
+          }
+        }
+      ];
+    }
     return [
       {
+        kind: "document",
         fileId: fileId as AttachmentManifest["attachments"][number]["fileId"],
         attachmentId: attachmentId as AttachmentManifest["attachments"][number]["attachmentId"],
         filename,
-        mimeType: typeof value.mimeType === "string" ? value.mimeType : undefined,
+        mimeType,
         byteSize,
         status: "ready",
         readable: true,
@@ -503,6 +559,25 @@ function readUserAttachmentManifest(metadata: JsonObject | undefined): Attachmen
   return attachments.length > 0 ? { version: 1, attachments } : undefined;
 }
 
+async function createUserMessageContent(
+  text: string,
+  attachmentManifest: AttachmentManifest | undefined,
+  options: ModelContextProjectionOptions
+): Promise<ModelContent> {
+  const projectedText = appendAttachmentManifestForModel(text, attachmentManifest);
+  const imageParts = await projectUserAttachmentImages(attachmentManifest, options);
+  if (imageParts.length === 0) {
+    return projectedText;
+  }
+  return [
+    {
+      type: "text",
+      text: projectedText
+    },
+    ...imageParts
+  ];
+}
+
 function appendAttachmentManifestForModel(
   text: string,
   attachmentManifest: AttachmentManifest | undefined
@@ -510,29 +585,115 @@ function appendAttachmentManifestForModel(
   if (!attachmentManifest || attachmentManifest.attachments.length === 0) {
     return text;
   }
+  const documents = attachmentManifest.attachments.filter(isDocumentAttachmentEntry);
+  const images = attachmentManifest.attachments.filter(isImageAttachmentEntry);
   const lines = [
     text,
-    "",
-    "[Attached documents]",
-    ...attachmentManifest.attachments.map((attachment) => {
-      const metadata = attachment.metadata;
-      const details = [
-        `fileId: ${attachment.fileId}`,
-        `status: ${attachment.status}`,
-        `size: ${attachment.byteSize} bytes`,
-        metadata.format ? `format: ${metadata.format}` : undefined,
-        metadata.wordCount !== undefined ? `words: ${metadata.wordCount}` : undefined,
-        metadata.pageCount !== undefined ? `pages: ${metadata.pageCount}` : undefined
-      ].filter((value): value is string => value !== undefined);
-      const readHint = `Use read_document({ "fileId": "${attachment.fileId}", "mode": "full" }) to read the full prepared text.`;
-      const viewHint =
-        metadata.format === "pdf"
-          ? `Use view_document_page({ "fileId": "${attachment.fileId}", "pageNumber": 1 }) to visually inspect a specific PDF page when layout or images matter.`
-          : undefined;
-      return `- ${attachment.filename} (${details.join(", ")}). ${[readHint, viewHint].filter(Boolean).join(" ")}`;
-    })
+    ...(documents.length > 0
+      ? [
+          "",
+          "[Attached documents]",
+          ...documents.map((attachment) => {
+            const metadata = attachment.metadata;
+            const details = [
+              `fileId: ${attachment.fileId}`,
+              `status: ${attachment.status}`,
+              `size: ${attachment.byteSize} bytes`,
+              metadata.format ? `format: ${metadata.format}` : undefined,
+              metadata.wordCount !== undefined ? `words: ${metadata.wordCount}` : undefined,
+              metadata.pageCount !== undefined ? `pages: ${metadata.pageCount}` : undefined
+            ].filter((value): value is string => value !== undefined);
+            const readHint = `Use read_document({ "fileId": "${attachment.fileId}", "mode": "full" }) to read the full prepared text.`;
+            const viewHint =
+              metadata.format === "pdf"
+                ? `Use view_document_page({ "fileId": "${attachment.fileId}", "pageNumber": 1 }) to visually inspect a specific PDF page when layout or images matter.`
+                : undefined;
+            return `- ${attachment.filename} (${details.join(", ")}). ${[readHint, viewHint].filter(Boolean).join(" ")}`;
+          })
+        ]
+      : []),
+    ...(images.length > 0
+      ? [
+          "",
+          "[Attached images]",
+          ...images.map((attachment) => {
+            const details = [
+              `fileId: ${attachment.fileId}`,
+              `status: ${attachment.status}`,
+              `mimeType: ${attachment.mimeType}`,
+              `size: ${attachment.byteSize} bytes`
+            ];
+            return `- ${attachment.filename} (${details.join(", ")}). The image is loaded directly into visual context when the provider supports image inputs.`;
+          })
+        ]
+      : [])
   ];
   return lines.join("\n");
+}
+
+function isDocumentAttachmentEntry(
+  attachment: AttachmentManifestEntry
+): attachment is Extract<AttachmentManifestEntry, { kind: "document" }> {
+  return attachment.kind === "document";
+}
+
+function isImageAttachmentEntry(
+  attachment: AttachmentManifestEntry
+): attachment is Extract<AttachmentManifestEntry, { kind: "image" }> {
+  return attachment.kind === "image";
+}
+
+async function projectUserAttachmentImages(
+  attachmentManifest: AttachmentManifest | undefined,
+  options: ModelContextProjectionOptions
+): Promise<Extract<ModelContentPart, { type: "image" }>[]> {
+  if (!attachmentManifest || !options.clientInstanceId || !options.fileReader) {
+    return [];
+  }
+  const images: Extract<ModelContentPart, { type: "image" }>[] = [];
+  for (const attachment of attachmentManifest.attachments) {
+    if (attachment.kind !== "image") {
+      continue;
+    }
+    try {
+      const object = await options.fileReader.readFile({
+        clientInstanceId: options.clientInstanceId,
+        fileId: attachment.fileId
+      });
+      const mimeType = object.mimeType ?? attachment.mimeType;
+      if (!isSupportedImageMimeType(mimeType) || mimeType !== attachment.mimeType) {
+        continue;
+      }
+      images.push({
+        type: "image",
+        mimeType,
+        data: object.bytes
+      });
+    } catch (error) {
+      console.warn(
+        JSON.stringify({
+          type: "model_context_projection.file_unavailable",
+          fileId: attachment.fileId,
+          error: error instanceof Error ? error.message : "Unknown file read error"
+        })
+      );
+    }
+  }
+  return images;
+}
+
+function readImageMimeType(value: JsonValue | undefined): SupportedImageMimeType | undefined {
+  return typeof value === "string" && isSupportedImageMimeType(value) ? value : undefined;
+}
+
+function readImageFormat(value: JsonValue | undefined): "png" | "jpeg" | "webp" | "gif" | undefined {
+  return value === "png" || value === "jpeg" || value === "webp" || value === "gif"
+    ? value
+    : undefined;
+}
+
+function isSupportedImageMimeType(value: string): value is SupportedImageMimeType {
+  return value === "image/png" || value === "image/jpeg" || value === "image/webp" || value === "image/gif";
 }
 
 function readToolExecutionResult(value: JsonValue | undefined): ToolExecutionResult | undefined {

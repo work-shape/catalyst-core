@@ -60,7 +60,7 @@ export const draftAttachmentSchema = z.object({
   mimeType: z.string().optional(),
   byteSize: z.number(),
   status: draftAttachmentStatusSchema,
-  format: z.enum(["pdf", "docx", "txt", "md"]).optional(),
+  format: z.enum(["pdf", "docx", "txt", "md", "png", "jpeg", "webp", "gif"]).optional(),
   characterCount: z.number().optional(),
   wordCount: z.number().optional(),
   pageCount: z.number().optional(),

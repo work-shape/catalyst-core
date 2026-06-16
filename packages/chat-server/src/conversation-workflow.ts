@@ -201,7 +201,7 @@ export class ConversationWorkflow {
     });
   }
 
-  async generateTitleForFirstExchange(
+  async generateTitleForConversation(
     conversationId: ConversationId,
     user: AuthenticatedUser,
     context: RuntimeCallContext
@@ -215,13 +215,13 @@ export class ConversationWorkflow {
       clientInstanceId: this.options.clientInstanceId,
       conversationId
     });
-    const firstExchange = findFirstExchange(messages);
+    const firstUserMessage = findFirstUserMessage(messages);
     if (
-      !firstExchange ||
+      !firstUserMessage ||
       !isTemporaryConversationTitle(
         conversation.title,
-        firstExchange.user.text,
-        temporaryAttachmentTitles(firstExchange.user)
+        firstUserMessage.text,
+        temporaryAttachmentTitles(firstUserMessage)
       )
     ) {
       return undefined;
@@ -239,7 +239,7 @@ export class ConversationWorkflow {
             {
               providerId: provider.id,
               model,
-              messages: createTitlePrompt(firstExchange),
+              messages: createTitlePrompt(firstUserMessage),
               tools: []
             },
             context
@@ -380,60 +380,85 @@ function createUserMessageMetadata(attachmentManifest: AttachmentManifest): Json
 }
 
 function toJsonAttachmentManifest(attachmentManifest: AttachmentManifest): JsonObject {
-  return {
-    version: attachmentManifest.version,
-    attachments: attachmentManifest.attachments.map((attachment) => ({
+  const attachments = attachmentManifest.attachments.map((attachment): JsonObject => {
+    if (attachment.kind === "image") {
+      return {
+        kind: "image",
+        fileId: attachment.fileId,
+        attachmentId: attachment.attachmentId,
+        filename: attachment.filename,
+        mimeType: attachment.mimeType,
+        byteSize: attachment.byteSize,
+        status: attachment.status,
+        readable: attachment.readable,
+        modelVisibility: {
+          type: attachment.modelVisibility.type,
+          mimeType: attachment.modelVisibility.mimeType
+        },
+        metadata: {
+          fileId: attachment.metadata.fileId,
+          filename: attachment.metadata.filename,
+          mimeType: attachment.metadata.mimeType,
+          byteSize: attachment.metadata.byteSize,
+          format: attachment.metadata.format,
+          checksum: attachment.metadata.checksum
+        }
+      };
+    }
+
+    const metadata: JsonObject = {
+      fileId: attachment.metadata.fileId,
+      filename: attachment.metadata.filename,
+      byteSize: attachment.metadata.byteSize,
+      warnings: attachment.metadata.warnings.map((warning): JsonObject => ({
+        code: warning.code,
+        message: warning.message
+      }))
+    };
+    if (attachment.metadata.mimeType) {
+      metadata.mimeType = attachment.metadata.mimeType;
+    }
+    if (attachment.metadata.format) {
+      metadata.format = attachment.metadata.format;
+    }
+    if (attachment.metadata.characterCount !== undefined) {
+      metadata.characterCount = attachment.metadata.characterCount;
+    }
+    if (attachment.metadata.wordCount !== undefined) {
+      metadata.wordCount = attachment.metadata.wordCount;
+    }
+    if (attachment.metadata.pageCount !== undefined) {
+      metadata.pageCount = attachment.metadata.pageCount;
+    }
+    if (attachment.metadata.preprocessingVersion) {
+      metadata.preprocessingVersion = attachment.metadata.preprocessingVersion;
+    }
+
+    const entry: JsonObject = {
+      kind: "document",
       fileId: attachment.fileId,
       attachmentId: attachment.attachmentId,
       filename: attachment.filename,
-      ...(attachment.mimeType ? { mimeType: attachment.mimeType } : {}),
       byteSize: attachment.byteSize,
       status: attachment.status,
       readable: attachment.readable,
       readToolName: attachment.readToolName,
-      metadata: {
-        fileId: attachment.metadata.fileId,
-        filename: attachment.metadata.filename,
-        ...(attachment.metadata.mimeType ? { mimeType: attachment.metadata.mimeType } : {}),
-        byteSize: attachment.metadata.byteSize,
-        ...(attachment.metadata.format ? { format: attachment.metadata.format } : {}),
-        ...(attachment.metadata.characterCount !== undefined
-          ? { characterCount: attachment.metadata.characterCount }
-          : {}),
-        ...(attachment.metadata.wordCount !== undefined ? { wordCount: attachment.metadata.wordCount } : {}),
-        ...(attachment.metadata.pageCount !== undefined ? { pageCount: attachment.metadata.pageCount } : {}),
-        warnings: attachment.metadata.warnings.map((warning) => ({
-          code: warning.code,
-          message: warning.message
-        })),
-        ...(attachment.metadata.preprocessingVersion
-          ? { preprocessingVersion: attachment.metadata.preprocessingVersion }
-          : {})
-      }
-    }))
+      metadata
+    };
+    if (attachment.mimeType) {
+      entry.mimeType = attachment.mimeType;
+    }
+    return entry;
+  });
+
+  return {
+    version: attachmentManifest.version,
+    attachments
   };
 }
 
-function findFirstExchange(messages: ChatMessage[]): { user: ChatMessage; assistant: ChatMessage } | undefined {
-  const userMessages = messages.filter((message) => message.role === "user");
-  if (userMessages.length !== 1) {
-    return undefined;
-  }
-
-  const assistantMessages = messages.filter(
-    (message) => message.role === "assistant" && !isAssistantToolCallMessage(message)
-  );
-  if (assistantMessages.length !== 1) {
-    return undefined;
-  }
-  const [user] = userMessages;
-  const [assistant] = assistantMessages;
-  return user && assistant ? { user, assistant } : undefined;
-}
-
-function isAssistantToolCallMessage(message: ChatMessage): boolean {
-  const runtime = readAgentRuntimeMetadata(message);
-  return runtime?.kind === "assistant_tool_calls";
+function findFirstUserMessage(messages: ChatMessage[]): ChatMessage | undefined {
+  return messages.find((message) => message.role === "user");
 }
 
 function temporaryAttachmentTitles(message: ChatMessage): string[] {
@@ -473,12 +498,14 @@ function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function createTitlePrompt(input: { user: ChatMessage; assistant: ChatMessage }): ModelMessage[] {
+function createTitlePrompt(firstUserMessage: ChatMessage): ModelMessage[] {
   return [
     {
       role: "system",
       content: [
-        "Generate a short neutral headline for a persisted conversation list.",
+        "Generate a short neutral headline/topic for a persisted conversation list.",
+        "Infer the conversation topic from the initial user message only.",
+        "The title should describe the overall likely conversation, not quote or answer the user message.",
         "Use 3 to 7 words.",
         "Do not include names, addresses, emails, phone numbers, bank details, exact salary amounts, IDs, or other personal data.",
         "If the content is sensitive, use a generic topic label.",
@@ -488,11 +515,8 @@ function createTitlePrompt(input: { user: ChatMessage; assistant: ChatMessage })
     {
       role: "user",
       content: [
-        "User message:",
-        truncateTitleSource(input.user.text),
-        "",
-        "Assistant response:",
-        truncateTitleSource(input.assistant.text)
+        "Initial user message:",
+        truncateTitleSource(firstUserMessage.text)
       ].join("\n")
     }
   ];

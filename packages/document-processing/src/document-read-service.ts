@@ -1,11 +1,11 @@
 import {
   AppError,
-  type AttachmentManifestEntry,
   type ClientInstanceId,
   type ConversationId,
   type DocumentAttachmentStore,
   type ManagedArtifactId,
   type ManagedFileId,
+  type PreparedDocumentMetadata,
   asManagedFileId
 } from "@vivd-catalyst/core";
 import type { PreparedPdfPage, PreparedPdfPagesArtifact } from "./converter";
@@ -34,7 +34,7 @@ export type ReadDocumentResult =
       mode: "full";
       artifactId: ManagedArtifactId;
       text: string;
-      metadata: AttachmentManifestEntry["metadata"];
+      metadata: PreparedDocumentMetadata;
     }
   | {
       fileId: ManagedFileId;
@@ -42,7 +42,7 @@ export type ReadDocumentResult =
       artifactId: ManagedArtifactId;
       pages: PreparedPdfPage[];
       text: string;
-      metadata: AttachmentManifestEntry["metadata"];
+      metadata: PreparedDocumentMetadata;
     };
 
 export interface DocumentReader {

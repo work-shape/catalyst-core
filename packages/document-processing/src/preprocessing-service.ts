@@ -5,9 +5,11 @@ import {
   type ConversationAttachmentId,
   type ConversationId,
   type DocumentAttachmentStore,
-  type DocumentFileFormat,
+  type FileAttachmentFormat,
+  type ManagedFileId,
   type DocumentPreprocessingConfig,
   type DraftAttachment,
+  asManagedFileId,
   asConversationAttachmentId
 } from "@vivd-catalyst/core";
 import { createChecksum, createObjectKey } from "./object-keys";
@@ -19,9 +21,13 @@ import {
   type ReadDocumentResult
 } from "./document-read-service";
 import {
-  detectDocumentFormat,
+  detectAttachmentFormat,
   extensionFromFilename,
-  unsupportedDocumentUploadReason
+  imageMimeTypeForFormat,
+  isDocumentFileFormat,
+  isImageFileFormat,
+  unsupportedDocumentUploadReason,
+  unsupportedImageUploadReason
 } from "./document-format";
 import type { ObjectStore } from "./object-store";
 import { PreparedDocumentArtifactPipeline } from "./prepared-document-artifacts";
@@ -39,6 +45,19 @@ export interface UploadDraftAttachmentInput {
   ownerUserId: string;
   filename: string;
   mimeType?: string;
+  bytes: Uint8Array;
+}
+
+export interface ReadConversationFileInput {
+  conversationId: ConversationId;
+  fileId: string;
+}
+
+export interface ReadConversationFileResult {
+  fileId: ManagedFileId;
+  filename: string;
+  mimeType?: string;
+  byteSize: number;
   bytes: Uint8Array;
 }
 
@@ -84,7 +103,10 @@ export class DocumentPreprocessingService {
     }
 
     const checksum = createChecksum(input.bytes);
-    const format = detectDocumentFormat(input.filename, input.mimeType);
+    const format = detectAttachmentFormat(input.filename, input.mimeType);
+    const normalizedMimeType = isImageFileFormat(format)
+      ? imageMimeTypeForFormat(format)
+      : input.mimeType;
     const objectKey = createObjectKey({
       clientInstanceId: this.clientInstanceId,
       conversationId: input.conversationId,
@@ -94,13 +116,13 @@ export class DocumentPreprocessingService {
     await this.objectStore.putObject({
       key: objectKey,
       body: input.bytes,
-      contentType: input.mimeType
+      contentType: normalizedMimeType
     });
     const file = await this.store.createManagedFile({
       clientInstanceId: this.clientInstanceId,
       ownerUserId: input.ownerUserId,
       filename: input.filename,
-      mimeType: input.mimeType,
+      mimeType: normalizedMimeType,
       byteSize: input.bytes.byteLength,
       checksum,
       objectKey
@@ -116,10 +138,10 @@ export class DocumentPreprocessingService {
       conversationId: input.conversationId,
       fileId: file.id,
       filename: input.filename,
-      mimeType: input.mimeType,
+      mimeType: normalizedMimeType,
       byteSize: input.bytes.byteLength,
       checksum,
-      status: unsupportedReason ? "unsupported" : "queued",
+      status: unsupportedReason ? "unsupported" : isImageFileFormat(format) ? "ready" : "queued",
       format: format ?? undefined,
       warnings: [],
       error: unsupportedReason
@@ -130,7 +152,7 @@ export class DocumentPreprocessingService {
         : undefined
     });
 
-    if (!unsupportedReason) {
+    if (!unsupportedReason && !isImageFileFormat(format)) {
       this.schedulePreprocessing(attachment);
     }
     return attachment as DraftAttachment;
@@ -187,6 +209,31 @@ export class DocumentPreprocessingService {
     return this.reader.readDocument(input);
   }
 
+  async readConversationFile(input: ReadConversationFileInput): Promise<ReadConversationFileResult> {
+    const attachment = await this.store.findConversationAttachmentByFile({
+      clientInstanceId: this.clientInstanceId,
+      conversationId: input.conversationId,
+      fileId: asManagedFileId(input.fileId)
+    });
+    if (!attachment || attachment.status !== "ready") {
+      throw new AppError("NOT_FOUND", "Managed attachment file is not available in this conversation");
+    }
+    const file = await this.store.getManagedFile({
+      clientInstanceId: this.clientInstanceId,
+      fileId: attachment.fileId
+    });
+    if (!file) {
+      throw new AppError("NOT_FOUND", "Managed file is not available");
+    }
+    return {
+      fileId: file.id,
+      filename: attachment.filename,
+      mimeType: attachment.mimeType ?? file.mimeType,
+      byteSize: attachment.byteSize,
+      bytes: await this.objectStore.getObject(file.objectKey)
+    };
+  }
+
   private schedulePreprocessing(
     attachment: Pick<ConversationAttachment, "id" | "conversationId">
   ): void {
@@ -239,6 +286,9 @@ export class DocumentPreprocessingService {
       if (!attachment.format) {
         throw new AppError("VALIDATION_FAILED", "Document format is not supported");
       }
+      if (!isDocumentFileFormat(attachment.format)) {
+        throw new AppError("VALIDATION_FAILED", "Attachment is not a preprocessable document");
+      }
       const file = await this.store.getManagedFile({
         clientInstanceId: this.clientInstanceId,
         fileId: attachment.fileId
@@ -288,15 +338,24 @@ export class DocumentPreprocessingService {
 
   private unsupportedReason(input: {
     filename: string;
-    format: DocumentFileFormat | undefined;
+    format: FileAttachmentFormat | undefined;
     bytes: Uint8Array;
   }): string | undefined {
+    if (isImageFileFormat(input.format)) {
+      return unsupportedImageUploadReason({
+        format: input.format,
+        bytes: input.bytes
+      });
+    }
     const uploadReason = unsupportedDocumentUploadReason(input);
     if (uploadReason) {
       return uploadReason;
     }
     if (!input.format) {
       return "The file type is not supported for document text extraction.";
+    }
+    if (!isDocumentFileFormat(input.format)) {
+      return "The file type is not supported.";
     }
     if (!this.config.supportedFormats.includes(input.format)) {
       return `The '${input.format}' file type is disabled for this client instance.`;

@@ -1,16 +1,18 @@
 import { AuiIf, ComposerPrimitive } from "@assistant-ui/react";
-import { FileText, Paperclip, RotateCcw, Send, Square, X } from "lucide-react";
-import { useRef } from "react";
+import { CheckCircle2, FileText, ImageIcon, Paperclip, RotateCcw, Send, Square, X } from "lucide-react";
+import { useLayoutEffect, useRef } from "react";
 import type { DraftAttachment } from "@vivd-catalyst/api-client";
 import { AttachmentPreview } from "./attachment-preview";
 import { useTranslation } from "./i18n";
 import { Button } from "./ui/button";
 import { cn } from "./ui/cn";
+import { Spinner } from "./ui/spinner";
 
 export interface LocalUploadingAttachment {
   id: string;
   filename: string;
   byteSize: number;
+  mimeType?: string;
   status: "uploading";
 }
 
@@ -18,6 +20,7 @@ export function AssistantComposer({
   attachments,
   localUploadingAttachments,
   sendBlockedReason,
+  focusRequestId,
   onFilesSelected,
   onRemoveAttachment,
   onRetryAttachment
@@ -25,13 +28,29 @@ export function AssistantComposer({
   attachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
   sendBlockedReason?: string;
+  focusRequestId: number;
   onFilesSelected: (files: File[]) => void;
   onRemoveAttachment: (attachmentId: string) => void;
   onRetryAttachment: (attachmentId: string) => void;
 }) {
   const { t } = useTranslation();
+  const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const hasAttachments = attachments.length > 0 || localUploadingAttachments.length > 0;
+
+  useLayoutEffect(() => {
+    if (focusRequestId === 0) {
+      return;
+    }
+
+    const input = composerInputRef.current;
+    if (!input || input.disabled) {
+      return;
+    }
+
+    input.focus({ preventScroll: true });
+    input.setSelectionRange(input.value.length, input.value.length);
+  }, [focusRequestId]);
 
   return (
     <ComposerPrimitive.Root className="relative grid w-full gap-2">
@@ -54,6 +73,7 @@ export function AssistantComposer({
           )}
         >
           <ComposerPrimitive.Input
+            ref={composerInputRef}
             className="max-h-40 min-h-12 w-full resize-none bg-transparent px-2 py-1.5 text-sm leading-6 outline-none placeholder:text-muted-foreground"
             placeholder={t("messagePlaceholder")}
             rows={1}
@@ -65,7 +85,7 @@ export function AssistantComposer({
               type="file"
               className="sr-only"
               multiple
-              accept=".pdf,.docx,.txt,.md,.markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown"
+              accept=".pdf,.docx,.txt,.md,.markdown,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,image/png,image/jpeg,image/webp,image/gif"
               onChange={(event) => {
                 const files = [...(event.currentTarget.files ?? [])];
                 event.currentTarget.value = "";
@@ -111,6 +131,7 @@ function DraftAttachmentList({
           key={attachment.id}
           filename={attachment.filename}
           byteSize={attachment.byteSize}
+          mimeType={attachment.mimeType}
           status={attachment.status}
         />
       ))}
@@ -119,6 +140,7 @@ function DraftAttachmentList({
           key={attachment.id}
           filename={attachment.filename}
           byteSize={attachment.byteSize}
+          mimeType={attachment.mimeType}
           status={attachment.status}
           failed={attachment.status === "failed"}
           unsupported={attachment.status === "unsupported"}
@@ -133,6 +155,7 @@ function DraftAttachmentList({
 function AttachmentChip({
   filename,
   byteSize,
+  mimeType,
   status,
   failed,
   unsupported,
@@ -141,22 +164,44 @@ function AttachmentChip({
 }: {
   filename: string;
   byteSize: number;
+  mimeType?: string;
   status: DraftAttachment["status"] | LocalUploadingAttachment["status"];
   failed?: boolean;
   unsupported?: boolean;
   onRemove?: () => void;
   onRetry?: () => void;
 }) {
+  const ready = status === "ready";
+
   return (
     <span
       className={cn(
         "inline-flex max-w-full items-center gap-2 rounded-md border bg-background px-2 py-1 text-xs shadow-xs",
-        failed || unsupported ? "border-destructive/40 text-destructive" : "border-border text-foreground"
+        failed || unsupported ? "border-destructive/40 text-destructive" : "border-border text-foreground",
+        ready ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300" : undefined
       )}
     >
-      <FileText size={14} className="shrink-0 text-muted-foreground" aria-hidden="true" />
+      {isImageMimeType(mimeType) ? (
+        <ImageIcon
+          size={14}
+          className={cn(
+            "shrink-0 text-muted-foreground",
+            ready ? "text-emerald-600 dark:text-emerald-400" : undefined
+          )}
+          aria-hidden="true"
+        />
+      ) : (
+        <FileText
+          size={14}
+          className={cn(
+            "shrink-0 text-muted-foreground",
+            ready ? "text-emerald-600 dark:text-emerald-400" : undefined
+          )}
+          aria-hidden="true"
+        />
+      )}
       <span className="min-w-0 truncate font-medium">{filename}</span>
-      <span className="shrink-0 text-muted-foreground">{status}</span>
+      <AttachmentStatusIndicator status={status} />
       <span className="shrink-0 text-muted-foreground">{formatFileSize(byteSize)}</span>
       {onRetry ? (
         <button
@@ -182,6 +227,32 @@ function AttachmentChip({
       ) : null}
     </span>
   );
+}
+
+function AttachmentStatusIndicator({
+  status
+}: {
+  status: DraftAttachment["status"] | LocalUploadingAttachment["status"];
+}) {
+  if (status === "ready") {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 font-medium text-emerald-700 dark:text-emerald-300">
+        <CheckCircle2 size={13} aria-hidden="true" />
+        <span>{status}</span>
+      </span>
+    );
+  }
+
+  if (status === "uploading" || status === "queued" || status === "preprocessing") {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 text-muted-foreground">
+        <Spinner size="xs" />
+        <span>{status}</span>
+      </span>
+    );
+  }
+
+  return <span className="shrink-0 text-muted-foreground">{status}</span>;
 }
 
 function ComposerAction({
@@ -228,4 +299,8 @@ function formatFileSize(byteSize: number): string {
     return `${Math.round(byteSize / 102.4) / 10} KB`;
   }
   return `${Math.round(byteSize / 1024 / 102.4) / 10} MB`;
+}
+
+function isImageMimeType(mimeType: string | undefined): boolean {
+  return mimeType === "image/png" || mimeType === "image/jpeg" || mimeType === "image/webp" || mimeType === "image/gif";
 }

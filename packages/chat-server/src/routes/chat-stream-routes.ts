@@ -10,18 +10,58 @@ import {
   AppError,
   type AgentRunId,
   type AgentRuntimeEvent,
+  type AuthenticatedUser,
   type ChatMessage,
+  type Conversation,
+  type ConversationId,
+  type RuntimeCallContext,
   asConversationId,
   isAppError
 } from "@vivd-catalyst/core";
 import { ConversationWorkflow } from "../conversation-workflow";
 import { createConversationTitle } from "../conversation-title";
-import { authenticateRequest, parseBody, withRequestLocale } from "../request-context";
+import { authenticateRequest, getConversationId, parseBody, withRequestLocale } from "../request-context";
 import type { ChatServerOptions } from "../types";
 import { sendWebResponse } from "./better-auth-routes";
 
 export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServerOptions): void {
   const conversations = new ConversationWorkflow(options);
+  const titleGenerationTasks = new Map<string, Promise<Conversation | undefined>>();
+
+  function generateTitleForConversationOnce(
+    conversationId: ConversationId,
+    user: AuthenticatedUser,
+    context: RuntimeCallContext
+  ): Promise<Conversation | undefined> {
+    const key = `${options.clientInstanceId}:${user.id}:${conversationId}`;
+    const existingTask = titleGenerationTasks.get(key);
+    if (existingTask) {
+      return existingTask;
+    }
+
+    const task = conversations.generateTitleForConversation(conversationId, user, context).finally(() => {
+      titleGenerationTasks.delete(key);
+    });
+    titleGenerationTasks.set(key, task);
+    return task;
+  }
+
+  async function readCurrentConversation(conversationId: ConversationId, user: AuthenticatedUser): Promise<Conversation> {
+    const conversation = (await conversations.listConversations(user)).find((candidate) => candidate.id === conversationId);
+    if (!conversation) {
+      throw new AppError("NOT_FOUND", "Conversation not found");
+    }
+    return conversation;
+  }
+
+  app.post("/api/conversations/:conversationId/title", async (request) => {
+    const { user, context } = await authenticateRequest(options, request);
+    const conversationId = getConversationId(request);
+    return (
+      (await generateTitleForConversationOnce(conversationId, user, context)) ??
+      (await readCurrentConversation(conversationId, user))
+    );
+  });
 
   app.post("/api/chat", async (request, reply) => {
     const { user, context } = await authenticateRequest(options, request);
@@ -42,6 +82,12 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
     const { runId } = await conversations.startMessageRun(conversationId, user, localizedContext, {
       agentName: body.agentName,
       text
+    });
+    void generateTitleForConversationOnce(conversationId, user, localizedContext).catch((error: unknown) => {
+      request.log.warn(
+        { err: error, conversationId, runId },
+        "Conversation title generation failed after first user message"
+      );
     });
     const responseMessageId = runId;
     const stream = createUIMessageStream<UIMessage>({
@@ -212,14 +258,6 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
               runId,
               assistantMessageCount
             );
-            await conversations
-              .generateTitleForFirstExchange(conversationId, user, localizedContext)
-              .catch((error: unknown) => {
-                request.log.warn(
-                  { err: error, conversationId, runId },
-                  "Conversation title generation failed after chat stream completion"
-                );
-              });
           }
         }
 

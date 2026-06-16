@@ -2,8 +2,14 @@ import type {
   AttachmentManifest,
   AttachmentManifestEntry,
   ConversationAttachment,
-  DraftAttachment
+  DraftAttachment,
+  PreparedDocumentMetadata
 } from "@vivd-catalyst/core";
+import {
+  imageMimeTypeForFormat,
+  isDocumentFileFormat,
+  isImageFileFormat
+} from "./document-format";
 
 export function createAttachmentManifest(
   attachments: readonly ConversationAttachment[],
@@ -15,8 +21,39 @@ export function createAttachmentManifest(
       if (attachment.status !== "ready") {
         return [];
       }
+      if (isImageFileFormat(attachment.format)) {
+        const mimeType = imageMimeTypeForFormat(attachment.format);
+        return [
+          {
+            kind: "image",
+            fileId: attachment.fileId,
+            attachmentId: attachment.id,
+            filename: attachment.filename,
+            mimeType,
+            byteSize: attachment.byteSize,
+            status: "ready",
+            readable: false,
+            modelVisibility: {
+              type: "image",
+              mimeType
+            },
+            metadata: {
+              fileId: attachment.fileId,
+              filename: attachment.filename,
+              mimeType,
+              byteSize: attachment.byteSize,
+              format: attachment.format,
+              checksum: attachment.checksum
+            }
+          }
+        ];
+      }
+      if (!isDocumentFileFormat(attachment.format)) {
+        return [];
+      }
       return [
         {
+          kind: "document",
           fileId: attachment.fileId,
           attachmentId: attachment.id,
           filename: attachment.filename,
@@ -58,13 +95,13 @@ export function blockingDraftAttachmentMessage(
 export function toPreparedDocumentMetadata(
   attachment: ConversationAttachment,
   preprocessingVersion: string
-): AttachmentManifestEntry["metadata"] {
+): PreparedDocumentMetadata {
   return {
     fileId: attachment.fileId,
     filename: attachment.filename,
     mimeType: attachment.mimeType,
     byteSize: attachment.byteSize,
-    format: attachment.format,
+    format: isDocumentFileFormat(attachment.format) ? attachment.format : undefined,
     characterCount: attachment.characterCount,
     wordCount: attachment.wordCount,
     pageCount: attachment.pageCount,

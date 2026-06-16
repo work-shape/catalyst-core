@@ -351,4 +351,25 @@ class PostgresDocumentAttachmentStore implements DocumentAttachmentStore {
       .limit(1);
     return row?.preparedTextArtifactId ? mapConversationAttachment(row) : undefined;
   }
+
+  async findConversationAttachmentByFile(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    fileId: ManagedFileId;
+  }): Promise<ConversationAttachment | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(conversationAttachments)
+      .where(
+        and(
+          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
+          eq(conversationAttachments.conversationId, input.conversationId),
+          eq(conversationAttachments.fileId, input.fileId),
+          ne(conversationAttachments.status, "deleted")
+        )
+      )
+      .orderBy(desc(conversationAttachments.updatedAt))
+      .limit(1);
+    return row ? mapConversationAttachment(row) : undefined;
+  }
 }

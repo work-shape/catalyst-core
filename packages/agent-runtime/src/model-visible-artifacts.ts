@@ -1,6 +1,7 @@
 import type {
   ClientInstanceId,
   ManagedArtifactId,
+  SupportedImageMimeType,
   ToolExecutionResult
 } from "@vivd-catalyst/core";
 import type { ModelContentPart } from "@vivd-catalyst/model-provider";
@@ -45,7 +46,7 @@ async function readModelVisibleImages(
   }
   const images: ModelContentPart[] = [];
   for (const artifact of result.artifacts) {
-    if (artifact.modelVisibility?.type !== "image" || artifact.modelVisibility.mimeType !== "image/png") {
+    if (artifact.modelVisibility?.type !== "image") {
       continue;
     }
     try {
@@ -53,12 +54,12 @@ async function readModelVisibleImages(
         clientInstanceId: options.clientInstanceId,
         artifactId: artifact.artifactId
       });
-      if (object.mimeType !== "image/png") {
+      if (!isSupportedImageMimeType(object.mimeType) || object.mimeType !== artifact.modelVisibility.mimeType) {
         continue;
       }
       images.push({
         type: "image",
-        mimeType: "image/png",
+        mimeType: object.mimeType,
         data: object.bytes
       });
     } catch (error) {
@@ -72,6 +73,10 @@ async function readModelVisibleImages(
     }
   }
   return images;
+}
+
+function isSupportedImageMimeType(value: string): value is SupportedImageMimeType {
+  return value === "image/png" || value === "image/jpeg" || value === "image/webp" || value === "image/gif";
 }
 
 function createVisualArtifactSummary(result: ToolExecutionResult): string | undefined {

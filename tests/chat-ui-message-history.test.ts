@@ -67,6 +67,71 @@ describe("chat UI message history projection", () => {
     });
   });
 
+  it("replays persisted user image manifests as image file parts", () => {
+    const messages: Message[] = [
+      {
+        id: "msg_user",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "user",
+        text: "what is in this image?",
+        createdAt: "2026-06-15T00:00:00.000Z",
+        metadata: {
+          agentRuntime: {
+            version: 1,
+            kind: "user_message",
+            attachmentManifest: {
+              version: 1,
+              attachments: [
+                {
+                  kind: "image",
+                  fileId: "file_receipt",
+                  attachmentId: "att_receipt",
+                  filename: "receipt.png",
+                  mimeType: "image/png",
+                  byteSize: 8,
+                  status: "ready",
+                  readable: false,
+                  modelVisibility: {
+                    type: "image",
+                    mimeType: "image/png"
+                  },
+                  metadata: {
+                    fileId: "file_receipt",
+                    filename: "receipt.png",
+                    mimeType: "image/png",
+                    byteSize: 8,
+                    format: "png",
+                    checksum: "checksum"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    ];
+
+    const projected = toUiMessages(messages);
+
+    expect(projected[0]).toMatchObject({
+      role: "user",
+      parts: [
+        {
+          type: "text",
+          text: "what is in this image?",
+          state: "done"
+        },
+        {
+          type: "file",
+          mediaType: "image/png",
+          filename: "receipt.png",
+          url: "vivd-document://file_receipt"
+        }
+      ]
+    });
+  });
+
   it("replays persisted tool displays as completed dynamic tool parts", () => {
     const messages: Message[] = [
       {

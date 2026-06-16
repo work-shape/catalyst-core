@@ -277,6 +277,22 @@ class InMemoryDocumentAttachmentStoreImpl implements InMemoryDocumentAttachmentS
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
   }
 
+  async findConversationAttachmentByFile(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    fileId: ManagedFileId;
+  }): Promise<ConversationAttachment | undefined> {
+    return [...this.conversationAttachments.values()]
+      .filter(
+        (attachment) =>
+          attachment.clientInstanceId === input.clientInstanceId &&
+          attachment.conversationId === input.conversationId &&
+          attachment.fileId === input.fileId &&
+          attachment.status !== "deleted"
+      )
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+  }
+
   deleteAttachmentsForConversation(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;

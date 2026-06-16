@@ -238,7 +238,7 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
-  it("generates a short conversation headline after the first exchange", async () => {
+  it("generates a short conversation headline from the first user message", async () => {
     const app = await createClientInstanceApp({
       config: createTestConfig(),
       env: {},
@@ -267,6 +267,16 @@ describe("client instance app vertical slice", () => {
       expect.arrayContaining([expect.objectContaining({ type: "finish" })])
     );
 
+    const generatedTitle = await app.server.inject({
+      method: "POST",
+      url: `/api/conversations/${conversation.id}/title`
+    });
+    expect(generatedTitle.statusCode).toBe(200);
+    expect(generatedTitle.json()).toMatchObject({
+      id: conversation.id,
+      title: "Please Summarize The Release Notes"
+    });
+
     const listed = await app.server.inject({
       method: "GET",
       url: "/api/conversations"
@@ -291,7 +301,7 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
-  it("replaces a file-drop placeholder title after the first exchange", async () => {
+  it("replaces a file-drop placeholder title from the first user message", async () => {
     const app = await createClientInstanceApp({
       config: createTestConfig(),
       env: {},
@@ -353,7 +363,53 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
-  it("generates a title when the first exchange includes tool call messages", async () => {
+  it("serves authenticated inline content for ready image attachments", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig(),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      payload: { title: "Image upload" }
+    });
+    expect(created.statusCode).toBe(200);
+    const conversation = created.json() as { id: string };
+    const upload = createMultipartFilePayload({
+      fieldName: "file",
+      filename: "receipt.gif",
+      contentType: "image/gif",
+      content: "GIF89a"
+    });
+
+    const uploaded = await app.server.inject({
+      method: "POST",
+      url: `/api/conversations/${conversation.id}/draft-attachments`,
+      headers: upload.headers,
+      payload: upload.payload
+    });
+    expect(uploaded.statusCode).toBe(200);
+    const body = uploaded.json() as { attachment: { fileId: string; status: string; format: string } };
+    expect(body.attachment).toMatchObject({
+      status: "ready",
+      format: "gif"
+    });
+
+    const content = await app.server.inject({
+      method: "GET",
+      url: `/api/conversations/${conversation.id}/files/${body.attachment.fileId}/content`
+    });
+
+    expect(content.statusCode).toBe(200);
+    expect(content.headers["content-type"]).toContain("image/gif");
+    expect(content.payload).toBe("GIF89a");
+
+    await app.close();
+  });
+
+  it("generates a title when the first user message invokes a tool", async () => {
     const config = createTestConfig({
       tools: [{ name: "demo.echo", enabled: true }],
       toolNames: ["demo.echo"]

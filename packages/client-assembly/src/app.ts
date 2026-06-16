@@ -149,6 +149,18 @@ export async function createClientInstanceApp(
           mimeType: artifact.mimeType
         };
       }
+    },
+    fileReader: {
+      async readFile(readInput) {
+        const file = await store.getManagedFile(readInput);
+        if (!file) {
+          throw new AppError("NOT_FOUND", `Managed file '${readInput.fileId}' was not found`);
+        }
+        return {
+          bytes: await objectStore.getObject(file.objectKey),
+          mimeType: file.mimeType
+        };
+      }
     }
   });
   const { authAdapter, standaloneAuth, sessionToken } = await createClientInstanceAuth({

@@ -696,6 +696,12 @@ export class PostgresPlatformStore
     return this.documentAttachments.findReadableDocumentAttachment(input);
   }
 
+  async findConversationAttachmentByFile(
+    input: Parameters<DocumentAttachmentStore["findConversationAttachmentByFile"]>[0]
+  ) {
+    return this.documentAttachments.findConversationAttachmentByFile(input);
+  }
+
   async deleteConversation(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;

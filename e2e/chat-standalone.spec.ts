@@ -136,6 +136,7 @@ test("new conversation action opens an unsaved draft screen", async ({ page }) =
 
   expect(createConversationRequests).toBe(0);
   await expect(input).toHaveValue("Draft on the new screen");
+  await expect(input).toBeFocused();
 });
 
 test("composer drafts are scoped to the new screen and selected conversations", async ({ page }) => {

@@ -1,7 +1,8 @@
-import { AuiIf, ThreadPrimitive } from "@assistant-ui/react";
+import { AuiIf, ThreadPrimitive, useAuiState } from "@assistant-ui/react";
 import { ArrowDown, Bot, CircleAlert, Sparkles } from "lucide-react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
 import { AssistantComposer, type LocalUploadingAttachment } from "./assistant-composer";
+import { AssistantCursor } from "./assistant-cursor";
 import { ThreadMessage } from "./assistant-message";
 import { useTranslation } from "./i18n";
 import { cn } from "./ui/cn";
@@ -13,6 +14,7 @@ export function AssistantThread({
   draftAttachments,
   localUploadingAttachments,
   sendBlockedReason,
+  composerFocusRequestId,
   onFilesSelected,
   onRemoveDraftAttachment,
   onRetryDraftAttachment
@@ -23,6 +25,7 @@ export function AssistantThread({
   draftAttachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
   sendBlockedReason?: string;
+  composerFocusRequestId: number;
   onFilesSelected: (files: File[]) => void;
   onRemoveDraftAttachment: (attachmentId: string) => void;
   onRetryDraftAttachment: (attachmentId: string) => void;
@@ -57,8 +60,9 @@ export function AssistantThread({
               />
             </AuiIf>
 
-            <div className="flex flex-col gap-5 pb-6 empty:hidden">
+            <div className="flex flex-col gap-6 pb-8 empty:hidden">
               <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
+              <PendingAssistantMessage />
             </div>
 
             <ThreadPrimitive.ViewportFooter className="relative sticky bottom-0 z-10 mt-auto pb-4 pt-5 before:pointer-events-none before:absolute before:-top-11 before:inset-x-0 before:z-0 before:h-16 before:bg-gradient-to-t before:from-background before:to-background/0 before:content-[''] after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:top-5 after:z-0 after:bg-background after:content-['']">
@@ -70,6 +74,7 @@ export function AssistantThread({
                   attachments={draftAttachments}
                   localUploadingAttachments={localUploadingAttachments}
                   sendBlockedReason={sendBlockedReason}
+                  focusRequestId={composerFocusRequestId}
                   onFilesSelected={onFilesSelected}
                   onRemoveAttachment={onRemoveDraftAttachment}
                   onRetryAttachment={onRetryDraftAttachment}
@@ -141,6 +146,33 @@ function ThreadScrollToBottom() {
     >
       <ArrowDown size={16} aria-hidden="true" />
     </ThreadPrimitive.ScrollToBottom>
+  );
+}
+
+function PendingAssistantMessage() {
+  const showPendingMessage = useAuiState((state) => {
+    if (!state.thread.isRunning) {
+      return false;
+    }
+
+    const lastMessage = state.thread.messages.at(-1);
+    return lastMessage?.role !== "assistant";
+  });
+
+  if (!showPendingMessage) {
+    return null;
+  }
+
+  return (
+    <div
+      className="group/message mx-auto w-full max-w-5xl animate-in fade-in slide-in-from-bottom-1 duration-150"
+      data-role="assistant"
+      data-testid="pending-assistant-message"
+    >
+      <div className="min-w-0 rounded-md px-1 py-1 text-sm leading-6">
+        <AssistantCursor className="my-1" />
+      </div>
+    </div>
   );
 }
 

@@ -3,17 +3,28 @@ import {
   AttachmentPrimitive,
   ComposerPrimitive,
   ErrorPrimitive,
+  MessagePartPrimitive,
   MessagePrimitive,
+  groupPartByType,
   useAuiState
 } from "@assistant-ui/react";
-import { Check, Copy, FileText, Pencil, RefreshCw, User } from "lucide-react";
+import { Check, Copy, FileText, ImageIcon, Pencil, RefreshCw, User } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AttachmentPreview } from "./attachment-preview";
+import { managedFileIdFromUrl, useAttachmentContentContext } from "./attachment-content";
+import { AssistantCursor } from "./assistant-cursor";
 import { useTranslation } from "./i18n";
 import { MarkdownText } from "./markdown-text";
 import { DataPart, ToolCallPart } from "./tool-call";
+import { ToolGroupContent, ToolGroupRoot, ToolGroupTrigger } from "./assistant-tool-group";
 import { TooltipIconButton, tooltipIconButtonClassName } from "./tooltip-icon-button";
 import { Button } from "./ui/button";
 import { cn } from "./ui/cn";
+
+const assistantMessageGroupBy = groupPartByType({
+  "tool-call": ["group-work"],
+  "standalone-tool-call": []
+});
 
 export function ThreadMessage() {
   const role = useAuiState((state) => state.message.role);
@@ -32,18 +43,9 @@ export function ThreadMessage() {
 
 function AssistantMessage() {
   const { t } = useTranslation();
-  const showPendingIndicator = useAuiState((state) => {
-    if (state.message.role !== "assistant" || state.message.status?.type !== "running") {
-      return false;
-    }
-
-    return !state.message.parts.some((part) => {
-      if (part.type === "text") {
-        return part.text.trim().length > 0;
-      }
-      return false;
-    });
-  });
+  const messageRunning = useAuiState(
+    (state) => state.message.role === "assistant" && state.message.status?.type === "running"
+  );
 
   return (
     <MessagePrimitive.Root
@@ -51,35 +53,62 @@ function AssistantMessage() {
       data-role="assistant"
     >
       <div className="min-w-0 rounded-md px-1 py-1 text-sm leading-6">
-        <MessagePrimitive.Parts
-          components={{
-            Text: AssistantTextPart,
-            Reasoning: HiddenReasoningPart,
-            File: FilePart,
-            tools: {
-              Override: ToolCallPart
-            },
-            data: {
-              Fallback: DataPart
+        <MessagePrimitive.GroupedParts groupBy={assistantMessageGroupBy} indicator="always">
+          {({ part, children }) => {
+            switch (part.type) {
+              case "group-work":
+                return (
+                  <AssistantWorkGroup count={part.indices.length} active={part.status.type === "running"}>
+                    {children}
+                  </AssistantWorkGroup>
+                );
+              case "text":
+                return <AssistantTextPart />;
+              case "tool-call":
+                return part.toolUI ?? <ToolCallPart {...part} />;
+              case "data":
+                return part.dataRendererUI ?? <DataPart {...part} />;
+              case "reasoning":
+                return <HiddenReasoningPart />;
+              case "image":
+                return <ImagePart />;
+              case "file":
+                return <FilePart />;
+              case "indicator":
+                return <AssistantStreamingIndicator />;
+              default:
+                return null;
             }
           }}
-        />
-        {showPendingIndicator ? (
-          <div className="mt-3">
-            <AssistantThinking />
-          </div>
-        ) : null}
+        </MessagePrimitive.GroupedParts>
         <MessageError />
       </div>
-      <div className="mt-1 flex min-h-8 items-center gap-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
-        <ActionBarPrimitive.Copy className={tooltipIconButtonClassName} title={t("copy")} aria-label={t("copy")}>
-          <CopiedState />
-        </ActionBarPrimitive.Copy>
-        <TooltipIconButton tooltip={t("regenerateResponse")} disabled>
-          <RefreshCw aria-hidden="true" />
-        </TooltipIconButton>
-      </div>
+      {!messageRunning ? (
+        <div className="mt-1 flex min-h-8 items-center gap-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
+          <ActionBarPrimitive.Copy className={tooltipIconButtonClassName} title={t("copy")} aria-label={t("copy")}>
+            <CopiedState />
+          </ActionBarPrimitive.Copy>
+          <TooltipIconButton tooltip={t("regenerateResponse")} disabled>
+            <RefreshCw aria-hidden="true" />
+          </TooltipIconButton>
+        </div>
+      ) : null}
     </MessagePrimitive.Root>
+  );
+}
+
+function AssistantWorkGroup({ count, active, children }: { count: number; active: boolean; children: ReactNode }) {
+  const { t } = useTranslation();
+
+  return (
+    <ToolGroupRoot className="chat-tool-work my-4 max-w-5xl" variant="ghost">
+      <ToolGroupTrigger
+        active={active}
+        count={count}
+        label={t(count === 1 ? "toolCallCountSingular" : "toolCallCount", { count })}
+      />
+      <ToolGroupContent>{children}</ToolGroupContent>
+    </ToolGroupRoot>
   );
 }
 
@@ -93,7 +122,7 @@ function UserMessage() {
     >
       <MessagePrimitive.Attachments>{() => <AttachmentPreview removable={false} />}</MessagePrimitive.Attachments>
       <div className="max-w-[min(42rem,88%)] rounded-2xl rounded-tr-md bg-primary px-4 py-2.5 text-sm leading-6 text-primary-foreground shadow-xs [overflow-wrap:anywhere]">
-        <MessagePrimitive.Parts components={{ Text: UserTextPart, File: FilePart }} />
+        <MessagePrimitive.Parts components={{ Text: UserTextPart, File: FilePart, Image: ImagePart }} />
       </div>
       <div className="flex min-h-8 items-center gap-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
         <ActionBarPrimitive.Copy className={tooltipIconButtonClassName} title={t("copy")} aria-label={t("copy")}>
@@ -112,35 +141,29 @@ function UserTextPart() {
 }
 
 function AssistantTextPart() {
+  const isRunning = useAuiState((state) => state.part.status.type === "running");
+
   return (
-    <div className="chat-assistant-text max-w-3xl">
+    <div className={cn("chat-assistant-text max-w-3xl", isRunning && "chat-assistant-text-running")}>
       <MarkdownText />
     </div>
   );
 }
 
-function HiddenReasoningPart() {
-  return null;
+function AssistantStreamingIndicator() {
+  const showIndicator = useAuiState((state) => {
+    const lastPart = state.message.parts.at(-1);
+    if (lastPart === undefined || lastPart.type !== "text") {
+      return true;
+    }
+    return lastPart.text.trim().length === 0;
+  });
+
+  return showIndicator ? <AssistantCursor className="my-1" /> : null;
 }
 
-function AssistantThinking() {
-  const { t } = useTranslation();
-
-  return (
-    <div
-      className="inline-flex items-center gap-2 px-1 py-1 text-sm text-muted-foreground"
-      role="status"
-      aria-live="polite"
-      data-testid="assistant-working-indicator"
-    >
-      <span>{t("thinking")}</span>
-      <span className="inline-flex h-4 items-end gap-1" aria-hidden="true">
-        <span className="size-1.5 animate-bounce rounded-full bg-primary/50 [animation-duration:850ms] motion-reduce:animate-none" />
-        <span className="size-1.5 animate-bounce rounded-full bg-primary/50 [animation-delay:120ms] [animation-duration:850ms] motion-reduce:animate-none" />
-        <span className="size-1.5 animate-bounce rounded-full bg-primary/50 [animation-delay:240ms] [animation-duration:850ms] motion-reduce:animate-none" />
-      </span>
-    </div>
-  );
+function HiddenReasoningPart() {
+  return null;
 }
 
 function CopiedState() {
@@ -153,12 +176,127 @@ function FilePart() {
   if (!file) {
     return null;
   }
+  const mimeType = filePartMimeType(file);
+  const url = filePartUrl(file);
+  if (isSupportedImageMimeType(mimeType)) {
+    return <ImageFilePart data={url} filename={file.filename} mimeType={mimeType} />;
+  }
   return (
     <div className="my-2 inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
       <FileText size={16} aria-hidden="true" className="text-muted-foreground" />
-      <span className="truncate">{file.filename ?? file.mimeType ?? "file"}</span>
+      <span className="truncate">{file.filename ?? mimeType ?? "file"}</span>
     </div>
   );
+}
+
+function ImagePart() {
+  const image = useAuiState((state) => (state.part.type === "image" ? state.part : undefined));
+  if (!image) {
+    return null;
+  }
+  return (
+    <div className="my-2 overflow-hidden rounded-md border bg-card shadow-xs">
+      <MessagePartPrimitive.Image
+        alt={image.filename ?? "Attached image"}
+        className="max-h-96 w-auto max-w-full object-contain"
+      />
+    </div>
+  );
+}
+
+function ImageFilePart({
+  data,
+  filename,
+  mimeType
+}: {
+  data: string;
+  filename?: string;
+  mimeType: string;
+}) {
+  const attachmentContent = useAttachmentContentContext();
+  const attachmentClient = attachmentContent?.client;
+  const selectedConversationId = attachmentContent?.selectedConversationId;
+  const [imageUrl, setImageUrl] = useState<string | undefined>(() =>
+    isDirectImageUrl(data) ? data : undefined
+  );
+
+  useEffect(() => {
+    if (isDirectImageUrl(data)) {
+      setImageUrl(data);
+      return undefined;
+    }
+
+    const fileId = managedFileIdFromUrl(data);
+    if (!fileId || !attachmentClient || !selectedConversationId) {
+      setImageUrl(undefined);
+      return undefined;
+    }
+
+    let active = true;
+    let objectUrl: string | undefined;
+    void attachmentClient
+      .conversationFileContent(selectedConversationId, fileId)
+      .then((blob) => {
+        if (!active) {
+          return;
+        }
+        objectUrl = URL.createObjectURL(blob);
+        setImageUrl(objectUrl);
+      })
+      .catch(() => {
+        if (active) {
+          setImageUrl(undefined);
+        }
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [attachmentClient, data, selectedConversationId]);
+
+  if (!imageUrl) {
+    return (
+      <div className="my-2 inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
+        <ImageIcon size={16} aria-hidden="true" className="text-muted-foreground" />
+        <span className="truncate">{filename ?? mimeType}</span>
+      </div>
+    );
+  }
+
+  return (
+    <figure className="my-2 grid gap-1 overflow-hidden rounded-md border bg-card p-1 shadow-xs">
+      <img src={imageUrl} alt={filename ?? "Attached image"} className="max-h-96 w-auto max-w-full rounded object-contain" />
+      {filename ? <figcaption className="truncate px-1 pb-1 text-xs text-muted-foreground">{filename}</figcaption> : null}
+    </figure>
+  );
+}
+
+function isDirectImageUrl(value: string | undefined): value is string {
+  return Boolean(value && /^(https:\/\/|blob:|data:image\/)/u.test(value));
+}
+
+function isSupportedImageMimeType(value: string | undefined): value is string {
+  return value === "image/png" || value === "image/jpeg" || value === "image/webp" || value === "image/gif";
+}
+
+function filePartMimeType(file: {
+  mediaType?: string;
+  mimeType?: string;
+}): string | undefined {
+  return file.mediaType ?? file.mimeType;
+}
+
+function filePartUrl(file: {
+  url?: string;
+  data?: unknown;
+}): string {
+  if (typeof file.url === "string") {
+    return file.url;
+  }
+  return typeof file.data === "string" ? file.data : "";
 }
 
 function MessageError() {

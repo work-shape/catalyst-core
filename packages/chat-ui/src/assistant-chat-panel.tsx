@@ -13,6 +13,8 @@ import type { UIMessage } from "ai";
 import type { ApiClient, DraftAttachment, LocaleCode, Message, SafeConfig } from "@vivd-catalyst/api-client";
 import { AssistantThread } from "./assistant-thread";
 import type { LocalUploadingAttachment } from "./assistant-composer";
+import { AttachmentContentProvider } from "./attachment-content";
+import { AssistantToolRegistry } from "./assistant-tool-registry";
 import { firstLineTitle } from "./conversation-title";
 import { useTranslation } from "./i18n";
 
@@ -25,6 +27,7 @@ export function AssistantChatPanel({
   messagesLoaded,
   notice,
   draft,
+  composerFocusRequestId,
   locale,
   selectedAgentName,
   draftAttachments,
@@ -36,6 +39,7 @@ export function AssistantChatPanel({
   onRetryDraftAttachment,
   onConversationStarted,
   onMessageSubmitted,
+  onChatRequestAccepted,
   onStreamFinished,
   onStreamError
 }: {
@@ -47,6 +51,7 @@ export function AssistantChatPanel({
   messagesLoaded: boolean;
   notice: string | undefined;
   draft: string;
+  composerFocusRequestId: number;
   locale: LocaleCode;
   selectedAgentName: string | undefined;
   draftAttachments: DraftAttachment[];
@@ -58,6 +63,7 @@ export function AssistantChatPanel({
   onRetryDraftAttachment: (attachmentId: string) => void;
   onConversationStarted: (conversationId: string, messages?: Message[]) => void;
   onMessageSubmitted: (conversationId: string) => void;
+  onChatRequestAccepted: (conversationId: string) => void;
   onStreamFinished: () => void;
   onStreamError: (message: string) => void;
 }) {
@@ -75,6 +81,7 @@ export function AssistantChatPanel({
       pendingConversationIdRef={pendingConversationIdRef}
       notice={notice}
       draft={draft}
+      composerFocusRequestId={composerFocusRequestId}
       locale={locale}
       selectedAgentName={selectedAgentName}
       draftAttachments={draftAttachments}
@@ -86,6 +93,7 @@ export function AssistantChatPanel({
       onRetryDraftAttachment={onRetryDraftAttachment}
       onConversationStarted={onConversationStarted}
       onMessageSubmitted={onMessageSubmitted}
+      onChatRequestAccepted={onChatRequestAccepted}
       onStreamFinished={onStreamFinished}
       onStreamError={onStreamError}
     />
@@ -102,6 +110,7 @@ function AssistantRuntimePane({
   pendingConversationIdRef,
   notice,
   draft,
+  composerFocusRequestId,
   locale,
   selectedAgentName,
   draftAttachments,
@@ -113,6 +122,7 @@ function AssistantRuntimePane({
   onRetryDraftAttachment,
   onConversationStarted,
   onMessageSubmitted,
+  onChatRequestAccepted,
   onStreamFinished,
   onStreamError
 }: {
@@ -125,6 +135,7 @@ function AssistantRuntimePane({
   pendingConversationIdRef: MutableRefObject<string | undefined>;
   notice: string | undefined;
   draft: string;
+  composerFocusRequestId: number;
   locale: LocaleCode;
   selectedAgentName: string | undefined;
   draftAttachments: DraftAttachment[];
@@ -136,6 +147,7 @@ function AssistantRuntimePane({
   onRetryDraftAttachment: (attachmentId: string) => void;
   onConversationStarted: (conversationId: string, messages?: Message[]) => void;
   onMessageSubmitted: (conversationId: string) => void;
+  onChatRequestAccepted: (conversationId: string) => void;
   onStreamFinished: () => void;
   onStreamError: (message: string) => void;
 }) {
@@ -143,19 +155,20 @@ function AssistantRuntimePane({
   const importedTargetRef = useRef<string | undefined>(undefined);
   const clearedTargetRef = useRef<string | undefined>(undefined);
   const streamedConversationIdRef = useRef<string | undefined>(undefined);
+  const titleRequestConversationIdRef = useRef<string | undefined>(undefined);
   const sendDisabledReason = sendBlockedReason ?? (!messagesLoaded ? t("loadingConversation") : undefined);
-  const documentFileParts = useMemo(
+  const attachmentFileParts = useMemo(
     () =>
       draftAttachments
         .filter((attachment) => attachment.status === "ready")
-        .map(toDocumentFilePart),
+        .map(toAttachmentFilePart),
     [draftAttachments]
   );
-  const toCreateMessageWithDocumentAttachments = useCallback(
+  const toCreateMessageWithAttachments = useCallback(
     ((message: ComposerAppendMessage) => {
       const parts = toOutgoingUiMessageParts(message);
-      if (message.role === "user" && documentFileParts.length > 0) {
-        parts.push(...documentFileParts);
+      if (message.role === "user" && attachmentFileParts.length > 0) {
+        parts.push(...attachmentFileParts);
       }
       return {
         role: message.role,
@@ -163,7 +176,7 @@ function AssistantRuntimePane({
         metadata: message.metadata
       };
     }) as NonNullable<UseChatRuntimeOptions<UIMessage>["toCreateMessage"]>,
-    [documentFileParts]
+    [attachmentFileParts]
   );
   const transport = useMemo(
     () =>
@@ -174,6 +187,15 @@ function AssistantRuntimePane({
           conversationId: selectedConversationId,
           locale,
           agentName: selectedAgentName
+        },
+        fetch: async (input, init) => {
+          const response = await fetch(input, init);
+          const conversationId = titleRequestConversationIdRef.current;
+          titleRequestConversationIdRef.current = undefined;
+          if (response.ok && conversationId) {
+            onChatRequestAccepted(conversationId);
+          }
+          return response;
         },
         prepareSendMessagesRequest: async (options) => {
           if (sendDisabledReason) {
@@ -190,6 +212,7 @@ function AssistantRuntimePane({
             pendingConversationIdRef.current = conversation.id;
           }
           onMessageSubmitted(conversationId);
+          titleRequestConversationIdRef.current = conversationId;
 
           return {
             credentials: "include",
@@ -208,6 +231,7 @@ function AssistantRuntimePane({
       client,
       locale,
       onMessageSubmitted,
+      onChatRequestAccepted,
       pendingConversationIdRef,
       selectedAgentName,
       selectedConversationId,
@@ -229,7 +253,7 @@ function AssistantRuntimePane({
     messages: initialMessages,
     transport,
     isSendDisabled: Boolean(sendDisabledReason),
-    toCreateMessage: toCreateMessageWithDocumentAttachments,
+    toCreateMessage: toCreateMessageWithAttachments,
     async onFinish() {
       await selectPendingConversation();
       onStreamFinished();
@@ -275,18 +299,23 @@ function AssistantRuntimePane({
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <DraftBridge draftKey={selectedConversationId ?? "new"} draft={draft} onDraftChange={onDraftChange} />
-      <AssistantThread
-        config={config}
-        selectedAgentName={selectedAgentName}
-        notice={notice}
-        draftAttachments={draftAttachments}
-        localUploadingAttachments={localUploadingAttachments}
-        sendBlockedReason={sendDisabledReason}
-        onFilesSelected={onFilesSelected}
-        onRemoveDraftAttachment={onRemoveDraftAttachment}
-        onRetryDraftAttachment={onRetryDraftAttachment}
-      />
+      <AssistantToolRegistry>
+        <DraftBridge draftKey={selectedConversationId ?? "new"} draft={draft} onDraftChange={onDraftChange} />
+        <AttachmentContentProvider client={client} selectedConversationId={selectedConversationId}>
+          <AssistantThread
+            config={config}
+            selectedAgentName={selectedAgentName}
+            notice={notice}
+            draftAttachments={draftAttachments}
+            localUploadingAttachments={localUploadingAttachments}
+            sendBlockedReason={sendDisabledReason}
+            composerFocusRequestId={composerFocusRequestId}
+            onFilesSelected={onFilesSelected}
+            onRemoveDraftAttachment={onRemoveDraftAttachment}
+            onRetryDraftAttachment={onRetryDraftAttachment}
+          />
+        </AttachmentContentProvider>
+      </AssistantToolRegistry>
     </AssistantRuntimeProvider>
   );
 }
@@ -443,7 +472,7 @@ function toUiMessageParts(
     });
   }
   if (message.role === "user") {
-    parts.push(...readUserDocumentFileParts(message));
+    parts.push(...readUserAttachmentFileParts(message));
   }
 
   const toolCalls = readAssistantToolCalls(message);
@@ -482,7 +511,7 @@ function toUiMessageParts(
       ];
 }
 
-function readUserDocumentFileParts(message: Message): UIMessage["parts"] {
+function readUserAttachmentFileParts(message: Message): UIMessage["parts"] {
   const runtime = readAgentRuntimeMetadata(message.metadata);
   if (runtime?.kind !== "user_message") {
     return [];
@@ -502,7 +531,7 @@ function readUserDocumentFileParts(message: Message): UIMessage["parts"] {
     }
     const mimeType = typeof value.mimeType === "string" ? value.mimeType : undefined;
     return [
-      toDocumentFilePart({
+      toAttachmentFilePart({
         fileId,
         filename,
         ...(mimeType ? { mimeType } : {})
@@ -511,7 +540,7 @@ function readUserDocumentFileParts(message: Message): UIMessage["parts"] {
   });
 }
 
-function toDocumentFilePart(
+function toAttachmentFilePart(
   attachment: Pick<DraftAttachment, "fileId" | "filename" | "mimeType">
 ): UIMessage["parts"][number] {
   return {

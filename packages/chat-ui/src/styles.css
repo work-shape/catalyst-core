@@ -106,8 +106,39 @@
     margin-bottom: 0;
   }
 
-  .chat-tool-part + .chat-assistant-text {
-    margin-top: 1rem;
+  .shimmer {
+    color: transparent;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--foreground) 45%, transparent),
+      transparent
+    );
+    background-size: 200% 100%;
+    background-clip: text;
+    animation: chat-shimmer 1.8s linear infinite;
+  }
+
+  .chat-tool-work .chat-tool-part {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .chat-tool-work > summary::-webkit-details-marker,
+  .chat-tool-part > summary::-webkit-details-marker,
+  .chat-tool-part details > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .chat-assistant-text + .chat-tool-work,
+  .chat-tool-part + .chat-assistant-text,
+  .chat-tool-work + .chat-assistant-text {
+    margin-top: 1.5rem;
+  }
+
+  .chat-assistant-text-running .chat-markdown > :last-child::after {
+    content: " \25CF";
+    font-family: revert;
   }
 
   .chat-markdown p,
@@ -172,5 +203,15 @@
 
   .chat-markdown th {
     @apply bg-muted font-semibold;
+  }
+}
+
+@keyframes chat-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: -200% 0;
   }
 }

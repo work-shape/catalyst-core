@@ -1,4 +1,9 @@
-import type { JsonObject, ModelTokenUsage, RuntimeCallContext } from "@vivd-catalyst/core";
+import type {
+  JsonObject,
+  ModelTokenUsage,
+  RuntimeCallContext,
+  SupportedImageMimeType
+} from "@vivd-catalyst/core";
 
 export interface ModelTool {
   name: string;
@@ -19,7 +24,7 @@ export type ModelContentPart =
     }
   | {
       type: "image";
-      mimeType: "image/png";
+      mimeType: SupportedImageMimeType;
       data: Uint8Array;
     };
 
