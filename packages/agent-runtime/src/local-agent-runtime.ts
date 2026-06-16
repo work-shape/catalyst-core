@@ -133,7 +133,7 @@ export class LocalAgentRuntime implements AgentRuntime {
       input.message.attachmentManifest
     );
     const messages: ModelMessage[] = [
-      { role: "system", content: createSystemInstructions(agent.instructions, tools.length, context.locale) },
+      { role: "system", content: createSystemInstructions(agent.instructions, context.locale) },
       ...historyMessages,
       { role: "user", content: userContent }
     ];
