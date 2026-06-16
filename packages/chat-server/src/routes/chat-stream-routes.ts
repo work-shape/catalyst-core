@@ -11,7 +11,8 @@ import {
   type AgentRunId,
   type AgentRuntimeEvent,
   type ChatMessage,
-  asConversationId
+  asConversationId,
+  isAppError
 } from "@vivd-catalyst/core";
 import { ConversationWorkflow } from "../conversation-workflow";
 import { createConversationTitle } from "../conversation-title";
@@ -237,7 +238,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
         });
       },
       onError(error) {
-        return error instanceof Error ? error.message : "Message failed";
+        return isAppError(error) && error.code !== "INTERNAL" ? error.message : "Message failed";
       }
     });
 

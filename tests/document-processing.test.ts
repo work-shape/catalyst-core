@@ -98,6 +98,76 @@ describe("document preprocessing", () => {
     });
   });
 
+  it("marks Word temporary owner files as unsupported", async () => {
+    const { service, conversationId } = await createDocumentFixture();
+
+    const attachment = await service.uploadDraftAttachment({
+      conversationId,
+      ownerUserId: "user-1",
+      filename: "~$26-001-rechnung-extrade.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      bytes: new TextEncoder().encode("Felix Pahlke\u0000\u0000")
+    });
+
+    expect(attachment).toMatchObject({
+      status: "unsupported",
+      error: {
+        code: "unsupported_document_format",
+        message: expect.stringContaining("temporary owner files")
+      }
+    });
+  });
+
+  it("marks DOCX uploads without a ZIP package signature as unsupported", async () => {
+    const { service, conversationId } = await createDocumentFixture();
+
+    const attachment = await service.uploadDraftAttachment({
+      conversationId,
+      ownerUserId: "user-1",
+      filename: "invoice.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      bytes: new TextEncoder().encode("not a zip package")
+    });
+
+    expect(attachment).toMatchObject({
+      status: "unsupported",
+      error: {
+        code: "unsupported_document_format",
+        message: expect.stringContaining("not a valid Word document package")
+      }
+    });
+  });
+
+  it("removes unsupported control characters from prepared text", async () => {
+    const { service, store, conversationId } = await createDocumentFixture();
+    const attachment = await service.uploadDraftAttachment({
+      conversationId,
+      ownerUserId: "user-1",
+      filename: "padded.txt",
+      mimeType: "text/plain",
+      bytes: new TextEncoder().encode("Alpha\u0000 Beta\u0007\nGamma\tDelta\u000c")
+    });
+    const ready = await waitForAttachment(store, attachment.id, "ready");
+
+    expect(ready.warnings).toContainEqual(
+      expect.objectContaining({
+        code: "control_characters_removed"
+      })
+    );
+
+    const read = await service.readDocument({
+      conversationId,
+      fileId: ready.fileId,
+      mode: "full"
+    });
+    expect(read.text).toBe("Alpha Beta\nGamma\tDelta");
+    expect(read.text).not.toMatch(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/u);
+    expect(read.metadata).toMatchObject({
+      characterCount: 22,
+      wordCount: 4
+    });
+  });
+
   it("creates a metadata-only attachment manifest", async () => {
     const { service, store, conversationId } = await createDocumentFixture();
     const attachment = await service.uploadDraftAttachment({
@@ -273,7 +343,7 @@ describe("document preprocessing", () => {
           filename: "missing-converter.txt",
           mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           format: "docx",
-          bytes: new TextEncoder().encode("fallback text")
+          bytes: createDocxZipHeader()
         })
       ).rejects.toThrow(
         "Document converter command 'markitdown' was not found on PATH."
@@ -373,6 +443,10 @@ sys.stdout.buffer.write(buffer.getvalue())
     throw new Error(result.stderr.toString("utf8") || "Failed to generate PDF fixture");
   }
   return new Uint8Array(result.stdout);
+}
+
+function createDocxZipHeader(): Uint8Array {
+  return new Uint8Array([0x50, 0x4b, 0x03, 0x04]);
 }
 
 const DEFAULT_DOCUMENT_COMMANDS = {

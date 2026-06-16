@@ -118,6 +118,8 @@ Draft Attachments must be persisted, not kept only in component memory. Switchin
 
 If the user drops a file on the unsent New conversation screen, the frontend should create a persisted Conversation shell first. Draft Attachments are always owned by `conversationId`; do not introduce a separate draft-owner id in v1.
 
+Document upload validation should reject known non-documents before preprocessing starts. In particular, Microsoft Word temporary owner files such as `~$example.docx` are not valid source documents and should enter `unsupported` with a clear user-facing error. Files identified as DOCX must have a DOCX/ZIP package signature before they are queued for conversion.
+
 Conversations created by file drop should use a temporary file-based title. For one file, use the filename; for multiple files, use a generic count such as `3 attached files`. Filename-based titles are acceptable in the user's own conversation list because the user uploaded the file and needs to recognize the conversation. Do not put filename-derived titles into audit metadata unless there is a specific governance reason. After the first real user message and assistant response, the normal backend title-generation flow can replace the title if it still looks temporary.
 
 Preprocessing should start immediately after each file drop/upload, but it must not block the user from dropping additional files or typing the message. Only message submission is blocked while any Draft Attachment is still uploading, queued, preprocessing, failed, or unsupported. The backend should persist status transitions so the UI can refetch or poll attachment state after refresh or conversation switches.
@@ -246,6 +248,8 @@ stderr:
 ```
 
 The wrapper must not fetch URLs or resolve remote resources. URL acquisition is a separate capability with its own network safety rules.
+
+Converter output must be normalized before it is stored as a prepared artifact or returned through `read_document`. At minimum, remove NUL bytes and unsupported control characters while preserving normal whitespace such as tabs and line breaks, and attach a preprocessing warning when this cleanup changes the extracted text. This prevents converter junk from breaking durable transcript storage or being replayed into model context.
 
 For PDFs, the preferred wrapper should use Poppler `pdfinfo` for preflight metadata and page count, `pdfplumber` for page-by-page text extraction, `pypdf` only as a fallback for simple text extraction or metadata cases, and Poppler `pdftoppm` for on-demand page rendering. Avoid making PyMuPDF the default dependency unless the project explicitly accepts its AGPL/commercial licensing path.
 

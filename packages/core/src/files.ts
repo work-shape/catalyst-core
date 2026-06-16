@@ -65,6 +65,7 @@ export type ConversationAttachmentStatus =
   | "deleted";
 
 export type DocumentAttachmentWarningCode =
+  | "control_characters_removed"
   | "no_extractable_text"
   | "text_truncated"
   | "page_count_unavailable"

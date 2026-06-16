@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  AppError,
   asAgentRunId,
   asClientInstanceId,
   type ChatMessage,
@@ -525,6 +526,158 @@ describe("local agent runtime", () => {
       }
     ]);
   });
+
+  it("does not expose raw internal error text in run failure events", async () => {
+    const clientInstanceId = asClientInstanceId("internal-error-client");
+    const context: RuntimeCallContext = {
+      clientInstanceId,
+      correlationId: "corr-internal-error",
+      user: {
+        id: "user-1",
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const store = new InMemoryPlatformStore();
+    const conversationId = await createConversationWithMessages(store, {
+      clientInstanceId,
+      messages: []
+    });
+    const providerConfig: ModelProviderConfig = {
+      id: "test-provider",
+      type: "deterministic",
+      model: "test-model"
+    };
+    const modelProvider: ModelProvider = {
+      id: "test-provider",
+      async complete() {
+        throw new Error("Failed query: insert into messages params: secret document text");
+      }
+    };
+    const runtime = new LocalAgentRuntime({
+      agents: [
+        {
+          name: "error_agent",
+          displayName: "Error Agent",
+          instructions: "Help the user.",
+          modelProviderId: "test-provider",
+          toolNames: [],
+          initialPrompts: []
+        }
+      ],
+      modelProviders: [providerConfig],
+      defaultModelProvider: providerConfig,
+      conversationHistory: store,
+      modelProvider,
+      toolRegistry: new ToolRegistry({ tools: [] }),
+      toolExecution: createUnusedToolExecution(),
+      usageGovernance: new ModelUsageGovernance({
+        store,
+        budget: {
+          costSafetyMultiplier: 1
+        },
+        safeguards: {}
+      })
+    });
+
+    const run = await runtime.start(
+      {
+        agentName: "error_agent",
+        conversationId,
+        message: {
+          text: "hello"
+        }
+      },
+      context
+    );
+
+    const failed = await firstRunFailedEvent(runtime, run.runId, context);
+
+    expect(failed.error).toEqual({
+      code: "INTERNAL",
+      message: "Agent run failed"
+    });
+  });
+
+  it("keeps non-internal AppError messages visible in run failure events", async () => {
+    const clientInstanceId = asClientInstanceId("app-error-client");
+    const context: RuntimeCallContext = {
+      clientInstanceId,
+      correlationId: "corr-app-error",
+      user: {
+        id: "user-1",
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const store = new InMemoryPlatformStore();
+    const conversationId = await createConversationWithMessages(store, {
+      clientInstanceId,
+      messages: []
+    });
+    const providerConfig: ModelProviderConfig = {
+      id: "test-provider",
+      type: "deterministic",
+      model: "test-model"
+    };
+    const modelProvider: ModelProvider = {
+      id: "test-provider",
+      async complete() {
+        throw new AppError("CONFLICT", "Daily model call safeguard has been reached");
+      }
+    };
+    const runtime = new LocalAgentRuntime({
+      agents: [
+        {
+          name: "app_error_agent",
+          displayName: "App Error Agent",
+          instructions: "Help the user.",
+          modelProviderId: "test-provider",
+          toolNames: [],
+          initialPrompts: []
+        }
+      ],
+      modelProviders: [providerConfig],
+      defaultModelProvider: providerConfig,
+      conversationHistory: store,
+      modelProvider,
+      toolRegistry: new ToolRegistry({ tools: [] }),
+      toolExecution: createUnusedToolExecution(),
+      usageGovernance: new ModelUsageGovernance({
+        store,
+        budget: {
+          costSafetyMultiplier: 1
+        },
+        safeguards: {}
+      })
+    });
+
+    const run = await runtime.start(
+      {
+        agentName: "app_error_agent",
+        conversationId,
+        message: {
+          text: "hello"
+        }
+      },
+      context
+    );
+
+    const failed = await firstRunFailedEvent(runtime, run.runId, context);
+
+    expect(failed.error).toEqual({
+      code: "CONFLICT",
+      message: "Daily model call safeguard has been reached"
+    });
+  });
 });
 
 async function createConversationWithMessages(
@@ -579,4 +732,17 @@ function modelContextOptions() {
       maxTokens: 60000
     }
   };
+}
+
+async function firstRunFailedEvent(
+  runtime: LocalAgentRuntime,
+  runId: ReturnType<typeof asAgentRunId>,
+  context: RuntimeCallContext
+) {
+  for await (const event of runtime.observe(runId, context)) {
+    if (event.type === "run_failed") {
+      return event;
+    }
+  }
+  throw new Error("Run did not fail");
 }

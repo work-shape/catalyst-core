@@ -12,7 +12,7 @@ import {
 import type { ConvertDocumentOutput, PreparedPdfPagesArtifact } from "./converter";
 import { createArtifactObjectKey, createChecksum } from "./object-keys";
 import type { ObjectStore } from "./object-store";
-import { boundPreparedText, countWords } from "./prepared-text";
+import { boundPreparedText, countWords, sanitizePreparedText } from "./prepared-text";
 
 export interface PreparedDocumentArtifactPipelineOptions {
   clientInstanceId: ClientInstanceId;
@@ -57,9 +57,15 @@ export class PreparedDocumentArtifactPipeline {
   async writePreparedDocumentArtifacts(
     input: WritePreparedDocumentArtifactsInput
   ): Promise<PreparedDocumentArtifacts> {
-    const bounded = boundPreparedText(input.converted.text, this.maxExtractedTextBytes);
+    const sanitized = sanitizePreparedText(input.converted.text);
+    const bounded = boundPreparedText(sanitized.text, this.maxExtractedTextBytes);
+    const sanitizedPages = input.converted.pages
+      ? sanitizePreparedPdfPages(input.converted.pages)
+      : undefined;
     const warnings: DocumentAttachmentWarning[] = [
       ...input.converted.warnings,
+      ...sanitized.warnings,
+      ...(sanitizedPages?.warnings ?? []),
       ...bounded.warnings
     ];
     if (bounded.text.trim().length === 0) {
@@ -94,7 +100,7 @@ export class PreparedDocumentArtifactPipeline {
           conversationId: input.conversationId,
           sourceFileId: input.sourceFileId,
           filename: input.filename,
-          pages: input.converted.pages,
+          pages: sanitizedPages?.pages ?? input.converted.pages,
           engine: input.converted.engine
         })
       : undefined;
@@ -167,4 +173,42 @@ export class PreparedDocumentArtifactPipeline {
       metadata: input.metadata
     });
   }
+}
+
+function sanitizePreparedPdfPages(pages: PreparedPdfPagesArtifact): {
+  pages: PreparedPdfPagesArtifact;
+  warnings: DocumentAttachmentWarning[];
+} {
+  const warnings: DocumentAttachmentWarning[] = [];
+  const sanitizedPages = pages.pages.map((page) => {
+    const sanitized = sanitizePreparedText(page.text);
+    warnings.push(...sanitized.warnings);
+    return {
+      ...page,
+      text: sanitized.text,
+      characterCount: sanitized.text.length,
+      wordCount: countWords(sanitized.text),
+      warnings: [...page.warnings, ...sanitized.warnings]
+    };
+  });
+
+  return {
+    pages: {
+      ...pages,
+      pages: sanitizedPages
+    },
+    warnings: dedupeWarnings(warnings)
+  };
+}
+
+function dedupeWarnings(warnings: DocumentAttachmentWarning[]): DocumentAttachmentWarning[] {
+  const seen = new Set<string>();
+  return warnings.filter((warning) => {
+    const key = `${warning.code}:${warning.message}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 }

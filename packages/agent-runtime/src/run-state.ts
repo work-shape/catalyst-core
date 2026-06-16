@@ -99,12 +99,13 @@ export class RunState {
 
   fail(error: unknown): void {
     this.status = "failed";
+    const appError = error instanceof AppError ? error : undefined;
     this.emit({
       type: "run_failed",
       runId: this.runId,
       error: {
-        code: error instanceof AppError ? error.code : "INTERNAL",
-        message: error instanceof Error ? error.message : "Agent run failed"
+        code: appError?.code ?? "INTERNAL",
+        message: appError && appError.code !== "INTERNAL" ? appError.message : "Agent run failed"
       }
     });
     this.close();

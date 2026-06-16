@@ -38,3 +38,26 @@ export function detectDocumentFormat(
 export function extensionFromFilename(filename: string): string | undefined {
   return filename.trim().toLowerCase().match(/\.([a-z0-9]+)$/u)?.[1];
 }
+
+export function unsupportedDocumentUploadReason(input: {
+  filename: string;
+  format: DocumentFileFormat | undefined;
+  bytes: Uint8Array;
+}): string | undefined {
+  if (isWordTemporaryOwnerFile(input.filename)) {
+    return "Microsoft Word temporary owner files are not readable documents. Upload the original .docx file instead of the '~$' lock file.";
+  }
+  if (input.format === "docx" && !hasDocxZipPackageSignature(input.bytes)) {
+    return "The file is marked as DOCX but is not a valid Word document package. Upload the original .docx file.";
+  }
+  return undefined;
+}
+
+export function hasDocxZipPackageSignature(bytes: Uint8Array): boolean {
+  return bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
+}
+
+function isWordTemporaryOwnerFile(filename: string): boolean {
+  const basename = filename.split(/[\\/]/u).pop() ?? filename;
+  return basename.startsWith("~$") && extensionFromFilename(basename) === "docx";
+}

@@ -11,6 +11,7 @@ import {
   createDefaultDocumentExecutionEnvironment,
   type DocumentExecutionEnvironment
 } from "./execution-environment";
+import { hasDocxZipPackageSignature } from "./document-format";
 
 export interface ConvertDocumentInput {
   bytes: Uint8Array;
@@ -70,6 +71,10 @@ export class PlatformDocumentPreprocessor implements DocumentPreprocessor {
 
     if (input.format === "pdf") {
       return this.convertPdf(input);
+    }
+
+    if (input.format === "docx" && !hasDocxZipPackageSignature(input.bytes)) {
+      throw new Error("The file is marked as DOCX but is not a valid Word document package.");
     }
 
     return this.convertWithMarkItDown(input);

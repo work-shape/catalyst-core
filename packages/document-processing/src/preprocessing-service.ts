@@ -18,7 +18,11 @@ import {
   type ReadDocumentInput,
   type ReadDocumentResult
 } from "./document-read-service";
-import { detectDocumentFormat, extensionFromFilename } from "./document-format";
+import {
+  detectDocumentFormat,
+  extensionFromFilename,
+  unsupportedDocumentUploadReason
+} from "./document-format";
 import type { ObjectStore } from "./object-store";
 import { PreparedDocumentArtifactPipeline } from "./prepared-document-artifacts";
 
@@ -102,7 +106,11 @@ export class DocumentPreprocessingService {
       objectKey
     });
 
-    const unsupportedReason = this.unsupportedReason(format);
+    const unsupportedReason = this.unsupportedReason({
+      filename: input.filename,
+      format,
+      bytes: input.bytes
+    });
     const attachment = await this.store.createConversationAttachment({
       clientInstanceId: this.clientInstanceId,
       conversationId: input.conversationId,
@@ -278,12 +286,20 @@ export class DocumentPreprocessingService {
     }
   }
 
-  private unsupportedReason(format: DocumentFileFormat | undefined): string | undefined {
-    if (!format) {
+  private unsupportedReason(input: {
+    filename: string;
+    format: DocumentFileFormat | undefined;
+    bytes: Uint8Array;
+  }): string | undefined {
+    const uploadReason = unsupportedDocumentUploadReason(input);
+    if (uploadReason) {
+      return uploadReason;
+    }
+    if (!input.format) {
       return "The file type is not supported for document text extraction.";
     }
-    if (!this.config.supportedFormats.includes(format)) {
-      return `The '${format}' file type is disabled for this client instance.`;
+    if (!this.config.supportedFormats.includes(input.format)) {
+      return `The '${input.format}' file type is disabled for this client instance.`;
     }
     return undefined;
   }
