@@ -11,14 +11,25 @@ export function normalizeGeneratedConversationTitle(text: string): string {
   );
 }
 
-export function isTemporaryConversationTitle(title: string, firstUserText: string): boolean {
+export function isTemporaryConversationTitle(
+  title: string,
+  firstUserText: string,
+  additionalTemporaryTitles: readonly string[] = []
+): boolean {
   const firstLine = firstUserText.split(/\r?\n/u)[0] ?? firstUserText;
-  return new Set([
+  const temporaryTitles = new Set([
     "New conversation",
     createConversationTitle(firstUserText),
     createConversationTitle(firstLine),
     legacyFirstLineTitle(firstUserText)
-  ]).has(title);
+  ]);
+
+  for (const temporaryTitle of additionalTemporaryTitles) {
+    temporaryTitles.add(temporaryTitle);
+    temporaryTitles.add(createConversationTitle(temporaryTitle));
+  }
+
+  return temporaryTitles.has(title);
 }
 
 function normalizeConversationTitle(text: string): string {

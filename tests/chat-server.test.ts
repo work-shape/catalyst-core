@@ -263,7 +263,9 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(sent.statusCode).toBe(200);
-    expect(parseSseChunks(sent.payload).some((chunk) => chunk.type === "finish")).toBe(true);
+    expect(parseSseChunks(sent.payload), sent.payload).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: "finish" })])
+    );
 
     const listed = await app.server.inject({
       method: "GET",
@@ -284,6 +286,125 @@ describe("client instance app vertical slice", () => {
     expect(audit.statusCode).toBe(200);
     expect((audit.json() as Array<{ type: string }>).some((event) => event.type === "conversation.title_generated")).toBe(
       true
+    );
+
+    await app.close();
+  });
+
+  it("replaces a file-drop placeholder title after the first exchange", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig(),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+    const filenameTitle = "Theo - Boardingpass - Y123.txt";
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      payload: { title: filenameTitle }
+    });
+    expect(created.statusCode).toBe(200);
+    const conversation = created.json() as { id: string };
+
+    const upload = createMultipartFilePayload({
+      fieldName: "file",
+      filename: filenameTitle,
+      contentType: "text/plain",
+      content: "Boarding pass fixture"
+    });
+    expect(
+      (
+        await app.server.inject({
+          method: "POST",
+          url: `/api/conversations/${conversation.id}/draft-attachments`,
+          headers: upload.headers,
+          payload: upload.payload
+        })
+      ).statusCode
+    ).toBe(200);
+    await waitForReadyDraftAttachment(app.server, conversation.id);
+
+    const sent = await app.server.inject({
+      method: "POST",
+      url: "/api/chat",
+      payload: {
+        conversationId: conversation.id,
+        messages: [createUserUiMessage("Please summarize this boarding pass")]
+      }
+    });
+    expect(sent.statusCode).toBe(200);
+    expect(parseSseChunks(sent.payload), sent.payload).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: "finish" })])
+    );
+
+    const listed = await app.server.inject({
+      method: "GET",
+      url: "/api/conversations"
+    });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json()).toContainEqual(
+      expect.objectContaining({
+        id: conversation.id,
+        title: "Please Summarize This Boarding Pass"
+      })
+    );
+
+    await app.close();
+  });
+
+  it("generates a title when the first exchange includes tool call messages", async () => {
+    const config = createTestConfig({
+      tools: [{ name: "demo.echo", enabled: true }],
+      toolNames: ["demo.echo"]
+    });
+    const tool = defineTool({
+      name: "demo.echo",
+      description: "Echo text for tests.",
+      inputSchema: z.object({ text: z.string() }),
+      outputSchema: z.object({ echoed: z.string() }),
+      async execute(input) {
+        return toolSuccess({ echoed: input.text });
+      }
+    });
+    const app = await createClientInstanceApp({
+      config,
+      env: {},
+      storeMode: "memory",
+      tools: [tool]
+    });
+    const firstMessage = '/tool demo.echo {"text":"boarding pass"}';
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      payload: { title: firstMessage }
+    });
+    expect(created.statusCode).toBe(200);
+    const conversation = created.json() as { id: string };
+
+    const sent = await app.server.inject({
+      method: "POST",
+      url: "/api/chat",
+      payload: {
+        conversationId: conversation.id,
+        messages: [createUserUiMessage(firstMessage)]
+      }
+    });
+    expect(sent.statusCode).toBe(200);
+    expect(parseSseChunks(sent.payload), sent.payload).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: "finish" })])
+    );
+
+    const listed = await app.server.inject({
+      method: "GET",
+      url: "/api/conversations"
+    });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json()).toContainEqual(
+      expect.objectContaining({
+        id: conversation.id,
+        title: "Tool result review"
+      })
     );
 
     await app.close();
@@ -1009,4 +1130,56 @@ function parseSseChunks(text: string): Array<{ type?: string; errorText?: string
     .map((line) => line.slice("data:".length).trim())
     .filter((line) => line !== "[DONE]")
     .map((line) => JSON.parse(line) as { type?: string; errorText?: string });
+}
+
+function createMultipartFilePayload(input: {
+  fieldName: string;
+  filename: string;
+  contentType: string;
+  content: string;
+}): { headers: Record<string, string>; payload: Buffer } {
+  const boundary = `vivd-test-${Math.random().toString(36).slice(2)}`;
+  const payload = Buffer.from(
+    [
+      `--${boundary}`,
+      `Content-Disposition: form-data; name="${input.fieldName}"; filename="${input.filename}"`,
+      `Content-Type: ${input.contentType}`,
+      "",
+      input.content,
+      `--${boundary}--`,
+      ""
+    ].join("\r\n")
+  );
+  return {
+    headers: {
+      "content-type": `multipart/form-data; boundary=${boundary}`,
+      "content-length": String(payload.byteLength)
+    },
+    payload
+  };
+}
+
+async function waitForReadyDraftAttachment(
+  server: Awaited<ReturnType<typeof createClientInstanceApp>>["server"],
+  conversationId: string
+): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const response = await server.inject({
+      method: "GET",
+      url: `/api/conversations/${conversationId}/draft-attachments`
+    });
+    expect(response.statusCode).toBe(200);
+    const attachments = response.json() as Array<{ status: string }>;
+    if (attachments.some((attachment) => attachment.status === "ready")) {
+      return;
+    }
+    await delay(10);
+  }
+  throw new Error("Timed out waiting for draft attachment preprocessing");
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }

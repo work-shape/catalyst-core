@@ -211,7 +211,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
               runId,
               assistantMessageCount
             );
-            void conversations
+            await conversations
               .generateTitleForFirstExchange(conversationId, user, localizedContext)
               .catch((error: unknown) => {
                 request.log.warn(

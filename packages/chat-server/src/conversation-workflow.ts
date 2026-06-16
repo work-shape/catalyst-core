@@ -216,7 +216,14 @@ export class ConversationWorkflow {
       conversationId
     });
     const firstExchange = findFirstExchange(messages);
-    if (!firstExchange || !isTemporaryConversationTitle(conversation.title, firstExchange.user.text)) {
+    if (
+      !firstExchange ||
+      !isTemporaryConversationTitle(
+        conversation.title,
+        firstExchange.user.text,
+        temporaryAttachmentTitles(firstExchange.user)
+      )
+    ) {
       return undefined;
     }
 
@@ -408,15 +415,62 @@ function toJsonAttachmentManifest(attachmentManifest: AttachmentManifest): JsonO
 }
 
 function findFirstExchange(messages: ChatMessage[]): { user: ChatMessage; assistant: ChatMessage } | undefined {
-  const visibleMessages = messages.filter((message) => message.role === "user" || message.role === "assistant");
-  if (visibleMessages.length !== 2) {
+  const userMessages = messages.filter((message) => message.role === "user");
+  if (userMessages.length !== 1) {
     return undefined;
   }
-  const [user, assistant] = visibleMessages;
-  if (user?.role !== "user" || assistant?.role !== "assistant") {
+
+  const assistantMessages = messages.filter(
+    (message) => message.role === "assistant" && !isAssistantToolCallMessage(message)
+  );
+  if (assistantMessages.length !== 1) {
     return undefined;
   }
-  return { user, assistant };
+  const [user] = userMessages;
+  const [assistant] = assistantMessages;
+  return user && assistant ? { user, assistant } : undefined;
+}
+
+function isAssistantToolCallMessage(message: ChatMessage): boolean {
+  const runtime = readAgentRuntimeMetadata(message);
+  return runtime?.kind === "assistant_tool_calls";
+}
+
+function temporaryAttachmentTitles(message: ChatMessage): string[] {
+  const attachments = readAttachmentManifestEntries(message);
+  if (attachments.length === 0) {
+    return [];
+  }
+
+  const filenames = attachments
+    .map((attachment) => (typeof attachment.filename === "string" ? attachment.filename : undefined))
+    .filter((filename): filename is string => Boolean(filename));
+
+  return [
+    ...filenames,
+    attachments.length === 1 ? "Attached file" : `${attachments.length} attached files`
+  ];
+}
+
+function readAttachmentManifestEntries(message: ChatMessage): JsonObject[] {
+  const runtime = readAgentRuntimeMetadata(message);
+  const manifest = runtime?.kind === "user_message" ? runtime.attachmentManifest : undefined;
+  if (!isJsonObject(manifest) || manifest.version !== 1 || !Array.isArray(manifest.attachments)) {
+    return [];
+  }
+  return manifest.attachments.filter(isJsonObject);
+}
+
+function readAgentRuntimeMetadata(message: ChatMessage): JsonObject | undefined {
+  const runtime = message.metadata?.agentRuntime;
+  if (!isJsonObject(runtime) || runtime.version !== 1) {
+    return undefined;
+  }
+  return runtime;
+}
+
+function isJsonObject(value: unknown): value is JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function createTitlePrompt(input: { user: ChatMessage; assistant: ChatMessage }): ModelMessage[] {
