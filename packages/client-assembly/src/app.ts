@@ -18,9 +18,11 @@ import {
 } from "@vivd-catalyst/tool-execution";
 import {
   createReadDocumentTool,
+  createViewDocumentPageTool,
+  DocumentPageRenderService,
   DocumentPreprocessingService,
   InMemoryObjectStore,
-  MarkItDownDocumentTextConverter,
+  PlatformDocumentPreprocessor,
   S3ObjectStore
 } from "@vivd-catalyst/document-processing";
 import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
@@ -70,8 +72,14 @@ export async function createClientInstanceApp(
     clientInstanceId,
     store,
     objectStore,
-    converter: new MarkItDownDocumentTextConverter(config.documents.preprocessing),
+    preprocessor: new PlatformDocumentPreprocessor(config.documents.preprocessing),
     config: config.documents.preprocessing
+  });
+  const documentPageViewer = new DocumentPageRenderService({
+    clientInstanceId,
+    store,
+    objectStore,
+    timeoutMs: config.documents.preprocessing.timeoutMs
   });
   const tools = createToolDefinitions({
     config,
@@ -81,6 +89,7 @@ export async function createClientInstanceApp(
         env
       }),
       createReadDocumentTool(documentPreprocessing),
+      createViewDocumentPageTool(documentPageViewer),
       ...input.tools
     ]
   });
@@ -128,7 +137,19 @@ export async function createClientInstanceApp(
     usageGovernance,
     maxSteps: config.runtime.maxSteps,
     repeatedToolCallLimit: config.runtime.repeatedToolCallLimit,
-    modelContext: config.modelContext
+    modelContext: config.modelContext,
+    artifactReader: {
+      async readArtifact(readInput) {
+        const artifact = await store.getManagedArtifact(readInput);
+        if (!artifact) {
+          throw new AppError("NOT_FOUND", `Managed artifact '${readInput.artifactId}' was not found`);
+        }
+        return {
+          bytes: await objectStore.getObject(artifact.objectKey),
+          mimeType: artifact.mimeType
+        };
+      }
+    }
   });
   const { authAdapter, standaloneAuth, sessionToken } = await createClientInstanceAuth({
     config,

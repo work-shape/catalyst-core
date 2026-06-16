@@ -15,7 +15,7 @@ import {
   parseJsonObject,
   readOpenAiResponsesText,
   toModelUsage,
-  toOpenAiChatMessage,
+  toOpenAiChatMessages,
   toOpenAiResponsesInput,
   toOpenAiResponsesTools,
   toResponsesModelUsage,
@@ -223,7 +223,7 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
   ): OpenAiCompatibleRequestBody {
     return {
       model: request.model || this.options.model,
-      messages: request.messages.map(toOpenAiChatMessage),
+      messages: toOpenAiChatMessages(request.messages),
       reasoning_effort: this.options.reasoningEffort,
       tools: providerTools.map(({ tool, providerName }) => ({
         type: "function",

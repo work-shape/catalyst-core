@@ -8,7 +8,7 @@ import {
 } from "@vivd-catalyst/core";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
-import type { ModelMessage, ModelProvider } from "@vivd-catalyst/model-provider";
+import { modelContentText, type ModelMessage, type ModelProvider } from "@vivd-catalyst/model-provider";
 import { ToolRegistry } from "@vivd-catalyst/tool-execution";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 
@@ -48,7 +48,7 @@ describe("local agent runtime", () => {
       async complete(request) {
         providerMessages = request.messages;
         const sawEarlierTurn = request.messages.some(
-          (message) => message.role === "user" && message.content.includes("favorite color is blue")
+          (message) => message.role === "user" && modelContentText(message.content).includes("favorite color is blue")
         );
         return {
           text: sawEarlierTurn ? "Your favorite color is blue." : "I do not know yet.",

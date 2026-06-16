@@ -7,17 +7,21 @@ import {
   type ConversationAttachmentId,
   type ConversationId,
   type CreateConversationAttachmentInput,
+  type CreateManagedArtifactInput,
   type CreateManagedFileInput,
   type DocumentAttachmentStore,
   type DraftAttachment,
+  type ManagedArtifactId,
+  type ManagedArtifactKind,
+  type ManagedArtifactRecord,
   type ManagedFileId,
   type ManagedFileRecord,
   type MessageId,
   type UpdateConversationAttachmentInput,
   createPlatformId
 } from "@vivd-catalyst/core";
-import { mapConversationAttachment, mapManagedFile } from "./rows";
-import { conversationAttachments, managedFiles, schema } from "./schema";
+import { mapConversationAttachment, mapManagedArtifact, mapManagedFile } from "./rows";
+import { conversationAttachments, managedArtifacts, managedFiles, schema } from "./schema";
 
 type PostgresDatabase = PostgresJsDatabase<typeof schema>;
 
@@ -78,6 +82,69 @@ class PostgresDocumentAttachmentStore implements DocumentAttachmentStore {
       )
       .limit(1);
     return row ? mapManagedFile(row) : undefined;
+  }
+
+  async createManagedArtifact(input: CreateManagedArtifactInput): Promise<ManagedArtifactRecord> {
+    const [row] = await this.db
+      .insert(managedArtifacts)
+      .values({
+        id: createPlatformId<"ManagedArtifactId">("art"),
+        clientInstanceId: input.clientInstanceId,
+        conversationId: input.conversationId,
+        sourceFileId: input.sourceFileId ?? null,
+        kind: input.kind,
+        objectKey: input.objectKey,
+        filename: input.filename ?? null,
+        mimeType: input.mimeType,
+        byteSize: input.byteSize,
+        checksum: input.checksum,
+        metadata: input.metadata ?? {},
+        status: "available",
+        createdAt: new Date()
+      })
+      .returning();
+    return mapManagedArtifact(row);
+  }
+
+  async getManagedArtifact(input: {
+    clientInstanceId: ClientInstanceId;
+    artifactId: ManagedArtifactId;
+  }): Promise<ManagedArtifactRecord | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(managedArtifacts)
+      .where(
+        and(
+          eq(managedArtifacts.clientInstanceId, input.clientInstanceId),
+          eq(managedArtifacts.id, input.artifactId),
+          ne(managedArtifacts.status, "deleted")
+        )
+      )
+      .limit(1);
+    return row ? mapManagedArtifact(row) : undefined;
+  }
+
+  async listManagedArtifactsForFile(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    fileId: ManagedFileId;
+    kind?: ManagedArtifactKind;
+  }): Promise<ManagedArtifactRecord[]> {
+    const where = [
+      eq(managedArtifacts.clientInstanceId, input.clientInstanceId),
+      eq(managedArtifacts.conversationId, input.conversationId),
+      eq(managedArtifacts.sourceFileId, input.fileId),
+      ne(managedArtifacts.status, "deleted")
+    ];
+    if (input.kind !== undefined) {
+      where.push(eq(managedArtifacts.kind, input.kind));
+    }
+    const rows = await this.db
+      .select()
+      .from(managedArtifacts)
+      .where(and(...where))
+      .orderBy(desc(managedArtifacts.createdAt));
+    return rows.map(mapManagedArtifact);
   }
 
   async createConversationAttachment(
@@ -158,11 +225,14 @@ class PostgresDocumentAttachmentStore implements DocumentAttachmentStore {
     if (input.format !== undefined) {
       set.format = input.format;
     }
-    if (input.preparedDocumentId !== undefined) {
-      set.preparedDocumentId = input.preparedDocumentId;
+    if (input.preparedTextArtifactId !== undefined) {
+      set.preparedTextArtifactId = input.preparedTextArtifactId;
     }
-    if (input.preparedObjectKey !== undefined) {
-      set.preparedObjectKey = input.preparedObjectKey;
+    if (input.preparedPagesArtifactId !== undefined) {
+      set.preparedPagesArtifactId = input.preparedPagesArtifactId;
+    }
+    if (input.preprocessingEngine !== undefined) {
+      set.preprocessingEngine = input.preprocessingEngine;
     }
     if (input.characterCount !== undefined) {
       set.characterCount = input.characterCount;
@@ -274,11 +344,11 @@ class PostgresDocumentAttachmentStore implements DocumentAttachmentStore {
           eq(conversationAttachments.conversationId, input.conversationId),
           eq(conversationAttachments.fileId, input.fileId),
           eq(conversationAttachments.status, "ready"),
-          ne(conversationAttachments.preparedObjectKey, "")
+          ne(conversationAttachments.preparedTextArtifactId, "")
         )
       )
       .orderBy(desc(conversationAttachments.updatedAt))
       .limit(1);
-    return row?.preparedObjectKey ? mapConversationAttachment(row) : undefined;
+    return row?.preparedTextArtifactId ? mapConversationAttachment(row) : undefined;
   }
 }

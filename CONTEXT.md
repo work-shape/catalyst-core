@@ -116,6 +116,10 @@ _Avoid_: File acquisition, document analysis, final review
 A document processing action that converts a managed file into readable text or Markdown for agent use, without interpreting fields, comparing facts, or making workflow judgments.
 _Avoid_: Document analysis, OCR, retrieval
 
+**Document Execution Environment**:
+The platform-owned document processing module that resolves and runs local extraction or rendering dependencies behind document preprocessing and visual page reads.
+_Avoid_: Client config command list, converter settings, PDF binary configuration
+
 **Document Reading**:
 An agent action that reads prepared document text from a managed file or artifact.
 _Avoid_: Document preprocessing, file upload, structured extraction

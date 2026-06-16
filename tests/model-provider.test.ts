@@ -283,6 +283,101 @@ describe("OpenAI-compatible model provider", () => {
     });
   });
 
+  it("keeps visual tool context after sibling tool outputs in Responses input", async () => {
+    let requestBody:
+      | {
+          input?: Array<Record<string, unknown>>;
+        }
+      | undefined;
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body));
+      return new Response(
+        JSON.stringify({
+          output_text: "done",
+          usage: {
+            input_tokens: 1,
+            output_tokens: 1,
+            total_tokens: 2
+          }
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const clientInstanceId = asClientInstanceId("client-test");
+    const provider = new OpenAiCompatibleChatProvider({
+      id: "openai",
+      api: "responses",
+      model: "gpt-5.5",
+      baseUrl: "https://example.test/v1",
+      apiKey: "test"
+    });
+    await provider.complete(
+      {
+        providerId: "openai",
+        model: "gpt-5.5",
+        messages: [
+          {
+            role: "assistant",
+            content: "",
+            toolCalls: [
+              { toolCallId: "call_image", toolName: "view_document_page", input: { pageNumber: 1 } },
+              { toolCallId: "call_text", toolName: "read_document", input: { mode: "pages" } }
+            ]
+          },
+          {
+            role: "tool",
+            toolCallId: "call_image",
+            content: [
+              { type: "text", text: "{\"pageNumber\":1}" },
+              {
+                type: "image",
+                mimeType: "image/png",
+                data: new Uint8Array([137, 80, 78, 71])
+              }
+            ]
+          },
+          { role: "tool", toolCallId: "call_text", content: "{\"text\":\"page text\"}" }
+        ],
+        tools: [
+          { name: "view_document_page", description: "View PDF page" },
+          { name: "read_document", description: "Read document" }
+        ]
+      },
+      {
+        clientInstanceId,
+        correlationId: "corr-test",
+        user: {
+          id: "user-test",
+          externalUserId: "user-test",
+          displayLabel: "User",
+          roles: ["user"],
+          permissionRefs: [],
+          clientInstanceId,
+          authSource: "test"
+        }
+      }
+    );
+
+    expect(requestBody?.input?.map((item) => item.type ?? item.role)).toEqual([
+      "function_call",
+      "function_call",
+      "function_call_output",
+      "function_call_output",
+      "user"
+    ]);
+    expect(requestBody?.input?.[4]).toMatchObject({
+      role: "user",
+      content: expect.arrayContaining([
+        expect.objectContaining({ type: "input_image" })
+      ])
+    });
+  });
+
   it("streams OpenAI-compatible text deltas and final usage", async () => {
     let requestBody: { stream?: boolean; stream_options?: { include_usage?: boolean } } | undefined;
     const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {

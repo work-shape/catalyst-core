@@ -66,10 +66,23 @@ export type OpenAiResponsesTool = {
 
 export type OpenAiResponseInput = OpenAiResponseInputItem[];
 
+export type OpenAiResponsesInputContent =
+  | string
+  | Array<
+      | {
+          type: "input_text";
+          text: string;
+        }
+      | {
+          type: "input_image";
+          image_url: string;
+        }
+    >;
+
 export type OpenAiResponseInputItem =
   | {
       role: "system" | "user";
-      content: string;
+      content: OpenAiResponsesInputContent;
     }
   | {
       role: "assistant";
@@ -115,7 +128,20 @@ export type OpenAiResponsesOutputItem =
 export type OpenAiCompatibleMessage =
   | {
       role: "system" | "user";
-      content: string;
+      content:
+        | string
+        | Array<
+            | {
+                type: "text";
+                text: string;
+              }
+            | {
+                type: "image_url";
+                image_url: {
+                  url: string;
+                };
+              }
+          >;
     }
   | {
       role: "assistant";

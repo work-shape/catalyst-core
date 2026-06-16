@@ -6,5 +6,7 @@ export * from "./document-read-service";
 export * from "./object-store";
 export * from "./object-keys";
 export * from "./prepared-text";
+export * from "./page-render-service";
 export * from "./preprocessing-service";
 export * from "./read-document-tool";
+export * from "./view-document-page-tool";

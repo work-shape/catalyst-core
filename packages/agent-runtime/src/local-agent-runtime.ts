@@ -32,6 +32,7 @@ import {
   projectAgentVisibleHistory,
   stableStringify,
   type ModelOutputProjection,
+  type ModelContextArtifactReader,
   type ModelContextProjectionOptions
 } from "./model-context-projection";
 
@@ -48,6 +49,7 @@ export interface LocalAgentRuntimeOptions {
   maxSteps?: number;
   repeatedToolCallLimit?: number;
   modelContext?: ModelContextProjectionOptions;
+  artifactReader?: ModelContextArtifactReader;
 }
 
 const DEFAULT_CONVERSATION_HISTORY_LIMIT = 20;
@@ -212,7 +214,7 @@ export class LocalAgentRuntime implements AgentRuntime {
           state,
           toolCall,
           toolExecution: this.options.toolExecution,
-          modelContext: this.modelContextOptions(),
+          modelContext: this.modelContextOptions(context),
           repeatedToolCall: this.registerToolCall(repeatedToolCalls, toolCall.input, toolCall.toolName)
         });
         await this.persistToolResult({
@@ -270,7 +272,7 @@ export class LocalAgentRuntime implements AgentRuntime {
     });
     return projectAgentVisibleHistory(
       dropCurrentSubmittedMessage(recentMessages, input.message.text),
-      this.modelContextOptions()
+      this.modelContextOptions(context)
     );
   }
 
@@ -286,7 +288,7 @@ export class LocalAgentRuntime implements AgentRuntime {
       clientInstanceId: input.context.clientInstanceId,
       conversationId: input.input.conversationId,
       role: "tool",
-      text: input.modelOutput.content,
+      text: input.modelOutput.text,
       metadata: createToolResultMetadata({
         runId: input.runId,
         toolCall: input.toolCall,
@@ -312,8 +314,12 @@ export class LocalAgentRuntime implements AgentRuntime {
     };
   }
 
-  private modelContextOptions(): ModelContextProjectionOptions {
-    return this.options.modelContext ?? DEFAULT_MODEL_CONTEXT;
+  private modelContextOptions(context: RuntimeCallContext): ModelContextProjectionOptions {
+    return {
+      ...(this.options.modelContext ?? DEFAULT_MODEL_CONTEXT),
+      clientInstanceId: context.clientInstanceId,
+      artifactReader: this.options.artifactReader
+    };
   }
 
   private async completeWithProvider(

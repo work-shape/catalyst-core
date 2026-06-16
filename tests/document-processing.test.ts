@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -10,11 +11,12 @@ import {
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 import {
   createAttachmentManifest,
+  DocumentPageRenderService,
   DocumentPreprocessingService,
   InMemoryObjectStore,
-  MarkItDownDocumentTextConverter,
+  PlatformDocumentPreprocessor,
   resolveS3Credentials,
-  type DocumentTextConverter
+  type DocumentPreprocessor
 } from "@vivd-catalyst/document-processing";
 
 describe("document preprocessing", () => {
@@ -39,10 +41,11 @@ describe("document preprocessing", () => {
 
     const read = await service.readDocument({
       conversationId,
-      fileId: ready.fileId
+      fileId: ready.fileId,
+      mode: "full"
     });
 
-    expect(read.preparedDocumentId).toBe(ready.preparedDocumentId);
+    expect(read.artifactId).toBe(ready.preparedTextArtifactId);
     expect(read.text).toBe("first page words\nsecond line");
     expect(read.metadata).toMatchObject({
       filename: "notes.txt",
@@ -147,18 +150,105 @@ describe("document preprocessing", () => {
     ).toBeUndefined();
   });
 
+  const pdfTest = hasPdfTooling() ? it : it.skip;
+  pdfTest("extracts PDF text page-by-page and renders selected pages", async () => {
+    const clientInstanceId = asClientInstanceId("document-client");
+    const store = new InMemoryPlatformStore();
+    const objectStore = new InMemoryObjectStore();
+    const config = createPreprocessingConfig();
+    const service = new DocumentPreprocessingService({
+      clientInstanceId,
+      store,
+      objectStore,
+      preprocessor: new PlatformDocumentPreprocessor(config),
+      config
+    });
+    const viewer = new DocumentPageRenderService({
+      clientInstanceId,
+      store,
+      objectStore,
+      timeoutMs: config.timeoutMs
+    });
+    const conversation = await store.createConversation({
+      clientInstanceId,
+      ownerUserId: "user-1",
+      ownerExternalUserId: "user-1",
+      title: "PDF",
+      retainedUntil: new Date(Date.now() + 86_400_000).toISOString()
+    });
+
+    const attachment = await service.uploadDraftAttachment({
+      conversationId: conversation.id,
+      ownerUserId: "user-1",
+      filename: "sample.pdf",
+      mimeType: "application/pdf",
+      bytes: createTwoPagePdf()
+    });
+    const ready = await waitForAttachment(store, attachment.id, "ready");
+
+    expect(ready).toMatchObject({
+      status: "ready",
+      format: "pdf",
+      pageCount: 2,
+      preprocessingEngine: "platform_pdf"
+    });
+    expect(ready.preparedTextArtifactId).toBeDefined();
+    expect(ready.preparedPagesArtifactId).toBeDefined();
+
+    const full = await service.readDocument({
+      conversationId: conversation.id,
+      fileId: ready.fileId,
+      mode: "full"
+    });
+    expect(full.text).toContain("[Page 1]");
+    expect(full.text).toContain("First page alpha");
+    expect(full.text).toContain("[Page 2]");
+    expect(full.text).toContain("Second page beta");
+    expect("pages" in full).toBe(false);
+
+    const pageTwo = await service.readDocument({
+      conversationId: conversation.id,
+      fileId: ready.fileId,
+      mode: "pages",
+      pages: {
+        from: 2,
+        to: 2
+      }
+    });
+    expect(pageTwo.pages).toHaveLength(1);
+    expect(pageTwo.pages[0]?.pageNumber).toBe(2);
+    expect(pageTwo.text).toContain("Second page beta");
+    expect(pageTwo.text).not.toContain("First page alpha");
+
+    const rendered = await viewer.viewPage({
+      conversationId: conversation.id,
+      fileId: ready.fileId,
+      pageNumber: 2
+    });
+    const artifact = await store.getManagedArtifact({
+      clientInstanceId,
+      artifactId: rendered.image.artifactId
+    });
+    expect(artifact).toMatchObject({
+      kind: "document.page_image",
+      mimeType: "image/png"
+    });
+    const imageBytes = await objectStore.getObject(artifact?.objectKey ?? "");
+    expect([...imageBytes.slice(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+  }, 40000);
+
   it("reports a clear setup error when markitdown is unavailable", async () => {
     const binDirectory = await mkdtemp(path.join(tmpdir(), "vivd-test-empty-bin-"));
     const originalPath = process.env.PATH;
     process.env.PATH = binDirectory;
 
     try {
-      const converter = new MarkItDownDocumentTextConverter(createPreprocessingConfig());
+      const converter = new PlatformDocumentPreprocessor(createPreprocessingConfig());
       await expect(
         converter.convert({
           filename: "missing-converter.txt",
-          mimeType: "application/pdf",
-          format: "pdf",
+          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          format: "docx",
           bytes: new TextEncoder().encode("fallback text")
         })
       ).rejects.toThrow(
@@ -179,7 +269,7 @@ async function createDocumentFixture() {
     clientInstanceId,
     store,
     objectStore,
-    converter: createUtf8Converter(),
+    preprocessor: createUtf8Preprocessor(),
     config: createPreprocessingConfig()
   });
   const conversation = await store.createConversation({
@@ -196,11 +286,14 @@ async function createDocumentFixture() {
   };
 }
 
-function createUtf8Converter(): DocumentTextConverter {
+function createUtf8Preprocessor(): DocumentPreprocessor {
   return {
     async convert(input) {
       return {
-        text: new TextDecoder().decode(input.bytes)
+        engine: "direct_text",
+        text: new TextDecoder().decode(input.bytes),
+        textMimeType: input.format === "md" ? "text/markdown" : "text/plain",
+        warnings: []
       };
     }
   };
@@ -212,14 +305,57 @@ function createPreprocessingConfig(): DocumentPreprocessingConfig {
     supportedFormats: ["pdf", "docx", "txt", "md"],
     maxFileBytes: 1024 * 1024,
     maxExtractedTextBytes: 1024 * 1024,
-    timeoutMs: 10000,
+    timeoutMs: 30000,
     perConversationConcurrency: 2,
     globalConcurrency: 4,
-    converterCommand: "markitdown",
-    converterArgs: [],
     preprocessingVersion: "test-preprocessing"
   };
 }
+
+function hasPdfTooling(): boolean {
+  return (
+    commandWorks(DEFAULT_DOCUMENT_COMMANDS.pdfInfo, ["-v"]) &&
+    commandWorks(DEFAULT_DOCUMENT_COMMANDS.pdfRenderer, ["-v"]) &&
+    commandWorks(DEFAULT_DOCUMENT_COMMANDS.python, ["-c", "import pdfplumber, pypdf, reportlab"])
+  );
+}
+
+function commandWorks(command: string, args: string[]): boolean {
+  const result = spawnSync(command, args, {
+    stdio: "ignore"
+  });
+  return result.status === 0;
+}
+
+function createTwoPagePdf(): Uint8Array {
+  const script = String.raw`
+from io import BytesIO
+import sys
+from reportlab.pdfgen import canvas
+
+buffer = BytesIO()
+pdf = canvas.Canvas(buffer, pagesize=(612, 792))
+for text in ("First page alpha", "Second page beta"):
+    pdf.setFont("Helvetica", 18)
+    pdf.drawString(72, 720, text)
+    pdf.showPage()
+pdf.save()
+sys.stdout.buffer.write(buffer.getvalue())
+`;
+  const result = spawnSync(DEFAULT_DOCUMENT_COMMANDS.python, ["-c", script], {
+    maxBuffer: 1024 * 1024
+  });
+  if (result.status !== 0) {
+    throw new Error(result.stderr.toString("utf8") || "Failed to generate PDF fixture");
+  }
+  return new Uint8Array(result.stdout);
+}
+
+const DEFAULT_DOCUMENT_COMMANDS = {
+  python: "python3",
+  pdfInfo: "pdfinfo",
+  pdfRenderer: "pdftoppm"
+};
 
 function restorePath(originalPath: string | undefined): void {
   if (originalPath === undefined) {

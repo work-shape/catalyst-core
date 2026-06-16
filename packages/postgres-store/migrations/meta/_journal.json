@@ -8,6 +8,13 @@
       "when": 1781510068624,
       "tag": "0000_amazing_sunfire",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781627619197,
+      "tag": "0001_fair_magdalene",
+      "breakpoints": true
     }
   ]
 }

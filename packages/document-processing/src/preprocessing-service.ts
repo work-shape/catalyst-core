@@ -5,16 +5,14 @@ import {
   type ConversationAttachmentId,
   type ConversationId,
   type DocumentAttachmentStore,
-  type DocumentAttachmentWarning,
   type DocumentFileFormat,
   type DocumentPreprocessingConfig,
   type DraftAttachment,
-  asConversationAttachmentId,
-  createPlatformId
+  asConversationAttachmentId
 } from "@vivd-catalyst/core";
 import { createChecksum, createObjectKey } from "./object-keys";
 import { AsyncLimiter } from "./concurrency";
-import type { DocumentTextConverter } from "./converter";
+import type { DocumentPreprocessor } from "./converter";
 import {
   DocumentReadService,
   type ReadDocumentInput,
@@ -22,13 +20,13 @@ import {
 } from "./document-read-service";
 import { detectDocumentFormat, extensionFromFilename } from "./document-format";
 import type { ObjectStore } from "./object-store";
-import { boundPreparedText, countWords } from "./prepared-text";
+import { PreparedDocumentArtifactPipeline } from "./prepared-document-artifacts";
 
 export interface DocumentPreprocessingServiceOptions {
   clientInstanceId: ClientInstanceId;
   store: DocumentAttachmentStore;
   objectStore: ObjectStore;
-  converter: DocumentTextConverter;
+  preprocessor: DocumentPreprocessor;
   config: DocumentPreprocessingConfig;
 }
 
@@ -44,9 +42,10 @@ export class DocumentPreprocessingService {
   private readonly clientInstanceId: ClientInstanceId;
   private readonly store: DocumentAttachmentStore;
   private readonly objectStore: ObjectStore;
-  private readonly converter: DocumentTextConverter;
+  private readonly preprocessor: DocumentPreprocessor;
   private readonly config: DocumentPreprocessingConfig;
   private readonly reader: DocumentReadService;
+  private readonly artifactPipeline: PreparedDocumentArtifactPipeline;
   private readonly globalLimiter: AsyncLimiter;
   private readonly conversationLimiters = new Map<string, AsyncLimiter>();
 
@@ -54,12 +53,19 @@ export class DocumentPreprocessingService {
     this.clientInstanceId = options.clientInstanceId;
     this.store = options.store;
     this.objectStore = options.objectStore;
-    this.converter = options.converter;
+    this.preprocessor = options.preprocessor;
     this.config = options.config;
     this.reader = new DocumentReadService({
       clientInstanceId: options.clientInstanceId,
       store: options.store,
       objectStore: options.objectStore,
+      preprocessingVersion: options.config.preprocessingVersion
+    });
+    this.artifactPipeline = new PreparedDocumentArtifactPipeline({
+      clientInstanceId: options.clientInstanceId,
+      store: options.store,
+      objectStore: options.objectStore,
+      maxExtractedTextBytes: options.config.maxExtractedTextBytes,
       preprocessingVersion: options.config.preprocessingVersion
     });
     this.globalLimiter = new AsyncLimiter(options.config.globalConcurrency);
@@ -233,48 +239,31 @@ export class DocumentPreprocessingService {
         throw new AppError("NOT_FOUND", "Managed file is not available");
       }
       const originalBytes = await this.objectStore.getObject(file.objectKey);
-      const converted = await this.converter.convert({
+      const converted = await this.preprocessor.convert({
         bytes: originalBytes,
         filename: attachment.filename,
         mimeType: attachment.mimeType,
         format: attachment.format
       });
-      const bounded = boundPreparedText(converted.text, this.config.maxExtractedTextBytes);
-      const warnings: DocumentAttachmentWarning[] = [...bounded.warnings];
-      if (bounded.text.trim().length === 0) {
-        warnings.push({
-          code: "no_extractable_text",
-          message: "The document was processed, but no extractable text was found."
-        });
-      }
-      if (attachment.format === "pdf") {
-        warnings.push({
-          code: "page_count_unavailable",
-          message: "Page count is not available from the v1 preprocessing converter."
-        });
-      }
-      const preparedDocumentId = createPlatformId<"PreparedDocumentId">("doc");
-      const preparedObjectKey = createObjectKey({
-        clientInstanceId: this.clientInstanceId,
+      const prepared = await this.artifactPipeline.writePreparedDocumentArtifacts({
         conversationId: attachment.conversationId,
-        segment: "prepared-text",
-        extension: "txt"
-      });
-      await this.objectStore.putObject({
-        key: preparedObjectKey,
-        body: new TextEncoder().encode(bounded.text),
-        contentType: "text/plain; charset=utf-8"
+        sourceFileId: attachment.fileId,
+        filename: attachment.filename,
+        format: attachment.format,
+        converted
       });
 
       await this.store.updateConversationAttachment({
         clientInstanceId: this.clientInstanceId,
         attachmentId,
         status: "ready",
-        preparedDocumentId,
-        preparedObjectKey,
-        characterCount: bounded.text.length,
-        wordCount: countWords(bounded.text),
-        warnings,
+        preparedTextArtifactId: prepared.preparedTextArtifact.id,
+        preparedPagesArtifactId: prepared.preparedPagesArtifact?.id ?? null,
+        preprocessingEngine: converted.engine,
+        characterCount: prepared.characterCount,
+        wordCount: prepared.wordCount,
+        pageCount: prepared.pageCount,
+        warnings: prepared.warnings,
         preprocessingCompletedAt: new Date().toISOString(),
         error: null
       });

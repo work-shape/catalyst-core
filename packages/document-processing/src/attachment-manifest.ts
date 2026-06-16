@@ -68,7 +68,10 @@ export function toPreparedDocumentMetadata(
     characterCount: attachment.characterCount,
     wordCount: attachment.wordCount,
     pageCount: attachment.pageCount,
+    preparedTextArtifactId: attachment.preparedTextArtifactId ?? undefined,
+    preparedPagesArtifactId: attachment.preparedPagesArtifactId ?? undefined,
     warnings: attachment.warnings,
-    preprocessingVersion
+    preprocessingVersion,
+    preprocessingEngine: attachment.preprocessingEngine
   };
 }

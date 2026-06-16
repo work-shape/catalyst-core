@@ -166,6 +166,20 @@ export class InMemoryPlatformStore
     return this.documentAttachments.getManagedFile(input);
   }
 
+  async createManagedArtifact(input: Parameters<DocumentAttachmentStore["createManagedArtifact"]>[0]) {
+    return this.documentAttachments.createManagedArtifact(input);
+  }
+
+  async getManagedArtifact(input: Parameters<DocumentAttachmentStore["getManagedArtifact"]>[0]) {
+    return this.documentAttachments.getManagedArtifact(input);
+  }
+
+  async listManagedArtifactsForFile(
+    input: Parameters<DocumentAttachmentStore["listManagedArtifactsForFile"]>[0]
+  ) {
+    return this.documentAttachments.listManagedArtifactsForFile(input);
+  }
+
   async createConversationAttachment(
     input: Parameters<DocumentAttachmentStore["createConversationAttachment"]>[0]
   ) {

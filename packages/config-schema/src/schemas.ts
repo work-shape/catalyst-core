@@ -217,8 +217,6 @@ const documentsConfigSchema = z
         timeoutMs: z.number().int().positive().default(120000),
         perConversationConcurrency: z.number().int().positive().default(2),
         globalConcurrency: z.number().int().positive().default(8),
-        converterCommand: z.string().min(1).default("markitdown"),
-        converterArgs: z.array(z.string()).default([]),
         preprocessingVersion: z.string().min(1).default("document-preprocessing-v1")
       })
       .default({
@@ -229,8 +227,6 @@ const documentsConfigSchema = z
         timeoutMs: 120000,
         perConversationConcurrency: 2,
         globalConcurrency: 8,
-        converterCommand: "markitdown",
-        converterArgs: [],
         preprocessingVersion: "document-preprocessing-v1"
       }),
     objectStorage: z
@@ -259,8 +255,6 @@ const documentsConfigSchema = z
       timeoutMs: 120000,
       perConversationConcurrency: 2,
       globalConcurrency: 8,
-      converterCommand: "markitdown",
-      converterArgs: [],
       preprocessingVersion: "document-preprocessing-v1"
     },
     objectStorage: {

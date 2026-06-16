@@ -1,11 +1,12 @@
 import { AppError, createPlatformId } from "@vivd-catalyst/core";
-import type {
-  ModelCompletion,
-  ModelCompletionRequest,
-  ModelCompletionStreamEvent,
-  ModelProvider,
-  ModelTool,
-  ModelToolCall
+import {
+  modelContentText,
+  type ModelCompletion,
+  type ModelCompletionRequest,
+  type ModelCompletionStreamEvent,
+  type ModelProvider,
+  type ModelTool,
+  type ModelToolCall
 } from "./types";
 
 export class DeterministicModelProvider implements ModelProvider {
@@ -19,14 +20,14 @@ export class DeterministicModelProvider implements ModelProvider {
     const toolMessages = request.messages.filter((message) => message.role === "tool");
     if (toolMessages.length > 0) {
       return {
-        text: `Tool work completed:\n\n${toolMessages.map((message) => message.content).join("\n\n")}`,
+        text: `Tool work completed:\n\n${toolMessages.map((message) => modelContentText(message.content)).join("\n\n")}`,
         toolCalls: [],
         usage: noReportedUsage()
       };
     }
 
     const lastUserMessage = [...request.messages].reverse().find((message) => message.role === "user");
-    const content = lastUserMessage?.content.trim() ?? "";
+    const content = modelContentText(lastUserMessage?.content ?? "").trim();
     if (isConversationTitleRequest(request)) {
       return {
         text: createDeterministicConversationTitle(content),
@@ -77,8 +78,8 @@ function isConversationTitleRequest(request: ModelCompletionRequest): boolean {
   return request.messages.some(
     (message) =>
       message.role === "system" &&
-      /short neutral headline/u.test(message.content) &&
-      /conversation list/u.test(message.content)
+      /short neutral headline/u.test(modelContentText(message.content)) &&
+      /conversation list/u.test(modelContentText(message.content))
   );
 }
 

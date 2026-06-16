@@ -4,6 +4,7 @@ import {
   asClientInstanceId,
   asConversationId,
   asConversationAttachmentId,
+  asManagedArtifactId,
   asManagedFileId,
   asMessageId,
   type AttachmentManifest,
@@ -17,9 +18,10 @@ import {
   createToolResultMetadata,
   projectAgentVisibleHistory
 } from "../packages/agent-runtime/src/model-context-projection";
+import { modelContentImages, modelContentText } from "@vivd-catalyst/model-provider";
 
 describe("model context projection", () => {
-  it("replays tool calls and model-visible output without exposing private result fields", () => {
+  it("replays tool calls and model-visible output without exposing private result fields", async () => {
     const runId = asAgentRunId("run_projection");
     const toolCall = {
       toolCallId: "toolcall_projection",
@@ -46,13 +48,13 @@ describe("model context projection", () => {
         }
       }
     };
-    const modelOutput = createModelVisibleToolOutput(result, modelContextOptions());
+    const modelOutput = await createModelVisibleToolOutput(result, modelContextOptions());
     const messages = [
       createMessage("user", "Show me the account dashboard"),
       createMessage("assistant", "", createAssistantToolCallsMetadata({ runId, toolCalls: [toolCall] })),
       createMessage(
         "tool",
-        modelOutput.content,
+        modelOutput.text,
         createToolResultMetadata({
           runId,
           toolCall,
@@ -62,7 +64,7 @@ describe("model context projection", () => {
       )
     ];
 
-    const projected = projectAgentVisibleHistory(messages, modelContextOptions());
+    const projected = await projectAgentVisibleHistory(messages, modelContextOptions());
     const projectedJson = JSON.stringify(projected);
 
     expect(projected).toHaveLength(3);
@@ -82,14 +84,14 @@ describe("model context projection", () => {
       role: "tool",
       toolCallId: "toolcall_projection"
     });
-    expect(projected[2]?.content).toContain("Data has been displayed to the user.");
+    expect(modelContentText(projected[2]?.content ?? "")).toContain("Data has been displayed to the user.");
     expect(JSON.stringify(messages[2]?.metadata)).toContain("Private Customer");
     expect(projectedJson).not.toContain("Private Customer");
     expect(projectedJson).not.toContain("1200000");
     expect(projectedJson).not.toContain("private_hydrated_view");
   });
 
-  it("replays tool errors so the model can correct invalid tool calls", () => {
+  it("replays tool errors so the model can correct invalid tool calls", async () => {
     const runId = asAgentRunId("run_projection_error");
     const toolCall = {
       toolCallId: "toolcall_projection_error",
@@ -108,13 +110,13 @@ describe("model context projection", () => {
         }
       }
     };
-    const modelOutput = createModelVisibleToolOutput(result, modelContextOptions());
-    const projected = projectAgentVisibleHistory(
+    const modelOutput = await createModelVisibleToolOutput(result, modelContextOptions());
+    const projected = await projectAgentVisibleHistory(
       [
         createMessage("assistant", "", createAssistantToolCallsMetadata({ runId, toolCalls: [toolCall] })),
         createMessage(
           "tool",
-          modelOutput.content,
+          modelOutput.text,
           createToolResultMetadata({
             runId,
             toolCall,
@@ -130,11 +132,11 @@ describe("model context projection", () => {
       role: "tool",
       toolCallId: "toolcall_projection_error"
     });
-    expect(projected[1]?.content).toContain("validation_failed");
-    expect(projected[1]?.content).toContain("Expected string");
+    expect(modelContentText(projected[1]?.content ?? "")).toContain("validation_failed");
+    expect(modelContentText(projected[1]?.content ?? "")).toContain("Expected string");
   });
 
-  it("projects user attachment manifests without embedding document text", () => {
+  it("projects user attachment manifests without embedding document text", async () => {
     const manifest: AttachmentManifest = {
       version: 1,
       attachments: [
@@ -157,7 +159,7 @@ describe("model context projection", () => {
         }
       ]
     };
-    const projected = projectAgentVisibleHistory(
+    const projected = await projectAgentVisibleHistory(
       [
         createMessage("user", "Summarize the attachment", {
           agentRuntime: {
@@ -170,9 +172,87 @@ describe("model context projection", () => {
       modelContextOptions()
     );
 
-    expect(projected[0]?.content).toContain("contract.pdf");
-    expect(projected[0]?.content).toContain('read_document({ "fileId": "file_contract" })');
-    expect(projected[0]?.content).not.toContain("Raw contract body");
+    const content = modelContentText(projected[0]?.content ?? "");
+    expect(content).toContain("contract.pdf");
+    expect(content).toContain('read_document({ "fileId": "file_contract", "mode": "full" })');
+    expect(content).toContain("view_document_page");
+    expect(content).not.toContain("Raw contract body");
+  });
+
+  it("loads model-visible image artifacts without storing base64 in history metadata", async () => {
+    const runId = asAgentRunId("run_projection_image");
+    const artifactId = asManagedArtifactId("art_page_image");
+    const toolCall = {
+      toolCallId: "toolcall_projection_image",
+      toolName: "view_document_page",
+      input: {
+        fileId: "file_contract",
+        pageNumber: 2
+      }
+    };
+    const result: ToolExecutionResult = {
+      status: "success",
+      output: {
+        fileId: "file_contract",
+        pageNumber: 2,
+        pageCount: 4,
+        dpi: 160,
+        image: {
+          artifactId,
+          mimeType: "image/png",
+          byteSize: 8,
+          checksum: "checksum"
+        }
+      },
+      artifacts: [
+        {
+          artifactId,
+          kind: "document.page_image",
+          mimeType: "image/png",
+          modelVisibility: {
+            type: "image",
+            mimeType: "image/png"
+          },
+          metadata: {
+            pageNumber: 2,
+            dpi: 160
+          }
+        }
+      ]
+    };
+    const imageBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    const options = {
+      ...modelContextOptions(),
+      clientInstanceId: asClientInstanceId("projection-client"),
+      artifactReader: {
+        async readArtifact() {
+          return {
+            bytes: imageBytes,
+            mimeType: "image/png"
+          };
+        }
+      }
+    };
+
+    const modelOutput = await createModelVisibleToolOutput(result, options);
+    const metadata = createToolResultMetadata({
+      runId,
+      toolCall,
+      result,
+      modelOutput
+    });
+    const projected = await projectAgentVisibleHistory(
+      [
+        createMessage("assistant", "", createAssistantToolCallsMetadata({ runId, toolCalls: [toolCall] })),
+        createMessage("tool", modelOutput.text, metadata)
+      ],
+      options
+    );
+
+    expect(modelContentText(modelOutput.content)).toContain("[Visual context loaded]");
+    expect(modelContentImages(modelOutput.content)).toHaveLength(1);
+    expect(modelContentImages(projected[1]?.content ?? "")[0]?.data).toEqual(imageBytes);
+    expect(JSON.stringify(metadata)).not.toContain("iVBOR");
   });
 });
 

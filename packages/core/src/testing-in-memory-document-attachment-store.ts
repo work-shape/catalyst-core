@@ -4,10 +4,14 @@ import {
   type ConversationAttachment,
   type ConversationAttachmentId,
   type ConversationId,
+  type CreateManagedArtifactInput,
   type CreateConversationAttachmentInput,
   type CreateManagedFileInput,
   type DocumentAttachmentStore,
   type DraftAttachment,
+  type ManagedArtifactId,
+  type ManagedArtifactKind,
+  type ManagedArtifactRecord,
   type ManagedFileId,
   type ManagedFileRecord,
   type MessageId,
@@ -36,6 +40,7 @@ export function createInMemoryDocumentAttachmentStore(
 
 class InMemoryDocumentAttachmentStoreImpl implements InMemoryDocumentAttachmentStore {
   private readonly managedFiles = new Map<string, ManagedFileRecord>();
+  private readonly managedArtifacts = new Map<string, ManagedArtifactRecord>();
   private readonly conversationAttachments = new Map<string, ConversationAttachment>();
 
   constructor(private readonly callbacks: InMemoryDocumentAttachmentCallbacks) {}
@@ -66,6 +71,55 @@ class InMemoryDocumentAttachmentStoreImpl implements InMemoryDocumentAttachmentS
       return undefined;
     }
     return file;
+  }
+
+  async createManagedArtifact(input: CreateManagedArtifactInput): Promise<ManagedArtifactRecord> {
+    const artifact: ManagedArtifactRecord = {
+      id: createPlatformId("art"),
+      clientInstanceId: input.clientInstanceId,
+      conversationId: input.conversationId,
+      sourceFileId: input.sourceFileId,
+      kind: input.kind,
+      objectKey: input.objectKey,
+      filename: input.filename,
+      mimeType: input.mimeType,
+      byteSize: input.byteSize,
+      checksum: input.checksum,
+      metadata: input.metadata ?? {},
+      status: "available",
+      createdAt: new Date().toISOString()
+    };
+    this.managedArtifacts.set(artifact.id, artifact);
+    return artifact;
+  }
+
+  async getManagedArtifact(input: {
+    clientInstanceId: ClientInstanceId;
+    artifactId: ManagedArtifactId;
+  }): Promise<ManagedArtifactRecord | undefined> {
+    const artifact = this.managedArtifacts.get(input.artifactId);
+    if (!artifact || artifact.clientInstanceId !== input.clientInstanceId || artifact.status === "deleted") {
+      return undefined;
+    }
+    return artifact;
+  }
+
+  async listManagedArtifactsForFile(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    fileId: ManagedFileId;
+    kind?: ManagedArtifactKind;
+  }): Promise<ManagedArtifactRecord[]> {
+    return [...this.managedArtifacts.values()]
+      .filter(
+        (artifact) =>
+          artifact.clientInstanceId === input.clientInstanceId &&
+          artifact.conversationId === input.conversationId &&
+          artifact.sourceFileId === input.fileId &&
+          artifact.status !== "deleted" &&
+          (input.kind === undefined || artifact.kind === input.kind)
+      )
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   }
 
   async createConversationAttachment(
@@ -137,14 +191,15 @@ class InMemoryDocumentAttachmentStoreImpl implements InMemoryDocumentAttachmentS
       ...existing,
       status: input.status ?? existing.status,
       format: input.format ?? existing.format,
-      preparedDocumentId:
-        input.preparedDocumentId === undefined
-          ? existing.preparedDocumentId
-          : (input.preparedDocumentId ?? undefined),
-      preparedObjectKey:
-        input.preparedObjectKey === undefined
-          ? existing.preparedObjectKey
-          : (input.preparedObjectKey ?? undefined),
+      preparedTextArtifactId:
+        input.preparedTextArtifactId === undefined
+          ? existing.preparedTextArtifactId
+          : (input.preparedTextArtifactId ?? undefined),
+      preparedPagesArtifactId:
+        input.preparedPagesArtifactId === undefined
+          ? existing.preparedPagesArtifactId
+          : (input.preparedPagesArtifactId ?? undefined),
+      preprocessingEngine: input.preprocessingEngine ?? existing.preprocessingEngine,
       characterCount: input.characterCount ?? existing.characterCount,
       wordCount: input.wordCount ?? existing.wordCount,
       pageCount: input.pageCount ?? existing.pageCount,
@@ -217,7 +272,7 @@ class InMemoryDocumentAttachmentStoreImpl implements InMemoryDocumentAttachmentS
           attachment.conversationId === input.conversationId &&
           attachment.fileId === input.fileId &&
           attachment.status === "ready" &&
-          Boolean(attachment.preparedObjectKey)
+          Boolean(attachment.preparedTextArtifactId)
       )
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
   }
@@ -237,6 +292,18 @@ class InMemoryDocumentAttachmentStoreImpl implements InMemoryDocumentAttachmentS
           status: "deleted",
           deletedAt: input.deletedAt,
           updatedAt: input.deletedAt
+        });
+      }
+    }
+    for (const artifact of this.managedArtifacts.values()) {
+      if (
+        artifact.clientInstanceId === input.clientInstanceId &&
+        artifact.conversationId === input.conversationId
+      ) {
+        this.managedArtifacts.set(artifact.id, {
+          ...artifact,
+          status: "deleted",
+          deletedAt: input.deletedAt
         });
       }
     }

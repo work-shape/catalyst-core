@@ -13,6 +13,7 @@ import type {
   ChatMessage,
   ConversationAttachment,
   Conversation,
+  ManagedArtifactRecord,
   ManagedFileRecord,
   ModelUsageEvent,
   UserRecord
@@ -149,8 +150,9 @@ export const conversationAttachments = pgTable(
     checksum: text("checksum").notNull(),
     status: text("status").$type<ConversationAttachment["status"]>().notNull(),
     format: text("format").$type<ConversationAttachment["format"]>(),
-    preparedDocumentId: text("prepared_document_id"),
-    preparedObjectKey: text("prepared_object_key"),
+    preparedTextArtifactId: text("prepared_text_artifact_id"),
+    preparedPagesArtifactId: text("prepared_pages_artifact_id"),
+    preprocessingEngine: text("preprocessing_engine"),
     characterCount: integer("character_count"),
     wordCount: integer("word_count"),
     pageCount: integer("page_count"),
@@ -170,6 +172,39 @@ export const conversationAttachments = pgTable(
       table.updatedAt
     ),
     index("conversation_attachments_file_idx").on(table.clientInstanceId, table.conversationId, table.fileId)
+  ]
+);
+
+export const managedArtifacts = pgTable(
+  "managed_artifacts",
+  {
+    id: text("id").primaryKey(),
+    clientInstanceId: text("client_instance_id").notNull(),
+    conversationId: text("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    sourceFileId: text("source_file_id").references(() => managedFiles.id, { onDelete: "restrict" }),
+    kind: text("kind").$type<ManagedArtifactRecord["kind"]>().notNull(),
+    objectKey: text("object_key").notNull(),
+    filename: text("filename"),
+    mimeType: text("mime_type").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    checksum: text("checksum").notNull(),
+    metadata: jsonb("metadata").$type<ManagedArtifactRecord["metadata"]>().notNull(),
+    status: text("status").$type<ManagedArtifactRecord["status"]>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true })
+  },
+  (table) => [
+    index("managed_artifacts_conversation_idx").on(table.clientInstanceId, table.conversationId),
+    index("managed_artifacts_file_kind_idx").on(
+      table.clientInstanceId,
+      table.conversationId,
+      table.sourceFileId,
+      table.kind,
+      table.createdAt.desc()
+    ),
+    index("managed_artifacts_object_key_idx").on(table.clientInstanceId, table.objectKey)
   ]
 );
 
@@ -223,6 +258,7 @@ export const schema = {
   conversations,
   messages,
   managedFiles,
+  managedArtifacts,
   conversationAttachments,
   auditEvents,
   modelUsageEvents

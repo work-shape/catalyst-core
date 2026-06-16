@@ -111,8 +111,6 @@ export interface DocumentPreprocessingConfig {
   timeoutMs: number;
   perConversationConcurrency: number;
   globalConcurrency: number;
-  converterCommand: string;
-  converterArgs: string[];
   preprocessingVersion: string;
 }
 

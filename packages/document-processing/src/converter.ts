@@ -1,8 +1,16 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { DocumentFileFormat, DocumentPreprocessingConfig } from "@vivd-catalyst/core";
+import type {
+  DocumentAttachmentWarning,
+  DocumentFileFormat,
+  DocumentPreprocessingConfig
+} from "@vivd-catalyst/core";
+import {
+  createDefaultDocumentExecutionEnvironment,
+  type DocumentExecutionEnvironment
+} from "./execution-environment";
 
 export interface ConvertDocumentInput {
   bytes: Uint8Array;
@@ -11,40 +19,119 @@ export interface ConvertDocumentInput {
   format: DocumentFileFormat;
 }
 
-export interface ConvertDocumentOutput {
+export interface PreparedPdfPage {
+  pageNumber: number;
   text: string;
+  characterCount: number;
+  wordCount: number;
+  warnings: DocumentAttachmentWarning[];
 }
 
-export interface DocumentTextConverter {
+export interface PreparedPdfPagesArtifact {
+  format: "pdf";
+  pageCount: number;
+  pages: PreparedPdfPage[];
+}
+
+export interface ConvertDocumentOutput {
+  engine: "platform_pdf" | "markitdown" | "direct_text";
+  text: string;
+  textMimeType: "text/plain" | "text/markdown";
+  pageCount?: number;
+  pages?: PreparedPdfPagesArtifact;
+  warnings: DocumentAttachmentWarning[];
+}
+
+export interface DocumentPreprocessor {
   convert(input: ConvertDocumentInput): Promise<ConvertDocumentOutput>;
 }
 
-export class MarkItDownDocumentTextConverter implements DocumentTextConverter {
+export class PlatformDocumentPreprocessor implements DocumentPreprocessor {
   private readonly config: DocumentPreprocessingConfig;
+  private readonly environment: DocumentExecutionEnvironment;
 
-  constructor(config: DocumentPreprocessingConfig) {
+  constructor(
+    config: DocumentPreprocessingConfig,
+    environment: DocumentExecutionEnvironment = createDefaultDocumentExecutionEnvironment()
+  ) {
     this.config = config;
+    this.environment = environment;
   }
 
   async convert(input: ConvertDocumentInput): Promise<ConvertDocumentOutput> {
     if (input.format === "txt" || input.format === "md") {
       return {
-        text: decodeUtf8(input.bytes)
+        engine: "direct_text",
+        text: decodeUtf8(input.bytes),
+        textMimeType: input.format === "md" ? "text/markdown" : "text/plain",
+        warnings: []
       };
     }
 
+    if (input.format === "pdf") {
+      return this.convertPdf(input);
+    }
+
+    return this.convertWithMarkItDown(input);
+  }
+
+  private async convertPdf(input: ConvertDocumentInput): Promise<ConvertDocumentOutput> {
+    const directory = await mkdtemp(path.join(tmpdir(), "vivd-pdf-"));
+    const inputPath = path.join(directory, sanitizeTempFilename(input.filename));
+    const textPath = path.join(directory, "prepared.txt");
+    const pagesPath = path.join(directory, "pages.json");
+    const scriptPath = path.join(directory, "extract_pdf_pages.py");
+    await writeFile(inputPath, input.bytes);
+    await writeFile(scriptPath, PDF_EXTRACT_SCRIPT);
+    try {
+      const pdfInfoPageCount = await readPdfInfoPageCount({
+        command: this.environment.commands.pdfInfo,
+        inputPath,
+        timeoutMs: this.config.timeoutMs
+      });
+      await runCommand({
+        command: this.environment.commands.python,
+        args: [scriptPath, inputPath, textPath, pagesPath],
+        timeoutMs: this.config.timeoutMs
+      });
+      const text = await readFile(textPath, "utf8");
+      const pages = parsePreparedPdfPages(await readFile(pagesPath, "utf8"));
+      const warnings: DocumentAttachmentWarning[] = [];
+      if (pdfInfoPageCount !== undefined && pdfInfoPageCount !== pages.pageCount) {
+        warnings.push({
+          code: "page_text_unavailable",
+          message: `PDF metadata reported ${pdfInfoPageCount} pages, but text extraction returned ${pages.pageCount} pages.`
+        });
+      }
+      return {
+        engine: "platform_pdf",
+        text,
+        textMimeType: "text/plain",
+        pageCount: pages.pageCount,
+        pages,
+        warnings
+      };
+    } finally {
+      await rm(directory, { force: true, recursive: true });
+    }
+  }
+
+  private async convertWithMarkItDown(input: ConvertDocumentInput): Promise<ConvertDocumentOutput> {
     const directory = await mkdtemp(path.join(tmpdir(), "vivd-doc-"));
     const inputPath = path.join(directory, sanitizeTempFilename(input.filename));
     await writeFile(inputPath, input.bytes);
     try {
-      const args = createConverterArgs(this.config.converterArgs, inputPath);
+      const args = createConverterArgs(this.environment.generalConverterArgs, inputPath);
       const text = await runCommand({
-        command: this.config.converterCommand,
+        command: this.environment.commands.generalConverter,
         args,
         timeoutMs: this.config.timeoutMs
       });
       return {
-        text
+        engine: "markitdown",
+        text,
+        textMimeType: "text/markdown",
+        warnings: []
       };
     } finally {
       await rm(directory, { force: true, recursive: true });
@@ -82,6 +169,36 @@ function isMissingCommandError(error: unknown, command: string): boolean {
   );
 }
 
+async function readPdfInfoPageCount(input: {
+  command: string;
+  inputPath: string;
+  timeoutMs: number;
+}): Promise<number | undefined> {
+  try {
+    const output = await runCommand({
+      command: input.command,
+      args: [input.inputPath],
+      timeoutMs: input.timeoutMs
+    });
+    const line = output
+      .split(/\r?\n/u)
+      .find((candidate) => candidate.toLowerCase().startsWith("pages:"));
+    const value = line?.split(":")[1]?.trim();
+    const parsed = value ? Number.parseInt(value, 10) : Number.NaN;
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function parsePreparedPdfPages(json: string): PreparedPdfPagesArtifact {
+  const parsed = JSON.parse(json) as PreparedPdfPagesArtifact;
+  if (parsed.format !== "pdf" || !Array.isArray(parsed.pages)) {
+    throw new Error("PDF extractor returned invalid page JSON");
+  }
+  return parsed;
+}
+
 function runCommand(input: {
   command: string;
   args: string[];
@@ -93,7 +210,9 @@ function runCommand(input: {
     });
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
+    let settled = false;
     const timeout = setTimeout(() => {
+      settled = true;
       child.kill("SIGKILL");
       reject(new Error(`Document conversion timed out after ${input.timeoutMs}ms`));
     }, input.timeoutMs);
@@ -101,11 +220,15 @@ function runCommand(input: {
     child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
     child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
     child.on("error", (error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
       clearTimeout(timeout);
       if (isMissingCommandError(error, input.command)) {
         reject(
           new Error(
-            `Document converter command '${input.command}' was not found on PATH. Install the converter or configure documents.preprocessing.converterCommand.`
+            `Document converter command '${input.command}' was not found on PATH. Install the converter or configure documents.preprocessing.`
           )
         );
         return;
@@ -113,6 +236,10 @@ function runCommand(input: {
       reject(error);
     });
     child.on("close", (code) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
       clearTimeout(timeout);
       if (code !== 0) {
         const errorText = Buffer.concat(stderr).toString("utf8").trim();
@@ -123,3 +250,63 @@ function runCommand(input: {
     });
   });
 }
+
+const PDF_EXTRACT_SCRIPT = String.raw`
+import json
+import re
+import sys
+
+input_path, text_path, pages_path = sys.argv[1:4]
+
+def word_count(text):
+    return len(re.findall(r"\S+", text))
+
+def page_record(page_number, text, warnings=None):
+    value = text or ""
+    return {
+        "pageNumber": page_number,
+        "text": value,
+        "characterCount": len(value),
+        "wordCount": word_count(value),
+        "warnings": warnings or [],
+    }
+
+pages = []
+try:
+    import pdfplumber
+    with pdfplumber.open(input_path) as pdf:
+        for index, page in enumerate(pdf.pages, start=1):
+            try:
+                text = page.extract_text() or ""
+                pages.append(page_record(index, text))
+            except Exception as error:
+                pages.append(page_record(index, "", [{
+                    "code": "page_text_unavailable",
+                    "message": f"Text extraction failed for page {index}: {error}",
+                }]))
+except Exception:
+    from pypdf import PdfReader
+    reader = PdfReader(input_path)
+    for index, page in enumerate(reader.pages, start=1):
+        try:
+            text = page.extract_text() or ""
+            pages.append(page_record(index, text))
+        except Exception as error:
+            pages.append(page_record(index, "", [{
+                "code": "page_text_unavailable",
+                "message": f"Text extraction failed for page {index}: {error}",
+            }]))
+
+full_text = "\n\n".join(f"[Page {page['pageNumber']}]\n{page['text']}" for page in pages)
+artifact = {
+    "format": "pdf",
+    "pageCount": len(pages),
+    "pages": pages,
+}
+
+with open(text_path, "w", encoding="utf-8") as handle:
+    handle.write(full_text)
+with open(pages_path, "w", encoding="utf-8") as handle:
+    json.dump(artifact, handle, ensure_ascii=False)
+print(json.dumps({"pageCount": len(pages)}))
+`;

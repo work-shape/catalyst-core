@@ -2,9 +2,9 @@ import type {
   ClientInstanceId,
   ConversationAttachmentId,
   ConversationId,
+  ManagedArtifactId,
   ManagedFileId,
-  MessageId,
-  PreparedDocumentId
+  MessageId
 } from "./ids";
 import type { JsonObject } from "./json";
 import type { ISODateString } from "./time";
@@ -16,11 +16,23 @@ export interface ManagedFileRef {
   checksum?: string;
 }
 
+export type ManagedArtifactKind =
+  | "document.prepared_text"
+  | "document.pages_json"
+  | "document.page_image";
+
+export interface ModelVisibleArtifactHint {
+  type: "image";
+  mimeType: "image/png";
+}
+
 export interface ManagedArtifactRef {
-  artifactId: string;
-  kind: string;
+  artifactId: ManagedArtifactId;
+  kind: ManagedArtifactKind;
   filename?: string;
   mimeType?: string;
+  modelVisibility?: ModelVisibleArtifactHint;
+  metadata?: JsonObject;
 }
 
 export type ToolDisplayMode = "inline" | "side_panel" | "fullscreen";
@@ -40,6 +52,7 @@ export interface AuditSafeSummary {
 }
 
 export type ManagedFileStatus = "available" | "deleted";
+export type ManagedArtifactStatus = "available" | "deleted";
 
 export type DocumentFileFormat = "pdf" | "docx" | "txt" | "md";
 
@@ -54,7 +67,9 @@ export type ConversationAttachmentStatus =
 export type DocumentAttachmentWarningCode =
   | "no_extractable_text"
   | "text_truncated"
-  | "page_count_unavailable";
+  | "page_count_unavailable"
+  | "page_text_unavailable"
+  | "page_image_rendered";
 
 export interface DocumentAttachmentWarning {
   code: DocumentAttachmentWarningCode;
@@ -75,6 +90,23 @@ export interface ManagedFileRecord {
   deletedAt?: ISODateString;
 }
 
+export interface ManagedArtifactRecord {
+  id: ManagedArtifactId;
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  sourceFileId?: ManagedFileId;
+  kind: ManagedArtifactKind;
+  objectKey: string;
+  filename?: string;
+  mimeType: string;
+  byteSize: number;
+  checksum: string;
+  metadata: JsonObject;
+  status: ManagedArtifactStatus;
+  createdAt: ISODateString;
+  deletedAt?: ISODateString;
+}
+
 export interface PreparedDocumentMetadata {
   fileId: ManagedFileId;
   filename: string;
@@ -84,8 +116,11 @@ export interface PreparedDocumentMetadata {
   characterCount?: number;
   wordCount?: number;
   pageCount?: number;
+  preparedTextArtifactId?: ManagedArtifactId;
+  preparedPagesArtifactId?: ManagedArtifactId;
   warnings: DocumentAttachmentWarning[];
   preprocessingVersion?: string;
+  preprocessingEngine?: string;
 }
 
 export interface ConversationAttachment {
@@ -100,8 +135,9 @@ export interface ConversationAttachment {
   checksum: string;
   status: ConversationAttachmentStatus;
   format?: DocumentFileFormat;
-  preparedDocumentId?: PreparedDocumentId | null;
-  preparedObjectKey?: string | null;
+  preparedTextArtifactId?: ManagedArtifactId | null;
+  preparedPagesArtifactId?: ManagedArtifactId | null;
+  preprocessingEngine?: string;
   characterCount?: number;
   wordCount?: number;
   pageCount?: number;
@@ -164,8 +200,9 @@ export interface UpdateConversationAttachmentInput {
   attachmentId: ConversationAttachmentId;
   status?: ConversationAttachmentStatus;
   format?: DocumentFileFormat;
-  preparedDocumentId?: PreparedDocumentId | null;
-  preparedObjectKey?: string | null;
+  preparedTextArtifactId?: ManagedArtifactId | null;
+  preparedPagesArtifactId?: ManagedArtifactId | null;
+  preprocessingEngine?: string;
   characterCount?: number;
   wordCount?: number;
   pageCount?: number;
@@ -176,12 +213,36 @@ export interface UpdateConversationAttachmentInput {
   deletedAt?: ISODateString;
 }
 
+export interface CreateManagedArtifactInput {
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  sourceFileId?: ManagedFileId;
+  kind: ManagedArtifactKind;
+  objectKey: string;
+  filename?: string;
+  mimeType: string;
+  byteSize: number;
+  checksum: string;
+  metadata?: JsonObject;
+}
+
 export interface DocumentAttachmentStore {
   createManagedFile(input: CreateManagedFileInput): Promise<ManagedFileRecord>;
   getManagedFile(input: {
     clientInstanceId: ClientInstanceId;
     fileId: ManagedFileId;
   }): Promise<ManagedFileRecord | undefined>;
+  createManagedArtifact(input: CreateManagedArtifactInput): Promise<ManagedArtifactRecord>;
+  getManagedArtifact(input: {
+    clientInstanceId: ClientInstanceId;
+    artifactId: ManagedArtifactId;
+  }): Promise<ManagedArtifactRecord | undefined>;
+  listManagedArtifactsForFile(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    fileId: ManagedFileId;
+    kind?: ManagedArtifactKind;
+  }): Promise<ManagedArtifactRecord[]>;
   createConversationAttachment(
     input: CreateConversationAttachmentInput
   ): Promise<ConversationAttachment>;

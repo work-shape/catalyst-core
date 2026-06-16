@@ -12,19 +12,32 @@ export interface ModelToolCall {
   input: unknown;
 }
 
+export type ModelContentPart =
+  | {
+      type: "text";
+      text: string;
+    }
+  | {
+      type: "image";
+      mimeType: "image/png";
+      data: Uint8Array;
+    };
+
+export type ModelContent = string | ModelContentPart[];
+
 export type ModelMessage =
   | {
       role: "system" | "user";
-      content: string;
+      content: ModelContent;
     }
   | {
       role: "assistant";
-      content: string;
+      content: ModelContent;
       toolCalls?: ModelToolCall[];
     }
   | {
       role: "tool";
-      content: string;
+      content: ModelContent;
       toolCallId: string;
     };
 
@@ -61,4 +74,23 @@ export interface ModelProvider {
     request: ModelCompletionRequest,
     context: RuntimeCallContext
   ): AsyncIterable<ModelCompletionStreamEvent>;
+}
+
+export function modelContentText(content: ModelContent): string {
+  if (typeof content === "string") {
+    return content;
+  }
+  return content
+    .filter((part): part is Extract<ModelContentPart, { type: "text" }> => part.type === "text")
+    .map((part) => part.text)
+    .join("");
+}
+
+export function modelContentImages(
+  content: ModelContent
+): Extract<ModelContentPart, { type: "image" }>[] {
+  if (typeof content === "string") {
+    return [];
+  }
+  return content.filter((part): part is Extract<ModelContentPart, { type: "image" }> => part.type === "image");
 }

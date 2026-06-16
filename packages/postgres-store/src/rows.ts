@@ -5,21 +5,23 @@ import {
   type ClientInstanceId,
   type Conversation,
   type ConversationAttachment,
+  type ManagedArtifactRecord,
   type ModelUsageEvent,
   type ManagedFileRecord,
   type UserIdentity,
   type UserRecord,
   asConversationAttachmentId,
   asConversationId,
+  asManagedArtifactId,
   asManagedFileId,
   asMessageId,
-  asPreparedDocumentId,
   asUserId
 } from "@vivd-catalyst/core";
 import type {
   auditEvents,
   conversationAttachments,
   conversations,
+  managedArtifacts,
   managedFiles,
   messages,
   modelUsageEvents,
@@ -30,6 +32,7 @@ import type {
 export type ConversationRow = typeof conversations.$inferSelect;
 export type MessageRow = typeof messages.$inferSelect;
 export type ManagedFileRow = typeof managedFiles.$inferSelect;
+export type ManagedArtifactRow = typeof managedArtifacts.$inferSelect;
 export type ConversationAttachmentRow = typeof conversationAttachments.$inferSelect;
 export type AuditEventRow = typeof auditEvents.$inferSelect;
 export type ModelUsageEventRow = typeof modelUsageEvents.$inferSelect;
@@ -88,6 +91,28 @@ export function mapManagedFile(row: ManagedFileRow | undefined): ManagedFileReco
   };
 }
 
+export function mapManagedArtifact(row: ManagedArtifactRow | undefined): ManagedArtifactRecord {
+  if (!row) {
+    throw new AppError("INTERNAL", "Expected managed artifact row");
+  }
+  return {
+    id: asManagedArtifactId(row.id),
+    clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    conversationId: asConversationId(row.conversationId),
+    sourceFileId: row.sourceFileId ? asManagedFileId(row.sourceFileId) : undefined,
+    kind: row.kind,
+    objectKey: row.objectKey,
+    filename: row.filename ?? undefined,
+    mimeType: row.mimeType,
+    byteSize: row.byteSize,
+    checksum: row.checksum,
+    metadata: row.metadata,
+    status: row.status,
+    createdAt: row.createdAt.toISOString(),
+    deletedAt: row.deletedAt?.toISOString()
+  };
+}
+
 export function mapConversationAttachment(
   row: ConversationAttachmentRow | undefined
 ): ConversationAttachment {
@@ -106,8 +131,13 @@ export function mapConversationAttachment(
     checksum: row.checksum,
     status: row.status,
     format: row.format ?? undefined,
-    preparedDocumentId: row.preparedDocumentId ? asPreparedDocumentId(row.preparedDocumentId) : undefined,
-    preparedObjectKey: row.preparedObjectKey ?? undefined,
+    preparedTextArtifactId: row.preparedTextArtifactId
+      ? asManagedArtifactId(row.preparedTextArtifactId)
+      : undefined,
+    preparedPagesArtifactId: row.preparedPagesArtifactId
+      ? asManagedArtifactId(row.preparedPagesArtifactId)
+      : undefined,
+    preprocessingEngine: row.preprocessingEngine ?? undefined,
     characterCount: row.characterCount ?? undefined,
     wordCount: row.wordCount ?? undefined,
     pageCount: row.pageCount ?? undefined,

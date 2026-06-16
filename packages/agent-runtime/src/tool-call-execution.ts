@@ -64,14 +64,14 @@ export async function executeToolCall(input: {
         }
       }
     };
-    const modelOutput = createModelVisibleToolOutput(result, input.modelContext);
+    const modelOutput = await createModelVisibleToolOutput(result, input.modelContext);
     input.state.emit({
       type: "tool_call_failed",
       runId: input.runId,
       toolCallId,
       toolName: input.toolCall.toolName,
       result,
-      modelOutput: modelOutput.content,
+      modelOutput: modelOutput.text,
       projectionNotice: modelOutput.notice
     });
     return { result, modelOutput };
@@ -86,14 +86,14 @@ export async function executeToolCall(input: {
         message: decision.reason
       }
     };
-    const modelOutput = createModelVisibleToolOutput(result, input.modelContext);
+    const modelOutput = await createModelVisibleToolOutput(result, input.modelContext);
     input.state.emit({
       type: "tool_call_failed",
       runId: input.runId,
       toolCallId,
       toolName: input.toolCall.toolName,
       result,
-      modelOutput: modelOutput.content,
+      modelOutput: modelOutput.text,
       projectionNotice: modelOutput.notice
     });
     return { result, modelOutput };
@@ -118,7 +118,7 @@ export async function executeToolCall(input: {
     createApprovedToolRequest(request, decision),
     input.context
   );
-  const modelOutput = createModelVisibleToolOutput(result, input.modelContext);
+  const modelOutput = await createModelVisibleToolOutput(result, input.modelContext);
   logProjectionNotice(input, modelOutput);
   input.state.emit({
     type: result.status === "success" ? "tool_call_completed" : "tool_call_failed",
@@ -126,7 +126,7 @@ export async function executeToolCall(input: {
     toolCallId,
     toolName: input.toolCall.toolName,
     result,
-    modelOutput: modelOutput.content,
+    modelOutput: modelOutput.text,
     projectionNotice: modelOutput.notice
   });
 

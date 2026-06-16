@@ -18,14 +18,14 @@ def module_exists(module):
 
 missing = [
     module
-    for module in ("lxml", "mammoth", "pdfminer.high_level", "pdfplumber")
+    for module in ("lxml", "mammoth", "pdfminer.high_level", "pdfplumber", "pypdf")
     if not module_exists(module)
 ]
 sys.exit(1 if missing else 0)
 PY
 }
 
-if command -v markitdown >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1 && has_document_dependencies python3; then
+if command -v markitdown >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1 && command -v pdfinfo >/dev/null 2>&1 && command -v pdftoppm >/dev/null 2>&1 && has_document_dependencies python3; then
   exit 0
 fi
 
@@ -33,8 +33,13 @@ if [ -x "$VENV_DIR/bin/markitdown" ] && has_document_dependencies "$VENV_DIR/bin
   exit 0
 fi
 
+if ! command -v pdfinfo >/dev/null 2>&1 || ! command -v pdftoppm >/dev/null 2>&1; then
+  echo "Document uploads require Poppler tools 'pdfinfo' and 'pdftoppm' on PATH." >&2
+  exit 1
+fi
+
 if ! command -v uv >/dev/null 2>&1; then
-  echo "Document uploads require MarkItDown. Install 'markitdown' on PATH, or install 'uv' so the demo can create $VENV_DIR." >&2
+  echo "Document uploads require MarkItDown plus Python PDF dependencies. Install them on PATH, or install 'uv' so the demo can create $VENV_DIR." >&2
   exit 1
 fi
 
@@ -42,4 +47,4 @@ echo "Installing MarkItDown $MARKITDOWN_VERSION with PDF and DOCX support into $
 if [ ! -x "$VENV_DIR/bin/python" ]; then
   uv venv "$VENV_DIR" >/dev/null
 fi
-uv pip install --python "$VENV_DIR/bin/python" "markitdown[pdf,docx]==$MARKITDOWN_VERSION"
+uv pip install --python "$VENV_DIR/bin/python" "markitdown[pdf,docx]==$MARKITDOWN_VERSION" pdfplumber pypdf

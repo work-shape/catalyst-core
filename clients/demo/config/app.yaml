@@ -95,8 +95,6 @@ documents:
     timeoutMs: 120000
     perConversationConcurrency: 2
     globalConcurrency: 8
-    converterCommand: markitdown
-    converterArgs: []
     preprocessingVersion: document-preprocessing-v1
   objectStorage:
     kind: s3
@@ -111,6 +109,8 @@ tools:
   - name: show_view
     enabled: true
   - name: read_document
+    enabled: true
+  - name: view_document_page
     enabled: true
   - name: demo.workflow_summary
     enabled: true

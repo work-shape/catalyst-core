@@ -2,11 +2,18 @@ import type {
   AgentRunId,
   AttachmentManifest,
   ChatMessage,
+  ClientInstanceId,
   JsonObject,
   JsonValue,
   ToolExecutionResult
 } from "@vivd-catalyst/core";
-import type { ModelMessage, ModelToolCall } from "@vivd-catalyst/model-provider";
+import type { ModelContent, ModelMessage, ModelToolCall } from "@vivd-catalyst/model-provider";
+import {
+  projectModelVisibleArtifacts,
+  type ModelContextArtifactReader
+} from "./model-visible-artifacts";
+
+export type { ModelContextArtifactReader } from "./model-visible-artifacts";
 
 const METADATA_VERSION = 1;
 const CHARS_PER_TOKEN = 4;
@@ -16,10 +23,13 @@ export interface ModelContextProjectionOptions {
     maxTokens: number;
     maxBytes?: number;
   };
+  clientInstanceId?: ClientInstanceId;
+  artifactReader?: ModelContextArtifactReader;
 }
 
 export interface ModelOutputProjection {
-  content: string;
+  text: string;
+  content: ModelContent;
   notice?: JsonObject;
 }
 
@@ -29,13 +39,12 @@ export interface StoredToolCall {
   input: JsonValue;
 }
 
-export function projectAgentVisibleHistory(
+export async function projectAgentVisibleHistory(
   messages: ChatMessage[],
   options: ModelContextProjectionOptions
-): ModelMessage[] {
-  return messages
-    .map((message) => toModelHistoryMessage(message, options))
-    .filter((message): message is ModelMessage => message !== undefined);
+): Promise<ModelMessage[]> {
+  const projected = await Promise.all(messages.map((message) => toModelHistoryMessage(message, options)));
+  return projected.filter((message): message is ModelMessage => message !== undefined);
 }
 
 export function createAssistantToolCallsMetadata(input: {
@@ -96,16 +105,16 @@ export function createToolResultMetadata(input: {
       toolName: input.toolCall.toolName,
       input: unknownToJsonValue(input.toolCall.input),
       result: unknownToJsonValue(input.result),
-      modelOutput: input.modelOutput.content,
+      modelOutput: input.modelOutput.text,
       ...(input.modelOutput.notice ? { projectionNotice: input.modelOutput.notice } : {})
     }
   };
 }
 
-export function createModelVisibleToolOutput(
+export async function createModelVisibleToolOutput(
   result: ToolExecutionResult,
   options: ModelContextProjectionOptions
-): ModelOutputProjection {
+): Promise<ModelOutputProjection> {
   // Data-critical boundary: privateOutput and private rendered display data must never be
   // serialized into model-visible history. Private render-view tools return only a zero-data
   // acknowledgement through output unless they are explicitly implemented as non-private query tools.
@@ -113,7 +122,23 @@ export function createModelVisibleToolOutput(
     result.status === "success"
       ? stringifyForModel(result.output ?? { status: "success" })
       : stringifyForModel(result.error);
-  return boundModelOutput(content, options);
+  const bounded = boundModelOutput(content, options);
+  const visualArtifacts = await projectModelVisibleArtifacts(result, options);
+  if (visualArtifacts.parts.length === 0) {
+    return bounded;
+  }
+  const text = visualArtifacts.summary ? `${bounded.text}\n\n${visualArtifacts.summary}` : bounded.text;
+  return {
+    ...bounded,
+    text,
+    content: [
+      {
+        type: "text",
+        text
+      },
+      ...visualArtifacts.parts
+    ]
+  };
 }
 
 export function dropCurrentSubmittedMessage(messages: ChatMessage[], text: string): ChatMessage[] {
@@ -135,10 +160,10 @@ export function stableStringify(value: unknown): string {
   return JSON.stringify(sortForStableStringify(unknownToJsonValue(value)));
 }
 
-function toModelHistoryMessage(
+async function toModelHistoryMessage(
   message: ChatMessage,
   options: ModelContextProjectionOptions
-): ModelMessage | undefined {
+): Promise<ModelMessage | undefined> {
   if (message.role === "user" || message.role === "system") {
     return {
       role: message.role,
@@ -170,7 +195,7 @@ function toModelHistoryMessage(
     }
     const result = readToolExecutionResult(metadata.result);
     const projected = result
-      ? createModelVisibleToolOutput(result, options).content
+      ? (await createModelVisibleToolOutput(result, options)).content
       : typeof metadata.modelOutput === "string"
         ? metadata.modelOutput
         : message.text;
@@ -312,7 +337,12 @@ function appendAttachmentManifestForModel(
         metadata.wordCount !== undefined ? `words: ${metadata.wordCount}` : undefined,
         metadata.pageCount !== undefined ? `pages: ${metadata.pageCount}` : undefined
       ].filter((value): value is string => value !== undefined);
-      return `- ${attachment.filename} (${details.join(", ")}). Use read_document({ "fileId": "${attachment.fileId}" }) to read the full prepared text.`;
+      const readHint = `Use read_document({ "fileId": "${attachment.fileId}", "mode": "full" }) to read the full prepared text.`;
+      const viewHint =
+        metadata.format === "pdf"
+          ? `Use view_document_page({ "fileId": "${attachment.fileId}", "pageNumber": 1 }) to visually inspect a specific PDF page when layout or images matter.`
+          : undefined;
+      return `- ${attachment.filename} (${details.join(", ")}). ${[readHint, viewHint].filter(Boolean).join(" ")}`;
     })
   ];
   return lines.join("\n");
@@ -345,7 +375,10 @@ function boundModelOutput(
   const overTokenLimit = originalTokens > maxTokens;
   const overByteLimit = maxBytes !== undefined && originalBytes > maxBytes;
   if (!overTokenLimit && !overByteLimit) {
-    return { content };
+    return {
+      text: content,
+      content
+    };
   }
 
   const maxCharsByTokens = maxTokens * CHARS_PER_TOKEN;
@@ -368,6 +401,7 @@ function boundModelOutput(
       : `${content.slice(0, headLength)}${marker}\n${content.slice(content.length - tailLength)}`;
 
   return {
+    text: bounded,
     content: bounded,
     notice: {
       type: "tool_output_bounded",
