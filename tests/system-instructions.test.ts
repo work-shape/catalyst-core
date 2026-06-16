@@ -16,7 +16,7 @@ describe("system instructions", () => {
     expect(runtimeIndex).toBeGreaterThan(catalystIndex);
     expect(clientIndex).toBeGreaterThan(runtimeIndex);
     expect(content).toContain(CATALYST_INTERNAL_AGENT_PROMPT);
-    expect(content).toContain("Before calling a tool, briefly say what you are going to inspect or do and why.");
+    expect(content).toContain("Keep the user informed with concise public text before tool calls");
     expect(content).toContain("Respond in German unless the user explicitly asks for another language.");
     expect(content).toContain("Use customer workflow rules.");
   });
