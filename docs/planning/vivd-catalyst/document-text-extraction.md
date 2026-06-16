@@ -367,12 +367,18 @@ Do not render page images during upload-time preprocessing. Page images are expe
 ```ts
 type ReadDocumentInput = {
   fileId: string;
-  mode?: "full" | "pages";
-  pages?: {
-    from: number;
-    to: number;
-  };
-};
+} & (
+  | {
+      mode: "full";
+    }
+  | {
+      mode: "pages";
+      pages: {
+        from: number;
+        to: number;
+      };
+    }
+);
 ```
 
 Do not expose page-range parameters in v1 unless the preprocessing pipeline actually persists page-indexed text. A parameter that implies page precision without page-indexed artifacts would create false confidence.
@@ -419,6 +425,58 @@ When a later provider request includes the visual history, `ModelContextProjecti
 Later model-context projection may omit, downsample, or replace the image with an artifact marker when context bounds or compaction require it, but that is a projection decision and must not rewrite or erase the durable transcript. Avoid storing base64 image data inside message history; store the artifact reference and metadata, and keep bytes in managed artifact storage.
 
 DOCX page boundaries should remain explicitly weaker than PDF page boundaries. A DOCX document has no stable page model without choosing a layout engine and rendering configuration, so DOCX should keep full-text conversion first. Add DOCX page-aware behavior only if the product accepts a deterministic rendering dependency and documents the limits.
+
+## Page-Aware PDF Implementation Plan
+
+This implementation can break the current v1 converter/storage shape. Optimize the new code around explicit artifacts, page-aware reads, and multimodal projection rather than preserving the current single-text `MarkItDownDocumentTextConverter` boundary.
+
+Implementation target:
+
+- `document.prepared_text`: retained full-text artifact for explicit full-document reads, exports, and debugging
+- `document.pages_json`: retained page-indexed PDF text artifact for page-range reads and page-specific citations
+- `document.page_image`: retained rendered PNG artifact for model-visible visual inspection
+- message/tool history stores artifact references and metadata, never base64 image data
+- model-provider adapters serialize retained image bytes into provider-specific request formats at projection time
+
+The most important model-context invariant is:
+
+```text
+Stored artifacts are not automatically projected into model context.
+The model sees only the exact text returned by a tool call, plus image artifacts that a tool result intentionally marks as model-visible visual context.
+```
+
+This prevents double-loading. Even though storage keeps both `document.prepared_text` and `document.pages_json`, `read_document(mode: "full")` returns only the full-text artifact content, `read_document(mode: "pages")` returns only the requested page texts, and `view_document_page` returns only page-image metadata plus the model-visible image artifact. No tool should return full text and all page text in the same result.
+
+Recommended implementation sequence:
+
+1. Replace `DocumentTextConverter` with a product-owned `DocumentPreprocessor` contract that can return full text, optional PDF page text, page count, warnings, and engine metadata.
+2. Add first-class managed artifact metadata in Postgres, backed by object storage bytes. Artifacts should include kind, MIME type, checksum, byte size, conversation id, source file id, retention metadata, and object key.
+3. Replace direct `preparedObjectKey` attachment state with artifact ids such as `preparedTextArtifactId` and `preparedPagesArtifactId`. Keep attachment-level counts, page count, status, warnings, and preprocessing engine.
+4. Implement the PDF preprocessor wrapper around Poppler `pdfinfo` and `pdfplumber`. It should emit metadata JSON and write full text/page JSON outputs through platform-controlled paths. Use MarkItDown only for DOCX/general full-text conversion, not for PDFs.
+5. Persist PDF preprocessing outputs as separate managed artifacts: full text as `document.prepared_text`, page JSON as `document.pages_json`.
+6. Make `read_document` mode explicit. `mode: "full"` reads only the full-text artifact. `mode: "pages"` reads the page JSON artifact and returns only the requested page range. Large PDFs can reject or require explicit confirmation for full reads.
+7. Add `view_document_page`. It renders one PDF page on demand with `pdftoppm`, persists the PNG as `document.page_image`, returns artifact metadata, and marks the artifact as model-visible visual context.
+8. Widen `ToolExecutionResult` artifact metadata or add a model-context hint so a result can say which artifacts are model-visible images. Do not infer model visibility from artifact kind alone if that would make future private image artifacts unsafe.
+9. Replace string-only `ModelMessage.content` with content parts, such as `{ type: "text", text }` and `{ type: "image", artifactId, mimeType }`. Keep text helpers for normal messages.
+10. Make `ModelContextProjection` artifact-aware. It should replay tool text outputs exactly as stored, include model-visible image artifact references as image parts when policy allows, and never expand `document.prepared_text` or `document.pages_json` merely because an artifact reference exists.
+11. Update the OpenAI-compatible provider mapping to load image artifact bytes from managed artifact storage and serialize them as provider request image inputs, such as base64 data URLs. Base64 remains request-only and is not persisted in history.
+12. Add projection bounds for visual artifacts: max images per request, max image bytes/pixels, recency ordering, and explicit artifact-marker notices when an older visual artifact is omitted.
+13. Hook retention/deletion so source files, prepared text, page JSON, page images, attachment rows, and tool-result artifact references are cleaned up together according to conversation/session policy.
+14. Add tests at the artifact boundary, tool boundary, projection boundary, provider mapping boundary, and retention boundary.
+
+Test cases should include:
+
+- PDF preprocessing creates one full-text artifact and one page JSON artifact with matching page count
+- the attachment manifest exposes only metadata and no prepared text/page text
+- `read_document(mode: "full")` returns full text but not page JSON
+- `read_document(mode: "pages")` returns selected pages but not full text
+- `view_document_page` returns a page-image artifact without base64 in history
+- repeated `view_document_page` can reuse an existing page-image artifact for the same file checksum, page number, and DPI
+- model-context projection does not expand text artifacts automatically
+- model-context projection includes page images only when the tool result marked them model-visible
+- provider mapping encodes retained image bytes into request-time image inputs
+- context bounding can omit older images with a model-visible artifact marker without mutating durable history
+- retention deletes original PDF, prepared text, page JSON, and page-image artifacts together
 
 ## Safeguards
 
@@ -563,12 +621,12 @@ Conversion outcomes:
 14. Persist an Attachment Manifest snapshot on the user message at send time.
 15. Project the persisted Attachment Manifest into model-visible user messages.
 16. Add a service-backed built-in `read_document` tool definition through the existing tool registry and client assembly path.
-17. Extend `read_document` with page-range reads only after page-text artifacts are available.
+17. Extend `read_document` with explicit `mode: "full"` and `mode: "pages"` reads only after page-text artifacts are available, and enforce that no response returns both full text and all page text.
 18. Add a service-backed built-in `view_document_page` tool that renders one PDF page on demand, persists a `document.page_image` artifact, and projects the image into agent visual context.
 19. Adjust client assembly construction so the platform store and storage-backed services are created before built-in tool definitions that depend on them.
 20. Add agent instructions that treat prepared document text and rendered page images as untrusted content.
 21. Add Adobe S3Mock to local Docker Compose.
-22. Add tests for upload-time preprocessing, persisted Draft Attachment state, conversation-scoped prepared artifacts, duplicate-file warning without deduplication, release-config validation, configurable concurrency/queueing, new-conversation file drop, refresh/conversation restoration, send-time clearing, persisted Attachment Manifest snapshots, send blocking for uploading/queued/preprocessing/failed/unsupported attachments, authorization, conversation-scoped read access, file-type rejection, file-size rejection, timeout, successful full-text read, PDF page-text artifact creation, page-range reads, no-extractable-text warning, oversized prepared text failure, artifact creation, page-image rendering, page-image artifact persistence, page-image model-context projection, object deletion, Attachment Manifest projection, model-context projection boundaries, and audit minimization.
+22. Add tests for upload-time preprocessing, persisted Draft Attachment state, conversation-scoped prepared artifacts, duplicate-file warning without deduplication, release-config validation, configurable concurrency/queueing, new-conversation file drop, refresh/conversation restoration, send-time clearing, persisted Attachment Manifest snapshots, send blocking for uploading/queued/preprocessing/failed/unsupported attachments, authorization, conversation-scoped read access, file-type rejection, file-size rejection, timeout, successful full-text read, PDF page-text artifact creation, page-range reads, no full-plus-all-pages double projection, no-extractable-text warning, oversized prepared text failure, artifact creation, page-image rendering, page-image artifact persistence, page-image model-context projection, object deletion, Attachment Manifest projection, model-context projection boundaries, and audit minimization.
 
 ## Open Questions
 
