@@ -358,7 +358,7 @@ type PreparedPdfPagesArtifact = {
 };
 ```
 
-The full prepared text may join page text with explicit delimiters such as `[Page 1]`, but those delimiters are for readability only. The structured page artifact is the source of truth for page-range reads and page-specific citations.
+For PDFs with page text, the full prepared text should join every page with explicit delimiters such as `[Page 1]`. This lets `read_document(mode: "full")` give the model page awareness without returning a second all-pages structure. The structured page artifact remains the source of truth for page-range reads, page-specific citations, and regenerating the page-delimited full text if needed.
 
 Do not render page images during upload-time preprocessing. Page images are expensive relative to text extraction, and most conversations will not need visual inspection of every page.
 
@@ -432,7 +432,7 @@ This implementation can break the current v1 converter/storage shape. Optimize t
 
 Implementation target:
 
-- `document.prepared_text`: retained full-text artifact for explicit full-document reads, exports, and debugging
+- `document.prepared_text`: retained full-text artifact for explicit full-document reads, exports, and debugging; for page-aware PDFs this is all page text joined once with page delimiters
 - `document.pages_json`: retained page-indexed PDF text artifact for page-range reads and page-specific citations
 - `document.page_image`: retained rendered PNG artifact for model-visible visual inspection
 - message/tool history stores artifact references and metadata, never base64 image data
@@ -445,7 +445,7 @@ Stored artifacts are not automatically projected into model context.
 The model sees only the exact text returned by a tool call, plus image artifacts that a tool result intentionally marks as model-visible visual context.
 ```
 
-This prevents double-loading. Even though storage keeps both `document.prepared_text` and `document.pages_json`, `read_document(mode: "full")` returns only the full-text artifact content, `read_document(mode: "pages")` returns only the requested page texts, and `view_document_page` returns only page-image metadata plus the model-visible image artifact. No tool should return full text and all page text in the same result.
+This prevents double-loading. Even though storage keeps both `document.prepared_text` and `document.pages_json`, `read_document(mode: "full")` returns one textual representation: for page-aware PDFs, all pages joined once with page delimiters; for non-page-aware documents, the prepared full text. `read_document(mode: "pages")` returns only the requested page texts. `view_document_page` returns only page-image metadata plus the model-visible image artifact. No tool should return both page-delimited full text and a separate all-pages text array in the same result.
 
 Recommended implementation sequence:
 
@@ -453,8 +453,8 @@ Recommended implementation sequence:
 2. Add first-class managed artifact metadata in Postgres, backed by object storage bytes. Artifacts should include kind, MIME type, checksum, byte size, conversation id, source file id, retention metadata, and object key.
 3. Replace direct `preparedObjectKey` attachment state with artifact ids such as `preparedTextArtifactId` and `preparedPagesArtifactId`. Keep attachment-level counts, page count, status, warnings, and preprocessing engine.
 4. Implement the PDF preprocessor wrapper around Poppler `pdfinfo` and `pdfplumber`. It should emit metadata JSON and write full text/page JSON outputs through platform-controlled paths. Use MarkItDown only for DOCX/general full-text conversion, not for PDFs.
-5. Persist PDF preprocessing outputs as separate managed artifacts: full text as `document.prepared_text`, page JSON as `document.pages_json`.
-6. Make `read_document` mode explicit. `mode: "full"` reads only the full-text artifact. `mode: "pages"` reads the page JSON artifact and returns only the requested page range. Large PDFs can reject or require explicit confirmation for full reads.
+5. Persist PDF preprocessing outputs as separate managed artifacts: page-delimited full text as `document.prepared_text`, page JSON as `document.pages_json`.
+6. Make `read_document` mode explicit. `mode: "full"` returns one full-document textual representation, with page delimiters when page text exists. `mode: "pages"` reads the page JSON artifact and returns only the requested page range. Large PDFs can reject or require explicit confirmation for full reads.
 7. Add `view_document_page`. It renders one PDF page on demand with `pdftoppm`, persists the PNG as `document.page_image`, returns artifact metadata, and marks the artifact as model-visible visual context.
 8. Widen `ToolExecutionResult` artifact metadata or add a model-context hint so a result can say which artifacts are model-visible images. Do not infer model visibility from artifact kind alone if that would make future private image artifacts unsafe.
 9. Replace string-only `ModelMessage.content` with content parts, such as `{ type: "text", text }` and `{ type: "image", artifactId, mimeType }`. Keep text helpers for normal messages.
@@ -468,7 +468,7 @@ Test cases should include:
 
 - PDF preprocessing creates one full-text artifact and one page JSON artifact with matching page count
 - the attachment manifest exposes only metadata and no prepared text/page text
-- `read_document(mode: "full")` returns full text but not page JSON
+- `read_document(mode: "full")` returns page-delimited full text for page-aware PDFs, but not a separate all-pages JSON/text array
 - `read_document(mode: "pages")` returns selected pages but not full text
 - `view_document_page` returns a page-image artifact without base64 in history
 - repeated `view_document_page` can reuse an existing page-image artifact for the same file checksum, page number, and DPI
