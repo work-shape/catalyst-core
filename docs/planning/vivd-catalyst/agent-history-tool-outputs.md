@@ -80,6 +80,8 @@ type ToolExecutionResult =
 
 `artifacts` are references to managed files or stored outputs. They let tools avoid stuffing large bytes into model context while preserving retention and deletion semantics.
 
+Some artifacts are also model-visible visual content. For example, `view_document_page` can return a rendered PDF page PNG as a `document.page_image` artifact. In that case, the artifact reference is part of the durable tool result and the model-context projection should load the image into the agent's visual context for the next provider call when policy and context bounds allow it. This is distinct from `display`: a display is primarily for the user-facing UI, while a model-visible image artifact is evidence the agent is expected to inspect.
+
 `auditSummary` remains minimized governance metadata and must not contain raw sensitive payloads.
 
 Do not add `modelSummary` as a parallel field. If an oversized `output` must be reduced for one provider call, do that in the model-context projection layer and retain the full output in durable storage.
@@ -95,17 +97,22 @@ Agent-visible history should be append-only except for retention/deletion workfl
 - status
 - validated `output` or `error`
 - references to `privateOutput`, `display`, and `artifacts` where they exist
+- model-visible image artifact references where a tool result intentionally provides visual context
 - timestamps/correlation ids needed for debugging and audit joins
 
 When constructing a provider request, the runtime projects this durable history into provider-specific messages. That projection may:
 
 - omit `privateOutput`
 - include `output` as model-visible tool result content
+- include model-visible image artifacts, such as rendered document pages, as provider image inputs
 - include tool errors as model-visible tool error content
 - replace extremely large `output` with a bounded preview plus an artifact/reference marker
+- omit, downsample, or replace older image artifacts with artifact markers when context bounds or compaction require it
 - include a compaction checkpoint for older history once context management exists
 
 The projection must not silently erase the fact that a tool call happened, what input the agent supplied, or what error came back.
+
+For model-visible image artifacts, projection may change whether the image bytes are loaded into a specific provider request, but it must not mutate the durable transcript or remove the artifact reference from message history.
 
 ## Module Shape
 

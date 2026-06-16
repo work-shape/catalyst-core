@@ -59,6 +59,8 @@ Related research:
 - Vercel AI SDK is the default v1 internal model/tool streaming candidate, behind product-owned runtime contracts.
 - Agent capabilities should be explicit tool groups; URL/file fetch and document processing should precede browser automation.
 - Agent-visible history preserves tool calls, tool inputs, complete tool outputs, and tool execution errors durably; context compaction or output bounding changes only the active model context projection, not the stored transcript.
+- PDF document processing should use a platform-owned page-aware adapter around Poppler/pdfplumber rather than treating MarkItDown as the PDF boundary.
+- On-demand rendered document page images are model-visible tool artifacts: they load into the agent's visual context when projected and persist in durable message/tool history as artifact references.
 - `ModelContextProjection` should be the deep module that owns data-critical model visibility rules, output bounding, future compaction insertion, and provider message adaptation.
 - Tools expose model-facing name, description, and input schema by default; output schemas are runtime validation contracts, not prompt context.
 - Tool results use `output` as the default model-visible result. `modelSummary` should not replace tool output; private tool data must use explicit non-model-visible output channels.

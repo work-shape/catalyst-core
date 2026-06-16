@@ -1,7 +1,7 @@
 # Document Preprocessing And Reading
 
 Date: 2026-06-10
-Updated: 2026-06-15
+Updated: 2026-06-16
 
 This note defines the first platform-native document preprocessing and reading path. It is intentionally narrow: after file acquisition, supported text-related documents are converted into reusable text/Markdown artifacts and safe metadata. The agent then uses a normal tool to read the prepared text. This does not extract structured fields, compare claims, perform OCR, retrieve from a knowledge source, or acquire files from URLs.
 
@@ -68,7 +68,7 @@ chat UI drop/upload
   -> persistent Draft Attachment is created for the conversation
   -> DocumentPreprocessingService
   -> ManagedFileStore reads source file
-  -> MarkItDownRunner converts file through a child process
+  -> format-specific converter prepares text through a child process
   -> ManagedArtifactStore writes extracted Markdown/text
   -> Postgres stores preprocessing status, counts, warnings, artifact refs
   -> send persists an Attachment Manifest snapshot on the user message
@@ -79,7 +79,7 @@ chat UI drop/upload
   -> ModelContextProjection sends model-visible output to the agent
 ```
 
-MarkItDown should be treated as the conversion engine behind the platform service, not as the product boundary. The product boundaries are Document Preprocessing and `read_document`, using product-owned result types.
+Converters should be treated as implementation details behind the platform service, not as the product boundary. The product boundaries are Document Preprocessing, `read_document`, and future page-view tools, using product-owned result types. MarkItDown can remain a converter for formats such as DOCX where stable page boundaries are not intrinsic. PDF handling should move to a platform-owned PDF adapter because page-indexed text and visual page reads are core product behavior.
 
 ## Alignment With Live Tool Runtime
 
@@ -212,18 +212,18 @@ For v1, the manifest should include word/character counts from the prepared text
 
 The manifest is there so the agent can decide whether to call `read_document`. It must not include full prepared text. In v1, the manifest includes only sendable ready files; unsupported or failed Draft Attachments block send until removed or retried. Empty or near-empty prepared text is still sendable as `ready` with a `no_extractable_text` warning and zero or near-zero counts.
 
-## MarkItDown Execution Model
+## Converter Execution Model
 
-Decision: for the first implementation, run preprocessing in the API process and run MarkItDown through a child process from the Node backend/container. Do not introduce a separate document-worker process or container in v1. Revisit that only when OCR dependencies, scaling needs, memory isolation, or operational reliability justify it.
+Decision: for the first implementation, run preprocessing in the API process and run format-specific converters through child processes from the Node backend/container. Do not introduce a separate document-worker process or container in v1. Revisit that only when OCR dependencies, scaling needs, memory isolation, or operational reliability justify it.
 
 Reasons:
 
-- The platform runtime is TypeScript/Node, while MarkItDown is Python.
+- The platform runtime is TypeScript/Node, while PDF extraction and document conversion dependencies are native or Python tools.
 - A child process gives a clear timeout, cancellation, stdout/stderr, and crash boundary.
 - It avoids introducing an HTTP worker service, queue, or extra deployment unit before the workflow proves it needs one.
 - The same service interface can later call a separate document-processing container if process isolation, scaling, OCR dependencies, or operational limits justify it.
 
-The child process should run a small platform-owned Python wrapper, not a free-form shell command. Node should invoke it with `execFile` or equivalent argument-safe process execution.
+The child process should run a small platform-owned wrapper, not a free-form shell command. Node should invoke it with `execFile` or equivalent argument-safe process execution.
 
 The wrapper contract should be simple:
 
@@ -235,7 +235,7 @@ input:
   optional detected MIME type
 
 work:
-  run MarkItDown conversion locally
+  run format-specific conversion locally
   write extracted Markdown/text to output artifact path
 
 stdout:
@@ -246,6 +246,8 @@ stderr:
 ```
 
 The wrapper must not fetch URLs or resolve remote resources. URL acquisition is a separate capability with its own network safety rules.
+
+For PDFs, the preferred wrapper should use Poppler `pdfinfo` for preflight metadata and page count, `pdfplumber` for page-by-page text extraction, `pypdf` only as a fallback for simple text extraction or metadata cases, and Poppler `pdftoppm` for on-demand page rendering. Avoid making PyMuPDF the default dependency unless the project explicitly accepts its AGPL/commercial licensing path.
 
 ## Tool Contract
 
@@ -278,7 +280,7 @@ type ReadDocumentOutput = {
     checksum?: string;
   };
   preprocessing: {
-    engine: "markitdown";
+    engine: "markitdown" | "platform_pdf";
     completedAt: string;
     durationMs: number;
     warnings: string[];
@@ -316,19 +318,51 @@ The successful tool result should also include:
 
 The agent receives `text` directly and the full model-visible output is persisted in durable conversation/tool history. The platform must not silently truncate document text inside the read tool result. If a later model request needs context management, session compaction or model-context projection can bound the active provider request without rewriting the durable transcript.
 
-## V2 Table Of Contents And Page-Aware Reads
+## PDF Page-Aware Extraction And Visual Page Reads
 
-V2 should build on the preprocessing state instead of changing the upload/read boundary.
+PDF page awareness should build on the preprocessing state instead of changing the upload/read boundary. For PDFs, the platform should move away from MarkItDown as the extraction boundary and use a platform-owned adapter with a stable product contract.
 
-Future preprocessing artifacts:
+Recommended PDF preprocessing dependencies:
 
-- page-indexed prepared text, when the source format supports stable page boundaries
-- per-page or per-section text chunks
-- page-aware word/character counts
-- a generated table-of-contents artifact
-- optional summaries over page ranges or sections
+- Poppler `pdfinfo` for preflight metadata, encryption status, page count, and page-size metadata
+- `pdfplumber` for page-by-page text extraction and future word/position/table-oriented extraction
+- `pypdf` as a narrow fallback for simple extraction or metadata cases when useful
+- Poppler `pdftoppm` for rendering specific pages to PNG on demand
 
-Future `read_document` input can extend v1:
+The platform-owned part is the adapter contract, storage shape, authorization, audit behavior, and tool behavior. The platform should not implement a PDF parser itself.
+
+For PDFs, preprocessing should persist:
+
+- the original PDF as the source managed file
+- a full prepared text artifact
+- a structured page-text JSON artifact
+- reliable `pageCount` metadata
+- per-page character and word counts
+- per-page warnings, such as `no_extractable_text`
+
+Suggested structured page artifact:
+
+```ts
+type PreparedPdfPage = {
+  pageNumber: number;
+  text: string;
+  characterCount: number;
+  wordCount?: number;
+  warnings: string[];
+};
+
+type PreparedPdfPagesArtifact = {
+  format: "pdf";
+  pageCount: number;
+  pages: PreparedPdfPage[];
+};
+```
+
+The full prepared text may join page text with explicit delimiters such as `[Page 1]`, but those delimiters are for readability only. The structured page artifact is the source of truth for page-range reads and page-specific citations.
+
+Do not render page images during upload-time preprocessing. Page images are expensive relative to text extraction, and most conversations will not need visual inspection of every page.
+
+`read_document` can extend v1 only after the page-text artifact exists:
 
 ```ts
 type ReadDocumentInput = {
@@ -343,7 +377,42 @@ type ReadDocumentInput = {
 
 Do not expose page-range parameters in v1 unless the preprocessing pipeline actually persists page-indexed text. A parameter that implies page precision without page-indexed artifacts would create false confidence.
 
-As of 2026-06-15, MarkItDown's main documentation supports general PDF/DOCX conversion to Markdown, but page-level extraction is not a stable mainline capability. There is an open upstream PR for `extract_pages` and page JSON output for PDF/PPTX/DOCX. If that lands and proves reliable, v2 can adopt it. If not, v2 page-aware reads need a platform-owned page-indexing strategy, likely starting with PDFs and treating DOCX pagination as less reliable.
+The page visual inspection tool should be named:
+
+```text
+view_document_page
+```
+
+Prefer `view_document_page` over `see_page`, `view_page`, or `visually_inspect_page`. `see_page` is too informal and ambiguous, `view_page` collides with browser/web pages, and `visually_inspect_page` describes what the agent does after the tool runs rather than what the tool itself does.
+
+Suggested input:
+
+```ts
+type ViewDocumentPageInput = {
+  fileId: string;
+  pageNumber: number;
+  render?: {
+    dpi?: 150 | 160 | 200;
+  };
+};
+```
+
+`view_document_page` should:
+
+1. Verify the authenticated user may access the file and that the file is attached to the current conversation.
+2. Verify the file is a PDF with a known page count and that `pageNumber` is in range.
+3. Render only the requested page from the original PDF with Poppler `pdftoppm`.
+4. Use a conservative default such as PNG at 150 or 160 DPI, with 200 DPI reserved for small text.
+5. Enforce output byte, pixel, timeout, and per-conversation rate limits.
+6. Cache the rendered PNG with a deterministic artifact key that includes file id, page number, DPI, and source checksum or preprocessing version.
+7. Persist the PNG as a managed artifact with kind `document.page_image`.
+8. Return a normal tool result whose model-visible `output` includes file id, page number, page count, render metadata, and the page-image artifact reference.
+9. Include the page-image artifact in the tool result `artifacts` list.
+10. Project the rendered page image into the agent's visual/model context for the next provider call.
+
+The rendered page image is agent-visible tool output, not only UI display data. It must be persisted through durable message/tool history in the same way as other model-visible tool outputs: the tool call input, validated output, artifact reference, and successful or failed execution state all remain in conversation history. The PNG bytes live in managed artifact storage under retention/deletion policy; later model-context projection may omit, downsample, or replace the image with an artifact marker when context bounds or compaction require it, but it must not rewrite or erase the durable transcript.
+
+DOCX page boundaries should remain explicitly weaker than PDF page boundaries. A DOCX document has no stable page model without choosing a layout engine and rendering configuration, so DOCX should keep full-text conversion first. Add DOCX page-aware behavior only if the product accepts a deterministic rendering dependency and documents the limits.
 
 ## Safeguards
 
@@ -477,19 +546,23 @@ Conversion outcomes:
 3. Add a document processing package/module with `DocumentPreprocessingService` and `DocumentReadService`.
 4. Add persistent Draft Attachment state for conversation attachments so refresh and conversation switching restore status.
 5. Create a Conversation shell on first file drop when no `conversationId` exists yet.
-6. Add a MarkItDown child-process runner with timeout and cancellation support.
-7. Add the Python wrapper script and dependency installation path for development/container builds.
-8. Add `documents.preprocessing` release config for enablement, supported formats, size/text limits, timeout, and concurrency.
-9. Wire file upload/acquisition finalization to start non-blocking preprocessing for supported text-related files.
-10. Add configurable preprocessing concurrency with queued Draft Attachments when capacity is exhausted.
-11. Block chat submission while attached files are uploading, queued, preprocessing, failed, or unsupported.
-12. Persist an Attachment Manifest snapshot on the user message at send time.
-13. Project the persisted Attachment Manifest into model-visible user messages.
-14. Add a service-backed built-in `read_document` tool definition through the existing tool registry and client assembly path.
-15. Adjust client assembly construction so the platform store and storage-backed services are created before built-in tool definitions that depend on them.
-16. Add agent instructions that treat prepared document text as untrusted content.
-17. Add Adobe S3Mock to local Docker Compose.
-18. Add tests for upload-time preprocessing, persisted Draft Attachment state, conversation-scoped prepared artifacts, duplicate-file warning without deduplication, release-config validation, configurable concurrency/queueing, new-conversation file drop, refresh/conversation restoration, send-time clearing, persisted Attachment Manifest snapshots, send blocking for uploading/queued/preprocessing/failed/unsupported attachments, authorization, conversation-scoped read access, file-type rejection, file-size rejection, timeout, successful full-text read, no-extractable-text warning, oversized prepared text failure, artifact creation, object deletion, Attachment Manifest projection, model-context projection boundaries, and audit minimization.
+6. Add a format-specific converter child-process runner with timeout and cancellation support.
+7. Add the PDF wrapper script and dependency installation path for Poppler `pdfinfo`, Poppler `pdftoppm`, `pdfplumber`, and `pypdf`.
+8. Keep a MarkItDown or equivalent wrapper for DOCX/general text conversion, but do not use it as the PDF page-boundary contract.
+9. Persist PDF page-text JSON artifacts, PDF page counts, and page-aware counts/warnings when PDF preprocessing succeeds.
+10. Add `documents.preprocessing` release config for enablement, supported formats, size/text limits, timeout, and concurrency.
+11. Wire file upload/acquisition finalization to start non-blocking preprocessing for supported text-related files.
+12. Add configurable preprocessing concurrency with queued Draft Attachments when capacity is exhausted.
+13. Block chat submission while attached files are uploading, queued, preprocessing, failed, or unsupported.
+14. Persist an Attachment Manifest snapshot on the user message at send time.
+15. Project the persisted Attachment Manifest into model-visible user messages.
+16. Add a service-backed built-in `read_document` tool definition through the existing tool registry and client assembly path.
+17. Extend `read_document` with page-range reads only after page-text artifacts are available.
+18. Add a service-backed built-in `view_document_page` tool that renders one PDF page on demand, persists a `document.page_image` artifact, and projects the image into agent visual context.
+19. Adjust client assembly construction so the platform store and storage-backed services are created before built-in tool definitions that depend on them.
+20. Add agent instructions that treat prepared document text and rendered page images as untrusted content.
+21. Add Adobe S3Mock to local Docker Compose.
+22. Add tests for upload-time preprocessing, persisted Draft Attachment state, conversation-scoped prepared artifacts, duplicate-file warning without deduplication, release-config validation, configurable concurrency/queueing, new-conversation file drop, refresh/conversation restoration, send-time clearing, persisted Attachment Manifest snapshots, send blocking for uploading/queued/preprocessing/failed/unsupported attachments, authorization, conversation-scoped read access, file-type rejection, file-size rejection, timeout, successful full-text read, PDF page-text artifact creation, page-range reads, no-extractable-text warning, oversized prepared text failure, artifact creation, page-image rendering, page-image artifact persistence, page-image model-context projection, object deletion, Attachment Manifest projection, model-context projection boundaries, and audit minimization.
 
 ## Open Questions
 
