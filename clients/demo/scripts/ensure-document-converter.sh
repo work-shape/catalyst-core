@@ -25,17 +25,17 @@ sys.exit(1 if missing else 0)
 PY
 }
 
-if command -v markitdown >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1 && command -v pdfinfo >/dev/null 2>&1 && command -v pdftoppm >/dev/null 2>&1 && has_document_dependencies python3; then
+if ! command -v pdfinfo >/dev/null 2>&1 || ! command -v pdftoppm >/dev/null 2>&1; then
+  echo "Document uploads require Poppler tools 'pdfinfo' and 'pdftoppm' on PATH. On macOS, install them with 'brew install poppler'." >&2
+  exit 1
+fi
+
+if command -v markitdown >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1 && has_document_dependencies python3; then
   exit 0
 fi
 
 if [ -x "$VENV_DIR/bin/markitdown" ] && has_document_dependencies "$VENV_DIR/bin/python"; then
   exit 0
-fi
-
-if ! command -v pdfinfo >/dev/null 2>&1 || ! command -v pdftoppm >/dev/null 2>&1; then
-  echo "Document uploads require Poppler tools 'pdfinfo' and 'pdftoppm' on PATH." >&2
-  exit 1
 fi
 
 if ! command -v uv >/dev/null 2>&1; then
