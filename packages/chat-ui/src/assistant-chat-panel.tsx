@@ -435,9 +435,6 @@ function toUiMessageParts(
   toolResultsByToolCallId: Map<string, PersistedToolResult>
 ): UIMessage["parts"] {
   const parts: UIMessage["parts"] = [];
-  if (message.role === "assistant") {
-    parts.push(...readAssistantReasoningParts(message));
-  }
   if (message.text || message.role !== "assistant") {
     parts.push({
       type: "text",
@@ -565,32 +562,6 @@ function readAssistantToolCalls(message: Message): PersistedToolCall[] {
         toolCallId,
         toolName,
         input: value.input
-      }
-    ];
-  });
-}
-
-function readAssistantReasoningParts(message: Message): UIMessage["parts"] {
-  const runtime = readAgentRuntimeMetadata(message.metadata);
-  if (
-    (runtime?.kind !== "assistant_tool_calls" && runtime?.kind !== "assistant_final") ||
-    !Array.isArray(runtime.reasoning)
-  ) {
-    return [];
-  }
-  return runtime.reasoning.flatMap((value): UIMessage["parts"] => {
-    if (!isRecord(value)) {
-      return [];
-    }
-    const text = typeof value.text === "string" ? value.text : undefined;
-    if (!text) {
-      return [];
-    }
-    return [
-      {
-        type: "reasoning",
-        text,
-        state: "done"
       }
     ];
   });

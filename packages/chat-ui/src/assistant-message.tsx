@@ -4,8 +4,7 @@ import {
   ComposerPrimitive,
   ErrorPrimitive,
   MessagePrimitive,
-  useAuiState,
-  type ReasoningMessagePartProps
+  useAuiState
 } from "@assistant-ui/react";
 import { Check, Copy, FileText, Pencil, RefreshCw, User } from "lucide-react";
 import { AttachmentPreview } from "./attachment-preview";
@@ -39,7 +38,7 @@ function AssistantMessage() {
     }
 
     return !state.message.parts.some((part) => {
-      if (part.type === "text" || part.type === "reasoning") {
+      if (part.type === "text") {
         return part.text.trim().length > 0;
       }
       return false;
@@ -55,7 +54,7 @@ function AssistantMessage() {
         <MessagePrimitive.Parts
           components={{
             Text: AssistantTextPart,
-            Reasoning: AssistantReasoningPart,
+            Reasoning: HiddenReasoningPart,
             File: FilePart,
             tools: {
               Override: ToolCallPart
@@ -120,15 +119,8 @@ function AssistantTextPart() {
   );
 }
 
-function AssistantReasoningPart({ text }: ReasoningMessagePartProps) {
-  if (text.trim().length === 0) {
-    return null;
-  }
-  return (
-    <div className="my-2 max-w-3xl border-l-2 border-border/80 pl-3 text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere] whitespace-pre-wrap">
-      {text}
-    </div>
-  );
+function HiddenReasoningPart() {
+  return null;
 }
 
 function AssistantThinking() {
