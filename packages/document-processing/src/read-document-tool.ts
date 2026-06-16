@@ -73,53 +73,37 @@ export function createReadDocumentTool(reader: DocumentReader): AnyToolDefinitio
     inputSchema: readDocumentInputSchema,
     outputSchema: readDocumentOutputSchema,
     inputJsonSchema: {
-      oneOf: [
-        {
-          type: "object",
-          additionalProperties: false,
-          required: ["fileId", "mode"],
-          properties: {
-            fileId: {
-              type: "string",
-              description: "The fileId from the current conversation attachment manifest."
-            },
-            mode: {
-              const: "full",
-              description: "Return one full-document text representation."
-            }
-          }
+      type: "object",
+      additionalProperties: false,
+      required: ["fileId", "mode"],
+      properties: {
+        fileId: {
+          type: "string",
+          description: "The fileId from the current conversation attachment manifest."
         },
-        {
+        mode: {
+          type: "string",
+          enum: ["full", "pages"],
+          description:
+            'Use "full" for the complete prepared text, or "pages" with pages.from/pages.to for a page range.'
+        },
+        pages: {
           type: "object",
           additionalProperties: false,
-          required: ["fileId", "mode", "pages"],
+          required: ["from", "to"],
+          description: 'Required when mode is "pages".',
           properties: {
-            fileId: {
-              type: "string",
-              description: "The fileId from the current conversation attachment manifest."
+            from: {
+              type: "integer",
+              minimum: 1
             },
-            mode: {
-              const: "pages",
-              description: "Return only the requested page range."
-            },
-            pages: {
-              type: "object",
-              additionalProperties: false,
-              required: ["from", "to"],
-              properties: {
-                from: {
-                  type: "integer",
-                  minimum: 1
-                },
-                to: {
-                  type: "integer",
-                  minimum: 1
-                }
-              }
+            to: {
+              type: "integer",
+              minimum: 1
             }
           }
         }
-      ]
+      }
     },
     async execute(input, context) {
       const conversationId = context.toolRequest?.conversationId;

@@ -11,6 +11,8 @@ import {
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 import {
   createAttachmentManifest,
+  createReadDocumentTool,
+  createViewDocumentPageTool,
   DocumentPageRenderService,
   DocumentPreprocessingService,
   InMemoryObjectStore,
@@ -20,6 +22,28 @@ import {
 } from "@vivd-catalyst/document-processing";
 
 describe("document preprocessing", () => {
+  it("exposes OpenAI-compatible root object schemas for document tools", () => {
+    const reader = {} as ConstructorParameters<typeof createReadDocumentTool>[0];
+    const viewer = {} as ConstructorParameters<typeof createViewDocumentPageTool>[0];
+    const readTool = createReadDocumentTool(reader);
+    const viewTool = createViewDocumentPageTool(viewer);
+
+    expect(readTool.inputJsonSchema).toMatchObject({
+      type: "object",
+      required: ["fileId", "mode"],
+      properties: {
+        fileId: expect.any(Object),
+        mode: expect.objectContaining({
+          enum: ["full", "pages"]
+        })
+      }
+    });
+    expect(viewTool.inputJsonSchema).toMatchObject({
+      type: "object",
+      required: ["fileId", "pageNumber"]
+    });
+  });
+
   it("preprocesses a text document on upload and reads the prepared text by conversation file id", async () => {
     const { service, store, conversationId } = await createDocumentFixture();
 
