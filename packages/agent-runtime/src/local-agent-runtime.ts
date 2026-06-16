@@ -30,10 +30,12 @@ import {
   createToolResultMetadata,
   dropCurrentSubmittedMessage,
   projectAgentVisibleHistory,
+  selectRecentCompleteHistory,
   stableStringify,
   type ModelOutputProjection,
   type ModelContextArtifactReader,
-  type ModelContextProjectionOptions
+  type ModelContextProjectionOptions,
+  type StoredReasoningSummary
 } from "./model-context-projection";
 
 export interface LocalAgentRuntimeOptions {
@@ -140,7 +142,7 @@ export class LocalAgentRuntime implements AgentRuntime {
     const maxSteps = agent.maxSteps ?? this.options.maxSteps ?? DEFAULT_MAX_STEPS;
 
     for (let step = 0; step < maxSteps; step += 1) {
-      const { completion, emittedDeltas } = await this.options.usageGovernance.runModelCall(
+      const { completion, emittedDeltas, reasoning } = await this.options.usageGovernance.runModelCall(
         context.clientInstanceId,
         async () => {
           const modelResult = await this.completeWithProvider(
@@ -173,7 +175,7 @@ export class LocalAgentRuntime implements AgentRuntime {
           conversationId: input.conversationId,
           role: "assistant",
           text: assistantText,
-          metadata: createAssistantFinalMetadata({ runId })
+          metadata: createAssistantFinalMetadata({ runId, reasoning })
         });
         if (emittedDeltas) {
           state.completeMessage(persisted);
@@ -196,7 +198,8 @@ export class LocalAgentRuntime implements AgentRuntime {
         text: completion.text,
         metadata: createAssistantToolCallsMetadata({
           runId,
-          toolCalls: completion.toolCalls
+          toolCalls: completion.toolCalls,
+          reasoning
         })
       });
 
@@ -259,13 +262,16 @@ export class LocalAgentRuntime implements AgentRuntime {
     input: StartAgentRunInput,
     context: RuntimeCallContext
   ): Promise<ModelMessage[]> {
-    const recentMessages = await this.options.conversationHistory.listRecentMessages({
+    const persistedMessages = await this.options.conversationHistory.listMessages({
       clientInstanceId: context.clientInstanceId,
-      conversationId: input.conversationId,
-      limit: this.options.historyMessageLimit ?? DEFAULT_CONVERSATION_HISTORY_LIMIT
+      conversationId: input.conversationId
     });
+    const activeHistory = selectRecentCompleteHistory(
+      dropCurrentSubmittedMessage(persistedMessages, input.message.text),
+      this.options.historyMessageLimit ?? DEFAULT_CONVERSATION_HISTORY_LIMIT
+    );
     return projectAgentVisibleHistory(
-      dropCurrentSubmittedMessage(recentMessages, input.message.text),
+      activeHistory,
       this.modelContextOptions(context)
     );
   }
@@ -321,17 +327,23 @@ export class LocalAgentRuntime implements AgentRuntime {
     context: RuntimeCallContext,
     state: RunState,
     streamText: boolean
-  ): Promise<{ completion: ModelCompletion; emittedDeltas: boolean }> {
+  ): Promise<{
+    completion: ModelCompletion;
+    emittedDeltas: boolean;
+    reasoning: StoredReasoningSummary[];
+  }> {
     if (!streamText || !this.options.modelProvider.stream) {
       return {
         completion: await this.options.modelProvider.complete(request, context),
-        emittedDeltas: false
+        emittedDeltas: false,
+        reasoning: []
       };
     }
 
     let completion: ModelCompletion | undefined;
     let emittedDeltas = false;
     let streamedText = "";
+    const reasoningById = new Map<string, string>();
     for await (const event of this.options.modelProvider.stream(request, context)) {
       if (event.type === "text_delta") {
         if (event.delta.length > 0) {
@@ -340,6 +352,18 @@ export class LocalAgentRuntime implements AgentRuntime {
           state.emit({
             type: "message_delta",
             runId: state.runId,
+            delta: event.delta
+          });
+        }
+        continue;
+      }
+      if (event.type === "reasoning_delta") {
+        if (event.delta.length > 0) {
+          reasoningById.set(event.id, `${reasoningById.get(event.id) ?? ""}${event.delta}`);
+          state.emit({
+            type: "reasoning_delta",
+            runId: state.runId,
+            id: event.id,
             delta: event.delta
           });
         }
@@ -364,7 +388,10 @@ export class LocalAgentRuntime implements AgentRuntime {
 
     return {
       completion,
-      emittedDeltas
+      emittedDeltas,
+      reasoning: [...reasoningById.entries()]
+        .map(([id, text]) => ({ id, text }))
+        .filter((summary) => summary.text.length > 0)
     };
   }
 }

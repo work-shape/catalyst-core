@@ -49,6 +49,14 @@ export type AgentRuntimeEvent =
       delta: string;
     }
   | {
+      type: "reasoning_delta";
+      runId: AgentRunId;
+      sequence: number;
+      createdAt: ISODateString;
+      id: string;
+      delta: string;
+    }
+  | {
       type: "message_completed";
       runId: AgentRunId;
       sequence: number;

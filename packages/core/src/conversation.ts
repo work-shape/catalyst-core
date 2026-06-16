@@ -82,6 +82,10 @@ export interface ConversationStore {
 }
 
 export interface ConversationHistoryReader {
+  listMessages(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+  }): Promise<ChatMessage[]>;
   listRecentMessages(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;

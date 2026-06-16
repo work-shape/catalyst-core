@@ -49,6 +49,7 @@ export interface OpenAiResponsesRequestBody {
   input: OpenAiResponseInput;
   reasoning?: {
     effort: ReasoningEffortConfig;
+    summary?: "auto" | "concise" | "detailed";
   };
   tools: OpenAiResponsesTool[];
   tool_choice?: "auto";

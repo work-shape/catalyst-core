@@ -60,6 +60,11 @@ export type ModelCompletionStreamEvent =
       delta: string;
     }
   | {
+      type: "reasoning_delta";
+      id: string;
+      delta: string;
+    }
+  | {
       type: "completed";
       completion: ModelCompletion;
     };

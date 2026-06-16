@@ -164,7 +164,7 @@ describe("OpenAI-compatible model provider", () => {
     let requestBody:
       | {
           input?: Array<Record<string, unknown>>;
-          reasoning?: { effort?: string };
+          reasoning?: { effort?: string; summary?: string };
           store?: boolean;
           tools?: Array<{ name: string; type: string; strict?: boolean }>;
         }
@@ -248,7 +248,7 @@ describe("OpenAI-compatible model provider", () => {
 
     expect(requestUrl).toBe("https://example.test/v1/responses");
     expect(requestBody).toMatchObject({
-      reasoning: { effort: "high" },
+      reasoning: { effort: "high", summary: "auto" },
       store: false,
       tools: [{ type: "function", strict: false }]
     });
@@ -474,13 +474,34 @@ describe("OpenAI-compatible model provider", () => {
 
   it("streams OpenAI Responses text deltas, tool calls, and final usage", async () => {
     let requestBody:
-      | { stream?: boolean; reasoning?: { effort?: string }; tools?: Array<{ name: string }> }
+      | { stream?: boolean; reasoning?: { effort?: string; summary?: string }; tools?: Array<{ name: string }> }
       | undefined;
     const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       requestBody = JSON.parse(String(init?.body));
       const toolName = requestBody?.tools?.[0]?.name;
       return new Response(
         createSseStream([
+          {
+            type: "response.output_item.added",
+            output_index: 0,
+            item: {
+              type: "reasoning",
+              id: "rs_1"
+            }
+          },
+          {
+            type: "response.reasoning_summary_part.added",
+            output_index: 0,
+            item_id: "rs_1",
+            summary_index: 0
+          },
+          {
+            type: "response.reasoning_summary_text.delta",
+            output_index: 0,
+            item_id: "rs_1",
+            summary_index: 0,
+            delta: "I will inspect the document."
+          },
           {
             type: "response.output_text.delta",
             delta: "Hello"
@@ -555,9 +576,13 @@ describe("OpenAI-compatible model provider", () => {
     expect(requestBody).toMatchObject({
       stream: true,
       reasoning: {
-        effort: "high"
+        effort: "high",
+        summary: "auto"
       }
     });
+    expect(events.filter((event) => event.type === "reasoning_delta").map((event) => event.delta)).toEqual([
+      "I will inspect the document."
+    ]);
     expect(events.filter((event) => event.type === "text_delta").map((event) => event.delta)).toEqual([
       "Hello",
       " world"

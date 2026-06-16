@@ -218,6 +218,22 @@ export const chatStreamTextEndChunkSchema = z.object({
   id: z.string()
 });
 
+export const chatStreamReasoningStartChunkSchema = z.object({
+  type: z.literal("reasoning-start"),
+  id: z.string()
+});
+
+export const chatStreamReasoningDeltaChunkSchema = z.object({
+  type: z.literal("reasoning-delta"),
+  id: z.string(),
+  delta: z.string()
+});
+
+export const chatStreamReasoningEndChunkSchema = z.object({
+  type: z.literal("reasoning-end"),
+  id: z.string()
+});
+
 export const chatStreamToolInputAvailableChunkSchema = z.object({
   type: z.literal("tool-input-available"),
   toolCallId: z.string(),
@@ -269,6 +285,9 @@ export const chatStreamChunkSchema = z.discriminatedUnion("type", [
   chatStreamTextDeltaChunkSchema,
   chatStreamMessageMetadataChunkSchema,
   chatStreamTextEndChunkSchema,
+  chatStreamReasoningStartChunkSchema,
+  chatStreamReasoningDeltaChunkSchema,
+  chatStreamReasoningEndChunkSchema,
   chatStreamToolInputAvailableChunkSchema,
   chatStreamToolApprovalRequestChunkSchema,
   chatStreamToolOutputAvailableChunkSchema,
@@ -284,6 +303,14 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     runId: z.string(),
     sequence: z.number(),
     createdAt: z.string(),
+    delta: z.string()
+  }),
+  z.object({
+    type: z.literal("reasoning_delta"),
+    runId: z.string(),
+    sequence: z.number(),
+    createdAt: z.string(),
+    id: z.string(),
     delta: z.string()
   }),
   z.object({

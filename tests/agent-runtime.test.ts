@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  asAgentRunId,
   asClientInstanceId,
   type ChatMessage,
+  type JsonObject,
   type ModelProviderConfig,
   type RuntimeCallContext,
-  type ToolExecution
+  type ToolExecution,
+  type ToolExecutionResult
 } from "@vivd-catalyst/core";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
@@ -18,9 +21,15 @@ import {
 import { defineTool } from "@vivd-catalyst/tool-sdk";
 import { ToolRegistry } from "@vivd-catalyst/tool-execution";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+import {
+  createAssistantToolCallsMetadata,
+  createModelVisibleToolOutput,
+  readAssistantReasoningSummaries,
+  createToolResultMetadata
+} from "../packages/agent-runtime/src/model-context-projection";
 
 describe("local agent runtime", () => {
-  it("loads recent conversation history before the new user message", async () => {
+  it("loads conversation history before the new user message", async () => {
     const clientInstanceId = asClientInstanceId("history-client");
     const context: RuntimeCallContext = {
       clientInstanceId,
@@ -120,6 +129,136 @@ describe("local agent runtime", () => {
       "assistant",
       "user"
     ]);
+  });
+
+  it("loads complete tool-call history by default before a follow-up turn", async () => {
+    const clientInstanceId = asClientInstanceId("tool-history-client");
+    const context: RuntimeCallContext = {
+      clientInstanceId,
+      correlationId: "corr-tool-history",
+      user: {
+        id: "user-1",
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const store = new InMemoryPlatformStore();
+    const runId = asAgentRunId("run_tool_history");
+    const toolCall = {
+      toolCallId: "call_old_page",
+      toolName: "view_document_page",
+      input: {
+        fileId: "file_contract",
+        pageNumber: 6
+      }
+    };
+    const result: ToolExecutionResult = {
+      status: "success",
+      output: {
+        pageNumber: 6,
+        status: "loaded"
+      }
+    };
+    const modelOutput = await createModelVisibleToolOutput(result, modelContextOptions());
+    const conversationId = await createConversationWithMessages(store, {
+      clientInstanceId,
+      messages: [
+        {
+          role: "assistant",
+          text: "I will inspect page 6.",
+          metadata: createAssistantToolCallsMetadata({ runId, toolCalls: [toolCall] })
+        },
+        {
+          role: "tool",
+          text: modelOutput.text,
+          metadata: createToolResultMetadata({
+            runId,
+            toolCall,
+            result,
+            modelOutput
+          })
+        },
+        ...Array.from({ length: 18 }, (_, index) => ({
+          role: "assistant" as const,
+          text: `Filler response ${index + 1}.`
+        })),
+        { role: "user", text: "Did it work?" }
+      ]
+    });
+    let providerMessages: ModelMessage[] = [];
+    const providerConfig: ModelProviderConfig = {
+      id: "test-provider",
+      type: "deterministic",
+      model: "test-model"
+    };
+    const modelProvider: ModelProvider = {
+      id: "test-provider",
+      async complete(request) {
+        providerMessages = request.messages;
+        return {
+          text: "Yes, page 6 was loaded.",
+          toolCalls: [],
+          usage: noReportedUsage()
+        };
+      }
+    };
+    const runtime = new LocalAgentRuntime({
+      agents: [
+        {
+          name: "tool_history_agent",
+          displayName: "Tool History Agent",
+          instructions: "Use conversation history.",
+          modelProviderId: "test-provider",
+          toolNames: [],
+          initialPrompts: []
+        }
+      ],
+      modelProviders: [providerConfig],
+      defaultModelProvider: providerConfig,
+      conversationHistory: store,
+      modelProvider,
+      toolRegistry: new ToolRegistry({ tools: [] }),
+      toolExecution: createUnusedToolExecution(),
+      usageGovernance: new ModelUsageGovernance({
+        store,
+        budget: {
+          costSafetyMultiplier: 1
+        },
+        safeguards: {}
+      })
+    });
+
+    const run = await runtime.start(
+      {
+        agentName: "tool_history_agent",
+        conversationId,
+        message: {
+          text: "Did it work?"
+        }
+      },
+      context
+    );
+
+    for await (const event of runtime.observe(run.runId, context)) {
+      if (event.type === "run_completed") {
+        break;
+      }
+    }
+
+    const assistantToolCallIndex = providerMessages.findIndex(
+      (message) =>
+        message.role === "assistant" &&
+        message.toolCalls?.some((candidate) => candidate.toolCallId === "call_old_page")
+    );
+    const toolResultIndex = providerMessages.findIndex(
+      (message) => message.role === "tool" && message.toolCallId === "call_old_page"
+    );
+    expect(assistantToolCallIndex).toBeGreaterThan(-1);
+    expect(toolResultIndex).toBeGreaterThan(assistantToolCallIndex);
   });
 
   it("adds the resolved locale to system instructions", async () => {
@@ -249,6 +388,11 @@ describe("local agent runtime", () => {
         modelStep += 1;
         if (modelStep === 1) {
           yield {
+            type: "reasoning_delta",
+            id: "rs_1:summary:0",
+            delta: "I need to inspect the referenced page."
+          };
+          yield {
             type: "completed",
             completion: {
               text: "I will inspect page 2.",
@@ -340,9 +484,13 @@ describe("local agent runtime", () => {
     );
 
     const textDeltas: string[] = [];
+    const reasoningDeltas: string[] = [];
     const startedToolInputs: unknown[] = [];
     const completedMessages: string[] = [];
     for await (const event of runtime.observe(run.runId, context)) {
+      if (event.type === "reasoning_delta") {
+        reasoningDeltas.push(event.delta);
+      }
       if (event.type === "message_delta") {
         textDeltas.push(event.delta);
       }
@@ -358,6 +506,7 @@ describe("local agent runtime", () => {
       "I will inspect page 2.",
       "The page contains the invoice total."
     ]);
+    expect(reasoningDeltas).toEqual(["I need to inspect the referenced page."]);
     expect(startedToolInputs).toEqual([{ page: 2 }]);
     expect(completedMessages).toEqual(["The page contains the invoice total."]);
 
@@ -369,6 +518,12 @@ describe("local agent runtime", () => {
       "I will inspect page 2.",
       "The page contains the invoice total."
     ]);
+    expect(readAssistantReasoningSummaries(assistantMessages[0]?.metadata)).toEqual([
+      {
+        id: "rs_1:summary:0",
+        text: "I need to inspect the referenced page."
+      }
+    ]);
   });
 });
 
@@ -376,7 +531,7 @@ async function createConversationWithMessages(
   store: InMemoryPlatformStore,
   input: {
     clientInstanceId: ChatMessage["clientInstanceId"];
-    messages: Array<{ role: ChatMessage["role"]; text: string }>;
+    messages: Array<{ role: ChatMessage["role"]; text: string; metadata?: JsonObject }>;
   }
 ): Promise<ChatMessage["conversationId"]> {
   const conversation = await store.createConversation({
@@ -391,7 +546,8 @@ async function createConversationWithMessages(
       clientInstanceId: input.clientInstanceId,
       conversationId: conversation.id,
       role: message.role,
-      text: message.text
+      text: message.text,
+      metadata: message.metadata
     });
   }
   return conversation.id;
@@ -414,5 +570,13 @@ function noReportedUsage() {
     outputTokens: 0,
     totalTokens: 0,
     source: "not_reported" as const
+  };
+}
+
+function modelContextOptions() {
+  return {
+    toolOutput: {
+      maxTokens: 60000
+    }
   };
 }

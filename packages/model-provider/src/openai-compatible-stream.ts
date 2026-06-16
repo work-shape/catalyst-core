@@ -35,6 +35,9 @@ interface OpenAiCompatibleStreamingToolCall {
 interface OpenAiResponsesStreamEvent {
   type: string;
   delta?: string;
+  output_index?: number;
+  summary_index?: number;
+  item_id?: string;
   response?: {
     usage?: {
       input_tokens: number;
@@ -46,6 +49,7 @@ interface OpenAiResponsesStreamEvent {
     } | null;
   };
   item?: {
+    id?: string;
     type?: string;
     call_id?: string;
     name?: string;
@@ -124,12 +128,43 @@ export async function* streamOpenAiResponsesCompletion(
   let text = "";
   let usage = noReportedUsage();
   const toolCalls: OpenAiCompatibleStreamingToolCall[] = [];
+  const reasoningItemsByOutputIndex = new Map<number, string>();
+  let latestReasoningItemId: string | undefined;
 
   for await (const data of readServerSentEventData(body)) {
     if (data === "[DONE]") {
       break;
     }
     const payload = parseResponsesStreamEvent(data);
+
+    if (
+      payload.type === "response.output_item.added" &&
+      payload.item?.type === "reasoning" &&
+      payload.item.id
+    ) {
+      latestReasoningItemId = payload.item.id;
+      if (payload.output_index !== undefined) {
+        reasoningItemsByOutputIndex.set(payload.output_index, payload.item.id);
+      }
+      continue;
+    }
+
+    if (payload.type === "response.reasoning_summary_part.added") {
+      const id = createReasoningSummaryId(payload, reasoningItemsByOutputIndex, latestReasoningItemId);
+      latestReasoningItemId = id.itemId;
+      continue;
+    }
+
+    if (payload.type === "response.reasoning_summary_text.delta" && payload.delta) {
+      const id = createReasoningSummaryId(payload, reasoningItemsByOutputIndex, latestReasoningItemId);
+      latestReasoningItemId = id.itemId;
+      yield {
+        type: "reasoning_delta",
+        id: id.partId,
+        delta: payload.delta
+      };
+      continue;
+    }
 
     if (payload.type === "response.output_text.delta" && payload.delta) {
       text += payload.delta;
@@ -177,6 +212,24 @@ export async function* streamOpenAiResponsesCompletion(
       })),
       usage
     }
+  };
+}
+
+function createReasoningSummaryId(
+  payload: OpenAiResponsesStreamEvent,
+  reasoningItemsByOutputIndex: Map<number, string>,
+  latestReasoningItemId: string | undefined
+): { itemId: string; partId: string } {
+  const itemId =
+    payload.item_id ??
+    payload.item?.id ??
+    (payload.output_index !== undefined ? reasoningItemsByOutputIndex.get(payload.output_index) : undefined) ??
+    latestReasoningItemId ??
+    "reasoning";
+  const summaryIndex = payload.summary_index ?? 0;
+  return {
+    itemId,
+    partId: `${itemId}:summary:${summaryIndex}`
   };
 }
 

@@ -39,17 +39,54 @@ export interface StoredToolCall {
   input: JsonValue;
 }
 
+export interface StoredReasoningSummary {
+  id: string;
+  text: string;
+}
+
 export async function projectAgentVisibleHistory(
   messages: ChatMessage[],
   options: ModelContextProjectionOptions
 ): Promise<ModelMessage[]> {
   const projected = await Promise.all(messages.map((message) => toModelHistoryMessage(message, options)));
-  return projected.filter((message): message is ModelMessage => message !== undefined);
+  return removeIncompleteToolContext(projected.filter((message): message is ModelMessage => message !== undefined));
+}
+
+export function selectRecentCompleteHistory(
+  messages: ChatMessage[],
+  limit: number | undefined
+): ChatMessage[] {
+  if (limit === undefined || messages.length <= limit) {
+    return messages;
+  }
+
+  const chunks = chunkHistoryMessages(messages);
+  const selected: ChatMessage[][] = [];
+  let selectedCount = 0;
+
+  for (let index = chunks.length - 1; index >= 0; index -= 1) {
+    const chunk = chunks[index] ?? [];
+    if (chunk.length === 0) {
+      continue;
+    }
+    if (selectedCount > 0 && selectedCount + chunk.length > limit) {
+      selected.unshift(chunk);
+      break;
+    }
+    selected.unshift(chunk);
+    selectedCount += chunk.length;
+    if (selectedCount >= limit) {
+      break;
+    }
+  }
+
+  return selected.flat();
 }
 
 export function createAssistantToolCallsMetadata(input: {
   runId: AgentRunId;
   toolCalls: readonly ModelToolCall[];
+  reasoning?: readonly StoredReasoningSummary[];
 }): JsonObject {
   return {
     agentRuntime: {
@@ -60,7 +97,8 @@ export function createAssistantToolCallsMetadata(input: {
         toolCallId: toolCall.toolCallId,
         toolName: toolCall.toolName,
         input: unknownToJsonValue(toolCall.input)
-      }))
+      })),
+      ...createReasoningMetadata(input.reasoning)
     }
   };
 }
@@ -80,14 +118,41 @@ export function createUserMessageMetadata(input: {
   };
 }
 
-export function createAssistantFinalMetadata(input: { runId: AgentRunId }): JsonObject {
+export function createAssistantFinalMetadata(input: {
+  runId: AgentRunId;
+  reasoning?: readonly StoredReasoningSummary[];
+}): JsonObject {
   return {
     agentRuntime: {
       version: METADATA_VERSION,
       kind: "assistant_final",
-      runId: input.runId
+      runId: input.runId,
+      ...createReasoningMetadata(input.reasoning)
     }
   };
+}
+
+export function readAssistantReasoningSummaries(
+  metadata: JsonObject | undefined
+): StoredReasoningSummary[] {
+  const runtime = readRuntimeMetadata(metadata);
+  if (
+    (runtime?.kind !== "assistant_tool_calls" && runtime?.kind !== "assistant_final") ||
+    !Array.isArray(runtime.reasoning)
+  ) {
+    return [];
+  }
+  return runtime.reasoning.flatMap((value): StoredReasoningSummary[] => {
+    if (!isJsonObject(value)) {
+      return [];
+    }
+    const id = typeof value.id === "string" ? value.id : undefined;
+    const text = typeof value.text === "string" ? value.text : undefined;
+    if (!id || !text) {
+      return [];
+    }
+    return [{ id, text }];
+  });
 }
 
 export function createToolResultMetadata(input: {
@@ -207,6 +272,128 @@ async function toModelHistoryMessage(
   }
 
   return undefined;
+}
+
+function chunkHistoryMessages(messages: ChatMessage[]): ChatMessage[][] {
+  const chunks: ChatMessage[][] = [];
+  let index = 0;
+  while (index < messages.length) {
+    const message = messages[index];
+    if (!message) {
+      break;
+    }
+    const toolCalls = message.role === "assistant" ? readAssistantToolCalls(message.metadata) : undefined;
+    if (!toolCalls?.length) {
+      chunks.push([message]);
+      index += 1;
+      continue;
+    }
+
+    const expectedToolCallIds = new Set(toolCalls.map((toolCall) => toolCall.toolCallId));
+    const seenToolCallIds = new Set<string>();
+    const chunk = [message];
+    index += 1;
+
+    while (index < messages.length) {
+      const candidate = messages[index];
+      if (candidate?.role !== "tool") {
+        break;
+      }
+      const toolResult = readToolResultMetadata(candidate.metadata);
+      if (!toolResult || !expectedToolCallIds.has(toolResult.toolCallId)) {
+        break;
+      }
+      chunk.push(candidate);
+      seenToolCallIds.add(toolResult.toolCallId);
+      index += 1;
+      if (seenToolCallIds.size === expectedToolCallIds.size) {
+        break;
+      }
+    }
+
+    chunks.push(chunk);
+  }
+  return chunks;
+}
+
+function removeIncompleteToolContext(messages: ModelMessage[]): ModelMessage[] {
+  const activeMessages: ModelMessage[] = [];
+  let index = 0;
+
+  while (index < messages.length) {
+    const message = messages[index];
+    if (!message) {
+      break;
+    }
+
+    if (message.role === "tool") {
+      index += 1;
+      continue;
+    }
+
+    if (message.role !== "assistant" || !message.toolCalls?.length) {
+      activeMessages.push(message);
+      index += 1;
+      continue;
+    }
+
+    const expectedToolCallIds = new Set(message.toolCalls.map((toolCall) => toolCall.toolCallId));
+    const seenToolCallIds = new Set<string>();
+    const toolResults: ModelMessage[] = [];
+    let cursor = index + 1;
+
+    while (cursor < messages.length) {
+      const candidate = messages[cursor];
+      if (candidate?.role !== "tool") {
+        break;
+      }
+      if (!expectedToolCallIds.has(candidate.toolCallId) || seenToolCallIds.has(candidate.toolCallId)) {
+        break;
+      }
+      toolResults.push(candidate);
+      seenToolCallIds.add(candidate.toolCallId);
+      cursor += 1;
+      if (seenToolCallIds.size === expectedToolCallIds.size) {
+        break;
+      }
+    }
+
+    if (seenToolCallIds.size === expectedToolCallIds.size) {
+      activeMessages.push(message, ...toolResults);
+      index = cursor;
+      continue;
+    }
+
+    if (hasTextContent(message.content)) {
+      activeMessages.push({
+        role: "assistant",
+        content: message.content
+      });
+    }
+    index = cursor;
+  }
+
+  return activeMessages;
+}
+
+function hasTextContent(content: ModelContent): boolean {
+  if (typeof content === "string") {
+    return content.length > 0;
+  }
+  return content.some((part) => part.type === "text" && part.text.length > 0);
+}
+
+function createReasoningMetadata(
+  reasoning: readonly StoredReasoningSummary[] | undefined
+): { reasoning?: JsonValue } {
+  const summaries =
+    reasoning
+      ?.map((summary) => ({
+        id: summary.id,
+        text: summary.text
+      }))
+      .filter((summary) => summary.text.length > 0) ?? [];
+  return summaries.length > 0 ? { reasoning: summaries } : {};
 }
 
 function readAssistantToolCalls(metadata: JsonObject | undefined): ModelToolCall[] | undefined {

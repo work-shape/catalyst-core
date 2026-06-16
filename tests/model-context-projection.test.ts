@@ -16,7 +16,8 @@ import {
   createAssistantToolCallsMetadata,
   createModelVisibleToolOutput,
   createToolResultMetadata,
-  projectAgentVisibleHistory
+  projectAgentVisibleHistory,
+  selectRecentCompleteHistory
 } from "../packages/agent-runtime/src/model-context-projection";
 import { modelContentImages, modelContentText } from "@vivd-catalyst/model-provider";
 
@@ -134,6 +135,94 @@ describe("model context projection", () => {
     });
     expect(modelContentText(projected[1]?.content ?? "")).toContain("validation_failed");
     expect(modelContentText(projected[1]?.content ?? "")).toContain("Expected string");
+  });
+
+  it("keeps tool-call blocks complete when selecting a bounded active history", async () => {
+    const runId = asAgentRunId("run_projection_bounded");
+    const toolCall = {
+      toolCallId: "toolcall_projection_bounded",
+      toolName: "view_document_page",
+      input: {
+        fileId: "file_contract",
+        pageNumber: 6
+      }
+    };
+    const result: ToolExecutionResult = {
+      status: "success",
+      output: {
+        pageNumber: 6,
+        status: "loaded"
+      }
+    };
+    const modelOutput = await createModelVisibleToolOutput(result, modelContextOptions());
+    const messages = [
+      createMessage("user", "Earlier request"),
+      createMessage("assistant", "", createAssistantToolCallsMetadata({ runId, toolCalls: [toolCall] })),
+      createMessage(
+        "tool",
+        modelOutput.text,
+        createToolResultMetadata({
+          runId,
+          toolCall,
+          result,
+          modelOutput
+        })
+      ),
+      createMessage("assistant", "Page 6 loaded."),
+      createMessage("user", "Did it work?")
+    ];
+
+    const selected = selectRecentCompleteHistory(messages, 4);
+
+    expect(selected.map((message) => message.role)).toEqual([
+      "assistant",
+      "tool",
+      "assistant",
+      "user"
+    ]);
+    expect(selected[0]?.metadata).toMatchObject({
+      agentRuntime: {
+        kind: "assistant_tool_calls"
+      }
+    });
+  });
+
+  it("drops orphan tool outputs from projected provider context", async () => {
+    const runId = asAgentRunId("run_projection_orphan");
+    const toolCall = {
+      toolCallId: "toolcall_projection_orphan",
+      toolName: "view_document_page",
+      input: {
+        fileId: "file_contract",
+        pageNumber: 6
+      }
+    };
+    const result: ToolExecutionResult = {
+      status: "success",
+      output: {
+        pageNumber: 6,
+        status: "loaded"
+      }
+    };
+    const modelOutput = await createModelVisibleToolOutput(result, modelContextOptions());
+    const projected = await projectAgentVisibleHistory(
+      [
+        createMessage(
+          "tool",
+          modelOutput.text,
+          createToolResultMetadata({
+            runId,
+            toolCall,
+            result,
+            modelOutput
+          })
+        ),
+        createMessage("user", "Did it work?")
+      ],
+      modelContextOptions()
+    );
+
+    expect(projected.map((message) => message.role)).toEqual(["user"]);
   });
 
   it("projects user attachment manifests without embedding document text", async () => {

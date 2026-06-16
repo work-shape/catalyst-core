@@ -244,13 +244,17 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     request: ModelCompletionRequest,
     providerTools: OpenAiCompatibleProviderTool[]
   ): OpenAiResponsesRequestBody {
+    const model = request.model || this.options.model;
     return {
-      model: request.model || this.options.model,
+      model,
       input: toOpenAiResponsesInput(request.messages),
       ...(this.options.reasoningEffort
         ? {
             reasoning: {
-              effort: this.options.reasoningEffort
+              effort: this.options.reasoningEffort,
+              ...(this.options.reasoningEffort !== "none" && shouldRequestReasoningSummary(model)
+                ? { summary: "auto" as const }
+                : {})
             }
           }
         : {}),
@@ -275,6 +279,16 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
       }
     );
   }
+}
+
+function shouldRequestReasoningSummary(model: string): boolean {
+  const normalized = model.toLowerCase();
+  return (
+    normalized.startsWith("gpt-5") ||
+    normalized.startsWith("o1") ||
+    normalized.startsWith("o3") ||
+    normalized.startsWith("o4")
+  );
 }
 
 function readOpenAiResponsesToolCalls(

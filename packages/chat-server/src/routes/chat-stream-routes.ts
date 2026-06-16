@@ -47,6 +47,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
       execute: async ({ writer }) => {
         let textPartId: string | undefined;
         let textPartIndex = 0;
+        const activeReasoningPartIds = new Set<string>();
         let assistantMessageCount = 0;
 
         function writeChunk(chunk: ChatStreamChunk): void {
@@ -76,6 +77,27 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
           textPartId = undefined;
         }
 
+        function ensureReasoningPart(id: string): void {
+          if (activeReasoningPartIds.has(id)) {
+            return;
+          }
+          activeReasoningPartIds.add(id);
+          writeChunk({
+            type: "reasoning-start",
+            id
+          });
+        }
+
+        function closeReasoningParts(): void {
+          for (const id of activeReasoningPartIds) {
+            writeChunk({
+              type: "reasoning-end",
+              id
+            });
+          }
+          activeReasoningPartIds.clear();
+        }
+
         writeChunk({
           type: "start",
           messageId: responseMessageId,
@@ -89,7 +111,18 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
         });
 
         for await (const event of conversations.observeRun(runId, localizedContext)) {
+          if (event.type === "reasoning_delta") {
+            closeTextPart();
+            ensureReasoningPart(event.id);
+            writeChunk({
+              type: "reasoning-delta",
+              id: event.id,
+              delta: event.delta
+            });
+          }
+
           if (event.type === "message_delta") {
+            closeReasoningParts();
             const activeTextPartId = ensureTextPart();
             writeChunk({
               type: "text-delta",
@@ -100,6 +133,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
 
           if (event.type === "tool_call_started") {
             closeTextPart();
+            closeReasoningParts();
             writeChunk({
               type: "tool-input-available",
               toolCallId: event.toolCallId,
@@ -112,6 +146,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
 
           if (event.type === "tool_permission_requested") {
             closeTextPart();
+            closeReasoningParts();
             writeChunk({
               type: "tool-approval-request",
               approvalId: `${event.toolCallId}:approval`,
@@ -121,6 +156,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
 
           if (event.type === "tool_call_completed") {
             closeTextPart();
+            closeReasoningParts();
             writeChunk({
               type: "tool-output-available",
               toolCallId: event.toolCallId,
@@ -131,6 +167,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
 
           if (event.type === "tool_call_failed") {
             closeTextPart();
+            closeReasoningParts();
             writeChunk({
               type: "tool-output-error",
               toolCallId: event.toolCallId,
@@ -149,6 +186,8 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
           }
 
           if (event.type === "run_failed") {
+            closeTextPart();
+            closeReasoningParts();
             await conversations.recordRunFailed(
               conversationId,
               user,
@@ -184,6 +223,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
         }
 
         closeTextPart();
+        closeReasoningParts();
         writeChunk({
           type: "finish-step"
         });
