@@ -404,13 +404,20 @@ type ViewDocumentPageInput = {
 3. Render only the requested page from the original PDF with Poppler `pdftoppm`.
 4. Use a conservative default such as PNG at 150 or 160 DPI, with 200 DPI reserved for small text.
 5. Enforce output byte, pixel, timeout, and per-conversation rate limits.
-6. Cache the rendered PNG with a deterministic artifact key that includes file id, page number, DPI, and source checksum or preprocessing version.
-7. Persist the PNG as a managed artifact with kind `document.page_image`.
+6. Persist or rehydrate the rendered PNG through a deterministic artifact reference that includes file id, page number, DPI, and source checksum or preprocessing version.
+7. Represent the image as a managed artifact with kind `document.page_image`.
 8. Return a normal tool result whose model-visible `output` includes file id, page number, page count, render metadata, and the page-image artifact reference.
 9. Include the page-image artifact in the tool result `artifacts` list.
 10. Project the rendered page image into the agent's visual/model context for the next provider call.
 
-The rendered page image is agent-visible tool output, not only UI display data. It must be persisted through durable message/tool history in the same way as other model-visible tool outputs: the tool call input, validated output, artifact reference, and successful or failed execution state all remain in conversation history. The PNG bytes live in managed artifact storage under retention/deletion policy; later model-context projection may omit, downsample, or replace the image with an artifact marker when context bounds or compaction require it, but it must not rewrite or erase the durable transcript.
+The rendered page image is agent-visible tool output, not only UI display data. It must be persisted through durable message/tool history in the same way as other model-visible tool outputs: the tool call input, validated output, artifact reference, and successful or failed execution state all remain in conversation history.
+
+Because API-model calls do not retain image bytes across requests by themselves, the platform must keep every active model-visible page image projectable. There are two acceptable implementations:
+
+- persist the rendered PNG bytes as a managed artifact for as long as the tool result remains eligible for active model-context projection
+- persist the artifact reference plus deterministic render parameters, then rehydrate the PNG from the retained original PDF whenever projection needs to include that image
+
+A short-lived render cache can delete cached PNG bytes after a tool call, but only if model-context projection can recreate the same visual input from the original PDF. If the original PDF is no longer available, the rendered PNG must remain available for the same retention scope as the active visual tool result. Later model-context projection may omit, downsample, or replace the image with an artifact marker when context bounds or compaction require it, but that is a projection decision and must not rewrite or erase the durable transcript.
 
 DOCX page boundaries should remain explicitly weaker than PDF page boundaries. A DOCX document has no stable page model without choosing a layout engine and rendering configuration, so DOCX should keep full-text conversion first. Add DOCX page-aware behavior only if the product accepts a deterministic rendering dependency and documents the limits.
 

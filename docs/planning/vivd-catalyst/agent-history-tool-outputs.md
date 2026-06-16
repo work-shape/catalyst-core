@@ -80,7 +80,7 @@ type ToolExecutionResult =
 
 `artifacts` are references to managed files or stored outputs. They let tools avoid stuffing large bytes into model context while preserving retention and deletion semantics.
 
-Some artifacts are also model-visible visual content. For example, `view_document_page` can return a rendered PDF page PNG as a `document.page_image` artifact. In that case, the artifact reference is part of the durable tool result and the model-context projection should load the image into the agent's visual context for the next provider call when policy and context bounds allow it. This is distinct from `display`: a display is primarily for the user-facing UI, while a model-visible image artifact is evidence the agent is expected to inspect.
+Some artifacts are also model-visible visual content. For example, `view_document_page` can return a rendered PDF page PNG as a `document.page_image` artifact. In that case, the artifact reference is part of the durable tool result and the model-context projection should load or rehydrate the image into the agent's visual context on later provider calls when policy and context bounds allow it. API-model calls do not remember image bytes across requests unless projection sends them again. This is distinct from `display`: a display is primarily for the user-facing UI, while a model-visible image artifact is evidence the agent is expected to inspect.
 
 `auditSummary` remains minimized governance metadata and must not contain raw sensitive payloads.
 
@@ -112,7 +112,7 @@ When constructing a provider request, the runtime projects this durable history 
 
 The projection must not silently erase the fact that a tool call happened, what input the agent supplied, or what error came back.
 
-For model-visible image artifacts, projection may change whether the image bytes are loaded into a specific provider request, but it must not mutate the durable transcript or remove the artifact reference from message history.
+For model-visible image artifacts, projection may change whether the image bytes are loaded into a specific provider request, but it must not mutate the durable transcript or remove the artifact reference from message history. If an image artifact is still eligible for active model context, projection must be able to fetch stored bytes or rehydrate equivalent bytes from retained source artifacts. Deleting a render cache is safe only when this rehydration path remains available.
 
 ## Module Shape
 
