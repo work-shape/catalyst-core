@@ -5,6 +5,7 @@ import type { ToolDisplayWidgetRegistry } from "./domain-ui-widgets";
 
 export interface StandaloneChatAppOptions {
   apiBaseUrl?: string;
+  defaultApiPort?: string | number;
   adminPanel?: ChatShellAdminPanel;
   displayWidgets?: ToolDisplayWidgetRegistry;
   rootElement?: HTMLElement | null;
@@ -12,6 +13,7 @@ export interface StandaloneChatAppOptions {
 
 export function renderStandaloneChatApp({
   apiBaseUrl,
+  defaultApiPort,
   adminPanel,
   displayWidgets,
   rootElement = document.getElementById("root")
@@ -23,7 +25,7 @@ export function renderStandaloneChatApp({
   createRoot(rootElement).render(
     <StrictMode>
       <ChatShell
-        apiBaseUrl={apiBaseUrl ?? defaultLocalApiBaseUrl()}
+        apiBaseUrl={resolveApiBaseUrl(apiBaseUrl, defaultApiPort)}
         adminPanel={adminPanel}
         displayWidgets={displayWidgets}
         manageDocumentTitle
@@ -32,6 +34,16 @@ export function renderStandaloneChatApp({
   );
 }
 
-function defaultLocalApiBaseUrl(): string {
-  return `${window.location.protocol}//${window.location.hostname}:4100`;
+function resolveApiBaseUrl(apiBaseUrl: string | undefined, defaultApiPort: string | number | undefined): string {
+  if (apiBaseUrl) {
+    return apiBaseUrl;
+  }
+  if (defaultApiPort) {
+    return defaultLocalApiBaseUrl(defaultApiPort);
+  }
+  return apiBaseUrl ?? defaultLocalApiBaseUrl(4100);
+}
+
+function defaultLocalApiBaseUrl(port: string | number): string {
+  return `${window.location.protocol}//${window.location.hostname}:${port}`;
 }

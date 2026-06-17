@@ -4,5 +4,6 @@ import "@vivd-catalyst/chat-ui/styles.css";
 
 renderStandaloneChatApp({
   apiBaseUrl: import.meta.env.VITE_CHAT_API_URL,
+  defaultApiPort: import.meta.env.VITE_CHAT_API_PORT,
   adminPanel: superadminPanel
 });

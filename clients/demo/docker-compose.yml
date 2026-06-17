@@ -3,7 +3,8 @@ x-client-build-args: &client-build-args
   SERVER_ENTRY: platform/clients/demo/dist/server.js
   UI_PACKAGE: "@vivd-catalyst/demo"
   UI_DIST_DIR: platform/clients/demo/dist/client
-  VITE_CHAT_API_URL: ${VITE_CHAT_API_URL:-http://127.0.0.1:4100}
+  VITE_CHAT_API_URL: ${VITE_CHAT_API_URL:-}
+  VITE_CHAT_API_PORT: ${VITE_CHAT_API_PORT:-4100}
 
 x-client-build: &client-build
   context: ../../..

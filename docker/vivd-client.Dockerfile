@@ -12,8 +12,10 @@ COPY deployments ./deployments
 ARG APP_PACKAGE
 ARG UI_PACKAGE
 ARG VITE_CHAT_API_URL
+ARG VITE_CHAT_API_PORT
 
 ENV VITE_CHAT_API_URL=${VITE_CHAT_API_URL}
+ENV VITE_CHAT_API_PORT=${VITE_CHAT_API_PORT}
 
 RUN --mount=type=cache,id=vivd-pnpm-store,target=/root/.local/share/pnpm/store \
   pnpm \
