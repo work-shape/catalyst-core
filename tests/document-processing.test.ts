@@ -168,6 +168,63 @@ describe("document preprocessing", () => {
     });
   });
 
+  it("preprocesses DOCX as a canonical PDF-backed page-aware document", async () => {
+    const { service, store, objectStore, conversationId } = await createDocumentFixture(
+      createCanonicalPdfPreprocessor(new TextEncoder().encode("%PDF-fixture"))
+    );
+    const attachment = await service.uploadDraftAttachment({
+      conversationId,
+      ownerUserId: "user-1",
+      filename: "contract.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      bytes: createDocxZipHeader()
+    });
+    const ready = await waitForAttachment(store, attachment.id, "ready");
+
+    expect(ready).toMatchObject({
+      filename: "contract.docx",
+      status: "ready",
+      format: "docx",
+      preprocessingEngine: "libreoffice_pdf",
+      pageCount: 2
+    });
+    expect(ready.preparedTextArtifactId).toBeDefined();
+    expect(ready.preparedPagesArtifactId).toBeDefined();
+
+    const canonicalArtifacts = await store.listManagedArtifactsForFile({
+      clientInstanceId: asClientInstanceId("document-client"),
+      conversationId,
+      fileId: ready.fileId,
+      kind: "document.canonical_pdf"
+    });
+    expect(canonicalArtifacts).toHaveLength(1);
+    expect(canonicalArtifacts[0]).toMatchObject({
+      kind: "document.canonical_pdf",
+      filename: "contract.docx.canonical.pdf",
+      mimeType: "application/pdf",
+      metadata: expect.objectContaining({
+        sourceFormat: "docx",
+        engine: "libreoffice_pdf"
+      })
+    });
+    await expect(objectStore.getObject(canonicalArtifacts[0]?.objectKey ?? "")).resolves.toEqual(
+      new TextEncoder().encode("%PDF-fixture")
+    );
+
+    const pageTwo = await service.readDocument({
+      conversationId,
+      fileId: ready.fileId,
+      mode: "pages",
+      pages: {
+        from: 2,
+        to: 2
+      }
+    });
+    expect(pageTwo.pages).toHaveLength(1);
+    expect(pageTwo.pages[0]?.pageNumber).toBe(2);
+    expect(pageTwo.text).toContain("DOCX page two");
+  });
+
   it("creates a metadata-only attachment manifest", async () => {
     const { service, store, conversationId } = await createDocumentFixture();
     const attachment = await service.uploadDraftAttachment({
@@ -379,7 +436,66 @@ describe("document preprocessing", () => {
     expect([...imageBytes.slice(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
   }, 40000);
 
-  it("reports a clear setup error when markitdown is unavailable", async () => {
+  pdfTest("renders DOCX pages from the canonical PDF artifact on demand", async () => {
+    const clientInstanceId = asClientInstanceId("document-client");
+    const store = new InMemoryPlatformStore();
+    const objectStore = new InMemoryObjectStore();
+    const config = createPreprocessingConfig();
+    const service = new DocumentPreprocessingService({
+      clientInstanceId,
+      store,
+      objectStore,
+      preprocessor: createCanonicalPdfPreprocessor(createTwoPagePdf()),
+      config
+    });
+    const viewer = new DocumentPageRenderService({
+      clientInstanceId,
+      store,
+      objectStore,
+      timeoutMs: config.timeoutMs
+    });
+    const conversation = await store.createConversation({
+      clientInstanceId,
+      ownerUserId: "user-1",
+      ownerExternalUserId: "user-1",
+      title: "DOCX",
+      retainedUntil: new Date(Date.now() + 86_400_000).toISOString()
+    });
+
+    const attachment = await service.uploadDraftAttachment({
+      conversationId: conversation.id,
+      ownerUserId: "user-1",
+      filename: "contract.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      bytes: createDocxZipHeader()
+    });
+    const ready = await waitForAttachment(store, attachment.id, "ready");
+
+    expect(ready).toMatchObject({
+      status: "ready",
+      format: "docx",
+      pageCount: 2,
+      preprocessingEngine: "libreoffice_pdf"
+    });
+
+    const rendered = await viewer.viewPage({
+      conversationId: conversation.id,
+      fileId: ready.fileId,
+      pageNumber: 1
+    });
+    const artifact = await store.getManagedArtifact({
+      clientInstanceId,
+      artifactId: rendered.image.artifactId
+    });
+    expect(artifact).toMatchObject({
+      kind: "document.page_image",
+      mimeType: "image/png"
+    });
+    const imageBytes = await objectStore.getObject(artifact?.objectKey ?? "");
+    expect([...imageBytes.slice(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+  }, 40000);
+
+  it("reports a clear setup error when the office converter is unavailable", async () => {
     const binDirectory = await mkdtemp(path.join(tmpdir(), "vivd-test-empty-bin-"));
     const originalPath = process.env.PATH;
     process.env.PATH = binDirectory;
@@ -394,7 +510,7 @@ describe("document preprocessing", () => {
           bytes: createDocxZipHeader()
         })
       ).rejects.toThrow(
-        "Document converter command 'markitdown' was not found on PATH."
+        "Document converter command 'soffice' was not found on PATH."
       );
     } finally {
       restorePath(originalPath);
@@ -403,7 +519,7 @@ describe("document preprocessing", () => {
   });
 });
 
-async function createDocumentFixture() {
+async function createDocumentFixture(preprocessor: DocumentPreprocessor = createUtf8Preprocessor()) {
   const clientInstanceId = asClientInstanceId("document-client");
   const store = new InMemoryPlatformStore();
   const objectStore = new InMemoryObjectStore();
@@ -411,7 +527,7 @@ async function createDocumentFixture() {
     clientInstanceId,
     store,
     objectStore,
-    preprocessor: createUtf8Preprocessor(),
+    preprocessor,
     config: createPreprocessingConfig()
   });
   const conversation = await store.createConversation({
@@ -424,6 +540,7 @@ async function createDocumentFixture() {
   return {
     service,
     store,
+    objectStore,
     conversationId: conversation.id
   };
 }
@@ -435,6 +552,44 @@ function createUtf8Preprocessor(): DocumentPreprocessor {
         engine: "direct_text",
         text: new TextDecoder().decode(input.bytes),
         textMimeType: input.format === "md" ? "text/markdown" : "text/plain",
+        warnings: []
+      };
+    }
+  };
+}
+
+function createCanonicalPdfPreprocessor(canonicalPdfBytes: Uint8Array): DocumentPreprocessor {
+  return {
+    async convert() {
+      return {
+        engine: "libreoffice_pdf",
+        text: "[Page 1]\nDOCX page one\n\n[Page 2]\nDOCX page two",
+        textMimeType: "text/plain",
+        pageCount: 2,
+        pages: {
+          format: "pdf",
+          pageCount: 2,
+          pages: [
+            {
+              pageNumber: 1,
+              text: "DOCX page one",
+              characterCount: 13,
+              wordCount: 3,
+              warnings: []
+            },
+            {
+              pageNumber: 2,
+              text: "DOCX page two",
+              characterCount: 13,
+              wordCount: 3,
+              warnings: []
+            }
+          ]
+        },
+        canonicalPdf: {
+          bytes: canonicalPdfBytes,
+          mimeType: "application/pdf"
+        },
         warnings: []
       };
     }

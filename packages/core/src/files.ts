@@ -17,6 +17,7 @@ export interface ManagedFileRef {
 }
 
 export type ManagedArtifactKind =
+  | "document.canonical_pdf"
   | "document.prepared_text"
   | "document.pages_json"
   | "document.page_image";

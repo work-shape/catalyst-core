@@ -76,11 +76,8 @@ export class DocumentPageRenderService implements DocumentPageViewer {
     if (!attachment) {
       throw new AppError("NOT_FOUND", "Prepared document is not available in this conversation");
     }
-    if (attachment.format !== "pdf") {
-      throw new AppError("VALIDATION_FAILED", "Only PDF pages can be rendered visually");
-    }
     if (!attachment.pageCount) {
-      throw new AppError("VALIDATION_FAILED", "PDF page count is not available");
+      throw new AppError("VALIDATION_FAILED", "Document page count is not available");
     }
     if (pageNumber < 1 || pageNumber > attachment.pageCount) {
       throw new AppError("VALIDATION_FAILED", "Requested page number is outside the document");
@@ -108,19 +105,17 @@ export class DocumentPageRenderService implements DocumentPageViewer {
       };
     }
 
-    const file = await this.store.getManagedFile({
-      clientInstanceId: this.clientInstanceId,
-      fileId: attachment.fileId
+    const pageSource = await this.resolvePageRenderSource({
+      conversationId: input.conversationId,
+      fileId: attachment.fileId,
+      format: attachment.format,
+      filename: attachment.filename
     });
-    if (!file) {
-      throw new AppError("NOT_FOUND", "Managed file is not available");
-    }
-    const originalBytes = await this.objectStore.getObject(file.objectKey);
     const imageBytes = await this.renderPage({
-      bytes: originalBytes,
+      bytes: pageSource.bytes,
       pageNumber,
       dpi,
-      filename: attachment.filename
+      filename: pageSource.filename
     });
     const checksum = createChecksum(imageBytes);
     const objectKey = createPageImageObjectKey({
@@ -164,6 +159,41 @@ export class DocumentPageRenderService implements DocumentPageViewer {
         byteSize: artifact.byteSize,
         checksum: artifact.checksum
       }
+    };
+  }
+
+  private async resolvePageRenderSource(input: {
+    conversationId: ConversationId;
+    fileId: ManagedFileId;
+    format: string | undefined;
+    filename: string;
+  }): Promise<{ bytes: Uint8Array; filename: string }> {
+    if (input.format === "pdf") {
+      const file = await this.store.getManagedFile({
+        clientInstanceId: this.clientInstanceId,
+        fileId: input.fileId
+      });
+      if (!file) {
+        throw new AppError("NOT_FOUND", "Managed file is not available");
+      }
+      return {
+        bytes: await this.objectStore.getObject(file.objectKey),
+        filename: input.filename
+      };
+    }
+
+    const [canonicalPdf] = await this.store.listManagedArtifactsForFile({
+      clientInstanceId: this.clientInstanceId,
+      conversationId: input.conversationId,
+      fileId: input.fileId,
+      kind: "document.canonical_pdf"
+    });
+    if (!canonicalPdf) {
+      throw new AppError("VALIDATION_FAILED", "Document does not have a canonical PDF for visual rendering");
+    }
+    return {
+      bytes: await this.objectStore.getObject(canonicalPdf.objectKey),
+      filename: canonicalPdf.filename ?? `${input.filename}.canonical.pdf`
     };
   }
 

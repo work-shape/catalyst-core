@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type {
@@ -34,12 +34,18 @@ export interface PreparedPdfPagesArtifact {
   pages: PreparedPdfPage[];
 }
 
+export interface CanonicalPdfOutput {
+  bytes: Uint8Array;
+  mimeType: "application/pdf";
+}
+
 export interface ConvertDocumentOutput {
-  engine: "platform_pdf" | "markitdown" | "direct_text";
+  engine: "platform_pdf" | "libreoffice_pdf" | "markitdown" | "direct_text";
   text: string;
   textMimeType: "text/plain" | "text/markdown";
   pageCount?: number;
   pages?: PreparedPdfPagesArtifact;
+  canonicalPdf?: CanonicalPdfOutput;
   warnings: DocumentAttachmentWarning[];
 }
 
@@ -77,7 +83,53 @@ export class PlatformDocumentPreprocessor implements DocumentPreprocessor {
       throw new Error("The file is marked as DOCX but is not a valid Word document package.");
     }
 
+    if (input.format === "docx") {
+      return this.convertDocxThroughCanonicalPdf(input);
+    }
+
     return this.convertWithMarkItDown(input);
+  }
+
+  private async convertDocxThroughCanonicalPdf(
+    input: ConvertDocumentInput
+  ): Promise<ConvertDocumentOutput> {
+    const canonicalPdf = await this.convertOfficeDocumentToPdf(input);
+    const converted = await this.convertPdf({
+      bytes: canonicalPdf.bytes,
+      filename: `${input.filename}.canonical.pdf`,
+      mimeType: canonicalPdf.mimeType,
+      format: "pdf"
+    });
+    return {
+      ...converted,
+      engine: "libreoffice_pdf",
+      canonicalPdf
+    };
+  }
+
+  private async convertOfficeDocumentToPdf(input: ConvertDocumentInput): Promise<CanonicalPdfOutput> {
+    const directory = await mkdtemp(path.join(tmpdir(), "vivd-office-"));
+    const userProfile = path.join(directory, "profile");
+    const convertDirectory = path.join(directory, "convert");
+    const inputPath = path.join(convertDirectory, sanitizeTempFilename(input.filename));
+    await mkdir(userProfile, { recursive: true });
+    await mkdir(convertDirectory, { recursive: true });
+    await writeFile(inputPath, input.bytes);
+    try {
+      const pdfPath = await runOfficePdfConversion({
+        command: this.environment.commands.officeConverter,
+        inputPath,
+        outputDirectory: convertDirectory,
+        userProfile,
+        timeoutMs: this.config.timeoutMs
+      });
+      return {
+        bytes: await readFile(pdfPath),
+        mimeType: "application/pdf"
+      };
+    } finally {
+      await rm(directory, { force: true, recursive: true });
+    }
   }
 
   private async convertPdf(input: ConvertDocumentInput): Promise<ConvertDocumentOutput> {
@@ -208,9 +260,11 @@ function runCommand(input: {
   command: string;
   args: string[];
   timeoutMs: number;
+  env?: NodeJS.ProcessEnv;
 }): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(input.command, input.args, {
+      env: input.env,
       stdio: ["ignore", "pipe", "pipe"]
     });
     const stdout: Buffer[] = [];
@@ -254,6 +308,112 @@ function runCommand(input: {
       resolve(Buffer.concat(stdout).toString("utf8"));
     });
   });
+}
+
+async function runOfficePdfConversion(input: {
+  command: string;
+  inputPath: string;
+  outputDirectory: string;
+  userProfile: string;
+  timeoutMs: number;
+}): Promise<string> {
+  const direct = await runOfficeConversionAttempt({
+    ...input,
+    outputFormat: "pdf"
+  });
+  const directPdf = await findPdfOutput(input.outputDirectory);
+  if (directPdf) {
+    return directPdf;
+  }
+
+  const odt = await runOfficeConversionAttempt({
+    ...input,
+    outputFormat: "odt"
+  });
+  const odtPath = await findConvertedOutput(input.outputDirectory, ".odt");
+  if (!odtPath) {
+    throw new Error(`LibreOffice did not produce a PDF or ODT output.\n${direct}\n${odt}`.trim());
+  }
+
+  const fromOdt = await runOfficeConversionAttempt({
+    ...input,
+    inputPath: odtPath,
+    outputFormat: "pdf"
+  });
+  const pdf = await findPdfOutput(input.outputDirectory);
+  if (pdf) {
+    return pdf;
+  }
+  throw new Error(`LibreOffice did not produce a PDF output.\n${direct}\n${odt}\n${fromOdt}`.trim());
+}
+
+async function runOfficeConversionAttempt(input: {
+  command: string;
+  inputPath: string;
+  outputDirectory: string;
+  userProfile: string;
+  timeoutMs: number;
+  outputFormat: "pdf" | "odt";
+}): Promise<string> {
+  const args = [
+    `-env:UserInstallation=file://${input.userProfile}`,
+    "--invisible",
+    "--headless",
+    "--norestore",
+    "--convert-to",
+    input.outputFormat,
+    "--outdir",
+    input.outputDirectory,
+    input.inputPath
+  ];
+  try {
+    return await runCommand({
+      command: input.command,
+      args,
+      timeoutMs: input.timeoutMs,
+      env: createOfficeConverterEnv(input.userProfile)
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "LibreOffice conversion failed";
+    throw new Error(`LibreOffice ${input.outputFormat.toUpperCase()} conversion failed: ${message}`);
+  }
+}
+
+function createOfficeConverterEnv(userProfile: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    HOME: userProfile,
+    XDG_CONFIG_HOME: path.join(userProfile, "xdg_config"),
+    XDG_CACHE_HOME: path.join(userProfile, "xdg_cache")
+  };
+  if (process.platform === "darwin") {
+    env.TMPDIR = "/private/tmp";
+    env.TEMP = "/private/tmp";
+    env.TMP = "/private/tmp";
+  }
+  return env;
+}
+
+async function findPdfOutput(directory: string): Promise<string | undefined> {
+  return findConvertedOutput(directory, ".pdf");
+}
+
+async function findConvertedOutput(
+  directory: string,
+  extension: ".pdf" | ".odt"
+): Promise<string | undefined> {
+  const entries = await readdir(directory);
+  const candidates = entries
+    .filter((entry) => entry.toLowerCase().endsWith(extension))
+    .sort();
+  for (const candidate of candidates) {
+    const fullPath = path.join(directory, candidate);
+    const info = await stat(fullPath);
+    if (info.isFile() && info.size > 0) {
+      return fullPath;
+    }
+  }
+  return undefined;
 }
 
 const PDF_EXTRACT_SCRIPT = String.raw`

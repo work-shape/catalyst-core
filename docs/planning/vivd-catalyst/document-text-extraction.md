@@ -1,7 +1,7 @@
 # Document Preprocessing And Reading
 
 Date: 2026-06-10
-Updated: 2026-06-16
+Updated: 2026-06-17
 
 This note defines the first platform-native document preprocessing and reading path. It is intentionally narrow: after file acquisition, supported text-related documents are converted into reusable text/Markdown artifacts and safe metadata. The agent then uses a normal tool to read the prepared text. This does not extract structured fields, compare claims, perform OCR, retrieve from a knowledge source, or acquire files from URLs.
 
@@ -13,9 +13,11 @@ The v1 flow is:
 file upload or handoff
   -> File Acquisition creates a Managed File
   -> DocumentPreprocessingService runs for supported text-related files
-  -> text/Markdown artifact and metadata are persisted
+  -> DOCX files are converted once into a canonical PDF artifact
+  -> text/page artifacts and metadata are persisted
   -> send persists an Attachment Manifest snapshot with file refs plus preprocessing metadata
   -> agent calls read_document when it needs the text
+  -> agent calls view_document_page only when it needs visual page evidence
   -> read_document returns prepared text as persisted model-visible tool output
 ```
 
@@ -37,7 +39,9 @@ Prepared text artifacts are also conversation-scoped in v1. Even if the same sou
 
 V1 should not deduplicate preprocessing even when the same file appears to be attached twice in the same conversation. Each Draft Attachment has its own preprocessing state and prepared artifact. The UI may warn on likely duplicates, such as matching filename and size, and ask whether the user wants to upload again; if the user continues, treat it as a separate attachment.
 
-The output is prepared document text, preferably Markdown when the converter can preserve useful structure. For v1, supported documents should normally be read in full. The platform also stores the extracted text as a managed artifact so retention, deletion, audit, future page-range reads, and future UI references have a durable object to point at.
+The output is prepared document text, preferably Markdown when the converter can preserve useful structure. For v1, supported documents should normally be read in full. The platform also stores the extracted text as a managed artifact so retention, deletion, audit, page-range reads, visual page reads, and future UI references have durable objects to point at.
+
+For DOCX, preprocessing should create a canonical PDF artifact on drop and then treat that PDF as the page-aware source for text extraction and visual page rendering. The original DOCX remains the managed source file. The canonical PDF is a derived managed artifact used by platform tools; it should not be rendered into page PNGs unless `view_document_page` requests a specific page.
 
 ## Non-Goals
 
@@ -68,8 +72,9 @@ chat UI drop/upload
   -> persistent Draft Attachment is created for the conversation
   -> DocumentPreprocessingService
   -> ManagedFileStore reads source file
-  -> format-specific converter prepares text through a child process
-  -> ManagedArtifactStore writes extracted Markdown/text
+  -> format-specific converter prepares text and derived artifacts through child processes
+  -> DOCX conversion writes a canonical PDF artifact before page extraction
+  -> ManagedArtifactStore writes extracted text, page JSON, and derived PDFs
   -> Postgres stores preprocessing status, counts, warnings, artifact refs
   -> send persists an Attachment Manifest snapshot on the user message
   -> agent chooses read_document(fileId)
@@ -79,7 +84,7 @@ chat UI drop/upload
   -> ModelContextProjection sends model-visible output to the agent
 ```
 
-Converters should be treated as implementation details behind the platform service, not as the product boundary. The product boundaries are Document Preprocessing, `read_document`, and future page-view tools, using product-owned result types. MarkItDown can remain a converter for formats such as DOCX where stable page boundaries are not intrinsic. PDF handling should move to a platform-owned PDF adapter because page-indexed text and visual page reads are core product behavior.
+Converters should be treated as implementation details behind the platform service, not as the product boundary. The product boundaries are Document Preprocessing, `read_document`, and page-view tools, using product-owned result types. DOCX should be converted to a canonical PDF when page-aware behavior is needed, then follow the same page extraction and rendering path as uploaded PDFs. MarkItDown can remain an optional semantic-text converter only if the workflow benefits from richer Markdown than PDF extraction provides.
 
 ## Alignment With Live Tool Runtime
 
@@ -251,7 +256,7 @@ The wrapper must not fetch URLs or resolve remote resources. URL acquisition is 
 
 Converter output must be normalized before it is stored as a prepared artifact or returned through `read_document`. At minimum, remove NUL bytes and unsupported control characters while preserving normal whitespace such as tabs and line breaks, and attach a preprocessing warning when this cleanup changes the extracted text. This prevents converter junk from breaking durable transcript storage or being replayed into model context.
 
-For PDFs, the preferred wrapper should use Poppler `pdfinfo` for preflight metadata and page count, `pdfplumber` for page-by-page text extraction, `pypdf` only as a fallback for simple text extraction or metadata cases, and Poppler `pdftoppm` for on-demand page rendering. Avoid making PyMuPDF the default dependency unless the project explicitly accepts its AGPL/commercial licensing path.
+For PDFs and DOCX-derived canonical PDFs, the preferred wrapper should use Poppler `pdfinfo` for preflight metadata and page count, `pdfplumber` for page-by-page text extraction, `pypdf` only as a fallback for simple text extraction or metadata cases, and Poppler `pdftoppm` for on-demand page rendering. DOCX canonical PDF conversion should use headless LibreOffice with a per-run user profile, strict timeout, isolated temporary directory, and bounded worker concurrency. Avoid making PyMuPDF the default dependency unless the project explicitly accepts its AGPL/commercial licensing path.
 
 ## Tool Contract
 

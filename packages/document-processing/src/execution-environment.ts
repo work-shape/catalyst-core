@@ -3,6 +3,7 @@ export interface DocumentExecutionEnvironment {
     python: string;
     pdfInfo: string;
     pdfRenderer: string;
+    officeConverter: string;
     generalConverter: string;
   };
   generalConverterArgs: readonly string[];
@@ -14,6 +15,7 @@ export function createDefaultDocumentExecutionEnvironment(): DocumentExecutionEn
       python: "python3",
       pdfInfo: "pdfinfo",
       pdfRenderer: "pdftoppm",
+      officeConverter: "soffice",
       generalConverter: "markitdown"
     },
     generalConverterArgs: []

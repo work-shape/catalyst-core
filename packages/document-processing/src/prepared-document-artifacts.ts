@@ -31,6 +31,7 @@ export interface WritePreparedDocumentArtifactsInput {
 }
 
 export interface PreparedDocumentArtifacts {
+  canonicalPdfArtifact?: ManagedArtifactRecord;
   preparedTextArtifact: ManagedArtifactRecord;
   preparedPagesArtifact?: ManagedArtifactRecord;
   characterCount: number;
@@ -81,6 +82,17 @@ export class PreparedDocumentArtifactPipeline {
       });
     }
 
+    const canonicalPdfArtifact = input.converted.canonicalPdf
+      ? await this.createCanonicalPdfArtifact({
+          conversationId: input.conversationId,
+          sourceFileId: input.sourceFileId,
+          filename: input.filename,
+          format: input.format,
+          bytes: input.converted.canonicalPdf.bytes,
+          engine: input.converted.engine
+        })
+      : undefined;
+
     const preparedTextArtifact = await this.createArtifact({
       conversationId: input.conversationId,
       sourceFileId: input.sourceFileId,
@@ -106,6 +118,7 @@ export class PreparedDocumentArtifactPipeline {
       : undefined;
 
     return {
+      canonicalPdfArtifact,
       preparedTextArtifact,
       preparedPagesArtifact,
       characterCount: bounded.text.length,
@@ -113,6 +126,30 @@ export class PreparedDocumentArtifactPipeline {
       pageCount: input.converted.pageCount,
       warnings
     };
+  }
+
+  private async createCanonicalPdfArtifact(input: {
+    conversationId: ConversationId;
+    sourceFileId: ManagedFileId;
+    filename: string;
+    format: DocumentFileFormat;
+    bytes: Uint8Array;
+    engine: string;
+  }): Promise<ManagedArtifactRecord> {
+    return this.createArtifact({
+      conversationId: input.conversationId,
+      sourceFileId: input.sourceFileId,
+      kind: "document.canonical_pdf",
+      extension: "pdf",
+      filename: `${input.filename}.canonical.pdf`,
+      mimeType: "application/pdf",
+      bytes: input.bytes,
+      metadata: {
+        sourceFormat: input.format,
+        engine: input.engine,
+        preprocessingVersion: this.preprocessingVersion
+      }
+    });
   }
 
   private async createPagesArtifact(input: {

@@ -33,7 +33,7 @@ export function createViewDocumentPageTool(viewer: DocumentPageViewer): AnyToolD
   return defineTool({
     name: "view_document_page",
     description:
-      "Visually inspect one page of a PDF attached to the current conversation. Render a single page to PNG and load that image into model visual context. Use this only for pages whose layout, signatures, tables, stamps, scans, or images need visual inspection.",
+      "Visually inspect one page of a document attached to the current conversation. Render a single prepared PDF page to PNG and load that image into model visual context. Use this only for pages whose layout, signatures, tables, stamps, scans, or images need visual inspection.",
     inputSchema: viewDocumentPageInputSchema,
     outputSchema: viewDocumentPageOutputSchema,
     inputJsonSchema: {
@@ -48,7 +48,7 @@ export function createViewDocumentPageTool(viewer: DocumentPageViewer): AnyToolD
         pageNumber: {
           type: "integer",
           minimum: 1,
-          description: "The 1-based PDF page number to render."
+          description: "The 1-based document page number to render."
         },
         dpi: {
           type: "integer",
