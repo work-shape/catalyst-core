@@ -158,6 +158,10 @@ export const conversationAttachments = pgTable(
     pageCount: integer("page_count"),
     warnings: jsonb("warnings").$type<ConversationAttachment["warnings"]>().notNull(),
     error: jsonb("error").$type<NonNullable<ConversationAttachment["error"]>>(),
+    processingOwnerId: text("processing_owner_id"),
+    processingLeaseToken: text("processing_lease_token"),
+    processingLeaseExpiresAt: timestamp("processing_lease_expires_at", { withTimezone: true }),
+    processingAttempts: integer("processing_attempts").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
     preprocessingStartedAt: timestamp("preprocessing_started_at", { withTimezone: true }),
@@ -171,7 +175,13 @@ export const conversationAttachments = pgTable(
       table.messageId,
       table.updatedAt
     ),
-    index("conversation_attachments_file_idx").on(table.clientInstanceId, table.conversationId, table.fileId)
+    index("conversation_attachments_file_idx").on(table.clientInstanceId, table.conversationId, table.fileId),
+    index("conversation_attachments_processing_idx").on(
+      table.clientInstanceId,
+      table.status,
+      table.processingLeaseExpiresAt,
+      table.createdAt
+    )
   ]
 );
 

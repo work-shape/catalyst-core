@@ -23,6 +23,7 @@
     "@vivd-catalyst/usage-governance": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "^24.13.1",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3"
   }

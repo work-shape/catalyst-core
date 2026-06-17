@@ -19,17 +19,18 @@ import {
 import {
   createReadDocumentTool,
   createViewDocumentPageTool,
+  DocumentAttachmentProcessor,
   DocumentPageRenderService,
   DocumentPreprocessingService,
-  InMemoryObjectStore,
   PlatformDocumentPreprocessor,
-  S3ObjectStore
+  RemoteDocumentPageViewer
 } from "@vivd-catalyst/document-processing";
 import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { assertClientAssemblyValid } from "./assembly-validation";
 import { createClientInstanceAuth } from "./auth";
 import type { ClientInstanceEnv } from "./env";
+import { createDocumentObjectStore } from "./document-object-store";
 import { createPlatformStore, type PlatformStoreMode } from "./store";
 import { createToolDefinitions } from "./tools";
 
@@ -55,32 +56,43 @@ export async function createClientInstanceApp(
   const env = input.env ?? process.env;
   const config = input.config ?? (await loadConfig(input.configPath));
   const clientInstanceId = getClientInstanceId(config);
+  const resolvedStoreMode = input.storeMode ?? env.STORE;
   const store = await createPlatformStore({ env, storeMode: input.storeMode });
-  const objectStore =
-    (input.storeMode ?? env.STORE) === "memory"
-      ? new InMemoryObjectStore()
-      : new S3ObjectStore({
-          config: {
-            ...config.documents.objectStorage,
-            bucket: env.DOCUMENT_OBJECT_STORE_BUCKET ?? config.documents.objectStorage.bucket,
-            region: env.DOCUMENT_OBJECT_STORE_REGION ?? config.documents.objectStorage.region,
-            endpoint: env.DOCUMENT_OBJECT_STORE_ENDPOINT ?? config.documents.objectStorage.endpoint
-          },
-          env
-        });
+  const objectStore = createDocumentObjectStore({
+    config,
+    env,
+    storeMode: input.storeMode
+  });
   const documentPreprocessing = new DocumentPreprocessingService({
     clientInstanceId,
     store,
     objectStore,
-    preprocessor: new PlatformDocumentPreprocessor(config.documents.preprocessing),
     config: config.documents.preprocessing
   });
-  const documentPageViewer = new DocumentPageRenderService({
-    clientInstanceId,
-    store,
-    objectStore,
-    timeoutMs: config.documents.preprocessing.timeoutMs
-  });
+  const stopInProcessDocumentProcessor =
+    resolvedStoreMode === "memory" && !env.DOCUMENT_WORKER_URL
+      ? startInProcessDocumentProcessor(
+          new DocumentAttachmentProcessor({
+            clientInstanceId,
+            store,
+            objectStore,
+            preprocessor: new PlatformDocumentPreprocessor(config.documents.preprocessing),
+            config: config.documents.preprocessing
+          })
+        )
+      : undefined;
+  const documentPageViewer = env.DOCUMENT_WORKER_URL
+    ? new RemoteDocumentPageViewer({
+        baseUrl: env.DOCUMENT_WORKER_URL,
+        timeoutMs: config.documents.preprocessing.timeoutMs,
+        token: env.DOCUMENT_WORKER_TOKEN
+      })
+    : new DocumentPageRenderService({
+        clientInstanceId,
+        store,
+        objectStore,
+        timeoutMs: config.documents.preprocessing.timeoutMs
+      });
   const tools = createToolDefinitions({
     config,
     tools: [
@@ -198,9 +210,35 @@ export async function createClientInstanceApp(
     },
     async close() {
       await server.close();
+      await stopInProcessDocumentProcessor?.();
       await standaloneAuth?.close();
       await store.close?.();
     }
+  };
+}
+
+function startInProcessDocumentProcessor(processor: DocumentAttachmentProcessor): () => Promise<void> {
+  let running = true;
+  const loop = (async () => {
+    while (running) {
+      const result = await processor.processNext({
+        workerId: "in-process-memory-document-worker"
+      });
+      if (result.status === "idle") {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    }
+  })().catch((error) => {
+    console.warn(
+      JSON.stringify({
+        type: "document_preprocessing.memory_worker_failure",
+        message: error instanceof Error ? error.message : "Unknown document worker failure"
+      })
+    );
+  });
+  return async () => {
+    running = false;
+    await loop;
   };
 }
 

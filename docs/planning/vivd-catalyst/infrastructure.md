@@ -10,6 +10,7 @@ Recommended first production shape for an operated dedicated instance:
 EU VPS / cloud VM
   -> Caddy reverse proxy / TLS
   -> chat API service
+  -> document worker service for document conversion/extraction/page rendering
   -> standalone/widget frontend service or static assets
   -> tool execution service or worker command, when needed
   -> Postgres, managed or on the VPS
@@ -72,7 +73,7 @@ The stack should still stay Kubernetes/managed-container ready by following cont
 3. **Larger operated production**: same images deployed to managed container service or Kubernetes.
 4. **Self-hosted customer deployment**: customer runs the same images through Compose or their own orchestrator.
 
-The likely scaling pressure is not normal chat traffic. It is tool execution and future full agent worker machines. Therefore the infrastructure should separate the chat API from worker-style execution early enough that heavy tools can move to separate containers/machines without changing the public API.
+The likely scaling pressure is not normal chat traffic. It is tool execution, document conversion/page rendering, and future full agent worker machines. Therefore the infrastructure separates the chat API from document worker execution now, and should keep other heavy tools movable to separate containers/machines without changing the public API.
 
 ## Deployment Automation
 

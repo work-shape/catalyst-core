@@ -1,4 +1,5 @@
 export type { ClientInstanceEnv } from "./env";
+export { createDocumentObjectStore } from "./document-object-store";
 export {
   createClientInstanceApp,
   type ClientInstanceApp,
@@ -14,4 +15,5 @@ export {
   type SeedStandaloneAuthInput,
   type SeedStandaloneAuthResult
 } from "./seed-auth";
+export { createPlatformStore, type PlatformStoreMode } from "./store";
 export { createToolDefinitions } from "./tools";

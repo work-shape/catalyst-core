@@ -1,3 +1,26 @@
+x-client-build-args: &client-build-args
+  APP_PACKAGE: "@vivd-catalyst/demo"
+  SERVER_ENTRY: platform/clients/demo/dist/server.js
+  UI_PACKAGE: "@vivd-catalyst/demo"
+  UI_DIST_DIR: platform/clients/demo/dist/client
+  VITE_CHAT_API_URL: ${VITE_CHAT_API_URL:-http://127.0.0.1:4100}
+
+x-client-build: &client-build
+  context: ../../..
+  dockerfile: platform/docker/vivd-client.Dockerfile
+  args:
+    <<: *client-build-args
+
+x-app-environment: &app-environment
+  CLIENT_CONFIG_PATH: /app/platform/clients/demo/config/app.yaml
+  DATABASE_URL: postgres://agent_chat:agent_chat@postgres:5432/agent_chat
+  DOCUMENT_OBJECT_STORE_ENDPOINT: http://s3mock:9090
+  DOCUMENT_OBJECT_STORE_BUCKET: vivd-catalyst-documents
+  AWS_ACCESS_KEY_ID: s3mock
+  AWS_SECRET_ACCESS_KEY: s3mock
+  DOCUMENT_WORKER_TOKEN: ${DOCUMENT_WORKER_TOKEN:-dev-document-worker-token}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+
 services:
   postgres:
     image: postgres:${POSTGRES_VERSION:-17}
@@ -23,27 +46,86 @@ services:
     ports:
       - "${S3MOCK_HOST_PORT:-9090}:9090"
 
-  api:
+  doc-worker:
     build:
-      context: ../..
-      dockerfile: clients/demo/Dockerfile
+      <<: *client-build
+      target: doc-worker
     depends_on:
       postgres:
         condition: service_healthy
       s3mock:
         condition: service_started
     environment:
+      <<: *app-environment
+      HOST: 0.0.0.0
+      PORT: 4110
+      RUN_MIGRATIONS: "false"
+      DOCUMENT_WORKER_CONCURRENCY: ${DOCUMENT_WORKER_CONCURRENCY:-2}
+    ports:
+      - "${DOCUMENT_WORKER_HOST_PORT:-4110}:4110"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4110/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      start_period: 20s
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build:
+      <<: *client-build
+      target: api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      s3mock:
+        condition: service_started
+      doc-worker:
+        condition: service_healthy
+    environment:
+      <<: *app-environment
       HOST: 0.0.0.0
       PORT: 4100
-      CLIENT_CONFIG_PATH: clients/demo/config/app.yaml
-      DATABASE_URL: postgres://agent_chat:agent_chat@postgres:5432/agent_chat
       RUN_MIGRATIONS: "true"
-      DOCUMENT_OBJECT_STORE_ENDPOINT: http://s3mock:9090
-      DOCUMENT_OBJECT_STORE_BUCKET: vivd-catalyst-documents
-      AWS_ACCESS_KEY_ID: s3mock
-      AWS_SECRET_ACCESS_KEY: s3mock
+      DOCUMENT_WORKER_URL: http://doc-worker:4110
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://127.0.0.1:4100/api/auth}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-replace-with-at-least-32-random-characters}
+      CHAT_UI_ORIGIN: ${CHAT_UI_ORIGIN:-http://127.0.0.1:5173}
+      DEMO_SUPERADMIN_EMAIL: ${DEMO_SUPERADMIN_EMAIL:-superadmin@example.test}
+      DEMO_SUPERADMIN_PASSWORD: ${DEMO_SUPERADMIN_PASSWORD:-demo-superadmin-password}
+      DEMO_USER_EMAIL: ${DEMO_USER_EMAIL:-user@example.test}
+      DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:-demo-user-password}
+      CHAT_SESSION_TOKEN_SECRET: ${CHAT_SESSION_TOKEN_SECRET:-replace-with-at-least-24-random-characters}
+      CHAT_SERVER_CREDENTIAL: ${CHAT_SERVER_CREDENTIAL:-replace-with-a-server-to-server-secret}
     ports:
-      - "4100:4100"
+      - "${API_HOST_PORT:-4100}:4100"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4100/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      start_period: 20s
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  ui:
+    build:
+      <<: *client-build
+      target: ui
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${UI_HOST_PORT:-5173}:80"
 
 volumes:
   postgres-data:

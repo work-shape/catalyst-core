@@ -17,20 +17,21 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "@fastify/multipart": "^9.3.0",
     "@vivd-catalyst/api-contract": "workspace:*",
     "@vivd-catalyst/auth": "workspace:*",
-    "@vivd-catalyst/core": "workspace:*",
     "@vivd-catalyst/config-schema": "workspace:*",
+    "@vivd-catalyst/core": "workspace:*",
     "@vivd-catalyst/document-processing": "workspace:*",
     "@vivd-catalyst/model-provider": "workspace:*",
     "@vivd-catalyst/usage-governance": "workspace:*",
-    "@fastify/cors": "^11.2.0",
-    "@fastify/multipart": "^9.3.0",
     "ai": "^6.0.199",
     "fastify": "^5.8.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/node": "^24.13.1",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3"
   }

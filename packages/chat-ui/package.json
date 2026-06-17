@@ -28,7 +28,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@vivd-catalyst/api-client": "workspace:*",
     "@ai-sdk/react": "^3.0.201",
     "@assistant-ui/react": "^0.14.16",
     "@assistant-ui/react-ai-sdk": "^1.3.33",
@@ -37,6 +36,7 @@
     "@radix-ui/react-collapsible": "^1.1.13",
     "@radix-ui/react-slot": "^1.2.5",
     "@tanstack/react-query": "^5.101.0",
+    "@vivd-catalyst/api-client": "workspace:*",
     "ai": "^6.0.199",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -48,6 +48,7 @@
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
+    "@types/node": "^24.13.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@types/react-syntax-highlighter": "^15.5.13",

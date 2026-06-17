@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNull, ne } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, ne, sql as drizzleSql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import {
   AppError,
@@ -249,11 +249,29 @@ class PostgresDocumentAttachmentStore implements DocumentAttachmentStore {
     if (input.error !== undefined) {
       set.error = input.error;
     }
+    if (input.processingOwnerId !== undefined) {
+      set.processingOwnerId = input.processingOwnerId;
+    }
+    if (input.processingLeaseToken !== undefined) {
+      set.processingLeaseToken = input.processingLeaseToken;
+    }
+    if (input.processingLeaseExpiresAt !== undefined) {
+      set.processingLeaseExpiresAt = input.processingLeaseExpiresAt
+        ? new Date(input.processingLeaseExpiresAt)
+        : null;
+    }
+    if (input.processingAttempts !== undefined) {
+      set.processingAttempts = input.processingAttempts;
+    }
     if (input.preprocessingStartedAt !== undefined) {
-      set.preprocessingStartedAt = new Date(input.preprocessingStartedAt);
+      set.preprocessingStartedAt = input.preprocessingStartedAt
+        ? new Date(input.preprocessingStartedAt)
+        : null;
     }
     if (input.preprocessingCompletedAt !== undefined) {
-      set.preprocessingCompletedAt = new Date(input.preprocessingCompletedAt);
+      set.preprocessingCompletedAt = input.preprocessingCompletedAt
+        ? new Date(input.preprocessingCompletedAt)
+        : null;
     }
     if (input.deletedAt !== undefined) {
       set.deletedAt = new Date(input.deletedAt);
@@ -328,6 +346,169 @@ class PostgresDocumentAttachmentStore implements DocumentAttachmentStore {
       )
       .returning();
     return rows.map(mapConversationAttachment);
+  }
+
+  async claimNextQueuedDocumentAttachment(input: {
+    clientInstanceId: ClientInstanceId;
+    workerId: string;
+    leaseToken: string;
+    now: string;
+    leaseExpiresAt: string;
+    perConversationLimit: number;
+    globalLimit: number;
+  }): Promise<ConversationAttachment | undefined> {
+    const now = new Date(input.now);
+    const leaseExpiresAt = new Date(input.leaseExpiresAt);
+    const rows = await this.db.transaction(async (tx) => {
+      const claimed = (await tx.execute(drizzleSql<{ id: string }>`
+        with candidate as (
+          select ca.id
+          from conversation_attachments ca
+          where ca.client_instance_id = ${input.clientInstanceId}
+            and ca.status <> 'deleted'
+            and ca.format in ('pdf', 'docx', 'txt', 'md')
+            and (
+              ca.status = 'queued'
+              or (
+                ca.status = 'preprocessing'
+                and (
+                  ca.processing_lease_expires_at is null
+                  or ca.processing_lease_expires_at <= ${now}
+                )
+              )
+            )
+            and (
+              select count(*)
+              from conversation_attachments active
+              where active.client_instance_id = ca.client_instance_id
+                and active.status = 'preprocessing'
+                and active.processing_lease_token is not null
+                and active.processing_lease_expires_at > ${now}
+            ) < ${input.globalLimit}
+            and (
+              select count(*)
+              from conversation_attachments active
+              where active.client_instance_id = ca.client_instance_id
+                and active.conversation_id = ca.conversation_id
+                and active.status = 'preprocessing'
+                and active.processing_lease_token is not null
+                and active.processing_lease_expires_at > ${now}
+            ) < ${input.perConversationLimit}
+          order by ca.created_at asc
+          limit 1
+          for update skip locked
+        )
+        update conversation_attachments ca
+        set status = 'preprocessing',
+            processing_owner_id = ${input.workerId},
+            processing_lease_token = ${input.leaseToken},
+            processing_lease_expires_at = ${leaseExpiresAt},
+            processing_attempts = ca.processing_attempts + 1,
+            preprocessing_started_at = coalesce(ca.preprocessing_started_at, ${now}),
+            updated_at = ${now},
+            error = null
+        from candidate
+        where ca.id = candidate.id
+        returning ca.id
+      `)) as unknown as Array<{ id: string }>;
+      const claimedId = claimed[0]?.id;
+      if (!claimedId) {
+        return [];
+      }
+      return tx
+        .select()
+        .from(conversationAttachments)
+        .where(
+          and(
+            eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
+            eq(conversationAttachments.id, claimedId)
+          )
+        )
+        .limit(1);
+    });
+    const row = rows[0];
+    return row ? mapConversationAttachment(row) : undefined;
+  }
+
+  async completeClaimedDocumentAttachment(input: {
+    clientInstanceId: ClientInstanceId;
+    attachmentId: ConversationAttachmentId;
+    leaseToken: string;
+    preparedTextArtifactId: ManagedArtifactId;
+    preparedPagesArtifactId?: ManagedArtifactId | null;
+    preprocessingEngine: string;
+    characterCount: number;
+    wordCount: number;
+    pageCount?: number;
+    warnings: ConversationAttachment["warnings"];
+    completedAt: string;
+  }): Promise<ConversationAttachment> {
+    const completedAt = new Date(input.completedAt);
+    const [row] = await this.db
+      .update(conversationAttachments)
+      .set({
+        status: "ready",
+        preparedTextArtifactId: input.preparedTextArtifactId,
+        preparedPagesArtifactId: input.preparedPagesArtifactId ?? null,
+        preprocessingEngine: input.preprocessingEngine,
+        characterCount: input.characterCount,
+        wordCount: input.wordCount,
+        pageCount: input.pageCount ?? null,
+        warnings: input.warnings,
+        error: null,
+        processingOwnerId: null,
+        processingLeaseToken: null,
+        processingLeaseExpiresAt: null,
+        preprocessingCompletedAt: completedAt,
+        updatedAt: completedAt
+      })
+      .where(
+        and(
+          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
+          eq(conversationAttachments.id, input.attachmentId),
+          eq(conversationAttachments.status, "preprocessing"),
+          eq(conversationAttachments.processingLeaseToken, input.leaseToken)
+        )
+      )
+      .returning();
+    if (!row) {
+      throw new AppError("CONFLICT", "Document preprocessing lease is no longer active");
+    }
+    return mapConversationAttachment(row);
+  }
+
+  async failClaimedDocumentAttachment(input: {
+    clientInstanceId: ClientInstanceId;
+    attachmentId: ConversationAttachmentId;
+    leaseToken: string;
+    error: NonNullable<ConversationAttachment["error"]>;
+    completedAt: string;
+  }): Promise<ConversationAttachment> {
+    const completedAt = new Date(input.completedAt);
+    const [row] = await this.db
+      .update(conversationAttachments)
+      .set({
+        status: "failed",
+        error: input.error,
+        processingOwnerId: null,
+        processingLeaseToken: null,
+        processingLeaseExpiresAt: null,
+        preprocessingCompletedAt: completedAt,
+        updatedAt: completedAt
+      })
+      .where(
+        and(
+          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
+          eq(conversationAttachments.id, input.attachmentId),
+          eq(conversationAttachments.status, "preprocessing"),
+          eq(conversationAttachments.processingLeaseToken, input.leaseToken)
+        )
+      )
+      .returning();
+    if (!row) {
+      throw new AppError("CONFLICT", "Document preprocessing lease is no longer active");
+    }
+    return mapConversationAttachment(row);
   }
 
   async findReadableDocumentAttachment(input: {

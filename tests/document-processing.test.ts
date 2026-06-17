@@ -5,6 +5,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   asClientInstanceId,
+  asManagedArtifactId,
   type ConversationAttachment,
   type DocumentPreprocessingConfig
 } from "@vivd-catalyst/core";
@@ -13,6 +14,7 @@ import {
   createAttachmentManifest,
   createReadDocumentTool,
   createViewDocumentPageTool,
+  DocumentAttachmentProcessor,
   DocumentPageRenderService,
   DocumentPreprocessingService,
   InMemoryObjectStore,
@@ -45,7 +47,7 @@ describe("document preprocessing", () => {
   });
 
   it("preprocesses a text document on upload and reads the prepared text by conversation file id", async () => {
-    const { service, store, conversationId } = await createDocumentFixture();
+    const { service, processor, store, conversationId } = await createDocumentFixture();
 
     const attachment = await service.uploadDraftAttachment({
       conversationId,
@@ -54,6 +56,7 @@ describe("document preprocessing", () => {
       mimeType: "text/plain",
       bytes: new TextEncoder().encode("first page words\nsecond line")
     });
+    await processNextAttachment(processor);
     const ready = await waitForAttachment(store, attachment.id, "ready");
 
     expect(ready).toMatchObject({
@@ -138,8 +141,94 @@ describe("document preprocessing", () => {
     });
   });
 
-  it("removes unsupported control characters from prepared text", async () => {
+  it("claims queued document attachments with lease caps and stale completion protection", async () => {
     const { service, store, conversationId } = await createDocumentFixture();
+    const attachment = await service.uploadDraftAttachment({
+      conversationId,
+      ownerUserId: "user-1",
+      filename: "queued.txt",
+      mimeType: "text/plain",
+      bytes: new TextEncoder().encode("queued document")
+    });
+    expect(attachment.status).toBe("queued");
+
+    const now = new Date("2026-06-17T10:00:00.000Z");
+    const firstClaim = await store.claimNextQueuedDocumentAttachment({
+      clientInstanceId: asClientInstanceId("document-client"),
+      workerId: "worker-1",
+      leaseToken: "lease-1",
+      now: now.toISOString(),
+      leaseExpiresAt: new Date(now.getTime() + 60_000).toISOString(),
+      perConversationLimit: 1,
+      globalLimit: 1
+    });
+    expect(firstClaim).toMatchObject({
+      id: attachment.id,
+      status: "preprocessing",
+      processingOwnerId: "worker-1",
+      processingLeaseToken: "lease-1",
+      processingAttempts: 1
+    });
+
+    await expect(
+      store.claimNextQueuedDocumentAttachment({
+        clientInstanceId: asClientInstanceId("document-client"),
+        workerId: "worker-2",
+        leaseToken: "lease-2",
+        now: now.toISOString(),
+        leaseExpiresAt: new Date(now.getTime() + 60_000).toISOString(),
+        perConversationLimit: 1,
+        globalLimit: 1
+      })
+    ).resolves.toBeUndefined();
+
+    await expect(
+      store.completeClaimedDocumentAttachment({
+        clientInstanceId: asClientInstanceId("document-client"),
+        attachmentId: attachment.id,
+        leaseToken: "stale-lease",
+        preparedTextArtifactId: asManagedArtifactId("art_stale"),
+        preprocessingEngine: "direct_text",
+        characterCount: 0,
+        wordCount: 0,
+        warnings: [],
+        completedAt: now.toISOString()
+      })
+    ).rejects.toThrow("Document preprocessing lease is no longer active");
+
+    const afterExpiry = new Date(now.getTime() + 120_000);
+    const reclaimed = await store.claimNextQueuedDocumentAttachment({
+      clientInstanceId: asClientInstanceId("document-client"),
+      workerId: "worker-2",
+      leaseToken: "lease-2",
+      now: afterExpiry.toISOString(),
+      leaseExpiresAt: new Date(afterExpiry.getTime() + 60_000).toISOString(),
+      perConversationLimit: 1,
+      globalLimit: 1
+    });
+    expect(reclaimed).toMatchObject({
+      id: attachment.id,
+      status: "preprocessing",
+      processingOwnerId: "worker-2",
+      processingLeaseToken: "lease-2",
+      processingAttempts: 2
+    });
+    await expect(
+      store.failClaimedDocumentAttachment({
+        clientInstanceId: asClientInstanceId("document-client"),
+        attachmentId: attachment.id,
+        leaseToken: "lease-1",
+        error: {
+          code: "stale",
+          message: "stale"
+        },
+        completedAt: afterExpiry.toISOString()
+      })
+    ).rejects.toThrow("Document preprocessing lease is no longer active");
+  });
+
+  it("removes unsupported control characters from prepared text", async () => {
+    const { service, processor, store, conversationId } = await createDocumentFixture();
     const attachment = await service.uploadDraftAttachment({
       conversationId,
       ownerUserId: "user-1",
@@ -147,6 +236,7 @@ describe("document preprocessing", () => {
       mimeType: "text/plain",
       bytes: new TextEncoder().encode("Alpha\u0000 Beta\u0007\nGamma\tDelta\u000c")
     });
+    await processNextAttachment(processor);
     const ready = await waitForAttachment(store, attachment.id, "ready");
 
     expect(ready.warnings).toContainEqual(
@@ -169,7 +259,7 @@ describe("document preprocessing", () => {
   });
 
   it("preprocesses DOCX as a canonical PDF-backed page-aware document", async () => {
-    const { service, store, objectStore, conversationId } = await createDocumentFixture(
+    const { service, processor, store, objectStore, conversationId } = await createDocumentFixture(
       createCanonicalPdfPreprocessor(new TextEncoder().encode("%PDF-fixture"))
     );
     const attachment = await service.uploadDraftAttachment({
@@ -179,6 +269,7 @@ describe("document preprocessing", () => {
       mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       bytes: createDocxZipHeader()
     });
+    await processNextAttachment(processor);
     const ready = await waitForAttachment(store, attachment.id, "ready");
 
     expect(ready).toMatchObject({
@@ -226,7 +317,7 @@ describe("document preprocessing", () => {
   });
 
   it("creates a metadata-only attachment manifest", async () => {
-    const { service, store, conversationId } = await createDocumentFixture();
+    const { service, processor, store, conversationId } = await createDocumentFixture();
     const attachment = await service.uploadDraftAttachment({
       conversationId,
       ownerUserId: "user-1",
@@ -234,6 +325,7 @@ describe("document preprocessing", () => {
       mimeType: "text/markdown",
       bytes: new TextEncoder().encode("# Memo\n\nRaw text remains in the prepared artifact.")
     });
+    await processNextAttachment(processor);
     const ready = await waitForAttachment(store, attachment.id, "ready");
 
     const manifest = createAttachmentManifest([ready], "test-preprocessing");
@@ -359,6 +451,12 @@ describe("document preprocessing", () => {
       clientInstanceId,
       store,
       objectStore,
+      config
+    });
+    const processor = new DocumentAttachmentProcessor({
+      clientInstanceId,
+      store,
+      objectStore,
       preprocessor: new PlatformDocumentPreprocessor(config),
       config
     });
@@ -383,6 +481,7 @@ describe("document preprocessing", () => {
       mimeType: "application/pdf",
       bytes: createTwoPagePdf()
     });
+    await processNextAttachment(processor);
     const ready = await waitForAttachment(store, attachment.id, "ready");
 
     expect(ready).toMatchObject({
@@ -445,6 +544,12 @@ describe("document preprocessing", () => {
       clientInstanceId,
       store,
       objectStore,
+      config
+    });
+    const processor = new DocumentAttachmentProcessor({
+      clientInstanceId,
+      store,
+      objectStore,
       preprocessor: createCanonicalPdfPreprocessor(createTwoPagePdf()),
       config
     });
@@ -469,6 +574,7 @@ describe("document preprocessing", () => {
       mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       bytes: createDocxZipHeader()
     });
+    await processNextAttachment(processor);
     const ready = await waitForAttachment(store, attachment.id, "ready");
 
     expect(ready).toMatchObject({
@@ -523,12 +629,19 @@ async function createDocumentFixture(preprocessor: DocumentPreprocessor = create
   const clientInstanceId = asClientInstanceId("document-client");
   const store = new InMemoryPlatformStore();
   const objectStore = new InMemoryObjectStore();
+  const config = createPreprocessingConfig();
   const service = new DocumentPreprocessingService({
     clientInstanceId,
     store,
     objectStore,
+    config
+  });
+  const processor = new DocumentAttachmentProcessor({
+    clientInstanceId,
+    store,
+    objectStore,
     preprocessor,
-    config: createPreprocessingConfig()
+    config
   });
   const conversation = await store.createConversation({
     clientInstanceId,
@@ -539,6 +652,7 @@ async function createDocumentFixture(preprocessor: DocumentPreprocessor = create
   });
   return {
     service,
+    processor,
     store,
     objectStore,
     conversationId: conversation.id
@@ -668,6 +782,13 @@ function restorePath(originalPath: string | undefined): void {
     return;
   }
   process.env.PATH = originalPath;
+}
+
+async function processNextAttachment(processor: DocumentAttachmentProcessor): Promise<void> {
+  const result = await processor.processNext({
+    workerId: "test-worker"
+  });
+  expect(result.status).toBe("processed");
 }
 
 async function waitForAttachment(

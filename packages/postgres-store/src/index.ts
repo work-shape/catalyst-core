@@ -690,6 +690,24 @@ export class PostgresPlatformStore
     return this.documentAttachments.claimReadyDraftAttachmentsForMessage(input);
   }
 
+  async claimNextQueuedDocumentAttachment(
+    input: Parameters<DocumentAttachmentStore["claimNextQueuedDocumentAttachment"]>[0]
+  ) {
+    return this.documentAttachments.claimNextQueuedDocumentAttachment(input);
+  }
+
+  async completeClaimedDocumentAttachment(
+    input: Parameters<DocumentAttachmentStore["completeClaimedDocumentAttachment"]>[0]
+  ) {
+    return this.documentAttachments.completeClaimedDocumentAttachment(input);
+  }
+
+  async failClaimedDocumentAttachment(
+    input: Parameters<DocumentAttachmentStore["failClaimedDocumentAttachment"]>[0]
+  ) {
+    return this.documentAttachments.failClaimedDocumentAttachment(input);
+  }
+
   async findReadableDocumentAttachment(
     input: Parameters<DocumentAttachmentStore["findReadableDocumentAttachment"]>[0]
   ) {

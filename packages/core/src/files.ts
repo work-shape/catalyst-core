@@ -162,6 +162,10 @@ export interface ConversationAttachment {
   pageCount?: number;
   warnings: DocumentAttachmentWarning[];
   error?: JsonObject | null;
+  processingOwnerId?: string;
+  processingLeaseToken?: string;
+  processingLeaseExpiresAt?: ISODateString;
+  processingAttempts: number;
   createdAt: ISODateString;
   updatedAt: ISODateString;
   preprocessingStartedAt?: ISODateString;
@@ -245,8 +249,12 @@ export interface UpdateConversationAttachmentInput {
   pageCount?: number;
   warnings?: DocumentAttachmentWarning[];
   error?: JsonObject | null;
-  preprocessingStartedAt?: ISODateString;
-  preprocessingCompletedAt?: ISODateString;
+  processingOwnerId?: string | null;
+  processingLeaseToken?: string | null;
+  processingLeaseExpiresAt?: ISODateString | null;
+  processingAttempts?: number;
+  preprocessingStartedAt?: ISODateString | null;
+  preprocessingCompletedAt?: ISODateString | null;
   deletedAt?: ISODateString;
 }
 
@@ -306,6 +314,35 @@ export interface DocumentAttachmentStore {
     messageId: MessageId;
     claimedAt: ISODateString;
   }): Promise<ConversationAttachment[]>;
+  claimNextQueuedDocumentAttachment(input: {
+    clientInstanceId: ClientInstanceId;
+    workerId: string;
+    leaseToken: string;
+    now: ISODateString;
+    leaseExpiresAt: ISODateString;
+    perConversationLimit: number;
+    globalLimit: number;
+  }): Promise<ConversationAttachment | undefined>;
+  completeClaimedDocumentAttachment(input: {
+    clientInstanceId: ClientInstanceId;
+    attachmentId: ConversationAttachmentId;
+    leaseToken: string;
+    preparedTextArtifactId: ManagedArtifactId;
+    preparedPagesArtifactId?: ManagedArtifactId | null;
+    preprocessingEngine: string;
+    characterCount: number;
+    wordCount: number;
+    pageCount?: number;
+    warnings: DocumentAttachmentWarning[];
+    completedAt: ISODateString;
+  }): Promise<ConversationAttachment>;
+  failClaimedDocumentAttachment(input: {
+    clientInstanceId: ClientInstanceId;
+    attachmentId: ConversationAttachmentId;
+    leaseToken: string;
+    error: JsonObject;
+    completedAt: ISODateString;
+  }): Promise<ConversationAttachment>;
   findReadableDocumentAttachment(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;

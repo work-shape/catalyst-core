@@ -141,6 +141,7 @@ class InMemoryDocumentAttachmentStoreImpl implements InMemoryDocumentAttachmentS
       format: input.format,
       warnings: input.warnings ?? [],
       error: input.error,
+      processingAttempts: 0,
       createdAt: now,
       updatedAt: now
     };
@@ -205,8 +206,27 @@ class InMemoryDocumentAttachmentStoreImpl implements InMemoryDocumentAttachmentS
       pageCount: input.pageCount ?? existing.pageCount,
       warnings: input.warnings ?? existing.warnings,
       error: input.error === undefined ? existing.error : (input.error ?? undefined),
-      preprocessingStartedAt: input.preprocessingStartedAt ?? existing.preprocessingStartedAt,
-      preprocessingCompletedAt: input.preprocessingCompletedAt ?? existing.preprocessingCompletedAt,
+      processingOwnerId:
+        input.processingOwnerId === undefined
+          ? existing.processingOwnerId
+          : (input.processingOwnerId ?? undefined),
+      processingLeaseToken:
+        input.processingLeaseToken === undefined
+          ? existing.processingLeaseToken
+          : (input.processingLeaseToken ?? undefined),
+      processingLeaseExpiresAt:
+        input.processingLeaseExpiresAt === undefined
+          ? existing.processingLeaseExpiresAt
+          : (input.processingLeaseExpiresAt ?? undefined),
+      processingAttempts: input.processingAttempts ?? existing.processingAttempts,
+      preprocessingStartedAt:
+        input.preprocessingStartedAt === undefined
+          ? existing.preprocessingStartedAt
+          : (input.preprocessingStartedAt ?? undefined),
+      preprocessingCompletedAt:
+        input.preprocessingCompletedAt === undefined
+          ? existing.preprocessingCompletedAt
+          : (input.preprocessingCompletedAt ?? undefined),
       deletedAt: input.deletedAt ?? existing.deletedAt,
       updatedAt: new Date().toISOString()
     };
@@ -258,6 +278,113 @@ class InMemoryDocumentAttachmentStoreImpl implements InMemoryDocumentAttachmentS
       this.conversationAttachments.set(attachment.id, attachment);
     }
     return claimed;
+  }
+
+  async claimNextQueuedDocumentAttachment(input: {
+    clientInstanceId: ClientInstanceId;
+    workerId: string;
+    leaseToken: string;
+    now: string;
+    leaseExpiresAt: string;
+    perConversationLimit: number;
+    globalLimit: number;
+  }): Promise<ConversationAttachment | undefined> {
+    if (this.activePreprocessingCount(input.clientInstanceId, input.now) >= input.globalLimit) {
+      return undefined;
+    }
+    const candidate = [...this.conversationAttachments.values()]
+      .filter((attachment) => {
+        if (attachment.clientInstanceId !== input.clientInstanceId || attachment.status === "deleted") {
+          return false;
+        }
+        if (attachment.status === "queued") {
+          return true;
+        }
+        return (
+          attachment.status === "preprocessing" &&
+          (!attachment.processingLeaseExpiresAt ||
+            attachment.processingLeaseExpiresAt.localeCompare(input.now) <= 0)
+        );
+      })
+      .filter(
+        (attachment) =>
+          this.activeConversationPreprocessingCount(attachment.conversationId, input.now) <
+          input.perConversationLimit
+      )
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt))[0];
+    if (!candidate) {
+      return undefined;
+    }
+    const claimed: ConversationAttachment = {
+      ...candidate,
+      status: "preprocessing",
+      processingOwnerId: input.workerId,
+      processingLeaseToken: input.leaseToken,
+      processingLeaseExpiresAt: input.leaseExpiresAt,
+      processingAttempts: candidate.processingAttempts + 1,
+      preprocessingStartedAt: candidate.preprocessingStartedAt ?? input.now,
+      error: undefined,
+      updatedAt: input.now
+    };
+    this.conversationAttachments.set(claimed.id, claimed);
+    return claimed;
+  }
+
+  async completeClaimedDocumentAttachment(input: {
+    clientInstanceId: ClientInstanceId;
+    attachmentId: ConversationAttachmentId;
+    leaseToken: string;
+    preparedTextArtifactId: ManagedArtifactId;
+    preparedPagesArtifactId?: ManagedArtifactId | null;
+    preprocessingEngine: string;
+    characterCount: number;
+    wordCount: number;
+    pageCount?: number;
+    warnings: ConversationAttachment["warnings"];
+    completedAt: string;
+  }): Promise<ConversationAttachment> {
+    const existing = this.requireClaimedAttachment(input);
+    const updated: ConversationAttachment = {
+      ...existing,
+      status: "ready",
+      preparedTextArtifactId: input.preparedTextArtifactId,
+      preparedPagesArtifactId: input.preparedPagesArtifactId ?? undefined,
+      preprocessingEngine: input.preprocessingEngine,
+      characterCount: input.characterCount,
+      wordCount: input.wordCount,
+      pageCount: input.pageCount,
+      warnings: input.warnings,
+      error: undefined,
+      processingOwnerId: undefined,
+      processingLeaseToken: undefined,
+      processingLeaseExpiresAt: undefined,
+      preprocessingCompletedAt: input.completedAt,
+      updatedAt: input.completedAt
+    };
+    this.conversationAttachments.set(updated.id, updated);
+    return updated;
+  }
+
+  async failClaimedDocumentAttachment(input: {
+    clientInstanceId: ClientInstanceId;
+    attachmentId: ConversationAttachmentId;
+    leaseToken: string;
+    error: ConversationAttachment["error"];
+    completedAt: string;
+  }): Promise<ConversationAttachment> {
+    const existing = this.requireClaimedAttachment(input);
+    const updated: ConversationAttachment = {
+      ...existing,
+      status: "failed",
+      error: input.error,
+      processingOwnerId: undefined,
+      processingLeaseToken: undefined,
+      processingLeaseExpiresAt: undefined,
+      preprocessingCompletedAt: input.completedAt,
+      updatedAt: input.completedAt
+    };
+    this.conversationAttachments.set(updated.id, updated);
+    return updated;
   }
 
   async findReadableDocumentAttachment(input: {
@@ -323,5 +450,52 @@ class InMemoryDocumentAttachmentStoreImpl implements InMemoryDocumentAttachmentS
         });
       }
     }
+  }
+
+  private requireClaimedAttachment(input: {
+    clientInstanceId: ClientInstanceId;
+    attachmentId: ConversationAttachmentId;
+    leaseToken: string;
+  }): ConversationAttachment {
+    const existing = this.conversationAttachments.get(input.attachmentId);
+    if (
+      !existing ||
+      existing.clientInstanceId !== input.clientInstanceId ||
+      existing.status !== "preprocessing" ||
+      existing.processingLeaseToken !== input.leaseToken
+    ) {
+      throw new AppError("CONFLICT", "Document preprocessing lease is no longer active");
+    }
+    return existing;
+  }
+
+  private activePreprocessingCount(clientInstanceId: ClientInstanceId, now: string): number {
+    return [...this.conversationAttachments.values()].filter(
+      (attachment) => {
+        const leaseExpiresAt = attachment.processingLeaseExpiresAt;
+        return (
+          attachment.clientInstanceId === clientInstanceId &&
+          attachment.status === "preprocessing" &&
+          Boolean(attachment.processingLeaseToken) &&
+          leaseExpiresAt !== undefined &&
+          leaseExpiresAt.localeCompare(now) > 0
+        );
+      }
+    ).length;
+  }
+
+  private activeConversationPreprocessingCount(conversationId: ConversationId, now: string): number {
+    return [...this.conversationAttachments.values()].filter(
+      (attachment) => {
+        const leaseExpiresAt = attachment.processingLeaseExpiresAt;
+        return (
+          attachment.conversationId === conversationId &&
+          attachment.status === "preprocessing" &&
+          Boolean(attachment.processingLeaseToken) &&
+          leaseExpiresAt !== undefined &&
+          leaseExpiresAt.localeCompare(now) > 0
+        );
+      }
+    ).length;
   }
 }

@@ -2,7 +2,6 @@ import {
   AppError,
   type ClientInstanceId,
   type ConversationAttachment,
-  type ConversationAttachmentId,
   type ConversationId,
   type DocumentAttachmentStore,
   type FileAttachmentFormat,
@@ -13,8 +12,6 @@ import {
   asConversationAttachmentId
 } from "@vivd-catalyst/core";
 import { createChecksum, createObjectKey } from "./object-keys";
-import { AsyncLimiter } from "./concurrency";
-import type { DocumentPreprocessor } from "./converter";
 import {
   DocumentReadService,
   type ReadDocumentInput,
@@ -30,13 +27,11 @@ import {
   unsupportedImageUploadReason
 } from "./document-format";
 import type { ObjectStore } from "./object-store";
-import { PreparedDocumentArtifactPipeline } from "./prepared-document-artifacts";
 
 export interface DocumentPreprocessingServiceOptions {
   clientInstanceId: ClientInstanceId;
   store: DocumentAttachmentStore;
   objectStore: ObjectStore;
-  preprocessor: DocumentPreprocessor;
   config: DocumentPreprocessingConfig;
 }
 
@@ -65,18 +60,13 @@ export class DocumentPreprocessingService {
   private readonly clientInstanceId: ClientInstanceId;
   private readonly store: DocumentAttachmentStore;
   private readonly objectStore: ObjectStore;
-  private readonly preprocessor: DocumentPreprocessor;
   private readonly config: DocumentPreprocessingConfig;
   private readonly reader: DocumentReadService;
-  private readonly artifactPipeline: PreparedDocumentArtifactPipeline;
-  private readonly globalLimiter: AsyncLimiter;
-  private readonly conversationLimiters = new Map<string, AsyncLimiter>();
 
   constructor(options: DocumentPreprocessingServiceOptions) {
     this.clientInstanceId = options.clientInstanceId;
     this.store = options.store;
     this.objectStore = options.objectStore;
-    this.preprocessor = options.preprocessor;
     this.config = options.config;
     this.reader = new DocumentReadService({
       clientInstanceId: options.clientInstanceId,
@@ -84,14 +74,6 @@ export class DocumentPreprocessingService {
       objectStore: options.objectStore,
       preprocessingVersion: options.config.preprocessingVersion
     });
-    this.artifactPipeline = new PreparedDocumentArtifactPipeline({
-      clientInstanceId: options.clientInstanceId,
-      store: options.store,
-      objectStore: options.objectStore,
-      maxExtractedTextBytes: options.config.maxExtractedTextBytes,
-      preprocessingVersion: options.config.preprocessingVersion
-    });
-    this.globalLimiter = new AsyncLimiter(options.config.globalConcurrency);
   }
 
   async uploadDraftAttachment(input: UploadDraftAttachmentInput): Promise<DraftAttachment> {
@@ -152,9 +134,6 @@ export class DocumentPreprocessingService {
         : undefined
     });
 
-    if (!unsupportedReason && !isImageFileFormat(format)) {
-      this.schedulePreprocessing(attachment);
-    }
     return attachment as DraftAttachment;
   }
 
@@ -199,9 +178,13 @@ export class DocumentPreprocessingService {
       attachmentId: attachment.id,
       status: "queued",
       warnings: [],
-      error: null
+      error: null,
+      processingOwnerId: null,
+      processingLeaseToken: null,
+      processingLeaseExpiresAt: null,
+      preprocessingStartedAt: null,
+      preprocessingCompletedAt: null
     });
-    this.schedulePreprocessing(updated);
     return updated;
   }
 
@@ -234,108 +217,6 @@ export class DocumentPreprocessingService {
     };
   }
 
-  private schedulePreprocessing(
-    attachment: Pick<ConversationAttachment, "id" | "conversationId">
-  ): void {
-    void this.globalLimiter
-      .run(() =>
-        this.conversationLimiterForConversation(attachment.conversationId).run(() =>
-          this.preprocessAttachment(attachment.id)
-        )
-      )
-      .catch((error) => {
-        console.warn(
-          JSON.stringify({
-            type: "document_preprocessing.unhandled_failure",
-            attachmentId: attachment.id,
-            message: error instanceof Error ? error.message : "Unknown preprocessing failure"
-          })
-        );
-      });
-  }
-
-  private conversationLimiterForConversation(conversationId: ConversationId): AsyncLimiter {
-    const key = conversationId;
-    const existing = this.conversationLimiters.get(key);
-    if (existing) {
-      return existing;
-    }
-    const limiter = new AsyncLimiter(this.config.perConversationConcurrency);
-    this.conversationLimiters.set(key, limiter);
-    return limiter;
-  }
-
-  private async preprocessAttachment(attachmentId: ConversationAttachmentId): Promise<void> {
-    const attachment = await this.store.getConversationAttachment({
-      clientInstanceId: this.clientInstanceId,
-      attachmentId
-    });
-    if (!attachment || attachment.status !== "queued") {
-      return;
-    }
-    const startedAt = new Date().toISOString();
-    await this.store.updateConversationAttachment({
-      clientInstanceId: this.clientInstanceId,
-      attachmentId,
-      status: "preprocessing",
-      preprocessingStartedAt: startedAt,
-      error: null
-    });
-
-    try {
-      if (!attachment.format) {
-        throw new AppError("VALIDATION_FAILED", "Document format is not supported");
-      }
-      if (!isDocumentFileFormat(attachment.format)) {
-        throw new AppError("VALIDATION_FAILED", "Attachment is not a preprocessable document");
-      }
-      const file = await this.store.getManagedFile({
-        clientInstanceId: this.clientInstanceId,
-        fileId: attachment.fileId
-      });
-      if (!file) {
-        throw new AppError("NOT_FOUND", "Managed file is not available");
-      }
-      const originalBytes = await this.objectStore.getObject(file.objectKey);
-      const converted = await this.preprocessor.convert({
-        bytes: originalBytes,
-        filename: attachment.filename,
-        mimeType: attachment.mimeType,
-        format: attachment.format
-      });
-      const prepared = await this.artifactPipeline.writePreparedDocumentArtifacts({
-        conversationId: attachment.conversationId,
-        sourceFileId: attachment.fileId,
-        filename: attachment.filename,
-        format: attachment.format,
-        converted
-      });
-
-      await this.store.updateConversationAttachment({
-        clientInstanceId: this.clientInstanceId,
-        attachmentId,
-        status: "ready",
-        preparedTextArtifactId: prepared.preparedTextArtifact.id,
-        preparedPagesArtifactId: prepared.preparedPagesArtifact?.id ?? null,
-        preprocessingEngine: converted.engine,
-        characterCount: prepared.characterCount,
-        wordCount: prepared.wordCount,
-        pageCount: prepared.pageCount,
-        warnings: prepared.warnings,
-        preprocessingCompletedAt: new Date().toISOString(),
-        error: null
-      });
-    } catch (error) {
-      await this.store.updateConversationAttachment({
-        clientInstanceId: this.clientInstanceId,
-        attachmentId,
-        status: "failed",
-        error: toAttachmentError(error),
-        preprocessingCompletedAt: new Date().toISOString()
-      });
-    }
-  }
-
   private unsupportedReason(input: {
     filename: string;
     format: FileAttachmentFormat | undefined;
@@ -362,17 +243,4 @@ export class DocumentPreprocessingService {
     }
     return undefined;
   }
-}
-
-function toAttachmentError(error: unknown) {
-  if (error instanceof AppError) {
-    return {
-      code: error.code,
-      message: error.message
-    };
-  }
-  return {
-    code: "preprocessing_failed",
-    message: error instanceof Error ? error.message : "Document preprocessing failed"
-  };
 }

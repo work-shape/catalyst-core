@@ -12,7 +12,8 @@ The v1 flow is:
 ```text
 file upload or handoff
   -> File Acquisition creates a Managed File
-  -> DocumentPreprocessingService runs for supported text-related files
+  -> DocumentPreprocessingService creates a queued Draft Attachment
+  -> document worker claims queued document attachments through Postgres leases
   -> DOCX files are converted once into a canonical PDF artifact
   -> text/page artifacts and metadata are persisted
   -> send persists an Attachment Manifest snapshot with file refs plus preprocessing metadata
@@ -21,7 +22,7 @@ file upload or handoff
   -> read_document returns prepared text as persisted model-visible tool output
 ```
 
-Document preprocessing is automatic for supported uploaded/attached documents in v1. The agent does not trigger extraction itself. The agent only chooses whether and when to call `read_document`.
+Document preprocessing is automatic for supported uploaded/attached documents in v1, but conversion runs in the document worker rather than the chat API process. The agent does not trigger extraction itself. The agent only chooses whether and when to call `read_document`.
 
 The first agent-facing tool is:
 
@@ -70,12 +71,12 @@ chat UI drop/upload
   -> create Conversation shell if the user is on the unsent New conversation screen
   -> upload/acquisition API stores raw file as Managed File
   -> persistent Draft Attachment is created for the conversation
-  -> DocumentPreprocessingService
+  -> document worker claims queued attachment with a lease
   -> ManagedFileStore reads source file
   -> format-specific converter prepares text and derived artifacts through child processes
   -> DOCX conversion writes a canonical PDF artifact before page extraction
   -> ManagedArtifactStore writes extracted text, page JSON, and derived PDFs
-  -> Postgres stores preprocessing status, counts, warnings, artifact refs
+  -> Postgres stores preprocessing status, lease state, counts, warnings, artifact refs
   -> send persists an Attachment Manifest snapshot on the user message
   -> agent chooses read_document(fileId)
   -> InProcessToolExecution authorization, input validation, and generic tool audit envelope
@@ -84,7 +85,7 @@ chat UI drop/upload
   -> ModelContextProjection sends model-visible output to the agent
 ```
 
-Converters should be treated as implementation details behind the platform service, not as the product boundary. The product boundaries are Document Preprocessing, `read_document`, and page-view tools, using product-owned result types. DOCX should be converted to a canonical PDF when page-aware behavior is needed, then follow the same page extraction and rendering path as uploaded PDFs. MarkItDown can remain an optional semantic-text converter only if the workflow benefits from richer Markdown than PDF extraction provides.
+Converters should be treated as implementation details behind the document worker, not as the product boundary. The product boundaries are Document Preprocessing, `read_document`, and page-view tools, using product-owned result types. DOCX should be converted to a canonical PDF when page-aware behavior is needed, then follow the same page extraction and rendering path as uploaded PDFs. MarkItDown can remain an optional semantic-text converter only if the workflow benefits from richer Markdown than PDF extraction provides.
 
 ## Alignment With Live Tool Runtime
 
@@ -152,6 +153,10 @@ global preprocessing concurrency: implementation-defined, conservative default
 ```
 
 When concurrency is exhausted, additional ready-to-process Draft Attachments should stay in `queued` until capacity is available. The backend should persist status transitions so the UI can refetch or poll attachment state after refresh or conversation switches.
+
+The first implementation uses `conversation_attachments` as the durable queue row. Worker claims set `status = preprocessing`, `processing_owner_id`, `processing_lease_token`, `processing_lease_expires_at`, and increment `processing_attempts` in one Postgres transaction using row locking. Completion and failure updates must match the active lease token so stale workers cannot overwrite a reclaimed job. Expired preprocessing leases are eligible for reclaim.
+
+`view_document_page` remains a PDF-page rendering tool internally. Uploaded PDFs are rendered from the original managed file; DOCX and other converted office documents are rendered from their canonical PDF artifact. Page PNGs are generated only on demand when `view_document_page` requests a specific page.
 
 Preprocessing policy should live in release config, not agent config:
 
@@ -221,14 +226,15 @@ The manifest is there so the agent can decide whether to call `read_document`. I
 
 ## Converter Execution Model
 
-Decision: for the first implementation, run preprocessing in the API process and run format-specific converters through child processes from the Node backend/container. Do not introduce a separate document-worker process or container in v1. Revisit that only when OCR dependencies, scaling needs, memory isolation, or operational reliability justify it.
+Decision: run preprocessing and page rendering in a separate document worker container. The chat API owns upload, managed file creation, conversation/draft attachment state, and tool orchestration. The document worker owns DOCX-to-canonical-PDF conversion, PDF text/page extraction, and on-demand PDF page rendering.
 
 Reasons:
 
 - The platform runtime is TypeScript/Node, while PDF extraction and document conversion dependencies are native or Python tools.
 - A child process gives a clear timeout, cancellation, stdout/stderr, and crash boundary.
-- It avoids introducing an HTTP worker service, queue, or extra deployment unit before the workflow proves it needs one.
-- The same service interface can later call a separate document-processing container if process isolation, scaling, OCR dependencies, or operational limits justify it.
+- The API image should not carry LibreOffice, Poppler, MarkItDown, or Python PDF dependencies.
+- Worker leases make multiple worker containers safe enough for the first VPS deployment without introducing a separate queue service.
+- The same document worker can later move to a larger machine or managed container platform without changing the upload or agent-facing tool contracts.
 
 The child process should run a small platform-owned wrapper, not a free-form shell command. Node should invoke it with `execFile` or equivalent argument-safe process execution.
 
@@ -616,7 +622,7 @@ Conversion outcomes:
 
 1. Add product-owned managed file/artifact/prepared-document store interfaces if the current types are not enough.
 2. Add an S3-compatible managed file/artifact store implementation.
-3. Add a document processing package/module with `DocumentPreprocessingService` and `DocumentReadService`.
+3. Add a document processing package/module with `DocumentPreprocessingService`, `DocumentAttachmentProcessor`, and `DocumentReadService`.
 4. Add persistent Draft Attachment state for conversation attachments so refresh and conversation switching restore status.
 5. Create a Conversation shell on first file drop when no `conversationId` exists yet.
 6. Add a format-specific converter child-process runner with timeout and cancellation support.
@@ -624,8 +630,8 @@ Conversion outcomes:
 8. Keep a MarkItDown or equivalent wrapper for DOCX/general text conversion, but do not use it as the PDF page-boundary contract.
 9. Persist PDF page-text JSON artifacts, PDF page counts, and page-aware counts/warnings when PDF preprocessing succeeds.
 10. Add `documents.preprocessing` release config for enablement, supported formats, size/text limits, timeout, and concurrency.
-11. Wire file upload/acquisition finalization to start non-blocking preprocessing for supported text-related files.
-12. Add configurable preprocessing concurrency with queued Draft Attachments when capacity is exhausted.
+11. Wire file upload/acquisition finalization to create queued Draft Attachments for supported text-related files.
+12. Add configurable worker concurrency with queued Draft Attachments when capacity is exhausted.
 13. Block chat submission while attached files are uploading, queued, preprocessing, failed, or unsupported.
 14. Persist an Attachment Manifest snapshot on the user message at send time.
 15. Project the persisted Attachment Manifest into model-visible user messages.
