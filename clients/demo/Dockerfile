@@ -15,7 +15,7 @@ FROM node:23-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 RUN corepack enable
-RUN apk add --no-cache python3 py3-pip poppler-utils \
+RUN apk add --no-cache libreoffice python3 py3-pip poppler-utils \
   && python3 -m pip install --break-system-packages --no-cache-dir 'markitdown[pdf,docx]==0.1.6' pdfplumber pypdf
 
 COPY --from=build /app/package.json /app/pnpm-workspace.yaml ./
