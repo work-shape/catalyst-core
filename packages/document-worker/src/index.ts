@@ -50,6 +50,7 @@ export async function createDocumentWorker(
   const workerId = input.workerId ?? env.DOCUMENT_WORKER_ID ?? createWorkerId();
   const pollIntervalMs = input.pollIntervalMs ?? numberFromEnv(env.DOCUMENT_WORKER_POLL_INTERVAL_MS, 1000);
   const concurrency = input.concurrency ?? numberFromEnv(env.DOCUMENT_WORKER_CONCURRENCY, config.documents.preprocessing.globalConcurrency);
+  assertWorkerRuntimeConfigured(env);
   const store = await createPlatformStore({
     env: {
       ...env,
@@ -198,13 +199,31 @@ function parseViewDocumentPageInput(body: unknown): ViewDocumentPageInput {
   };
 }
 
-function requireWorkerToken(header: string | undefined, configuredToken: string | undefined): void {
-  if (!configuredToken) {
+function assertWorkerRuntimeConfigured(env: ClientInstanceEnv): void {
+  if (env.NODE_ENV !== "production") {
     return;
   }
-  if (header !== `Bearer ${configuredToken}`) {
+  if (!nonEmptyEnv(env.DOCUMENT_WORKER_TOKEN)) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "DOCUMENT_WORKER_TOKEN is required in production for document worker internal endpoints"
+    );
+  }
+}
+
+function requireWorkerToken(header: string | undefined, configuredToken: string | undefined): void {
+  const token = nonEmptyEnv(configuredToken);
+  if (!token) {
+    return;
+  }
+  if (header !== `Bearer ${token}`) {
     throw new AppError("UNAUTHENTICATED", "Document worker token is invalid");
   }
+}
+
+function nonEmptyEnv(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 function createWorkerId(): string {

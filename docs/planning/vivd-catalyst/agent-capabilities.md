@@ -116,9 +116,9 @@ Suggested tools:
 - `document.compare_fields`: compares extracted facts with application/email statements.
 - `document.redact`: removes or masks sensitive fields where needed.
 
-## MarkItDown
+## Generic Conversion Engines
 
-Microsoft MarkItDown is a strong candidate conversion engine for upload-time document preprocessing.
+Microsoft MarkItDown was evaluated as a generic conversion engine for upload-time document preprocessing. It is not the v1 default: supported v1 files use platform-owned PDF/DOCX/TXT/MD paths, with DOCX converted to canonical PDF before page extraction.
 
 Relevant current capabilities:
 
@@ -164,7 +164,7 @@ V1 should include:
 
 - upload-time document preprocessing for supported text-related documents
 - `read_document` as the first agent-facing document reading tool
-- MarkItDown evaluation as the default conversion backend behind preprocessing
+- platform-owned PDF/DOCX/TXT/MD preprocessing behind `read_document`
 - `document.extract_structured` interface
 - provider-agnostic structured extraction evaluation, with Gemini on Vertex AI as one candidate when compliance requirements allow it
 

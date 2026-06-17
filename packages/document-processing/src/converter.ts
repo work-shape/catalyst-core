@@ -40,7 +40,7 @@ export interface CanonicalPdfOutput {
 }
 
 export interface ConvertDocumentOutput {
-  engine: "platform_pdf" | "libreoffice_pdf" | "markitdown" | "direct_text";
+  engine: "platform_pdf" | "libreoffice_pdf" | "direct_text";
   text: string;
   textMimeType: "text/plain" | "text/markdown";
   pageCount?: number;
@@ -87,7 +87,7 @@ export class PlatformDocumentPreprocessor implements DocumentPreprocessor {
       return this.convertDocxThroughCanonicalPdf(input);
     }
 
-    return this.convertWithMarkItDown(input);
+    throw new Error("Document format is not supported");
   }
 
   private async convertDocxThroughCanonicalPdf(
@@ -173,40 +173,10 @@ export class PlatformDocumentPreprocessor implements DocumentPreprocessor {
     }
   }
 
-  private async convertWithMarkItDown(input: ConvertDocumentInput): Promise<ConvertDocumentOutput> {
-    const directory = await mkdtemp(path.join(tmpdir(), "vivd-doc-"));
-    const inputPath = path.join(directory, sanitizeTempFilename(input.filename));
-    await writeFile(inputPath, input.bytes);
-    try {
-      const args = createConverterArgs(this.environment.generalConverterArgs, inputPath);
-      const text = await runCommand({
-        command: this.environment.commands.generalConverter,
-        args,
-        timeoutMs: this.config.timeoutMs
-      });
-      return {
-        engine: "markitdown",
-        text,
-        textMimeType: "text/markdown",
-        warnings: []
-      };
-    } finally {
-      await rm(directory, { force: true, recursive: true });
-    }
-  }
 }
 
 function decodeUtf8(bytes: Uint8Array): string {
   return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-}
-
-function createConverterArgs(configuredArgs: readonly string[], inputPath: string): string[] {
-  if (configuredArgs.length === 0) {
-    return [inputPath];
-  }
-  const hasInputPlaceholder = configuredArgs.some((arg) => arg.includes("{input}"));
-  const args = configuredArgs.map((arg) => arg.replaceAll("{input}", inputPath));
-  return hasInputPlaceholder ? args : [...args, inputPath];
 }
 
 function sanitizeTempFilename(filename: string): string {

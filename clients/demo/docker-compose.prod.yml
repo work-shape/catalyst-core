@@ -11,6 +11,14 @@ x-client-build: &client-build
   args:
     <<: *client-build-args
 
+x-migrate-command: &migrate-command
+  [
+    "node",
+    "--input-type=module",
+    "-e",
+    "import { createPlatformStore } from '@vivd-catalyst/client-assembly'; const store = await createPlatformStore({ env: process.env }); await store.close?.();"
+  ]
+
 x-app-environment: &app-environment
   CLIENT_CONFIG_PATH: /app/platform/clients/demo/config/app.yaml
   DATABASE_URL: ${DATABASE_URL:-postgres://agent_chat:agent_chat@postgres:5432/agent_chat}
@@ -19,8 +27,7 @@ x-app-environment: &app-environment
   DOCUMENT_OBJECT_STORE_REGION: ${DOCUMENT_OBJECT_STORE_REGION:-us-east-1}
   AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
   AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-  DOCUMENT_WORKER_TOKEN: ${DOCUMENT_WORKER_TOKEN:-}
-  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  DOCUMENT_WORKER_TOKEN: ${DOCUMENT_WORKER_TOKEN:?DOCUMENT_WORKER_TOKEN is required}
 
 services:
   postgres:
@@ -38,11 +45,26 @@ services:
       timeout: 5s
       retries: 12
 
+  migrate:
+    build:
+      <<: *client-build
+      target: api
+    working_dir: /app/platform/clients/demo
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *app-environment
+      RUN_MIGRATIONS: "true"
+    command: *migrate-command
+
   doc-worker:
     build:
       <<: *client-build
       target: doc-worker
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
     environment:
@@ -69,27 +91,26 @@ services:
       <<: *client-build
       target: api
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
-        condition: service_healthy
-      doc-worker:
         condition: service_healthy
     environment:
       <<: *app-environment
       HOST: 0.0.0.0
       PORT: 4100
-      RUN_MIGRATIONS: "true"
+      RUN_MIGRATIONS: "false"
       DOCUMENT_WORKER_URL: http://doc-worker:4110
-      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://127.0.0.1:4100/api/auth}
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
-      CHAT_UI_ORIGIN: ${CHAT_UI_ORIGIN:-}
-      DEMO_SUPERADMIN_EMAIL: ${DEMO_SUPERADMIN_EMAIL:-}
-      DEMO_SUPERADMIN_PASSWORD: ${DEMO_SUPERADMIN_PASSWORD:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY is required}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://127.0.0.1:8080/api/auth}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
+      CHAT_UI_ORIGIN: ${CHAT_UI_ORIGIN:-http://127.0.0.1:8080}
+      DEMO_SUPERADMIN_EMAIL: ${DEMO_SUPERADMIN_EMAIL:?DEMO_SUPERADMIN_EMAIL is required}
+      DEMO_SUPERADMIN_PASSWORD: ${DEMO_SUPERADMIN_PASSWORD:?DEMO_SUPERADMIN_PASSWORD is required}
       DEMO_USER_EMAIL: ${DEMO_USER_EMAIL:-}
       DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:-}
-      CHAT_SESSION_TOKEN_SECRET: ${CHAT_SESSION_TOKEN_SECRET:-}
-      CHAT_SERVER_CREDENTIAL: ${CHAT_SERVER_CREDENTIAL:-}
-    ports:
-      - "${API_HOST_PORT:-4100}:4100"
+      CHAT_SESSION_TOKEN_SECRET: ${CHAT_SESSION_TOKEN_SECRET:?CHAT_SESSION_TOKEN_SECRET is required}
+      CHAT_SERVER_CREDENTIAL: ${CHAT_SERVER_CREDENTIAL:?CHAT_SERVER_CREDENTIAL is required}
     healthcheck:
       test:
         [
@@ -110,8 +131,18 @@ services:
     depends_on:
       api:
         condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      api:
+        condition: service_healthy
+      ui:
+        condition: service_started
     ports:
-      - "${UI_HOST_PORT:-8080}:80"
+      - "${HTTP_HOST_PORT:-8080}:80"
+    volumes:
+      - ../../docker/Caddyfile:/etc/caddy/Caddyfile:ro
 
 volumes:
   postgres-data:

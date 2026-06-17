@@ -1029,6 +1029,37 @@ describe("client instance app vertical slice", () => {
     });
   });
 
+  it("rejects production startup without a document worker URL", async () => {
+    await expect(
+      createClientInstanceApp({
+        config: createTestConfig(),
+        env: {
+          NODE_ENV: "production"
+        },
+        tools: []
+      })
+    ).rejects.toMatchObject({
+      code: "VALIDATION_FAILED",
+      message: expect.stringContaining("DOCUMENT_WORKER_URL is required in production")
+    });
+  });
+
+  it("rejects production startup without a document worker token", async () => {
+    await expect(
+      createClientInstanceApp({
+        config: createTestConfig(),
+        env: {
+          NODE_ENV: "production",
+          DOCUMENT_WORKER_URL: "http://doc-worker:4110"
+        },
+        tools: []
+      })
+    ).rejects.toMatchObject({
+      code: "VALIDATION_FAILED",
+      message: expect.stringContaining("DOCUMENT_WORKER_TOKEN is required in production")
+    });
+  });
+
   it("rejects startup when an enabled tool requires approval before resume support exists", async () => {
     const approvalTool = defineTool({
       name: "demo.approval",

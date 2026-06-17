@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:23-bookworm-slim AS build
+FROM node:24-bookworm-slim AS build
 
 WORKDIR /app
 RUN corepack enable
@@ -27,20 +27,19 @@ RUN pnpm -r \
   --filter "@vivd-catalyst/document-worker..." \
   build
 
-FROM node:23-bookworm-slim AS api
+FROM node:24-bookworm-slim AS api
 
 WORKDIR /app
 ENV NODE_ENV=production
 ARG SERVER_ENTRY
 ENV SERVER_ENTRY=${SERVER_ENTRY}
 
-RUN corepack enable
 COPY --from=build /app ./
 
 EXPOSE 4100
 CMD ["sh", "-c", "node ${SERVER_ENTRY}"]
 
-FROM node:23-bookworm-slim AS document-runtime
+FROM node:24-bookworm-slim AS document-runtime
 
 WORKDIR /app
 ENV NODE_ENV=production
@@ -54,7 +53,6 @@ RUN --mount=type=cache,id=vivd-apt-lists,target=/var/lib/apt/lists,sharing=locke
     python3-pip \
     poppler-utils \
   && python3 -m pip install --break-system-packages --no-cache-dir \
-    'markitdown[pdf,docx]==0.1.6' \
     pdfplumber \
     pypdf \
   && rm -rf /var/lib/apt/lists/*

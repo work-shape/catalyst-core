@@ -56,7 +56,11 @@ export async function createClientInstanceApp(
   const env = input.env ?? process.env;
   const config = input.config ?? (await loadConfig(input.configPath));
   const clientInstanceId = getClientInstanceId(config);
-  const resolvedStoreMode = input.storeMode ?? env.STORE;
+  const resolvedStoreMode = resolveStoreMode(input.storeMode, env);
+  assertDocumentWorkerRuntimeConfigured({
+    env,
+    storeMode: resolvedStoreMode
+  });
   const store = await createPlatformStore({ env, storeMode: input.storeMode });
   const objectStore = createDocumentObjectStore({
     config,
@@ -240,6 +244,46 @@ function startInProcessDocumentProcessor(processor: DocumentAttachmentProcessor)
     running = false;
     await loop;
   };
+}
+
+function assertDocumentWorkerRuntimeConfigured(input: {
+  env: ClientInstanceEnv;
+  storeMode: PlatformStoreMode;
+}): void {
+  if (input.env.NODE_ENV !== "production" || input.storeMode === "memory") {
+    return;
+  }
+  if (!nonEmptyEnv(input.env.DOCUMENT_WORKER_URL)) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "DOCUMENT_WORKER_URL is required in production so document page rendering does not fall back to local binaries in the API container"
+    );
+  }
+  if (!nonEmptyEnv(input.env.DOCUMENT_WORKER_TOKEN)) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "DOCUMENT_WORKER_TOKEN is required in production when DOCUMENT_WORKER_URL is configured"
+    );
+  }
+}
+
+function resolveStoreMode(
+  explicitMode: PlatformStoreMode | undefined,
+  env: ClientInstanceEnv
+): PlatformStoreMode {
+  const value = explicitMode ?? env.STORE;
+  if (!value) {
+    return "postgres";
+  }
+  if (value === "memory" || value === "postgres") {
+    return value;
+  }
+  throw new AppError("VALIDATION_FAILED", "STORE must be either 'postgres' or 'memory'");
+}
+
+function nonEmptyEnv(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 async function loadConfig(configPath: string | undefined): Promise<ClientInstanceConfig> {

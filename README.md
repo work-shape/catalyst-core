@@ -34,13 +34,13 @@ pnpm dev:musterbau
 - The API image is Node-only and does not install LibreOffice, Poppler, or Python document tooling.
 - The document worker image owns DOCX-to-PDF conversion, PDF text/page extraction, and on-demand page rendering.
 - The UI is served from a built Vite bundle.
-- API startup runs committed Drizzle migrations when `RUN_MIGRATIONS` is not `false`.
+- A one-shot migration service runs committed Drizzle migrations before the API and document worker start.
 - Standalone Better Auth users from `clients/demo/config/app.yaml` are seeded into Postgres on startup.
 - You can seed those users explicitly with `pnpm --filter @vivd-catalyst/demo seed:auth`.
 
 The Musterbau client follows the same local shape from `../deployments/musterbau` and can seed users from the top-level workspace with `pnpm --filter @vivd-catalyst/musterbau seed:auth`.
 
-Each client has a development Compose file at `docker-compose.yml` and a production-style Compose file at `docker-compose.prod.yml`. The development stack includes S3Mock. The production-style stack keeps Postgres local by default but expects real object storage configuration through environment variables.
+Each client has a development Compose file at `docker-compose.yml` and a production-style Compose file at `docker-compose.prod.yml`. The development stack includes S3Mock. The production-style stack keeps Postgres local by default, expects real object storage configuration through `.env.prod`, and publishes a Caddy front door that serves the UI and proxies API/auth routes to the API container.
 
 Default standalone login users:
 

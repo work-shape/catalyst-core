@@ -357,8 +357,8 @@ class PostgresDocumentAttachmentStore implements DocumentAttachmentStore {
     perConversationLimit: number;
     globalLimit: number;
   }): Promise<ConversationAttachment | undefined> {
-    const now = new Date(input.now);
-    const leaseExpiresAt = new Date(input.leaseExpiresAt);
+    const now = new Date(input.now).toISOString();
+    const leaseExpiresAt = new Date(input.leaseExpiresAt).toISOString();
     const rows = await this.db.transaction(async (tx) => {
       const claimed = (await tx.execute(drizzleSql<{ id: string }>`
         with candidate as (
@@ -373,7 +373,7 @@ class PostgresDocumentAttachmentStore implements DocumentAttachmentStore {
                 ca.status = 'preprocessing'
                 and (
                   ca.processing_lease_expires_at is null
-                  or ca.processing_lease_expires_at <= ${now}
+                  or ca.processing_lease_expires_at <= ${now}::timestamptz
                 )
               )
             )
@@ -383,7 +383,7 @@ class PostgresDocumentAttachmentStore implements DocumentAttachmentStore {
               where active.client_instance_id = ca.client_instance_id
                 and active.status = 'preprocessing'
                 and active.processing_lease_token is not null
-                and active.processing_lease_expires_at > ${now}
+                and active.processing_lease_expires_at > ${now}::timestamptz
             ) < ${input.globalLimit}
             and (
               select count(*)
@@ -392,7 +392,7 @@ class PostgresDocumentAttachmentStore implements DocumentAttachmentStore {
                 and active.conversation_id = ca.conversation_id
                 and active.status = 'preprocessing'
                 and active.processing_lease_token is not null
-                and active.processing_lease_expires_at > ${now}
+                and active.processing_lease_expires_at > ${now}::timestamptz
             ) < ${input.perConversationLimit}
           order by ca.created_at asc
           limit 1
@@ -402,10 +402,10 @@ class PostgresDocumentAttachmentStore implements DocumentAttachmentStore {
         set status = 'preprocessing',
             processing_owner_id = ${input.workerId},
             processing_lease_token = ${input.leaseToken},
-            processing_lease_expires_at = ${leaseExpiresAt},
+            processing_lease_expires_at = ${leaseExpiresAt}::timestamptz,
             processing_attempts = ca.processing_attempts + 1,
-            preprocessing_started_at = coalesce(ca.preprocessing_started_at, ${now}),
-            updated_at = ${now},
+            preprocessing_started_at = coalesce(ca.preprocessing_started_at, ${now}::timestamptz),
+            updated_at = ${now}::timestamptz,
             error = null
         from candidate
         where ca.id = candidate.id

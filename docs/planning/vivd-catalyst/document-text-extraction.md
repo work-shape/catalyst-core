@@ -85,7 +85,7 @@ chat UI drop/upload
   -> ModelContextProjection sends model-visible output to the agent
 ```
 
-Converters should be treated as implementation details behind the document worker, not as the product boundary. The product boundaries are Document Preprocessing, `read_document`, and page-view tools, using product-owned result types. DOCX should be converted to a canonical PDF when page-aware behavior is needed, then follow the same page extraction and rendering path as uploaded PDFs. MarkItDown can remain an optional semantic-text converter only if the workflow benefits from richer Markdown than PDF extraction provides.
+Converters should be treated as implementation details behind the document worker, not as the product boundary. The product boundaries are Document Preprocessing, `read_document`, and page-view tools, using product-owned result types. DOCX is converted to a canonical PDF, then follows the same page extraction and rendering path as uploaded PDFs. The v1 runtime intentionally avoids a generic converter fallback until a supported workflow needs one.
 
 ## Alignment With Live Tool Runtime
 
@@ -226,13 +226,13 @@ The manifest is there so the agent can decide whether to call `read_document`. I
 
 ## Converter Execution Model
 
-Decision: run preprocessing and page rendering in a separate document worker container. The chat API owns upload, managed file creation, conversation/draft attachment state, and tool orchestration. The document worker owns DOCX-to-canonical-PDF conversion, PDF text/page extraction, and on-demand PDF page rendering.
+Decision: run preprocessing and page rendering in a separate document worker container. The chat API owns upload, managed file creation, conversation/draft attachment state, and tool orchestration. The document worker owns DOCX-to-canonical-PDF conversion, PDF text/page extraction, and on-demand PDF page rendering. Compose deployments run committed migrations as a one-shot job before either the API or document worker starts; worker and API containers should then run with startup migrations disabled.
 
 Reasons:
 
 - The platform runtime is TypeScript/Node, while PDF extraction and document conversion dependencies are native or Python tools.
 - A child process gives a clear timeout, cancellation, stdout/stderr, and crash boundary.
-- The API image should not carry LibreOffice, Poppler, MarkItDown, or Python PDF dependencies.
+- The API image should not carry LibreOffice, Poppler, or Python PDF dependencies.
 - Worker leases make multiple worker containers safe enough for the first VPS deployment without introducing a separate queue service.
 - The same document worker can later move to a larger machine or managed container platform without changing the upload or agent-facing tool contracts.
 
@@ -295,7 +295,7 @@ type ReadDocumentOutput = {
     checksum?: string;
   };
   preprocessing: {
-    engine: "markitdown" | "platform_pdf";
+    engine: "platform_pdf" | "libreoffice_pdf" | "direct_text";
     completedAt: string;
     durationMs: number;
     warnings: string[];
@@ -467,7 +467,7 @@ Recommended implementation sequence:
 1. Replace `DocumentTextConverter` with a product-owned `DocumentPreprocessor` contract that can return full text, optional PDF page text, page count, warnings, and engine metadata.
 2. Add first-class managed artifact metadata in Postgres, backed by object storage bytes. Artifacts should include kind, MIME type, checksum, byte size, conversation id, source file id, retention metadata, and object key.
 3. Replace direct `preparedObjectKey` attachment state with artifact ids such as `preparedTextArtifactId` and `preparedPagesArtifactId`. Keep attachment-level counts, page count, status, warnings, and preprocessing engine.
-4. Implement the PDF preprocessor wrapper around Poppler `pdfinfo` and `pdfplumber`. It should emit metadata JSON and write full text/page JSON outputs through platform-controlled paths. Use MarkItDown only for DOCX/general full-text conversion, not for PDFs.
+4. Implement the PDF preprocessor wrapper around Poppler `pdfinfo` and `pdfplumber`. It should emit metadata JSON and write full text/page JSON outputs through platform-controlled paths. Convert DOCX to canonical PDF first, then reuse the same PDF extraction path.
 5. Persist PDF preprocessing outputs as separate managed artifacts: page-delimited full text as `document.prepared_text`, page JSON as `document.pages_json`.
 6. Make `read_document` mode explicit. `mode: "full"` returns one full-document textual representation, with page delimiters when page text exists. `mode: "pages"` reads the page JSON artifact and returns only the requested page range. Large PDFs can reject or require explicit confirmation for full reads.
 7. Add `view_document_page`. It renders one PDF page on demand with `pdftoppm`, persists the PNG as `document.page_image`, returns artifact metadata, and marks the artifact as model-visible visual context.
@@ -627,7 +627,7 @@ Conversion outcomes:
 5. Create a Conversation shell on first file drop when no `conversationId` exists yet.
 6. Add a format-specific converter child-process runner with timeout and cancellation support.
 7. Add the PDF wrapper script and dependency installation path for Poppler `pdfinfo`, Poppler `pdftoppm`, `pdfplumber`, and `pypdf`.
-8. Keep a MarkItDown or equivalent wrapper for DOCX/general text conversion, but do not use it as the PDF page-boundary contract.
+8. Keep unsupported document formats outside v1 preprocessing until a concrete workflow justifies a dedicated converter path.
 9. Persist PDF page-text JSON artifacts, PDF page counts, and page-aware counts/warnings when PDF preprocessing succeeds.
 10. Add `documents.preprocessing` release config for enablement, supported formats, size/text limits, timeout, and concurrency.
 11. Wire file upload/acquisition finalization to create queued Draft Attachments for supported text-related files.
