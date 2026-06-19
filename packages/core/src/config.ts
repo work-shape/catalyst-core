@@ -1,5 +1,4 @@
 import type { LocalizationConfig, LocalizedStringConfig } from "./localization";
-import type { DocumentFileFormat } from "./files";
 
 export interface AgentInitialPromptConfig {
   title: LocalizedStringConfig;
@@ -101,6 +100,10 @@ export interface PostgresDataSourceConfig {
     schemaDescription?: string;
   };
   tools?: {
+    query?: {
+      enabled: boolean;
+      name?: string;
+    };
     renderView?: {
       enabled: boolean;
       name?: string;
@@ -111,28 +114,4 @@ export interface PostgresDataSourceConfig {
 
 export type DataSourceConfig = PostgresDataSourceConfig;
 
-export interface DocumentPreprocessingConfig {
-  enabled: boolean;
-  supportedFormats: DocumentFileFormat[];
-  maxFileBytes: number;
-  maxExtractedTextBytes: number;
-  timeoutMs: number;
-  perConversationConcurrency: number;
-  globalConcurrency: number;
-  preprocessingVersion: string;
-}
-
-export interface DocumentObjectStorageConfig {
-  kind: "s3";
-  bucket: string;
-  region: string;
-  endpoint?: string;
-  forcePathStyle: boolean;
-  accessKeyIdEnvName?: string;
-  secretAccessKeyEnvName?: string;
-}
-
-export interface DocumentsConfig {
-  preprocessing: DocumentPreprocessingConfig;
-  objectStorage: DocumentObjectStorageConfig;
-}
+export type CapabilityConfigMap = Record<string, unknown>;

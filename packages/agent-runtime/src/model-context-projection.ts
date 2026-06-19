@@ -484,75 +484,30 @@ function readUserAttachmentManifest(metadata: JsonObject | undefined): Attachmen
     const attachmentId = typeof value.attachmentId === "string" ? value.attachmentId : undefined;
     const filename = typeof value.filename === "string" ? value.filename : undefined;
     const byteSize = typeof value.byteSize === "number" ? value.byteSize : undefined;
-    const metadata = isJsonObject(value.metadata) ? value.metadata : undefined;
-    if (!fileId || !attachmentId || !filename || byteSize === undefined || !metadata) {
+    if (!fileId || !attachmentId || !filename || byteSize === undefined) {
       return [];
     }
     const mimeType = typeof value.mimeType === "string" ? value.mimeType : undefined;
     const kind = typeof value.kind === "string" ? value.kind : undefined;
-    const manifestImageMimeType =
-      mimeType !== undefined && isSupportedImageMimeType(mimeType) ? mimeType : undefined;
-    if (kind === "image" || manifestImageMimeType !== undefined) {
-      const imageMimeType = manifestImageMimeType ?? readImageMimeType(metadata.mimeType);
-      const format = readImageFormat(metadata.format);
-      if (!imageMimeType || !format) {
-        return [];
-      }
-      return [
-        {
-          kind: "image",
-          fileId: fileId as AttachmentManifest["attachments"][number]["fileId"],
-          attachmentId: attachmentId as AttachmentManifest["attachments"][number]["attachmentId"],
-          filename,
-          mimeType: imageMimeType,
-          byteSize,
-          status: "ready",
-          readable: false,
-          modelVisibility: {
-            type: "image",
-            mimeType: imageMimeType
-          },
-          metadata: {
-            fileId: fileId as ManagedFileId,
-            filename,
-            mimeType: imageMimeType,
-            byteSize,
-            format,
-            checksum: typeof metadata.checksum === "string" ? metadata.checksum : ""
-          }
-        }
-      ];
+    if (!kind) {
+      return [];
     }
+    const metadata = isJsonObject(value.metadata) ? value.metadata : undefined;
+    const modelVisibility = readModelVisibility(value.modelVisibility);
+    const modelContext = readAttachmentModelContext(value.modelContext);
     return [
       {
-        kind: "document",
-        fileId: fileId as AttachmentManifest["attachments"][number]["fileId"],
+        kind,
+        fileId: fileId as ManagedFileId,
         attachmentId: attachmentId as AttachmentManifest["attachments"][number]["attachmentId"],
         filename,
         mimeType,
         byteSize,
-        status: "ready",
-        readable: true,
-        readToolName: "read_document",
-        metadata: {
-          fileId: fileId as AttachmentManifest["attachments"][number]["metadata"]["fileId"],
-          filename,
-          mimeType: typeof metadata.mimeType === "string" ? metadata.mimeType : undefined,
-          byteSize,
-          format:
-            metadata.format === "pdf" ||
-            metadata.format === "docx" ||
-            metadata.format === "txt" ||
-            metadata.format === "md"
-              ? metadata.format
-              : undefined,
-          characterCount: typeof metadata.characterCount === "number" ? metadata.characterCount : undefined,
-          wordCount: typeof metadata.wordCount === "number" ? metadata.wordCount : undefined,
-          pageCount: typeof metadata.pageCount === "number" ? metadata.pageCount : undefined,
-          warnings: [],
-          preprocessingVersion:
-            typeof metadata.preprocessingVersion === "string" ? metadata.preprocessingVersion : undefined
-        }
+        status: typeof value.status === "string" ? value.status : "ready",
+        readable: typeof value.readable === "boolean" ? value.readable : undefined,
+        ...(modelVisibility ? { modelVisibility } : {}),
+        ...(modelContext ? { modelContext } : {}),
+        ...(metadata ? { metadata } : {})
       }
     ];
   });
@@ -585,62 +540,27 @@ function appendAttachmentManifestForModel(
   if (!attachmentManifest || attachmentManifest.attachments.length === 0) {
     return text;
   }
-  const documents = attachmentManifest.attachments.filter(isDocumentAttachmentEntry);
-  const images = attachmentManifest.attachments.filter(isImageAttachmentEntry);
+  const sections = groupAttachmentModelContext(attachmentManifest.attachments);
   const lines = [
     text,
-    ...(documents.length > 0
-      ? [
-          "",
-          "[Attached documents]",
-          ...documents.map((attachment) => {
-            const metadata = attachment.metadata;
-            const details = [
-              `fileId: ${attachment.fileId}`,
-              `status: ${attachment.status}`,
-              `size: ${attachment.byteSize} bytes`,
-              metadata.format ? `format: ${metadata.format}` : undefined,
-              metadata.wordCount !== undefined ? `words: ${metadata.wordCount}` : undefined,
-              metadata.pageCount !== undefined ? `pages: ${metadata.pageCount}` : undefined
-            ].filter((value): value is string => value !== undefined);
-            const readHint = `Use read_document({ "fileId": "${attachment.fileId}", "mode": "full" }) to read the full prepared text.`;
-            const viewHint =
-              metadata.format === "pdf"
-                ? `Use view_document_page({ "fileId": "${attachment.fileId}", "pageNumber": 1 }) to visually inspect a specific PDF page when layout or images matter.`
-                : undefined;
-            return `- ${attachment.filename} (${details.join(", ")}). ${[readHint, viewHint].filter(Boolean).join(" ")}`;
-          })
-        ]
-      : []),
-    ...(images.length > 0
-      ? [
-          "",
-          "[Attached images]",
-          ...images.map((attachment) => {
-            const details = [
-              `fileId: ${attachment.fileId}`,
-              `status: ${attachment.status}`,
-              `mimeType: ${attachment.mimeType}`,
-              `size: ${attachment.byteSize} bytes`
-            ];
-            return `- ${attachment.filename} (${details.join(", ")}). The image is loaded directly into visual context when the provider supports image inputs.`;
-          })
-        ]
-      : [])
+    ...sections.flatMap(([section, sectionLines]) => ["", `[${section}]`, ...sectionLines])
   ];
   return lines.join("\n");
 }
 
-function isDocumentAttachmentEntry(
-  attachment: AttachmentManifestEntry
-): attachment is Extract<AttachmentManifestEntry, { kind: "document" }> {
-  return attachment.kind === "document";
-}
-
-function isImageAttachmentEntry(
-  attachment: AttachmentManifestEntry
-): attachment is Extract<AttachmentManifestEntry, { kind: "image" }> {
-  return attachment.kind === "image";
+function groupAttachmentModelContext(
+  attachments: readonly AttachmentManifestEntry[]
+): [string, string[]][] {
+  const sections = new Map<string, string[]>();
+  for (const attachment of attachments) {
+    if (!attachment.modelContext) {
+      continue;
+    }
+    const lines = sections.get(attachment.modelContext.section) ?? [];
+    lines.push(attachment.modelContext.text);
+    sections.set(attachment.modelContext.section, lines);
+  }
+  return [...sections.entries()];
 }
 
 async function projectUserAttachmentImages(
@@ -652,7 +572,7 @@ async function projectUserAttachmentImages(
   }
   const images: Extract<ModelContentPart, { type: "image" }>[] = [];
   for (const attachment of attachmentManifest.attachments) {
-    if (attachment.kind !== "image") {
+    if (attachment.modelVisibility?.type !== "image") {
       continue;
     }
     try {
@@ -660,8 +580,8 @@ async function projectUserAttachmentImages(
         clientInstanceId: options.clientInstanceId,
         fileId: attachment.fileId
       });
-      const mimeType = object.mimeType ?? attachment.mimeType;
-      if (!isSupportedImageMimeType(mimeType) || mimeType !== attachment.mimeType) {
+      const mimeType = object.mimeType ?? attachment.mimeType ?? attachment.modelVisibility.mimeType;
+      if (!isSupportedImageMimeType(mimeType) || mimeType !== attachment.modelVisibility.mimeType) {
         continue;
       }
       images.push({
@@ -682,14 +602,27 @@ async function projectUserAttachmentImages(
   return images;
 }
 
-function readImageMimeType(value: JsonValue | undefined): SupportedImageMimeType | undefined {
-  return typeof value === "string" && isSupportedImageMimeType(value) ? value : undefined;
+function readModelVisibility(value: JsonValue | undefined): AttachmentManifestEntry["modelVisibility"] | undefined {
+  if (!isJsonObject(value) || value.type !== "image") {
+    return undefined;
+  }
+  const mimeType = typeof value.mimeType === "string" ? value.mimeType : undefined;
+  if (!mimeType || !isSupportedImageMimeType(mimeType)) {
+    return undefined;
+  }
+  return {
+    type: "image",
+    mimeType
+  };
 }
 
-function readImageFormat(value: JsonValue | undefined): "png" | "jpeg" | "webp" | "gif" | undefined {
-  return value === "png" || value === "jpeg" || value === "webp" || value === "gif"
-    ? value
-    : undefined;
+function readAttachmentModelContext(value: JsonValue | undefined): AttachmentManifestEntry["modelContext"] | undefined {
+  if (!isJsonObject(value)) {
+    return undefined;
+  }
+  const section = typeof value.section === "string" ? value.section.trim() : "";
+  const text = typeof value.text === "string" ? value.text.trim() : "";
+  return section && text ? { section, text } : undefined;
 }
 
 function isSupportedImageMimeType(value: string): value is SupportedImageMimeType {

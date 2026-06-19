@@ -27,7 +27,10 @@ describe("chat UI message history projection", () => {
                   byteSize: 157593,
                   status: "ready",
                   readable: true,
-                  readToolName: "read_document",
+                  modelContext: {
+                    section: "Attached documents",
+                    text: '- Felix - Boardingpass.pdf (fileId: file_boardingpass, status: ready, size: 157593 bytes, format: pdf, words: 420, pages: 2). Use read_document({ "fileId": "file_boardingpass", "mode": "full" }) to read the full prepared text.'
+                  },
                   metadata: {
                     fileId: "file_boardingpass",
                     filename: "Felix - Boardingpass.pdf",
@@ -61,7 +64,7 @@ describe("chat UI message history projection", () => {
           type: "file",
           mediaType: "application/pdf",
           filename: "Felix - Boardingpass.pdf",
-          url: "vivd-document://file_boardingpass"
+          url: "vivd-file://file_boardingpass"
         }
       ]
     });
@@ -96,6 +99,10 @@ describe("chat UI message history projection", () => {
                     type: "image",
                     mimeType: "image/png"
                   },
+                  modelContext: {
+                    section: "Attached images",
+                    text: "- receipt.png (fileId: file_receipt, status: ready, mimeType: image/png, size: 8 bytes). The image is loaded directly into visual context when the provider supports image inputs."
+                  },
                   metadata: {
                     fileId: "file_receipt",
                     filename: "receipt.png",
@@ -126,7 +133,7 @@ describe("chat UI message history projection", () => {
           type: "file",
           mediaType: "image/png",
           filename: "receipt.png",
-          url: "vivd-document://file_receipt"
+          url: "vivd-file://file_receipt"
         }
       ]
     });

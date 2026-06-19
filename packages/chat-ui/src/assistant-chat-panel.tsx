@@ -34,6 +34,7 @@ export function AssistantChatPanel({
   localUploadingAttachments,
   sendBlockedReason,
   attachmentsEnabled,
+  attachmentAccept,
   onDraftChange,
   onFilesSelected,
   onRemoveDraftAttachment,
@@ -59,6 +60,7 @@ export function AssistantChatPanel({
   localUploadingAttachments: LocalUploadingAttachment[];
   sendBlockedReason?: string;
   attachmentsEnabled: boolean;
+  attachmentAccept: string;
   onDraftChange: (value: string) => void;
   onFilesSelected: (files: File[]) => void;
   onRemoveDraftAttachment: (attachmentId: string) => void;
@@ -90,6 +92,7 @@ export function AssistantChatPanel({
       localUploadingAttachments={localUploadingAttachments}
       sendBlockedReason={sendBlockedReason}
       attachmentsEnabled={attachmentsEnabled}
+      attachmentAccept={attachmentAccept}
       onDraftChange={onDraftChange}
       onFilesSelected={onFilesSelected}
       onRemoveDraftAttachment={onRemoveDraftAttachment}
@@ -120,6 +123,7 @@ function AssistantRuntimePane({
   localUploadingAttachments,
   sendBlockedReason,
   attachmentsEnabled,
+  attachmentAccept,
   onDraftChange,
   onFilesSelected,
   onRemoveDraftAttachment,
@@ -146,6 +150,7 @@ function AssistantRuntimePane({
   localUploadingAttachments: LocalUploadingAttachment[];
   sendBlockedReason?: string;
   attachmentsEnabled: boolean;
+  attachmentAccept: string;
   onDraftChange: (value: string) => void;
   onFilesSelected: (files: File[]) => void;
   onRemoveDraftAttachment: (attachmentId: string) => void;
@@ -315,6 +320,7 @@ function AssistantRuntimePane({
             localUploadingAttachments={localUploadingAttachments}
             sendBlockedReason={sendDisabledReason}
             attachmentsEnabled={attachmentsEnabled}
+            attachmentAccept={attachmentAccept}
             composerFocusRequestId={composerFocusRequestId}
             onFilesSelected={onFilesSelected}
             onRemoveDraftAttachment={onRemoveDraftAttachment}
@@ -553,7 +559,7 @@ function toAttachmentFilePart(
     type: "file",
     mediaType: attachment.mimeType ?? "application/octet-stream",
     filename: attachment.filename,
-    url: `vivd-document://${encodeURIComponent(attachment.fileId)}`
+    url: `vivd-file://${encodeURIComponent(attachment.fileId)}`
   };
 }
 

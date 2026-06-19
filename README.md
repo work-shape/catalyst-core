@@ -9,6 +9,8 @@ The first implementation keeps product-owned contracts separate from adapters an
 - Customer assemblies and premium/restricted capabilities are expected to live in separate repositories that consume these packages.
 - Product planning and private deployment notes are intentionally outside this OSS platform repository.
 
+The OSS platform owns generic extension surfaces: tool contracts, capability assembly, datasource registry/adapters, managed files, conversation attachments, managed artifacts, and model-context projection rules. Restricted capabilities plug into those surfaces for heavier or proprietary behavior such as document preprocessing or private hydrated data views.
+
 Run the local vertical slice:
 
 ```bash

@@ -1245,8 +1245,13 @@ function createTestAttachmentCapability(): ClientInstanceCapability {
     name: "test-attachments",
     create(context) {
       return {
-        attachments: {
+        attachments: [{
+          name: "test-attachments",
           maxFileBytes: 1024 * 1024,
+          acceptedFileTypes: ["text/plain", "image/gif"],
+          acceptsFile() {
+            return true;
+          },
           async listDraftAttachments(conversationId) {
             return attachmentsByConversation.get(conversationId) ?? [];
           },
@@ -1263,6 +1268,8 @@ function createTestAttachmentCapability(): ClientInstanceCapability {
               checksum: "test-checksum",
               status: "ready",
               format: formatForMimeType(input.mimeType),
+              artifactRefs: {},
+              processingMetadata: {},
               warnings: [],
               error: null,
               processingAttempts: 0,
@@ -1327,7 +1334,7 @@ function createTestAttachmentCapability(): ClientInstanceCapability {
           isInlineDisplayMimeType(mimeType) {
             return mimeType === "image/gif";
           }
-        }
+        }]
       };
     }
   };
@@ -1348,6 +1355,10 @@ function manifestEntryForAttachment(attachment: ConversationAttachment) {
         modelVisibility: {
           type: "image" as const,
           mimeType: "image/gif" as SupportedImageMimeType
+        },
+        modelContext: {
+          section: "Attached images",
+          text: `- ${attachment.filename} (fileId: ${attachment.fileId}, status: ready, mimeType: image/gif, size: ${attachment.byteSize} bytes). The image is loaded directly into visual context when the provider supports image inputs.`
         },
         metadata: {
           fileId: attachment.fileId,
@@ -1371,7 +1382,10 @@ function manifestEntryForAttachment(attachment: ConversationAttachment) {
       byteSize: attachment.byteSize,
       status: "ready" as const,
       readable: true as const,
-      readToolName: "read_document" as const,
+      modelContext: {
+        section: "Attached files",
+        text: `- ${attachment.filename} (fileId: ${attachment.fileId}, status: ready, size: ${attachment.byteSize} bytes).`
+      },
       metadata: {
         fileId: attachment.fileId,
         filename: attachment.filename,

@@ -14,7 +14,7 @@ import {
   type ConversationStore,
   type CreateConversationInput,
   type CreateMessageInput,
-  type DocumentAttachmentStore,
+  type PlatformFileStore,
   type ModelUsageEvent,
   type ModelUsageEventInput,
   type ModelUsageEventStore,
@@ -52,7 +52,7 @@ import {
   schema,
   userIdentities
 } from "./schema";
-import { createPostgresDocumentAttachmentStore } from "./postgres-document-attachment-store";
+import { createPostgresPlatformFileStore } from "./postgres-file-store";
 
 export interface PostgresPlatformStoreOptions {
   databaseUrl: string;
@@ -76,16 +76,16 @@ function handlePostgresNotice(notice: Notice): void {
 }
 
 export class PostgresPlatformStore
-  implements ConversationStore, DocumentAttachmentStore, AuditEventStore, ModelUsageEventStore, UserStore
+  implements ConversationStore, PlatformFileStore, AuditEventStore, ModelUsageEventStore, UserStore
 {
   private readonly postgresClient: Sql;
   private readonly db: PostgresDatabase;
-  private readonly documentAttachments: DocumentAttachmentStore;
+  private readonly fileStore: PlatformFileStore;
 
   private constructor(sql: Sql) {
     this.postgresClient = sql;
     this.db = drizzle(sql, { schema });
-    this.documentAttachments = createPostgresDocumentAttachmentStore(this.db, {
+    this.fileStore = createPostgresPlatformFileStore(this.db, {
       requireActiveConversation: (clientInstanceId, conversationId) =>
         this.requireActiveConversation(clientInstanceId, conversationId),
       touchConversation: (clientInstanceId, conversationId, updatedAt) =>
@@ -636,88 +636,88 @@ export class PostgresPlatformStore
     return rows.map(mapMessage).reverse();
   }
 
-  async createManagedFile(input: Parameters<DocumentAttachmentStore["createManagedFile"]>[0]) {
-    return this.documentAttachments.createManagedFile(input);
+  async createManagedFile(input: Parameters<PlatformFileStore["createManagedFile"]>[0]) {
+    return this.fileStore.createManagedFile(input);
   }
 
-  async getManagedFile(input: Parameters<DocumentAttachmentStore["getManagedFile"]>[0]) {
-    return this.documentAttachments.getManagedFile(input);
+  async getManagedFile(input: Parameters<PlatformFileStore["getManagedFile"]>[0]) {
+    return this.fileStore.getManagedFile(input);
   }
 
-  async createManagedArtifact(input: Parameters<DocumentAttachmentStore["createManagedArtifact"]>[0]) {
-    return this.documentAttachments.createManagedArtifact(input);
+  async createManagedArtifact(input: Parameters<PlatformFileStore["createManagedArtifact"]>[0]) {
+    return this.fileStore.createManagedArtifact(input);
   }
 
-  async getManagedArtifact(input: Parameters<DocumentAttachmentStore["getManagedArtifact"]>[0]) {
-    return this.documentAttachments.getManagedArtifact(input);
+  async getManagedArtifact(input: Parameters<PlatformFileStore["getManagedArtifact"]>[0]) {
+    return this.fileStore.getManagedArtifact(input);
   }
 
   async listManagedArtifactsForFile(
-    input: Parameters<DocumentAttachmentStore["listManagedArtifactsForFile"]>[0]
+    input: Parameters<PlatformFileStore["listManagedArtifactsForFile"]>[0]
   ) {
-    return this.documentAttachments.listManagedArtifactsForFile(input);
+    return this.fileStore.listManagedArtifactsForFile(input);
   }
 
   async createConversationAttachment(
-    input: Parameters<DocumentAttachmentStore["createConversationAttachment"]>[0]
+    input: Parameters<PlatformFileStore["createConversationAttachment"]>[0]
   ) {
-    return this.documentAttachments.createConversationAttachment(input);
+    return this.fileStore.createConversationAttachment(input);
   }
 
   async getConversationAttachment(
-    input: Parameters<DocumentAttachmentStore["getConversationAttachment"]>[0]
+    input: Parameters<PlatformFileStore["getConversationAttachment"]>[0]
   ) {
-    return this.documentAttachments.getConversationAttachment(input);
+    return this.fileStore.getConversationAttachment(input);
   }
 
-  async listDraftAttachments(input: Parameters<DocumentAttachmentStore["listDraftAttachments"]>[0]) {
-    return this.documentAttachments.listDraftAttachments(input);
+  async listDraftAttachments(input: Parameters<PlatformFileStore["listDraftAttachments"]>[0]) {
+    return this.fileStore.listDraftAttachments(input);
   }
 
   async updateConversationAttachment(
-    input: Parameters<DocumentAttachmentStore["updateConversationAttachment"]>[0]
+    input: Parameters<PlatformFileStore["updateConversationAttachment"]>[0]
   ) {
-    return this.documentAttachments.updateConversationAttachment(input);
+    return this.fileStore.updateConversationAttachment(input);
   }
 
-  async deleteDraftAttachment(input: Parameters<DocumentAttachmentStore["deleteDraftAttachment"]>[0]) {
-    return this.documentAttachments.deleteDraftAttachment(input);
+  async deleteDraftAttachment(input: Parameters<PlatformFileStore["deleteDraftAttachment"]>[0]) {
+    return this.fileStore.deleteDraftAttachment(input);
   }
 
   async claimReadyDraftAttachmentsForMessage(
-    input: Parameters<DocumentAttachmentStore["claimReadyDraftAttachmentsForMessage"]>[0]
+    input: Parameters<PlatformFileStore["claimReadyDraftAttachmentsForMessage"]>[0]
   ) {
-    return this.documentAttachments.claimReadyDraftAttachmentsForMessage(input);
+    return this.fileStore.claimReadyDraftAttachmentsForMessage(input);
   }
 
-  async claimNextQueuedDocumentAttachment(
-    input: Parameters<DocumentAttachmentStore["claimNextQueuedDocumentAttachment"]>[0]
+  async claimNextQueuedConversationAttachment(
+    input: Parameters<PlatformFileStore["claimNextQueuedConversationAttachment"]>[0]
   ) {
-    return this.documentAttachments.claimNextQueuedDocumentAttachment(input);
+    return this.fileStore.claimNextQueuedConversationAttachment(input);
   }
 
-  async completeClaimedDocumentAttachment(
-    input: Parameters<DocumentAttachmentStore["completeClaimedDocumentAttachment"]>[0]
+  async completeClaimedConversationAttachment(
+    input: Parameters<PlatformFileStore["completeClaimedConversationAttachment"]>[0]
   ) {
-    return this.documentAttachments.completeClaimedDocumentAttachment(input);
+    return this.fileStore.completeClaimedConversationAttachment(input);
   }
 
-  async failClaimedDocumentAttachment(
-    input: Parameters<DocumentAttachmentStore["failClaimedDocumentAttachment"]>[0]
+  async failClaimedConversationAttachment(
+    input: Parameters<PlatformFileStore["failClaimedConversationAttachment"]>[0]
   ) {
-    return this.documentAttachments.failClaimedDocumentAttachment(input);
+    return this.fileStore.failClaimedConversationAttachment(input);
   }
 
-  async findReadableDocumentAttachment(
-    input: Parameters<DocumentAttachmentStore["findReadableDocumentAttachment"]>[0]
+  async findReadyConversationAttachmentByFile(
+    input: Parameters<PlatformFileStore["findReadyConversationAttachmentByFile"]>[0]
   ) {
-    return this.documentAttachments.findReadableDocumentAttachment(input);
+    return this.fileStore.findReadyConversationAttachmentByFile(input);
   }
 
   async findConversationAttachmentByFile(
-    input: Parameters<DocumentAttachmentStore["findConversationAttachmentByFile"]>[0]
+    input: Parameters<PlatformFileStore["findConversationAttachmentByFile"]>[0]
   ) {
-    return this.documentAttachments.findConversationAttachmentByFile(input);
+    return this.fileStore.findConversationAttachmentByFile(input);
   }
 
   async deleteConversation(input: {

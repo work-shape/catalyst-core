@@ -15,6 +15,7 @@ export function AssistantThread({
   localUploadingAttachments,
   sendBlockedReason,
   attachmentsEnabled,
+  attachmentAccept,
   composerFocusRequestId,
   onFilesSelected,
   onRemoveDraftAttachment,
@@ -27,6 +28,7 @@ export function AssistantThread({
   localUploadingAttachments: LocalUploadingAttachment[];
   sendBlockedReason?: string;
   attachmentsEnabled: boolean;
+  attachmentAccept: string;
   composerFocusRequestId: number;
   onFilesSelected: (files: File[]) => void;
   onRemoveDraftAttachment: (attachmentId: string) => void;
@@ -77,6 +79,7 @@ export function AssistantThread({
                   localUploadingAttachments={localUploadingAttachments}
                   sendBlockedReason={sendBlockedReason}
                   attachmentsEnabled={attachmentsEnabled}
+                  attachmentAccept={attachmentAccept}
                   focusRequestId={composerFocusRequestId}
                   onFilesSelected={onFilesSelected}
                   onRemoveAttachment={onRemoveDraftAttachment}

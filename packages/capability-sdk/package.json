@@ -1,0 +1,29 @@
+{
+  "name": "@vivd-catalyst/capability-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@vivd-catalyst/client-assembly": "workspace:*",
+    "@vivd-catalyst/data-source": "workspace:*",
+    "@vivd-catalyst/tool-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.1",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3"
+  }
+}

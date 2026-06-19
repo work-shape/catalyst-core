@@ -237,7 +237,10 @@ describe("model context projection", () => {
           byteSize: 1200,
           status: "ready",
           readable: true,
-          readToolName: "read_document",
+          modelContext: {
+            section: "Attached documents",
+            text: '- contract.pdf (fileId: file_contract, status: ready, size: 1200 bytes, format: pdf, words: 250). Use read_document({ "fileId": "file_contract", "mode": "full" }) to read the full prepared text. Use view_document_page({ "fileId": "file_contract", "pageNumber": 1 }) to visually inspect a specific PDF page when layout or images matter.'
+          },
           metadata: {
             fileId: asManagedFileId("file_contract"),
             filename: "contract.pdf",
@@ -286,6 +289,10 @@ describe("model context projection", () => {
           modelVisibility: {
             type: "image",
             mimeType: "image/png"
+          },
+          modelContext: {
+            section: "Attached images",
+            text: "- receipt.png (fileId: file_receipt, status: ready, mimeType: image/png, size: 8 bytes). The image is loaded directly into visual context when the provider supports image inputs."
           },
           metadata: {
             fileId: asManagedFileId("file_receipt"),

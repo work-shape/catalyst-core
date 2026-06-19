@@ -27,7 +27,8 @@ export function createSafeConfigView(config: ClientInstanceConfig, localeInput: 
     },
     features: {
       attachments: {
-        enabled: false
+        enabled: false,
+        accept: ""
       }
     },
     defaultAgentName: config.defaultAgentName,

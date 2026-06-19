@@ -9,7 +9,7 @@ import {
   type CreateConversationAttachmentInput,
   type CreateManagedArtifactInput,
   type CreateManagedFileInput,
-  type DocumentAttachmentStore,
+  type PlatformFileStore,
   type DraftAttachment,
   type ManagedArtifactId,
   type ManagedArtifactKind,
@@ -25,7 +25,7 @@ import { conversationAttachments, managedArtifacts, managedFiles, schema } from 
 
 type PostgresDatabase = PostgresJsDatabase<typeof schema>;
 
-export interface PostgresDocumentAttachmentStoreCallbacks {
+export interface PostgresPlatformFileStoreCallbacks {
   requireActiveConversation(clientInstanceId: ClientInstanceId, conversationId: ConversationId): Promise<void>;
   touchConversation(
     clientInstanceId: ClientInstanceId,
@@ -34,17 +34,17 @@ export interface PostgresDocumentAttachmentStoreCallbacks {
   ): Promise<void>;
 }
 
-export function createPostgresDocumentAttachmentStore(
+export function createPostgresPlatformFileStore(
   db: PostgresDatabase,
-  callbacks: PostgresDocumentAttachmentStoreCallbacks
-): DocumentAttachmentStore {
-  return new PostgresDocumentAttachmentStore(db, callbacks);
+  callbacks: PostgresPlatformFileStoreCallbacks
+): PlatformFileStore {
+  return new PostgresPlatformFileStore(db, callbacks);
 }
 
-class PostgresDocumentAttachmentStore implements DocumentAttachmentStore {
+class PostgresPlatformFileStore implements PlatformFileStore {
   constructor(
     private readonly db: PostgresDatabase,
-    private readonly callbacks: PostgresDocumentAttachmentStoreCallbacks
+    private readonly callbacks: PostgresPlatformFileStoreCallbacks
   ) {}
 
   async createManagedFile(input: CreateManagedFileInput): Promise<ManagedFileRecord> {
@@ -166,6 +166,8 @@ class PostgresDocumentAttachmentStore implements DocumentAttachmentStore {
         checksum: input.checksum,
         status: input.status,
         format: input.format ?? null,
+        artifactRefs: input.artifactRefs ?? {},
+        processingMetadata: input.processingMetadata ?? {},
         warnings: input.warnings ?? [],
         error: input.error ?? null,
         createdAt: now,
@@ -225,23 +227,11 @@ class PostgresDocumentAttachmentStore implements DocumentAttachmentStore {
     if (input.format !== undefined) {
       set.format = input.format;
     }
-    if (input.preparedTextArtifactId !== undefined) {
-      set.preparedTextArtifactId = input.preparedTextArtifactId;
+    if (input.artifactRefs !== undefined) {
+      set.artifactRefs = input.artifactRefs;
     }
-    if (input.preparedPagesArtifactId !== undefined) {
-      set.preparedPagesArtifactId = input.preparedPagesArtifactId;
-    }
-    if (input.preprocessingEngine !== undefined) {
-      set.preprocessingEngine = input.preprocessingEngine;
-    }
-    if (input.characterCount !== undefined) {
-      set.characterCount = input.characterCount;
-    }
-    if (input.wordCount !== undefined) {
-      set.wordCount = input.wordCount;
-    }
-    if (input.pageCount !== undefined) {
-      set.pageCount = input.pageCount;
+    if (input.processingMetadata !== undefined) {
+      set.processingMetadata = input.processingMetadata;
     }
     if (input.warnings !== undefined) {
       set.warnings = input.warnings;
@@ -348,7 +338,7 @@ class PostgresDocumentAttachmentStore implements DocumentAttachmentStore {
     return rows.map(mapConversationAttachment);
   }
 
-  async claimNextQueuedDocumentAttachment(input: {
+  async claimNextQueuedConversationAttachment(input: {
     clientInstanceId: ClientInstanceId;
     workerId: string;
     leaseToken: string;
@@ -356,9 +346,17 @@ class PostgresDocumentAttachmentStore implements DocumentAttachmentStore {
     leaseExpiresAt: string;
     perConversationLimit: number;
     globalLimit: number;
+    formats?: readonly string[];
   }): Promise<ConversationAttachment | undefined> {
     const now = new Date(input.now).toISOString();
     const leaseExpiresAt = new Date(input.leaseExpiresAt).toISOString();
+    const formatFilter =
+      input.formats && input.formats.length > 0
+        ? drizzleSql`and ca.format in (${drizzleSql.join(
+            input.formats.map((format) => drizzleSql`${format}`),
+            drizzleSql`, `
+          )})`
+        : drizzleSql``;
     const rows = await this.db.transaction(async (tx) => {
       const claimed = (await tx.execute(drizzleSql<{ id: string }>`
         with candidate as (
@@ -366,7 +364,7 @@ class PostgresDocumentAttachmentStore implements DocumentAttachmentStore {
           from conversation_attachments ca
           where ca.client_instance_id = ${input.clientInstanceId}
             and ca.status <> 'deleted'
-            and ca.format in ('pdf', 'docx', 'txt', 'md')
+            ${formatFilter}
             and (
               ca.status = 'queued'
               or (
@@ -430,30 +428,23 @@ class PostgresDocumentAttachmentStore implements DocumentAttachmentStore {
     return row ? mapConversationAttachment(row) : undefined;
   }
 
-  async completeClaimedDocumentAttachment(input: {
+  async completeClaimedConversationAttachment(input: {
     clientInstanceId: ClientInstanceId;
     attachmentId: ConversationAttachmentId;
     leaseToken: string;
-    preparedTextArtifactId: ManagedArtifactId;
-    preparedPagesArtifactId?: ManagedArtifactId | null;
-    preprocessingEngine: string;
-    characterCount: number;
-    wordCount: number;
-    pageCount?: number;
+    artifactRefs: ConversationAttachment["artifactRefs"];
+    processingMetadata?: ConversationAttachment["processingMetadata"];
     warnings: ConversationAttachment["warnings"];
     completedAt: string;
   }): Promise<ConversationAttachment> {
     const completedAt = new Date(input.completedAt);
+    const processingMetadata = input.processingMetadata ?? {};
     const [row] = await this.db
       .update(conversationAttachments)
       .set({
         status: "ready",
-        preparedTextArtifactId: input.preparedTextArtifactId,
-        preparedPagesArtifactId: input.preparedPagesArtifactId ?? null,
-        preprocessingEngine: input.preprocessingEngine,
-        characterCount: input.characterCount,
-        wordCount: input.wordCount,
-        pageCount: input.pageCount ?? null,
+        artifactRefs: input.artifactRefs,
+        processingMetadata,
         warnings: input.warnings,
         error: null,
         processingOwnerId: null,
@@ -472,12 +463,12 @@ class PostgresDocumentAttachmentStore implements DocumentAttachmentStore {
       )
       .returning();
     if (!row) {
-      throw new AppError("CONFLICT", "Document preprocessing lease is no longer active");
+      throw new AppError("CONFLICT", "Attachment processing lease is no longer active");
     }
     return mapConversationAttachment(row);
   }
 
-  async failClaimedDocumentAttachment(input: {
+  async failClaimedConversationAttachment(input: {
     clientInstanceId: ClientInstanceId;
     attachmentId: ConversationAttachmentId;
     leaseToken: string;
@@ -506,12 +497,12 @@ class PostgresDocumentAttachmentStore implements DocumentAttachmentStore {
       )
       .returning();
     if (!row) {
-      throw new AppError("CONFLICT", "Document preprocessing lease is no longer active");
+      throw new AppError("CONFLICT", "Attachment processing lease is no longer active");
     }
     return mapConversationAttachment(row);
   }
 
-  async findReadableDocumentAttachment(input: {
+  async findReadyConversationAttachmentByFile(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
     fileId: ManagedFileId;
@@ -524,13 +515,12 @@ class PostgresDocumentAttachmentStore implements DocumentAttachmentStore {
           eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
           eq(conversationAttachments.conversationId, input.conversationId),
           eq(conversationAttachments.fileId, input.fileId),
-          eq(conversationAttachments.status, "ready"),
-          ne(conversationAttachments.preparedTextArtifactId, "")
+          eq(conversationAttachments.status, "ready")
         )
       )
       .orderBy(desc(conversationAttachments.updatedAt))
       .limit(1);
-    return row?.preparedTextArtifactId ? mapConversationAttachment(row) : undefined;
+    return row ? mapConversationAttachment(row) : undefined;
   }
 
   async findConversationAttachmentByFile(input: {

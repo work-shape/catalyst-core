@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
 import { StoreBackedAuditRecorder } from "@vivd-catalyst/core";
 import { createChatServer } from "@vivd-catalyst/chat-server";
+import type { ChatAttachmentService } from "@vivd-catalyst/chat-server";
 import { AppError } from "@vivd-catalyst/core";
 import {
   type ClientInstanceConfig,
@@ -11,6 +12,11 @@ import {
   loadClientInstanceConfigFromFile
 } from "@vivd-catalyst/config-schema";
 import { createModelProviderRegistry } from "@vivd-catalyst/model-provider";
+import {
+  createDataSourceQueryTools,
+  createDataSourceRegistry,
+  createEnvSecretResolver
+} from "@vivd-catalyst/data-source";
 import {
   createBuiltInToolDefinitions,
   createReadSkillTool,
@@ -23,8 +29,10 @@ import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { assertClientAssemblyValid } from "./assembly-validation";
 import { createClientInstanceAuth } from "./auth";
 import type {
+  ClientInstanceAttachmentHandler,
   ClientInstanceCapabilityContribution,
-  ClientInstanceCapability
+  ClientInstanceCapability,
+  ClientInstanceManagedObjectReaderContribution
 } from "./capabilities";
 import type { ClientInstanceEnv } from "./env";
 import { createPlatformStore, type PlatformStoreMode } from "./store";
@@ -55,9 +63,14 @@ export async function createClientInstanceApp(
   const clientInstanceId = getClientInstanceId(config);
   const resolvedStoreMode = resolveStoreMode(input.storeMode, env);
   const store = await createPlatformStore({ env, storeMode: input.storeMode });
+  const dataSources = createDataSourceRegistry({
+    configs: config.dataSources,
+    secretResolver: createEnvSecretResolver(env)
+  });
   const capabilityContributions = await createCapabilityContributions(input.capabilities ?? [], {
     config,
     clientInstanceId,
+    dataSources,
     env,
     store,
     storeMode: resolvedStoreMode
@@ -71,6 +84,7 @@ export async function createClientInstanceApp(
     config,
     tools: [
       ...createBuiltInToolDefinitions(),
+      ...createDataSourceQueryTools({ dataSources }),
       createReadSkillTool({
         catalog: skillCatalog,
         getAgentSkillNames(agentName) {
@@ -195,26 +209,150 @@ async function createCapabilityContributions(
   return contributions;
 }
 
-function resolveAttachmentContribution(contributions: readonly ClientInstanceCapabilityContribution[]) {
-  const attachmentContributions = contributions
-    .map((contribution) => contribution.attachments)
-    .filter((attachments) => attachments !== undefined);
-  if (attachmentContributions.length > 1) {
-    throw new AppError("VALIDATION_FAILED", "Only one attachment handling capability can be configured");
+function resolveAttachmentContribution(
+  contributions: readonly ClientInstanceCapabilityContribution[]
+): ChatAttachmentService | undefined {
+  const handlers = contributions.flatMap((contribution) => contribution.attachments ?? []);
+  if (handlers.length === 0) {
+    return undefined;
   }
-  return attachmentContributions[0];
+  if (handlers.length === 1) {
+    return handlers[0];
+  }
+  return createCompositeAttachmentService(handlers);
 }
 
 function resolveManagedObjectContribution(
   contributions: readonly ClientInstanceCapabilityContribution[]
 ) {
-  const managedObjectContributions = contributions
-    .map((contribution) => contribution.managedObjects)
-    .filter((reader) => reader !== undefined);
-  if (managedObjectContributions.length > 1) {
-    throw new AppError("VALIDATION_FAILED", "Only one managed object reader capability can be configured");
+  const readers = contributions.flatMap((contribution) => contribution.managedObjects ?? []);
+  if (readers.length === 0) {
+    return undefined;
   }
-  return managedObjectContributions[0];
+  if (readers.length === 1) {
+    return readers[0];
+  }
+  return createCompositeManagedObjectReader(readers);
+}
+
+function createCompositeAttachmentService(
+  handlers: readonly ClientInstanceAttachmentHandler[]
+): ChatAttachmentService {
+  return {
+    maxFileBytes: Math.max(...handlers.map((handler) => handler.maxFileBytes)),
+    acceptedFileTypes: [...new Set(handlers.flatMap((handler) => handler.acceptedFileTypes))],
+    async listDraftAttachments(conversationId) {
+      return uniqueById(
+        (await Promise.all(handlers.map((handler) => handler.listDraftAttachments(conversationId)))).flat()
+      );
+    },
+    async uploadDraftAttachment(input) {
+      const matchingHandlers = handlers.filter((handler) => handler.acceptsFile(input));
+      if (matchingHandlers.length === 0) {
+        throw new AppError("BAD_REQUEST", "No configured attachment capability accepts this file");
+      }
+      if (matchingHandlers.length > 1) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `Multiple attachment capabilities accept this file: ${matchingHandlers
+            .map((handler) => handler.name)
+            .join(", ")}`
+        );
+      }
+      const handler = matchingHandlers[0];
+      if (!handler) {
+        throw new AppError("BAD_REQUEST", "No configured attachment capability accepts this file");
+      }
+      return handler.uploadDraftAttachment(input);
+    },
+    async retryDraftAttachment(input) {
+      return tryAttachmentHandlers(handlers, (handler) => handler.retryDraftAttachment(input), input.attachmentId);
+    },
+    async deleteDraftAttachment(input) {
+      return tryAttachmentHandlers(handlers, (handler) => handler.deleteDraftAttachment(input), input.attachmentId);
+    },
+    async readConversationFile(input) {
+      return tryAttachmentHandlers(handlers, (handler) => handler.readConversationFile(input), input.fileId);
+    },
+    blockingDraftAttachmentMessage(attachments) {
+      for (const handler of handlers) {
+        const message = handler.blockingDraftAttachmentMessage(attachments);
+        if (message) {
+          return message;
+        }
+      }
+      return undefined;
+    },
+    createAttachmentManifest(attachments) {
+      return {
+        version: 1,
+        attachments: uniqueManifestEntries(
+          handlers.flatMap((handler) => handler.createAttachmentManifest(attachments).attachments)
+        )
+      };
+    },
+    isInlineDisplayMimeType(mimeType) {
+      return handlers.some((handler) => handler.isInlineDisplayMimeType(mimeType));
+    }
+  };
+}
+
+function createCompositeManagedObjectReader(
+  readers: readonly ClientInstanceManagedObjectReaderContribution[]
+): ClientInstanceManagedObjectReaderContribution {
+  return {
+    name: "composite",
+    async readArtifact(input) {
+      return tryManagedObjectReaders(readers, (reader) => reader.readArtifact(input), input.artifactId);
+    },
+    async readFile(input) {
+      return tryManagedObjectReaders(readers, (reader) => reader.readFile(input), input.fileId);
+    }
+  };
+}
+
+async function tryAttachmentHandlers<T>(
+  handlers: readonly ClientInstanceAttachmentHandler[],
+  read: (handler: ClientInstanceAttachmentHandler) => Promise<T>,
+  subject: string
+): Promise<T> {
+  for (const handler of handlers) {
+    try {
+      return await read(handler);
+    } catch (error) {
+      if (error instanceof AppError && error.code === "NOT_FOUND") {
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new AppError("NOT_FOUND", `Attachment object '${subject}' was not found`);
+}
+
+async function tryManagedObjectReaders<T>(
+  readers: readonly ClientInstanceManagedObjectReaderContribution[],
+  read: (reader: ClientInstanceManagedObjectReaderContribution) => Promise<T>,
+  subject: string
+): Promise<T> {
+  for (const reader of readers) {
+    try {
+      return await read(reader);
+    } catch (error) {
+      if (error instanceof AppError && error.code === "NOT_FOUND") {
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new AppError("NOT_FOUND", `Managed object '${subject}' was not found`);
+}
+
+function uniqueById<T extends { id: string }>(records: T[]): T[] {
+  return [...new Map(records.map((record) => [record.id, record])).values()];
+}
+
+function uniqueManifestEntries<T extends { kind: string; attachmentId: string }>(entries: T[]): T[] {
+  return [...new Map(entries.map((entry) => [`${entry.kind}:${entry.attachmentId}`, entry])).values()];
 }
 
 async function closeCapabilityContributions(

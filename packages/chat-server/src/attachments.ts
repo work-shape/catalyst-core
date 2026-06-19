@@ -29,6 +29,7 @@ export interface ReadConversationFileResult {
 
 export interface ChatAttachmentService {
   maxFileBytes: number;
+  acceptedFileTypes: string[];
   listDraftAttachments(conversationId: ConversationId): Promise<DraftAttachment[]>;
   uploadDraftAttachment(input: UploadDraftAttachmentInput): Promise<DraftAttachment>;
   retryDraftAttachment(input: {

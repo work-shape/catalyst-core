@@ -2,11 +2,11 @@ import { z } from "zod";
 import type {
   AgentConfig,
   DataSourceConfig,
+  CapabilityConfigMap,
   LocalizationConfig,
   AgentRuntimeConfig,
   ModelContextConfig,
   ModelProviderConfig,
-  DocumentsConfig,
   SkillConfig,
   UsageBudgetConfig,
   UsagePricingConfig,
@@ -95,6 +95,12 @@ const dataSourceConfigSchema = z.object({
   }),
   tools: z
     .object({
+      query: z
+        .object({
+          enabled: z.boolean().default(false),
+          name: z.string().min(1).optional()
+        })
+        .optional(),
       renderView: z
         .object({
           enabled: z.boolean().default(false),
@@ -225,70 +231,6 @@ export const modelContextConfigSchema = z
     }
   });
 
-const documentsConfigSchema = z
-  .object({
-    preprocessing: z
-      .object({
-        enabled: z.boolean().default(true),
-        supportedFormats: z.array(z.enum(["pdf", "docx", "txt", "md"])).default([
-          "pdf",
-          "docx",
-          "txt",
-          "md"
-        ]),
-        maxFileBytes: z.number().int().positive().default(25 * 1024 * 1024),
-        maxExtractedTextBytes: z.number().int().positive().default(4 * 1024 * 1024),
-        timeoutMs: z.number().int().positive().default(120000),
-        perConversationConcurrency: z.number().int().positive().default(2),
-        globalConcurrency: z.number().int().positive().default(8),
-        preprocessingVersion: z.string().min(1).default("document-preprocessing-v1")
-      })
-      .default({
-        enabled: true,
-        supportedFormats: ["pdf", "docx", "txt", "md"],
-        maxFileBytes: 25 * 1024 * 1024,
-        maxExtractedTextBytes: 4 * 1024 * 1024,
-        timeoutMs: 120000,
-        perConversationConcurrency: 2,
-        globalConcurrency: 8,
-        preprocessingVersion: "document-preprocessing-v1"
-      }),
-    objectStorage: z
-      .object({
-        kind: z.literal("s3").default("s3"),
-        bucket: z.string().min(1).default("vivd-catalyst-documents"),
-        region: z.string().min(1).default("us-east-1"),
-        endpoint: z.string().url().optional(),
-        forcePathStyle: z.boolean().default(true),
-        accessKeyIdEnvName: z.string().min(1).optional(),
-        secretAccessKeyEnvName: z.string().min(1).optional()
-      })
-      .default({
-        kind: "s3",
-        bucket: "vivd-catalyst-documents",
-        region: "us-east-1",
-        forcePathStyle: true
-      })
-  })
-  .default({
-    preprocessing: {
-      enabled: true,
-      supportedFormats: ["pdf", "docx", "txt", "md"],
-      maxFileBytes: 25 * 1024 * 1024,
-      maxExtractedTextBytes: 4 * 1024 * 1024,
-      timeoutMs: 120000,
-      perConversationConcurrency: 2,
-      globalConcurrency: 8,
-      preprocessingVersion: "document-preprocessing-v1"
-    },
-    objectStorage: {
-      kind: "s3",
-      bucket: "vivd-catalyst-documents",
-      region: "us-east-1",
-      forcePathStyle: true
-    }
-  });
-
 const defaultLightUiTheme = {
   accentColor: "#0f766e",
   accentStrongColor: "#0b5f59",
@@ -399,7 +341,7 @@ export const clientInstanceConfigSchema = z.object({
   conversationTitles: conversationTitleConfigSchema,
   runtime: agentRuntimeConfigSchema,
   modelContext: modelContextConfigSchema,
-  documents: documentsConfigSchema,
+  capabilities: z.record(z.string(), z.unknown()).default({}),
   usage: z
     .object({
       budget: usageBudgetConfigSchema,
@@ -446,9 +388,9 @@ export type ToolInstanceConfig = z.infer<typeof toolInstanceConfigSchema>;
 export type {
   AgentConfig,
   DataSourceConfig,
+  CapabilityConfigMap,
   LocalizationConfig,
   ModelProviderConfig,
-  DocumentsConfig,
   SkillConfig,
   UsageBudgetConfig,
   AgentRuntimeConfig,

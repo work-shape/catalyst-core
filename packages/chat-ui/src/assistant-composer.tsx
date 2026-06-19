@@ -21,6 +21,7 @@ export function AssistantComposer({
   localUploadingAttachments,
   sendBlockedReason,
   attachmentsEnabled,
+  attachmentAccept,
   focusRequestId,
   onFilesSelected,
   onRemoveAttachment,
@@ -30,6 +31,7 @@ export function AssistantComposer({
   localUploadingAttachments: LocalUploadingAttachment[];
   sendBlockedReason?: string;
   attachmentsEnabled: boolean;
+  attachmentAccept: string;
   focusRequestId: number;
   onFilesSelected: (files: File[]) => void;
   onRemoveAttachment: (attachmentId: string) => void;
@@ -89,7 +91,7 @@ export function AssistantComposer({
                   type="file"
                   className="sr-only"
                   multiple
-                  accept=".pdf,.docx,.txt,.md,.markdown,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,image/png,image/jpeg,image/webp,image/gif"
+                  accept={attachmentAccept}
                   onChange={(event) => {
                     const files = [...(event.currentTarget.files ?? [])];
                     event.currentTarget.value = "";

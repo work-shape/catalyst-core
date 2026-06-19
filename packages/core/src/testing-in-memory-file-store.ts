@@ -7,7 +7,7 @@ import {
   type CreateManagedArtifactInput,
   type CreateConversationAttachmentInput,
   type CreateManagedFileInput,
-  type DocumentAttachmentStore,
+  type PlatformFileStore,
   type DraftAttachment,
   type ManagedArtifactId,
   type ManagedArtifactKind,
@@ -19,7 +19,7 @@ import {
   createPlatformId
 } from "./index";
 
-export type InMemoryDocumentAttachmentStore = DocumentAttachmentStore & {
+export type InMemoryPlatformFileStore = PlatformFileStore & {
   deleteAttachmentsForConversation(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
@@ -27,23 +27,23 @@ export type InMemoryDocumentAttachmentStore = DocumentAttachmentStore & {
   }): void;
 };
 
-export interface InMemoryDocumentAttachmentCallbacks {
+export interface InMemoryFileStoreCallbacks {
   requireActiveConversation(clientInstanceId: ClientInstanceId, conversationId: ConversationId): Promise<void>;
   touchConversation(conversationId: ConversationId, updatedAt: string): void;
 }
 
-export function createInMemoryDocumentAttachmentStore(
-  callbacks: InMemoryDocumentAttachmentCallbacks
-): InMemoryDocumentAttachmentStore {
-  return new InMemoryDocumentAttachmentStoreImpl(callbacks);
+export function createInMemoryPlatformFileStore(
+  callbacks: InMemoryFileStoreCallbacks
+): InMemoryPlatformFileStore {
+  return new InMemoryPlatformFileStoreImpl(callbacks);
 }
 
-class InMemoryDocumentAttachmentStoreImpl implements InMemoryDocumentAttachmentStore {
+class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
   private readonly managedFiles = new Map<string, ManagedFileRecord>();
   private readonly managedArtifacts = new Map<string, ManagedArtifactRecord>();
   private readonly conversationAttachments = new Map<string, ConversationAttachment>();
 
-  constructor(private readonly callbacks: InMemoryDocumentAttachmentCallbacks) {}
+  constructor(private readonly callbacks: InMemoryFileStoreCallbacks) {}
 
   async createManagedFile(input: CreateManagedFileInput): Promise<ManagedFileRecord> {
     const file: ManagedFileRecord = {
@@ -139,6 +139,8 @@ class InMemoryDocumentAttachmentStoreImpl implements InMemoryDocumentAttachmentS
       checksum: input.checksum,
       status: input.status,
       format: input.format,
+      artifactRefs: input.artifactRefs ?? {},
+      processingMetadata: input.processingMetadata ?? {},
       warnings: input.warnings ?? [],
       error: input.error,
       processingAttempts: 0,
@@ -192,18 +194,8 @@ class InMemoryDocumentAttachmentStoreImpl implements InMemoryDocumentAttachmentS
       ...existing,
       status: input.status ?? existing.status,
       format: input.format ?? existing.format,
-      preparedTextArtifactId:
-        input.preparedTextArtifactId === undefined
-          ? existing.preparedTextArtifactId
-          : (input.preparedTextArtifactId ?? undefined),
-      preparedPagesArtifactId:
-        input.preparedPagesArtifactId === undefined
-          ? existing.preparedPagesArtifactId
-          : (input.preparedPagesArtifactId ?? undefined),
-      preprocessingEngine: input.preprocessingEngine ?? existing.preprocessingEngine,
-      characterCount: input.characterCount ?? existing.characterCount,
-      wordCount: input.wordCount ?? existing.wordCount,
-      pageCount: input.pageCount ?? existing.pageCount,
+      artifactRefs: input.artifactRefs ?? existing.artifactRefs,
+      processingMetadata: input.processingMetadata ?? existing.processingMetadata,
       warnings: input.warnings ?? existing.warnings,
       error: input.error === undefined ? existing.error : (input.error ?? undefined),
       processingOwnerId:
@@ -280,7 +272,7 @@ class InMemoryDocumentAttachmentStoreImpl implements InMemoryDocumentAttachmentS
     return claimed;
   }
 
-  async claimNextQueuedDocumentAttachment(input: {
+  async claimNextQueuedConversationAttachment(input: {
     clientInstanceId: ClientInstanceId;
     workerId: string;
     leaseToken: string;
@@ -288,6 +280,7 @@ class InMemoryDocumentAttachmentStoreImpl implements InMemoryDocumentAttachmentS
     leaseExpiresAt: string;
     perConversationLimit: number;
     globalLimit: number;
+    formats?: readonly string[];
   }): Promise<ConversationAttachment | undefined> {
     if (this.activePreprocessingCount(input.clientInstanceId, input.now) >= input.globalLimit) {
       return undefined;
@@ -295,6 +288,13 @@ class InMemoryDocumentAttachmentStoreImpl implements InMemoryDocumentAttachmentS
     const candidate = [...this.conversationAttachments.values()]
       .filter((attachment) => {
         if (attachment.clientInstanceId !== input.clientInstanceId || attachment.status === "deleted") {
+          return false;
+        }
+        if (
+          input.formats &&
+          input.formats.length > 0 &&
+          !input.formats.includes(attachment.format ?? "")
+        ) {
           return false;
         }
         if (attachment.status === "queued") {
@@ -330,16 +330,12 @@ class InMemoryDocumentAttachmentStoreImpl implements InMemoryDocumentAttachmentS
     return claimed;
   }
 
-  async completeClaimedDocumentAttachment(input: {
+  async completeClaimedConversationAttachment(input: {
     clientInstanceId: ClientInstanceId;
     attachmentId: ConversationAttachmentId;
     leaseToken: string;
-    preparedTextArtifactId: ManagedArtifactId;
-    preparedPagesArtifactId?: ManagedArtifactId | null;
-    preprocessingEngine: string;
-    characterCount: number;
-    wordCount: number;
-    pageCount?: number;
+    artifactRefs: ConversationAttachment["artifactRefs"];
+    processingMetadata?: ConversationAttachment["processingMetadata"];
     warnings: ConversationAttachment["warnings"];
     completedAt: string;
   }): Promise<ConversationAttachment> {
@@ -347,12 +343,8 @@ class InMemoryDocumentAttachmentStoreImpl implements InMemoryDocumentAttachmentS
     const updated: ConversationAttachment = {
       ...existing,
       status: "ready",
-      preparedTextArtifactId: input.preparedTextArtifactId,
-      preparedPagesArtifactId: input.preparedPagesArtifactId ?? undefined,
-      preprocessingEngine: input.preprocessingEngine,
-      characterCount: input.characterCount,
-      wordCount: input.wordCount,
-      pageCount: input.pageCount,
+      artifactRefs: input.artifactRefs,
+      processingMetadata: input.processingMetadata ?? {},
       warnings: input.warnings,
       error: undefined,
       processingOwnerId: undefined,
@@ -365,7 +357,7 @@ class InMemoryDocumentAttachmentStoreImpl implements InMemoryDocumentAttachmentS
     return updated;
   }
 
-  async failClaimedDocumentAttachment(input: {
+  async failClaimedConversationAttachment(input: {
     clientInstanceId: ClientInstanceId;
     attachmentId: ConversationAttachmentId;
     leaseToken: string;
@@ -387,7 +379,7 @@ class InMemoryDocumentAttachmentStoreImpl implements InMemoryDocumentAttachmentS
     return updated;
   }
 
-  async findReadableDocumentAttachment(input: {
+  async findReadyConversationAttachmentByFile(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
     fileId: ManagedFileId;
@@ -399,7 +391,7 @@ class InMemoryDocumentAttachmentStoreImpl implements InMemoryDocumentAttachmentS
           attachment.conversationId === input.conversationId &&
           attachment.fileId === input.fileId &&
           attachment.status === "ready" &&
-          Boolean(attachment.preparedTextArtifactId)
+          Object.keys(attachment.artifactRefs).length > 0
       )
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
   }
@@ -464,7 +456,7 @@ class InMemoryDocumentAttachmentStoreImpl implements InMemoryDocumentAttachmentS
       existing.status !== "preprocessing" ||
       existing.processingLeaseToken !== input.leaseToken
     ) {
-      throw new AppError("CONFLICT", "Document preprocessing lease is no longer active");
+      throw new AppError("CONFLICT", "Attachment processing lease is no longer active");
     }
     return existing;
   }

@@ -7,6 +7,8 @@ Custom code tools are the primary extension point for a Vivd Catalyst client ins
 
 A tool lets the agent do a bounded action: look up a record, create a ticket, fetch a document, send a draft to review, or call an internal service.
 
+For larger reusable behavior, author a capability package with `@vivd-catalyst/capability-sdk`. Capabilities can contribute tools, attachment handlers, managed object readers, and lifecycle cleanup while consuming platform-owned services such as the datasource registry.
+
 ## Configured Tool Shape
 
 Use the public tool SDK and product-owned types. Prefer configured tool factories when customer-specific values should live in release config.
@@ -117,6 +119,8 @@ the generic widget registry, tool frame, and fallback rendering.
 Use `auditSummary` for minimized governance metadata, not raw sensitive payloads.
 
 Do not pass broad database handles or global service containers into tools. Give tools explicit capabilities and scoped secrets.
+
+For configured customer/domain databases, prefer platform `dataSources` and the OSS datasource registry. If a datasource enables `tools.query`, the platform exposes a guarded `data.<source>.query` tool. Restricted visualization packages can use the same registry without owning SQL execution, secret resolution, or read-only guardrails.
 
 ## Permission Policy
 

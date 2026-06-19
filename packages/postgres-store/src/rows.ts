@@ -131,16 +131,8 @@ export function mapConversationAttachment(
     checksum: row.checksum,
     status: row.status,
     format: row.format ?? undefined,
-    preparedTextArtifactId: row.preparedTextArtifactId
-      ? asManagedArtifactId(row.preparedTextArtifactId)
-      : undefined,
-    preparedPagesArtifactId: row.preparedPagesArtifactId
-      ? asManagedArtifactId(row.preparedPagesArtifactId)
-      : undefined,
-    preprocessingEngine: row.preprocessingEngine ?? undefined,
-    characterCount: row.characterCount ?? undefined,
-    wordCount: row.wordCount ?? undefined,
-    pageCount: row.pageCount ?? undefined,
+    artifactRefs: row.artifactRefs,
+    processingMetadata: row.processingMetadata,
     warnings: row.warnings,
     error: row.error ?? undefined,
     processingOwnerId: row.processingOwnerId ?? undefined,

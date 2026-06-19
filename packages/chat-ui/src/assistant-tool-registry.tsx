@@ -9,8 +9,6 @@ const backendToolUi = {
 
 const vivdToolUiToolkit = defineToolkit({
   show_view: backendToolUi,
-  read_document: backendToolUi,
-  view_document_page: backendToolUi,
   "demo.weather_forecast": backendToolUi,
   "demo.workflow_summary": backendToolUi
 });

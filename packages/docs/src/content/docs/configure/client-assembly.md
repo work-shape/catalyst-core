@@ -40,11 +40,13 @@ The client object imports platform packages, points at release config, registers
 
 ```ts
 import { defineClientInstance } from "@vivd-catalyst/client-assembly";
+import { createDocumentProcessingCapability } from "@vivd-catalyst/document-processing";
 import { lookupOrderToolFactory } from "../tools/lookup-order";
 import { updateTicketToolFactory } from "../tools/update-ticket";
 
 export default defineClientInstance({
   rootDir: new URL("..", import.meta.url),
+  capabilities: [createDocumentProcessingCapability()],
   tools: [lookupOrderToolFactory, updateTicketToolFactory]
 });
 ```
@@ -90,3 +92,7 @@ Keep these in platform packages:
 - auth adapter contracts
 - usage governance
 - audit and storage interfaces
+- datasource registry, adapters, guardrails, and generic datasource query tools
+- capability SDK, managed file, conversation attachment, and managed artifact extension surfaces
+
+Reusable capabilities that are not part of the OSS foundation should live in capability packages. Document processing, for example, owns its preprocessing config under `capabilities.documentProcessing`, its document tools, and its document-specific model-context hints while using platform-managed files and conversation attachments.

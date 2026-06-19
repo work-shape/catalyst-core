@@ -150,12 +150,14 @@ export const conversationAttachments = pgTable(
     checksum: text("checksum").notNull(),
     status: text("status").$type<ConversationAttachment["status"]>().notNull(),
     format: text("format").$type<ConversationAttachment["format"]>(),
-    preparedTextArtifactId: text("prepared_text_artifact_id"),
-    preparedPagesArtifactId: text("prepared_pages_artifact_id"),
-    preprocessingEngine: text("preprocessing_engine"),
-    characterCount: integer("character_count"),
-    wordCount: integer("word_count"),
-    pageCount: integer("page_count"),
+    artifactRefs: jsonb("artifact_refs")
+      .$type<ConversationAttachment["artifactRefs"]>()
+      .notNull()
+      .default({}),
+    processingMetadata: jsonb("processing_metadata")
+      .$type<ConversationAttachment["processingMetadata"]>()
+      .notNull()
+      .default({}),
     warnings: jsonb("warnings").$type<ConversationAttachment["warnings"]>().notNull(),
     error: jsonb("error").$type<NonNullable<ConversationAttachment["error"]>>(),
     processingOwnerId: text("processing_owner_id"),

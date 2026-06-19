@@ -16,11 +16,7 @@ export interface ManagedFileRef {
   checksum?: string;
 }
 
-export type ManagedArtifactKind =
-  | "document.canonical_pdf"
-  | "document.prepared_text"
-  | "document.pages_json"
-  | "document.page_image";
+export type ManagedArtifactKind = string;
 
 export type SupportedImageMimeType =
   | "image/png"
@@ -61,9 +57,8 @@ export interface AuditSafeSummary {
 export type ManagedFileStatus = "available" | "deleted";
 export type ManagedArtifactStatus = "available" | "deleted";
 
-export type DocumentFileFormat = "pdf" | "docx" | "txt" | "md";
 export type ImageFileFormat = "png" | "jpeg" | "webp" | "gif";
-export type FileAttachmentFormat = DocumentFileFormat | ImageFileFormat;
+export type FileAttachmentFormat = string;
 
 export type ConversationAttachmentStatus =
   | "queued"
@@ -73,18 +68,12 @@ export type ConversationAttachmentStatus =
   | "unsupported"
   | "deleted";
 
-export type DocumentAttachmentWarningCode =
-  | "control_characters_removed"
-  | "no_extractable_text"
-  | "text_truncated"
-  | "page_count_unavailable"
-  | "page_text_unavailable"
-  | "page_image_rendered";
-
-export interface DocumentAttachmentWarning {
-  code: DocumentAttachmentWarningCode;
+export interface AttachmentWarning {
+  code: string;
   message: string;
 }
+
+export type AttachmentArtifactRefs = Record<string, ManagedArtifactId>;
 
 export interface ManagedFileRecord {
   id: ManagedFileId;
@@ -117,31 +106,6 @@ export interface ManagedArtifactRecord {
   deletedAt?: ISODateString;
 }
 
-export interface PreparedDocumentMetadata {
-  fileId: ManagedFileId;
-  filename: string;
-  mimeType?: string;
-  byteSize: number;
-  format?: DocumentFileFormat;
-  characterCount?: number;
-  wordCount?: number;
-  pageCount?: number;
-  preparedTextArtifactId?: ManagedArtifactId;
-  preparedPagesArtifactId?: ManagedArtifactId;
-  warnings: DocumentAttachmentWarning[];
-  preprocessingVersion?: string;
-  preprocessingEngine?: string;
-}
-
-export interface ImageAttachmentMetadata {
-  fileId: ManagedFileId;
-  filename: string;
-  mimeType: SupportedImageMimeType;
-  byteSize: number;
-  format: ImageFileFormat;
-  checksum: string;
-}
-
 export interface ConversationAttachment {
   id: ConversationAttachmentId;
   clientInstanceId: ClientInstanceId;
@@ -154,13 +118,9 @@ export interface ConversationAttachment {
   checksum: string;
   status: ConversationAttachmentStatus;
   format?: FileAttachmentFormat;
-  preparedTextArtifactId?: ManagedArtifactId | null;
-  preparedPagesArtifactId?: ManagedArtifactId | null;
-  preprocessingEngine?: string;
-  characterCount?: number;
-  wordCount?: number;
-  pageCount?: number;
-  warnings: DocumentAttachmentWarning[];
+  artifactRefs: AttachmentArtifactRefs;
+  processingMetadata: JsonObject;
+  warnings: AttachmentWarning[];
   error?: JsonObject | null;
   processingOwnerId?: string;
   processingLeaseToken?: string;
@@ -177,35 +137,24 @@ export type DraftAttachment = ConversationAttachment & {
   messageId?: undefined;
 };
 
-export interface DocumentAttachmentManifestEntry {
-  kind: "document";
+export interface AttachmentModelContextHint {
+  section: string;
+  text: string;
+}
+
+export interface AttachmentManifestEntry {
+  kind: string;
   fileId: ManagedFileId;
   attachmentId: ConversationAttachmentId;
   filename: string;
   mimeType?: string;
   byteSize: number;
-  status: "ready";
-  readable: true;
-  readToolName: "read_document";
-  metadata: PreparedDocumentMetadata;
+  status: string;
+  readable?: boolean;
+  modelVisibility?: ModelVisibleArtifactHint;
+  modelContext?: AttachmentModelContextHint;
+  metadata?: JsonObject;
 }
-
-export interface ImageAttachmentManifestEntry {
-  kind: "image";
-  fileId: ManagedFileId;
-  attachmentId: ConversationAttachmentId;
-  filename: string;
-  mimeType: SupportedImageMimeType;
-  byteSize: number;
-  status: "ready";
-  readable: false;
-  modelVisibility: ModelVisibleArtifactHint;
-  metadata: ImageAttachmentMetadata;
-}
-
-export type AttachmentManifestEntry =
-  | DocumentAttachmentManifestEntry
-  | ImageAttachmentManifestEntry;
 
 export interface AttachmentManifest {
   version: 1;
@@ -232,7 +181,9 @@ export interface CreateConversationAttachmentInput {
   checksum: string;
   status: Exclude<ConversationAttachmentStatus, "preprocessing" | "deleted">;
   format?: FileAttachmentFormat;
-  warnings?: DocumentAttachmentWarning[];
+  artifactRefs?: AttachmentArtifactRefs;
+  processingMetadata?: JsonObject;
+  warnings?: AttachmentWarning[];
   error?: JsonObject;
 }
 
@@ -241,13 +192,9 @@ export interface UpdateConversationAttachmentInput {
   attachmentId: ConversationAttachmentId;
   status?: ConversationAttachmentStatus;
   format?: FileAttachmentFormat;
-  preparedTextArtifactId?: ManagedArtifactId | null;
-  preparedPagesArtifactId?: ManagedArtifactId | null;
-  preprocessingEngine?: string;
-  characterCount?: number;
-  wordCount?: number;
-  pageCount?: number;
-  warnings?: DocumentAttachmentWarning[];
+  artifactRefs?: AttachmentArtifactRefs;
+  processingMetadata?: JsonObject;
+  warnings?: AttachmentWarning[];
   error?: JsonObject | null;
   processingOwnerId?: string | null;
   processingLeaseToken?: string | null;
@@ -271,12 +218,15 @@ export interface CreateManagedArtifactInput {
   metadata?: JsonObject;
 }
 
-export interface DocumentAttachmentStore {
+export interface ManagedFileStore {
   createManagedFile(input: CreateManagedFileInput): Promise<ManagedFileRecord>;
   getManagedFile(input: {
     clientInstanceId: ClientInstanceId;
     fileId: ManagedFileId;
   }): Promise<ManagedFileRecord | undefined>;
+}
+
+export interface ManagedArtifactStore {
   createManagedArtifact(input: CreateManagedArtifactInput): Promise<ManagedArtifactRecord>;
   getManagedArtifact(input: {
     clientInstanceId: ClientInstanceId;
@@ -288,6 +238,9 @@ export interface DocumentAttachmentStore {
     fileId: ManagedFileId;
     kind?: ManagedArtifactKind;
   }): Promise<ManagedArtifactRecord[]>;
+}
+
+export interface ConversationAttachmentStore {
   createConversationAttachment(
     input: CreateConversationAttachmentInput
   ): Promise<ConversationAttachment>;
@@ -314,7 +267,7 @@ export interface DocumentAttachmentStore {
     messageId: MessageId;
     claimedAt: ISODateString;
   }): Promise<ConversationAttachment[]>;
-  claimNextQueuedDocumentAttachment(input: {
+  claimNextQueuedConversationAttachment(input: {
     clientInstanceId: ClientInstanceId;
     workerId: string;
     leaseToken: string;
@@ -322,28 +275,25 @@ export interface DocumentAttachmentStore {
     leaseExpiresAt: ISODateString;
     perConversationLimit: number;
     globalLimit: number;
+    formats?: readonly FileAttachmentFormat[];
   }): Promise<ConversationAttachment | undefined>;
-  completeClaimedDocumentAttachment(input: {
+  completeClaimedConversationAttachment(input: {
     clientInstanceId: ClientInstanceId;
     attachmentId: ConversationAttachmentId;
     leaseToken: string;
-    preparedTextArtifactId: ManagedArtifactId;
-    preparedPagesArtifactId?: ManagedArtifactId | null;
-    preprocessingEngine: string;
-    characterCount: number;
-    wordCount: number;
-    pageCount?: number;
-    warnings: DocumentAttachmentWarning[];
+    artifactRefs: AttachmentArtifactRefs;
+    processingMetadata?: JsonObject;
+    warnings: AttachmentWarning[];
     completedAt: ISODateString;
   }): Promise<ConversationAttachment>;
-  failClaimedDocumentAttachment(input: {
+  failClaimedConversationAttachment(input: {
     clientInstanceId: ClientInstanceId;
     attachmentId: ConversationAttachmentId;
     leaseToken: string;
     error: JsonObject;
     completedAt: ISODateString;
   }): Promise<ConversationAttachment>;
-  findReadableDocumentAttachment(input: {
+  findReadyConversationAttachmentByFile(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
     fileId: ManagedFileId;
@@ -354,3 +304,8 @@ export interface DocumentAttachmentStore {
     fileId: ManagedFileId;
   }): Promise<ConversationAttachment | undefined>;
 }
+
+export interface PlatformFileStore
+  extends ManagedFileStore,
+    ManagedArtifactStore,
+    ConversationAttachmentStore {}

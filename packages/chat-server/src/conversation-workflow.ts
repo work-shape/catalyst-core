@@ -376,72 +376,34 @@ function createUserMessageMetadata(attachmentManifest: AttachmentManifest): Json
 
 function toJsonAttachmentManifest(attachmentManifest: AttachmentManifest): JsonObject {
   const attachments = attachmentManifest.attachments.map((attachment): JsonObject => {
-    if (attachment.kind === "image") {
-      return {
-        kind: "image",
-        fileId: attachment.fileId,
-        attachmentId: attachment.attachmentId,
-        filename: attachment.filename,
-        mimeType: attachment.mimeType,
-        byteSize: attachment.byteSize,
-        status: attachment.status,
-        readable: attachment.readable,
-        modelVisibility: {
-          type: attachment.modelVisibility.type,
-          mimeType: attachment.modelVisibility.mimeType
-        },
-        metadata: {
-          fileId: attachment.metadata.fileId,
-          filename: attachment.metadata.filename,
-          mimeType: attachment.metadata.mimeType,
-          byteSize: attachment.metadata.byteSize,
-          format: attachment.metadata.format,
-          checksum: attachment.metadata.checksum
-        }
-      };
-    }
-
-    const metadata: JsonObject = {
-      fileId: attachment.metadata.fileId,
-      filename: attachment.metadata.filename,
-      byteSize: attachment.metadata.byteSize,
-      warnings: attachment.metadata.warnings.map((warning): JsonObject => ({
-        code: warning.code,
-        message: warning.message
-      }))
-    };
-    if (attachment.metadata.mimeType) {
-      metadata.mimeType = attachment.metadata.mimeType;
-    }
-    if (attachment.metadata.format) {
-      metadata.format = attachment.metadata.format;
-    }
-    if (attachment.metadata.characterCount !== undefined) {
-      metadata.characterCount = attachment.metadata.characterCount;
-    }
-    if (attachment.metadata.wordCount !== undefined) {
-      metadata.wordCount = attachment.metadata.wordCount;
-    }
-    if (attachment.metadata.pageCount !== undefined) {
-      metadata.pageCount = attachment.metadata.pageCount;
-    }
-    if (attachment.metadata.preprocessingVersion) {
-      metadata.preprocessingVersion = attachment.metadata.preprocessingVersion;
-    }
-
     const entry: JsonObject = {
-      kind: "document",
+      kind: attachment.kind,
       fileId: attachment.fileId,
       attachmentId: attachment.attachmentId,
       filename: attachment.filename,
       byteSize: attachment.byteSize,
-      status: attachment.status,
-      readable: attachment.readable,
-      readToolName: attachment.readToolName,
-      metadata
+      status: attachment.status
     };
     if (attachment.mimeType) {
       entry.mimeType = attachment.mimeType;
+    }
+    if (attachment.readable !== undefined) {
+      entry.readable = attachment.readable;
+    }
+    if (attachment.modelVisibility) {
+      entry.modelVisibility = {
+        type: attachment.modelVisibility.type,
+        mimeType: attachment.modelVisibility.mimeType
+      };
+    }
+    if (attachment.modelContext) {
+      entry.modelContext = {
+        section: attachment.modelContext.section,
+        text: attachment.modelContext.text
+      };
+    }
+    if (attachment.metadata) {
+      entry.metadata = attachment.metadata;
     }
     return entry;
   });

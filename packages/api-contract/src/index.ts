@@ -60,10 +60,9 @@ export const draftAttachmentSchema = z.object({
   mimeType: z.string().optional(),
   byteSize: z.number(),
   status: draftAttachmentStatusSchema,
-  format: z.enum(["pdf", "docx", "txt", "md", "png", "jpeg", "webp", "gif"]).optional(),
-  characterCount: z.number().optional(),
-  wordCount: z.number().optional(),
-  pageCount: z.number().optional(),
+  format: z.string().optional(),
+  artifactRefs: z.record(z.string(), z.string()),
+  processingMetadata: z.record(z.string(), z.unknown()),
   warnings: z.array(
     z.object({
       code: z.string(),
@@ -141,7 +140,8 @@ export const safeConfigSchema = z.object({
   }),
   features: z.object({
     attachments: z.object({
-      enabled: z.boolean()
+      enabled: z.boolean(),
+      accept: z.string()
     })
   }),
   defaultAgentName: z.string(),

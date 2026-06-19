@@ -1,5 +1,6 @@
-import type { ChatAttachmentService } from "@vivd-catalyst/chat-server";
+import type { ChatAttachmentService, UploadDraftAttachmentInput } from "@vivd-catalyst/chat-server";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import type { DataSourceRegistry } from "@vivd-catalyst/data-source";
 import type {
   ClientInstanceId,
   ManagedArtifactId,
@@ -13,6 +14,7 @@ import type { PlatformStoreMode } from "./store";
 export interface ClientInstanceCapabilityContext {
   config: ClientInstanceConfig;
   clientInstanceId: ClientInstanceId;
+  dataSources: DataSourceRegistry;
   env: ClientInstanceEnv;
   store: PlatformStore;
   storeMode: PlatformStoreMode;
@@ -20,9 +22,14 @@ export interface ClientInstanceCapabilityContext {
 
 export interface ClientInstanceCapabilityContribution {
   tools?: AnyToolDefinition[];
-  attachments?: ChatAttachmentService;
-  managedObjects?: ClientInstanceManagedObjectReader;
+  attachments?: ClientInstanceAttachmentHandler[];
+  managedObjects?: ClientInstanceManagedObjectReaderContribution[];
   close?: () => Promise<void>;
+}
+
+export interface ClientInstanceAttachmentHandler extends ChatAttachmentService {
+  name: string;
+  acceptsFile(input: Pick<UploadDraftAttachmentInput, "filename" | "mimeType" | "bytes">): boolean;
 }
 
 export interface ClientInstanceManagedObjectReader {
@@ -40,6 +47,10 @@ export interface ClientInstanceManagedObjectReader {
     bytes: Uint8Array;
     mimeType?: string;
   }>;
+}
+
+export interface ClientInstanceManagedObjectReaderContribution extends ClientInstanceManagedObjectReader {
+  name: string;
 }
 
 export interface ClientInstanceCapability {

@@ -22,6 +22,7 @@
     "@vivd-catalyst/chat-server": "workspace:*",
     "@vivd-catalyst/config-schema": "workspace:*",
     "@vivd-catalyst/core": "workspace:*",
+    "@vivd-catalyst/data-source": "workspace:*",
     "@vivd-catalyst/model-provider": "workspace:*",
     "@vivd-catalyst/postgres-store": "workspace:*",
     "@vivd-catalyst/tool-execution": "workspace:*",

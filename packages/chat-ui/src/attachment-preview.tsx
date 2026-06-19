@@ -180,7 +180,7 @@ function imageSourceFromContent(content: AttachmentContentPart[] | undefined): A
   for (const part of content ?? []) {
     const image = typeof part.image === "string" ? part.image : undefined;
     if (part.type === "image" && image) {
-      return image.startsWith("vivd-document://")
+      return image.startsWith("vivd-file://")
         ? {
             kind: "managed",
             url: image
@@ -193,7 +193,7 @@ function imageSourceFromContent(content: AttachmentContentPart[] | undefined): A
 
     const data = typeof part.data === "string" ? part.data : undefined;
     if (part.type === "file" && isImageMimeType(part.mimeType) && data) {
-      return data.startsWith("vivd-document://")
+      return data.startsWith("vivd-file://")
         ? {
             kind: "managed",
             url: data

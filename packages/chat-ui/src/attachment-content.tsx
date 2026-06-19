@@ -27,9 +27,9 @@ export function useAttachmentContentContext(): AttachmentContentContextValue | u
 }
 
 export function managedFileIdFromUrl(url: string | undefined): string | undefined {
-  if (!url?.startsWith("vivd-document://")) {
+  if (!url?.startsWith("vivd-file://")) {
     return undefined;
   }
-  const rawFileId = url.slice("vivd-document://".length);
+  const rawFileId = url.slice("vivd-file://".length);
   return rawFileId ? decodeURIComponent(rawFileId) : undefined;
 }

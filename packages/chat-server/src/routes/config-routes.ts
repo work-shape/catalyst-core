@@ -25,7 +25,8 @@ export function registerConfigRoutes(app: FastifyInstance, options: ChatServerOp
       features: {
         ...config.features,
         attachments: {
-          enabled: Boolean(options.attachments)
+          enabled: Boolean(options.attachments),
+          accept: options.attachments?.acceptedFileTypes.join(",") ?? ""
         }
       }
     };

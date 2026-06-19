@@ -3,6 +3,8 @@ export type {
   ClientInstanceCapability,
   ClientInstanceCapabilityContext,
   ClientInstanceCapabilityContribution,
+  ClientInstanceAttachmentHandler,
+  ClientInstanceManagedObjectReaderContribution,
   ClientInstanceManagedObjectReader
 } from "./capabilities";
 export {

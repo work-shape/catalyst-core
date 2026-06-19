@@ -152,6 +152,7 @@ export function ChatWorkspace({
   const messagesLoaded = !selectedConversationId || messagesQuery.data !== undefined;
   const config = configQuery.data;
   const attachmentsEnabled = config?.features.attachments.enabled ?? false;
+  const attachmentAccept = config?.features.attachments.accept ?? "";
   const activeLocale = config?.localization.locale ?? localePreference ?? browserLocale ?? "en";
   async function ensureConversationForFiles(files: File[]): Promise<string> {
     if (selectedConversationId) {
@@ -556,6 +557,7 @@ export function ChatWorkspace({
             localUploadingAttachments={draftAttachmentController.visibleUploadingAttachments}
             sendBlockedReason={draftAttachmentController.sendBlockedReason}
             attachmentsEnabled={attachmentsEnabled}
+            attachmentAccept={attachmentAccept}
             onDraftChange={(value) => setDraftForKey(draftKey, value)}
             onFilesSelected={draftAttachmentController.onFilesSelected}
             onRemoveDraftAttachment={draftAttachmentController.onRemoveDraftAttachment}

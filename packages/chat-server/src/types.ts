@@ -4,7 +4,7 @@ import type {
   AuditEventStore,
   ClientInstanceId,
   ConversationStore,
-  DocumentAttachmentStore,
+  PlatformFileStore,
   UserStore
 } from "@vivd-catalyst/core";
 import type { AuditRecorder } from "@vivd-catalyst/core";
@@ -18,7 +18,7 @@ export interface ChatServerOptions {
   config: ClientInstanceConfig;
   clientInstanceId: ClientInstanceId;
   authAdapter: AuthAdapter;
-  conversationStore: ConversationStore & DocumentAttachmentStore;
+  conversationStore: ConversationStore & PlatformFileStore;
   auditEventStore: AuditEventStore;
   userStore: UserStore;
   usageGovernance: ModelUsageGovernance;
