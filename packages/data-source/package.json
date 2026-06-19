@@ -19,7 +19,8 @@
   "dependencies": {
     "@vivd-catalyst/core": "workspace:*",
     "@vivd-catalyst/tool-sdk": "workspace:*",
-    "postgres": "^3.4.9"
+    "postgres": "^3.4.9",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^24.13.1",

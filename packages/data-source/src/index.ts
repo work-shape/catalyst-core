@@ -38,6 +38,18 @@ export interface CreateDataSourceQueryToolsInput {
   dataSources: DataSourceRegistry;
 }
 
+const queryToolInputSchema = z.object({
+  query: z.string().min(1).max(20000)
+});
+
+const queryToolOutputSchema = z.object({
+  rows: z.array(z.record(z.string(), z.unknown())),
+  truncated: z.boolean()
+});
+
+type QueryToolInput = z.infer<typeof queryToolInputSchema>;
+type QueryToolOutput = z.infer<typeof queryToolOutputSchema>;
+
 interface RegisteredDataSource extends DataSourceRegistration {
   adapter: DataSourceAdapter;
 }
@@ -85,7 +97,7 @@ export function createDataSourceQueryTools(input: CreateDataSourceQueryToolsInpu
     }
     const toolName = queryTool.name ?? `data.${name}.query`;
     return [
-      defineTool({
+      defineTool<QueryToolInput, QueryToolOutput>({
         name: toolName,
         description: [
           `Run a read-only query against ${config.description}.`,
@@ -96,13 +108,8 @@ export function createDataSourceQueryTools(input: CreateDataSourceQueryToolsInpu
         ]
           .filter(Boolean)
           .join(" "),
-        inputSchema: z.object({
-          query: z.string().min(1).max(20000)
-        }),
-        outputSchema: z.object({
-          rows: z.array(z.record(z.string(), z.unknown())),
-          truncated: z.boolean()
-        }),
+        inputSchema: queryToolInputSchema,
+        outputSchema: queryToolOutputSchema,
         inputJsonSchema: {
           type: "object",
           additionalProperties: false,
