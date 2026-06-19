@@ -3,6 +3,7 @@ import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
 import { StoreBackedAuditRecorder } from "@vivd-catalyst/core";
 import { createChatServer } from "@vivd-catalyst/chat-server";
 import type { ChatAttachmentService } from "@vivd-catalyst/chat-server";
+import { createManagedObjectAccess } from "@vivd-catalyst/capability-sdk";
 import { AppError } from "@vivd-catalyst/core";
 import {
   type ClientInstanceConfig,
@@ -68,11 +69,20 @@ export async function createClientInstanceApp(
     secretResolver: createEnvSecretResolver(env)
   });
   const capabilityContributions = await createCapabilityContributions(input.capabilities ?? [], {
-    config,
+    capabilitiesConfig: config.capabilities,
     clientInstanceId,
     dataSources,
     env,
-    store,
+    files: store,
+    managedObjectAccess: {
+      createAccess(accessInput) {
+        return createManagedObjectAccess({
+          clientInstanceId,
+          files: store,
+          ...accessInput
+        });
+      }
+    },
     storeMode: resolvedStoreMode
   });
   const attachments = resolveAttachmentContribution(capabilityContributions);

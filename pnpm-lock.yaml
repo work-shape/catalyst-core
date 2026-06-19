@@ -178,9 +178,9 @@ importers:
 
   packages/capability-sdk:
     dependencies:
-      '@vivd-catalyst/client-assembly':
+      '@vivd-catalyst/core':
         specifier: workspace:*
-        version: link:../client-assembly
+        version: link:../core
       '@vivd-catalyst/data-source':
         specifier: workspace:*
         version: link:../data-source
@@ -396,6 +396,9 @@ importers:
       '@vivd-catalyst/auth':
         specifier: workspace:*
         version: link:../auth
+      '@vivd-catalyst/capability-sdk':
+        specifier: workspace:*
+        version: link:../capability-sdk
       '@vivd-catalyst/chat-server':
         specifier: workspace:*
         version: link:../chat-server

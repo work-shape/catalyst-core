@@ -17,8 +17,10 @@ The repository currently contains:
 - shared chat UI package
 - tool SDK and tool execution packages
 - config schema package
+- capability SDK package with capability authoring contracts and Managed Object Access
 - auth package
 - Postgres store package
+- datasource registry package with guarded Postgres query access
 - usage governance package
 
 Workspace-level planning docs and ADRs live outside the OSS platform repo while
@@ -36,7 +38,7 @@ Expect changes around:
 - production deployment scripts
 - generated API client flow
 - OpenAPI tool adapter implementation
-- file acquisition and document processing
+- file acquisition and restricted document processing packages
 - approval-required tool resume flow
 - deeper worker isolation
 - self-hosted production runbooks

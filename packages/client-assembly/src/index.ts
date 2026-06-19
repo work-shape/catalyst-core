@@ -4,8 +4,10 @@ export type {
   ClientInstanceCapabilityContext,
   ClientInstanceCapabilityContribution,
   ClientInstanceAttachmentHandler,
+  ClientInstanceCapabilityFiles,
   ClientInstanceManagedObjectReaderContribution,
-  ClientInstanceManagedObjectReader
+  ClientInstanceManagedObjectReader,
+  ManagedObjectAccessFactory
 } from "./capabilities";
 export {
   createClientInstanceApp,

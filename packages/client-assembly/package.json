@@ -19,6 +19,7 @@
   "dependencies": {
     "@vivd-catalyst/agent-runtime": "workspace:*",
     "@vivd-catalyst/auth": "workspace:*",
+    "@vivd-catalyst/capability-sdk": "workspace:*",
     "@vivd-catalyst/chat-server": "workspace:*",
     "@vivd-catalyst/config-schema": "workspace:*",
     "@vivd-catalyst/core": "workspace:*",

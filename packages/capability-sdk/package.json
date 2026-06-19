@@ -17,7 +17,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@vivd-catalyst/client-assembly": "workspace:*",
+    "@vivd-catalyst/core": "workspace:*",
     "@vivd-catalyst/data-source": "workspace:*",
     "@vivd-catalyst/tool-sdk": "workspace:*"
   },

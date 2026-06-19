@@ -39,8 +39,14 @@ describe("data source registry", () => {
   it("rejects non-read-only and multi-statement SQL", () => {
     expect(() => assertReadOnlyQuery("select * from reporting.orders")).not.toThrow();
     expect(() => assertReadOnlyQuery("with orders as (select 1) select * from orders")).not.toThrow();
+    expect(() => assertReadOnlyQuery("select '; delete is just text' as note")).not.toThrow();
+    expect(() => assertReadOnlyQuery("select 1; -- trailing comment")).not.toThrow();
     expect(() => assertReadOnlyQuery("delete from reporting.orders")).toThrow(/read-only SELECT or WITH/u);
     expect(() => assertReadOnlyQuery("select 1; select 2")).toThrow(/single statement/u);
+    expect(() =>
+      assertReadOnlyQuery("with deleted as (delete from reporting.orders returning *) select * from deleted")
+    ).toThrow(/write, DDL, transaction, or session-control/u);
+    expect(() => assertReadOnlyQuery("select * from reporting.orders for update")).toThrow(/row locks/u);
   });
 });
 
