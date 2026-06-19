@@ -176,6 +176,28 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/capability-sdk:
+    dependencies:
+      '@vivd-catalyst/client-assembly':
+        specifier: workspace:*
+        version: link:../client-assembly
+      '@vivd-catalyst/data-source':
+        specifier: workspace:*
+        version: link:../data-source
+      '@vivd-catalyst/tool-sdk':
+        specifier: workspace:*
+        version: link:../tool-sdk
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.1
+        version: 24.13.1
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.4)(typescript@6.0.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/chat-server:
     dependencies:
       '@fastify/cors':
@@ -383,6 +405,9 @@ importers:
       '@vivd-catalyst/core':
         specifier: workspace:*
         version: link:../core
+      '@vivd-catalyst/data-source':
+        specifier: workspace:*
+        version: link:../data-source
       '@vivd-catalyst/model-provider':
         specifier: workspace:*
         version: link:../model-provider
@@ -441,6 +466,28 @@ importers:
         version: 6.0.3
 
   packages/core:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.1
+        version: 24.13.1
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.4)(typescript@6.0.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/data-source:
+    dependencies:
+      '@vivd-catalyst/core':
+        specifier: workspace:*
+        version: link:../core
+      '@vivd-catalyst/tool-sdk':
+        specifier: workspace:*
+        version: link:../tool-sdk
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
     devDependencies:
       '@types/node':
         specifier: ^24.13.1
