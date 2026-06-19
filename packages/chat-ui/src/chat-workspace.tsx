@@ -151,6 +151,7 @@ export function ChatWorkspace({
   const messages = selectedConversationId ? messagesQuery.data : [];
   const messagesLoaded = !selectedConversationId || messagesQuery.data !== undefined;
   const config = configQuery.data;
+  const attachmentsEnabled = config?.features.attachments.enabled ?? false;
   const activeLocale = config?.localization.locale ?? localePreference ?? browserLocale ?? "en";
   async function ensureConversationForFiles(files: File[]): Promise<string> {
     if (selectedConversationId) {
@@ -178,6 +179,7 @@ export function ChatWorkspace({
   }
 
   const draftAttachmentController = useDraftAttachmentController({
+    enabled: attachmentsEnabled,
     apiBaseUrl,
     authScope,
     client,
@@ -187,6 +189,7 @@ export function ChatWorkspace({
     onError: setNotice
   });
   const fileDropzone = useChatFileDropzone({
+    enabled: attachmentsEnabled,
     onFilesSelected: draftAttachmentController.onFilesSelected
   });
   const supportedLocales = config?.localization.supportedLocales ?? DEFAULT_LOCALES;
@@ -552,6 +555,7 @@ export function ChatWorkspace({
             draftAttachments={draftAttachmentController.draftAttachments}
             localUploadingAttachments={draftAttachmentController.visibleUploadingAttachments}
             sendBlockedReason={draftAttachmentController.sendBlockedReason}
+            attachmentsEnabled={attachmentsEnabled}
             onDraftChange={(value) => setDraftForKey(draftKey, value)}
             onFilesSelected={draftAttachmentController.onFilesSelected}
             onRemoveDraftAttachment={draftAttachmentController.onRemoveDraftAttachment}

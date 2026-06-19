@@ -8,6 +8,7 @@ import {
   type ClientInstanceApp,
   type CreateClientInstanceAppInput
 } from "./app";
+import type { ClientInstanceCapability } from "./capabilities";
 import type { ClientInstanceEnv } from "./env";
 import {
   seedStandaloneAuth as seedStandaloneAuthCommand,
@@ -20,6 +21,7 @@ export interface DefineClientInstanceInput {
   workspaceRoot?: string | URL;
   configFile?: string;
   tools?: ToolAssemblyDefinition[];
+  capabilities?: ClientInstanceCapability[];
   corsOrigin?: string | string[];
   loadEnv?: boolean;
 }
@@ -51,6 +53,7 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
   const clientRoot = resolve(toPath(input.rootDir));
   const workspaceRoot = resolve(toPath(input.workspaceRoot ?? resolve(clientRoot, "../..")));
   const tools = input.tools ?? [];
+  const capabilities = input.capabilities ?? [];
 
   function loadEnvironment(loadInput: { env?: ClientInstanceEnv } = {}): ClientInstanceEnv {
     const env = loadInput.env ?? process.env;
@@ -93,6 +96,7 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
         configPath: appInput.configPath
       }),
       tools,
+      capabilities,
       corsOrigin: appInput.corsOrigin ?? input.corsOrigin
     });
   }

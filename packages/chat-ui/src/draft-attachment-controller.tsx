@@ -8,6 +8,7 @@ import {
 import type { LocalUploadingAttachment } from "./assistant-composer";
 
 export interface DraftAttachmentControllerInput {
+  enabled: boolean;
   apiBaseUrl: string;
   authScope: string;
   client: ApiClient;
@@ -39,7 +40,7 @@ export function useDraftAttachmentController(
   const draftAttachmentsQuery = useQuery({
     queryKey: draftAttachmentsQueryKey(input.apiBaseUrl, input.authScope, input.selectedConversationId),
     queryFn: () => input.client.draftAttachments(input.selectedConversationId ?? ""),
-    enabled: input.isAuthenticated && Boolean(input.selectedConversationId),
+    enabled: input.enabled && input.isAuthenticated && Boolean(input.selectedConversationId),
     refetchInterval: (query) =>
       hasProcessingDraftAttachments((query.state.data as DraftAttachment[] | undefined) ?? [])
         ? 1000
@@ -53,6 +54,9 @@ export function useDraftAttachmentController(
     : [];
 
   function onFilesSelected(files: File[]) {
+    if (!input.enabled) {
+      return;
+    }
     void uploadFiles(files);
   }
 

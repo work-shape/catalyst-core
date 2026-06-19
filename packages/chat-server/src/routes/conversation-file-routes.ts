@@ -1,6 +1,5 @@
 import type { FastifyInstance } from "fastify";
 import { AppError } from "@vivd-catalyst/core";
-import { isSupportedImageMimeType } from "@vivd-catalyst/document-processing";
 import { ConversationWorkflow } from "../conversation-workflow";
 import { authenticateRequest, getConversationId } from "../request-context";
 import type { ChatServerOptions } from "../types";
@@ -12,11 +11,12 @@ export function registerConversationFileRoutes(app: FastifyInstance, options: Ch
     const { user } = await authenticateRequest(options, request);
     const conversationId = getConversationId(request);
     await conversations.requireOwnedActiveConversation(conversationId, user);
-    const file = await documentPreprocessing(options).readConversationFile({
+    const service = attachments(options);
+    const file = await service.readConversationFile({
       conversationId,
       fileId: getFileId(request)
     });
-    if (!file.mimeType || !isSupportedImageMimeType(file.mimeType)) {
+    if (!file.mimeType || !service.isInlineDisplayMimeType(file.mimeType)) {
       throw new AppError("VALIDATION_FAILED", "Only image attachments can be displayed inline");
     }
     return reply
@@ -28,11 +28,11 @@ export function registerConversationFileRoutes(app: FastifyInstance, options: Ch
   });
 }
 
-function documentPreprocessing(options: ChatServerOptions) {
-  if (!options.documentPreprocessing) {
-    throw new AppError("VALIDATION_FAILED", "Document preprocessing is not configured");
+function attachments(options: ChatServerOptions) {
+  if (!options.attachments) {
+    throw new AppError("VALIDATION_FAILED", "Attachment handling is not configured");
   }
-  return options.documentPreprocessing;
+  return options.attachments;
 }
 
 function getFileId(request: { params: unknown }): string {

@@ -1,5 +1,10 @@
 export type { ClientInstanceEnv } from "./env";
-export { createDocumentObjectStore } from "./document-object-store";
+export type {
+  ClientInstanceCapability,
+  ClientInstanceCapabilityContext,
+  ClientInstanceCapabilityContribution,
+  ClientInstanceManagedObjectReader
+} from "./capabilities";
 export {
   createClientInstanceApp,
   type ClientInstanceApp,

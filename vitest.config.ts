@@ -16,7 +16,6 @@ const sourceAlias = {
   "@vivd-catalyst/chat-widget": "packages/chat-widget/src/index.tsx",
   "@vivd-catalyst/client-assembly": "packages/client-assembly/src/index.ts",
   "@vivd-catalyst/config-schema": "packages/config-schema/src/index.ts",
-  "@vivd-catalyst/document-processing": "packages/document-processing/src/index.ts",
   "@vivd-catalyst/model-provider": "packages/model-provider/src/index.ts",
   "@vivd-catalyst/postgres-store": "packages/postgres-store/src/index.ts",
   "@vivd-catalyst/tool-execution": "packages/tool-execution/src/index.ts",

@@ -11,7 +11,7 @@ export function registerDraftAttachmentRoutes(app: FastifyInstance, options: Cha
     const { user } = await authenticateRequest(options, request);
     const conversationId = getConversationId(request);
     await conversations.requireOwnedActiveConversation(conversationId, user);
-    return documentPreprocessing(options).listDraftAttachments(conversationId);
+    return attachments(options).listDraftAttachments(conversationId);
   });
 
   app.post("/api/conversations/:conversationId/draft-attachments", async (request) => {
@@ -23,7 +23,7 @@ export function registerDraftAttachmentRoutes(app: FastifyInstance, options: Cha
       throw new AppError("VALIDATION_FAILED", "A file upload is required");
     }
     const bytes = await readMultipartFile(file.file);
-    const service = documentPreprocessing(options);
+    const service = attachments(options);
     const attachment = await service.uploadDraftAttachment({
       conversationId,
       ownerUserId: user.id,
@@ -41,7 +41,7 @@ export function registerDraftAttachmentRoutes(app: FastifyInstance, options: Cha
     const { user } = await authenticateRequest(options, request);
     const conversationId = getConversationId(request);
     await conversations.requireOwnedActiveConversation(conversationId, user);
-    const service = documentPreprocessing(options);
+    const service = attachments(options);
     const attachment = await service.retryDraftAttachment({
       conversationId,
       attachmentId: getAttachmentId(request)
@@ -56,18 +56,18 @@ export function registerDraftAttachmentRoutes(app: FastifyInstance, options: Cha
     const { user } = await authenticateRequest(options, request);
     const conversationId = getConversationId(request);
     await conversations.requireOwnedActiveConversation(conversationId, user);
-    return documentPreprocessing(options).deleteDraftAttachment({
+    return attachments(options).deleteDraftAttachment({
       conversationId,
       attachmentId: getAttachmentId(request)
     });
   });
 }
 
-function documentPreprocessing(options: ChatServerOptions) {
-  if (!options.documentPreprocessing) {
-    throw new AppError("VALIDATION_FAILED", "Document preprocessing is not configured");
+function attachments(options: ChatServerOptions) {
+  if (!options.attachments) {
+    throw new AppError("VALIDATION_FAILED", "Attachment handling is not configured");
   }
-  return options.documentPreprocessing;
+  return options.attachments;
 }
 
 function getAttachmentId(request: FastifyRequest): string {

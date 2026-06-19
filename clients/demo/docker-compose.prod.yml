@@ -1,13 +1,14 @@
 x-client-build-args: &client-build-args
   APP_PACKAGE: "@vivd-catalyst/demo"
-  SERVER_ENTRY: platform/clients/demo/dist/server.js
+  SERVER_ENTRY: clients/demo/dist/server.js
   UI_PACKAGE: "@vivd-catalyst/demo"
-  UI_DIST_DIR: platform/clients/demo/dist/client
+  UI_DIST_DIR: clients/demo/dist/client
+  NGINX_CONFIG_PATH: docker/nginx-spa.conf
   VITE_CHAT_API_URL: ${VITE_CHAT_API_URL:-}
 
 x-client-build: &client-build
-  context: ../../..
-  dockerfile: platform/docker/vivd-client.Dockerfile
+  context: ../..
+  dockerfile: docker/vivd-client.Dockerfile
   args:
     <<: *client-build-args
 
@@ -20,14 +21,8 @@ x-migrate-command: &migrate-command
   ]
 
 x-app-environment: &app-environment
-  CLIENT_CONFIG_PATH: /app/platform/clients/demo/config/app.yaml
+  CLIENT_CONFIG_PATH: /app/clients/demo/config/app.yaml
   DATABASE_URL: ${DATABASE_URL:-postgres://agent_chat:agent_chat@postgres:5432/agent_chat}
-  DOCUMENT_OBJECT_STORE_ENDPOINT: ${DOCUMENT_OBJECT_STORE_ENDPOINT:-}
-  DOCUMENT_OBJECT_STORE_BUCKET: ${DOCUMENT_OBJECT_STORE_BUCKET:-vivd-catalyst-documents}
-  DOCUMENT_OBJECT_STORE_REGION: ${DOCUMENT_OBJECT_STORE_REGION:-us-east-1}
-  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-  DOCUMENT_WORKER_TOKEN: ${DOCUMENT_WORKER_TOKEN:?DOCUMENT_WORKER_TOKEN is required}
 
 services:
   postgres:
@@ -49,7 +44,7 @@ services:
     build:
       <<: *client-build
       target: api
-    working_dir: /app/platform/clients/demo
+    working_dir: /app/clients/demo
     depends_on:
       postgres:
         condition: service_healthy
@@ -57,34 +52,6 @@ services:
       <<: *app-environment
       RUN_MIGRATIONS: "true"
     command: *migrate-command
-
-  doc-worker:
-    build:
-      <<: *client-build
-      target: doc-worker
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-      postgres:
-        condition: service_healthy
-    environment:
-      <<: *app-environment
-      HOST: 0.0.0.0
-      PORT: 4110
-      RUN_MIGRATIONS: "false"
-      DOCUMENT_WORKER_CONCURRENCY: ${DOCUMENT_WORKER_CONCURRENCY:-2}
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "fetch('http://127.0.0.1:4110/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-        ]
-      start_period: 20s
-      interval: 10s
-      timeout: 5s
-      retries: 12
 
   api:
     build:
@@ -100,7 +67,6 @@ services:
       HOST: 0.0.0.0
       PORT: 4100
       RUN_MIGRATIONS: "false"
-      DOCUMENT_WORKER_URL: http://doc-worker:4110
       OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY is required}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://127.0.0.1:8080/api/auth}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}

@@ -17,8 +17,17 @@ export function registerConfigRoutes(app: FastifyInstance, options: ChatServerOp
 
   app.get("/api/config", async (request) => {
     await authenticateRequest(options, request);
-    return createSafeConfigView(options.config, {
+    const config = createSafeConfigView(options.config, {
       requestedLocale: resolveRequestLocale(options, request)
     });
+    return {
+      ...config,
+      features: {
+        ...config.features,
+        attachments: {
+          enabled: Boolean(options.attachments)
+        }
+      }
+    };
   });
 }

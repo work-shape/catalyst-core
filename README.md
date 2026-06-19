@@ -4,10 +4,10 @@ This repository is a greenfield foundation for reusable, code-deployed AI agent 
 
 The first implementation keeps product-owned contracts separate from adapters and client assembly code:
 
-- `packages/` contains reusable platform packages.
+- `packages/` contains reusable OSS platform packages.
 - `clients/demo/` is the generic reference client instance.
-- Customer assemblies such as Musterbau live outside this repo under `../deployments/<customer>/`.
-- `docs/` keeps product planning and architecture decisions.
+- Customer assemblies and premium/restricted capabilities are expected to live in separate repositories that consume these packages.
+- Product planning and private deployment notes are intentionally outside this OSS platform repository.
 
 Run the local vertical slice:
 
@@ -17,30 +17,21 @@ cp clients/demo/.env.example clients/demo/.env
 pnpm dev
 ```
 
-Paste an OpenAI API key into `.env` before using the default demo config. The demo Compose stack exposes the API on `http://127.0.0.1:4100`, the document worker on `http://127.0.0.1:4110`, and the standalone chat UI on `http://127.0.0.1:5173`.
+Paste an OpenAI API key into `.env` before using the default demo config. The demo Compose stack exposes the API on `http://127.0.0.1:4100` and the standalone chat UI on `http://127.0.0.1:5173`.
 
-`pnpm dev` is an alias for `pnpm dev:demo`. To run the Musterbau customer assembly from the top-level workspace instead:
-
-```bash
-cd ..
-cp deployments/musterbau/.env.example deployments/musterbau/.env
-pnpm dev:musterbau
-```
+`pnpm dev` is an alias for `pnpm dev:demo`.
 
 `pnpm dev:demo` runs the demo client stack:
 
-- Docker Compose starts Postgres, S3Mock, the API, the document worker, and the UI.
+- Docker Compose starts Postgres, the API, and the UI.
 - Workspace packages resolve from `src` through the local `development` export condition.
 - The API image is Node-only and does not install LibreOffice, Poppler, or Python document tooling.
-- The document worker image owns DOCX-to-PDF conversion, PDF text/page extraction, and on-demand page rendering.
 - The UI is served from a built Vite bundle.
-- A one-shot migration service runs committed Drizzle migrations before the API and document worker start.
+- A one-shot migration service runs committed Drizzle migrations before the API starts.
 - Standalone Better Auth users from `clients/demo/config/app.yaml` are seeded into Postgres on startup.
 - You can seed those users explicitly with `pnpm --filter @vivd-catalyst/demo seed:auth`.
 
-The Musterbau client follows the same local shape from `../deployments/musterbau` and can seed users from the top-level workspace with `pnpm --filter @vivd-catalyst/musterbau seed:auth`.
-
-Each client has a development Compose file at `docker-compose.yml` and a production-style Compose file at `docker-compose.prod.yml`. The development stack includes S3Mock. The production-style stack keeps Postgres local by default, expects real object storage configuration through `.env.prod`, and publishes a Caddy front door that serves the UI and proxies API/auth routes to the API container.
+Each client has a development Compose file at `docker-compose.yml` and a production-style Compose file at `docker-compose.prod.yml`. The demo stack intentionally avoids premium/restricted capabilities. External deployments can opt into additional capability packages and runtime services without adding those implementations to this repository.
 
 Default standalone login users:
 

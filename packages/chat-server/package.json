@@ -23,7 +23,6 @@
     "@vivd-catalyst/auth": "workspace:*",
     "@vivd-catalyst/config-schema": "workspace:*",
     "@vivd-catalyst/core": "workspace:*",
-    "@vivd-catalyst/document-processing": "workspace:*",
     "@vivd-catalyst/model-provider": "workspace:*",
     "@vivd-catalyst/usage-governance": "workspace:*",
     "ai": "^6.0.199",

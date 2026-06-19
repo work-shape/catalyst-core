@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createClientInstanceApp } from "@vivd-catalyst/client-assembly";
+import {
+  createClientInstanceApp,
+  type ClientInstanceCapability
+} from "@vivd-catalyst/client-assembly";
+import {
+  createPlatformId,
+  type ConversationAttachment,
+  type DraftAttachment,
+  type FileAttachmentFormat,
+  type ImageFileFormat,
+  type ManagedFileId,
+  type SupportedImageMimeType
+} from "@vivd-catalyst/core";
 import { parseClientInstanceConfig, type UsageSafeguardsConfig } from "@vivd-catalyst/config-schema";
 import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 
@@ -243,6 +255,7 @@ describe("client instance app vertical slice", () => {
       config: createTestConfig(),
       env: {},
       storeMode: "memory",
+      capabilities: [createTestAttachmentCapability()],
       tools: []
     });
     const firstMessage = "Please summarize the release notes";
@@ -306,6 +319,7 @@ describe("client instance app vertical slice", () => {
       config: createTestConfig(),
       env: {},
       storeMode: "memory",
+      capabilities: [createTestAttachmentCapability()],
       tools: []
     });
     const filenameTitle = "Theo - Boardingpass - Y123.txt";
@@ -368,6 +382,7 @@ describe("client instance app vertical slice", () => {
       config: createTestConfig(),
       env: {},
       storeMode: "memory",
+      capabilities: [createTestAttachmentCapability()],
       tools: []
     });
     const created = await app.server.inject({
@@ -1029,37 +1044,6 @@ describe("client instance app vertical slice", () => {
     });
   });
 
-  it("rejects production startup without a document worker URL", async () => {
-    await expect(
-      createClientInstanceApp({
-        config: createTestConfig(),
-        env: {
-          NODE_ENV: "production"
-        },
-        tools: []
-      })
-    ).rejects.toMatchObject({
-      code: "VALIDATION_FAILED",
-      message: expect.stringContaining("DOCUMENT_WORKER_URL is required in production")
-    });
-  });
-
-  it("rejects production startup without a document worker token", async () => {
-    await expect(
-      createClientInstanceApp({
-        config: createTestConfig(),
-        env: {
-          NODE_ENV: "production",
-          DOCUMENT_WORKER_URL: "http://doc-worker:4110"
-        },
-        tools: []
-      })
-    ).rejects.toMatchObject({
-      code: "VALIDATION_FAILED",
-      message: expect.stringContaining("DOCUMENT_WORKER_TOKEN is required in production")
-    });
-  });
-
   it("rejects startup when an enabled tool requires approval before resume support exists", async () => {
     const approvalTool = defineTool({
       name: "demo.approval",
@@ -1244,6 +1228,170 @@ function createMultipartFilePayload(input: {
     },
     payload
   };
+}
+
+function createTestAttachmentCapability(): ClientInstanceCapability {
+  const attachmentsByConversation = new Map<string, DraftAttachment[]>();
+  const files = new Map<
+    string,
+    {
+      filename: string;
+      mimeType?: string;
+      bytes: Uint8Array;
+    }
+  >();
+
+  return {
+    name: "test-attachments",
+    create(context) {
+      return {
+        attachments: {
+          maxFileBytes: 1024 * 1024,
+          async listDraftAttachments(conversationId) {
+            return attachmentsByConversation.get(conversationId) ?? [];
+          },
+          async uploadDraftAttachment(input) {
+            const fileId = createPlatformId<"ManagedFileId">("file");
+            const attachment: DraftAttachment = {
+              id: createPlatformId<"ConversationAttachmentId">("att"),
+              clientInstanceId: context.clientInstanceId,
+              conversationId: input.conversationId,
+              fileId,
+              filename: input.filename,
+              mimeType: input.mimeType,
+              byteSize: input.bytes.byteLength,
+              checksum: "test-checksum",
+              status: "ready",
+              format: formatForMimeType(input.mimeType),
+              warnings: [],
+              error: null,
+              processingAttempts: 0,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            };
+            files.set(fileId, {
+              filename: input.filename,
+              mimeType: input.mimeType,
+              bytes: input.bytes
+            });
+            const conversationAttachments =
+              attachmentsByConversation.get(input.conversationId) ?? [];
+            conversationAttachments.push(attachment);
+            attachmentsByConversation.set(input.conversationId, conversationAttachments);
+            return attachment;
+          },
+          async retryDraftAttachment() {
+            throw new Error("Retry is not implemented by the test attachment capability");
+          },
+          async deleteDraftAttachment(input) {
+            const conversationAttachments = attachmentsByConversation.get(input.conversationId) ?? [];
+            const remaining = conversationAttachments.filter(
+              (attachment) => attachment.id !== input.attachmentId
+            );
+            attachmentsByConversation.set(input.conversationId, remaining);
+            const deleted = conversationAttachments.find(
+              (attachment) => attachment.id === input.attachmentId
+            );
+            if (!deleted) {
+              throw new Error("Attachment is not available");
+            }
+            return {
+              ...deleted,
+              deletedAt: new Date().toISOString()
+            };
+          },
+          async readConversationFile(input) {
+            const file = files.get(input.fileId);
+            if (!file) {
+              throw new Error("File is not available");
+            }
+            return {
+              fileId: input.fileId as ManagedFileId,
+              filename: file.filename,
+              mimeType: file.mimeType,
+              byteSize: file.bytes.byteLength,
+              bytes: file.bytes
+            };
+          },
+          blockingDraftAttachmentMessage() {
+            return undefined;
+          },
+          createAttachmentManifest(attachments) {
+            return {
+              version: 1,
+              attachments: attachments.flatMap((attachment) =>
+                manifestEntryForAttachment(attachment)
+              )
+            };
+          },
+          isInlineDisplayMimeType(mimeType) {
+            return mimeType === "image/gif";
+          }
+        }
+      };
+    }
+  };
+}
+
+function manifestEntryForAttachment(attachment: ConversationAttachment) {
+  if (attachment.mimeType === "image/gif") {
+    return [
+      {
+        kind: "image" as const,
+        fileId: attachment.fileId,
+        attachmentId: attachment.id,
+        filename: attachment.filename,
+        mimeType: "image/gif" as SupportedImageMimeType,
+        byteSize: attachment.byteSize,
+        status: "ready" as const,
+        readable: false as const,
+        modelVisibility: {
+          type: "image" as const,
+          mimeType: "image/gif" as SupportedImageMimeType
+        },
+        metadata: {
+          fileId: attachment.fileId,
+          filename: attachment.filename,
+          mimeType: "image/gif" as SupportedImageMimeType,
+          byteSize: attachment.byteSize,
+          format: "gif" as ImageFileFormat,
+          checksum: attachment.checksum
+        }
+      }
+    ];
+  }
+
+  return [
+    {
+      kind: "document" as const,
+      fileId: attachment.fileId,
+      attachmentId: attachment.id,
+      filename: attachment.filename,
+      mimeType: attachment.mimeType,
+      byteSize: attachment.byteSize,
+      status: "ready" as const,
+      readable: true as const,
+      readToolName: "read_document" as const,
+      metadata: {
+        fileId: attachment.fileId,
+        filename: attachment.filename,
+        mimeType: attachment.mimeType,
+        byteSize: attachment.byteSize,
+        format: attachment.format === "txt" ? "txt" : undefined,
+        warnings: []
+      }
+    }
+  ];
+}
+
+function formatForMimeType(mimeType: string | undefined): FileAttachmentFormat | undefined {
+  if (mimeType === "image/gif") {
+    return "gif";
+  }
+  if (mimeType === "text/plain") {
+    return "txt";
+  }
+  return undefined;
 }
 
 async function waitForReadyDraftAttachment(

@@ -30,4 +30,4 @@ Starlight keeps the dependency small and content-focused while leaving room for 
 
 The docs live in `packages/docs` as `@vivd-catalyst/docs`.
 
-This keeps operator docs close to the platform packages while leaving the existing `docs/planning` folder as the internal architecture and decision map.
+This keeps operator docs close to the platform packages while leaving the workspace-level `docs/planning` folder as the internal architecture and decision map.

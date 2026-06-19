@@ -33,6 +33,7 @@ export function AssistantChatPanel({
   draftAttachments,
   localUploadingAttachments,
   sendBlockedReason,
+  attachmentsEnabled,
   onDraftChange,
   onFilesSelected,
   onRemoveDraftAttachment,
@@ -57,6 +58,7 @@ export function AssistantChatPanel({
   draftAttachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
   sendBlockedReason?: string;
+  attachmentsEnabled: boolean;
   onDraftChange: (value: string) => void;
   onFilesSelected: (files: File[]) => void;
   onRemoveDraftAttachment: (attachmentId: string) => void;
@@ -87,6 +89,7 @@ export function AssistantChatPanel({
       draftAttachments={draftAttachments}
       localUploadingAttachments={localUploadingAttachments}
       sendBlockedReason={sendBlockedReason}
+      attachmentsEnabled={attachmentsEnabled}
       onDraftChange={onDraftChange}
       onFilesSelected={onFilesSelected}
       onRemoveDraftAttachment={onRemoveDraftAttachment}
@@ -116,6 +119,7 @@ function AssistantRuntimePane({
   draftAttachments,
   localUploadingAttachments,
   sendBlockedReason,
+  attachmentsEnabled,
   onDraftChange,
   onFilesSelected,
   onRemoveDraftAttachment,
@@ -141,6 +145,7 @@ function AssistantRuntimePane({
   draftAttachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
   sendBlockedReason?: string;
+  attachmentsEnabled: boolean;
   onDraftChange: (value: string) => void;
   onFilesSelected: (files: File[]) => void;
   onRemoveDraftAttachment: (attachmentId: string) => void;
@@ -309,6 +314,7 @@ function AssistantRuntimePane({
             draftAttachments={draftAttachments}
             localUploadingAttachments={localUploadingAttachments}
             sendBlockedReason={sendDisabledReason}
+            attachmentsEnabled={attachmentsEnabled}
             composerFocusRequestId={composerFocusRequestId}
             onFilesSelected={onFilesSelected}
             onRemoveDraftAttachment={onRemoveDraftAttachment}

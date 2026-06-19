@@ -18,21 +18,15 @@ import {
   SkillCatalog,
   ToolRegistry
 } from "@vivd-catalyst/tool-execution";
-import {
-  createReadDocumentTool,
-  createViewDocumentPageTool,
-  DocumentAttachmentProcessor,
-  DocumentPageRenderService,
-  DocumentPreprocessingService,
-  PlatformDocumentPreprocessor,
-  RemoteDocumentPageViewer
-} from "@vivd-catalyst/document-processing";
 import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { assertClientAssemblyValid } from "./assembly-validation";
 import { createClientInstanceAuth } from "./auth";
+import type {
+  ClientInstanceCapabilityContribution,
+  ClientInstanceCapability
+} from "./capabilities";
 import type { ClientInstanceEnv } from "./env";
-import { createDocumentObjectStore } from "./document-object-store";
 import { createPlatformStore, type PlatformStoreMode } from "./store";
 import { createToolDefinitions } from "./tools";
 
@@ -42,6 +36,7 @@ export interface CreateClientInstanceAppInput {
   env?: ClientInstanceEnv;
   storeMode?: PlatformStoreMode;
   tools: ToolAssemblyDefinition[];
+  capabilities?: ClientInstanceCapability[];
   corsOrigin?: string | string[];
 }
 
@@ -59,64 +54,30 @@ export async function createClientInstanceApp(
   const config = input.config ?? (await loadConfig(input.configPath));
   const clientInstanceId = getClientInstanceId(config);
   const resolvedStoreMode = resolveStoreMode(input.storeMode, env);
-  assertDocumentWorkerRuntimeConfigured({
+  const store = await createPlatformStore({ env, storeMode: input.storeMode });
+  const capabilityContributions = await createCapabilityContributions(input.capabilities ?? [], {
+    config,
+    clientInstanceId,
     env,
+    store,
     storeMode: resolvedStoreMode
   });
-  const store = await createPlatformStore({ env, storeMode: input.storeMode });
-  const objectStore = createDocumentObjectStore({
-    config,
-    env,
-    storeMode: input.storeMode
-  });
-  const documentPreprocessing = new DocumentPreprocessingService({
-    clientInstanceId,
-    store,
-    objectStore,
-    config: config.documents.preprocessing
-  });
-  const stopInProcessDocumentProcessor =
-    resolvedStoreMode === "memory" && !env.DOCUMENT_WORKER_URL
-      ? startInProcessDocumentProcessor(
-          new DocumentAttachmentProcessor({
-            clientInstanceId,
-            store,
-            objectStore,
-            preprocessor: new PlatformDocumentPreprocessor(config.documents.preprocessing),
-            config: config.documents.preprocessing
-          })
-        )
-      : undefined;
-  const documentPageViewer = env.DOCUMENT_WORKER_URL
-    ? new RemoteDocumentPageViewer({
-        baseUrl: env.DOCUMENT_WORKER_URL,
-        timeoutMs: config.documents.preprocessing.timeoutMs,
-        token: env.DOCUMENT_WORKER_TOKEN
-      })
-    : new DocumentPageRenderService({
-        clientInstanceId,
-        store,
-        objectStore,
-        timeoutMs: config.documents.preprocessing.timeoutMs
-      });
+  const attachments = resolveAttachmentContribution(capabilityContributions);
+  const managedObjects = resolveManagedObjectContribution(capabilityContributions);
   const skillCatalog = new SkillCatalog({
     skills: config.skills
   });
   const tools = createToolDefinitions({
     config,
     tools: [
-      ...createBuiltInToolDefinitions({
-        dataSources: config.dataSources,
-        env
-      }),
+      ...createBuiltInToolDefinitions(),
       createReadSkillTool({
         catalog: skillCatalog,
         getAgentSkillNames(agentName) {
           return getAgentConfig(config, agentName).skillNames;
         }
       }),
-      createReadDocumentTool(documentPreprocessing),
-      createViewDocumentPageTool(documentPageViewer),
+      ...capabilityContributions.flatMap((contribution) => contribution.tools ?? []),
       ...input.tools
     ]
   });
@@ -166,30 +127,20 @@ export async function createClientInstanceApp(
     repeatedToolCallLimit: config.runtime.repeatedToolCallLimit,
     modelContext: config.modelContext,
     skills: config.skills,
-    artifactReader: {
-      async readArtifact(readInput) {
-        const artifact = await store.getManagedArtifact(readInput);
-        if (!artifact) {
-          throw new AppError("NOT_FOUND", `Managed artifact '${readInput.artifactId}' was not found`);
+    artifactReader: managedObjects
+      ? {
+          readArtifact(readInput) {
+            return managedObjects.readArtifact(readInput);
+          }
         }
-        return {
-          bytes: await objectStore.getObject(artifact.objectKey),
-          mimeType: artifact.mimeType
-        };
-      }
-    },
-    fileReader: {
-      async readFile(readInput) {
-        const file = await store.getManagedFile(readInput);
-        if (!file) {
-          throw new AppError("NOT_FOUND", `Managed file '${readInput.fileId}' was not found`);
+      : undefined,
+    fileReader: managedObjects
+      ? {
+          readFile(readInput) {
+            return managedObjects.readFile(readInput);
+          }
         }
-        return {
-          bytes: await objectStore.getObject(file.objectKey),
-          mimeType: file.mimeType
-        };
-      }
-    }
+      : undefined
   });
   const { authAdapter, standaloneAuth, sessionToken } = await createClientInstanceAuth({
     config,
@@ -208,7 +159,7 @@ export async function createClientInstanceApp(
     usageGovernance,
     auditRecorder,
     agentRuntime,
-    documentPreprocessing,
+    attachments,
     modelProvider,
     corsOrigin: input.corsOrigin,
     standaloneAuth,
@@ -226,63 +177,55 @@ export async function createClientInstanceApp(
     },
     async close() {
       await server.close();
-      await stopInProcessDocumentProcessor?.();
+      await closeCapabilityContributions(capabilityContributions);
       await standaloneAuth?.close();
       await store.close?.();
     }
   };
 }
 
-function startInProcessDocumentProcessor(processor: DocumentAttachmentProcessor): () => Promise<void> {
-  let running = true;
-  const loop = (async () => {
-    while (running) {
-      const result = await processor.processNext({
-        workerId: "in-process-memory-document-worker"
-      });
-      if (result.status === "idle") {
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      }
-    }
-  })().catch((error) => {
-    console.warn(
-      JSON.stringify({
-        type: "document_preprocessing.memory_worker_failure",
-        message: error instanceof Error ? error.message : "Unknown document worker failure"
-      })
-    );
-  });
-  return async () => {
-    running = false;
-    await loop;
-  };
+async function createCapabilityContributions(
+  capabilities: readonly ClientInstanceCapability[],
+  context: Parameters<ClientInstanceCapability["create"]>[0]
+): Promise<ClientInstanceCapabilityContribution[]> {
+  const contributions: ClientInstanceCapabilityContribution[] = [];
+  for (const capability of capabilities) {
+    contributions.push(await capability.create(context));
+  }
+  return contributions;
 }
 
-function assertDocumentWorkerRuntimeConfigured(input: {
-  env: ClientInstanceEnv;
-  storeMode: PlatformStoreMode;
-}): void {
-  if (input.env.NODE_ENV !== "production" || input.storeMode === "memory") {
-    return;
+function resolveAttachmentContribution(contributions: readonly ClientInstanceCapabilityContribution[]) {
+  const attachmentContributions = contributions
+    .map((contribution) => contribution.attachments)
+    .filter((attachments) => attachments !== undefined);
+  if (attachmentContributions.length > 1) {
+    throw new AppError("VALIDATION_FAILED", "Only one attachment handling capability can be configured");
   }
-  if (!nonEmptyEnv(input.env.DOCUMENT_WORKER_URL)) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      "DOCUMENT_WORKER_URL is required in production so document page rendering does not fall back to local binaries in the API container"
-    );
+  return attachmentContributions[0];
+}
+
+function resolveManagedObjectContribution(
+  contributions: readonly ClientInstanceCapabilityContribution[]
+) {
+  const managedObjectContributions = contributions
+    .map((contribution) => contribution.managedObjects)
+    .filter((reader) => reader !== undefined);
+  if (managedObjectContributions.length > 1) {
+    throw new AppError("VALIDATION_FAILED", "Only one managed object reader capability can be configured");
   }
-  if (!nonEmptyEnv(input.env.DOCUMENT_WORKER_TOKEN)) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      "DOCUMENT_WORKER_TOKEN is required in production when DOCUMENT_WORKER_URL is configured"
-    );
+  return managedObjectContributions[0];
+}
+
+async function closeCapabilityContributions(
+  contributions: readonly ClientInstanceCapabilityContribution[]
+): Promise<void> {
+  for (const contribution of [...contributions].reverse()) {
+    await contribution.close?.();
   }
 }
 
-function resolveStoreMode(
-  explicitMode: PlatformStoreMode | undefined,
-  env: ClientInstanceEnv
-): PlatformStoreMode {
+function resolveStoreMode(explicitMode: PlatformStoreMode | undefined, env: ClientInstanceEnv): PlatformStoreMode {
   const value = explicitMode ?? env.STORE;
   if (!value) {
     return "postgres";
@@ -291,11 +234,6 @@ function resolveStoreMode(
     return value;
   }
   throw new AppError("VALIDATION_FAILED", "STORE must be either 'postgres' or 'memory'");
-}
-
-function nonEmptyEnv(value: string | undefined): string | undefined {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
 }
 
 async function loadConfig(configPath: string | undefined): Promise<ClientInstanceConfig> {

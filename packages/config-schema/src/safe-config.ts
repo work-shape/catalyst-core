@@ -25,6 +25,11 @@ export function createSafeConfigView(config: ClientInstanceConfig, localeInput: 
       budget: config.usage.budget,
       safeguards: config.usage.safeguards
     },
+    features: {
+      attachments: {
+        enabled: false
+      }
+    },
     defaultAgentName: config.defaultAgentName,
     agents: config.agents.map((agent) => ({
       name: agent.name,

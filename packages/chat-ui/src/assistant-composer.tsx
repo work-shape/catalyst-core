@@ -20,6 +20,7 @@ export function AssistantComposer({
   attachments,
   localUploadingAttachments,
   sendBlockedReason,
+  attachmentsEnabled,
   focusRequestId,
   onFilesSelected,
   onRemoveAttachment,
@@ -28,6 +29,7 @@ export function AssistantComposer({
   attachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
   sendBlockedReason?: string;
+  attachmentsEnabled: boolean;
   focusRequestId: number;
   onFilesSelected: (files: File[]) => void;
   onRemoveAttachment: (attachmentId: string) => void;
@@ -80,31 +82,35 @@ export function AssistantComposer({
             submitMode="enter"
           />
           <div className="flex items-center justify-between gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="sr-only"
-              multiple
-              accept=".pdf,.docx,.txt,.md,.markdown,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,image/png,image/jpeg,image/webp,image/gif"
-              onChange={(event) => {
-                const files = [...(event.currentTarget.files ?? [])];
-                event.currentTarget.value = "";
-                if (files.length > 0) {
-                  onFilesSelected(files);
-                }
-              }}
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-8 text-muted-foreground"
-              title={t("addAttachment")}
-              aria-label={t("addAttachment")}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Paperclip size={16} aria-hidden="true" />
-            </Button>
+            {attachmentsEnabled ? (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="sr-only"
+                  multiple
+                  accept=".pdf,.docx,.txt,.md,.markdown,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,image/png,image/jpeg,image/webp,image/gif"
+                  onChange={(event) => {
+                    const files = [...(event.currentTarget.files ?? [])];
+                    event.currentTarget.value = "";
+                    if (files.length > 0) {
+                      onFilesSelected(files);
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 text-muted-foreground"
+                  title={t("addAttachment")}
+                  aria-label={t("addAttachment")}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Paperclip size={16} aria-hidden="true" />
+                </Button>
+              </>
+            ) : null}
             <ComposerAction disabled={Boolean(sendBlockedReason)} disabledReason={sendBlockedReason} />
           </div>
         </div>

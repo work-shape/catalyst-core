@@ -14,12 +14,9 @@ import {
   createPlatformId,
   isAppError
 } from "@vivd-catalyst/core";
-import {
-  blockingDraftAttachmentMessage,
-  createAttachmentManifest
-} from "@vivd-catalyst/document-processing";
 import { getModelProviderForConversationTitles } from "@vivd-catalyst/config-schema";
 import type { ModelMessage } from "@vivd-catalyst/model-provider";
+import { createEmptyAttachmentManifest } from "./attachments";
 import {
   isTemporaryConversationTitle,
   normalizeGeneratedConversationTitle
@@ -101,18 +98,16 @@ export class ConversationWorkflow {
     command: SendConversationMessageCommand
   ): Promise<StartedConversationMessageRun> {
     await this.requireOwnedActiveConversation(conversationId, user);
-    const draftAttachments = await this.options.conversationStore.listDraftAttachments({
-      clientInstanceId: this.options.clientInstanceId,
-      conversationId
-    });
-    const blockMessage = blockingDraftAttachmentMessage(draftAttachments);
+    const attachments = this.options.attachments;
+    const draftAttachments = attachments
+      ? await attachments.listDraftAttachments(conversationId)
+      : [];
+    const blockMessage = attachments?.blockingDraftAttachmentMessage(draftAttachments);
     if (blockMessage) {
       throw new AppError("CONFLICT", blockMessage);
     }
-    const attachmentManifest = createAttachmentManifest(
-      draftAttachments,
-      this.options.config.documents.preprocessing.preprocessingVersion
-    );
+    const attachmentManifest =
+      attachments?.createAttachmentManifest(draftAttachments) ?? createEmptyAttachmentManifest();
     const userMessageId = createPlatformId<"MessageId">("msg");
     const userMessage = await this.options.conversationStore.appendMessage({
       id: userMessageId,

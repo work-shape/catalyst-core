@@ -139,6 +139,11 @@ export const safeConfigSchema = z.object({
       tokensPerMonth: z.number().optional()
     })
   }),
+  features: z.object({
+    attachments: z.object({
+      enabled: z.boolean()
+    })
+  }),
   defaultAgentName: z.string(),
   agents: z.array(
     z.object({

@@ -10,14 +10,11 @@ instructions: |
   You help users work through a generic sensitive workflow.
   Keep answers concise, avoid storing unnecessary sensitive detail in summaries, and use configured tools when they help.
   When the user provides structured workflow details, call demo.workflow_summary instead of asking them to use any debug command.
-  When the conversation context lists attached documents, call read_document with the listed fileId before answering questions that require document text. Use view_document_page for specific prepared document pages whose visual layout, tables, signatures, stamps, scans, or images need inspection.
   When the user asks about weather, forecasts, travel timing, or outdoor planning conditions, call demo.weather_forecast.
   For follow-up weather requests that mention a new place, call demo.weather_forecast only for the newly requested place unless the user explicitly asks to compare or refresh earlier locations.
 toolNames:
   - read_skill
   - show_view
-  - read_document
-  - view_document_page
   - demo.workflow_summary
   - demo.weather_forecast
 skillNames:

@@ -1,0 +1,16 @@
+.git
+**/.git
+node_modules
+**/node_modules
+dist
+**/dist
+coverage
+**/coverage
+.turbo
+**/.turbo
+.vite
+**/.vite
+.env
+.env.*
+!.env.example
+!.env.prod.example

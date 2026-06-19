@@ -14,7 +14,7 @@
     "prod:config": "docker compose --env-file .env.prod -f docker-compose.prod.yml config",
     "dev:ui": "vite --host 0.0.0.0 --port 5173",
     "preview:ui": "vite preview --host 127.0.0.1 --port 5173 --outDir dist/client",
-    "seed:auth": "docker compose run --rm api node platform/clients/demo/dist/seed-auth.js",
+    "seed:auth": "docker compose run --rm api node clients/demo/dist/seed-auth.js",
     "start": "node dist/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

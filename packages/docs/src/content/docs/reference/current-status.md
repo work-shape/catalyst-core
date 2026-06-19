@@ -20,7 +20,10 @@ The repository currently contains:
 - auth package
 - Postgres store package
 - usage governance package
-- planning docs and ADRs
+
+Workspace-level planning docs and ADRs live outside the OSS platform repo while
+the product is still being split into platform, capability, and deployment
+repositories.
 
 The current implementation includes a local vertical slice for the demo client.
 

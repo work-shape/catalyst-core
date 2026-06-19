@@ -2,6 +2,7 @@ import { Upload } from "lucide-react";
 import { useState, type DragEvent } from "react";
 
 export interface ChatFileDropzoneInput {
+  enabled: boolean;
   onFilesSelected(files: File[]): void;
 }
 
@@ -17,6 +18,9 @@ export function useChatFileDropzone(input: ChatFileDropzoneInput): ChatFileDropz
   const [draggingFiles, setDraggingFiles] = useState(false);
 
   function onChatDragEnter(event: DragEvent<HTMLElement>) {
+    if (!input.enabled) {
+      return;
+    }
     if (!hasDraggedFiles(event)) {
       return;
     }
@@ -25,6 +29,9 @@ export function useChatFileDropzone(input: ChatFileDropzoneInput): ChatFileDropz
   }
 
   function onChatDragOver(event: DragEvent<HTMLElement>) {
+    if (!input.enabled) {
+      return;
+    }
     if (!hasDraggedFiles(event)) {
       return;
     }
@@ -41,6 +48,9 @@ export function useChatFileDropzone(input: ChatFileDropzoneInput): ChatFileDropz
   }
 
   function onChatDrop(event: DragEvent<HTMLElement>) {
+    if (!input.enabled) {
+      return;
+    }
     if (!hasDraggedFiles(event)) {
       return;
     }

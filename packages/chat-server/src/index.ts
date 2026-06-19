@@ -14,6 +14,7 @@ import { registerSuperadminRoutes } from "./routes/superadmin-routes";
 import { registerUserAccountRoutes } from "./routes/user-account-routes";
 import type { ChatServerOptions } from "./types";
 
+export type { ChatAttachmentService } from "./attachments";
 export type { ChatServerOptions } from "./types";
 
 export async function createChatServer(options: ChatServerOptions): Promise<FastifyInstance> {
@@ -29,7 +30,7 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
   });
   await app.register(multipart, {
     limits: {
-      fileSize: options.config.documents.preprocessing.maxFileBytes
+      fileSize: options.attachments?.maxFileBytes
     }
   });
 
