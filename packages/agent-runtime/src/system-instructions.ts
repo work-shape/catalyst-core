@@ -15,6 +15,7 @@ export interface SystemSkillMetadata {
 }
 
 export interface CreateSystemInstructionsOptions {
+  currentDate?: Date;
   skills?: readonly SystemSkillMetadata[];
 }
 
@@ -27,9 +28,9 @@ export function createSystemInstructions(
     `Catalyst internal instructions:\n${CATALYST_INTERNAL_AGENT_PROMPT}`
   ];
 
-  const languageInstruction = createLanguageInstruction(locale);
-  if (languageInstruction) {
-    sections.push(`Runtime instructions:\n${languageInstruction}`);
+  const runtimeContext = createRuntimeContext(locale, options.currentDate);
+  if (runtimeContext) {
+    sections.push(`Runtime context:\n${runtimeContext}`);
   }
 
   if (options.skills && options.skills.length > 0) {
@@ -50,12 +51,34 @@ export function createSystemInstructions(
   return sections.join("\n\n");
 }
 
-function createLanguageInstruction(locale: LocaleCode | undefined): string | undefined {
+function createRuntimeContext(locale: LocaleCode | undefined, currentDate: Date | undefined): string | undefined {
+  const lines = [
+    createSelectedLanguageContext(locale),
+    currentDate ? `- Current date: ${formatCurrentDate(currentDate, locale)}.` : undefined
+  ].filter((line): line is string => line !== undefined);
+
+  return lines.length > 0 ? lines.join("\n") : undefined;
+}
+
+function createSelectedLanguageContext(locale: LocaleCode | undefined): string | undefined {
   if (locale === "de") {
-    return "Respond in German unless the user explicitly asks for another language.";
+    return "- User selected language: German (locale: de).";
   }
   if (locale === "en") {
-    return "Respond in English unless the user explicitly asks for another language.";
+    return "- User selected language: English (locale: en).";
   }
   return undefined;
+}
+
+function formatCurrentDate(date: Date, locale: LocaleCode | undefined): string {
+  const dateLocale = locale === "de" ? "de-DE" : "en-GB";
+  const displayDate = new Intl.DateTimeFormat(dateLocale, {
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+    weekday: "long",
+    year: "numeric"
+  }).format(date);
+  const isoDate = date.toISOString().slice(0, 10);
+  return `${displayDate} (ISO: ${isoDate})`;
 }

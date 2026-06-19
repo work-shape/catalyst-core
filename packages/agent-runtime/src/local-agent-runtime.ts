@@ -7,6 +7,7 @@ import {
   type AgentRuntimeCommand,
   type AgentRuntimeEvent,
   type ChatMessage,
+  type Clock,
   type ConversationHistoryStore,
   type ModelProviderConfig,
   type RuntimeCallContext,
@@ -15,7 +16,8 @@ import {
   type ToolExecution,
   type ToolExecutionResult,
   asAgentRunId,
-  createPlatformId
+  createPlatformId,
+  systemClock
 } from "@vivd-catalyst/core";
 import type { ModelCompletion, ModelMessage, ModelProvider, ModelToolCall } from "@vivd-catalyst/model-provider";
 import type { ToolRegistry } from "@vivd-catalyst/tool-execution";
@@ -55,6 +57,7 @@ export interface LocalAgentRuntimeOptions {
   repeatedToolCallLimit?: number;
   modelContext?: ModelContextProjectionOptions;
   artifactReader?: ModelContextArtifactReader;
+  clock?: Clock;
   fileReader?: ModelContextFileReader;
 }
 
@@ -141,6 +144,7 @@ export class LocalAgentRuntime implements AgentRuntime {
       {
         role: "system",
         content: createSystemInstructions(agent.instructions, context.locale, {
+          currentDate: this.options.clock?.now() ?? systemClock.now(),
           skills: this.getSkillMetadataForAgent(agent)
         })
       },

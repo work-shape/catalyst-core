@@ -262,7 +262,7 @@ describe("local agent runtime", () => {
     expect(toolResultIndex).toBeGreaterThan(assistantToolCallIndex);
   });
 
-  it("adds the resolved locale to system instructions", async () => {
+  it("adds the resolved locale and current date to system instructions", async () => {
     const clientInstanceId = asClientInstanceId("locale-client");
     const context: RuntimeCallContext = {
       clientInstanceId,
@@ -328,7 +328,10 @@ describe("local agent runtime", () => {
           costSafetyMultiplier: 1
         },
         safeguards: {}
-      })
+      }),
+      clock: {
+        now: () => new Date("2026-06-19T12:00:00.000Z")
+      }
     });
 
     const run = await runtime.start(
@@ -350,8 +353,12 @@ describe("local agent runtime", () => {
 
     expect(providerMessages[0]).toMatchObject({
       role: "system",
-      content: expect.stringContaining("Respond in German")
+      content: expect.stringContaining("- User selected language: German (locale: de).")
     });
+    expect(providerMessages[0]?.content).toContain(
+      "- Current date: Freitag, 19. Juni 2026 (ISO: 2026-06-19)."
+    );
+    expect(providerMessages[0]?.content).not.toContain("Respond in German");
   });
 
   it("streams model text around tool calls and keeps final messages separate", async () => {

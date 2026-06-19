@@ -6,10 +6,12 @@ import {
 
 describe("system instructions", () => {
   it("places Catalyst internal instructions before client agent instructions", () => {
-    const content = createSystemInstructions("Use customer workflow rules.", "de");
+    const content = createSystemInstructions("Use customer workflow rules.", "de", {
+      currentDate: new Date("2026-06-19T12:00:00.000Z")
+    });
 
     const catalystIndex = content.indexOf("Catalyst internal instructions:");
-    const runtimeIndex = content.indexOf("Runtime instructions:");
+    const runtimeIndex = content.indexOf("Runtime context:");
     const clientIndex = content.indexOf("Client agent instructions:");
 
     expect(catalystIndex).toBe(0);
@@ -17,7 +19,9 @@ describe("system instructions", () => {
     expect(clientIndex).toBeGreaterThan(runtimeIndex);
     expect(content).toContain(CATALYST_INTERNAL_AGENT_PROMPT);
     expect(content).toContain("Keep the user informed with concise public text before tool calls");
-    expect(content).toContain("Respond in German unless the user explicitly asks for another language.");
+    expect(content).toContain("- User selected language: German (locale: de).");
+    expect(content).toContain("- Current date: Freitag, 19. Juni 2026 (ISO: 2026-06-19).");
+    expect(content).not.toContain("Respond in German unless the user explicitly asks for another language.");
     expect(content).toContain("Use customer workflow rules.");
   });
 
