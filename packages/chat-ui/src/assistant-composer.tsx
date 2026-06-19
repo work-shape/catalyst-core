@@ -273,7 +273,7 @@ function ComposerAction({
   const { t } = useTranslation();
 
   return (
-    <div className="relative size-9">
+    <div className="relative ml-auto size-9">
       <AuiIf condition={(state) => state.thread.isRunning}>
         <ComposerPrimitive.Cancel asChild>
           <Button type="button" size="icon" className="absolute inset-0 size-9" aria-label={t("stopGenerating")}>
