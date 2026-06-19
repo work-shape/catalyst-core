@@ -20,4 +20,27 @@ describe("system instructions", () => {
     expect(content).toContain("Respond in German unless the user explicitly asks for another language.");
     expect(content).toContain("Use customer workflow rules.");
   });
+
+  it("includes allowed skill metadata without full skill content", () => {
+    const content = createSystemInstructions("Use customer workflow rules.", "en", {
+      skills: [
+        {
+          name: "support_review",
+          title: "Support Review",
+          description: "Use when reviewing support case details."
+        }
+      ]
+    });
+
+    const skillsIndex = content.indexOf("Available client skills:");
+    const clientIndex = content.indexOf("Client agent instructions:");
+
+    expect(skillsIndex).toBeGreaterThan(0);
+    expect(clientIndex).toBeGreaterThan(skillsIndex);
+    expect(content).toContain(
+      "- support_review: Support Review - Use when reviewing support case details."
+    );
+    expect(content).toContain("call read_skill");
+    expect(content).not.toContain("# Support Review");
+  });
 });

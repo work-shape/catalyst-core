@@ -54,6 +54,7 @@ Related research:
 - Conversation routes delegate to a conversation workflow module that owns retention-aware creation/deletion, ownership checks, chat-turn persistence, agent-run observation, and message audit outcomes.
 - Governance actions centralize admin/superadmin role checks and audit sensitive operational reads such as usage and audit-event views.
 - Client assembly validates tool-reference closure at startup, including rejecting enabled approval-required tools until runtime resume is implemented.
+- Client skills are code-deployed Markdown guidance documents. Release config explicitly lists skill files, agent config allowlists skill names, and agents read full skill content through the built-in `read_skill` tool.
 - Governance in v1 means narrow product controls: permissioned admin actions, retention/deletion workflows, audit views, and reason-required sensitive actions.
 - Admin/superadmin views default to metadata, deletion, export/request-handling, audit, and retention status; full message access requires explicit configuration, permission, and audit reason.
 - Vercel AI SDK is the default v1 internal model/tool streaming candidate, behind product-owned runtime contracts.

@@ -2,6 +2,8 @@ import { AppError } from "@vivd-catalyst/core";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
 
+const READ_SKILL_TOOL_NAME = "read_skill";
+
 export function assertClientAssemblyValid(input: {
   config: ClientInstanceConfig;
   tools: AnyToolDefinition[];
@@ -77,6 +79,12 @@ function findToolReferenceIssues(
   }
 
   for (const agent of config.agents) {
+    const skillNames = agent.skillNames ?? [];
+    if (skillNames.length > 0 && !agent.toolNames.includes(READ_SKILL_TOOL_NAME)) {
+      issues.push(
+        `Agent '${agent.name}' references skills but does not allow '${READ_SKILL_TOOL_NAME}'`
+      );
+    }
     for (const toolName of agent.toolNames) {
       if (!configuredTools.has(toolName)) {
         issues.push(`Agent '${agent.name}' references tool '${toolName}' that is missing from release config`);

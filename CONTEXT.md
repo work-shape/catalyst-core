@@ -88,6 +88,10 @@ _Avoid_: Runtime registration, dynamic plugin discovery
 A permissioned group of tools or runtime behaviors made available to an agent for a class of work, such as file fetching, document processing, retrieval, or browser automation.
 _Avoid_: Tool, feature
 
+**Client Skill**:
+A code-deployed Markdown guidance document for an agent, with a small metadata summary exposed in model context and full instructions available only through the `read_skill` tool.
+_Avoid_: Runtime plugin, agent capability, hidden prompt
+
 **File Acquisition**:
 The process of turning an uploaded file, email attachment, or URL into a managed file stored by the client instance.
 _Avoid_: Web scraping, document extraction

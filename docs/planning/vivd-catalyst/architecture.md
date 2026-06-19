@@ -113,7 +113,9 @@ The runtime should preserve agent-visible history durably, including assistant t
 
 `ModelContextProjection` should be a dedicated deep module inside the runtime implementation. It owns the data-critical rules for turning durable agent-visible history into provider messages: excluding `privateOutput` and `display`, replaying tool inputs/results/errors, applying configurable output bounds, inserting future compaction artifacts, and adapting to provider-specific message formats. Keep the agentic loop itself internal to the local runtime adapter unless a second runtime implementation makes a broader seam real.
 
-The local runtime should compose model system instructions from a platform-owned Catalyst internal prompt followed by request/runtime instructions and then the client-specific agent instructions. Client agent instructions can specialize domain behavior, tone, and workflow, but the platform prompt owns baseline product behavior such as public progress text around tool use, untrusted document/tool content handling, and private-data boundaries.
+The local runtime should compose model system instructions from a platform-owned Catalyst internal prompt followed by request/runtime instructions, allowed client skill metadata, and then the client-specific agent instructions. Client agent instructions can specialize domain behavior, tone, and workflow, but the platform prompt owns baseline product behavior such as public progress text around tool use, untrusted document/tool content handling, and private-data boundaries.
+
+Client skills are Markdown guidance documents deployed with the client assembly app. The model sees only each allowed skill's name, title, and short description in the system instructions. Full skill content is loaded only when the agent calls the built-in `read_skill` tool, which checks the current agent's `skillNames` allowlist.
 
 ## V1 Tool Definition And Execution Contract
 

@@ -105,7 +105,11 @@ documents:
 defaultAgentName: workflow_assistant
 agentFiles:
   - ../agents/workflow-assistant.agent.yaml
+skillFiles:
+  - ../skills/generic-workflow-review/SKILL.md
 tools:
+  - name: read_skill
+    enabled: true
   - name: show_view
     enabled: true
   - name: read_document

@@ -38,7 +38,15 @@ export interface AgentConfig {
   modelProviderId?: string;
   maxSteps?: number;
   toolNames: string[];
+  skillNames: string[];
   initialPrompts: AgentInitialPromptConfig[];
+}
+
+export interface SkillConfig {
+  name: string;
+  title: string;
+  description: string;
+  content: string;
 }
 
 export type { LocalizationConfig, LocalizedStringConfig };

@@ -7,6 +7,7 @@ import type {
   ModelContextConfig,
   ModelProviderConfig,
   DocumentsConfig,
+  SkillConfig,
   UsageBudgetConfig,
   UsagePricingConfig,
   UsageSafeguardsConfig
@@ -105,6 +106,28 @@ const dataSourceConfigSchema = z.object({
     .optional()
 });
 
+export const skillNameSchema = z
+  .string()
+  .min(1)
+  .regex(/^[A-Za-z][A-Za-z0-9_.-]*$/u, {
+    message: "Skill name must start with a letter and contain only letters, numbers, dots, underscores, or hyphens"
+  });
+
+export const skillConfigSchema = z.object({
+  name: skillNameSchema,
+  title: z.string().min(1),
+  description: z.string().min(1),
+  content: z.string().min(1)
+});
+
+export const skillFileFrontmatterSchema = skillConfigSchema
+  .omit({
+    content: true
+  })
+  .extend({
+    name: skillNameSchema.optional()
+  });
+
 export const modelProviderConfigSchema = z.discriminatedUnion("type", [
   deterministicModelProviderSchema,
   openAiCompatibleModelProviderSchema
@@ -118,6 +141,7 @@ export const agentConfigSchema = z.object({
   modelProviderId: z.string().min(1).optional(),
   maxSteps: z.number().int().positive().optional(),
   toolNames: z.array(z.string().min(1)).default([]),
+  skillNames: z.array(skillNameSchema).default([]),
   initialPrompts: z
     .array(
       z.object({
@@ -394,6 +418,7 @@ export const clientInstanceConfigSchema = z.object({
     }),
   defaultAgentName: z.string().min(1),
   agents: z.array(agentConfigSchema).min(1),
+  skills: z.array(skillConfigSchema).default([]),
   tools: z
     .array(toolInstanceConfigSchema)
     .default([]),
@@ -409,6 +434,8 @@ export const clientInstanceConfigFileSchema = clientInstanceConfigSchema
   .extend({
     agents: z.array(agentConfigSchema).default([]),
     agentFiles: z.array(z.string().min(1)).default([]),
+    skills: z.array(skillConfigSchema).default([]),
+    skillFiles: z.array(z.string().min(1)).default([]),
     ui: uiConfigSchema.optional(),
     uiFile: z.string().min(1).optional()
   });
@@ -422,6 +449,7 @@ export type {
   LocalizationConfig,
   ModelProviderConfig,
   DocumentsConfig,
+  SkillConfig,
   UsageBudgetConfig,
   AgentRuntimeConfig,
   ModelContextConfig,

@@ -1,10 +1,12 @@
 import { readFile } from "node:fs/promises";
-import { dirname, extname, resolve } from "node:path";
+import { basename, dirname, extname, resolve } from "node:path";
 import yaml from "js-yaml";
 import { AppError } from "@vivd-catalyst/core";
 import {
   agentConfigSchema,
   clientInstanceConfigFileSchema,
+  skillConfigSchema,
+  skillFileFrontmatterSchema,
   uiConfigSchema,
   type ClientInstanceConfig
 } from "./schemas";
@@ -45,11 +47,15 @@ export async function loadClientInstanceConfigFromFile(
       return agent.data;
     })
   );
+  const fileSkills = await Promise.all(
+    parsed.data.skillFiles.map((skillFile) => loadSkillFile(baseDir, skillFile))
+  );
 
   return parseClientInstanceConfig({
     ...parsed.data,
     ui: fileUi,
-    agents: [...parsed.data.agents, ...fileAgents]
+    agents: [...parsed.data.agents, ...fileAgents],
+    skills: [...parsed.data.skills, ...fileSkills]
   });
 }
 
@@ -69,6 +75,56 @@ async function readStructuredFile(path: string): Promise<unknown> {
   const contents = await readFile(path, "utf8");
   const extension = extname(path).toLowerCase();
   return extension === ".json" ? JSON.parse(contents) : yaml.load(contents);
+}
+
+async function loadSkillFile(baseDir: string, skillFile: string) {
+  const skillPath = resolve(baseDir, skillFile);
+  const contents = await readFile(skillPath, "utf8");
+  const parsed = parseSkillMarkdown(contents, skillFile, skillPath);
+  const skill = skillConfigSchema.safeParse(parsed);
+  if (!skill.success) {
+    throw new AppError("VALIDATION_FAILED", `Skill file '${skillFile}' is invalid`, {
+      issues: skill.error.issues
+    });
+  }
+  return skill.data;
+}
+
+function parseSkillMarkdown(contents: string, skillFile: string, skillPath: string): unknown {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/u.exec(contents);
+  if (!match) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Skill file '${skillFile}' must start with YAML frontmatter`
+    );
+  }
+
+  const frontmatterRaw = yaml.load(match[1] ?? "");
+  const frontmatter = skillFileFrontmatterSchema.safeParse(frontmatterRaw);
+  if (!frontmatter.success) {
+    throw new AppError("VALIDATION_FAILED", `Skill file '${skillFile}' frontmatter is invalid`, {
+      issues: frontmatter.error.issues
+    });
+  }
+
+  const content = (match[2] ?? "").trim();
+  return {
+    ...frontmatter.data,
+    name: frontmatter.data.name ?? deriveSkillName(skillPath),
+    content
+  };
+}
+
+function deriveSkillName(skillPath: string): string {
+  const extension = extname(skillPath);
+  const filename = basename(skillPath);
+  const sourceName =
+    filename.toLowerCase() === "skill.md" ? basename(dirname(skillPath)) : basename(skillPath, extension);
+  return sourceName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, "_")
+    .replace(/^_+|_+$/gu, "");
 }
 
 function hasOwnProperty(input: unknown, key: string): boolean {

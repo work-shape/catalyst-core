@@ -13,7 +13,9 @@ import {
 import { createModelProviderRegistry } from "@vivd-catalyst/model-provider";
 import {
   createBuiltInToolDefinitions,
+  createReadSkillTool,
   InProcessToolExecution,
+  SkillCatalog,
   ToolRegistry
 } from "@vivd-catalyst/tool-execution";
 import {
@@ -97,12 +99,21 @@ export async function createClientInstanceApp(
         objectStore,
         timeoutMs: config.documents.preprocessing.timeoutMs
       });
+  const skillCatalog = new SkillCatalog({
+    skills: config.skills
+  });
   const tools = createToolDefinitions({
     config,
     tools: [
       ...createBuiltInToolDefinitions({
         dataSources: config.dataSources,
         env
+      }),
+      createReadSkillTool({
+        catalog: skillCatalog,
+        getAgentSkillNames(agentName) {
+          return getAgentConfig(config, agentName).skillNames;
+        }
       }),
       createReadDocumentTool(documentPreprocessing),
       createViewDocumentPageTool(documentPageViewer),
@@ -154,6 +165,7 @@ export async function createClientInstanceApp(
     maxSteps: config.runtime.maxSteps,
     repeatedToolCallLimit: config.runtime.repeatedToolCallLimit,
     modelContext: config.modelContext,
+    skills: config.skills,
     artifactReader: {
       async readArtifact(readInput) {
         const artifact = await store.getManagedArtifact(readInput);

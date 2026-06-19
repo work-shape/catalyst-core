@@ -23,12 +23,13 @@ platform packages
 client assembly app
   imports platform packages
   defines client tools
+  defines client skills
   defines agent YAML/config
   defines UI/domain-output config
   defines deployment env/compose wiring
 ```
 
-The client layer should be intentionally thin. It should contain customer-specific tools, agent definitions, config, branding, domain UI output definitions, and deployment wiring. It should not contain copied platform internals.
+The client layer should be intentionally thin. It should contain customer-specific tools, client skills, agent definitions, config, branding, domain UI output definitions, and deployment wiring. It should not contain copied platform internals.
 
 ## Code-Deployed Model
 
@@ -40,7 +41,7 @@ The repository remains the source of truth. A CLI can validate, test tools, buil
 
 V1 should use release config only.
 
-Release config is version-controlled and deployed with the client assembly app. It defines agent behavior, tool availability, OpenAPI operation selections, built-in tool enablement, configured data-source connections, model provider options, domain UI output types, retention policy, usage budget, usage safeguards, client branding/theme, and default policy bounds.
+Release config is version-controlled and deployed with the client assembly app. It defines agent behavior, client skill file references, tool availability, OpenAPI operation selections, built-in tool enablement, configured data-source connections, model provider options, domain UI output types, retention policy, usage budget, usage safeguards, client branding/theme, and default policy bounds.
 
 Release config changes through the normal release/publish/deploy flow. The platform should snapshot the active release config at deploy/startup so runtime behavior is explainable.
 
@@ -110,6 +111,8 @@ client-assembly/
   tools/
     payslip-summary.ts
     lookup-employee.ts
+  skills/
+    payslip-review/SKILL.md
   config/
     app.yaml
     ui.yaml
@@ -169,9 +172,24 @@ agents:
   payslip_agent:
     instructions: |
       You are the payslip assistant for this client instance.
+    skillNames:
+      - payslip_review
     tools:
+      - read_skill
       - payslip.summarize
 ```
+
+Client skills are source-controlled Markdown guidance documents. Release config references skill files explicitly, and file-backed skill names can be supplied in frontmatter or derived from the file/folder name:
+
+```yaml
+skillFiles:
+  - ../skills/payslip-review/SKILL.md
+tools:
+  - name: read_skill
+    enabled: true
+```
+
+The model receives only the allowed skill metadata. It calls `read_skill` to load full content when the title and description match the user task. Avoid production behavior that auto-loads every file in a `skills/` folder.
 
 Longer instructions may be moved into a separate Markdown file and referenced from YAML when that improves readability.
 

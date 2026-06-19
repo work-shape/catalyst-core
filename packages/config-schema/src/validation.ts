@@ -58,6 +58,26 @@ function assertConfigReferences(config: ClientInstanceConfig): void {
       );
     }
   }
+
+  const duplicateSkillNames = findDuplicates(config.skills.map((skill) => skill.name));
+  if (duplicateSkillNames.length > 0) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Duplicate skill definitions: ${duplicateSkillNames.join(", ")}`
+    );
+  }
+
+  const skillNames = new Set(config.skills.map((skill) => skill.name));
+  for (const agent of config.agents) {
+    for (const skillName of agent.skillNames) {
+      if (!skillNames.has(skillName)) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `Agent '${agent.name}' references missing skill '${skillName}'`
+        );
+      }
+    }
+  }
 }
 
 function assertSpendBudgetPricingCoverage(config: ClientInstanceConfig): void {
@@ -97,4 +117,16 @@ function assertSpendBudgetPricingCoverage(config: ClientInstanceConfig): void {
 
 function createPricingKey(providerId: string, model: string): string {
   return `${providerId}/${model}`;
+}
+
+function findDuplicates(values: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const value of values) {
+    if (seen.has(value)) {
+      duplicates.add(value);
+    }
+    seen.add(value);
+  }
+  return [...duplicates];
 }

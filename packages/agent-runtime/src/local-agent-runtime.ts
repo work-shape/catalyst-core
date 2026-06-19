@@ -10,6 +10,7 @@ import {
   type ConversationHistoryStore,
   type ModelProviderConfig,
   type RuntimeCallContext,
+  type SkillConfig,
   type StartAgentRunInput,
   type ToolExecution,
   type ToolExecutionResult,
@@ -48,6 +49,7 @@ export interface LocalAgentRuntimeOptions {
   toolRegistry: ToolRegistry;
   toolExecution: ToolExecution;
   usageGovernance: ModelUsageGovernance;
+  skills?: readonly SkillConfig[];
   historyMessageLimit?: number;
   maxSteps?: number;
   repeatedToolCallLimit?: number;
@@ -136,7 +138,12 @@ export class LocalAgentRuntime implements AgentRuntime {
       this.modelContextOptions(context)
     );
     const messages: ModelMessage[] = [
-      { role: "system", content: createSystemInstructions(agent.instructions, context.locale) },
+      {
+        role: "system",
+        content: createSystemInstructions(agent.instructions, context.locale, {
+          skills: this.getSkillMetadataForAgent(agent)
+        })
+      },
       ...historyMessages,
       { role: "user", content: userContent }
     ];
@@ -259,6 +266,22 @@ export class LocalAgentRuntime implements AgentRuntime {
       throw new AppError("NOT_FOUND", `Model provider '${providerId}' is not defined`);
     }
     return provider;
+  }
+
+  private getSkillMetadataForAgent(agent: AgentConfig) {
+    const skillNames = agent.skillNames ?? [];
+    if (skillNames.length === 0 || !this.options.skills || this.options.skills.length === 0) {
+      return [];
+    }
+    const skillsByName = new Map(this.options.skills.map((skill) => [skill.name, skill]));
+    return skillNames
+      .map((skillName) => skillsByName.get(skillName))
+      .filter((skill): skill is SkillConfig => Boolean(skill))
+      .map(({ name, title, description }) => ({
+        name,
+        title,
+        description
+      }));
   }
 
   private async loadModelHistory(

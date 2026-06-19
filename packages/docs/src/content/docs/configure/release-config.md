@@ -12,6 +12,7 @@ V1 does not rely on runtime mutation for agent behavior, tool availability, mode
 Release config should cover:
 
 - agents and instructions
+- client skill files and agent skill allowlists
 - tool enablement, tool parameters, and agent tool allowlists
 - model provider choices
 - supported locales and default locale
@@ -91,6 +92,42 @@ Startup validation fails when:
 - a configured tool's `config` does not match its schema
 - an agent references a disabled or missing tool
 - an enabled tool requires approval before approval resume is implemented
+
+## Client Skills
+
+Client skills are source-controlled Markdown guidance documents. Release config lists skill files explicitly, and each agent allowlists the skills it may read.
+
+```yaml
+skillFiles:
+  - ../skills/support-review/SKILL.md
+
+agents:
+  - name: support_agent
+    skillNames:
+      - support_review
+    toolNames:
+      - read_skill
+      - support.lookup_ticket
+
+tools:
+  - name: read_skill
+    enabled: true
+```
+
+Each skill file starts with YAML frontmatter:
+
+```md
+---
+title: Support Review
+description: Use when the user asks to review support case details and plan next checks.
+---
+
+# Support Review
+
+...
+```
+
+The model sees only the allowed skill name, title, and description. It calls `read_skill` to load the full Markdown body when a skill matches the task.
 
 ## UI Branding
 
