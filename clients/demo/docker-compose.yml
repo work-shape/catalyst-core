@@ -13,6 +13,13 @@ x-client-build: &client-build
   args:
     <<: *client-build-args
 
+x-watch-ignore: &watch-ignore
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/.venv/**"
+  - "**/.vite/**"
+  - "**/.astro/**"
+
 x-migrate-command: &migrate-command
   [
     "node",
@@ -82,6 +89,22 @@ services:
       CHAT_SERVER_CREDENTIAL: ${CHAT_SERVER_CREDENTIAL:-replace-with-a-server-to-server-secret}
     ports:
       - "${API_HOST_PORT:-4100}:4100"
+    develop:
+      watch:
+        - action: rebuild
+          path: ../../clients/demo
+          ignore: *watch-ignore
+        - action: rebuild
+          path: ../../packages
+          ignore: *watch-ignore
+        - action: rebuild
+          path: ../../docker
+        - action: rebuild
+          path: ../../package.json
+        - action: rebuild
+          path: ../../pnpm-lock.yaml
+        - action: rebuild
+          path: ../../pnpm-workspace.yaml
     healthcheck:
       test:
         [
@@ -104,6 +127,22 @@ services:
         condition: service_healthy
     ports:
       - "${UI_HOST_PORT:-5173}:80"
+    develop:
+      watch:
+        - action: rebuild
+          path: ../../clients/demo
+          ignore: *watch-ignore
+        - action: rebuild
+          path: ../../packages
+          ignore: *watch-ignore
+        - action: rebuild
+          path: ../../docker
+        - action: rebuild
+          path: ../../package.json
+        - action: rebuild
+          path: ../../pnpm-lock.yaml
+        - action: rebuild
+          path: ../../pnpm-workspace.yaml
 
 volumes:
   postgres-data:

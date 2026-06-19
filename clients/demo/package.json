@@ -7,7 +7,7 @@
     "build": "tsup src/server.ts src/seed-auth.ts --format esm --out-dir dist && vite build",
     "build:server": "tsup src/server.ts src/seed-auth.ts --format esm --out-dir dist",
     "build:ui": "vite build",
-    "dev": "docker compose up --build",
+    "dev": "docker compose watch",
     "dev:down": "docker compose down",
     "dev:db": "docker compose up -d postgres s3mock",
     "dev:prod": "docker compose --env-file .env.prod -f docker-compose.prod.yml up --build",
