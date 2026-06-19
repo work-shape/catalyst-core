@@ -68,15 +68,13 @@ services:
       <<: *client-build
       target: api
     depends_on:
-      migrate:
-        condition: service_completed_successfully
       postgres:
         condition: service_healthy
     environment:
       <<: *app-environment
       HOST: 0.0.0.0
       PORT: 4100
-      RUN_MIGRATIONS: "false"
+      RUN_MIGRATIONS: "true"
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://127.0.0.1:4100/api/auth}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-replace-with-at-least-32-random-characters}
