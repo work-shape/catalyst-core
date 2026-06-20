@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { MessageSquare, Trash2 } from "lucide-react";
+import { ThreadListItemMorePrimitive } from "@assistant-ui/react";
+import { MessageSquare, MoreHorizontal, Trash2 } from "lucide-react";
 import type { Conversation } from "@vivd-catalyst/api-client";
 import { useTranslation } from "./i18n";
 import { Button } from "./ui/button";
 import { cn } from "./ui/cn";
+import { Dialog } from "./ui/dialog";
 
 export function ConversationButton({
   conversation,
@@ -19,42 +21,106 @@ export function ConversationButton({
   deleting: boolean;
 }) {
   const { locale, t } = useTranslation();
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   return (
-    <div
-      data-testid="conversation-row"
-      className={cn(
-        "group/conversation grid min-w-0 grid-cols-[minmax(0,1fr)_2.25rem] items-center rounded-md border border-transparent transition-colors",
-        "hover:border-sidebar-border hover:bg-sidebar-accent/70",
-        selected && "border-primary/40 bg-sidebar-accent shadow-xs"
-      )}
-    >
-      <Button
-        className="h-auto min-w-0 justify-start gap-2 px-2 py-2 text-left text-foreground hover:bg-transparent"
-        type="button"
-        variant="ghost"
-        onClick={onSelect}
+    <>
+      <div
+        data-testid="conversation-row"
+        className={cn(
+          "group/conversation grid min-w-0 grid-cols-[minmax(0,1fr)_2.25rem] items-center rounded-md border border-transparent transition-colors",
+          "hover:border-sidebar-border hover:bg-sidebar-accent/70",
+          selected && "border-primary/40 bg-sidebar-accent shadow-xs"
+        )}
       >
-        <MessageSquare size={16} className="mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="grid min-w-0 gap-0.5">
-          <AnimatedConversationTitle title={conversation.title} />
-          <span className="truncate text-xs text-muted-foreground">
-            {formatConversationDate(conversation.updatedAt, locale, t("updatedRecently"))}
+        <Button
+          className="h-auto min-w-0 justify-start gap-2 px-2 py-2 text-left text-foreground hover:bg-transparent"
+          type="button"
+          variant="ghost"
+          onClick={onSelect}
+        >
+          <MessageSquare size={16} className="mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="grid min-w-0 gap-0.5">
+            <AnimatedConversationTitle title={conversation.title} />
+            <span className="truncate text-xs text-muted-foreground">
+              {formatConversationDate(conversation.updatedAt, locale, t("updatedRecently"))}
+            </span>
           </span>
-        </span>
-      </Button>
-      <Button
-        className="size-8 text-muted-foreground opacity-100 hover:bg-destructive/10 hover:text-destructive md:opacity-0 md:transition-opacity md:group-hover/conversation:opacity-100 md:group-focus-within/conversation:opacity-100"
-        type="button"
-        variant="ghost"
-        size="icon"
-        onClick={onDelete}
-        disabled={deleting}
-        aria-label={t("deleteConversation", { title: conversation.title })}
+        </Button>
+
+        <ThreadListItemMorePrimitive.Root>
+          <ThreadListItemMorePrimitive.Trigger
+            className={cn(
+              "inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors",
+              "hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40",
+              "opacity-100 md:opacity-0 md:group-hover/conversation:opacity-100 md:group-focus-within/conversation:opacity-100",
+              "data-[state=open]:bg-accent data-[state=open]:text-accent-foreground data-[state=open]:opacity-100"
+            )}
+            type="button"
+            disabled={deleting}
+            aria-label={t("conversationOptions", { title: conversation.title })}
+            title={t("conversationOptions", { title: conversation.title })}
+          >
+            <MoreHorizontal size={16} aria-hidden="true" />
+          </ThreadListItemMorePrimitive.Trigger>
+          <ThreadListItemMorePrimitive.Content
+            align="end"
+            sideOffset={6}
+            className="z-50 min-w-44 rounded-md border bg-popover p-1.5 text-popover-foreground shadow-lg"
+          >
+            <ThreadListItemMorePrimitive.Item
+              className={cn(
+                "flex min-h-9 cursor-default select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none transition-colors",
+                "text-destructive focus:bg-destructive/10 data-[highlighted]:bg-destructive/10 data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+              )}
+              disabled={deleting}
+              onSelect={() => setConfirmDeleteOpen(true)}
+            >
+              <Trash2 size={15} aria-hidden="true" />
+              <span>{t("deleteConversationMenuItem")}</span>
+            </ThreadListItemMorePrimitive.Item>
+          </ThreadListItemMorePrimitive.Content>
+        </ThreadListItemMorePrimitive.Root>
+      </div>
+
+      <Dialog
+        open={confirmDeleteOpen}
+        title={t("deleteConversationDialogTitle")}
+        onClose={() => {
+          if (!deleting) {
+            setConfirmDeleteOpen(false);
+          }
+        }}
       >
-        <Trash2 size={15} aria-hidden="true" />
-      </Button>
-    </div>
+        <div className="grid gap-4">
+          <p className="text-sm leading-6 text-muted-foreground">
+            {t("deleteConversationDialogDescription", { title: conversation.title })}
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmDeleteOpen(false)}
+              disabled={deleting}
+            >
+              {t("cancel")}
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              onClick={() => {
+                setConfirmDeleteOpen(false);
+                onDelete();
+              }}
+              disabled={deleting}
+            >
+              <Trash2 size={16} aria-hidden="true" />
+              {deleting ? t("deleting") : t("confirmDeleteConversation")}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    </>
   );
 }
 

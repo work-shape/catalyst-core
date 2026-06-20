@@ -14,6 +14,7 @@ import {
   type ManagedArtifactRecord,
   type ManagedFileId,
   type ManagedFileRecord,
+  type ManagedObjectDeletionResult,
   type MessageId,
   type UpdateConversationAttachmentInput,
   createPlatformId
@@ -412,6 +413,68 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
   }
 
+  async markConversationManagedObjectsDeleted(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    deletedAt: string;
+  }): Promise<ManagedObjectDeletionResult> {
+    const attachments = [...this.conversationAttachments.values()].filter(
+      (attachment) =>
+        attachment.clientInstanceId === input.clientInstanceId &&
+        attachment.conversationId === input.conversationId
+    );
+    const fileIds = [...new Set(attachments.map((attachment) => attachment.fileId))];
+    const sharedFileIds = new Set(
+      [...this.conversationAttachments.values()]
+        .filter(
+          (attachment) =>
+            attachment.clientInstanceId === input.clientInstanceId &&
+            attachment.conversationId !== input.conversationId &&
+            attachment.status !== "deleted" &&
+            fileIds.includes(attachment.fileId)
+        )
+        .map((attachment) => attachment.fileId)
+    );
+    const files = fileIds
+      .filter((fileId) => !sharedFileIds.has(fileId))
+      .map((fileId) => this.managedFiles.get(fileId))
+      .filter((file): file is ManagedFileRecord => file !== undefined);
+    const artifacts = [...this.managedArtifacts.values()].filter(
+      (artifact) =>
+        artifact.clientInstanceId === input.clientInstanceId &&
+        artifact.conversationId === input.conversationId
+    );
+
+    for (const attachment of attachments) {
+      this.conversationAttachments.set(attachment.id, {
+        ...attachment,
+        status: "deleted",
+        deletedAt: input.deletedAt,
+        updatedAt: input.deletedAt
+      });
+    }
+    for (const file of files) {
+      this.managedFiles.set(file.id, {
+        ...file,
+        status: "deleted",
+        deletedAt: input.deletedAt
+      });
+    }
+    for (const artifact of artifacts) {
+      this.managedArtifacts.set(artifact.id, {
+        ...artifact,
+        status: "deleted",
+        deletedAt: input.deletedAt
+      });
+    }
+
+    return {
+      attachmentCount: attachments.length,
+      fileObjectKeys: uniqueStrings(files.map((file) => file.objectKey)),
+      artifactObjectKeys: uniqueStrings(artifacts.map((artifact) => artifact.objectKey))
+    };
+  }
+
   deleteAttachmentsForConversation(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
@@ -490,4 +553,8 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
       }
     ).length;
   }
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
 }

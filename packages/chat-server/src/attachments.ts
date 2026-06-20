@@ -3,7 +3,8 @@ import type {
   ConversationAttachment,
   ConversationId,
   DraftAttachment,
-  ManagedFileId
+  ManagedFileId,
+  ManagedObjectDeletionResult
 } from "@vivd-catalyst/core";
 
 export interface UploadDraftAttachmentInput {
@@ -40,6 +41,10 @@ export interface ChatAttachmentService {
     conversationId: ConversationId;
     attachmentId: string;
   }): Promise<ConversationAttachment>;
+  deleteConversationAttachments(input: {
+    conversationId: ConversationId;
+    deletedAt: string;
+  }): Promise<ManagedObjectDeletionResult>;
   readConversationFile(input: ReadConversationFileInput): Promise<ReadConversationFileResult>;
   blockingDraftAttachmentMessage(attachments: readonly DraftAttachment[]): string | undefined;
   createAttachmentManifest(attachments: readonly ConversationAttachment[]): AttachmentManifest;

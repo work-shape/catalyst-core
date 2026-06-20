@@ -12,6 +12,7 @@ import {
   type ManagedArtifactRecord,
   type ManagedFileId,
   type ManagedFileRecord,
+  type ManagedObjectDeletionResult,
   type PlatformFileStore
 } from "@vivd-catalyst/core";
 import type {
@@ -66,6 +67,7 @@ export type ClientInstanceCapabilityFiles = Pick<
   | "findReadyConversationAttachmentByFile"
   | "findConversationAttachmentByFile"
   | "listManagedArtifactsForFile"
+  | "markConversationManagedObjectsDeleted"
 >;
 
 export interface ClientInstanceCapabilityContribution {
@@ -111,6 +113,10 @@ export interface ClientInstanceAttachmentHandler {
     conversationId: ConversationId;
     attachmentId: string;
   }): Promise<ConversationAttachment>;
+  deleteConversationAttachments(input: {
+    conversationId: ConversationId;
+    deletedAt: string;
+  }): Promise<ManagedObjectDeletionResult>;
   readConversationFile(input: ReadConversationFileInput): Promise<ReadConversationFileResult>;
   blockingDraftAttachmentMessage(attachments: readonly DraftAttachment[]): string | undefined;
   createAttachmentManifest(attachments: readonly ConversationAttachment[]): AttachmentManifest;
@@ -152,6 +158,7 @@ export interface ManagedObjectByteStore {
     contentType?: string;
   }): Promise<void>;
   getObject(key: string): Promise<Uint8Array>;
+  deleteObject(key: string): Promise<void>;
 }
 
 export interface ManagedObjectFileKeyInput {
@@ -232,6 +239,10 @@ export interface ManagedObjectAccess {
   createArtifact(input: CreateManagedObjectArtifactInput): Promise<ManagedArtifactRecord>;
   readFile(input: ReadManagedObjectFileInput): Promise<ManagedObjectFileRead>;
   readArtifact(input: ReadManagedObjectArtifactInput): Promise<ManagedObjectArtifactRead>;
+  deleteConversationObjects(input: {
+    conversationId: ConversationId;
+    deletedAt: string;
+  }): Promise<ManagedObjectDeletionResult>;
 }
 
 export interface CreateManagedObjectAccessInput {
@@ -362,6 +373,23 @@ class DefaultManagedObjectAccess implements ManagedObjectAccess {
       bytes: await this.byteStore.getObject(record.objectKey),
       mimeType: record.mimeType
     };
+  }
+
+  async deleteConversationObjects(input: {
+    conversationId: ConversationId;
+    deletedAt: string;
+  }): Promise<ManagedObjectDeletionResult> {
+    const deletion = await this.files.markConversationManagedObjectsDeleted({
+      clientInstanceId: this.clientInstanceId,
+      conversationId: input.conversationId,
+      deletedAt: input.deletedAt
+    });
+    await Promise.all(
+      [...deletion.artifactObjectKeys, ...deletion.fileObjectKeys].map((objectKey) =>
+        this.byteStore.deleteObject(objectKey)
+      )
+    );
+    return deletion;
   }
 }
 

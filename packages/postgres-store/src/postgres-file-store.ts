@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNull, ne, sql as drizzleSql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, sql as drizzleSql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import {
   AppError,
@@ -16,6 +16,7 @@ import {
   type ManagedArtifactRecord,
   type ManagedFileId,
   type ManagedFileRecord,
+  type ManagedObjectDeletionResult,
   type MessageId,
   type UpdateConversationAttachmentInput,
   createPlatformId
@@ -543,4 +544,110 @@ class PostgresPlatformFileStore implements PlatformFileStore {
       .limit(1);
     return row ? mapConversationAttachment(row) : undefined;
   }
+
+  async markConversationManagedObjectsDeleted(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    deletedAt: string;
+  }): Promise<ManagedObjectDeletionResult> {
+    const deletedAt = new Date(input.deletedAt);
+    return this.db.transaction(async (tx) => {
+      const attachmentRows = await tx
+        .select()
+        .from(conversationAttachments)
+        .where(
+          and(
+            eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
+            eq(conversationAttachments.conversationId, input.conversationId)
+          )
+        );
+      const fileIds = [...new Set(attachmentRows.map((attachment) => attachment.fileId))];
+
+      const artifactRows = await tx
+        .select()
+        .from(managedArtifacts)
+        .where(
+          and(
+            eq(managedArtifacts.clientInstanceId, input.clientInstanceId),
+            eq(managedArtifacts.conversationId, input.conversationId)
+          )
+        );
+
+      let fileRows: Array<typeof managedFiles.$inferSelect> = [];
+      if (fileIds.length > 0) {
+        const sharedAttachmentRows = await tx
+          .select({ fileId: conversationAttachments.fileId })
+          .from(conversationAttachments)
+          .where(
+            and(
+              eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
+              inArray(conversationAttachments.fileId, fileIds),
+              ne(conversationAttachments.conversationId, input.conversationId),
+              ne(conversationAttachments.status, "deleted")
+            )
+          );
+        const sharedFileIds = new Set(sharedAttachmentRows.map((attachment) => attachment.fileId));
+        const deletableFileIds = fileIds.filter((fileId) => !sharedFileIds.has(fileId));
+        if (deletableFileIds.length > 0) {
+          fileRows = await tx
+            .select()
+            .from(managedFiles)
+            .where(
+              and(
+                eq(managedFiles.clientInstanceId, input.clientInstanceId),
+                inArray(managedFiles.id, deletableFileIds)
+              )
+            );
+          await tx
+            .update(managedFiles)
+            .set({
+              status: "deleted",
+              deletedAt
+            })
+            .where(
+              and(
+                eq(managedFiles.clientInstanceId, input.clientInstanceId),
+                inArray(managedFiles.id, deletableFileIds)
+              )
+            );
+        }
+      }
+
+      await tx
+        .update(conversationAttachments)
+        .set({
+          status: "deleted",
+          deletedAt,
+          updatedAt: deletedAt
+        })
+        .where(
+          and(
+            eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
+            eq(conversationAttachments.conversationId, input.conversationId)
+          )
+        );
+      await tx
+        .update(managedArtifacts)
+        .set({
+          status: "deleted",
+          deletedAt
+        })
+        .where(
+          and(
+            eq(managedArtifacts.clientInstanceId, input.clientInstanceId),
+            eq(managedArtifacts.conversationId, input.conversationId)
+          )
+        );
+
+      return {
+        attachmentCount: attachmentRows.length,
+        fileObjectKeys: uniqueStrings(fileRows.map((file) => file.objectKey)),
+        artifactObjectKeys: uniqueStrings(artifactRows.map((artifact) => artifact.objectKey))
+      };
+    });
+  }
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
 }

@@ -38,6 +38,12 @@ export interface ManagedArtifactRef {
   metadata?: JsonObject;
 }
 
+export interface ManagedObjectDeletionResult {
+  attachmentCount: number;
+  fileObjectKeys: string[];
+  artifactObjectKeys: string[];
+}
+
 export type ToolDisplayMode = "inline" | "side_panel" | "fullscreen";
 
 export type ToolDisplayOutput = JsonObject & {
@@ -303,6 +309,11 @@ export interface ConversationAttachmentStore {
     conversationId: ConversationId;
     fileId: ManagedFileId;
   }): Promise<ConversationAttachment | undefined>;
+  markConversationManagedObjectsDeleted(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    deletedAt: ISODateString;
+  }): Promise<ManagedObjectDeletionResult>;
 }
 
 export interface PlatformFileStore

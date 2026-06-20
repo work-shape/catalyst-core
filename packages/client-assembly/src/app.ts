@@ -282,6 +282,16 @@ function createCompositeAttachmentService(
     async deleteDraftAttachment(input) {
       return tryAttachmentHandlers(handlers, (handler) => handler.deleteDraftAttachment(input), input.attachmentId);
     },
+    async deleteConversationAttachments(input) {
+      const deletions = await Promise.all(
+        handlers.map((handler) => handler.deleteConversationAttachments(input))
+      );
+      return {
+        attachmentCount: deletions.reduce((count, deletion) => count + deletion.attachmentCount, 0),
+        fileObjectKeys: uniqueStrings(deletions.flatMap((deletion) => deletion.fileObjectKeys)),
+        artifactObjectKeys: uniqueStrings(deletions.flatMap((deletion) => deletion.artifactObjectKeys))
+      };
+    },
     async readConversationFile(input) {
       return tryAttachmentHandlers(handlers, (handler) => handler.readConversationFile(input), input.fileId);
     },
@@ -360,6 +370,10 @@ async function tryManagedObjectReaders<T>(
 
 function uniqueById<T extends { id: string }>(records: T[]): T[] {
   return [...new Map(records.map((record) => [record.id, record])).values()];
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
 }
 
 function uniqueManifestEntries<T extends { kind: string; attachmentId: string }>(entries: T[]): T[] {

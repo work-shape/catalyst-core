@@ -185,18 +185,27 @@ test("conversation rail deletes a conversation", async ({ page }) => {
   await expect(targetConversation).toHaveCount(1);
 
   const conversationCountBefore = await conversations.count();
-  const deleteButton = targetConversation.getByRole("button", {
-    name: `Delete conversation ${title}`,
+  const optionsButton = targetConversation.getByRole("button", {
+    name: `Conversation options for ${title}`,
     exact: true
   });
-  await expect(deleteButton).toBeVisible();
+  await expect(optionsButton).toBeVisible();
+  await optionsButton.click();
+  await page.getByRole("menuitem", { name: "Delete conversation", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Delete conversation?", exact: true })).toBeVisible();
+  expect(deleteConversationRequests).toBe(0);
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Delete conversation?", exact: true })).toHaveCount(0);
+
+  await optionsButton.click();
+  await page.getByRole("menuitem", { name: "Delete conversation", exact: true }).click();
   await Promise.all([
     page.waitForResponse(
       (response) =>
         response.request().method() === "DELETE" &&
         /^\/api\/conversations\/[^/]+$/u.test(new URL(response.url()).pathname)
     ),
-    deleteButton.click()
+    page.getByRole("button", { name: "Delete", exact: true }).click()
   ]);
 
   expect(deleteConversationRequests).toBe(1);

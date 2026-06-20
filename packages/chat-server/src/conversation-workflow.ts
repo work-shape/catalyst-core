@@ -327,17 +327,31 @@ export class ConversationWorkflow {
       throw new AppError("FORBIDDEN", "User conversation deletion is disabled for this client instance");
     }
     await this.requireOwnedActiveConversation(conversationId, user);
+    const deletedAt = new Date().toISOString();
+    const attachmentDeletion = this.options.attachments
+      ? await this.options.attachments.deleteConversationAttachments({
+          conversationId,
+          deletedAt
+        })
+      : undefined;
     const deleted = await this.options.conversationStore.deleteConversation({
       clientInstanceId: this.options.clientInstanceId,
       conversationId,
-      deletedAt: new Date().toISOString()
+      deletedAt
     });
     await this.options.auditRecorder.record({
       type: "conversation.deleted",
       status: "success",
       actor: auditActorFromUser(user),
       subject: deleted.id,
-      correlationId: context.correlationId
+      correlationId: context.correlationId,
+      metadata: attachmentDeletion
+        ? {
+            attachmentCount: attachmentDeletion.attachmentCount,
+            fileCount: attachmentDeletion.fileObjectKeys.length,
+            artifactCount: attachmentDeletion.artifactObjectKeys.length
+          }
+        : undefined
     });
     return deleted;
   }

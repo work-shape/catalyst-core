@@ -720,6 +720,12 @@ export class PostgresPlatformStore
     return this.fileStore.findConversationAttachmentByFile(input);
   }
 
+  async markConversationManagedObjectsDeleted(
+    input: Parameters<PlatformFileStore["markConversationManagedObjectsDeleted"]>[0]
+  ) {
+    return this.fileStore.markConversationManagedObjectsDeleted(input);
+  }
+
   async deleteConversation(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;

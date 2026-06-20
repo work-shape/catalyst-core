@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import { Button } from "./button";
 import { cn } from "./cn";
 
@@ -17,6 +17,7 @@ export function Dialog({
   className?: string;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -33,6 +34,7 @@ export function Dialog({
   return (
     <dialog
       ref={dialogRef}
+      aria-labelledby={titleId}
       className={cn(
         "m-auto w-[min(36rem,calc(100vw-2rem))] rounded-lg border bg-card p-0 text-card-foreground shadow-lg backdrop:bg-black/45",
         className
@@ -45,7 +47,7 @@ export function Dialog({
       }}
     >
       <div className="flex items-center justify-between gap-3 border-b px-5 py-3">
-        <h2 className="text-sm font-semibold">{title}</h2>
+        <h2 id={titleId} className="text-sm font-semibold">{title}</h2>
         <Button
           type="button"
           size="icon"
