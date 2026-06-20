@@ -132,6 +132,101 @@ describe("local agent runtime", () => {
     ]);
   });
 
+  it("resolves the configured model binding for an agent run", async () => {
+    const clientInstanceId = asClientInstanceId("binding-client");
+    const context: RuntimeCallContext = {
+      clientInstanceId,
+      correlationId: "corr-binding",
+      user: {
+        id: "user-1",
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const store = new InMemoryPlatformStore();
+    const conversationId = await createConversationWithMessages(store, {
+      clientInstanceId,
+      messages: []
+    });
+    const providerConfig: ModelProviderConfig = {
+      id: "test-provider",
+      type: "deterministic",
+      model: "provider-default"
+    };
+    let providerRequest: Parameters<ModelProvider["complete"]>[0] | undefined;
+    const modelProvider: ModelProvider = {
+      id: "test-provider",
+      async complete(request) {
+        providerRequest = request;
+        return {
+          text: "Bound model response.",
+          toolCalls: [],
+          usage: noReportedUsage()
+        };
+      }
+    };
+    const runtime = new LocalAgentRuntime({
+      agents: [
+        {
+          name: "binding_agent",
+          displayName: "Binding Agent",
+          instructions: "Use the configured model binding.",
+          modelBindingId: "primaryReasoning",
+          toolNames: [],
+          initialPrompts: []
+        }
+      ],
+      modelProviders: [providerConfig],
+      modelBindings: [
+        {
+          id: "primaryReasoning",
+          providerId: "test-provider",
+          model: "bound-model",
+          reasoningEffort: "high"
+        }
+      ],
+      defaultModelProvider: providerConfig,
+      conversationHistory: store,
+      modelProvider,
+      toolRegistry: new ToolRegistry({ tools: [] }),
+      toolExecution: createUnusedToolExecution(),
+      usageGovernance: new ModelUsageGovernance({
+        store,
+        budget: {
+          costSafetyMultiplier: 1
+        },
+        safeguards: {}
+      })
+    });
+
+    const run = await runtime.start(
+      {
+        agentName: "binding_agent",
+        conversationId,
+        message: {
+          text: "Use the bound model."
+        }
+      },
+      context
+    );
+
+    for await (const event of runtime.observe(run.runId, context)) {
+      if (event.type === "message_completed") {
+        break;
+      }
+    }
+
+    expect(providerRequest).toMatchObject({
+      providerId: "test-provider",
+      model: "bound-model",
+      reasoningEffort: "high"
+    });
+  });
+
   it("loads complete tool-call history by default before a follow-up turn", async () => {
     const clientInstanceId = asClientInstanceId("tool-history-client");
     const context: RuntimeCallContext = {

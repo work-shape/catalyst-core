@@ -11,6 +11,15 @@ export interface DeterministicModelProviderConfig {
   model: string;
 }
 
+export type ModelProviderAuthModeConfig = "bearer" | "api-key";
+export type ModelProviderResidencyConfig = "global" | "eu" | "unknown";
+
+export interface ModelProviderComplianceConfig {
+  residency?: ModelProviderResidencyConfig;
+  productionApproved?: boolean;
+  notes?: string;
+}
+
 export interface OpenAiCompatibleModelProviderConfig {
   id: string;
   type: "openai-compatible";
@@ -18,8 +27,10 @@ export interface OpenAiCompatibleModelProviderConfig {
   model: string;
   baseUrl: string;
   apiKeyEnvName: string;
+  authMode?: ModelProviderAuthModeConfig;
   organizationEnvName?: string;
   reasoningEffort?: ReasoningEffortConfig;
+  compliance?: ModelProviderComplianceConfig;
 }
 
 export type ModelProviderConfig =
@@ -29,12 +40,20 @@ export type ModelProviderConfig =
 export type OpenAiCompatibleModelProviderApiConfig = "chat_completions" | "responses";
 export type ReasoningEffortConfig = "none" | "low" | "medium" | "high" | "xhigh";
 
+export interface ModelBindingConfig {
+  id: string;
+  providerId: string;
+  model?: string;
+  reasoningEffort?: ReasoningEffortConfig;
+}
+
 export interface AgentConfig {
   name: string;
   displayName: LocalizedStringConfig;
   welcomeMessage?: LocalizedStringConfig;
   instructions: string;
   modelProviderId?: string;
+  modelBindingId?: string;
   maxSteps?: number;
   toolNames: string[];
   skillNames: string[];

@@ -6,6 +6,7 @@ import type {
   LocalizationConfig,
   AgentRuntimeConfig,
   ModelContextConfig,
+  ModelBindingConfig,
   ModelProviderConfig,
   SkillConfig,
   UsageBudgetConfig,
@@ -64,6 +65,12 @@ const deterministicModelProviderSchema = z.object({
   model: z.string().min(1).default("deterministic-local")
 });
 
+const modelProviderComplianceSchema = z.object({
+  residency: z.enum(["global", "eu", "unknown"]).optional(),
+  productionApproved: z.boolean().optional(),
+  notes: z.string().min(1).optional()
+});
+
 const openAiCompatibleModelProviderSchema = z.object({
   id: z.string().min(1),
   type: z.literal("openai-compatible"),
@@ -71,8 +78,10 @@ const openAiCompatibleModelProviderSchema = z.object({
   model: z.string().min(1),
   baseUrl: z.string().url().default("https://api.openai.com/v1"),
   apiKeyEnvName: z.string().min(1).default("OPENAI_API_KEY"),
+  authMode: z.enum(["bearer", "api-key"]).default("bearer"),
   organizationEnvName: z.string().min(1).optional(),
-  reasoningEffort: z.enum(["none", "low", "medium", "high", "xhigh"]).optional()
+  reasoningEffort: z.enum(["none", "low", "medium", "high", "xhigh"]).optional(),
+  compliance: modelProviderComplianceSchema.optional()
 });
 
 const toolInstanceConfigSchema = z.object({
@@ -139,12 +148,20 @@ export const modelProviderConfigSchema = z.discriminatedUnion("type", [
   openAiCompatibleModelProviderSchema
 ]);
 
+export const modelBindingConfigSchema = z.object({
+  id: z.string().min(1),
+  providerId: z.string().min(1),
+  model: z.string().min(1).optional(),
+  reasoningEffort: z.enum(["none", "low", "medium", "high", "xhigh"]).optional()
+});
+
 export const agentConfigSchema = z.object({
   name: z.string().min(1),
   displayName: localizedStringSchema,
   welcomeMessage: localizedStringSchema.optional(),
   instructions: z.string().min(1),
   modelProviderId: z.string().min(1).optional(),
+  modelBindingId: z.string().min(1).optional(),
   maxSteps: z.number().int().positive().optional(),
   toolNames: z.array(z.string().min(1)).default([]),
   skillNames: z.array(skillNameSchema).default([]),
@@ -198,6 +215,7 @@ export const conversationTitleConfigSchema = z
   .object({
     enabled: z.boolean().default(true),
     modelProviderId: z.string().min(1).optional(),
+    modelBindingId: z.string().min(1).optional(),
     model: z.string().min(1).optional()
   })
   .default({
@@ -297,7 +315,7 @@ export const clientInstanceConfigSchema = z.object({
   clientInstance: z.object({
     id: z.string().min(1),
     displayName: z.string().min(1),
-    environment: z.enum(["development", "production"]).default("development")
+    environment: z.enum(["development", "staging", "production"]).default("development")
   }),
   auth: z
     .object({
@@ -337,6 +355,7 @@ export const clientInstanceConfigSchema = z.object({
     .array(modelProviderConfigSchema)
     .min(1)
     .default([{ id: "local", type: "deterministic", model: "deterministic-local" }]),
+  modelBindings: z.array(modelBindingConfigSchema).default([]),
   localization: localizationConfigSchema,
   conversationTitles: conversationTitleConfigSchema,
   runtime: agentRuntimeConfigSchema,
@@ -390,6 +409,7 @@ export type {
   DataSourceConfig,
   CapabilityConfigMap,
   LocalizationConfig,
+  ModelBindingConfig,
   ModelProviderConfig,
   SkillConfig,
   UsageBudgetConfig,

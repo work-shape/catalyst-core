@@ -9,7 +9,9 @@ import {
   type ChatMessage,
   type Clock,
   type ConversationHistoryStore,
+  type ModelBindingConfig,
   type ModelProviderConfig,
+  type ReasoningEffortConfig,
   type RuntimeCallContext,
   type SkillConfig,
   type StartAgentRunInput,
@@ -45,6 +47,7 @@ import {
 export interface LocalAgentRuntimeOptions {
   agents: AgentConfig[];
   modelProviders: ModelProviderConfig[];
+  modelBindings?: readonly ModelBindingConfig[];
   defaultModelProvider: ModelProviderConfig;
   conversationHistory: ConversationHistoryStore;
   modelProvider: ModelProvider;
@@ -132,7 +135,7 @@ export class LocalAgentRuntime implements AgentRuntime {
   ): Promise<void> {
     const state = this.getRun(runId);
     const agent = this.getAgentConfig(input.agentName);
-    const provider = this.getModelProviderForAgent(agent);
+    const modelSelection = this.getModelSelectionForAgent(agent);
     const tools = this.options.toolRegistry.listDescriptorsForAgent(agent.toolNames);
     const historyMessages = await this.loadModelHistory(input, context);
     const userContent = await createSubmittedUserMessageContent(
@@ -161,8 +164,9 @@ export class LocalAgentRuntime implements AgentRuntime {
         async () => {
           const modelResult = await this.completeWithProvider(
             {
-              providerId: provider.id,
-              model: provider.model,
+              providerId: modelSelection.provider.id,
+              model: modelSelection.model,
+              reasoningEffort: modelSelection.reasoningEffort,
               messages,
               tools
             },
@@ -175,7 +179,8 @@ export class LocalAgentRuntime implements AgentRuntime {
             runId,
             startInput: input,
             context,
-            provider,
+            provider: modelSelection.provider,
+            model: modelSelection.model,
             completion: modelResult.completion
           });
           return modelResult;
@@ -263,8 +268,37 @@ export class LocalAgentRuntime implements AgentRuntime {
     return agent;
   }
 
-  private getModelProviderForAgent(agent: AgentConfig): ModelProviderConfig {
-    const providerId = agent.modelProviderId ?? this.options.defaultModelProvider.id;
+  private getModelSelectionForAgent(agent: AgentConfig): {
+    provider: ModelProviderConfig;
+    model: string;
+    reasoningEffort?: ReasoningEffortConfig;
+  } {
+    if (agent.modelBindingId) {
+      const binding = this.options.modelBindings?.find(
+        (candidate) => candidate.id === agent.modelBindingId
+      );
+      if (!binding) {
+        throw new AppError("NOT_FOUND", `Model binding '${agent.modelBindingId}' is not defined`);
+      }
+      const provider = this.getModelProvider(binding.providerId);
+      return {
+        provider,
+        model: binding.model ?? provider.model,
+        reasoningEffort:
+          binding.reasoningEffort ??
+          (provider.type === "openai-compatible" ? provider.reasoningEffort : undefined)
+      };
+    }
+
+    const provider = this.getModelProvider(agent.modelProviderId ?? this.options.defaultModelProvider.id);
+    return {
+      provider,
+      model: provider.model,
+      reasoningEffort: provider.type === "openai-compatible" ? provider.reasoningEffort : undefined
+    };
+  }
+
+  private getModelProvider(providerId: string): ModelProviderConfig {
     const provider = this.options.modelProviders.find((candidate) => candidate.id === providerId);
     if (!provider) {
       throw new AppError("NOT_FOUND", `Model provider '${providerId}' is not defined`);

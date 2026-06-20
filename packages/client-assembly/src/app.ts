@@ -141,6 +141,7 @@ export async function createClientInstanceApp(
   const agentRuntime = new LocalAgentRuntime({
     agents: config.agents,
     modelProviders: config.modelProviders,
+    modelBindings: config.modelBindings,
     defaultModelProvider,
     conversationHistory: store,
     modelProvider,

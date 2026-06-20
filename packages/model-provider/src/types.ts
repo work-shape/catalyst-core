@@ -1,6 +1,7 @@
 import type {
   JsonObject,
   ModelTokenUsage,
+  ReasoningEffortConfig,
   RuntimeCallContext,
   SupportedImageMimeType
 } from "@vivd-catalyst/core";
@@ -49,6 +50,7 @@ export type ModelMessage =
 export interface ModelCompletionRequest {
   providerId: string;
   model: string;
+  reasoningEffort?: ReasoningEffortConfig;
   messages: ModelMessage[];
   tools: ModelTool[];
 }

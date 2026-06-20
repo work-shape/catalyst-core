@@ -14,7 +14,7 @@ import {
   createPlatformId,
   isAppError
 } from "@vivd-catalyst/core";
-import { getModelProviderForConversationTitles } from "@vivd-catalyst/config-schema";
+import { getModelSelectionForConversationTitles } from "@vivd-catalyst/config-schema";
 import type { ModelMessage } from "@vivd-catalyst/model-provider";
 import { createEmptyAttachmentManifest } from "./attachments";
 import {
@@ -222,8 +222,7 @@ export class ConversationWorkflow {
       return undefined;
     }
 
-    const provider = getModelProviderForConversationTitles(this.options.config);
-    const model = this.options.config.conversationTitles.model ?? provider.model;
+    const modelSelection = getModelSelectionForConversationTitles(this.options.config);
     const runId = createPlatformId<"AgentRunId">("run");
 
     try {
@@ -232,8 +231,9 @@ export class ConversationWorkflow {
         async () => {
           const result = await this.options.modelProvider.complete(
             {
-              providerId: provider.id,
-              model,
+              providerId: modelSelection.provider.id,
+              model: modelSelection.model,
+              reasoningEffort: modelSelection.reasoningEffort,
               messages: createTitlePrompt(firstUserMessage),
               tools: []
             },
@@ -244,8 +244,8 @@ export class ConversationWorkflow {
             conversationId,
             agentRunId: runId,
             agentName: CONVERSATION_TITLE_AGENT_NAME,
-            providerId: provider.id,
-            model,
+            providerId: modelSelection.provider.id,
+            model: modelSelection.model,
             correlationId: context.correlationId,
             ...result.usage
           });
@@ -271,8 +271,8 @@ export class ConversationWorkflow {
         correlationId: context.correlationId,
         metadata: {
           runId,
-          providerId: provider.id,
-          model,
+          providerId: modelSelection.provider.id,
+          model: modelSelection.model,
           previousTitleLength: conversation.title.length,
           generatedTitleLength: title.length
         }
@@ -287,8 +287,8 @@ export class ConversationWorkflow {
         correlationId: context.correlationId,
         metadata: {
           runId,
-          providerId: provider.id,
-          model,
+          providerId: modelSelection.provider.id,
+          model: modelSelection.model,
           ...toAuditErrorMetadata(error)
         }
       });

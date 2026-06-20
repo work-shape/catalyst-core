@@ -27,6 +27,7 @@ export function createModelProviderRegistry(input: {
         model: config.model,
         baseUrl: config.baseUrl,
         apiKey,
+        authMode: config.authMode,
         organization: config.organizationEnvName ? input.env[config.organizationEnvName] : undefined,
         reasoningEffort: config.reasoningEffort
       });

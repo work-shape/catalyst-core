@@ -1,5 +1,6 @@
 import {
   AppError,
+  type ModelProviderAuthModeConfig,
   type OpenAiCompatibleModelProviderApiConfig,
   type ReasoningEffortConfig,
   type RuntimeCallContext
@@ -39,6 +40,7 @@ export interface OpenAiCompatibleChatProviderOptions {
   model: string;
   baseUrl: string;
   apiKey: string;
+  authMode?: ModelProviderAuthModeConfig;
   organization?: string;
   reasoningEffort?: ReasoningEffortConfig;
 }
@@ -210,11 +212,23 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
   }
 
   private createHeaders(): Record<string, string> {
-    return {
-      "content-type": "application/json",
-      authorization: `Bearer ${this.options.apiKey}`,
-      ...(this.options.organization ? { "openai-organization": this.options.organization } : {})
+    const headers: Record<string, string> = {
+      "content-type": "application/json"
     };
+    if ((this.options.authMode ?? "bearer") === "api-key") {
+      headers["api-key"] = this.options.apiKey;
+    } else {
+      headers.authorization = `Bearer ${this.options.apiKey}`;
+    }
+    if (this.options.organization) {
+      headers["openai-organization"] = this.options.organization;
+    }
+    return headers;
+  }
+
+  private resolveReasoningEffort(request: ModelCompletionRequest): ReasoningEffortConfig | undefined {
+    const reasoningEffort = request.reasoningEffort ?? this.options.reasoningEffort;
+    return reasoningEffort === "none" ? undefined : reasoningEffort;
   }
 
   private createChatCompletionsRequestBody(
@@ -224,7 +238,7 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     return {
       model: request.model || this.options.model,
       messages: toOpenAiChatMessages(request.messages),
-      reasoning_effort: this.options.reasoningEffort,
+      reasoning_effort: this.resolveReasoningEffort(request),
       tools: providerTools.map(({ tool, providerName }) => ({
         type: "function",
         function: {
@@ -245,16 +259,15 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     providerTools: OpenAiCompatibleProviderTool[]
   ): OpenAiResponsesRequestBody {
     const model = request.model || this.options.model;
+    const reasoningEffort = this.resolveReasoningEffort(request);
     return {
       model,
       input: toOpenAiResponsesInput(request.messages),
-      ...(this.options.reasoningEffort
+      ...(reasoningEffort
         ? {
             reasoning: {
-              effort: this.options.reasoningEffort,
-              ...(this.options.reasoningEffort !== "none" && shouldRequestReasoningSummary(model)
-                ? { summary: "auto" as const }
-                : {})
+              effort: reasoningEffort,
+              ...(shouldRequestReasoningSummary(model) ? { summary: "auto" as const } : {})
             }
           }
         : {}),

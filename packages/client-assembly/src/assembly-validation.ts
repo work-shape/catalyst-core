@@ -36,6 +36,23 @@ function findDuplicateToolImplementations(tools: AnyToolDefinition[]): string[] 
 function findModelProviderReferenceIssues(config: ClientInstanceConfig): string[] {
   const issues: string[] = [];
   const configuredProviderIds = new Set(config.modelProviders.map((provider) => provider.id));
+  const configuredModelBindingIds = new Set(config.modelBindings.map((binding) => binding.id));
+
+  for (const binding of config.modelBindings) {
+    if (!configuredProviderIds.has(binding.providerId)) {
+      issues.push(
+        `Model binding '${binding.id}' references model provider '${binding.providerId}' that is missing from release config`
+      );
+    }
+  }
+
+  if (
+    config.conversationTitles.enabled &&
+    config.conversationTitles.modelProviderId &&
+    config.conversationTitles.modelBindingId
+  ) {
+    issues.push("Conversation title generation must use either modelProviderId or modelBindingId, not both");
+  }
 
   if (
     config.conversationTitles.enabled &&
@@ -47,10 +64,28 @@ function findModelProviderReferenceIssues(config: ClientInstanceConfig): string[
     );
   }
 
+  if (
+    config.conversationTitles.enabled &&
+    config.conversationTitles.modelBindingId &&
+    !configuredModelBindingIds.has(config.conversationTitles.modelBindingId)
+  ) {
+    issues.push(
+      `Conversation title generation references model binding '${config.conversationTitles.modelBindingId}' that is missing from release config`
+    );
+  }
+
   for (const agent of config.agents) {
+    if (agent.modelProviderId && agent.modelBindingId) {
+      issues.push(`Agent '${agent.name}' must use either modelProviderId or modelBindingId, not both`);
+    }
     if (agent.modelProviderId && !configuredProviderIds.has(agent.modelProviderId)) {
       issues.push(
         `Agent '${agent.name}' references model provider '${agent.modelProviderId}' that is missing from release config`
+      );
+    }
+    if (agent.modelBindingId && !configuredModelBindingIds.has(agent.modelBindingId)) {
+      issues.push(
+        `Agent '${agent.name}' references model binding '${agent.modelBindingId}' that is missing from release config`
       );
     }
   }

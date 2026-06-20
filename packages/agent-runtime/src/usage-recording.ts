@@ -13,6 +13,7 @@ export async function recordModelUsage(input: {
   startInput: StartAgentRunInput;
   context: RuntimeCallContext;
   provider: ModelProviderConfig;
+  model: string;
   completion: ModelCompletion;
 }): Promise<void> {
   await input.usageStore.appendModelUsageEvent({
@@ -21,7 +22,7 @@ export async function recordModelUsage(input: {
     agentRunId: input.runId,
     agentName: input.startInput.agentName,
     providerId: input.provider.id,
-    model: input.provider.model,
+    model: input.model,
     correlationId: input.context.correlationId,
     ...input.completion.usage
   });
