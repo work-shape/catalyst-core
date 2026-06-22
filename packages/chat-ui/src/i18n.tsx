@@ -158,7 +158,7 @@ const translations = {
     structuredOutput: "Strukturierte Ausgabe: {name}",
     switchToDarkTheme: "Zum dunklen Design wechseln",
     switchToLightTheme: "Zum hellen Design wechseln",
-    thinking: "Denkt nach",
+    thinking: "Denke nach",
     toolCallCount: "{count} Tool-Aufrufe",
     toolCallCountSingular: "1 Tool-Aufruf",
     toolCompleted: "Abgeschlossen",

@@ -53,7 +53,7 @@ function AssistantMessage() {
       data-role="assistant"
     >
       <div className="min-w-0 rounded-md px-1 py-1 text-sm leading-6">
-        <MessagePrimitive.GroupedParts groupBy={assistantMessageGroupBy} indicator="always">
+        <MessagePrimitive.GroupedParts groupBy={assistantMessageGroupBy} indicator="no-text">
           {({ part, children }) => {
             switch (part.type) {
               case "group-work":
@@ -141,10 +141,17 @@ function UserTextPart() {
 }
 
 function AssistantTextPart() {
-  const isRunning = useAuiState((state) => state.part.status.type === "running");
+  const showCursor = useAuiState((state) => {
+    if (state.part.type !== "text" || state.part.status.type !== "running" || state.part.text.trim().length === 0) {
+      return false;
+    }
+
+    const lastPart = state.message.parts.at(-1);
+    return lastPart?.type === "text" && lastPart.text === state.part.text && lastPart.status.type === "running";
+  });
 
   return (
-    <div className={cn("chat-assistant-text max-w-3xl", isRunning && "chat-assistant-text-running")}>
+    <div className={cn("chat-assistant-text max-w-3xl", showCursor && "chat-assistant-text-running")}>
       <MarkdownText />
     </div>
   );
@@ -171,9 +178,8 @@ function AssistantReasoningPart() {
   }
 
   return (
-    <div className="my-1 flex min-h-6 items-center gap-2 text-sm text-muted-foreground" role="status" aria-live="polite">
-      <span aria-hidden="true" className="chat-assistant-cursor-dot size-1.5" />
-      <span className="leading-6">{t("thinking")}</span>
+    <div className="my-1 flex min-h-6 items-center text-sm" role="status" aria-live="polite">
+      <span className="chat-reasoning-status leading-6">{t("thinking")}</span>
     </div>
   );
 }
