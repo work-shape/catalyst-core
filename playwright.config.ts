@@ -27,7 +27,8 @@ export default defineConfig({
       timeout: 60_000
     },
     {
-      command: "pnpm --filter @vivd-catalyst/demo preview:ui --host 127.0.0.1 --port 5273",
+      command:
+        "VITE_CHAT_API_PORT=4210 pnpm --filter @vivd-catalyst/demo build:ui && pnpm --filter @vivd-catalyst/demo preview:ui --host 127.0.0.1 --port 5273",
       url: "http://127.0.0.1:5273",
       reuseExistingServer: false,
       timeout: 30_000

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PanelLeft } from "lucide-react";
 import {
-  ApiError,
   createApiClient,
   type AdministeredUserIdentity,
   type ChangeCurrentUserPasswordRequest,
@@ -153,7 +152,7 @@ export function ChatWorkspace({
       void queryClient.invalidateQueries({ queryKey: ["conversations", apiBaseUrl, authScope] });
     },
     onError: (error) => {
-      setNotice(error instanceof ApiError ? error.message : "Delete failed");
+      setNotice(apiErrorMessage(error, "Delete failed"));
     }
   });
 
@@ -563,7 +562,7 @@ export function ChatWorkspace({
     setNotice(undefined);
   }
 
-  if (meQuery.error instanceof ApiError && meQuery.error.status === 401) {
+  if (apiErrorStatus(meQuery.error) === 401) {
     return (
       <TranslationProvider locale={activeLocale}>
         <LoginPanel
@@ -585,7 +584,7 @@ export function ChatWorkspace({
       <TranslationProvider locale={activeLocale}>
         <SessionCheckPanel
           className={className}
-          error={meQuery.error instanceof ApiError ? meQuery.error.message : undefined}
+          error={meQuery.error ? apiErrorMessage(meQuery.error, undefined) : undefined}
         />
       </TranslationProvider>
     );
@@ -651,12 +650,12 @@ export function ChatWorkspace({
           loading: usageQuery.isLoading || auditQuery.isLoading,
           usersLoading: usersQuery.isLoading,
           error:
-            usageQuery.error instanceof ApiError
-              ? usageQuery.error.message
-              : auditQuery.error instanceof ApiError
-                ? auditQuery.error.message
+            usageQuery.error
+              ? apiErrorMessage(usageQuery.error, undefined)
+              : auditQuery.error
+                ? apiErrorMessage(auditQuery.error, undefined)
                 : undefined,
-          usersError: usersQuery.error instanceof ApiError ? usersQuery.error.message : undefined,
+          usersError: usersQuery.error ? apiErrorMessage(usersQuery.error, undefined) : undefined,
           usersMutating:
             createUser.isPending ||
             updateUser.isPending ||
@@ -853,6 +852,27 @@ function isAssistantFinalMessage(message: Message): boolean {
     "kind" in runtime &&
     runtime.kind === "assistant_final"
   );
+}
+
+function apiErrorStatus(error: unknown): number | undefined {
+  if (!error || typeof error !== "object" || Array.isArray(error) || !("status" in error)) {
+    return undefined;
+  }
+  const status = (error as { status?: unknown }).status;
+  return typeof status === "number" ? status : undefined;
+}
+
+function apiErrorMessage(error: unknown, fallback: string | undefined): string | undefined {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  if (error && typeof error === "object" && !Array.isArray(error) && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message) {
+      return message;
+    }
+  }
+  return fallback;
 }
 
 function readStoredThemeMode(): ResolvedThemeMode | undefined {

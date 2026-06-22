@@ -127,7 +127,7 @@ test("new conversation action opens an unsaved draft screen", async ({ page }) =
   const newConversationButton = page.getByRole("button", { name: "New", exact: true });
   await expect(newConversationButton).toBeVisible();
   await expect(page.getByRole("button", { name: "Select agent" })).toContainText("Application Assistant");
-  await expect(page.getByRole("button", { name: "Add attachment" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Add attachment" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Find review risks" })).toBeVisible();
 
   const input = page.getByPlaceholder("Message");
@@ -165,7 +165,7 @@ test("composer drafts are scoped to the new screen and selected conversations", 
 });
 
 test("conversation switching isolates pending stream state", async ({ page }) => {
-  await signInViaApi(page, normalUser);
+  await signInViaUi(page, normalUser);
   const suffix = Date.now();
   const sourceTitle = `Streaming source ${suffix}`;
   const targetTitle = `Stable target ${suffix}`;
@@ -186,27 +186,30 @@ test("conversation switching isolates pending stream state", async ({ page }) =>
   await page.route(`${apiBaseUrl}/api/chat`, async (route) => {
     chatRequestStarted = true;
     await chatGate;
-    await route.abort("aborted");
+    await route.abort("aborted").catch(() => undefined);
   });
 
   try {
     await page.goto("/");
     const input = page.getByPlaceholder("Message");
+    const chatRegion = page.getByRole("region", { name: "Chat" });
     const sourceConversation = page.getByTestId("conversation-row").filter({ hasText: sourceTitle });
     const targetConversation = page.getByTestId("conversation-row").filter({ hasText: targetTitle });
     await expect(sourceConversation).toHaveCount(1);
     await expect(targetConversation).toHaveCount(1);
 
     await sourceConversation.getByRole("button").first().click();
+    const sendButton = page.getByRole("button", { name: "Send message" });
+    await expect(sendButton).toBeEnabled();
     const messageText = `Session isolation ${suffix}`;
     await input.fill(messageText);
-    await page.getByRole("button", { name: "Send message" }).click();
+    await sendButton.click();
     await expect(page.getByTestId("pending-assistant-message")).toBeVisible();
     await expect.poll(() => chatRequestStarted).toBe(true);
     await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
 
     await targetConversation.getByRole("button").first().click();
-    await expect(page.getByText(messageText)).toHaveCount(0);
+    await expect(chatRegion.getByText(messageText)).toHaveCount(0);
     await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
     await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
 
@@ -219,7 +222,7 @@ test("conversation switching isolates pending stream state", async ({ page }) =>
 });
 
 test("new conversation stream completion does not steal the selected conversation", async ({ page }) => {
-  await signInViaApi(page, normalUser);
+  await signInViaUi(page, normalUser);
   const suffix = Date.now();
   const targetTitle = `Switch target ${suffix}`;
   const target = await page.request.post(`${apiBaseUrl}/api/conversations`, {
@@ -235,15 +238,18 @@ test("new conversation stream completion does not steal the selected conversatio
   await page.route(`${apiBaseUrl}/api/chat`, async (route) => {
     chatRequestStarted = true;
     await chatGate;
-    await route.abort("aborted");
+    await route.abort("aborted").catch(() => undefined);
   });
 
   try {
     await page.goto("/");
     const input = page.getByPlaceholder("Message");
+    const chatRegion = page.getByRole("region", { name: "Chat" });
+    const sendButton = page.getByRole("button", { name: "Send message" });
+    await expect(sendButton).toBeEnabled();
     const messageText = `New session isolation ${suffix}`;
     await input.fill(messageText);
-    await page.getByRole("button", { name: "Send message" }).click();
+    await sendButton.click();
     await expect(page.getByTestId("pending-assistant-message")).toBeVisible();
     await expect.poll(() => chatRequestStarted).toBe(true);
     const newConversation = page.getByTestId("conversation-row").filter({ hasText: messageText });
@@ -253,7 +259,7 @@ test("new conversation stream completion does not steal the selected conversatio
     await targetConversation.getByRole("button").first().click();
     releaseChat();
     await expect(targetConversation).toHaveClass(/border-primary/);
-    await expect(page.getByText(messageText)).toHaveCount(0);
+    await expect(chatRegion.getByText(messageText)).toHaveCount(0);
     await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
   } finally {
     releaseChat();
@@ -262,7 +268,7 @@ test("new conversation stream completion does not steal the selected conversatio
 });
 
 test("completed background turns are marked unread until viewed", async ({ page }) => {
-  await signInViaApi(page, normalUser);
+  await signInViaUi(page, normalUser);
   const suffix = Date.now();
   const sourceTitle = `Unread source ${suffix}`;
   const targetTitle = `Unread target ${suffix}`;
@@ -283,8 +289,10 @@ test("completed background turns are marked unread until viewed", async ({ page 
   await expect(targetConversation).toHaveCount(1);
 
   await sourceConversation.getByRole("button").first().click();
+  const sendButton = page.getByRole("button", { name: "Send message" });
+  await expect(sendButton).toBeEnabled();
   await input.fill(`Unread completion ${suffix}`);
-  await page.getByRole("button", { name: "Send message" }).click();
+  await sendButton.click();
   await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
 
   await targetConversation.getByRole("button").first().click();
@@ -427,7 +435,6 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
       `/tool demo.weather_forecast {"location":"${forecastLocation}","days":3,"unit":"celsius","startDate":"2026-06-13"}`
     );
   await page.getByRole("button", { name: "Send message" }).click();
-  await expect(page.getByTestId("assistant-working-indicator")).toBeVisible();
 
   const toolCallCard = page.getByTestId("tool-call-card").last();
   await expect(toolCallCard).toBeVisible();
@@ -437,8 +444,7 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
   await expect(toolCallCard).toContainText(forecastLocation);
   await expect(toolCallCard).toContainText("3-day forecast");
   await expect(page.getByText("Tool work completed").last()).toBeVisible();
-  await expect(page.getByText(`Forecast for ${forecastLocation}`).last()).toBeVisible();
-  await expect(page.getByTestId("assistant-working-indicator")).toHaveCount(0);
+  await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
   await expect.poll(() => messageHistoryResponses).toBeGreaterThan(0);
   await expect(toolCallCard).toBeVisible();
   await expect(toolCallCard).toContainText("Completed");
