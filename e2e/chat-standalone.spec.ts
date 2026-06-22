@@ -164,6 +164,96 @@ test("composer drafts are scoped to the new screen and selected conversations", 
   await expect(input).toHaveValue("Selected conversation draft");
 });
 
+test("conversation switching isolates pending stream state", async ({ page }) => {
+  await signInViaApi(page, normalUser);
+  const suffix = Date.now();
+  const sourceTitle = `Streaming source ${suffix}`;
+  const targetTitle = `Stable target ${suffix}`;
+  const source = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    data: { title: sourceTitle }
+  });
+  const target = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    data: { title: targetTitle }
+  });
+  expect(source.ok()).toBe(true);
+  expect(target.ok()).toBe(true);
+
+  let chatRequestStarted = false;
+  let releaseChat: () => void = () => {};
+  const chatGate = new Promise<void>((resolve) => {
+    releaseChat = resolve;
+  });
+  await page.route(`${apiBaseUrl}/api/chat`, async (route) => {
+    chatRequestStarted = true;
+    await chatGate;
+    await route.abort("aborted");
+  });
+
+  try {
+    await page.goto("/");
+    const input = page.getByPlaceholder("Message");
+    const sourceConversation = page.getByTestId("conversation-row").filter({ hasText: sourceTitle });
+    const targetConversation = page.getByTestId("conversation-row").filter({ hasText: targetTitle });
+    await expect(sourceConversation).toHaveCount(1);
+    await expect(targetConversation).toHaveCount(1);
+
+    await sourceConversation.getByRole("button").first().click();
+    const messageText = `Session isolation ${suffix}`;
+    await input.fill(messageText);
+    await page.getByRole("button", { name: "Send message" }).click();
+    await expect(page.getByTestId("pending-assistant-message")).toBeVisible();
+    await expect.poll(() => chatRequestStarted).toBe(true);
+
+    await targetConversation.getByRole("button").first().click();
+    await expect(page.getByText(messageText)).toHaveCount(0);
+    await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
+  } finally {
+    releaseChat();
+    await page.unroute(`${apiBaseUrl}/api/chat`);
+  }
+});
+
+test("new conversation stream completion does not steal the selected conversation", async ({ page }) => {
+  await signInViaApi(page, normalUser);
+  const suffix = Date.now();
+  const targetTitle = `Switch target ${suffix}`;
+  const target = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    data: { title: targetTitle }
+  });
+  expect(target.ok()).toBe(true);
+
+  let chatRequestStarted = false;
+  let releaseChat: () => void = () => {};
+  const chatGate = new Promise<void>((resolve) => {
+    releaseChat = resolve;
+  });
+  await page.route(`${apiBaseUrl}/api/chat`, async (route) => {
+    chatRequestStarted = true;
+    await chatGate;
+    await route.abort("aborted");
+  });
+
+  try {
+    await page.goto("/");
+    const input = page.getByPlaceholder("Message");
+    const messageText = `New session isolation ${suffix}`;
+    await input.fill(messageText);
+    await page.getByRole("button", { name: "Send message" }).click();
+    await expect(page.getByTestId("pending-assistant-message")).toBeVisible();
+    await expect.poll(() => chatRequestStarted).toBe(true);
+
+    const targetConversation = page.getByTestId("conversation-row").filter({ hasText: targetTitle });
+    await targetConversation.getByRole("button").first().click();
+    releaseChat();
+    await expect(targetConversation).toHaveClass(/border-primary/);
+    await expect(page.getByText(messageText)).toHaveCount(0);
+    await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
+  } finally {
+    releaseChat();
+    await page.unroute(`${apiBaseUrl}/api/chat`);
+  }
+});
+
 test("conversation rail deletes a conversation", async ({ page }) => {
   await signInViaApi(page, normalUser);
   let deleteConversationRequests = 0;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type MutableRefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   AssistantRuntimeProvider,
   useComposer,
@@ -72,17 +72,17 @@ export function AssistantChatPanel({
   onStreamError: (message: string) => void;
 }) {
   const initialMessages = useMemo(() => toUiMessages(messages ?? []), [messages]);
-  const pendingConversationIdRef = useRef<string | undefined>(undefined);
+  const runtimeKey = selectedConversationId ?? "new";
 
   return (
     <AssistantRuntimePane
+      key={runtimeKey}
       apiBaseUrl={apiBaseUrl}
       client={client}
       config={config}
       selectedConversationId={selectedConversationId}
       initialMessages={initialMessages}
       messagesLoaded={messagesLoaded}
-      pendingConversationIdRef={pendingConversationIdRef}
       notice={notice}
       draft={draft}
       composerFocusRequestId={composerFocusRequestId}
@@ -113,7 +113,6 @@ function AssistantRuntimePane({
   selectedConversationId,
   initialMessages,
   messagesLoaded,
-  pendingConversationIdRef,
   notice,
   draft,
   composerFocusRequestId,
@@ -140,7 +139,6 @@ function AssistantRuntimePane({
   selectedConversationId: string | undefined;
   initialMessages: UIMessage[];
   messagesLoaded: boolean;
-  pendingConversationIdRef: MutableRefObject<string | undefined>;
   notice: string | undefined;
   draft: string;
   composerFocusRequestId: number;
@@ -164,9 +162,25 @@ function AssistantRuntimePane({
   const { t } = useTranslation();
   const importedTargetRef = useRef<string | undefined>(undefined);
   const clearedTargetRef = useRef<string | undefined>(undefined);
+  const pendingConversationIdRef = useRef<string | undefined>(undefined);
   const streamedConversationIdRef = useRef<string | undefined>(undefined);
   const titleRequestConversationIdRef = useRef<string | undefined>(undefined);
+  const activeRef = useRef(true);
+  const [optimisticPending, setOptimisticPending] = useState(false);
   const sendDisabledReason = sendBlockedReason ?? (!messagesLoaded ? t("loadingConversation") : undefined);
+
+  useEffect(() => {
+    return () => {
+      activeRef.current = false;
+    };
+  }, []);
+
+  const setOptimisticPendingIfActive = useCallback((pending: boolean) => {
+    if (activeRef.current) {
+      setOptimisticPending(pending);
+    }
+  }, []);
+
   const attachmentFileParts = useMemo(
     () =>
       draftAttachments
@@ -177,6 +191,9 @@ function AssistantRuntimePane({
   const toCreateMessageWithAttachments = useCallback(
     ((message: ComposerAppendMessage) => {
       const parts = toOutgoingUiMessageParts(message);
+      if (message.role === "user" && !sendDisabledReason) {
+        setOptimisticPendingIfActive(true);
+      }
       if (message.role === "user" && attachmentFileParts.length > 0) {
         parts.push(...attachmentFileParts);
       }
@@ -186,7 +203,7 @@ function AssistantRuntimePane({
         metadata: message.metadata
       };
     }) as NonNullable<UseChatRuntimeOptions<UIMessage>["toCreateMessage"]>,
-    [attachmentFileParts]
+    [attachmentFileParts, sendDisabledReason, setOptimisticPendingIfActive]
   );
   const transport = useMemo(
     () =>
@@ -245,7 +262,8 @@ function AssistantRuntimePane({
       pendingConversationIdRef,
       selectedAgentName,
       selectedConversationId,
-      sendDisabledReason
+      sendDisabledReason,
+      setOptimisticPendingIfActive
     ]
   );
   async function selectPendingConversation(): Promise<void> {
@@ -255,7 +273,13 @@ function AssistantRuntimePane({
     }
     pendingConversationIdRef.current = undefined;
     streamedConversationIdRef.current = conversationId;
+    if (!activeRef.current) {
+      return;
+    }
     const persistedMessages = await client.messages(conversationId).catch(() => undefined);
+    if (!activeRef.current) {
+      return;
+    }
     onConversationStarted(conversationId, persistedMessages);
   }
 
@@ -265,12 +289,18 @@ function AssistantRuntimePane({
     isSendDisabled: Boolean(sendDisabledReason),
     toCreateMessage: toCreateMessageWithAttachments,
     async onFinish() {
+      setOptimisticPendingIfActive(false);
       await selectPendingConversation();
       onStreamFinished();
     },
     async onError(error) {
+      setOptimisticPendingIfActive(false);
       await selectPendingConversation();
-      onStreamError(error.message);
+      if (activeRef.current) {
+        onStreamError(error.message);
+      } else {
+        onStreamFinished();
+      }
     }
   });
 
@@ -321,6 +351,7 @@ function AssistantRuntimePane({
             sendBlockedReason={sendDisabledReason}
             attachmentsEnabled={attachmentsEnabled}
             attachmentAccept={attachmentAccept}
+            optimisticPending={optimisticPending}
             composerFocusRequestId={composerFocusRequestId}
             onFilesSelected={onFilesSelected}
             onRemoveDraftAttachment={onRemoveDraftAttachment}
