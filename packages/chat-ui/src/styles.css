@@ -119,6 +119,17 @@
     animation: chat-shimmer 1.8s linear infinite;
   }
 
+  .chat-assistant-cursor-dot {
+    display: inline-block;
+    width: 0.7rem;
+    height: 0.7rem;
+    flex: 0 0 auto;
+    border-radius: 9999px;
+    background: currentColor;
+    transform-origin: center;
+    animation: chat-cursor-pulse 1.2s ease-in-out infinite;
+  }
+
   .chat-tool-work .chat-tool-part {
     margin-top: 0;
     margin-bottom: 0;
@@ -137,8 +148,16 @@
   }
 
   .chat-assistant-text-running .chat-markdown > :last-child::after {
-    content: " \25CF";
-    font-family: revert;
+    content: "";
+    display: inline-block;
+    width: 0.55em;
+    height: 0.55em;
+    margin-left: 0.35em;
+    border-radius: 9999px;
+    background: currentColor;
+    vertical-align: middle;
+    transform-origin: center;
+    animation: chat-cursor-pulse 1.2s ease-in-out infinite;
   }
 
   .chat-markdown p,
@@ -213,5 +232,27 @@
 
   to {
     background-position: -200% 0;
+  }
+}
+
+@keyframes chat-cursor-pulse {
+  0%,
+  100% {
+    opacity: 0.68;
+    transform: scale(0.72);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-assistant-cursor-dot,
+  .chat-assistant-text-running .chat-markdown > :last-child::after {
+    opacity: 1;
+    transform: none;
+    animation: none;
   }
 }

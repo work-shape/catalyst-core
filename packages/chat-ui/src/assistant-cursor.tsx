@@ -6,13 +6,11 @@ export function AssistantCursor({ className }: { className?: string }) {
 
   return (
     <span
-      className={cn("inline-flex h-6 items-center px-1 align-baseline text-foreground", className)}
+      className={cn("inline-flex h-6 w-7 items-center justify-center align-baseline text-foreground", className)}
       role="status"
       aria-live="polite"
     >
-      <span aria-hidden="true" className="font-[revert] leading-none">
-        {"\u25CF"}
-      </span>
+      <span aria-hidden="true" className="chat-assistant-cursor-dot" />
       <span className="sr-only">{t("thinking")}</span>
     </span>
   );

@@ -69,7 +69,7 @@ function AssistantMessage() {
               case "data":
                 return part.dataRendererUI ?? <DataPart {...part} />;
               case "reasoning":
-                return <HiddenReasoningPart />;
+                return <AssistantReasoningPart />;
               case "image":
                 return <ImagePart />;
               case "file":
@@ -162,8 +162,20 @@ function AssistantStreamingIndicator() {
   return showIndicator ? <AssistantCursor className="my-1" /> : null;
 }
 
-function HiddenReasoningPart() {
-  return null;
+function AssistantReasoningPart() {
+  const { t } = useTranslation();
+  const isRunning = useAuiState((state) => state.part.status.type === "running");
+
+  if (!isRunning) {
+    return null;
+  }
+
+  return (
+    <div className="my-1 flex min-h-6 items-center gap-2 text-sm text-muted-foreground" role="status" aria-live="polite">
+      <span aria-hidden="true" className="chat-assistant-cursor-dot size-1.5" />
+      <span className="leading-6">{t("thinking")}</span>
+    </div>
+  );
 }
 
 function CopiedState() {
