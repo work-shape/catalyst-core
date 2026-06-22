@@ -6,6 +6,7 @@ import {
 } from "@assistant-ui/react";
 import {
   AssistantChatTransport,
+  RESUMABLE_STREAM_ID_HEADER,
   useChatRuntime,
   type UseChatRuntimeOptions
 } from "@assistant-ui/react-ai-sdk";
@@ -17,6 +18,12 @@ import { AttachmentContentProvider } from "./attachment-content";
 import { AssistantToolRegistry } from "./assistant-tool-registry";
 import { firstLineTitle } from "./conversation-title";
 import { useTranslation } from "./i18n";
+import {
+  clearConversationStreamId,
+  createConversationResumableStorage,
+  readConversationStreamId,
+  rememberConversationStreamId
+} from "./resumable-stream-storage";
 
 export function AssistantChatPanel({
   apiBaseUrl,
@@ -33,6 +40,7 @@ export function AssistantChatPanel({
   draftAttachments,
   localUploadingAttachments,
   conversationRunning,
+  conversationRunId,
   sendBlockedReason,
   attachmentsEnabled,
   attachmentAccept,
@@ -44,6 +52,7 @@ export function AssistantChatPanel({
   onConversationStarted,
   onMessageSubmitted,
   onChatRequestAccepted,
+  onStreamUnavailable,
   onStreamFinished,
   onStreamError
 }: {
@@ -61,6 +70,7 @@ export function AssistantChatPanel({
   draftAttachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
   conversationRunning: boolean;
+  conversationRunId?: string;
   sendBlockedReason?: string;
   attachmentsEnabled: boolean;
   attachmentAccept: string;
@@ -71,12 +81,27 @@ export function AssistantChatPanel({
   onConversationCreated: (conversation: Conversation) => void;
   onConversationStarted: (conversationId: string, messages?: Message[]) => void;
   onMessageSubmitted: (conversationId: string) => void;
-  onChatRequestAccepted: (conversationId: string) => void;
+  onChatRequestAccepted: (conversationId: string, runId?: string) => void;
+  onStreamUnavailable: (conversationId: string) => void;
   onStreamFinished: (conversationId: string, viewed: boolean) => void;
   onStreamError: (conversationId: string, message: string, viewed: boolean) => void;
 }) {
-  const initialMessages = useMemo(() => toUiMessages(messages ?? []), [messages]);
-  const messageSnapshotKey = useMemo(() => createMessageSnapshotKey(messages ?? []), [messages]);
+  const resumableRunId = useMemo(() => {
+    if (!conversationRunning || !conversationRunId) {
+      return undefined;
+    }
+    const storedStreamId = readConversationStreamId(apiBaseUrl, selectedConversationId);
+    if (storedStreamId !== conversationRunId) {
+      return undefined;
+    }
+    return conversationRunId;
+  }, [apiBaseUrl, conversationRunning, conversationRunId, selectedConversationId]);
+  const resumableMessages = useMemo(
+    () => (resumableRunId ? withoutRunResponseMessages(messages ?? [], resumableRunId) : messages ?? []),
+    [resumableRunId, messages]
+  );
+  const initialMessages = useMemo(() => toUiMessages(resumableMessages), [resumableMessages]);
+  const messageSnapshotKey = useMemo(() => createMessageSnapshotKey(resumableMessages), [resumableMessages]);
   const runtimeKey = selectedConversationId ?? "new";
 
   return (
@@ -108,6 +133,7 @@ export function AssistantChatPanel({
       onConversationStarted={onConversationStarted}
       onMessageSubmitted={onMessageSubmitted}
       onChatRequestAccepted={onChatRequestAccepted}
+      onStreamUnavailable={onStreamUnavailable}
       onStreamFinished={onStreamFinished}
       onStreamError={onStreamError}
     />
@@ -141,6 +167,7 @@ function AssistantRuntimePane({
   onConversationStarted,
   onMessageSubmitted,
   onChatRequestAccepted,
+  onStreamUnavailable,
   onStreamFinished,
   onStreamError
 }: {
@@ -169,7 +196,8 @@ function AssistantRuntimePane({
   onConversationCreated: (conversation: Conversation) => void;
   onConversationStarted: (conversationId: string, messages?: Message[]) => void;
   onMessageSubmitted: (conversationId: string) => void;
-  onChatRequestAccepted: (conversationId: string) => void;
+  onChatRequestAccepted: (conversationId: string, runId?: string) => void;
+  onStreamUnavailable: (conversationId: string) => void;
   onStreamFinished: (conversationId: string, viewed: boolean) => void;
   onStreamError: (conversationId: string, message: string, viewed: boolean) => void;
 }) {
@@ -226,6 +254,11 @@ function AssistantRuntimePane({
       new AssistantChatTransport<UIMessage>({
         api: `${apiBaseUrl.replace(/\/$/u, "")}/api/chat`,
         credentials: "include",
+        resumable: {
+          storage: createConversationResumableStorage(apiBaseUrl, selectedConversationId),
+          resumeApi: (streamId) =>
+            `${apiBaseUrl.replace(/\/$/u, "")}/api/chat/runs/${encodeURIComponent(streamId)}/stream`
+        },
         body: {
           conversationId: selectedConversationId,
           locale,
@@ -233,10 +266,19 @@ function AssistantRuntimePane({
         },
         fetch: async (input, init) => {
           const response = await fetch(input, init);
+          if (response.status === 204 && selectedConversationId && isResumeRequest(input)) {
+            clearConversationStreamId(apiBaseUrl, selectedConversationId);
+            onStreamUnavailable(selectedConversationId);
+            return createNullBodyResponse(response);
+          }
           const conversationId = titleRequestConversationIdRef.current;
+          const runId = response.headers.get(RESUMABLE_STREAM_ID_HEADER) ?? undefined;
           titleRequestConversationIdRef.current = undefined;
+          if (response.ok && conversationId && runId) {
+            rememberConversationStreamId(apiBaseUrl, conversationId, runId);
+          }
           if (response.ok && conversationId) {
-            onChatRequestAccepted(conversationId);
+            onChatRequestAccepted(conversationId, runId);
           }
           return response;
         },
@@ -278,6 +320,7 @@ function AssistantRuntimePane({
       onConversationCreated,
       onMessageSubmitted,
       onChatRequestAccepted,
+      onStreamUnavailable,
       pendingConversationIdRef,
       selectedAgentName,
       selectedConversationId,
@@ -434,6 +477,19 @@ function toAiSdkMessageRepository(messages: UIMessage[]): AiSdkMessageFormatRepo
 
 function isAbortLikeError(error: Error): boolean {
   return error.name === "AbortError" || /abort/u.test(error.message.toLowerCase());
+}
+
+function isResumeRequest(input: RequestInfo | URL): boolean {
+  const url = typeof input === "string" || input instanceof URL ? input.toString() : input.url;
+  return /\/api\/chat\/runs\/[^/]+\/stream$/u.test(new URL(url, window.location.href).pathname);
+}
+
+function createNullBodyResponse(response: Response): Response {
+  return new Response(null, {
+    headers: new Headers(response.headers),
+    status: response.status,
+    statusText: response.statusText
+  });
 }
 
 function DraftBridge({
@@ -613,6 +669,16 @@ function toUiMessageParts(
           state: "done"
         }
       ];
+}
+
+function withoutRunResponseMessages(messages: Message[], runId: string): Message[] {
+  return messages.filter((message) => {
+    const runtime = readAgentRuntimeMetadata(message.metadata);
+    if (runtime?.runId !== runId) {
+      return true;
+    }
+    return message.role === "user" || runtime.kind === "user_message";
+  });
 }
 
 function readUserAttachmentFileParts(message: Message): UIMessage["parts"] {

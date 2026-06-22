@@ -3,6 +3,7 @@ import {
   type AgentConfig,
   type AgentRunHandle,
   type AgentRunId,
+  type AgentRunStatus,
   type AgentRuntime,
   type AgentRuntimeCommand,
   type AgentRuntimeEvent,
@@ -105,6 +106,13 @@ export class LocalAgentRuntime implements AgentRuntime {
   observe(runId: AgentRunId): AsyncIterable<AgentRuntimeEvent> {
     const state = this.getRun(runId);
     return state.observe();
+  }
+
+  async getStatus(
+    runId: AgentRunId,
+    _context: RuntimeCallContext
+  ): Promise<AgentRunStatus> {
+    return this.getRun(runId).getStatus();
   }
 
   async resume(

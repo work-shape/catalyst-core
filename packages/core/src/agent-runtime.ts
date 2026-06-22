@@ -142,6 +142,10 @@ export interface AgentRuntime {
     runId: AgentRunId,
     context: RuntimeCallContext
   ): AsyncIterable<AgentRuntimeEvent>;
+  getStatus(
+    runId: AgentRunId,
+    context: RuntimeCallContext
+  ): Promise<AgentRunStatus>;
   resume(
     runId: AgentRunId,
     command: AgentRuntimeCommand,

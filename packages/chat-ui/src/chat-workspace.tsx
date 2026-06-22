@@ -19,13 +19,18 @@ import { AssistantChatPanel } from "./assistant-chat-panel";
 import { signOut } from "./auth-client";
 import type { ChatShellProps } from "./chat-shell";
 import { ChatDropOverlay, useChatFileDropzone } from "./chat-file-dropzone";
-import type { ConversationActivity } from "./conversation-activity";
+import {
+  isConversationRunning,
+  shouldRefreshConversationMessagesOnSelect,
+  type ConversationActivity
+} from "./conversation-activity";
 import {
   draftAttachmentsQueryKey,
   useDraftAttachmentController
 } from "./draft-attachment-controller";
 import { readBrowserLocale, TranslationProvider, useTranslation } from "./i18n";
 import { LoginPanel } from "./login-panel";
+import { clearConversationStreamId } from "./resumable-stream-storage";
 import {
   createThemeStyle,
   readSystemThemeMode,
@@ -162,7 +167,7 @@ export function ChatWorkspace({
   const selectedConversationActivity = selectedConversationId
     ? conversationActivities[selectedConversationId]
     : undefined;
-  const selectedConversationRunning = selectedConversationActivity?.status === "running";
+  const selectedConversationRunning = isConversationRunning(selectedConversationActivity);
   const runningConversationEntries = useMemo(
     () =>
       Object.entries(conversationActivities)
@@ -442,31 +447,44 @@ export function ChatWorkspace({
     );
   }
 
-  function markConversationRunning(conversationId: string) {
-    setConversationActivities((currentActivities) => ({
-      ...currentActivities,
-      [conversationId]: {
-        status: "running",
-        unread: false,
-        startedAt: new Date().toISOString()
-      }
-    }));
+  function markConversationRunning(conversationId: string, runId?: string) {
+    setConversationActivities((currentActivities) => {
+      const currentActivity = currentActivities[conversationId];
+      return {
+        ...currentActivities,
+        [conversationId]: {
+          ...currentActivity,
+          status: "running",
+          unread: false,
+          startedAt: currentActivity?.status === "running" ? currentActivity.startedAt : new Date().toISOString(),
+          completedAt: undefined,
+          error: undefined,
+          runId: runId ?? currentActivity?.runId
+        }
+      };
+    });
   }
 
   function markConversationFinished(conversationId: string, viewed: boolean) {
-    setConversationActivities((currentActivities) => ({
-      ...currentActivities,
-      [conversationId]: {
-        ...currentActivities[conversationId],
-        status: "idle",
-        unread: !viewed,
-        completedAt: new Date().toISOString(),
-        error: undefined
-      }
-    }));
+    clearConversationStreamId(apiBaseUrl, conversationId);
+    setConversationActivities((currentActivities) => {
+      const currentActivity = currentActivities[conversationId];
+      return {
+        ...currentActivities,
+        [conversationId]: {
+          ...currentActivity,
+          status: "idle",
+          unread: !viewed,
+          completedAt: new Date().toISOString(),
+          error: undefined,
+          runId: undefined
+        }
+      };
+    });
   }
 
   function markConversationFailed(conversationId: string, message: string, viewed: boolean) {
+    clearConversationStreamId(apiBaseUrl, conversationId);
     setConversationActivities((currentActivities) => ({
       ...currentActivities,
       [conversationId]: {
@@ -474,7 +492,8 @@ export function ChatWorkspace({
         status: "failed",
         unread: !viewed,
         completedAt: new Date().toISOString(),
-        error: message
+        error: message,
+        runId: undefined
       }
     }));
   }
@@ -512,7 +531,10 @@ export function ChatWorkspace({
     draftAttachmentController.clearConversationUploads(conversationId);
   }
 
-  function onChatRequestAccepted(conversationId: string) {
+  function onChatRequestAccepted(conversationId: string, runId?: string) {
+    if (runId) {
+      markConversationRunning(conversationId, runId);
+    }
     void queryClient.invalidateQueries({ queryKey: ["messages", apiBaseUrl, authScope, conversationId] });
     void client
       .generateConversationTitle(conversationId)
@@ -544,6 +566,26 @@ export function ChatWorkspace({
     void queryClient.invalidateQueries({ queryKey: ["audit-events", apiBaseUrl, authScope] });
   }
 
+  function onStreamUnavailable(conversationId: string) {
+    clearConversationStreamId(apiBaseUrl, conversationId);
+    setConversationActivities((currentActivities) => {
+      const currentActivity = currentActivities[conversationId];
+      if (!currentActivity?.runId) {
+        return currentActivities;
+      }
+      return {
+        ...currentActivities,
+        [conversationId]: {
+          ...currentActivity,
+          status: "idle",
+          completedAt: currentActivity.completedAt ?? new Date().toISOString(),
+          runId: undefined
+        }
+      };
+    });
+    void queryClient.invalidateQueries({ queryKey: ["messages", apiBaseUrl, authScope, conversationId] });
+  }
+
   function onStreamError(conversationId: string, message: string, viewed: boolean) {
     const visible = viewed || selectedConversationIdRef.current === conversationId;
     markConversationFailed(conversationId, message, visible);
@@ -556,6 +598,15 @@ export function ChatWorkspace({
   }
 
   function onSelectConversation(conversationId: string) {
+    if (shouldRefreshConversationMessagesOnSelect(conversationActivities[conversationId])) {
+      void queryClient
+        .fetchQuery({
+          queryKey: ["messages", apiBaseUrl, authScope, conversationId],
+          queryFn: () => client.messages(conversationId),
+          staleTime: 0
+        })
+        .catch(() => undefined);
+    }
     markConversationViewed(conversationId);
     setSelectedConversationId(conversationId);
     setView("chat");
@@ -708,6 +759,7 @@ export function ChatWorkspace({
                 draftAttachments={draftAttachmentController.draftAttachments}
                 localUploadingAttachments={draftAttachmentController.visibleUploadingAttachments}
                 conversationRunning={selectedConversationRunning}
+                conversationRunId={selectedConversationActivity?.runId}
                 sendBlockedReason={draftAttachmentController.sendBlockedReason}
                 attachmentsEnabled={attachmentsEnabled}
                 attachmentAccept={attachmentAccept}
@@ -719,6 +771,7 @@ export function ChatWorkspace({
                 onConversationStarted={onConversationStarted}
                 onMessageSubmitted={onMessageSubmitted}
                 onChatRequestAccepted={onChatRequestAccepted}
+                onStreamUnavailable={onStreamUnavailable}
                 onStreamFinished={onStreamFinished}
                 onStreamError={onStreamError}
               />

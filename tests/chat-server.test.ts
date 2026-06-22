@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import type { AddressInfo } from "net";
 import {
   createClientInstanceApp,
   type ClientInstanceCapability
@@ -96,6 +97,101 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(usageBody.today.modelCallCount).toBeGreaterThan(0);
+
+    await app.close();
+  });
+
+  it("exposes active chat runs as resumable streams", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig(),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      payload: { title: "Resume test" }
+    });
+    expect(created.statusCode).toBe(200);
+    const conversation = created.json() as { id: string };
+
+    await app.server.listen({ host: "127.0.0.1", port: 0 });
+    const address = app.server.server.address() as AddressInfo;
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+
+    const sent = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        conversationId: conversation.id,
+        messages: [createUserUiMessage("resume this response while it is active")]
+      })
+    });
+    expect(sent.status).toBe(200);
+    const streamId = sent.headers.get("x-resumable-stream-id");
+    expect(streamId).toEqual(expect.stringMatching(/^run_/));
+
+    const resumed = await fetch(`${baseUrl}/api/chat/runs/${streamId}/stream`);
+    expect(resumed.status).toBe(200);
+    expect(resumed.headers.get("x-resumable-stream-id")).toBe(streamId);
+    const [sentPayload, resumedPayload] = await Promise.all([sent.text(), resumed.text()]);
+    expect(parseSseChunks(sentPayload).some((chunk) => chunk.type === "finish")).toBe(true);
+    const resumedChunks = parseSseChunks(resumedPayload);
+    expect(resumedChunks.some((chunk) => chunk.type === "text-delta")).toBe(true);
+    expect(resumedChunks.some((chunk) => chunk.type === "finish")).toBe(true);
+
+    const completedResume = await fetch(`${baseUrl}/api/chat/runs/${streamId}/stream`);
+    expect(completedResume.status).toBe(204);
+    expect(completedResume.headers.get("x-resumable-stream-id")).toBeNull();
+
+    await app.close();
+  });
+
+  it("does not resume a run that completed after the original stream was abandoned", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig(),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      payload: { title: "Abandoned resume test" }
+    });
+    expect(created.statusCode).toBe(200);
+    const conversation = created.json() as { id: string };
+
+    await app.server.listen({ host: "127.0.0.1", port: 0 });
+    const address = app.server.server.address() as AddressInfo;
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+
+    const sent = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        conversationId: conversation.id,
+        messages: [createUserUiMessage("complete after abandoned stream")]
+      })
+    });
+    expect(sent.status).toBe(200);
+    const streamId = sent.headers.get("x-resumable-stream-id");
+    expect(streamId).toEqual(expect.stringMatching(/^run_/));
+    await sent.body?.cancel();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 800);
+    });
+
+    const abandonedResume = await fetch(`${baseUrl}/api/chat/runs/${streamId}/stream`);
+    expect(abandonedResume.status).toBe(204);
+    expect(abandonedResume.headers.get("x-resumable-stream-id")).toBeNull();
 
     await app.close();
   });
@@ -1267,13 +1363,13 @@ function createUserUiMessage(text: string) {
   };
 }
 
-function parseSseChunks(text: string): Array<{ type?: string; errorText?: string }> {
+function parseSseChunks(text: string): Array<{ type?: string; errorText?: string; delta?: string }> {
   return text
     .split("\n")
     .filter((line) => line.startsWith("data:"))
     .map((line) => line.slice("data:".length).trim())
     .filter((line) => line !== "[DONE]")
-    .map((line) => JSON.parse(line) as { type?: string; errorText?: string });
+    .map((line) => JSON.parse(line) as { type?: string; errorText?: string; delta?: string });
 }
 
 function createMultipartFilePayload(input: {

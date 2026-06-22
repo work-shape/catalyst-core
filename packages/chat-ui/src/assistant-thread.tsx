@@ -5,6 +5,7 @@ import { AssistantComposer, type LocalUploadingAttachment } from "./assistant-co
 import { AssistantCursor } from "./assistant-cursor";
 import { ThreadMessage } from "./assistant-message";
 import { useTranslation } from "./i18n";
+import { shouldShowPendingAssistantMessage } from "./thread-activity";
 import { cn } from "./ui/cn";
 
 export function AssistantThread({
@@ -69,7 +70,14 @@ export function AssistantThread({
             </AuiIf>
 
             <div className="flex flex-col gap-6 pb-8 empty:hidden">
-              <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
+              <ThreadPrimitive.Messages>
+                {() => (
+                  <ThreadMessage
+                    conversationRunning={conversationRunning}
+                    optimisticPending={optimisticPending}
+                  />
+                )}
+              </ThreadPrimitive.Messages>
               <PendingAssistantMessage conversationRunning={conversationRunning} optimisticPending={optimisticPending} />
             </div>
 
@@ -82,6 +90,7 @@ export function AssistantThread({
                   attachments={draftAttachments}
                   localUploadingAttachments={localUploadingAttachments}
                   sendBlockedReason={sendBlockedReason}
+                  conversationRunning={conversationRunning}
                   attachmentsEnabled={attachmentsEnabled}
                   attachmentAccept={attachmentAccept}
                   focusRequestId={composerFocusRequestId}
@@ -167,12 +176,12 @@ function PendingAssistantMessage({
   optimisticPending?: boolean;
 }) {
   const showPendingMessage = useAuiState((state) => {
-    if (!conversationRunning && !optimisticPending && !state.thread.isRunning) {
-      return false;
-    }
-
-    const lastMessage = state.thread.messages.at(-1);
-    return lastMessage?.role !== "assistant" || !assistantMessageHasVisibleContent(lastMessage);
+    return shouldShowPendingAssistantMessage({
+      conversationRunning,
+      optimisticPending,
+      threadRunning: state.thread.isRunning,
+      lastMessage: state.thread.messages.at(-1)
+    });
   });
 
   if (!showPendingMessage) {
@@ -190,20 +199,6 @@ function PendingAssistantMessage({
       </div>
     </div>
   );
-}
-
-function assistantMessageHasVisibleContent(message: {
-  parts?: ReadonlyArray<{
-    type: string;
-    text?: string;
-  }>;
-}): boolean {
-  return (message.parts ?? []).some((part) => {
-    if (part.type === "text") {
-      return part.text?.trim().length ? true : false;
-    }
-    return part.type !== "indicator" && part.type !== "step-start";
-  });
 }
 
 function getSelectedAgent(

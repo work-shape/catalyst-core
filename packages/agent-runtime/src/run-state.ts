@@ -25,6 +25,10 @@ export class RunState {
     this.runId = runId;
   }
 
+  getStatus(): AgentRunStatus {
+    return this.status;
+  }
+
   async *observe(): AsyncIterable<AgentRuntimeEvent> {
     let index = 0;
     while (true) {

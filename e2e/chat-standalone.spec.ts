@@ -221,6 +221,101 @@ test("conversation switching isolates pending stream state", async ({ page }) =>
   }
 });
 
+test("switching back to a running conversation resumes one stream indicator", async ({ page }) => {
+  await signInViaUi(page, normalUser);
+  const suffix = Date.now();
+  const sourceTitle = `Resume source ${suffix}`;
+  const targetTitle = `Resume target ${suffix}`;
+  const source = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    data: { title: sourceTitle }
+  });
+  const target = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    data: { title: targetTitle }
+  });
+  expect(source.ok()).toBe(true);
+  expect(target.ok()).toBe(true);
+
+  const resumeRequests: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (request.method() === "GET" && /^\/api\/chat\/runs\/[^/]+\/stream$/u.test(url.pathname)) {
+      resumeRequests.push(request.url());
+    }
+  });
+
+  await page.goto("/");
+  const input = page.getByPlaceholder("Message");
+  const chatRegion = page.getByRole("region", { name: "Chat" });
+  const sourceConversation = page.getByTestId("conversation-row").filter({ hasText: sourceTitle });
+  const targetConversation = page.getByTestId("conversation-row").filter({ hasText: targetTitle });
+  await expect(sourceConversation).toHaveCount(1);
+  await expect(targetConversation).toHaveCount(1);
+
+  await sourceConversation.getByRole("button").first().click();
+  const uniqueToken = `resume-token-${suffix}`;
+  await input.fill(
+    Array.from({ length: 90 }, (_, index) => `${uniqueToken}-${index}`).join(" ")
+  );
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
+  expect(await sampleMaxCursorCount(page, 300)).toBeLessThanOrEqual(1);
+
+  await targetConversation.getByRole("button").first().click();
+  await expect(chatRegion.getByText(uniqueToken)).toHaveCount(0);
+
+  await sourceConversation.getByRole("button").first().click();
+  await expect.poll(() => resumeRequests.length, { timeout: 10_000 }).toBeGreaterThan(0);
+  await expect(chatRegion.getByText(uniqueToken, { exact: false }).first()).toBeVisible({
+    timeout: 15_000
+  });
+  expect(await sampleMaxCursorCount(page, 1_000)).toBeLessThanOrEqual(1);
+  await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
+});
+
+test("unavailable resume clears stream state without rendering a response construction error", async ({ page }) => {
+  await signInViaUi(page, normalUser);
+  const suffix = Date.now();
+  const sourceTitle = `Unavailable resume source ${suffix}`;
+  const targetTitle = `Unavailable resume target ${suffix}`;
+  const source = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    data: { title: sourceTitle }
+  });
+  const target = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    data: { title: targetTitle }
+  });
+  expect(source.ok()).toBe(true);
+  expect(target.ok()).toBe(true);
+
+  const resumeRequests: string[] = [];
+
+  await page.goto("/");
+  const input = page.getByPlaceholder("Message");
+  const chatRegion = page.getByRole("region", { name: "Chat" });
+  const sourceConversation = page.getByTestId("conversation-row").filter({ hasText: sourceTitle });
+  const targetConversation = page.getByTestId("conversation-row").filter({ hasText: targetTitle });
+  await expect(sourceConversation).toHaveCount(1);
+  await expect(targetConversation).toHaveCount(1);
+
+  await sourceConversation.getByRole("button").first().click();
+  await input.fill(Array.from({ length: 90 }, (_, index) => `unavailable-resume-${suffix}-${index}`).join(" "));
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
+
+  await targetConversation.getByRole("button").first().click();
+  await expect(chatRegion.getByText(`unavailable-resume-${suffix}`, { exact: false })).toHaveCount(0);
+
+  await page.route(/\/api\/chat\/runs\/[^/]+\/stream$/u, async (route) => {
+    resumeRequests.push(route.request().url());
+    await route.fulfill({ status: 204 });
+  });
+  await sourceConversation.getByRole("button").first().click();
+
+  await expect.poll(() => resumeRequests.length, { timeout: 10_000 }).toBeGreaterThan(0);
+  await expect(page.getByText("Failed to construct 'Response'")).toHaveCount(0);
+  await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
+  await expect(page.getByTestId("assistant-cursor")).toHaveCount(0);
+});
+
 test("new conversation stream completion does not steal the selected conversation", async ({ page }) => {
   await signInViaUi(page, normalUser);
   const suffix = Date.now();
@@ -281,6 +376,14 @@ test("completed background turns are marked unread until viewed", async ({ page 
   expect(source.ok()).toBe(true);
   expect(target.ok()).toBe(true);
 
+  const resumeRequests: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (request.method() === "GET" && /^\/api\/chat\/runs\/[^/]+\/stream$/u.test(url.pathname)) {
+      resumeRequests.push(request.url());
+    }
+  });
+
   await page.goto("/");
   const input = page.getByPlaceholder("Message");
   const chatRegion = page.getByRole("region", { name: "Chat" });
@@ -305,13 +408,18 @@ test("completed background turns are marked unread until viewed", async ({ page 
   });
   await expect(sourceConversation.getByTestId("conversation-unread-label")).toBeVisible();
 
+  const resumeRequestCountBeforeView = resumeRequests.length;
   await sourceConversation.getByRole("button").first().click();
+  await page.waitForTimeout(500);
+  expect(resumeRequests).toHaveLength(resumeRequestCountBeforeView);
   await expect(sourceConversation.getByTestId("conversation-unread-indicator")).toHaveCount(0);
+  await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
+  await expect(page.getByTestId("assistant-cursor")).toHaveCount(0);
   const toolCallCard = chatRegion.getByTestId("tool-call-card").last();
   await expect(toolCallCard).toBeVisible();
   await expect(toolCallCard).toContainText("Completed");
   await expect(toolCallCard).toContainText(forecastLocation);
-  await expect(chatRegion.getByText("Tool work completed").last()).toBeVisible();
+  await expect(chatRegion.getByText("Tool work completed")).toHaveCount(1);
 });
 
 test("conversation rail deletes a conversation", async ({ page }) => {
@@ -565,6 +673,16 @@ async function ensureDarkMode(page: Page): Promise<void> {
     await page.getByRole("button", { name: "Switch to dark theme" }).click();
   }
   await expect.poll(() => page.locator("main").first().evaluate((element) => element.classList.contains("dark"))).toBe(true);
+}
+
+async function sampleMaxCursorCount(page: Page, durationMs: number): Promise<number> {
+  const deadline = Date.now() + durationMs;
+  let maxCount = 0;
+  while (Date.now() < deadline) {
+    maxCount = Math.max(maxCount, await page.getByTestId("assistant-cursor").count());
+    await page.waitForTimeout(50);
+  }
+  return maxCount;
 }
 
 async function expectDocumentScrollLocked(page: Page): Promise<void> {

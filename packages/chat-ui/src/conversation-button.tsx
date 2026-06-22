@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ThreadListItemMorePrimitive } from "@assistant-ui/react";
 import { MessageSquare, MoreHorizontal, Trash2 } from "lucide-react";
 import type { Conversation } from "@vivd-catalyst/api-client";
-import type { ConversationActivity } from "./conversation-activity";
+import { isConversationRunning, type ConversationActivity } from "./conversation-activity";
 import { useTranslation } from "./i18n";
 import { Button } from "./ui/button";
 import { cn } from "./ui/cn";
@@ -26,7 +26,7 @@ export function ConversationButton({
 }) {
   const { locale, t } = useTranslation();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
-  const running = activity?.status === "running";
+  const running = isConversationRunning(activity);
   const failed = activity?.status === "failed";
   const unread = Boolean(activity?.unread && !selected);
 

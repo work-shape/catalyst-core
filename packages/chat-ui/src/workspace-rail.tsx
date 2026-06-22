@@ -140,7 +140,7 @@ export function WorkspaceRail({
         <span>{t("newConversation")}</span>
       </Button>
 
-      <nav className="grid min-h-0 content-start gap-2 overflow-auto pr-1">
+      <nav className="chat-scrollbar grid min-h-0 content-start gap-2 overflow-y-auto overflow-x-hidden pr-1">
         {conversations.length === 0 ? (
           <div className="rounded-md border border-dashed bg-sidebar-accent/40 px-3 py-4 text-sm text-muted-foreground">
             {t("noConversations")}

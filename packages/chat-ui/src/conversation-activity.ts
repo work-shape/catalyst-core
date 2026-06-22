@@ -6,4 +6,15 @@ export interface ConversationActivity {
   startedAt?: string;
   completedAt?: string;
   error?: string;
+  runId?: string;
+}
+
+export function isConversationRunning(activity: ConversationActivity | undefined): boolean {
+  return activity?.status === "running";
+}
+
+export function shouldRefreshConversationMessagesOnSelect(
+  activity: ConversationActivity | undefined
+): boolean {
+  return Boolean(activity?.unread || isConversationRunning(activity));
 }

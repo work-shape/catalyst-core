@@ -3,6 +3,7 @@ import {
   AppError,
   type AttachmentManifest,
   type AgentRunId,
+  type AgentRunStatus,
   type AgentRuntimeEvent,
   type AuthenticatedUser,
   type ChatMessage,
@@ -159,6 +160,10 @@ export class ConversationWorkflow {
 
   observeRun(runId: AgentRunId, context: RuntimeCallContext): AsyncIterable<AgentRuntimeEvent> {
     return this.options.agentRuntime.observe(runId, context);
+  }
+
+  async getRunStatus(runId: AgentRunId, context: RuntimeCallContext): Promise<AgentRunStatus> {
+    return this.options.agentRuntime.getStatus(runId, context);
   }
 
   async persistAssistantMessage(

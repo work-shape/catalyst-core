@@ -1,9 +1,10 @@
-import { AuiIf, ComposerPrimitive } from "@assistant-ui/react";
+import { ComposerPrimitive, useAuiState } from "@assistant-ui/react";
 import { CheckCircle2, FileText, ImageIcon, Paperclip, RotateCcw, Send, Square, X } from "lucide-react";
 import { useLayoutEffect, useRef } from "react";
 import type { DraftAttachment } from "@vivd-catalyst/api-client";
 import { AttachmentPreview } from "./attachment-preview";
 import { useTranslation } from "./i18n";
+import { isComposerBlockedByBackgroundRun } from "./thread-activity";
 import { Button } from "./ui/button";
 import { cn } from "./ui/cn";
 import { Spinner } from "./ui/spinner";
@@ -20,6 +21,7 @@ export function AssistantComposer({
   attachments,
   localUploadingAttachments,
   sendBlockedReason,
+  conversationRunning,
   attachmentsEnabled,
   attachmentAccept,
   focusRequestId,
@@ -30,6 +32,7 @@ export function AssistantComposer({
   attachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
   sendBlockedReason?: string;
+  conversationRunning?: boolean;
   attachmentsEnabled: boolean;
   attachmentAccept: string;
   focusRequestId: number;
@@ -113,7 +116,11 @@ export function AssistantComposer({
                 </Button>
               </>
             ) : null}
-            <ComposerAction disabled={Boolean(sendBlockedReason)} disabledReason={sendBlockedReason} />
+            <ComposerAction
+              disabled={Boolean(sendBlockedReason)}
+              disabledReason={sendBlockedReason}
+              conversationRunning={conversationRunning}
+            />
           </div>
         </div>
       </ComposerPrimitive.AttachmentDropzone>
@@ -265,36 +272,43 @@ function AttachmentStatusIndicator({
 
 function ComposerAction({
   disabled,
-  disabledReason
+  disabledReason,
+  conversationRunning
 }: {
   disabled: boolean;
   disabledReason?: string;
+  conversationRunning?: boolean;
 }) {
   const { t } = useTranslation();
+  const threadRunning = useAuiState((state) => state.thread.isRunning);
+  const backgroundRunBlocked = isComposerBlockedByBackgroundRun({
+    conversationRunning,
+    threadRunning
+  });
+  const effectiveDisabledReason = disabledReason ?? (backgroundRunBlocked ? t("conversationStillRunning") : undefined);
 
   return (
     <div className="relative ml-auto size-9">
-      <AuiIf condition={(state) => state.thread.isRunning}>
+      {threadRunning ? (
         <ComposerPrimitive.Cancel asChild>
           <Button type="button" size="icon" className="absolute inset-0 size-9" aria-label={t("stopGenerating")}>
             <Square size={14} className="fill-current" aria-hidden="true" />
           </Button>
         </ComposerPrimitive.Cancel>
-      </AuiIf>
-      <AuiIf condition={(state) => !state.thread.isRunning}>
+      ) : (
         <ComposerPrimitive.Send asChild>
           <Button
             type="button"
             size="icon"
             className="absolute inset-0 size-9"
             aria-label={t("sendMessage")}
-            title={disabledReason ?? t("sendMessage")}
-            disabled={disabled}
+            title={effectiveDisabledReason ?? t("sendMessage")}
+            disabled={disabled || backgroundRunBlocked}
           >
             <Send size={17} aria-hidden="true" />
           </Button>
         </ComposerPrimitive.Send>
-      </AuiIf>
+      )}
     </div>
   );
 }

@@ -26,7 +26,13 @@ const assistantMessageGroupBy = groupPartByType({
   "standalone-tool-call": []
 });
 
-export function ThreadMessage() {
+export function ThreadMessage({
+  conversationRunning: _conversationRunning,
+  optimisticPending: _optimisticPending
+}: {
+  conversationRunning?: boolean;
+  optimisticPending?: boolean;
+}) {
   const role = useAuiState((state) => state.message.role);
   const isEditing = useAuiState((state) => state.message.composer.isEditing);
 
@@ -38,7 +44,9 @@ export function ThreadMessage() {
     return <UserMessage />;
   }
 
-  return <AssistantMessage />;
+  return (
+    <AssistantMessage />
+  );
 }
 
 function AssistantMessage() {

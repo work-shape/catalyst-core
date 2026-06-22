@@ -6,7 +6,8 @@ export function AssistantCursor({ className }: { className?: string }) {
 
   return (
     <span
-      className={cn("inline-flex h-6 w-7 items-center justify-center align-baseline text-foreground", className)}
+      className={cn("inline-flex h-6 w-[0.7rem] items-center justify-start align-baseline text-foreground", className)}
+      data-testid="assistant-cursor"
       role="status"
       aria-live="polite"
     >
