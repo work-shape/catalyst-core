@@ -58,8 +58,10 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
   function loadEnvironment(loadInput: { env?: ClientInstanceEnv } = {}): ClientInstanceEnv {
     const env = loadInput.env ?? process.env;
     if (!loadInput.env && input.loadEnv !== false) {
+      const explicitEnvironment = snapshotEnvironment(env);
       loadDotenv({ path: resolve(workspaceRoot, ".env"), quiet: true });
       loadDotenv({ path: resolve(clientRoot, ".env"), override: true, quiet: true });
+      restoreEnvironment(env, explicitEnvironment);
     }
     return env;
   }
@@ -144,6 +146,18 @@ function toPath(value: string | URL): string {
     return fileURLToPath(new URL(value));
   }
   return value;
+}
+
+function snapshotEnvironment(env: ClientInstanceEnv): Map<string, string> {
+  return new Map(
+    Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined)
+  );
+}
+
+function restoreEnvironment(env: ClientInstanceEnv, snapshot: Map<string, string>): void {
+  for (const [key, value] of snapshot) {
+    env[key] = value;
+  }
 }
 
 function registerShutdownHandlers(app: ClientInstanceApp): void {

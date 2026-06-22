@@ -172,7 +172,7 @@ function PendingAssistantMessage({
     }
 
     const lastMessage = state.thread.messages.at(-1);
-    return lastMessage?.role !== "assistant";
+    return lastMessage?.role !== "assistant" || !assistantMessageHasVisibleContent(lastMessage);
   });
 
   if (!showPendingMessage) {
@@ -190,6 +190,20 @@ function PendingAssistantMessage({
       </div>
     </div>
   );
+}
+
+function assistantMessageHasVisibleContent(message: {
+  parts?: ReadonlyArray<{
+    type: string;
+    text?: string;
+  }>;
+}): boolean {
+  return (message.parts ?? []).some((part) => {
+    if (part.type === "text") {
+      return part.text?.trim().length ? true : false;
+    }
+    return part.type !== "indicator" && part.type !== "step-start";
+  });
 }
 
 function getSelectedAgent(
