@@ -6,6 +6,7 @@ export interface ToolDisplayPayload {
   version?: unknown;
   mode?: unknown;
   displayId?: unknown;
+  title?: unknown;
   data?: unknown;
 }
 

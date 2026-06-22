@@ -146,7 +146,8 @@ export const showViewTool = defineTool({
         type: "string",
         enum: ["inline", "side_panel", "fullscreen"],
         default: "inline",
-        description: "How prominently the user interface should render the HTML."
+        description:
+          "How prominently the user interface should render the HTML. Use side_panel when the user should keep chatting while the view opens in the right preview panel."
       },
       title: {
         type: "string",
@@ -169,6 +170,7 @@ export const showViewTool = defineTool({
         version: 1,
         mode: input.mode,
         displayId,
+        ...(input.title ? { title: input.title } : {}),
         data: {
           html: prepareVisualizationHtml(input.html),
           ...(input.title ? { title: input.title } : {})

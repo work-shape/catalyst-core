@@ -49,7 +49,7 @@ export function AssistantThread({
         className="grid h-full min-h-0 min-w-0 overflow-hidden"
         style={{ ["--thread-max-width" as string]: "52rem" }}
       >
-        <ThreadPrimitive.Viewport className="relative flex min-h-0 flex-col overflow-y-auto overflow-x-hidden scroll-smooth">
+        <ThreadPrimitive.Viewport className="chat-scrollbar relative flex min-h-0 flex-col overflow-y-auto overflow-x-hidden scroll-smooth">
           <div className="mx-auto flex min-h-full w-full max-w-[var(--thread-max-width)] flex-1 flex-col px-5 pt-20">
             {notice ? (
               <div className="mb-4 inline-flex w-fit max-w-full items-center gap-2 rounded-md border border-amber-300/70 bg-amber-50 px-3 py-2 text-sm text-amber-900">

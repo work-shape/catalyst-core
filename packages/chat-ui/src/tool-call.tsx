@@ -12,6 +12,7 @@ import {
   useToolDisplayWidget
 } from "./domain-ui-widgets";
 import { useTranslation } from "./i18n";
+import { useToolDisplayPanel } from "./tool-display-panel";
 import { cn } from "./ui/cn";
 import { Spinner } from "./ui/spinner";
 
@@ -60,6 +61,7 @@ interface DataPartProps {
 
 export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isError, status }: ToolCallMessagePartProps) {
   const { locale, t } = useTranslation();
+  const displayPanel = useToolDisplayPanel();
   const displayWidget = useToolDisplayWidget();
   const state = toolUiState({ isError, result, status });
   const display = readToolDisplayPayloadFromToolResult(result);
@@ -76,6 +78,7 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
       : undefined;
   const builtInDisplay = display && !hasRenderedNode(renderedDisplay) ? renderBuiltInDisplay(display) : undefined;
   const hasDisplay = hasRenderedNode(renderedDisplay) || hasRenderedNode(builtInDisplay);
+  const displayMode = readDisplayMode(display);
   const detailSections = toolDetailSections({
     args,
     argsText,
@@ -86,31 +89,29 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
   const statusLabel = toolStatusLabel(state, t);
 
   if (hasDisplay) {
-    return (
-      <div
-        className={cn("chat-tool-part my-3 max-w-5xl", state === "failed" && "text-destructive")}
-        data-testid="tool-call-card"
-      >
-        <div className="mb-2 flex min-w-0 items-center gap-2 px-1 text-xs text-muted-foreground">
-          <ToolStatusIcon state={state} />
-          <span className="truncate font-medium text-foreground">{toolName}</span>
-          <span className="shrink-0">{statusLabel}</span>
-        </div>
-        <div
-          className={cn(
-            "overflow-hidden rounded-md border bg-card shadow-xs",
-            state === "failed" && "border-destructive/40 bg-destructive/5"
-          )}
-        >
-          {renderedDisplay ?? builtInDisplay}
-        </div>
-        <ToolDetailDisclosure
-          sections={detailSections}
-          defaultOpen={state === "failed"}
-          className="mt-2"
+    if (displayMode === "side_panel" && displayPanel.available) {
+      return (
+        <SidePanelToolCall
+          detailSections={detailSections}
+          display={display}
+          displayNode={renderedDisplay ?? builtInDisplay}
+          state={state}
+          statusLabel={statusLabel}
+          toolCallId={toolCallId}
+          toolName={toolName}
         />
-        <span className="sr-only">{toolCallId}</span>
-      </div>
+      );
+    }
+
+    return (
+      <DisplayToolCall
+        detailSections={detailSections}
+        displayNode={renderedDisplay ?? builtInDisplay}
+        state={state}
+        statusLabel={statusLabel}
+        toolCallId={toolCallId}
+        toolName={toolName}
+      />
     );
   }
 
@@ -147,6 +148,7 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
 
 export function DataPart({ name, data }: DataPartProps) {
   const { locale, t } = useTranslation();
+  const displayPanel = useToolDisplayPanel();
   const displayWidget = useToolDisplayWidget();
   const renderedDisplay =
     isToolDisplayPayload(data) && displayWidget
@@ -159,14 +161,15 @@ export function DataPart({ name, data }: DataPartProps) {
   const builtInDisplay =
     isToolDisplayPayload(data) && !hasRenderedNode(renderedDisplay) ? renderBuiltInDisplay(data) : undefined;
   const hasDisplay = hasRenderedNode(renderedDisplay) || hasRenderedNode(builtInDisplay);
+  const displayMode = isToolDisplayPayload(data) ? readDisplayMode(data) : "inline";
   const details = formatDetails(data);
 
   if (hasDisplay) {
-    return (
-      <div className="chat-tool-part my-2 max-w-5xl rounded-md border bg-card shadow-xs">
-        {renderedDisplay ?? builtInDisplay}
-      </div>
-    );
+    if (displayMode === "side_panel" && displayPanel.available && isToolDisplayPayload(data)) {
+      return <SidePanelDataPart display={data} displayNode={renderedDisplay ?? builtInDisplay} name={name} />;
+    }
+
+    return <DisplayDataPart displayNode={renderedDisplay ?? builtInDisplay} name={name} />;
   }
 
   return (
@@ -180,6 +183,210 @@ export function DataPart({ name, data }: DataPartProps) {
           {details}
         </pre>
       ) : null}
+    </div>
+  );
+}
+
+function SidePanelToolCall({
+  detailSections,
+  display,
+  displayNode,
+  state,
+  statusLabel,
+  toolCallId,
+  toolName
+}: {
+  detailSections: Array<{ label: string; value: string }>;
+  display: ReturnType<typeof readToolDisplayPayloadFromToolResult>;
+  displayNode: ReactNode;
+  state: "running" | "completed" | "failed";
+  statusLabel: string;
+  toolCallId: string;
+  toolName: string;
+}) {
+  const { t } = useTranslation();
+  const panel = useToolDisplayPanel();
+  const openedKeyRef = useRef<string | undefined>(undefined);
+  const panelKey = displayPanelKey(display, toolCallId);
+  const title = displayPanelTitle(display, toolName);
+
+  useEffect(() => {
+    if (!panel.available || openedKeyRef.current === panelKey) {
+      return;
+    }
+    openedKeyRef.current = panelKey;
+    panel.show({
+      key: panelKey,
+      title,
+      subtitle: toolName,
+      node: displayNode
+    });
+  }, [panel, panelKey, title, toolName]);
+
+  return (
+    <div
+      className={cn(
+        "chat-tool-part my-3 max-w-3xl rounded-md border border-border/60 bg-card/40 text-xs",
+        state === "failed" && "border-destructive/40 bg-destructive/5"
+      )}
+      data-testid="tool-call-card"
+    >
+      <button
+        type="button"
+        onClick={() =>
+          panel.show({
+            key: panelKey,
+            title,
+            subtitle: toolName,
+            node: displayNode
+          })
+        }
+        className="flex w-full min-w-0 items-center gap-2 px-2.5 py-2 text-left text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
+      >
+        <ToolStatusIcon state={state} />
+        <span className="truncate font-medium text-foreground">{toolName}</span>
+        <span className="shrink-0">{statusLabel}</span>
+        <span className="ml-auto shrink-0 rounded-md bg-muted px-2 py-1">{t("shownInSidePanel")}</span>
+      </button>
+      <ToolDetailDisclosure
+        sections={detailSections}
+        defaultOpen={state === "failed"}
+        className="border-t px-2.5 py-1"
+      />
+      <span className="sr-only">{toolCallId}</span>
+    </div>
+  );
+}
+
+function SidePanelDataPart({
+  display,
+  displayNode,
+  name
+}: {
+  display: { kind?: unknown; mode?: unknown; displayId?: unknown; title?: unknown; data?: unknown };
+  displayNode: ReactNode;
+  name: string;
+}) {
+  const { t } = useTranslation();
+  const panel = useToolDisplayPanel();
+  const openedKeyRef = useRef<string | undefined>(undefined);
+  const panelKey = displayPanelKey(display, `data:${name}`);
+  const title = displayPanelTitle(display, t("structuredOutput", { name }));
+
+  useEffect(() => {
+    if (!panel.available || openedKeyRef.current === panelKey) {
+      return;
+    }
+    openedKeyRef.current = panelKey;
+    panel.show({
+      key: panelKey,
+      title,
+      subtitle: t("structuredOutput", { name }),
+      node: displayNode
+    });
+  }, [name, panel, panelKey, title]);
+
+  return (
+    <div className="chat-tool-part my-2 max-w-3xl rounded-md border border-border/60 bg-card/40 text-xs">
+      <button
+        type="button"
+        onClick={() =>
+          panel.show({
+            key: panelKey,
+            title,
+            subtitle: t("structuredOutput", { name }),
+            node: displayNode
+          })
+        }
+        className="flex w-full min-w-0 items-center gap-2 px-2.5 py-2 text-left text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
+      >
+        <Wrench size={14} className="shrink-0" aria-hidden="true" />
+        <span className="truncate font-medium text-foreground">{title}</span>
+        <span className="ml-auto shrink-0 rounded-md bg-muted px-2 py-1">{t("shownInSidePanel")}</span>
+      </button>
+    </div>
+  );
+}
+
+function DisplayToolCall({
+  detailSections,
+  displayNode,
+  state,
+  statusLabel,
+  toolCallId,
+  toolName
+}: {
+  detailSections: Array<{ label: string; value: string }>;
+  displayNode: ReactNode;
+  state: "running" | "completed" | "failed";
+  statusLabel: string;
+  toolCallId: string;
+  toolName: string;
+}) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(true);
+
+  return (
+    <div
+      className={cn("chat-tool-part my-3 max-w-5xl", state === "failed" && "text-destructive")}
+      data-testid="tool-call-card"
+    >
+      <div
+        className={cn(
+          "overflow-hidden rounded-md border bg-card shadow-xs",
+          state === "failed" && "border-destructive/40 bg-destructive/5"
+        )}
+      >
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-label={open ? t("collapseDisplay") : t("expandDisplay")}
+          onClick={() => setOpen((current) => !current)}
+          className="flex w-full min-w-0 items-center gap-2 border-b px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
+        >
+          <ToolStatusIcon state={state} />
+          <span className="truncate font-medium text-foreground">{toolName}</span>
+          <span className="shrink-0">{statusLabel}</span>
+          <ChevronRight
+            size={14}
+            className={cn("ml-auto shrink-0 transition-transform", open && "rotate-90")}
+            aria-hidden="true"
+          />
+        </button>
+        {open ? <div>{displayNode}</div> : null}
+      </div>
+      <ToolDetailDisclosure
+        sections={detailSections}
+        defaultOpen={state === "failed"}
+        className="mt-2"
+      />
+      <span className="sr-only">{toolCallId}</span>
+    </div>
+  );
+}
+
+function DisplayDataPart({ displayNode, name }: { displayNode: ReactNode; name: string }) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(true);
+
+  return (
+    <div className="chat-tool-part my-2 max-w-5xl overflow-hidden rounded-md border bg-card shadow-xs">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-label={open ? t("collapseDisplay") : t("expandDisplay")}
+        onClick={() => setOpen((current) => !current)}
+        className="flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
+      >
+        <Wrench size={14} className="shrink-0" aria-hidden="true" />
+        <span className="truncate font-medium text-foreground">{t("structuredOutput", { name })}</span>
+        <ChevronRight
+          size={14}
+          className={cn("ml-auto shrink-0 transition-transform", open && "rotate-90")}
+          aria-hidden="true"
+        />
+      </button>
+      {open ? <div className="border-t">{displayNode}</div> : null}
     </div>
   );
 }
@@ -392,6 +599,40 @@ function getToolSummary(result: unknown): string | undefined {
     return result.output;
   }
   return undefined;
+}
+
+function readDisplayMode(display: { mode?: unknown } | undefined): "inline" | "side_panel" | "fullscreen" {
+  if (display?.mode === "side_panel" || display?.mode === "fullscreen") {
+    return display.mode;
+  }
+  return "inline";
+}
+
+function displayPanelKey(display: { displayId?: unknown; kind?: unknown } | undefined, fallback: string): string {
+  if (typeof display?.displayId === "string" && display.displayId.trim()) {
+    return display.displayId;
+  }
+  if (typeof display?.kind === "string" && display.kind.trim()) {
+    return `${display.kind}:${fallback}`;
+  }
+  return fallback;
+}
+
+function displayPanelTitle(
+  display: { kind?: unknown; title?: unknown; data?: unknown } | undefined,
+  fallback: string
+): string {
+  if (typeof display?.title === "string" && display.title.trim()) {
+    return display.title;
+  }
+  const dataTitle = isRecord(display?.data) && typeof display.data.title === "string" ? display.data.title : undefined;
+  if (dataTitle?.trim()) {
+    return dataTitle;
+  }
+  if (typeof display?.kind === "string" && display.kind.trim()) {
+    return display.kind;
+  }
+  return fallback;
 }
 
 function renderBuiltInDisplay(display: { kind?: unknown; mode?: unknown; data?: unknown }): ReactNode {

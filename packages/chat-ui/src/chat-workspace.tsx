@@ -33,6 +33,7 @@ import {
   type ResolvedThemeMode
 } from "./theme";
 import { ThemeToggle } from "./theme-toggle";
+import { ToolDisplayPanel, useToolDisplayPanel } from "./tool-display-panel";
 import { cn } from "./ui/cn";
 import { UserMenu } from "./user-menu";
 import { UserSettingsPanel } from "./user-settings-panel";
@@ -65,6 +66,7 @@ export function ChatWorkspace({
     readStoredThemeMode()
   );
   const [systemThemeMode, setSystemThemeMode] = useState<ResolvedThemeMode>(() => readSystemThemeMode());
+  const displayPanel = useToolDisplayPanel();
   const authScope = "standalone";
   const draftKey = createDraftKey(authScope, selectedConversationId);
   const draft = draftsByTarget[draftKey] ?? "";
@@ -201,6 +203,11 @@ export function ChatWorkspace({
     ...(themeStyle ?? {})
   } as CSSProperties;
   const activeAgentName = selectedAgentName ?? config?.defaultAgentName ?? config?.agents[0]?.name;
+  const displayPanelOpen = Boolean(displayPanel.entry && displayPanel.open);
+
+  useEffect(() => {
+    displayPanel.close();
+  }, [displayPanel.close, selectedConversationId]);
 
   useEffect(() => {
     const media = window.matchMedia?.("(prefers-color-scheme: dark)");
@@ -484,6 +491,7 @@ export function ChatWorkspace({
 
       <WorkspaceChrome
         agents={config?.agents ?? []}
+        displayPanelOpen={displayPanelOpen}
         sidebarOpen={sidebarOpen}
         selectedAgentName={activeAgentName}
         themeMode={resolvedThemeMode}
@@ -534,41 +542,46 @@ export function ChatWorkspace({
           onSelectLocale={onSelectLocale}
         />
       ) : (
-        <section
-          className="relative h-full min-h-0 min-w-0"
-          onDragEnter={fileDropzone.onChatDragEnter}
-          onDragOver={fileDropzone.onChatDragOver}
-          onDragLeave={fileDropzone.onChatDragLeave}
-          onDrop={fileDropzone.onChatDrop}
-        >
-          <AssistantChatPanel
-            apiBaseUrl={apiBaseUrl}
-            client={client}
-            config={config}
-            selectedConversationId={selectedConversationId}
-            messages={messages}
-            messagesLoaded={messagesLoaded}
-            notice={notice}
-            draft={draft}
-            composerFocusRequestId={composerFocusRequestId}
-            locale={activeLocale}
-            selectedAgentName={activeAgentName}
-            draftAttachments={draftAttachmentController.draftAttachments}
-            localUploadingAttachments={draftAttachmentController.visibleUploadingAttachments}
-            sendBlockedReason={draftAttachmentController.sendBlockedReason}
-            attachmentsEnabled={attachmentsEnabled}
-            attachmentAccept={attachmentAccept}
-            onDraftChange={(value) => setDraftForKey(draftKey, value)}
-            onFilesSelected={draftAttachmentController.onFilesSelected}
-            onRemoveDraftAttachment={draftAttachmentController.onRemoveDraftAttachment}
-            onRetryDraftAttachment={draftAttachmentController.onRetryDraftAttachment}
-            onConversationStarted={onConversationStarted}
-            onMessageSubmitted={onMessageSubmitted}
-            onChatRequestAccepted={onChatRequestAccepted}
-            onStreamFinished={onStreamFinished}
-            onStreamError={onStreamError}
-          />
-          {fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
+        <section className="relative h-full min-h-0 min-w-0">
+          <div className="flex h-full min-h-0 min-w-0">
+            <div
+              className="relative h-full min-h-0 min-w-0 flex-1 transition-[width] duration-300 ease-out"
+              onDragEnter={fileDropzone.onChatDragEnter}
+              onDragOver={fileDropzone.onChatDragOver}
+              onDragLeave={fileDropzone.onChatDragLeave}
+              onDrop={fileDropzone.onChatDrop}
+            >
+              <AssistantChatPanel
+                apiBaseUrl={apiBaseUrl}
+                client={client}
+                config={config}
+                selectedConversationId={selectedConversationId}
+                messages={messages}
+                messagesLoaded={messagesLoaded}
+                notice={notice}
+                draft={draft}
+                composerFocusRequestId={composerFocusRequestId}
+                locale={activeLocale}
+                selectedAgentName={activeAgentName}
+                draftAttachments={draftAttachmentController.draftAttachments}
+                localUploadingAttachments={draftAttachmentController.visibleUploadingAttachments}
+                sendBlockedReason={draftAttachmentController.sendBlockedReason}
+                attachmentsEnabled={attachmentsEnabled}
+                attachmentAccept={attachmentAccept}
+                onDraftChange={(value) => setDraftForKey(draftKey, value)}
+                onFilesSelected={draftAttachmentController.onFilesSelected}
+                onRemoveDraftAttachment={draftAttachmentController.onRemoveDraftAttachment}
+                onRetryDraftAttachment={draftAttachmentController.onRetryDraftAttachment}
+                onConversationStarted={onConversationStarted}
+                onMessageSubmitted={onMessageSubmitted}
+                onChatRequestAccepted={onChatRequestAccepted}
+                onStreamFinished={onStreamFinished}
+                onStreamError={onStreamError}
+              />
+              {fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
+            </div>
+            <ToolDisplayPanel />
+          </div>
         </section>
       )}
       </main>
@@ -604,6 +617,7 @@ function SessionCheckPanel({
 
 function WorkspaceChrome({
   agents,
+  displayPanelOpen,
   sidebarOpen,
   selectedAgentName,
   themeMode,
@@ -612,6 +626,7 @@ function WorkspaceChrome({
   onToggleTheme
 }: {
   agents: SafeConfig["agents"];
+  displayPanelOpen: boolean;
   sidebarOpen: boolean;
   selectedAgentName: string | undefined;
   themeMode: ResolvedThemeMode;
@@ -655,7 +670,12 @@ function WorkspaceChrome({
         ) : null}
       </div>
 
-      <div className="pointer-events-none absolute right-4 top-3 z-50 flex items-center gap-2">
+      <div
+        className={cn(
+          "pointer-events-none absolute right-4 top-3 z-50 flex items-center gap-2",
+          displayPanelOpen && "lg:hidden"
+        )}
+      >
         <div className="pointer-events-auto">
           <ThemeToggle mode={themeMode} onToggle={onToggleTheme} />
         </div>

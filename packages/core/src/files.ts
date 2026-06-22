@@ -51,6 +51,7 @@ export type ToolDisplayOutput = JsonObject & {
   version: number;
   mode?: ToolDisplayMode;
   displayId?: string;
+  title?: string;
   data?: JsonObject;
 };
 

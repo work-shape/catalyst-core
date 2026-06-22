@@ -9,7 +9,7 @@ import {
   useAuiState
 } from "@assistant-ui/react";
 import { Check, Copy, FileText, ImageIcon, Pencil, RefreshCw, User } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AttachmentPreview } from "./attachment-preview";
 import { managedFileIdFromUrl, useAttachmentContentContext } from "./attachment-content";
 import { AssistantCursor } from "./assistant-cursor";
@@ -58,7 +58,11 @@ function AssistantMessage() {
             switch (part.type) {
               case "group-work":
                 return (
-                  <AssistantWorkGroup count={part.indices.length} active={part.status.type === "running"}>
+                  <AssistantWorkGroup
+                    count={part.indices.length}
+                    active={part.status.type === "running"}
+                    indices={part.indices}
+                  >
                     {children}
                   </AssistantWorkGroup>
                 );
@@ -97,11 +101,34 @@ function AssistantMessage() {
   );
 }
 
-function AssistantWorkGroup({ count, active, children }: { count: number; active: boolean; children: ReactNode }) {
+function AssistantWorkGroup({
+  count,
+  active,
+  children,
+  indices
+}: {
+  count: number;
+  active: boolean;
+  children: ReactNode;
+  indices: readonly number[];
+}) {
   const { t } = useTranslation();
+  const hasDisplay = useAuiState((state) =>
+    indices.some((index) => partHasDisplay(state.message.parts[index]))
+  );
+  const [open, setOpen] = useState(false);
+  const openedForDisplayRef = useRef(false);
+
+  useEffect(() => {
+    if (!hasDisplay || openedForDisplayRef.current) {
+      return;
+    }
+    openedForDisplayRef.current = true;
+    setOpen(true);
+  }, [hasDisplay, openedForDisplayRef]);
 
   return (
-    <ToolGroupRoot className="chat-tool-work my-4 max-w-5xl" variant="ghost">
+    <ToolGroupRoot className="chat-tool-work my-4 max-w-5xl" open={open} onOpenChange={setOpen} variant="ghost">
       <ToolGroupTrigger
         active={active}
         count={count}
@@ -110,6 +137,17 @@ function AssistantWorkGroup({ count, active, children }: { count: number; active
       <ToolGroupContent>{children}</ToolGroupContent>
     </ToolGroupRoot>
   );
+}
+
+function partHasDisplay(part: unknown): boolean {
+  if (!isRecord(part) || part.type !== "tool-call" || !isRecord(part.result)) {
+    return false;
+  }
+  return isRecord(part.result.display);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function UserMessage() {

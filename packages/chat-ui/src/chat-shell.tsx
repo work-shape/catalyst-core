@@ -15,6 +15,7 @@ import {
   ToolDisplayWidgetProvider,
   type ToolDisplayWidgetRegistry
 } from "./domain-ui-widgets";
+import { ToolDisplayPanelProvider } from "./tool-display-panel";
 
 export interface ChatShellAdminPanel {
   canView(user: ApiUser | undefined): boolean;
@@ -57,7 +58,9 @@ export function ChatShell({ displayWidgets, ...workspaceProps }: ChatShellProps)
   return (
     <QueryClientProvider client={queryClient}>
       <ToolDisplayWidgetProvider widgets={displayWidgets}>
-        <ChatWorkspace {...workspaceProps} />
+        <ToolDisplayPanelProvider>
+          <ChatWorkspace {...workspaceProps} />
+        </ToolDisplayPanelProvider>
       </ToolDisplayWidgetProvider>
     </QueryClientProvider>
   );

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:24-bookworm-slim AS build
+FROM node:24-bookworm-slim AS deps
 
 WORKDIR /app
 RUN corepack enable
@@ -20,6 +20,9 @@ RUN --mount=type=cache,id=vivd-pnpm-store,target=/root/.local/share/pnpm/store \
     --filter "${APP_PACKAGE}..." \
     --filter "${UI_PACKAGE}..." \
     install --frozen-lockfile
+
+FROM deps AS build
+
 RUN pnpm -r \
   --filter "${APP_PACKAGE}..." \
   --filter "${UI_PACKAGE}..." \
@@ -46,3 +49,15 @@ COPY --from=build /app/${UI_DIST_DIR} /usr/share/nginx/html
 COPY ${NGINX_CONFIG_PATH} /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
+
+FROM deps AS ui-dev
+
+ARG UI_PACKAGE
+ARG UI_DEV_PORT=5173
+
+ENV UI_PACKAGE=${UI_PACKAGE}
+ENV UI_DEV_PORT=${UI_DEV_PORT}
+ENV NODE_ENV=development
+
+EXPOSE 5173
+CMD ["sh", "-c", "pnpm --filter \"${UI_PACKAGE}\" exec vite --host 0.0.0.0 --port ${UI_DEV_PORT}"]

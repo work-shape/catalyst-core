@@ -20,6 +20,30 @@ x-watch-ignore: &watch-ignore
   - "**/.vite/**"
   - "**/.astro/**"
 
+x-demo-api-watch-ignore: &demo-api-watch-ignore
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/.venv/**"
+  - "**/.vite/**"
+  - "**/.astro/**"
+  - "src/chat-main.tsx"
+  - "src/styles.css"
+  - "widgets/**"
+  - "public/**"
+  - "index.html"
+  - "vite.config.ts"
+
+x-backend-package-watch-ignore: &backend-package-watch-ignore
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/.venv/**"
+  - "**/.vite/**"
+  - "**/.astro/**"
+  - "chat-standalone/**"
+  - "chat-ui/**"
+  - "chat-widget/**"
+  - "docs/**"
+
 x-migrate-command: &migrate-command
   [
     "node",
@@ -91,10 +115,10 @@ services:
       watch:
         - action: rebuild
           path: ../../clients/demo
-          ignore: *watch-ignore
+          ignore: *demo-api-watch-ignore
         - action: rebuild
           path: ../../packages
-          ignore: *watch-ignore
+          ignore: *backend-package-watch-ignore
         - action: rebuild
           path: ../../docker
         - action: rebuild
@@ -119,20 +143,43 @@ services:
   ui:
     build:
       <<: *client-build
-      target: ui
+      target: ui-dev
     depends_on:
       api:
         condition: service_healthy
     ports:
-      - "${UI_HOST_PORT:-5173}:80"
+      - "${UI_HOST_PORT:-5173}:5173"
     develop:
       watch:
-        - action: rebuild
-          path: ../../clients/demo
+        - action: sync
+          path: ../../clients/demo/src
+          target: /app/clients/demo/src
+          ignore: *watch-ignore
+        - action: sync
+          path: ../../clients/demo/widgets
+          target: /app/clients/demo/widgets
+          ignore: *watch-ignore
+        - action: sync
+          path: ../../clients/demo/public
+          target: /app/clients/demo/public
+          ignore: *watch-ignore
+        - action: sync
+          path: ../../clients/demo/index.html
+          target: /app/clients/demo/index.html
+        - action: sync
+          path: ../../packages/chat-ui/src
+          target: /app/packages/chat-ui/src
           ignore: *watch-ignore
         - action: rebuild
-          path: ../../packages
-          ignore: *watch-ignore
+          path: ../../clients/demo/package.json
+        - action: rebuild
+          path: ../../clients/demo/tsconfig.json
+        - action: rebuild
+          path: ../../clients/demo/vite.config.ts
+        - action: rebuild
+          path: ../../packages/chat-ui/package.json
+        - action: rebuild
+          path: ../../packages/chat-ui/tsconfig.json
         - action: rebuild
           path: ../../docker
         - action: rebuild
