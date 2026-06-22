@@ -2,19 +2,23 @@ import { useEffect, useRef, useState } from "react";
 import { ThreadListItemMorePrimitive } from "@assistant-ui/react";
 import { MessageSquare, MoreHorizontal, Trash2 } from "lucide-react";
 import type { Conversation } from "@vivd-catalyst/api-client";
+import type { ConversationActivity } from "./conversation-activity";
 import { useTranslation } from "./i18n";
 import { Button } from "./ui/button";
 import { cn } from "./ui/cn";
 import { Dialog } from "./ui/dialog";
+import { Spinner } from "./ui/spinner";
 
 export function ConversationButton({
   conversation,
+  activity,
   selected,
   onSelect,
   onDelete,
   deleting
 }: {
   conversation: Conversation;
+  activity?: ConversationActivity;
   selected: boolean;
   onSelect: () => void;
   onDelete: () => void;
@@ -22,6 +26,9 @@ export function ConversationButton({
 }) {
   const { locale, t } = useTranslation();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const running = activity?.status === "running";
+  const failed = activity?.status === "failed";
+  const unread = Boolean(activity?.unread && !selected);
 
   return (
     <>
@@ -39,11 +46,49 @@ export function ConversationButton({
           variant="ghost"
           onClick={onSelect}
         >
-          <MessageSquare size={16} className="mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          {running ? (
+            <Spinner
+              size="sm"
+              className="mt-0.5 text-primary"
+              data-testid="conversation-running-icon"
+            />
+          ) : (
+            <MessageSquare
+              size={16}
+              className={cn(
+                "mt-0.5 shrink-0 text-muted-foreground",
+                unread && "text-primary",
+                failed && "text-destructive"
+              )}
+              aria-hidden="true"
+            />
+          )}
           <span className="grid min-w-0 gap-0.5">
-            <AnimatedConversationTitle title={conversation.title} />
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <AnimatedConversationTitle title={conversation.title} />
+              {unread ? (
+                <span
+                  className="size-1.5 shrink-0 rounded-full bg-primary"
+                  data-testid="conversation-unread-indicator"
+                  aria-label={t("conversationUnread")}
+                  title={t("conversationUnread")}
+                />
+              ) : null}
+            </span>
             <span className="truncate text-xs text-muted-foreground">
-              {formatConversationDate(conversation.updatedAt, locale, t("updatedRecently"))}
+              {running ? (
+                <span className="inline-flex min-w-0 items-center gap-1 text-primary" data-testid="conversation-running-indicator">
+                  {t("conversationRunning")}
+                </span>
+              ) : unread ? (
+                <span className="text-primary" data-testid="conversation-unread-label">
+                  {t("conversationUnread")}
+                </span>
+              ) : failed ? (
+                <span className="text-destructive">{t("conversationFailed")}</span>
+              ) : (
+                formatConversationDate(conversation.updatedAt, locale, t("updatedRecently"))
+              )}
             </span>
           </span>
         </Button>

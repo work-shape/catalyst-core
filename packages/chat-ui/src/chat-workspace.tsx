@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PanelLeft } from "lucide-react";
 import {
@@ -20,6 +20,7 @@ import { AssistantChatPanel } from "./assistant-chat-panel";
 import { signOut } from "./auth-client";
 import type { ChatShellProps } from "./chat-shell";
 import { ChatDropOverlay, useChatFileDropzone } from "./chat-file-dropzone";
+import type { ConversationActivity } from "./conversation-activity";
 import {
   draftAttachmentsQueryKey,
   useDraftAttachmentController
@@ -54,7 +55,9 @@ export function ChatWorkspace({
 }: ChatShellProps) {
   const queryClient = useQueryClient();
   const [selectedConversationId, setSelectedConversationId] = useState<string | undefined>();
+  const selectedConversationIdRef = useRef<string | undefined>(undefined);
   const [draftsByTarget, setDraftsByTarget] = useState<Record<string, string>>({});
+  const [conversationActivities, setConversationActivities] = useState<Record<string, ConversationActivity>>({});
   const [notice, setNotice] = useState<string | undefined>();
   const [view, setView] = useState<WorkspaceView>("chat");
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -140,6 +143,11 @@ export function ChatWorkspace({
         queryKey: draftAttachmentsQueryKey(apiBaseUrl, authScope, deletedConversation.id)
       });
       draftAttachmentController.clearConversationUploads(deletedConversation.id);
+      setConversationActivities((currentActivities) => {
+        const nextActivities = { ...currentActivities };
+        delete nextActivities[deletedConversation.id];
+        return nextActivities;
+      });
       setSelectedConversationId(nextSelectedConversationId);
       setNotice(undefined);
       void queryClient.invalidateQueries({ queryKey: ["conversations", apiBaseUrl, authScope] });
@@ -152,6 +160,20 @@ export function ChatWorkspace({
   const conversations = conversationsQuery.data ?? [];
   const messages = selectedConversationId ? messagesQuery.data : [];
   const messagesLoaded = !selectedConversationId || messagesQuery.data !== undefined;
+  const selectedConversationActivity = selectedConversationId
+    ? conversationActivities[selectedConversationId]
+    : undefined;
+  const selectedConversationRunning = selectedConversationActivity?.status === "running";
+  const runningConversationEntries = useMemo(
+    () =>
+      Object.entries(conversationActivities)
+        .filter(([, activity]) => activity.status === "running")
+        .map(([conversationId, activity]) => ({
+          conversationId,
+          startedAt: activity.startedAt
+        })),
+    [conversationActivities]
+  );
   const config = configQuery.data;
   const attachmentsEnabled = config?.features.attachments.enabled ?? false;
   const attachmentAccept = config?.features.attachments.accept ?? "";
@@ -210,6 +232,50 @@ export function ChatWorkspace({
   }, [displayPanel.close, selectedConversationId]);
 
   useEffect(() => {
+    selectedConversationIdRef.current = selectedConversationId;
+    if (selectedConversationId) {
+      markConversationViewed(selectedConversationId);
+    }
+  }, [selectedConversationId]);
+
+  useEffect(() => {
+    if (!isAuthenticated || runningConversationEntries.length === 0) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    const pollRunningConversations = async () => {
+      await Promise.all(
+        runningConversationEntries.map(async ({ conversationId, startedAt }) => {
+          const persistedMessages = await queryClient
+            .fetchQuery({
+              queryKey: ["messages", apiBaseUrl, authScope, conversationId],
+              queryFn: () => client.messages(conversationId),
+              staleTime: 0
+            })
+            .catch(() => undefined);
+          if (!cancelled && persistedMessages && hasAssistantFinalSince(persistedMessages, startedAt)) {
+            markConversationFinished(conversationId, selectedConversationIdRef.current === conversationId);
+          }
+        })
+      );
+      if (!cancelled) {
+        void queryClient.invalidateQueries({ queryKey: ["conversations", apiBaseUrl, authScope] });
+      }
+    };
+
+    void pollRunningConversations();
+    const intervalId = window.setInterval(() => {
+      void pollRunningConversations();
+    }, 2500);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [apiBaseUrl, authScope, client, isAuthenticated, queryClient, runningConversationEntries]);
+
+  useEffect(() => {
     const media = window.matchMedia?.("(prefers-color-scheme: dark)");
     if (!media) {
       return undefined;
@@ -263,6 +329,7 @@ export function ChatWorkspace({
     onSuccess: () => {
       setSelectedConversationId(undefined);
       setDraftsByTarget({});
+      setConversationActivities({});
       setView("chat");
       void queryClient.clear();
       void queryClient.invalidateQueries({ queryKey: ["me", apiBaseUrl] });
@@ -362,6 +429,73 @@ export function ChatWorkspace({
     });
   }
 
+  function onConversationCreated(conversation: Conversation) {
+    queryClient.setQueryData<Conversation[]>(
+      ["conversations", apiBaseUrl, authScope],
+      (currentConversations = []) => {
+        if (currentConversations.some((candidate) => candidate.id === conversation.id)) {
+          return currentConversations.map((candidate) =>
+            candidate.id === conversation.id ? conversation : candidate
+          );
+        }
+        return [conversation, ...currentConversations];
+      }
+    );
+  }
+
+  function markConversationRunning(conversationId: string) {
+    setConversationActivities((currentActivities) => ({
+      ...currentActivities,
+      [conversationId]: {
+        status: "running",
+        unread: false,
+        startedAt: new Date().toISOString()
+      }
+    }));
+  }
+
+  function markConversationFinished(conversationId: string, viewed: boolean) {
+    setConversationActivities((currentActivities) => ({
+      ...currentActivities,
+      [conversationId]: {
+        ...currentActivities[conversationId],
+        status: "idle",
+        unread: !viewed,
+        completedAt: new Date().toISOString(),
+        error: undefined
+      }
+    }));
+  }
+
+  function markConversationFailed(conversationId: string, message: string, viewed: boolean) {
+    setConversationActivities((currentActivities) => ({
+      ...currentActivities,
+      [conversationId]: {
+        ...currentActivities[conversationId],
+        status: "failed",
+        unread: !viewed,
+        completedAt: new Date().toISOString(),
+        error: message
+      }
+    }));
+  }
+
+  function markConversationViewed(conversationId: string) {
+    setConversationActivities((currentActivities) => {
+      const currentActivity = currentActivities[conversationId];
+      if (!currentActivity?.unread) {
+        return currentActivities;
+      }
+      return {
+        ...currentActivities,
+        [conversationId]: {
+          ...currentActivity,
+          unread: false
+        }
+      };
+    });
+  }
+
   function onConversationStarted(conversationId: string, startedMessages?: Message[]) {
     if (startedMessages) {
       queryClient.setQueryData(["messages", apiBaseUrl, authScope, conversationId], startedMessages);
@@ -373,12 +507,14 @@ export function ChatWorkspace({
   }
 
   function onMessageSubmitted(conversationId: string) {
+    markConversationRunning(conversationId);
     setDraftForKey(createDraftKey(authScope, conversationId), "");
     queryClient.setQueryData(draftAttachmentsQueryKey(apiBaseUrl, authScope, conversationId), []);
     draftAttachmentController.clearConversationUploads(conversationId);
   }
 
   function onChatRequestAccepted(conversationId: string) {
+    void queryClient.invalidateQueries({ queryKey: ["messages", apiBaseUrl, authScope, conversationId] });
     void client
       .generateConversationTitle(conversationId)
       .then((updatedConversation) => {
@@ -399,7 +535,8 @@ export function ChatWorkspace({
       });
   }
 
-  function onStreamFinished() {
+  function onStreamFinished(conversationId: string, viewed: boolean) {
+    markConversationFinished(conversationId, viewed || selectedConversationIdRef.current === conversationId);
     setNotice(undefined);
     void queryClient.invalidateQueries({ queryKey: ["conversations", apiBaseUrl, authScope] });
     void queryClient.invalidateQueries({ queryKey: ["messages", apiBaseUrl, authScope] });
@@ -408,14 +545,19 @@ export function ChatWorkspace({
     void queryClient.invalidateQueries({ queryKey: ["audit-events", apiBaseUrl, authScope] });
   }
 
-  function onStreamError(message: string) {
-    setNotice(message);
+  function onStreamError(conversationId: string, message: string, viewed: boolean) {
+    const visible = viewed || selectedConversationIdRef.current === conversationId;
+    markConversationFailed(conversationId, message, visible);
+    if (visible) {
+      setNotice(message);
+    }
     void queryClient.invalidateQueries({ queryKey: ["conversations", apiBaseUrl, authScope] });
     void queryClient.invalidateQueries({ queryKey: ["messages", apiBaseUrl, authScope] });
     void queryClient.invalidateQueries({ queryKey: ["draft-attachments", apiBaseUrl, authScope] });
   }
 
   function onSelectConversation(conversationId: string) {
+    markConversationViewed(conversationId);
     setSelectedConversationId(conversationId);
     setView("chat");
     setNotice(undefined);
@@ -474,6 +616,7 @@ export function ChatWorkspace({
           <WorkspaceRail
             config={config}
             conversations={conversations}
+            conversationActivities={conversationActivities}
             selectedConversationId={selectedConversationId}
             isSuperadmin={isSuperadmin}
             view={view}
@@ -565,6 +708,7 @@ export function ChatWorkspace({
                 selectedAgentName={activeAgentName}
                 draftAttachments={draftAttachmentController.draftAttachments}
                 localUploadingAttachments={draftAttachmentController.visibleUploadingAttachments}
+                conversationRunning={selectedConversationRunning}
                 sendBlockedReason={draftAttachmentController.sendBlockedReason}
                 attachmentsEnabled={attachmentsEnabled}
                 attachmentAccept={attachmentAccept}
@@ -572,6 +716,7 @@ export function ChatWorkspace({
                 onFilesSelected={draftAttachmentController.onFilesSelected}
                 onRemoveDraftAttachment={draftAttachmentController.onRemoveDraftAttachment}
                 onRetryDraftAttachment={draftAttachmentController.onRetryDraftAttachment}
+                onConversationCreated={onConversationCreated}
                 onConversationStarted={onConversationStarted}
                 onMessageSubmitted={onMessageSubmitted}
                 onChatRequestAccepted={onChatRequestAccepted}
@@ -686,6 +831,28 @@ function WorkspaceChrome({
 
 function createDraftKey(authScope: string, conversationId: string | undefined): string {
   return `${authScope}:${conversationId ?? "new"}`;
+}
+
+function hasAssistantFinalSince(messages: Message[], startedAt: string | undefined): boolean {
+  return messages.some((message) => {
+    if (message.role !== "assistant" || !isAssistantFinalMessage(message)) {
+      return false;
+    }
+    return !startedAt || message.createdAt >= startedAt;
+  });
+}
+
+function isAssistantFinalMessage(message: Message): boolean {
+  const runtime = message.metadata?.agentRuntime;
+  return (
+    typeof runtime === "object" &&
+    runtime !== null &&
+    !Array.isArray(runtime) &&
+    "version" in runtime &&
+    runtime.version === 1 &&
+    "kind" in runtime &&
+    runtime.kind === "assistant_final"
+  );
 }
 
 function readStoredThemeMode(): ResolvedThemeMode | undefined {

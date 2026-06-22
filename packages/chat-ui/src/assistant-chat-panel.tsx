@@ -10,7 +10,7 @@ import {
   type UseChatRuntimeOptions
 } from "@assistant-ui/react-ai-sdk";
 import type { UIMessage } from "ai";
-import type { ApiClient, DraftAttachment, LocaleCode, Message, SafeConfig } from "@vivd-catalyst/api-client";
+import type { ApiClient, Conversation, DraftAttachment, LocaleCode, Message, SafeConfig } from "@vivd-catalyst/api-client";
 import { AssistantThread } from "./assistant-thread";
 import type { LocalUploadingAttachment } from "./assistant-composer";
 import { AttachmentContentProvider } from "./attachment-content";
@@ -32,6 +32,7 @@ export function AssistantChatPanel({
   selectedAgentName,
   draftAttachments,
   localUploadingAttachments,
+  conversationRunning,
   sendBlockedReason,
   attachmentsEnabled,
   attachmentAccept,
@@ -39,6 +40,7 @@ export function AssistantChatPanel({
   onFilesSelected,
   onRemoveDraftAttachment,
   onRetryDraftAttachment,
+  onConversationCreated,
   onConversationStarted,
   onMessageSubmitted,
   onChatRequestAccepted,
@@ -58,6 +60,7 @@ export function AssistantChatPanel({
   selectedAgentName: string | undefined;
   draftAttachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
+  conversationRunning: boolean;
   sendBlockedReason?: string;
   attachmentsEnabled: boolean;
   attachmentAccept: string;
@@ -65,11 +68,12 @@ export function AssistantChatPanel({
   onFilesSelected: (files: File[]) => void;
   onRemoveDraftAttachment: (attachmentId: string) => void;
   onRetryDraftAttachment: (attachmentId: string) => void;
+  onConversationCreated: (conversation: Conversation) => void;
   onConversationStarted: (conversationId: string, messages?: Message[]) => void;
   onMessageSubmitted: (conversationId: string) => void;
   onChatRequestAccepted: (conversationId: string) => void;
-  onStreamFinished: () => void;
-  onStreamError: (message: string) => void;
+  onStreamFinished: (conversationId: string, viewed: boolean) => void;
+  onStreamError: (conversationId: string, message: string, viewed: boolean) => void;
 }) {
   const initialMessages = useMemo(() => toUiMessages(messages ?? []), [messages]);
   const runtimeKey = selectedConversationId ?? "new";
@@ -90,6 +94,7 @@ export function AssistantChatPanel({
       selectedAgentName={selectedAgentName}
       draftAttachments={draftAttachments}
       localUploadingAttachments={localUploadingAttachments}
+      conversationRunning={conversationRunning}
       sendBlockedReason={sendBlockedReason}
       attachmentsEnabled={attachmentsEnabled}
       attachmentAccept={attachmentAccept}
@@ -97,6 +102,7 @@ export function AssistantChatPanel({
       onFilesSelected={onFilesSelected}
       onRemoveDraftAttachment={onRemoveDraftAttachment}
       onRetryDraftAttachment={onRetryDraftAttachment}
+      onConversationCreated={onConversationCreated}
       onConversationStarted={onConversationStarted}
       onMessageSubmitted={onMessageSubmitted}
       onChatRequestAccepted={onChatRequestAccepted}
@@ -120,6 +126,7 @@ function AssistantRuntimePane({
   selectedAgentName,
   draftAttachments,
   localUploadingAttachments,
+  conversationRunning,
   sendBlockedReason,
   attachmentsEnabled,
   attachmentAccept,
@@ -127,6 +134,7 @@ function AssistantRuntimePane({
   onFilesSelected,
   onRemoveDraftAttachment,
   onRetryDraftAttachment,
+  onConversationCreated,
   onConversationStarted,
   onMessageSubmitted,
   onChatRequestAccepted,
@@ -146,6 +154,7 @@ function AssistantRuntimePane({
   selectedAgentName: string | undefined;
   draftAttachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
+  conversationRunning: boolean;
   sendBlockedReason?: string;
   attachmentsEnabled: boolean;
   attachmentAccept: string;
@@ -153,11 +162,12 @@ function AssistantRuntimePane({
   onFilesSelected: (files: File[]) => void;
   onRemoveDraftAttachment: (attachmentId: string) => void;
   onRetryDraftAttachment: (attachmentId: string) => void;
+  onConversationCreated: (conversation: Conversation) => void;
   onConversationStarted: (conversationId: string, messages?: Message[]) => void;
   onMessageSubmitted: (conversationId: string) => void;
   onChatRequestAccepted: (conversationId: string) => void;
-  onStreamFinished: () => void;
-  onStreamError: (message: string) => void;
+  onStreamFinished: (conversationId: string, viewed: boolean) => void;
+  onStreamError: (conversationId: string, message: string, viewed: boolean) => void;
 }) {
   const { t } = useTranslation();
   const importedTargetRef = useRef<string | undefined>(undefined);
@@ -237,6 +247,7 @@ function AssistantRuntimePane({
             });
             conversationId = conversation.id;
             pendingConversationIdRef.current = conversation.id;
+            onConversationCreated(conversation);
           }
           onMessageSubmitted(conversationId);
           titleRequestConversationIdRef.current = conversationId;
@@ -257,6 +268,7 @@ function AssistantRuntimePane({
       apiBaseUrl,
       client,
       locale,
+      onConversationCreated,
       onMessageSubmitted,
       onChatRequestAccepted,
       pendingConversationIdRef,
@@ -283,24 +295,33 @@ function AssistantRuntimePane({
     onConversationStarted(conversationId, persistedMessages);
   }
 
+  function currentRunConversationId(): string | undefined {
+    return pendingConversationIdRef.current ?? streamedConversationIdRef.current ?? selectedConversationId;
+  }
+
   const runtime = useChatRuntime({
     messages: initialMessages,
     transport,
     isSendDisabled: Boolean(sendDisabledReason),
     toCreateMessage: toCreateMessageWithAttachments,
     async onFinish() {
+      const conversationId = currentRunConversationId();
+      const viewed = activeRef.current;
       setOptimisticPendingIfActive(false);
       await selectPendingConversation();
-      onStreamFinished();
+      if (conversationId) {
+        onStreamFinished(conversationId, viewed);
+      }
     },
     async onError(error) {
+      const conversationId = currentRunConversationId();
+      const viewed = activeRef.current;
       setOptimisticPendingIfActive(false);
       await selectPendingConversation();
-      if (activeRef.current) {
-        onStreamError(error.message);
-      } else {
-        onStreamFinished();
+      if (!conversationId || (!activeRef.current && isAbortLikeError(error))) {
+        return;
       }
+      onStreamError(conversationId, error.message, viewed);
     }
   });
 
@@ -351,6 +372,7 @@ function AssistantRuntimePane({
             sendBlockedReason={sendDisabledReason}
             attachmentsEnabled={attachmentsEnabled}
             attachmentAccept={attachmentAccept}
+            conversationRunning={conversationRunning}
             optimisticPending={optimisticPending}
             composerFocusRequestId={composerFocusRequestId}
             onFilesSelected={onFilesSelected}
@@ -384,6 +406,10 @@ function toAiSdkMessageRepository(messages: UIMessage[]): AiSdkMessageFormatRepo
       return item;
     })
   };
+}
+
+function isAbortLikeError(error: Error): boolean {
+  return error.name === "AbortError" || /abort/u.test(error.message.toLowerCase());
 }
 
 function DraftBridge({

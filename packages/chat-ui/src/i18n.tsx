@@ -22,7 +22,10 @@ const translations = {
     couldNotVerifySession: "Could not verify your session",
     confirmPassword: "Confirm password",
     confirmDeleteConversation: "Delete",
+    conversationFailed: "Failed",
     conversationOptions: "Conversation options for {title}",
+    conversationRunning: "Running",
+    conversationUnread: "New response",
     currentPassword: "Current password",
     deleting: "Deleting",
     deleteConversationDialogDescription:
@@ -114,7 +117,10 @@ const translations = {
     couldNotVerifySession: "Sitzung konnte nicht geprüft werden",
     confirmPassword: "Passwort bestätigen",
     confirmDeleteConversation: "Löschen",
+    conversationFailed: "Fehlgeschlagen",
     conversationOptions: "Optionen für Unterhaltung {title}",
+    conversationRunning: "Läuft",
+    conversationUnread: "Neue Antwort",
     currentPassword: "Aktuelles Passwort",
     deleting: "Löscht",
     deleteConversationDialogDescription:

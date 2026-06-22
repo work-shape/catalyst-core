@@ -203,10 +203,15 @@ test("conversation switching isolates pending stream state", async ({ page }) =>
     await page.getByRole("button", { name: "Send message" }).click();
     await expect(page.getByTestId("pending-assistant-message")).toBeVisible();
     await expect.poll(() => chatRequestStarted).toBe(true);
+    await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
 
     await targetConversation.getByRole("button").first().click();
     await expect(page.getByText(messageText)).toHaveCount(0);
     await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
+    await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
+
+    await sourceConversation.getByRole("button").first().click();
+    await expect(page.getByTestId("pending-assistant-message")).toBeVisible();
   } finally {
     releaseChat();
     await page.unroute(`${apiBaseUrl}/api/chat`);
@@ -241,6 +246,8 @@ test("new conversation stream completion does not steal the selected conversatio
     await page.getByRole("button", { name: "Send message" }).click();
     await expect(page.getByTestId("pending-assistant-message")).toBeVisible();
     await expect.poll(() => chatRequestStarted).toBe(true);
+    const newConversation = page.getByTestId("conversation-row").filter({ hasText: messageText });
+    await expect(newConversation.getByTestId("conversation-running-indicator")).toBeVisible();
 
     const targetConversation = page.getByTestId("conversation-row").filter({ hasText: targetTitle });
     await targetConversation.getByRole("button").first().click();
@@ -252,6 +259,42 @@ test("new conversation stream completion does not steal the selected conversatio
     releaseChat();
     await page.unroute(`${apiBaseUrl}/api/chat`);
   }
+});
+
+test("completed background turns are marked unread until viewed", async ({ page }) => {
+  await signInViaApi(page, normalUser);
+  const suffix = Date.now();
+  const sourceTitle = `Unread source ${suffix}`;
+  const targetTitle = `Unread target ${suffix}`;
+  const source = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    data: { title: sourceTitle }
+  });
+  const target = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    data: { title: targetTitle }
+  });
+  expect(source.ok()).toBe(true);
+  expect(target.ok()).toBe(true);
+
+  await page.goto("/");
+  const input = page.getByPlaceholder("Message");
+  const sourceConversation = page.getByTestId("conversation-row").filter({ hasText: sourceTitle });
+  const targetConversation = page.getByTestId("conversation-row").filter({ hasText: targetTitle });
+  await expect(sourceConversation).toHaveCount(1);
+  await expect(targetConversation).toHaveCount(1);
+
+  await sourceConversation.getByRole("button").first().click();
+  await input.fill(`Unread completion ${suffix}`);
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
+
+  await targetConversation.getByRole("button").first().click();
+  await expect(sourceConversation.getByTestId("conversation-unread-indicator")).toBeVisible({
+    timeout: 20_000
+  });
+  await expect(sourceConversation.getByTestId("conversation-unread-label")).toBeVisible();
+
+  await sourceConversation.getByRole("button").first().click();
+  await expect(sourceConversation.getByTestId("conversation-unread-indicator")).toHaveCount(0);
 });
 
 test("conversation rail deletes a conversation", async ({ page }) => {

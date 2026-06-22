@@ -16,6 +16,7 @@ export function AssistantThread({
   sendBlockedReason,
   attachmentsEnabled,
   attachmentAccept,
+  conversationRunning,
   optimisticPending,
   composerFocusRequestId,
   onFilesSelected,
@@ -30,6 +31,7 @@ export function AssistantThread({
   sendBlockedReason?: string;
   attachmentsEnabled: boolean;
   attachmentAccept: string;
+  conversationRunning?: boolean;
   optimisticPending?: boolean;
   composerFocusRequestId: number;
   onFilesSelected: (files: File[]) => void;
@@ -58,7 +60,7 @@ export function AssistantThread({
               </div>
             ) : null}
 
-            <AuiIf condition={(state) => state.thread.isEmpty}>
+            <AuiIf condition={(state) => state.thread.isEmpty && !conversationRunning}>
               <ThreadWelcome
                 agent={agent}
                 fallbackWelcomeMessage={config?.ui.welcomeMessage ?? t("genericWelcome")}
@@ -68,7 +70,7 @@ export function AssistantThread({
 
             <div className="flex flex-col gap-6 pb-8 empty:hidden">
               <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
-              <PendingAssistantMessage optimisticPending={optimisticPending} />
+              <PendingAssistantMessage conversationRunning={conversationRunning} optimisticPending={optimisticPending} />
             </div>
 
             <ThreadPrimitive.ViewportFooter className="relative sticky bottom-0 z-10 mt-auto pb-4 pt-5 before:pointer-events-none before:absolute before:-top-11 before:inset-x-0 before:z-0 before:h-16 before:bg-gradient-to-t before:from-background before:to-background/0 before:content-[''] after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:top-5 after:z-0 after:bg-background after:content-['']">
@@ -157,9 +159,15 @@ function ThreadScrollToBottom() {
   );
 }
 
-function PendingAssistantMessage({ optimisticPending }: { optimisticPending?: boolean }) {
+function PendingAssistantMessage({
+  conversationRunning,
+  optimisticPending
+}: {
+  conversationRunning?: boolean;
+  optimisticPending?: boolean;
+}) {
   const showPendingMessage = useAuiState((state) => {
-    if (!optimisticPending && !state.thread.isRunning) {
+    if (!conversationRunning && !optimisticPending && !state.thread.isRunning) {
       return false;
     }
 
