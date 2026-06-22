@@ -76,6 +76,7 @@ export function AssistantChatPanel({
   onStreamError: (conversationId: string, message: string, viewed: boolean) => void;
 }) {
   const initialMessages = useMemo(() => toUiMessages(messages ?? []), [messages]);
+  const messageSnapshotKey = useMemo(() => createMessageSnapshotKey(messages ?? []), [messages]);
   const runtimeKey = selectedConversationId ?? "new";
 
   return (
@@ -86,6 +87,7 @@ export function AssistantChatPanel({
       config={config}
       selectedConversationId={selectedConversationId}
       initialMessages={initialMessages}
+      messageSnapshotKey={messageSnapshotKey}
       messagesLoaded={messagesLoaded}
       notice={notice}
       draft={draft}
@@ -118,6 +120,7 @@ function AssistantRuntimePane({
   config,
   selectedConversationId,
   initialMessages,
+  messageSnapshotKey,
   messagesLoaded,
   notice,
   draft,
@@ -146,6 +149,7 @@ function AssistantRuntimePane({
   config: SafeConfig | undefined;
   selectedConversationId: string | undefined;
   initialMessages: UIMessage[];
+  messageSnapshotKey: string;
   messagesLoaded: boolean;
   notice: string | undefined;
   draft: string;
@@ -171,7 +175,9 @@ function AssistantRuntimePane({
 }) {
   const { t } = useTranslation();
   const importedTargetRef = useRef<string | undefined>(undefined);
+  const importedSnapshotRef = useRef<string | undefined>(undefined);
   const clearedTargetRef = useRef<string | undefined>(undefined);
+  const localStreamConversationIdRef = useRef<string | undefined>(undefined);
   const pendingConversationIdRef = useRef<string | undefined>(undefined);
   const streamedConversationIdRef = useRef<string | undefined>(undefined);
   const titleRequestConversationIdRef = useRef<string | undefined>(undefined);
@@ -249,6 +255,7 @@ function AssistantRuntimePane({
             pendingConversationIdRef.current = conversation.id;
             onConversationCreated(conversation);
           }
+          localStreamConversationIdRef.current = conversationId;
           onMessageSubmitted(conversationId);
           titleRequestConversationIdRef.current = conversationId;
 
@@ -309,6 +316,9 @@ function AssistantRuntimePane({
       const viewed = activeRef.current;
       setOptimisticPendingIfActive(false);
       await selectPendingConversation();
+      if (localStreamConversationIdRef.current === conversationId) {
+        localStreamConversationIdRef.current = undefined;
+      }
       if (conversationId) {
         onStreamFinished(conversationId, viewed);
       }
@@ -318,6 +328,9 @@ function AssistantRuntimePane({
       const viewed = activeRef.current;
       setOptimisticPendingIfActive(false);
       await selectPendingConversation();
+      if (localStreamConversationIdRef.current === conversationId) {
+        localStreamConversationIdRef.current = undefined;
+      }
       if (!conversationId || (!activeRef.current && isAbortLikeError(error))) {
         return;
       }
@@ -327,20 +340,25 @@ function AssistantRuntimePane({
 
   useLayoutEffect(() => {
     const targetKey = selectedConversationId ?? "new";
-    if (importedTargetRef.current === targetKey) {
+
+    if (!selectedConversationId) {
+      if (importedTargetRef.current !== targetKey || importedSnapshotRef.current !== messageSnapshotKey) {
+        runtime.thread.importExternalState(toAiSdkMessageRepository([]));
+        importedTargetRef.current = targetKey;
+        importedSnapshotRef.current = messageSnapshotKey;
+        clearedTargetRef.current = undefined;
+      }
       return;
     }
 
-    if (!selectedConversationId) {
-      runtime.thread.importExternalState(toAiSdkMessageRepository([]));
-      importedTargetRef.current = targetKey;
-      clearedTargetRef.current = undefined;
+    if (localStreamConversationIdRef.current === selectedConversationId) {
       return;
     }
 
     if (streamedConversationIdRef.current === selectedConversationId) {
       streamedConversationIdRef.current = undefined;
       importedTargetRef.current = targetKey;
+      importedSnapshotRef.current = messageSnapshotKey;
       clearedTargetRef.current = undefined;
       return;
     }
@@ -349,14 +367,20 @@ function AssistantRuntimePane({
       if (clearedTargetRef.current !== targetKey) {
         runtime.thread.importExternalState(toAiSdkMessageRepository([]));
         clearedTargetRef.current = targetKey;
+        importedSnapshotRef.current = undefined;
       }
+      return;
+    }
+
+    if (importedTargetRef.current === targetKey && importedSnapshotRef.current === messageSnapshotKey) {
       return;
     }
 
     runtime.thread.importExternalState(toAiSdkMessageRepository(initialMessages));
     importedTargetRef.current = targetKey;
+    importedSnapshotRef.current = messageSnapshotKey;
     clearedTargetRef.current = undefined;
-  }, [initialMessages, messagesLoaded, runtime, selectedConversationId]);
+  }, [initialMessages, messageSnapshotKey, messagesLoaded, runtime, selectedConversationId]);
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
@@ -526,6 +550,17 @@ export function toUiMessages(messages: Message[]): UIMessage[] {
       role: message.role as UIMessage["role"],
       parts: toUiMessageParts(message, toolResultsByToolCallId)
     }));
+}
+
+function createMessageSnapshotKey(messages: Message[]): string {
+  return JSON.stringify(
+    messages.map((message) => ({
+      id: message.id,
+      role: message.role,
+      text: message.text,
+      metadata: message.metadata
+    }))
+  );
 }
 
 function toUiMessageParts(

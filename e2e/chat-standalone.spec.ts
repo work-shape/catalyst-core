@@ -283,6 +283,7 @@ test("completed background turns are marked unread until viewed", async ({ page 
 
   await page.goto("/");
   const input = page.getByPlaceholder("Message");
+  const chatRegion = page.getByRole("region", { name: "Chat" });
   const sourceConversation = page.getByTestId("conversation-row").filter({ hasText: sourceTitle });
   const targetConversation = page.getByTestId("conversation-row").filter({ hasText: targetTitle });
   await expect(sourceConversation).toHaveCount(1);
@@ -291,7 +292,10 @@ test("completed background turns are marked unread until viewed", async ({ page 
   await sourceConversation.getByRole("button").first().click();
   const sendButton = page.getByRole("button", { name: "Send message" });
   await expect(sendButton).toBeEnabled();
-  await input.fill(`Unread completion ${suffix}`);
+  const forecastLocation = `Unread background ${suffix}`;
+  await input.fill(
+    `/tool demo.weather_forecast {"location":"${forecastLocation}","days":3,"unit":"celsius","startDate":"2026-06-13"}`
+  );
   await sendButton.click();
   await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
 
@@ -303,6 +307,11 @@ test("completed background turns are marked unread until viewed", async ({ page 
 
   await sourceConversation.getByRole("button").first().click();
   await expect(sourceConversation.getByTestId("conversation-unread-indicator")).toHaveCount(0);
+  const toolCallCard = chatRegion.getByTestId("tool-call-card").last();
+  await expect(toolCallCard).toBeVisible();
+  await expect(toolCallCard).toContainText("Completed");
+  await expect(toolCallCard).toContainText(forecastLocation);
+  await expect(chatRegion.getByText("Tool work completed").last()).toBeVisible();
 });
 
 test("conversation rail deletes a conversation", async ({ page }) => {
