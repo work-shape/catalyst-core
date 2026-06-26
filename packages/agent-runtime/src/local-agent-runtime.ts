@@ -117,6 +117,7 @@ export class LocalAgentRuntime implements AgentRuntime {
         ownerUserId: getRuntimeSubjectUserId(context),
         inputMessageId: input.inputMessageId,
         agentName: input.agentName,
+        idempotencyKey: input.idempotencyKey,
         correlationId: context.correlationId,
         startedAt: state.startedAt
       });
@@ -379,13 +380,30 @@ export class LocalAgentRuntime implements AgentRuntime {
     context: RuntimeCallContext,
     event: AgentRuntimeEvent
   ): Promise<void> {
-    await this.options.runObservationStore?.appendRunObservation({
-      clientInstanceId: context.clientInstanceId,
-      runId: event.runId,
-      conversationId: input.conversationId,
-      ownerUserId: getRuntimeSubjectUserId(context),
-      event
-    });
+    try {
+      await this.options.runObservationStore?.appendRunObservation({
+        clientInstanceId: context.clientInstanceId,
+        runId: event.runId,
+        conversationId: input.conversationId,
+        ownerUserId: getRuntimeSubjectUserId(context),
+        event
+      });
+    } catch (error) {
+      await this.options.agentRunStore?.updateAgentRunStatus({
+        clientInstanceId: context.clientInstanceId,
+        runId: event.runId,
+        status: "failed",
+        updatedAt: event.createdAt,
+        failedAt: event.createdAt,
+        lastSequence: event.sequence,
+        error: {
+          code: "OBSERVATION_PERSISTENCE_FAILED",
+          message: "Agent run observation persistence failed",
+          category: "internal_error"
+        }
+      });
+      throw error;
+    }
 
     if (event.type === "run_completed") {
       await this.options.agentRunStore?.updateAgentRunStatus({

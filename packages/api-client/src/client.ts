@@ -103,13 +103,17 @@ export function createApiClient(options: ApiClientOptions) {
     runId: string,
     observeOptions: { afterSequence?: number; signal?: AbortSignal } = {}
   ): AsyncIterable<RunObservation> {
-    const path = `/api/conversations/${encodeURIComponent(conversationId)}/runs/${encodeURIComponent(runId)}/events${
-      observeOptions.afterSequence !== undefined ? `?after=${encodeURIComponent(String(observeOptions.afterSequence))}` : ""
-    }`;
+    const path = apiOperations.observeConversationRun.buildPath({
+      params: { conversationId, runId },
+      query: { after: observeOptions.afterSequence }
+    });
     const response = await request(path, {
       method: "GET",
       headers: {
-        accept: "text/event-stream"
+        accept: "text/event-stream",
+        ...(observeOptions.afterSequence === undefined
+          ? {}
+          : { "last-event-id": String(observeOptions.afterSequence) })
       },
       signal: observeOptions.signal
     });
@@ -155,6 +159,106 @@ export function createApiClient(options: ApiClientOptions) {
     }
   }
 
+  const listConversations = () =>
+    unwrapJson(
+      generatedSdk.listConversations({ client: generatedClient }),
+      apiOperations.listConversations.responseSchema
+    );
+
+  const createConversation = (
+    input: OperationRequestInput<typeof apiOperations.createConversation> = {}
+  ) =>
+    unwrapJson(
+      generatedSdk.createConversation({
+        client: generatedClient,
+        body: apiOperations.createConversation.requestSchema.parse(input)
+      }),
+      apiOperations.createConversation.responseSchema
+    );
+
+  const getConversationThread = (conversationId: string) =>
+    requestJson(
+      apiOperations.getConversationThread.buildPath({ params: { conversationId } }),
+      apiOperations.getConversationThread.responseSchema
+    );
+
+  const listConversationMessages = (conversationId: string) =>
+    unwrapJson(
+      generatedSdk.listConversationMessages({
+        client: generatedClient,
+        path: { conversationId }
+      }),
+      apiOperations.listConversationMessages.responseSchema
+    );
+
+  const startConversationRun = (
+    conversationId: string,
+    input: OperationRequestInput<typeof apiOperations.startConversationRun>
+  ) =>
+    requestJson(
+      apiOperations.startConversationRun.buildPath({ params: { conversationId } }),
+      apiOperations.startConversationRun.responseSchema,
+      {
+        method: "POST",
+        body: JSON.stringify(apiOperations.startConversationRun.requestSchema.parse(input))
+      }
+    );
+
+  const createConversationRun = (
+    input: OperationRequestInput<typeof apiOperations.createConversationRun>
+  ) =>
+    requestJson(
+      apiOperations.createConversationRun.buildPath(),
+      apiOperations.createConversationRun.responseSchema,
+      {
+        method: "POST",
+        body: JSON.stringify(apiOperations.createConversationRun.requestSchema.parse(input))
+      }
+    );
+
+  const cancelRun = (
+    conversationId: string,
+    runId: string,
+    input: OperationRequestInput<typeof apiOperations.cancelConversationRun> = {}
+  ) =>
+    requestJson(
+      apiOperations.cancelConversationRun.buildPath({ params: { conversationId, runId } }),
+      apiOperations.cancelConversationRun.responseSchema,
+      {
+        method: "POST",
+        body: JSON.stringify(apiOperations.cancelConversationRun.requestSchema.parse(input))
+      }
+    );
+
+  const commandRun = (
+    conversationId: string,
+    runId: string,
+    input: OperationRequestInput<typeof apiOperations.commandConversationRun>
+  ) =>
+    requestJson(
+      apiOperations.commandConversationRun.buildPath({ params: { conversationId, runId } }),
+      apiOperations.commandConversationRun.responseSchema,
+      {
+        method: "POST",
+        body: JSON.stringify(apiOperations.commandConversationRun.requestSchema.parse(input))
+      }
+    );
+
+  const conversations = Object.assign(listConversations, {
+    list: listConversations,
+    create: createConversation,
+    getThread: getConversationThread,
+    messages: listConversationMessages,
+    startRun: startConversationRun,
+    createAndStartRun: createConversationRun
+  });
+
+  const runs = {
+    observe: observeRunEvents,
+    cancel: cancelRun,
+    command: commandRun
+  };
+
   return {
     me: () =>
       unwrapJson(
@@ -195,21 +299,8 @@ export function createApiClient(options: ApiClientOptions) {
         }),
         apiOperations.getConfig.responseSchema
       ),
-    conversations: () =>
-      unwrapJson(
-        generatedSdk.listConversations({ client: generatedClient }),
-        apiOperations.listConversations.responseSchema
-      ),
-    createConversation: (
-      input: OperationRequestInput<typeof apiOperations.createConversation> = {}
-    ) =>
-      unwrapJson(
-        generatedSdk.createConversation({
-          client: generatedClient,
-          body: apiOperations.createConversation.requestSchema.parse(input)
-        }),
-        apiOperations.createConversation.responseSchema
-      ),
+    conversations,
+    createConversation,
     generateConversationTitle: (conversationId: string) =>
       unwrapJson(
         generatedSdk.generateConversationTitle({
@@ -218,32 +309,13 @@ export function createApiClient(options: ApiClientOptions) {
         }),
         apiOperations.generateConversationTitle.responseSchema
       ),
-    thread: (conversationId: string) =>
-      requestJson(
-        apiOperations.getConversationThread.buildPath({ params: { conversationId } }),
-        apiOperations.getConversationThread.responseSchema
-      ),
-    messages: (conversationId: string) =>
-      unwrapJson(
-        generatedSdk.listConversationMessages({
-          client: generatedClient,
-          path: { conversationId }
-        }),
-        apiOperations.listConversationMessages.responseSchema
-      ),
-    cancelRun: (
-      conversationId: string,
-      runId: string,
-      input: OperationRequestInput<typeof apiOperations.cancelConversationRun> = {}
-    ) =>
-      requestJson(
-        apiOperations.cancelConversationRun.buildPath({ params: { conversationId, runId } }),
-        apiOperations.cancelConversationRun.responseSchema,
-        {
-          method: "POST",
-          body: JSON.stringify(apiOperations.cancelConversationRun.requestSchema.parse(input))
-        }
-      ),
+    thread: getConversationThread,
+    messages: listConversationMessages,
+    runs,
+    startConversationRun,
+    createConversationRun,
+    cancelRun,
+    commandRun,
     observeRunEvents,
     draftAttachments: (conversationId: string) =>
       unwrapJson(

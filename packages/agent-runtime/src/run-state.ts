@@ -65,6 +65,7 @@ export class RunState {
   private readonly listeners = new Set<() => void>();
   private readonly onEvent: RunStateOptions["onEvent"];
   private eventWriteQueue: Promise<void> = Promise.resolve();
+  private persistenceFailed = false;
 
   constructor(runId: AgentRunId, options: RunStateOptions = {}) {
     this.runId = runId;
@@ -267,7 +268,18 @@ export class RunState {
       .then(() => this.onEvent?.(event))
       .then(() => undefined)
       .catch((error: unknown) => {
-        console.warn("Failed to persist agent run observation", error);
+        if (this.closed || this.persistenceFailed) {
+          return;
+        }
+        this.persistenceFailed = true;
+        this.fail(
+          new AppError("INTERNAL", "Agent run observation persistence failed"),
+          {
+            code: "OBSERVATION_PERSISTENCE_FAILED",
+            message: "Agent run observation persistence failed",
+            category: "internal_error"
+          }
+        );
       });
   }
 }

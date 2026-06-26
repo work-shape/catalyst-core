@@ -8,7 +8,12 @@ import {
   chatStreamChunkSchema,
   chatStreamRoutePath,
   chatStreamRequestSchema,
+  createConversationRunRequestSchema,
   runObservationSchema,
+  runCommandRequestSchema,
+  runCommandResponseSchema,
+  startConversationRunRequestSchema,
+  startConversationRunResponseSchema,
   type ChatStreamChunk,
   type ChatStreamRequest
 } from "@vivd-catalyst/api-contract";
@@ -23,6 +28,7 @@ import {
   type RuntimeCallContext,
   asAgentRunId,
   asConversationId,
+  asToolCallId,
   getSubjectUserId,
   isAppError,
   requireAuthScope
@@ -38,6 +44,7 @@ import { ResumableRunRegistry } from "./resumable-run-registry";
 export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServerOptions): void {
   const conversations = new ConversationWorkflow(options);
   const titleGenerationTasks = new Map<string, Promise<Conversation | undefined>>();
+  const lifecycleMonitorTasks = new Set<AgentRunId>();
   const resumableRuns = new ResumableRunRegistry();
 
   function generateTitleForConversationOnce(
@@ -108,7 +115,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
         "Conversation title generation failed after first user message"
       );
     });
-    monitorRunLifecycle({
+    monitorRunLifecycleOnce({
       conversationId,
       context: localizedContext,
       runId,
@@ -197,7 +204,94 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
 
   app.post("/api/chat/conversations/:conversationId/runs/:runId/cancel", cancelRun);
 
-  app.get("/api/conversations/:conversationId/runs/:runId/events", async (request, reply) => {
+  app.post(apiOperations.startConversationRun.path, async (request) => {
+    const { user, context } = await authenticateRequest(options, request);
+    requireAuthScope(user, "conversation:write");
+    requireAuthScope(user, "run:start");
+    const conversationId = getConversationId(request);
+    const body = parseBody(startConversationRunRequestSchema, request.body);
+    const localizedContext = withRequestLocale(context, options, request, body.locale);
+    const started = await conversations.startMessageRun(conversationId, user, localizedContext, {
+      agentName: body.agentName,
+      idempotencyKey: body.idempotencyKey,
+      text: body.message.text
+    });
+    void generateTitleForConversationOnce(conversationId, user, localizedContext).catch((error: unknown) => {
+      request.log.warn(
+        { err: error, conversationId, runId: started.runId },
+        "Conversation title generation failed after public run start"
+      );
+    });
+    if (isObservableRunStatus(started.run.status)) {
+      monitorRunLifecycleOnce({
+        conversationId,
+        context: localizedContext,
+        runId: started.runId,
+        user
+      });
+    }
+    return startConversationRunResponseSchema.parse({
+      conversation: await readCurrentConversation(conversationId, user),
+      userMessage: started.userMessage,
+      run: started.run
+    });
+  });
+
+  app.post(apiOperations.createConversationRun.path, async (request) => {
+    const { user, context } = await authenticateRequest(options, request);
+    requireAuthScope(user, "conversation:write");
+    requireAuthScope(user, "run:start");
+    const body = parseBody(createConversationRunRequestSchema, request.body);
+    const localizedContext = withRequestLocale(context, options, request, body.locale);
+    const started = await conversations.createConversationAndStartMessageRun(
+      user,
+      localizedContext,
+      {
+        agentName: body.agentName,
+        idempotencyKey: body.idempotencyKey,
+        text: body.message.text,
+        title: body.conversation?.title
+      }
+    );
+    void generateTitleForConversationOnce(started.conversation.id, user, localizedContext).catch((error: unknown) => {
+      request.log.warn(
+        { err: error, conversationId: started.conversation.id, runId: started.runId },
+        "Conversation title generation failed after public create-and-run"
+      );
+    });
+    if (isObservableRunStatus(started.run.status)) {
+      monitorRunLifecycleOnce({
+        conversationId: started.conversation.id,
+        context: localizedContext,
+        runId: started.runId,
+        user
+      });
+    }
+    return startConversationRunResponseSchema.parse({
+      conversation: started.conversation,
+      userMessage: started.userMessage,
+      run: started.run
+    });
+  });
+
+  app.post(apiOperations.commandConversationRun.path, async (request) => {
+    const { user, context } = await authenticateRequest(options, request);
+    requireAuthScope(user, "run:command");
+    const params = request.params as { conversationId?: string; runId?: string };
+    const conversationId = asConversationId(params.conversationId ?? "");
+    const runId = asAgentRunId(params.runId ?? "");
+    const body = parseBody(runCommandRequestSchema, request.body);
+    const run = await conversations.commandRun(
+      conversationId,
+      runId,
+      user,
+      withRequestLocale(context, options, request, undefined),
+      toRuntimeRunCommand(body.command)
+    );
+    return runCommandResponseSchema.parse({ run });
+  });
+
+  app.get(apiOperations.observeConversationRun.path, async (request, reply) => {
     const { user, context } = await authenticateRequest(options, request);
     requireAuthScope(user, "run:observe");
     const params = request.params as { conversationId?: string; runId?: string };
@@ -246,12 +340,16 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
     );
   });
 
-  function monitorRunLifecycle(input: {
+  function monitorRunLifecycleOnce(input: {
     conversationId: ConversationId;
     context: RuntimeCallContext;
     runId: AgentRunId;
     user: AuthenticatedUser;
   }): void {
+    if (lifecycleMonitorTasks.has(input.runId)) {
+      return;
+    }
+    lifecycleMonitorTasks.add(input.runId);
     void (async () => {
       let assistantMessageCount = 0;
       for await (const event of conversations.observeRun(input.runId, input.context)) {
@@ -268,6 +366,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
             assistantMessageCount,
             event
           );
+          lifecycleMonitorTasks.delete(input.runId);
           return;
         }
         if (event.type === "run_cancelled") {
@@ -280,6 +379,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
             assistantMessageCount,
             event
           );
+          lifecycleMonitorTasks.delete(input.runId);
           return;
         }
         if (event.type === "run_completed") {
@@ -291,10 +391,13 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
             input.runId,
             assistantMessageCount
           );
+          lifecycleMonitorTasks.delete(input.runId);
           return;
         }
       }
+      lifecycleMonitorTasks.delete(input.runId);
     })().catch((error: unknown) => {
+      lifecycleMonitorTasks.delete(input.runId);
       app.log.warn({ err: error, conversationId: input.conversationId, runId: input.runId }, "Agent run lifecycle monitor failed");
     });
   }
@@ -624,4 +727,21 @@ function toToolUiError(event: Extract<AgentRuntimeEvent, { type: "tool_call_fail
     return event.result.error.message;
   }
   return "Tool call failed";
+}
+
+function toRuntimeRunCommand(command: {
+  type: "continue";
+} | {
+  type: "tool_permission_decision";
+  toolCallId: string;
+  approved: boolean;
+  reason?: string;
+}) {
+  if (command.type === "continue") {
+    return command;
+  }
+  return {
+    ...command,
+    toolCallId: asToolCallId(command.toolCallId)
+  };
 }

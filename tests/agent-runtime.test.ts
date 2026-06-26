@@ -7,6 +7,7 @@ import {
   type ChatMessage,
   type JsonObject,
   type ModelProviderConfig,
+  type RunObservationStore,
   type RuntimeCallContext,
   type ToolExecution,
   type ToolExecutionResult
@@ -374,6 +375,113 @@ describe("local agent runtime", () => {
       "assistant",
       "user"
     ]);
+  });
+
+  it("marks the durable run failed when observation persistence fails", async () => {
+    const clientInstanceId = asClientInstanceId("observation-failure-client");
+    const context: RuntimeCallContext = {
+      clientInstanceId,
+      correlationId: "corr-observation-failure",
+      user: {
+        id: "user-1",
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const store = new InMemoryPlatformStore();
+    const conversationId = await createConversationWithMessages(store, {
+      clientInstanceId,
+      messages: []
+    });
+    const inputMessage = await store.appendMessage({
+      clientInstanceId,
+      conversationId,
+      role: "user",
+      text: "hello"
+    });
+    const providerConfig: ModelProviderConfig = {
+      id: "test-provider",
+      type: "deterministic",
+      model: "test-model"
+    };
+    const failingObservationStore: RunObservationStore = {
+      async appendRunObservation() {
+        throw new AppError("INTERNAL", "simulated observation write failure");
+      },
+      async listRunObservations() {
+        return [];
+      }
+    };
+    const runtime = new LocalAgentRuntime({
+      agents: [
+        {
+          name: "observation_failure_agent",
+          displayName: "Observation Failure Agent",
+          instructions: "Help the user.",
+          modelProviderId: "test-provider",
+          toolNames: [],
+          initialPrompts: []
+        }
+      ],
+      modelProviders: [providerConfig],
+      defaultModelProvider: providerConfig,
+      conversationHistory: store,
+      agentRunStore: store,
+      runObservationStore: failingObservationStore,
+      modelProvider: {
+        id: "test-provider",
+        async complete() {
+          return {
+            text: "This response cannot be made durable.",
+            toolCalls: [],
+            usage: noReportedUsage()
+          };
+        }
+      },
+      toolRegistry: new ToolRegistry({ tools: [] }),
+      toolExecution: createUnusedToolExecution(),
+      usageGovernance: new ModelUsageGovernance({
+        store,
+        budget: {
+          costSafetyMultiplier: 1
+        },
+        safeguards: {}
+      })
+    });
+
+    const run = await runtime.start(
+      {
+        agentName: "observation_failure_agent",
+        conversationId,
+        inputMessageId: inputMessage.id,
+        message: {
+          text: "hello"
+        }
+      },
+      context
+    );
+
+    for await (const _event of runtime.observe(run.runId, context)) {
+      // Drain the live observer; the durable run status is the public API authority.
+    }
+    const persistedRun = await waitForPersistedRunStatus(store, {
+      clientInstanceId,
+      runId: run.runId,
+      status: "failed"
+    });
+
+    expect(persistedRun).toMatchObject({
+      status: "failed",
+      error: {
+        code: "OBSERVATION_PERSISTENCE_FAILED",
+        message: "Agent run observation persistence failed",
+        category: "internal_error"
+      }
+    });
   });
 
   it("resolves the configured model binding for an agent run", async () => {
@@ -1284,4 +1392,25 @@ async function firstRunFailedEvent(
     }
   }
   throw new Error("Run did not fail");
+}
+
+async function waitForPersistedRunStatus(
+  store: InMemoryPlatformStore,
+  input: {
+    clientInstanceId: ReturnType<typeof asClientInstanceId>;
+    runId: ReturnType<typeof asAgentRunId>;
+    status: string;
+  }
+) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const run = await store.getAgentRun({
+      clientInstanceId: input.clientInstanceId,
+      runId: input.runId
+    });
+    if (run?.status === input.status) {
+      return run;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  throw new Error(`Run did not reach status '${input.status}'`);
 }

@@ -7,6 +7,7 @@ import {
   type AttachmentManifest,
   type AgentRunId,
   type AgentRunStatus,
+  type AgentRuntimeCommand,
   type AgentRuntimeEvent,
   type AgentRuntimeObserveOptions,
   type AuthenticatedUser,
@@ -28,6 +29,7 @@ import { getModelSelectionForConversationTitles } from "@vivd-catalyst/config-sc
 import type { ModelMessage } from "@vivd-catalyst/model-provider";
 import { createEmptyAttachmentManifest } from "./attachments";
 import {
+  createConversationTitle,
   isTemporaryConversationTitle,
   normalizeGeneratedConversationTitle
 } from "./conversation-title";
@@ -39,11 +41,13 @@ export interface CreateConversationCommand {
 
 export interface SendConversationMessageCommand {
   agentName?: string;
+  idempotencyKey?: string;
   text: string;
 }
 
 export interface StartedConversationMessageRun {
   userMessage: ChatMessage;
+  run: AgentRun;
   runId: AgentRunId;
 }
 
@@ -159,7 +163,23 @@ export class ConversationWorkflow {
     context: RuntimeCallContext,
     command: SendConversationMessageCommand
   ): Promise<StartedConversationMessageRun> {
-    await this.requireOwnedActiveConversation(conversationId, user);
+    const conversation = await this.requireOwnedActiveConversation(conversationId, user);
+    if (command.idempotencyKey) {
+      const existing = await this.options.conversationStore.getAgentRunByIdempotencyKey({
+        clientInstanceId: this.options.clientInstanceId,
+        conversationId,
+        ownerUserId: getSubjectUserId(user),
+        idempotencyKey: command.idempotencyKey
+      });
+      if (existing) {
+        return {
+          userMessage: await this.requireRunInputMessage(existing),
+          run: existing,
+          runId: existing.id
+        };
+      }
+    }
+
     const activeRun = await this.options.conversationStore.getActiveConversationAgentRun({
       clientInstanceId: this.options.clientInstanceId,
       conversationId,
@@ -213,6 +233,7 @@ export class ConversationWorkflow {
       {
         agentName: command.agentName ?? this.options.config.defaultAgentName,
         conversationId,
+        idempotencyKey: command.idempotencyKey,
         inputMessageId: userMessage.id,
         message: {
           text: command.text,
@@ -222,10 +243,51 @@ export class ConversationWorkflow {
       },
       context
     );
+    const persistedRun = await this.options.conversationStore.getConversationAgentRun({
+      clientInstanceId: this.options.clientInstanceId,
+      conversationId: conversation.id,
+      runId: run.runId
+    });
+    if (!persistedRun) {
+      throw new AppError("INTERNAL", "Agent run was not persisted");
+    }
 
     return {
       userMessage,
+      run: persistedRun,
       runId: run.runId
+    };
+  }
+
+  async createConversationAndStartMessageRun(
+    user: AuthenticatedUser,
+    context: RuntimeCallContext,
+    command: SendConversationMessageCommand & CreateConversationCommand
+  ): Promise<{ conversation: Conversation; userMessage: ChatMessage; run: AgentRun; runId: AgentRunId }> {
+    if (command.idempotencyKey) {
+      const existing = await this.options.conversationStore.getAgentRunByIdempotencyKey({
+        clientInstanceId: this.options.clientInstanceId,
+        ownerUserId: getSubjectUserId(user),
+        idempotencyKey: command.idempotencyKey
+      });
+      if (existing) {
+        const conversation = await this.requireOwnedActiveConversation(existing.conversationId, user);
+        return {
+          conversation,
+          userMessage: await this.requireRunInputMessage(existing),
+          run: existing,
+          runId: existing.id
+        };
+      }
+    }
+
+    const conversation = await this.createConversation(user, context, {
+      title: command.title ?? createConversationTitle(command.text)
+    });
+    const started = await this.startMessageRun(conversation.id, user, context, command);
+    return {
+      conversation,
+      ...started
     };
   }
 
@@ -358,6 +420,27 @@ export class ConversationWorkflow {
     }
 
     await this.options.agentRuntime.cancel(runId, reason, context);
+    return (
+      (await this.options.conversationStore.getConversationAgentRun({
+        clientInstanceId: this.options.clientInstanceId,
+        conversationId,
+        runId
+      })) ?? run
+    );
+  }
+
+  async commandRun(
+    conversationId: ConversationId,
+    runId: AgentRunId,
+    user: AuthenticatedUser,
+    context: RuntimeCallContext,
+    command: AgentRuntimeCommand
+  ): Promise<AgentRun> {
+    const run = await this.getConversationRunForUser(conversationId, runId, user);
+    if (!run) {
+      throw new AppError("NOT_FOUND", "Agent run is not available");
+    }
+    await this.options.agentRuntime.resume(runId, command, context);
     return (
       (await this.options.conversationStore.getConversationAgentRun({
         clientInstanceId: this.options.clientInstanceId,
@@ -600,6 +683,18 @@ export class ConversationWorkflow {
       throw new AppError("NOT_FOUND", "Conversation is not available");
     }
     return conversation;
+  }
+
+  private async requireRunInputMessage(run: AgentRun): Promise<ChatMessage> {
+    const messages = await this.options.conversationStore.listMessages({
+      clientInstanceId: this.options.clientInstanceId,
+      conversationId: run.conversationId
+    });
+    const message = messages.find((candidate) => candidate.id === run.inputMessageId);
+    if (!message) {
+      throw new AppError("INTERNAL", "Agent run input message was not persisted");
+    }
+    return message;
   }
 
 }

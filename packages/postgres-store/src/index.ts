@@ -38,6 +38,7 @@ import {
   createAgentRun as createPostgresAgentRun,
   getAgentRun as getPostgresAgentRun,
   getActiveConversationAgentRun as getPostgresActiveConversationAgentRun,
+  getAgentRunByIdempotencyKey as getPostgresAgentRunByIdempotencyKey,
   getConversationAgentRun as getPostgresConversationAgentRun,
   listRunObservations as listPostgresRunObservations,
   updateAgentRunStatus as updatePostgresAgentRunStatus
@@ -246,6 +247,12 @@ export class PostgresPlatformStore
     ownerUserId: string;
   }): Promise<AgentRun | undefined> {
     return getPostgresActiveConversationAgentRun(this.db, input);
+  }
+
+  async getAgentRunByIdempotencyKey(
+    input: Parameters<AgentRunStore["getAgentRunByIdempotencyKey"]>[0]
+  ): Promise<AgentRun | undefined> {
+    return getPostgresAgentRunByIdempotencyKey(this.db, input);
   }
 
   async updateAgentRunStatus(input: UpdateAgentRunStatusInput): Promise<AgentRun> {

@@ -334,6 +334,161 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
+  it("exposes idempotent public Agent Runs start APIs and product SSE ids", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig(),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      payload: { title: "Public runs API test" }
+    });
+    expect(created.statusCode).toBe(200);
+    const conversation = created.json() as { id: string };
+
+    await app.server.listen({ host: "127.0.0.1", port: 0 });
+    const address = app.server.server.address() as AddressInfo;
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+
+    const missingIdempotency = await fetch(`${baseUrl}/api/conversations/${conversation.id}/runs`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        message: { text: "missing idempotency key" }
+      })
+    });
+    expect(missingIdempotency.status).toBe(422);
+    await missingIdempotency.text();
+
+    const firstStart = await fetch(`${baseUrl}/api/conversations/${conversation.id}/runs`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        idempotencyKey: "public-existing-run-key",
+        message: { text: "start through public run API" }
+      })
+    });
+    expect(firstStart.status).toBe(200);
+    const firstStartBody = (await firstStart.json()) as {
+      conversation: { id: string };
+      userMessage: { id: string; text: string };
+      run: { id: string };
+    };
+
+    const retryStart = await fetch(`${baseUrl}/api/conversations/${conversation.id}/runs`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        idempotencyKey: "public-existing-run-key",
+        message: { text: "this retry must not append" }
+      })
+    });
+    expect(retryStart.status).toBe(200);
+    expect(await retryStart.json()).toMatchObject({
+      conversation: { id: conversation.id },
+      userMessage: {
+        id: firstStartBody.userMessage.id,
+        text: "start through public run API"
+      },
+      run: { id: firstStartBody.run.id }
+    });
+
+    const events = await fetch(
+      `${baseUrl}/api/conversations/${conversation.id}/runs/${firstStartBody.run.id}/events`
+    );
+    expect(events.status).toBe(200);
+    const eventPayload = await events.text();
+    expect(eventPayload).toContain("id: 1\n");
+    const observations = parseSseChunks(eventPayload);
+    expect(observations).toContainEqual(
+      expect.objectContaining({
+        runId: firstStartBody.run.id,
+        conversationId: conversation.id,
+        type: "run_completed",
+        payload: expect.objectContaining({
+          type: "run_completed"
+        })
+      })
+    );
+    expect(observations).not.toContainEqual(
+      expect.objectContaining({
+        type: "text-delta"
+      })
+    );
+
+    const messages = await fetch(`${baseUrl}/api/conversations/${conversation.id}/messages`);
+    expect(messages.status).toBe(200);
+    const userMessages = ((await messages.json()) as Array<{ role: string; text: string }>).filter(
+      (message) => message.role === "user"
+    );
+    expect(userMessages).toEqual([
+      expect.objectContaining({
+        text: "start through public run API"
+      })
+    ]);
+
+    const firstCreateAndStart = await fetch(`${baseUrl}/api/conversations/runs`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        idempotencyKey: "public-create-run-key",
+        conversation: { title: "Created through run command" },
+        message: { text: "create and start through public run API" }
+      })
+    });
+    expect(firstCreateAndStart.status).toBe(200);
+    const firstCreateAndStartBody = (await firstCreateAndStart.json()) as {
+      conversation: { id: string };
+      userMessage: { id: string };
+      run: { id: string };
+    };
+
+    const retryCreateAndStart = await fetch(`${baseUrl}/api/conversations/runs`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        idempotencyKey: "public-create-run-key",
+        conversation: { title: "Should not create another conversation" },
+        message: { text: "this retry must not create another run" }
+      })
+    });
+    expect(retryCreateAndStart.status).toBe(200);
+    expect(await retryCreateAndStart.json()).toMatchObject({
+      conversation: { id: firstCreateAndStartBody.conversation.id },
+      userMessage: { id: firstCreateAndStartBody.userMessage.id },
+      run: { id: firstCreateAndStartBody.run.id }
+    });
+
+    const command = await fetch(
+      `${baseUrl}/api/conversations/${conversation.id}/runs/${firstStartBody.run.id}/commands`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({ command: { type: "continue" } })
+      }
+    );
+    expect(command.status).toBe(409);
+    await command.text();
+
+    await app.close();
+  });
+
   it("does not expose or mutate another user's resumable run", async () => {
     const app = await createClientInstanceApp({
       config: createTestConfig({

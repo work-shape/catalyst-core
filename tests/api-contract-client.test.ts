@@ -86,6 +86,116 @@ describe("api operation catalog and client", () => {
     expect(() => client.createConversation({ title: "" })).toThrow();
   });
 
+  it("exposes resource-oriented Agent Runs client helpers", async () => {
+    const calls: Request[] = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      calls.push(request);
+      if (request.url.endsWith("/events?after=7")) {
+        return new Response(
+          [
+            "id: 8",
+            "event: run_completed",
+            `data: ${JSON.stringify({
+              clientInstanceId: "client_1",
+              runId: "run_1",
+              conversationId: "conv_1",
+              ownerUserId: "user_1",
+              sequence: 8,
+              type: "run_completed",
+              payload: {
+                type: "run_completed",
+                runId: "run_1",
+                sequence: 8,
+                createdAt: "2026-06-27T00:00:00.000Z"
+              },
+              createdAt: "2026-06-27T00:00:00.000Z"
+            })}`,
+            "",
+            ""
+          ].join("\n"),
+          {
+            headers: {
+              "content-type": "text/event-stream"
+            }
+          }
+        );
+      }
+      return Response.json({
+        conversation: {
+          id: "conv_1",
+          clientInstanceId: "client_1",
+          ownerUserId: "user_1",
+          ownerExternalUserId: "user_1",
+          title: "Started",
+          status: "active",
+          createdAt: "2026-06-27T00:00:00.000Z",
+          updatedAt: "2026-06-27T00:00:00.000Z",
+          retainedUntil: "2026-07-27T00:00:00.000Z"
+        },
+        userMessage: {
+          id: "msg_1",
+          conversationId: "conv_1",
+          clientInstanceId: "client_1",
+          role: "user",
+          text: "Hello",
+          createdAt: "2026-06-27T00:00:00.000Z"
+        },
+        run: {
+          id: "run_1",
+          clientInstanceId: "client_1",
+          conversationId: "conv_1",
+          ownerUserId: "user_1",
+          inputMessageId: "msg_1",
+          agentName: "test_agent",
+          status: "running",
+          idempotencyKey: "idem_1",
+          startedAt: "2026-06-27T00:00:00.000Z",
+          updatedAt: "2026-06-27T00:00:00.000Z",
+          lastSequence: 0,
+          correlationId: "corr_1"
+        }
+      });
+    };
+    const client = createApiClient({
+      baseUrl: "https://chat.example",
+      getToken: () => "test-token",
+      fetchImpl
+    });
+
+    await client.conversations.startRun("conv 1", {
+      idempotencyKey: "idem_1",
+      message: { text: "Hello" }
+    });
+    await client.conversations.createAndStartRun({
+      idempotencyKey: "idem_2",
+      message: { text: "Hello" }
+    });
+    await client.runs.cancel("conv 1", "run 1", { reason: "user_requested" });
+    await client.runs.command("conv 1", "run 1", { command: { type: "continue" } });
+    const observed = [];
+    for await (const observation of client.runs.observe("conv_1", "run_1", { afterSequence: 7 })) {
+      observed.push(observation);
+    }
+
+    expect(calls.map((request) => `${request.method} ${new URL(request.url).pathname}${new URL(request.url).search}`)).toEqual([
+      "POST /api/conversations/conv%201/runs",
+      "POST /api/conversations/runs",
+      "POST /api/conversations/conv%201/runs/run%201/cancel",
+      "POST /api/conversations/conv%201/runs/run%201/commands",
+      "GET /api/conversations/conv_1/runs/run_1/events?after=7"
+    ]);
+    expect(calls.every((request) => request.headers.get("authorization") === "Bearer test-token")).toBe(true);
+    expect(calls[4]?.headers.get("last-event-id")).toBe("7");
+    expect(observed).toEqual([
+      expect.objectContaining({
+        runId: "run_1",
+        sequence: 8,
+        type: "run_completed"
+      })
+    ]);
+  });
+
   it("keeps normal server route registrations tied to the operation catalog", async () => {
     const routeFiles = [
       "packages/chat-server/src/routes/audit-routes.ts",

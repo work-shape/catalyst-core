@@ -272,6 +272,21 @@ export class InMemoryPlatformStore
     );
   }
 
+  async getAgentRunByIdempotencyKey(input: {
+    clientInstanceId: ClientInstanceId;
+    ownerUserId: string;
+    idempotencyKey: string;
+    conversationId?: ConversationId;
+  }): Promise<AgentRun | undefined> {
+    return [...this.agentRuns.values()].find(
+      (run) =>
+        run.clientInstanceId === input.clientInstanceId &&
+        run.ownerUserId === input.ownerUserId &&
+        run.idempotencyKey === input.idempotencyKey &&
+        (input.conversationId === undefined || run.conversationId === input.conversationId)
+    );
+  }
+
   async updateAgentRunStatus(input: UpdateAgentRunStatusInput): Promise<AgentRun> {
     const run = await this.getAgentRun({
       clientInstanceId: input.clientInstanceId,

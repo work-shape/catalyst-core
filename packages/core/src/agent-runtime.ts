@@ -9,6 +9,7 @@ import type { ToolExecutionResult } from "./tool-execution";
 export interface StartAgentRunInput {
   agentName: string;
   conversationId: ConversationId;
+  idempotencyKey?: string;
   inputMessageId?: MessageId;
   message: {
     text: string;
@@ -289,6 +290,12 @@ export interface AgentRunStore {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
     ownerUserId: string;
+  }): Promise<AgentRun | undefined>;
+  getAgentRunByIdempotencyKey(input: {
+    clientInstanceId: ClientInstanceId;
+    ownerUserId: string;
+    idempotencyKey: string;
+    conversationId?: ConversationId;
   }): Promise<AgentRun | undefined>;
   updateAgentRunStatus(input: UpdateAgentRunStatusInput): Promise<AgentRun>;
 }

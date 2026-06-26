@@ -541,6 +541,45 @@ export const runObservationSchema = z.object({
   createdAt: z.string()
 });
 
+export const startConversationRunRequestSchema = z.object({
+  idempotencyKey: z.string().min(1),
+  agentName: z.string().min(1).optional(),
+  locale: localeCodeSchema.optional(),
+  message: z.object({
+    text: z.string().min(1)
+  })
+});
+
+export const startConversationRunResponseSchema = z.object({
+  conversation: conversationSchema,
+  userMessage: messageSchema,
+  run: agentRunSchema
+});
+
+export const createConversationRunRequestSchema = startConversationRunRequestSchema.extend({
+  conversation: createConversationRequestSchema.optional()
+});
+
+export const runCommandSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("tool_permission_decision"),
+    toolCallId: z.string().min(1),
+    approved: z.boolean(),
+    reason: z.string().min(1).optional()
+  }),
+  z.object({
+    type: z.literal("continue")
+  })
+]);
+
+export const runCommandRequestSchema = z.object({
+  command: runCommandSchema
+});
+
+export const runCommandResponseSchema = z.object({
+  run: agentRunSchema
+});
+
 export const conversationListItemSchema = conversationSchema.extend({
   latestMessageAt: z.string().optional(),
   activeRun: activeRunSummarySchema.optional(),
@@ -844,6 +883,34 @@ export const apiOperations = {
     requestSchema: cancelRunRequestSchema,
     responseSchema: cancelRunResponseSchema
   }),
+  startConversationRun: defineJsonApiOperation({
+    operationId: "startConversationRun",
+    method: "POST",
+    path: "/api/conversations/:conversationId/runs",
+    requestSchema: startConversationRunRequestSchema,
+    responseSchema: startConversationRunResponseSchema
+  }),
+  createConversationRun: defineJsonApiOperation({
+    operationId: "createConversationRun",
+    method: "POST",
+    path: "/api/conversations/runs",
+    requestSchema: createConversationRunRequestSchema,
+    responseSchema: startConversationRunResponseSchema
+  }),
+  observeConversationRun: defineJsonApiOperation({
+    operationId: "observeConversationRun",
+    method: "GET",
+    path: "/api/conversations/:conversationId/runs/:runId/events",
+    queryParams: ["after"],
+    responseSchema: runObservationSchema
+  }),
+  commandConversationRun: defineJsonApiOperation({
+    operationId: "commandConversationRun",
+    method: "POST",
+    path: "/api/conversations/:conversationId/runs/:runId/commands",
+    requestSchema: runCommandRequestSchema,
+    responseSchema: runCommandResponseSchema
+  }),
   deleteConversation: defineJsonApiOperation({
     operationId: "deleteConversation",
     method: "DELETE",
@@ -979,6 +1046,12 @@ export type AgentRun = z.infer<typeof agentRunSchema>;
 export type ActiveRunSummary = z.infer<typeof activeRunSummarySchema>;
 export type AgentRunProjection = z.infer<typeof agentRunProjectionSchema>;
 export type RunObservation = z.infer<typeof runObservationSchema>;
+export type StartConversationRunRequest = z.infer<typeof startConversationRunRequestSchema>;
+export type StartConversationRunResponse = z.infer<typeof startConversationRunResponseSchema>;
+export type CreateConversationRunRequest = z.infer<typeof createConversationRunRequestSchema>;
+export type RunCommand = z.infer<typeof runCommandSchema>;
+export type RunCommandRequest = z.infer<typeof runCommandRequestSchema>;
+export type RunCommandResponse = z.infer<typeof runCommandResponseSchema>;
 export type ConversationUserState = z.infer<typeof conversationUserStateSchema>;
 export type ConversationThreadSnapshot = z.infer<typeof conversationThreadSnapshotSchema>;
 export type CancelRunRequest = z.infer<typeof cancelRunRequestSchema>;

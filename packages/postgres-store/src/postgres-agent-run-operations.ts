@@ -99,6 +99,33 @@ export async function getActiveConversationAgentRun(
   return row ? mapAgentRun(row) : undefined;
 }
 
+export async function getAgentRunByIdempotencyKey(
+  db: PostgresDatabase,
+  input: {
+    clientInstanceId: ClientInstanceId;
+    ownerUserId: string;
+    idempotencyKey: string;
+    conversationId?: ConversationId;
+  }
+): Promise<AgentRun | undefined> {
+  const [row] = await db
+    .select()
+    .from(agentRuns)
+    .where(
+      and(
+        eq(agentRuns.clientInstanceId, input.clientInstanceId),
+        eq(agentRuns.ownerUserId, input.ownerUserId),
+        eq(agentRuns.idempotencyKey, input.idempotencyKey),
+        input.conversationId === undefined
+          ? undefined
+          : eq(agentRuns.conversationId, input.conversationId)
+      )
+    )
+    .orderBy(agentRuns.startedAt)
+    .limit(1);
+  return row ? mapAgentRun(row) : undefined;
+}
+
 export async function updateAgentRunStatus(
   db: PostgresDatabase,
   input: UpdateAgentRunStatusInput
