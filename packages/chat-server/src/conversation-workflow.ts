@@ -317,6 +317,7 @@ export class ConversationWorkflow {
       correlationId: context.correlationId,
       metadata: {
         assistantMessageCount,
+        errorCategory: event.error.category,
         errorCode: event.error.code,
         runId
       }

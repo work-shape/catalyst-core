@@ -36,6 +36,7 @@ import type {
   ClientInstanceManagedObjectReaderContribution
 } from "./capabilities";
 import type { ClientInstanceEnv } from "./env";
+import { createRuntimeFailureReporter } from "./runtime-error-logging";
 import { createPlatformStore, type PlatformStoreMode } from "./store";
 import { createToolDefinitions } from "./tools";
 
@@ -152,6 +153,7 @@ export async function createClientInstanceApp(
     repeatedToolCallLimit: config.runtime.repeatedToolCallLimit,
     modelContext: config.modelContext,
     skills: config.skills,
+    runFailureReporter: createRuntimeFailureReporter(),
     artifactReader: managedObjects
       ? {
           readArtifact(readInput) {

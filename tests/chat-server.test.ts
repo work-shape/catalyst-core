@@ -247,8 +247,14 @@ describe("client instance app vertical slice", () => {
       url: "/api/audit-events"
     });
     expect(audit.statusCode).toBe(200);
-    expect((audit.json() as Array<{ type: string }>).some((event) => event.type === "message.failed")).toBe(
-      true
+    expect(audit.json()).toContainEqual(
+      expect.objectContaining({
+        type: "message.failed",
+        metadata: expect.objectContaining({
+          errorCategory: "app_error",
+          errorCode: "FORBIDDEN"
+        })
+      })
     );
 
     await app.close();

@@ -1,5 +1,6 @@
 import {
   AppError,
+  type AgentRunFailureCategory,
   type AgentRunId,
   type AgentRunStatus,
   type AgentRuntimeEvent,
@@ -11,6 +12,34 @@ type AgentRuntimeEventDraft = AgentRuntimeEvent extends infer TEvent
     ? Omit<TEvent, "sequence" | "createdAt">
     : never
   : never;
+
+export interface RunFailureError {
+  code: string;
+  message: string;
+  category: AgentRunFailureCategory;
+}
+
+export function toRunFailureError(error: unknown): RunFailureError {
+  const appError = error instanceof AppError ? error : undefined;
+  return {
+    code: appError?.code ?? "INTERNAL",
+    message: appError && appError.code !== "INTERNAL" ? appError.message : "Agent run failed",
+    category: categorizeRunFailure(error)
+  };
+}
+
+function categorizeRunFailure(error: unknown): AgentRunFailureCategory {
+  if (error instanceof AppError) {
+    return error.code === "INTERNAL" ? "internal_error" : "app_error";
+  }
+  if (error instanceof Error && error.name === "AbortError") {
+    return "abort_error";
+  }
+  if (error instanceof Error) {
+    return "internal_error";
+  }
+  return "unknown_error";
+}
 
 export class RunState {
   readonly runId: AgentRunId;
@@ -101,16 +130,12 @@ export class RunState {
     this.close();
   }
 
-  fail(error: unknown): void {
+  fail(error: unknown, failure: RunFailureError = toRunFailureError(error)): void {
     this.status = "failed";
-    const appError = error instanceof AppError ? error : undefined;
     this.emit({
       type: "run_failed",
       runId: this.runId,
-      error: {
-        code: appError?.code ?? "INTERNAL",
-        message: appError && appError.code !== "INTERNAL" ? appError.message : "Agent run failed"
-      }
+      error: failure
     });
     this.close();
   }

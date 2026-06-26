@@ -12,7 +12,7 @@ import {
   type ToolExecutionResult
 } from "@vivd-catalyst/core";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
-import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
+import { LocalAgentRuntime, type LocalAgentRunFailureReport } from "@vivd-catalyst/agent-runtime";
 import {
   modelContentText,
   type ModelCompletionStreamEvent,
@@ -654,10 +654,12 @@ describe("local agent runtime", () => {
       type: "deterministic",
       model: "test-model"
     };
+    const thrownError = new Error("Failed query: insert into messages params: secret document text");
+    let reportedFailure: LocalAgentRunFailureReport | undefined;
     const modelProvider: ModelProvider = {
       id: "test-provider",
       async complete() {
-        throw new Error("Failed query: insert into messages params: secret document text");
+        throw thrownError;
       }
     };
     const runtime = new LocalAgentRuntime({
@@ -683,7 +685,10 @@ describe("local agent runtime", () => {
           costSafetyMultiplier: 1
         },
         safeguards: {}
-      })
+      }),
+      runFailureReporter(report) {
+        reportedFailure = report;
+      }
     });
 
     const run = await runtime.start(
@@ -701,8 +706,12 @@ describe("local agent runtime", () => {
 
     expect(failed.error).toEqual({
       code: "INTERNAL",
-      message: "Agent run failed"
+      message: "Agent run failed",
+      category: "internal_error"
     });
+    expect(reportedFailure?.runId).toBe(run.runId);
+    expect(reportedFailure?.failure).toEqual(failed.error);
+    expect(reportedFailure?.error).toBe(thrownError);
   });
 
   it("keeps non-internal AppError messages visible in run failure events", async () => {
@@ -777,7 +786,8 @@ describe("local agent runtime", () => {
 
     expect(failed.error).toEqual({
       code: "CONFLICT",
-      message: "Daily model call safeguard has been reached"
+      message: "Daily model call safeguard has been reached",
+      category: "app_error"
     });
   });
 });

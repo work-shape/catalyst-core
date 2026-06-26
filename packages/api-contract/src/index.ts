@@ -391,7 +391,8 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     createdAt: z.string(),
     error: z.object({
       code: z.string(),
-      message: z.string()
+      message: z.string(),
+      category: z.enum(["app_error", "internal_error", "abort_error", "unknown_error"])
     })
   })
 ]);

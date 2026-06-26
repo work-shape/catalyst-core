@@ -25,7 +25,7 @@ import {
 import type { ModelCompletion, ModelMessage, ModelProvider, ModelToolCall } from "@vivd-catalyst/model-provider";
 import type { ToolRegistry } from "@vivd-catalyst/tool-execution";
 import type { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
-import { RunState } from "./run-state";
+import { RunState, toRunFailureError, type RunFailureError } from "./run-state";
 import { createSystemInstructions } from "./system-instructions";
 import { executeToolCall } from "./tool-call-execution";
 import { recordModelUsage } from "./usage-recording";
@@ -63,6 +63,15 @@ export interface LocalAgentRuntimeOptions {
   artifactReader?: ModelContextArtifactReader;
   clock?: Clock;
   fileReader?: ModelContextFileReader;
+  runFailureReporter?: (report: LocalAgentRunFailureReport) => void | Promise<void>;
+}
+
+export interface LocalAgentRunFailureReport {
+  runId: AgentRunId;
+  input: StartAgentRunInput;
+  context: RuntimeCallContext;
+  failure: RunFailureError;
+  error: unknown;
 }
 
 const DEFAULT_CONVERSATION_HISTORY_LIMIT = 20;
@@ -92,7 +101,15 @@ export class LocalAgentRuntime implements AgentRuntime {
 
     queueMicrotask(() => {
       void this.executeRun(runId, input, context).catch((error) => {
-        state.fail(error);
+        const failure = toRunFailureError(error);
+        this.reportRunFailure({
+          runId,
+          input,
+          context,
+          failure,
+          error
+        });
+        state.fail(error, failure);
       });
     });
 
@@ -258,6 +275,17 @@ export class LocalAgentRuntime implements AgentRuntime {
     }
 
     state.fail(new AppError("CONFLICT", `Agent exceeded the maximum step limit of ${maxSteps}`));
+  }
+
+  private reportRunFailure(report: LocalAgentRunFailureReport): void {
+    if (!this.options.runFailureReporter) {
+      return;
+    }
+    try {
+      void Promise.resolve(this.options.runFailureReporter(report)).catch(() => undefined);
+    } catch {
+      // A diagnostics sink must not change the user-visible run outcome.
+    }
   }
 
   private getRun(runId: AgentRunId): RunState {

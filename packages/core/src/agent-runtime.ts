@@ -29,6 +29,12 @@ export type AgentRunStatus =
   | "cancelled"
   | "failed";
 
+export type AgentRunFailureCategory =
+  | "app_error"
+  | "internal_error"
+  | "abort_error"
+  | "unknown_error";
+
 export type AgentRuntimeCommand =
   | {
       type: "tool_permission_decision";
@@ -130,6 +136,7 @@ export type AgentRuntimeEvent =
       error: {
         code: string;
         message: string;
+        category: AgentRunFailureCategory;
       };
     };
 
