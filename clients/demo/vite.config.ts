@@ -1,9 +1,10 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import { vivdCatalystChatUiPlugin } from "@vivd-catalyst/chat-ui/vite";
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [vivdCatalystChatUiPlugin(), react(), tailwindcss()],
   resolve: {
     dedupe: ["react", "react-dom"]
   },

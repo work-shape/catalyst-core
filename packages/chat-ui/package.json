@@ -21,6 +21,10 @@
       "development": "./src/admin.tsx",
       "import": "./dist/admin.js"
     },
+    "./vite": {
+      "types": "./src/vite.d.ts",
+      "import": "./src/vite.js"
+    },
     "./styles.css": "./src/styles.css"
   },
   "scripts": {
