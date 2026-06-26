@@ -96,6 +96,95 @@ describe("OpenAI-compatible model provider", () => {
     });
   });
 
+  it("returns malformed tool arguments as a recoverable parse error", async () => {
+    let requestBody: {
+      tools: Array<{ function: { name: string; description: string } }>;
+    } | undefined;
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body));
+      const toolName = requestBody?.tools[0]?.function.name;
+
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: null,
+                tool_calls: [
+                  {
+                    id: "call_bad_json",
+                    type: "function",
+                    function: {
+                      name: toolName,
+                      arguments: "{\"city\":"
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          usage: {
+            prompt_tokens: 10,
+            completion_tokens: 2,
+            total_tokens: 12
+          }
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const clientInstanceId = asClientInstanceId("client-test");
+    const provider = new OpenAiCompatibleChatProvider({
+      id: "openai",
+      model: "gpt-test",
+      baseUrl: "https://example.test/v1",
+      apiKey: "test"
+    });
+    const completion = await provider.complete(
+      {
+        providerId: "openai",
+        model: "gpt-test",
+        messages: [{ role: "user", content: "run a tool" }],
+        tools: [
+          {
+            name: "weather.lookup",
+            description: "Lookup weather"
+          }
+        ]
+      },
+      {
+        clientInstanceId,
+        correlationId: "corr-test",
+        user: {
+          id: "user-test",
+          externalUserId: "user-test",
+          displayLabel: "User",
+          roles: ["user"],
+          permissionRefs: [],
+          clientInstanceId,
+          authSource: "test"
+        }
+      }
+    );
+
+    expect(completion.toolCalls).toEqual([
+      {
+        toolCallId: "call_bad_json",
+        toolName: "weather.lookup",
+        input: {},
+        inputParseError: {
+          code: "invalid_json",
+          message: "Tool input must be valid JSON",
+          rawInput: "{\"city\":"
+        }
+      }
+    ]);
+  });
+
   it("passes configured reasoning effort to OpenAI-compatible requests", async () => {
     let requestBody: { reasoning_effort?: string } | undefined;
     const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {

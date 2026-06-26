@@ -16,6 +16,11 @@ export interface ModelToolCall {
   toolCallId: string;
   toolName: string;
   input: unknown;
+  inputParseError?: {
+    code: "invalid_json";
+    message: string;
+    rawInput?: string;
+  };
 }
 
 export type ModelContentPart =

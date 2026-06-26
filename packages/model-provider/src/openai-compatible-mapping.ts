@@ -7,6 +7,7 @@ import {
   type ModelMessage,
   type ModelTool
 } from "./types";
+import { serializeToolInput } from "./tool-input";
 import type {
   OpenAiCompatibleMessage,
   OpenAiCompatibleResponse,
@@ -87,14 +88,6 @@ export function noReportedUsage(): ModelTokenUsage {
   };
 }
 
-export function parseJsonObject(value: string): unknown {
-  try {
-    return value ? JSON.parse(value) : {};
-  } catch {
-    throw new AppError("BAD_REQUEST", "Tool input must be valid JSON");
-  }
-}
-
 export function toOpenAiChatMessages(messages: ModelMessage[]): OpenAiCompatibleMessage[] {
   const output: OpenAiCompatibleMessage[] = [];
   const pendingVisualMessages: OpenAiCompatibleMessage[] = [];
@@ -125,7 +118,7 @@ function toOpenAiChatMessagesForOne(
           type: "function",
           function: {
             name: toProviderToolName(toolCall.toolName),
-            arguments: JSON.stringify(toolCall.input)
+            arguments: serializeToolInput(toolCall)
           }
         }))
       }
@@ -191,7 +184,7 @@ export function toOpenAiResponsesInput(messages: ModelMessage[]): OpenAiResponse
           type: "function_call",
           call_id: toolCall.toolCallId,
           name: toProviderToolName(toolCall.toolName),
-          arguments: JSON.stringify(toolCall.input)
+          arguments: serializeToolInput(toolCall)
         });
       }
       return;

@@ -99,6 +99,36 @@ export async function executeToolCall(input: {
     return { result, modelOutput };
   }
 
+  if (input.toolCall.inputParseError) {
+    const result = {
+      status: "failed" as const,
+      error: {
+        code: "validation_failed" as const,
+        message: input.toolCall.inputParseError.message,
+        details: {
+          issues: [
+            {
+              code: input.toolCall.inputParseError.code,
+              path: "",
+              message: input.toolCall.inputParseError.message
+            }
+          ]
+        }
+      }
+    };
+    const modelOutput = await createModelVisibleToolOutput(result, input.modelContext);
+    input.state.emit({
+      type: "tool_call_failed",
+      runId: input.runId,
+      toolCallId,
+      toolName: input.toolCall.toolName,
+      result,
+      modelOutput: modelOutput.text,
+      projectionNotice: modelOutput.notice
+    });
+    return { result, modelOutput };
+  }
+
   if (decision.status === "requires_approval") {
     input.state.emit({
       type: "tool_permission_requested",

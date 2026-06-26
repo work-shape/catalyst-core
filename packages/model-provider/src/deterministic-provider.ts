@@ -8,6 +8,7 @@ import {
   type ModelTool,
   type ModelToolCall
 } from "./types";
+import { parseToolInput } from "./tool-input";
 
 export class DeterministicModelProvider implements ModelProvider {
   readonly id: string;
@@ -127,16 +128,8 @@ function parseToolCommand(content: string, tools: ModelTool[]): ModelToolCall | 
   return {
     toolCallId: createPlatformId("toolcall"),
     toolName,
-    input: parseJsonObject(json || "{}")
+    ...parseToolInput(json || "{}")
   };
-}
-
-function parseJsonObject(value: string): unknown {
-  try {
-    return value ? JSON.parse(value) : {};
-  } catch {
-    throw new AppError("BAD_REQUEST", "Tool input must be valid JSON");
-  }
 }
 
 function chunkText(text: string): string[] {

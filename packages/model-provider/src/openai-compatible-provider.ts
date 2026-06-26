@@ -13,7 +13,6 @@ import type {
 } from "./types";
 import {
   createProviderToolMetadata,
-  parseJsonObject,
   readOpenAiResponsesText,
   toModelUsage,
   toOpenAiChatMessages,
@@ -22,6 +21,7 @@ import {
   toResponsesModelUsage,
   type OpenAiCompatibleProviderTool
 } from "./openai-compatible-mapping";
+import { parseToolInput } from "./tool-input";
 import {
   streamOpenAiCompatibleCompletion,
   streamOpenAiResponsesCompletion
@@ -101,7 +101,7 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
         message.tool_calls?.map((toolCall) => ({
           toolCallId: toolCall.id,
           toolName: toolNameMap.get(toolCall.function.name) ?? toolCall.function.name,
-          input: parseJsonObject(toolCall.function.arguments)
+          ...parseToolInput(toolCall.function.arguments)
         })) ?? [],
       usage: toModelUsage(payload.usage)
     };
@@ -314,7 +314,7 @@ function readOpenAiResponsesToolCalls(
       .map((toolCall) => ({
         toolCallId: toolCall.call_id,
         toolName: toolNameMap.get(toolCall.name) ?? toolCall.name,
-        input: parseJsonObject(toolCall.arguments)
+        ...parseToolInput(toolCall.arguments)
       })) ?? []
   );
 }

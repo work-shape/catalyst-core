@@ -629,6 +629,189 @@ describe("local agent runtime", () => {
     ]);
   });
 
+  it("feeds invalid tool argument JSON back to the model as a failed tool result", async () => {
+    const clientInstanceId = asClientInstanceId("invalid-tool-json-client");
+    const context: RuntimeCallContext = {
+      clientInstanceId,
+      correlationId: "corr-invalid-tool-json",
+      user: {
+        id: "user-1",
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const store = new InMemoryPlatformStore();
+    const conversationId = await createConversationWithMessages(store, {
+      clientInstanceId,
+      messages: []
+    });
+    const providerConfig: ModelProviderConfig = {
+      id: "test-provider",
+      type: "deterministic",
+      model: "test-model"
+    };
+    let modelStep = 0;
+    let invalidToolResult = "";
+    let validToolExecutions = 0;
+    const modelProvider: ModelProvider = {
+      id: "test-provider",
+      async complete() {
+        throw new Error("Expected the streaming provider path to be used");
+      },
+      async *stream(request): AsyncIterable<ModelCompletionStreamEvent> {
+        modelStep += 1;
+        if (modelStep === 1) {
+          yield {
+            type: "completed",
+            completion: {
+              text: "I will inspect the page.",
+              toolCalls: [
+                {
+                  toolCallId: "call_bad_json",
+                  toolName: "test.inspect",
+                  input: {},
+                  inputParseError: {
+                    code: "invalid_json",
+                    message: "Tool input must be valid JSON",
+                    rawInput: "{\"page\":"
+                  }
+                }
+              ],
+              usage: noReportedUsage()
+            }
+          };
+          return;
+        }
+
+        if (modelStep === 2) {
+          const toolMessage = request.messages.find(
+            (message) => message.role === "tool" && message.toolCallId === "call_bad_json"
+          );
+          invalidToolResult = modelContentText(toolMessage?.content ?? "");
+          yield {
+            type: "completed",
+            completion: {
+              text: "I will retry with valid JSON.",
+              toolCalls: [
+                {
+                  toolCallId: "call_valid_json",
+                  toolName: "test.inspect",
+                  input: { page: 2 }
+                }
+              ],
+              usage: noReportedUsage()
+            }
+          };
+          return;
+        }
+
+        yield {
+          type: "completed",
+          completion: {
+            text: "The valid retry worked.",
+            toolCalls: [],
+            usage: noReportedUsage()
+          }
+        };
+      }
+    };
+    const runtime = new LocalAgentRuntime({
+      agents: [
+        {
+          name: "invalid_tool_json_agent",
+          displayName: "Invalid Tool JSON Agent",
+          instructions: "Use tools when useful.",
+          modelProviderId: "test-provider",
+          toolNames: ["test.inspect"],
+          initialPrompts: []
+        }
+      ],
+      modelProviders: [providerConfig],
+      defaultModelProvider: providerConfig,
+      conversationHistory: store,
+      modelProvider,
+      toolRegistry: new ToolRegistry({
+        tools: [
+          defineTool({
+            name: "test.inspect",
+            description: "Inspect a page.",
+            inputSchema: z.object({ page: z.number() }),
+            async execute() {
+              throw new Error("Tool registry execution should not be used by this test");
+            }
+          })
+        ]
+      }),
+      toolExecution: {
+        async authorize() {
+          return { status: "allowed" };
+        },
+        async execute() {
+          validToolExecutions += 1;
+          return {
+            status: "success",
+            output: {
+              inspected: true
+            }
+          };
+        }
+      },
+      usageGovernance: new ModelUsageGovernance({
+        store,
+        budget: {
+          costSafetyMultiplier: 1
+        },
+        safeguards: {}
+      })
+    });
+
+    const run = await runtime.start(
+      {
+        agentName: "invalid_tool_json_agent",
+        conversationId,
+        message: {
+          text: "Check page 2"
+        }
+      },
+      context
+    );
+
+    const failedToolErrors: unknown[] = [];
+    const completedMessages: string[] = [];
+    for await (const event of runtime.observe(run.runId, context)) {
+      if (event.type === "tool_call_failed") {
+        failedToolErrors.push(event.result.error);
+      }
+      if (event.type === "message_completed") {
+        completedMessages.push(event.message.text);
+      }
+    }
+
+    expect(failedToolErrors).toEqual([
+      {
+        code: "validation_failed",
+        message: "Tool input must be valid JSON",
+        details: {
+          issues: [
+            {
+              code: "invalid_json",
+              path: "",
+              message: "Tool input must be valid JSON"
+            }
+          ]
+        }
+      }
+    ]);
+    expect(invalidToolResult).toContain("Tool input must be valid JSON");
+    expect(invalidToolResult).toContain("invalid_json");
+    expect(validToolExecutions).toBe(1);
+    expect(completedMessages).toEqual(["The valid retry worked."]);
+  });
+
   it("does not expose raw internal error text in run failure events", async () => {
     const clientInstanceId = asClientInstanceId("internal-error-client");
     const context: RuntimeCallContext = {

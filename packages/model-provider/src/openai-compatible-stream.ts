@@ -2,10 +2,10 @@ import { AppError } from "@vivd-catalyst/core";
 import type { ModelCompletionStreamEvent } from "./types";
 import {
   noReportedUsage,
-  parseJsonObject,
   toModelUsage,
   toResponsesModelUsage
 } from "./openai-compatible-mapping";
+import { parseToolInput } from "./tool-input";
 import type { OpenAiCompatibleResponse } from "./openai-compatible-types";
 
 interface OpenAiCompatibleStreamChunk {
@@ -114,7 +114,7 @@ export async function* streamOpenAiCompatibleCompletion(
         .map((toolCall) => ({
           toolCallId: toolCall.id,
           toolName: toolNameMap.get(toolCall.name) ?? toolCall.name,
-          input: parseJsonObject(toolCall.arguments)
+          ...parseToolInput(toolCall.arguments)
         })),
       usage
     }
@@ -208,7 +208,7 @@ export async function* streamOpenAiResponsesCompletion(
       toolCalls: toolCalls.map((toolCall) => ({
         toolCallId: toolCall.id,
         toolName: toolNameMap.get(toolCall.name) ?? toolCall.name,
-        input: parseJsonObject(toolCall.arguments)
+        ...parseToolInput(toolCall.arguments)
       })),
       usage
     }
