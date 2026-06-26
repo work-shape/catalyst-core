@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef } from "react";
 import type { DraftAttachment } from "@vivd-catalyst/api-client";
 import { AttachmentPreview } from "./attachment-preview";
 import { useTranslation } from "./i18n";
-import { isComposerBlockedByBackgroundRun } from "./thread-activity";
+import { isComposerBlockedByBackgroundRun, shouldShowCancelAction } from "./thread-activity";
 import { Button } from "./ui/button";
 import { cn } from "./ui/cn";
 import { Spinner } from "./ui/spinner";
@@ -290,22 +290,31 @@ function ComposerAction({
     conversationRunning,
     threadRunning
   });
+  const showCancelAction = shouldShowCancelAction({
+    conversationRunning,
+    threadRunning
+  });
   const effectiveDisabledReason = disabledReason ?? (backgroundRunBlocked ? t("conversationStillRunning") : undefined);
+  const cancelButton = (
+    <Button
+      type="button"
+      size="icon"
+      className="absolute inset-0 size-9"
+      aria-label={t("stopGenerating")}
+      onClick={onCancelRun}
+    >
+      <Square size={14} className="fill-current" aria-hidden="true" />
+    </Button>
+  );
 
   return (
     <div className="relative ml-auto size-9">
-      {threadRunning ? (
-        <ComposerPrimitive.Cancel asChild>
-          <Button
-            type="button"
-            size="icon"
-            className="absolute inset-0 size-9"
-            aria-label={t("stopGenerating")}
-            onClick={onCancelRun}
-          >
-            <Square size={14} className="fill-current" aria-hidden="true" />
-          </Button>
-        </ComposerPrimitive.Cancel>
+      {showCancelAction ? (
+        threadRunning ? (
+          <ComposerPrimitive.Cancel asChild>{cancelButton}</ComposerPrimitive.Cancel>
+        ) : (
+          cancelButton
+        )
       ) : (
         <ComposerPrimitive.Send asChild>
           <Button

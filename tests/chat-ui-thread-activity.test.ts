@@ -3,6 +3,7 @@ import {
   isComposerBlockedByBackgroundRun,
   isThreadBusy,
   pendingAssistantPresentation,
+  shouldShowCancelAction,
   shouldShowPendingAssistantMessage
 } from "../packages/chat-ui/src/thread-activity";
 
@@ -101,6 +102,12 @@ describe("chat UI thread activity", () => {
     expect(isComposerBlockedByBackgroundRun({ conversationRunning: true, threadRunning: false })).toBe(true);
     expect(isComposerBlockedByBackgroundRun({ conversationRunning: true, threadRunning: true })).toBe(false);
     expect(isComposerBlockedByBackgroundRun({ conversationRunning: false, threadRunning: false })).toBe(false);
+  });
+
+  it("shows cancel for resumed background runs without a local assistant stream", () => {
+    expect(shouldShowCancelAction({ conversationRunning: true, threadRunning: false })).toBe(true);
+    expect(shouldShowCancelAction({ conversationRunning: false, threadRunning: true })).toBe(true);
+    expect(shouldShowCancelAction({ conversationRunning: false, threadRunning: false })).toBe(false);
   });
 
   it("combines local stream, optimistic send, and persisted conversation activity as one busy signal", () => {

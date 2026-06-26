@@ -300,6 +300,30 @@ export class ConversationWorkflow {
     return run?.ownerUserId === user.id ? run : undefined;
   }
 
+  async getConversationRunForUser(
+    conversationId: ConversationId,
+    runId: AgentRunId,
+    user: AuthenticatedUser
+  ): Promise<AgentRun | undefined> {
+    const run = await this.options.conversationStore.getConversationAgentRun({
+      clientInstanceId: this.options.clientInstanceId,
+      conversationId,
+      runId
+    });
+    if (!run || run.ownerUserId !== user.id) {
+      return undefined;
+    }
+
+    const conversation = await this.options.conversationStore.getConversation(
+      this.options.clientInstanceId,
+      conversationId
+    );
+    if (!conversation || conversation.status !== "active" || conversation.ownerUserId !== user.id) {
+      return undefined;
+    }
+    return run;
+  }
+
   private async createRunProjection(
     run: AgentRun,
     user: AuthenticatedUser
@@ -320,13 +344,8 @@ export class ConversationWorkflow {
     context: RuntimeCallContext,
     reason?: string
   ): Promise<AgentRun> {
-    await this.requireOwnedActiveConversation(conversationId, user);
-    const run = await this.options.conversationStore.getConversationAgentRun({
-      clientInstanceId: this.options.clientInstanceId,
-      conversationId,
-      runId
-    });
-    if (!run || run.ownerUserId !== user.id) {
+    const run = await this.getConversationRunForUser(conversationId, runId, user);
+    if (!run) {
       throw new AppError("NOT_FOUND", "Agent run is not available");
     }
     if (!isActiveAgentRunStatus(run.status)) {

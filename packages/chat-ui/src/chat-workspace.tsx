@@ -220,6 +220,10 @@ export function ChatWorkspace({
   const selectedConversationRunning = Boolean(
     controller.activeRun && isActiveRunStatus(controller.activeRun.run.status)
   );
+  const controllerTerminalNotice = isVisibleTerminalControllerError(controller.error?.class)
+    ? controller.error?.message
+    : undefined;
+  const visibleNotice = notice ?? controllerTerminalNotice;
   const config = configQuery.data;
   const attachmentsEnabled = config?.features.attachments.enabled ?? false;
   const attachmentAccept = config?.features.attachments.accept ?? "";
@@ -701,7 +705,7 @@ export function ChatWorkspace({
                 selectedConversationId={selectedConversationId}
                 messages={messages}
                 messagesLoaded={messagesLoaded}
-                notice={notice}
+                notice={visibleNotice}
                 draft={draft}
                 composerFocusRequestId={composerFocusRequestId}
                 locale={activeLocale}
@@ -751,6 +755,10 @@ function isActiveRunStatus(status: string): boolean {
     status === "waiting_for_permission" ||
     status === "cancelling"
   );
+}
+
+function isVisibleTerminalControllerError(errorClass: string | undefined): boolean {
+  return errorClass === "run_failed" || errorClass === "run_cancelled";
 }
 
 function markThreadRunCancelling(

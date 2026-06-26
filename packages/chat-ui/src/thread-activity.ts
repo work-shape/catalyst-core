@@ -59,6 +59,13 @@ export function isComposerBlockedByBackgroundRun({
   return Boolean(conversationRunning && !threadRunning);
 }
 
+export function shouldShowCancelAction({
+  conversationRunning,
+  threadRunning
+}: Pick<ThreadActivityInput, "conversationRunning" | "threadRunning">): boolean {
+  return Boolean(conversationRunning || threadRunning);
+}
+
 function lastAssistantPartShowsOwnActivity(message: ThreadActivityMessage | undefined): boolean {
   if (message?.role !== "assistant") {
     return false;

@@ -1,4 +1,4 @@
-import type { LocaleCode, Message } from "@vivd-catalyst/api-client";
+import type { LocaleCode } from "@vivd-catalyst/api-client";
 import type { ResolvedThemeMode } from "./theme";
 
 export const STANDALONE_AUTH_SOURCE = "better-auth";
@@ -9,15 +9,6 @@ const LOCALE_STORAGE_KEY = "vivd-catalyst:locale";
 
 export function createDraftKey(authScope: string, conversationId: string | undefined): string {
   return `${authScope}:${conversationId ?? "new"}`;
-}
-
-export function hasAssistantFinalSince(messages: Message[], startedAt: string | undefined): boolean {
-  return messages.some((message) => {
-    if (message.role !== "assistant" || !isAssistantFinalMessage(message)) {
-      return false;
-    }
-    return !startedAt || message.createdAt >= startedAt;
-  });
 }
 
 export function apiErrorStatus(error: unknown): number | undefined {
@@ -72,17 +63,4 @@ export function applyFavicon(href: string): void {
   if (!existing) {
     document.head.appendChild(link);
   }
-}
-
-function isAssistantFinalMessage(message: Message): boolean {
-  const runtime = message.metadata?.agentRuntime;
-  return (
-    typeof runtime === "object" &&
-    runtime !== null &&
-    !Array.isArray(runtime) &&
-    "version" in runtime &&
-    runtime.version === 1 &&
-    "kind" in runtime &&
-    runtime.kind === "assistant_final"
-  );
 }

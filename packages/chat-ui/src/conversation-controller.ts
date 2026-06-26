@@ -102,7 +102,7 @@ export function useConversationController({
       return;
     }
     if (snapshot) {
-      setState(createControllerStateFromSnapshot(snapshot));
+      setState((current) => createControllerStateFromSnapshot(snapshot, current));
     }
   }, [conversationId, enabled, snapshot, snapshotError, snapshotLoading, snapshotRunKey]);
 
@@ -201,8 +201,10 @@ export function createInitialControllerState(): ConversationControllerState {
 }
 
 export function createControllerStateFromSnapshot(
-  snapshot: ConversationThreadSnapshot
+  snapshot: ConversationThreadSnapshot,
+  previousState?: ConversationControllerState
 ): ConversationControllerState {
+  const preservedTerminalRun = terminalRunForSnapshot(snapshot, previousState);
   return {
     snapshotStatus: "ready",
     connectionStatus: snapshot.activeRun ? "connecting" : "idle",
@@ -216,7 +218,12 @@ export function createControllerStateFromSnapshot(
             lastAppliedSequence: snapshot.activeRun.projection.lastSequence
           }
         }
-      : {})
+      : preservedTerminalRun
+        ? {
+            activeRun: preservedTerminalRun,
+            ...(previousState?.error ? { error: previousState.error } : {})
+          }
+        : {})
   };
 }
 
@@ -448,6 +455,27 @@ function applyObservationStatus(
     return "failed";
   }
   return currentStatus;
+}
+
+function terminalRunForSnapshot(
+  snapshot: ConversationThreadSnapshot,
+  previousState: ConversationControllerState | undefined
+): ConversationControllerState["activeRun"] | undefined {
+  if (snapshot.activeRun || !previousState?.activeRun) {
+    return undefined;
+  }
+  const previousRun = previousState.activeRun.run;
+  if (
+    previousRun.conversationId !== snapshot.conversation.id ||
+    !isUserVisibleTerminalRunStatus(previousRun.status)
+  ) {
+    return undefined;
+  }
+  return previousState.activeRun;
+}
+
+function isUserVisibleTerminalRunStatus(status: AgentRun["status"]): boolean {
+  return status === "cancelled" || status === "failed";
 }
 
 function terminalError(

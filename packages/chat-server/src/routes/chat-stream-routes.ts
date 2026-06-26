@@ -197,10 +197,9 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
     const runId = asAgentRunId(params.runId ?? "");
     const afterSequence = readAfterSequence(request);
     const localizedContext = withRequestLocale(context, options, request, undefined);
-    await conversations.requireOwnedActiveConversation(conversationId, user);
 
-    const run = await conversations.getRunForUser(runId, user);
-    if (!run || run.conversationId !== conversationId) {
+    const run = await conversations.getConversationRunForUser(conversationId, runId, user);
+    if (!run) {
       return reply.status(204).send();
     }
     if (!isObservableRunStatus(run.status) && afterSequence >= run.lastSequence) {

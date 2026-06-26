@@ -105,16 +105,74 @@ describe("chat UI conversation controller", () => {
     expect(result.state.activeRun?.projection.text).toBe("Canonical final");
     expect(result.state.activeRun?.lastAppliedSequence).toBe(3);
   });
+
+  it("keeps failed terminal run state visible across snapshot refresh", () => {
+    const state = createControllerStateFromSnapshot(createSnapshot({ lastSequence: 2, text: "Partial answer" }));
+    const failed = applyRunObservationToControllerState(
+      state,
+      createObservation({
+        sequence: 3,
+        type: "run_failed",
+        payload: {
+          error: {
+            category: "internal_error",
+            code: "MODEL_FAILED",
+            message: "Model provider failed"
+          }
+        }
+      })
+    ).state;
+
+    const refreshed = createControllerStateFromSnapshot(
+      createSnapshot({ lastSequence: 3, text: "", activeRun: false }),
+      failed
+    );
+
+    expect(refreshed.activeRun?.run.status).toBe("failed");
+    expect(refreshed.activeRun?.projection.text).toBe("Partial answer");
+    expect(refreshed.error).toMatchObject({
+      class: "run_failed",
+      message: "Model provider failed"
+    });
+  });
+
+  it("keeps cancelled terminal run state visible across snapshot refresh", () => {
+    const state = createControllerStateFromSnapshot(createSnapshot({ lastSequence: 2, text: "Partial answer" }));
+    const cancelled = applyRunObservationToControllerState(
+      state,
+      createObservation({
+        sequence: 3,
+        type: "run_cancelled",
+        payload: {
+          reason: "user_requested"
+        }
+      })
+    ).state;
+
+    const refreshed = createControllerStateFromSnapshot(
+      createSnapshot({ lastSequence: 3, text: "", activeRun: false }),
+      cancelled
+    );
+
+    expect(refreshed.activeRun?.run.status).toBe("cancelled");
+    expect(refreshed.activeRun?.projection.text).toBe("Partial answer");
+    expect(refreshed.error).toMatchObject({
+      class: "run_cancelled",
+      message: "user_requested"
+    });
+  });
 });
 
 function createSnapshot({
   lastSequence,
   text,
-  messages = []
+  messages = [],
+  activeRun = true
 }: {
   lastSequence: number;
   text: string;
   messages?: ConversationThreadSnapshot["messages"];
+  activeRun?: boolean;
 }): ConversationThreadSnapshot {
   return {
     conversation: {
@@ -129,25 +187,29 @@ function createSnapshot({
       retainedUntil: "2026-07-26T10:00:00.000Z"
     },
     messages,
-    activeRun: {
-      run: {
-        id: "run_1",
-        conversationId: "conv_1",
-        agentName: "test_agent",
-        status: "running",
-        startedAt: "2026-06-26T10:00:00.000Z",
-        updatedAt: "2026-06-26T10:00:00.000Z",
-        lastSequence
-      },
-      projection: {
-        runId: "run_1",
-        lastSequence,
-        status: "running",
-        text,
-        reasoning: [],
-        activeToolCalls: []
-      }
-    },
+    ...(activeRun
+      ? {
+          activeRun: {
+            run: {
+              id: "run_1",
+              conversationId: "conv_1",
+              agentName: "test_agent",
+              status: "running",
+              startedAt: "2026-06-26T10:00:00.000Z",
+              updatedAt: "2026-06-26T10:00:00.000Z",
+              lastSequence
+            },
+            projection: {
+              runId: "run_1",
+              lastSequence,
+              status: "running",
+              text,
+              reasoning: [],
+              activeToolCalls: []
+            }
+          }
+        }
+      : {}),
     userState: {
       clientInstanceId: "client_1",
       conversationId: "conv_1",

@@ -414,6 +414,108 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
+  it("does not disclose or mutate product run routes for the wrong owner", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        developmentAuth: {
+          enabled: true,
+          defaultUserId: "user-1",
+          users: [
+            {
+              id: "user-1",
+              externalUserId: "user-1",
+              displayLabel: "User One",
+              roles: ["user", "admin", "superadmin"],
+              permissionRefs: ["demo-tools"]
+            },
+            {
+              id: "user-2",
+              externalUserId: "user-2",
+              displayLabel: "User Two",
+              roles: ["user"],
+              permissionRefs: ["demo-tools"]
+            }
+          ]
+        }
+      }),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      headers: {
+        "x-dev-user-id": "user-1"
+      },
+      payload: { title: "Product route owner mismatch" }
+    });
+    expect(created.statusCode).toBe(200);
+    const conversation = created.json() as { id: string };
+
+    await app.server.listen({ host: "127.0.0.1", port: 0 });
+    const address = app.server.server.address() as AddressInfo;
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+
+    const sent = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-dev-user-id": "user-1"
+      },
+      body: JSON.stringify({
+        conversationId: conversation.id,
+        messages: [createUserUiMessage("wrong owner product route checks should not cancel this run")]
+      })
+    });
+    expect(sent.status).toBe(200);
+    const runId = sent.headers.get("x-resumable-stream-id");
+    expect(runId).toEqual(expect.stringMatching(/^run_/));
+
+    const wrongOwnerEvents = await fetch(
+      `${baseUrl}/api/conversations/${conversation.id}/runs/${runId}/events`,
+      {
+        headers: {
+          "x-dev-user-id": "user-2"
+        }
+      }
+    );
+    expect(wrongOwnerEvents.status).toBe(204);
+    expect(await wrongOwnerEvents.text()).toBe("");
+
+    const wrongOwnerCancel = await fetch(
+      `${baseUrl}/api/conversations/${conversation.id}/runs/${runId}/cancel`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-dev-user-id": "user-2"
+        },
+        body: JSON.stringify({ reason: "wrong owner must not cancel" })
+      }
+    );
+    expect(wrongOwnerCancel.status).toBe(404);
+    await wrongOwnerCancel.text();
+
+    expect(parseSseChunks(await sent.text()).some((chunk) => chunk.type === "finish")).toBe(true);
+    const audit = await app.server.inject({
+      method: "GET",
+      url: "/api/audit-events"
+    });
+    expect(audit.statusCode).toBe(200);
+    expect(audit.json()).not.toContainEqual(
+      expect.objectContaining({
+        type: "message.cancelled",
+        metadata: expect.objectContaining({
+          runId
+        })
+      })
+    );
+
+    await app.close();
+  });
+
   it("cancels a backend run through the cancel route and records cancellation", async () => {
     const app = await createClientInstanceApp({
       config: createTestConfig(),
