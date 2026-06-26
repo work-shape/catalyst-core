@@ -1,4 +1,10 @@
-import type { AuthenticatedUser, UserRole } from "./identity";
+import {
+  getAuthPrincipal,
+  getSubjectUserId,
+  type AuthenticatedUser,
+  type DelegatedActor,
+  type UserRole
+} from "./identity";
 import type { AuditEventId, ClientInstanceId } from "./ids";
 import type { JsonObject } from "./json";
 import type { ISODateString } from "./time";
@@ -8,6 +14,11 @@ export interface AuditActor {
   externalUserId: string;
   displayLabel: string;
   roles: UserRole[];
+  principalKind?: "user" | "service";
+  principalId?: string;
+  principalDisplayLabel?: string;
+  subjectUserId?: string;
+  delegatedActor?: DelegatedActor;
 }
 
 export type AuditEventStatus = "success" | "failed" | "denied";
@@ -84,10 +95,16 @@ export class NoopAuditRecorder implements AuditRecorder {
 }
 
 export function auditActorFromUser(user: AuthenticatedUser): AuditActor {
+  const principal = getAuthPrincipal(user);
   return {
     userId: user.id,
     externalUserId: user.externalUserId,
     displayLabel: user.displayLabel,
-    roles: user.roles
+    roles: user.roles,
+    principalKind: principal.kind,
+    principalId: principal.id,
+    principalDisplayLabel: principal.displayLabel,
+    subjectUserId: getSubjectUserId(user),
+    delegatedActor: user.delegatedActor
   };
 }

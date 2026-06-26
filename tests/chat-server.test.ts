@@ -1647,6 +1647,244 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
+  it("keeps chat session tokens scoped away from governance routes despite elevated roles", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        sessionToken: {
+          issuer: "demo-client-instance",
+          ttlSeconds: 900
+        },
+        developmentAuth: {
+          enabled: true,
+          defaultUserId: "superadmin-1",
+          users: [
+            {
+              id: "superadmin-1",
+              externalUserId: "superadmin-1",
+              displayLabel: "Superadmin",
+              roles: ["user", "admin", "superadmin"],
+              permissionRefs: ["demo-tools"]
+            }
+          ]
+        }
+      }),
+      env: {
+        CHAT_SESSION_TOKEN_SECRET: "a-development-session-token-secret",
+        CHAT_SERVER_CREDENTIAL: "server-credential"
+      },
+      storeMode: "memory",
+      tools: []
+    });
+
+    const issued = await app.server.inject({
+      method: "POST",
+      url: "/auth/session-token",
+      headers: {
+        "x-server-credential": "server-credential"
+      },
+      payload: {
+        externalUserId: "customer-admin",
+        displayLabel: "Customer Admin",
+        roles: ["user", "admin", "superadmin"],
+        permissionRefs: ["demo-tools"]
+      }
+    });
+    expect(issued.statusCode).toBe(200);
+    const token = (issued.json() as { chatSessionToken: string }).chatSessionToken;
+
+    const conversations = await app.server.inject({
+      method: "GET",
+      url: "/api/conversations",
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+    expect(conversations.statusCode).toBe(200);
+
+    const usage = await app.server.inject({
+      method: "GET",
+      url: "/api/superadmin/usage",
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+    expect(usage.statusCode).toBe(403);
+    expect((usage.json() as { error: { message: string } }).error.message).toContain(
+      "Missing auth scope 'governance:read'"
+    );
+
+    const audit = await app.server.inject({
+      method: "GET",
+      url: "/api/audit-events",
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+    expect(audit.statusCode).toBe(403);
+
+    await app.close();
+  });
+
+  it("honors explicit chat session token scopes for conversation writes", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        sessionToken: {
+          issuer: "demo-client-instance",
+          ttlSeconds: 900
+        }
+      }),
+      env: {
+        CHAT_SESSION_TOKEN_SECRET: "a-development-session-token-secret",
+        CHAT_SERVER_CREDENTIAL: "server-credential"
+      },
+      storeMode: "memory",
+      tools: []
+    });
+
+    const issued = await app.server.inject({
+      method: "POST",
+      url: "/auth/session-token",
+      headers: {
+        "x-server-credential": "server-credential"
+      },
+      payload: {
+        externalUserId: "read-only-user",
+        displayLabel: "Read Only User",
+        roles: ["user"],
+        permissionRefs: ["demo-tools"],
+        scopes: ["conversation:read"]
+      }
+    });
+    expect(issued.statusCode).toBe(200);
+    const token = (issued.json() as { chatSessionToken: string }).chatSessionToken;
+
+    const conversations = await app.server.inject({
+      method: "GET",
+      url: "/api/conversations",
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+    expect(conversations.statusCode).toBe(200);
+
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      payload: {
+        title: "Should not be created"
+      }
+    });
+    expect(created.statusCode).toBe(403);
+    expect((created.json() as { error: { message: string } }).error.message).toContain(
+      "Missing auth scope 'conversation:write'"
+    );
+
+    await app.close();
+  });
+
+  it("audits delegated service-principal conversation actions for the subject user", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        sessionToken: {
+          issuer: "demo-client-instance",
+          ttlSeconds: 900
+        },
+        developmentAuth: {
+          enabled: true,
+          defaultUserId: "superadmin-1",
+          users: [
+            {
+              id: "superadmin-1",
+              externalUserId: "superadmin-1",
+              displayLabel: "Superadmin",
+              roles: ["user", "admin", "superadmin"],
+              permissionRefs: ["demo-tools"]
+            }
+          ]
+        }
+      }),
+      env: {
+        CHAT_SESSION_TOKEN_SECRET: "a-development-session-token-secret",
+        CHAT_SERVER_CREDENTIAL: "server-credential"
+      },
+      storeMode: "memory",
+      tools: []
+    });
+
+    const issued = await app.server.inject({
+      method: "POST",
+      url: "/auth/session-token",
+      headers: {
+        "x-server-credential": "server-credential"
+      },
+      payload: {
+        externalUserId: "customer-jane",
+        displayLabel: "Jane Reviewer",
+        roles: ["user"],
+        permissionRefs: ["demo-tools"],
+        delegatedActor: {
+          kind: "service_principal",
+          id: "svc-customer-api",
+          displayLabel: "Customer API",
+          authSource: "customer-app"
+        }
+      }
+    });
+    expect(issued.statusCode).toBe(200);
+    const token = (issued.json() as { chatSessionToken: string }).chatSessionToken;
+
+    const createdConversation = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      payload: {
+        title: "Delegated action"
+      }
+    });
+    expect(createdConversation.statusCode).toBe(200);
+    const conversation = createdConversation.json() as {
+      id: string;
+      ownerUserId: string;
+      ownerExternalUserId: string;
+    };
+    expect(conversation.ownerExternalUserId).toBe("customer-jane");
+    expect(conversation.ownerUserId).not.toBe("svc-customer-api");
+
+    const audit = await app.server.inject({
+      method: "GET",
+      url: "/api/audit-events",
+      headers: {
+        "x-dev-user-id": "superadmin-1"
+      }
+    });
+    expect(audit.statusCode).toBe(200);
+    expect(audit.json()).toContainEqual(
+      expect.objectContaining({
+        type: "conversation.created",
+        subject: conversation.id,
+        actor: expect.objectContaining({
+          userId: conversation.ownerUserId,
+          principalKind: "service",
+          principalId: "svc-customer-api",
+          principalDisplayLabel: "Customer API",
+          subjectUserId: conversation.ownerUserId,
+          delegatedActor: expect.objectContaining({
+            kind: "service_principal",
+            id: "svc-customer-api",
+            authSource: "customer-app"
+          })
+        })
+      })
+    );
+
+    await app.close();
+  });
+
   it("rejects password resets when standalone auth is not enabled", async () => {
     const app = await createClientInstanceApp({
       config: createTestConfig(),

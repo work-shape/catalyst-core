@@ -20,6 +20,8 @@ import {
   type RunObservation,
   addDays,
   createPlatformId,
+  getRuntimeSubjectUserId,
+  getSubjectUserId,
   isAppError
 } from "@vivd-catalyst/core";
 import { getModelSelectionForConversationTitles } from "@vivd-catalyst/config-schema";
@@ -56,16 +58,17 @@ export class ConversationWorkflow {
   }
 
   async listConversations(user: AuthenticatedUser): Promise<ConversationListItem[]> {
+    const subjectUserId = getSubjectUserId(user);
     const conversations = await this.options.conversationStore.listConversationsForUser({
       clientInstanceId: this.options.clientInstanceId,
-      ownerUserId: user.id
+      ownerUserId: subjectUserId
     });
     return Promise.all(
       conversations.map(async (conversation): Promise<ConversationListItem> => {
         const activeRun = await this.options.conversationStore.getActiveConversationAgentRun({
           clientInstanceId: this.options.clientInstanceId,
           conversationId: conversation.id,
-          ownerUserId: user.id
+          ownerUserId: subjectUserId
         });
         return {
           ...conversation,
@@ -80,9 +83,10 @@ export class ConversationWorkflow {
     context: RuntimeCallContext,
     command: CreateConversationCommand
   ): Promise<Conversation> {
+    const subjectUserId = getSubjectUserId(user);
     const conversation = await this.options.conversationStore.createConversation({
       clientInstanceId: this.options.clientInstanceId,
-      ownerUserId: user.id,
+      ownerUserId: subjectUserId,
       ownerExternalUserId: user.externalUserId,
       title: command.title ?? "New conversation",
       retainedUntil: addDays(new Date(), this.options.config.retention.conversationDays).toISOString()
@@ -124,7 +128,7 @@ export class ConversationWorkflow {
     const activeRun = await this.options.conversationStore.getActiveConversationAgentRun({
       clientInstanceId: this.options.clientInstanceId,
       conversationId,
-      ownerUserId: user.id
+      ownerUserId: getSubjectUserId(user)
     });
     const serverTime = new Date().toISOString();
 
@@ -142,7 +146,7 @@ export class ConversationWorkflow {
       userState: {
         clientInstanceId: this.options.clientInstanceId,
         conversationId,
-        userId: user.id,
+        userId: getSubjectUserId(user),
         updatedAt: serverTime
       },
       serverTime
@@ -159,7 +163,7 @@ export class ConversationWorkflow {
     const activeRun = await this.options.conversationStore.getActiveConversationAgentRun({
       clientInstanceId: this.options.clientInstanceId,
       conversationId,
-      ownerUserId: user.id
+      ownerUserId: getSubjectUserId(user)
     });
     if (activeRun) {
       throw new AppError("CONFLICT", "Conversation already has an active agent run");
@@ -238,7 +242,7 @@ export class ConversationWorkflow {
       yield* this.options.agentRuntime.observe(runId, context, options);
       return;
     }
-    if (persistedRun.ownerUserId !== context.user.id) {
+    if (persistedRun.ownerUserId !== getRuntimeSubjectUserId(context)) {
       throw new AppError("NOT_FOUND", "Agent run is not available");
     }
 
@@ -246,7 +250,7 @@ export class ConversationWorkflow {
     const observations = await this.options.conversationStore.listRunObservations({
       clientInstanceId: this.options.clientInstanceId,
       runId,
-      ownerUserId: context.user.id,
+      ownerUserId: getRuntimeSubjectUserId(context),
       afterSequence: lastSequence
     });
     for (const observation of observations) {
@@ -280,7 +284,7 @@ export class ConversationWorkflow {
       clientInstanceId: this.options.clientInstanceId,
       runId
     });
-    if (run?.ownerUserId === context.user.id) {
+    if (run?.ownerUserId === getRuntimeSubjectUserId(context)) {
       return run.status;
     }
     if (run) {
@@ -297,7 +301,7 @@ export class ConversationWorkflow {
       clientInstanceId: this.options.clientInstanceId,
       runId
     });
-    return run?.ownerUserId === user.id ? run : undefined;
+    return run?.ownerUserId === getSubjectUserId(user) ? run : undefined;
   }
 
   async getConversationRunForUser(
@@ -310,7 +314,8 @@ export class ConversationWorkflow {
       conversationId,
       runId
     });
-    if (!run || run.ownerUserId !== user.id) {
+    const subjectUserId = getSubjectUserId(user);
+    if (!run || run.ownerUserId !== subjectUserId) {
       return undefined;
     }
 
@@ -318,7 +323,7 @@ export class ConversationWorkflow {
       this.options.clientInstanceId,
       conversationId
     );
-    if (!conversation || conversation.status !== "active" || conversation.ownerUserId !== user.id) {
+    if (!conversation || conversation.status !== "active" || conversation.ownerUserId !== subjectUserId) {
       return undefined;
     }
     return run;
@@ -331,7 +336,7 @@ export class ConversationWorkflow {
     const observations = await this.options.conversationStore.listRunObservations({
       clientInstanceId: this.options.clientInstanceId,
       runId: run.id,
-      ownerUserId: user.id,
+      ownerUserId: getSubjectUserId(user),
       afterSequence: 0
     });
     return buildAgentRunProjection(run, observations);
@@ -591,8 +596,8 @@ export class ConversationWorkflow {
     if (!conversation || conversation.status !== "active") {
       throw new AppError("NOT_FOUND", "Conversation is not available");
     }
-    if (conversation.ownerUserId !== user.id) {
-      throw new AppError("FORBIDDEN", "Conversation belongs to another user");
+    if (conversation.ownerUserId !== getSubjectUserId(user)) {
+      throw new AppError("NOT_FOUND", "Conversation is not available");
     }
     return conversation;
   }

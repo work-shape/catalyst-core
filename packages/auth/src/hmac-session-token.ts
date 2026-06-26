@@ -1,8 +1,12 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import {
   AppError,
+  CHAT_SESSION_AUTH_SCOPES,
+  isChatSessionAuthScope,
   type AuthenticatedUser,
+  type AuthScope,
   type ClientInstanceId,
+  type DelegatedActor,
   type ISODateString,
   asClientInstanceId
 } from "@vivd-catalyst/core";
@@ -16,6 +20,8 @@ export interface SessionTokenInput {
   roles?: string[];
   permissionRefs?: string[];
   correlationId?: string;
+  scopes?: AuthScope[];
+  delegatedActor?: DelegatedActor;
 }
 
 interface SessionTokenClaims {
@@ -31,6 +37,8 @@ interface SessionTokenClaims {
   iat: number;
   exp: number;
   correlationId?: string;
+  scopes?: string[];
+  delegatedActor?: DelegatedActor;
 }
 
 export interface HmacSessionTokenOptions {
@@ -66,7 +74,9 @@ export class HmacSessionTokenIssuer {
       iss: this.options.issuer,
       iat: issuedAt,
       exp: expiresAt,
-      correlationId: input.correlationId
+      correlationId: input.correlationId,
+      scopes: normalizeSessionTokenScopes(input.scopes),
+      delegatedActor: input.delegatedActor
     };
 
     return {
@@ -101,19 +111,52 @@ export class HmacSessionTokenAuthAdapter implements AuthAdapter {
       throw new AppError("UNAUTHENTICATED", "Chat session token is expired");
     }
 
+    const clientInstanceId = asClientInstanceId(claims.clientInstanceId);
+    const id = `${claims.clientInstanceId}:${claims.sub}`;
+    const delegatedActor = claims.delegatedActor;
     return {
-      id: `${claims.clientInstanceId}:${claims.sub}`,
+      id,
       externalUserId: claims.sub,
       displayLabel: claims.displayLabel,
       email: claims.email,
       emailVerified: claims.emailVerified,
       roles: claims.roles,
       permissionRefs: claims.permissionRefs,
-      clientInstanceId: asClientInstanceId(claims.clientInstanceId),
+      clientInstanceId,
       authSource: claims.authSource,
-      correlationId: claims.correlationId ?? request.correlationId
+      correlationId: claims.correlationId ?? request.correlationId,
+      subjectUserId: id,
+      principal: delegatedActor
+        ? {
+            kind: "service",
+            id: delegatedActor.id,
+            displayLabel: delegatedActor.displayLabel ?? delegatedActor.id,
+            clientInstanceId,
+            authSource: delegatedActor.authSource
+          }
+        : {
+            kind: "user",
+            id,
+            externalUserId: claims.sub,
+            displayLabel: claims.displayLabel,
+            clientInstanceId,
+            authSource: claims.authSource
+          },
+      delegatedActor,
+      scopes: normalizeSessionTokenScopes(claims.scopes)
     };
   }
+}
+
+function normalizeSessionTokenScopes(scopes: readonly string[] | undefined): AuthScope[] {
+  const normalizedScopes = scopes ?? CHAT_SESSION_AUTH_SCOPES;
+  const unsupported = normalizedScopes.filter((scope) => !isChatSessionAuthScope(scope));
+  if (unsupported.length > 0) {
+    throw new AppError("VALIDATION_FAILED", "Chat session token scopes must be limited to chat API operations", {
+      unsupportedScopes: unsupported
+    });
+  }
+  return [...new Set(normalizedScopes)];
 }
 
 function extractBearerToken(headers: AuthRequestHeaders): string | undefined {

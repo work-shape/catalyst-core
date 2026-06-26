@@ -23,6 +23,7 @@ import {
   type ToolExecutionResult,
   asAgentRunId,
   createPlatformId,
+  getRuntimeSubjectUserId,
   systemClock
 } from "@vivd-catalyst/core";
 import type { ModelCompletion, ModelMessage, ModelProvider, ModelToolCall } from "@vivd-catalyst/model-provider";
@@ -112,7 +113,7 @@ export class LocalAgentRuntime implements AgentRuntime {
         id: runId,
         clientInstanceId: context.clientInstanceId,
         conversationId: input.conversationId,
-        ownerUserId: context.user.id,
+        ownerUserId: getRuntimeSubjectUserId(context),
         inputMessageId: input.inputMessageId,
         agentName: input.agentName,
         correlationId: context.correlationId,
@@ -169,7 +170,7 @@ export class LocalAgentRuntime implements AgentRuntime {
       clientInstanceId: context.clientInstanceId,
       runId
     });
-    if (run?.ownerUserId === context.user.id) {
+    if (run?.ownerUserId === getRuntimeSubjectUserId(context)) {
       return run.status;
     }
     throw new AppError("NOT_FOUND", `Agent run '${runId}' was not found`);
@@ -353,7 +354,7 @@ export class LocalAgentRuntime implements AgentRuntime {
       clientInstanceId: context.clientInstanceId,
       runId: event.runId,
       conversationId: input.conversationId,
-      ownerUserId: context.user.id,
+      ownerUserId: getRuntimeSubjectUserId(context),
       event
     });
 

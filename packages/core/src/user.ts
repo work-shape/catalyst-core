@@ -105,7 +105,7 @@ export function authenticatedUserFromRecord(input: {
     throw new AppError("FORBIDDEN", "User is disabled");
   }
 
-  return {
+  const authenticatedUser: AuthenticatedUser = {
     id: input.user.id,
     externalUserId: input.identity.externalUserId,
     displayLabel: input.user.displayLabel,
@@ -114,6 +114,19 @@ export function authenticatedUserFromRecord(input: {
     permissionRefs: input.user.permissionRefs,
     clientInstanceId: input.user.clientInstanceId,
     authSource: input.identity.authSource,
-    correlationId: input.correlationId
+    correlationId: input.correlationId,
+    subjectUserId: input.user.id
+  };
+
+  return {
+    ...authenticatedUser,
+    principal: {
+      kind: "user",
+      id: authenticatedUser.id,
+      externalUserId: authenticatedUser.externalUserId,
+      displayLabel: authenticatedUser.displayLabel,
+      clientInstanceId: authenticatedUser.clientInstanceId,
+      authSource: authenticatedUser.authSource
+    }
   };
 }

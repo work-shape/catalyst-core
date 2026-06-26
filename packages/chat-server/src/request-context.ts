@@ -7,7 +7,9 @@ import {
   type LocaleCode,
   type RuntimeCallContext,
   asConversationId,
-  createPlatformId
+  authContextFromUser,
+  createPlatformId,
+  normalizeAuthenticatedUser
 } from "@vivd-catalyst/core";
 import { resolveConfigLocale } from "@vivd-catalyst/config-schema";
 import type { ChatServerOptions } from "./types";
@@ -17,18 +19,19 @@ export async function authenticateRequest(
   request: FastifyRequest
 ): Promise<{ user: AuthenticatedUser; context: RuntimeCallContext }> {
   const correlationId = createCorrelationId(request);
-  const user = await options.authAdapter.authenticate({
+  const user = normalizeAuthenticatedUser(await options.authAdapter.authenticate({
     headers: request.headers,
     clientInstanceId: options.clientInstanceId,
     correlationId
-  });
+  }));
 
   return {
     user,
     context: {
       user,
       clientInstanceId: options.clientInstanceId,
-      correlationId
+      correlationId,
+      ...authContextFromUser(user)
     }
   };
 }
@@ -71,6 +74,7 @@ export function withRequestLocale(
 ): RuntimeCallContext {
   return {
     ...context,
+    ...authContextFromUser(context.user),
     locale: resolveRequestLocale(options, request, requestedLocale)
   };
 }

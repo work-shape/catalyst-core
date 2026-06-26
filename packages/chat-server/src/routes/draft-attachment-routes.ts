@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { apiOperations } from "@vivd-catalyst/api-contract";
-import { AppError } from "@vivd-catalyst/core";
+import { AppError, getSubjectUserId, requireAuthScope } from "@vivd-catalyst/core";
 import { ConversationWorkflow } from "../conversation-workflow";
 import { authenticateRequest, getConversationId } from "../request-context";
 import type { ChatServerOptions } from "../types";
@@ -10,6 +10,7 @@ export function registerDraftAttachmentRoutes(app: FastifyInstance, options: Cha
 
   app.get(apiOperations.listDraftAttachments.path, async (request) => {
     const { user } = await authenticateRequest(options, request);
+    requireAuthScope(user, "conversation:read");
     const conversationId = getConversationId(request);
     await conversations.requireOwnedActiveConversation(conversationId, user);
     return attachments(options).listDraftAttachments(conversationId);
@@ -17,6 +18,7 @@ export function registerDraftAttachmentRoutes(app: FastifyInstance, options: Cha
 
   app.post(apiOperations.uploadDraftAttachment.path, async (request) => {
     const { user } = await authenticateRequest(options, request);
+    requireAuthScope(user, "conversation:write");
     const conversationId = getConversationId(request);
     await conversations.requireOwnedActiveConversation(conversationId, user);
     const file = await request.file();
@@ -27,7 +29,7 @@ export function registerDraftAttachmentRoutes(app: FastifyInstance, options: Cha
     const service = attachments(options);
     const attachment = await service.uploadDraftAttachment({
       conversationId,
-      ownerUserId: user.id,
+      ownerUserId: getSubjectUserId(user),
       filename: file.filename,
       mimeType: file.mimetype,
       bytes
@@ -40,6 +42,7 @@ export function registerDraftAttachmentRoutes(app: FastifyInstance, options: Cha
 
   app.post(apiOperations.retryDraftAttachment.path, async (request) => {
     const { user } = await authenticateRequest(options, request);
+    requireAuthScope(user, "conversation:write");
     const conversationId = getConversationId(request);
     await conversations.requireOwnedActiveConversation(conversationId, user);
     const service = attachments(options);
@@ -55,6 +58,7 @@ export function registerDraftAttachmentRoutes(app: FastifyInstance, options: Cha
 
   app.delete(apiOperations.deleteDraftAttachment.path, async (request) => {
     const { user } = await authenticateRequest(options, request);
+    requireAuthScope(user, "conversation:write");
     const conversationId = getConversationId(request);
     await conversations.requireOwnedActiveConversation(conversationId, user);
     return attachments(options).deleteDraftAttachment({

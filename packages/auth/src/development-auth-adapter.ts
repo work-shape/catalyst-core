@@ -1,4 +1,4 @@
-import { AppError, type AuthenticatedUser } from "@vivd-catalyst/core";
+import { AppError, AUTH_SCOPE_WILDCARD, type AuthenticatedUser } from "@vivd-catalyst/core";
 import type { AuthAdapter, AuthRequest } from "./types";
 
 export const DEVELOPMENT_AUTH_USER_HEADER = "x-dev-user-id";
@@ -58,11 +58,24 @@ export class DevelopmentAuthAdapter implements AuthAdapter {
       );
     }
 
-    return {
+    const resolvedUser: AuthenticatedUser = {
       ...user,
       authSource: user.authSource ?? this.id,
       clientInstanceId: request.clientInstanceId,
-      correlationId: request.correlationId
+      correlationId: request.correlationId,
+      subjectUserId: user.id,
+      scopes: [AUTH_SCOPE_WILDCARD]
+    };
+    return {
+      ...resolvedUser,
+      principal: {
+        kind: "user",
+        id: resolvedUser.id,
+        externalUserId: resolvedUser.externalUserId,
+        displayLabel: resolvedUser.displayLabel,
+        clientInstanceId: request.clientInstanceId,
+        authSource: resolvedUser.authSource
+      }
     };
   }
 }

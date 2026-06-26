@@ -13,6 +13,50 @@ export const localizationSchema = z.object({
   supportedLocales: z.array(localeCodeSchema)
 });
 
+export const authScopeSchema = z.enum([
+  "*",
+  "me:read",
+  "config:read",
+  "conversation:read",
+  "conversation:write",
+  "run:start",
+  "run:observe",
+  "run:cancel",
+  "run:command",
+  "me:write",
+  "governance:read",
+  "governance:write",
+  "user_admin:read",
+  "user_admin:write"
+]);
+
+export const chatSessionAuthScopeSchema = z.enum([
+  "me:read",
+  "config:read",
+  "conversation:read",
+  "conversation:write",
+  "run:start",
+  "run:observe",
+  "run:cancel",
+  "run:command"
+]);
+
+export const authPrincipalSchema = z.object({
+  kind: z.enum(["user", "service"]),
+  id: z.string(),
+  displayLabel: z.string(),
+  clientInstanceId: z.string(),
+  authSource: z.string(),
+  externalUserId: z.string().optional()
+});
+
+export const delegatedActorSchema = z.object({
+  kind: z.literal("service_principal").default("service_principal"),
+  id: z.string(),
+  displayLabel: z.string().optional(),
+  authSource: z.string()
+});
+
 export const apiUserSchema = z.object({
   id: z.string(),
   externalUserId: z.string(),
@@ -22,7 +66,11 @@ export const apiUserSchema = z.object({
   roles: z.array(z.string()),
   permissionRefs: z.array(z.string()),
   clientInstanceId: z.string(),
-  authSource: z.string()
+  authSource: z.string(),
+  principal: authPrincipalSchema.optional(),
+  subjectUserId: z.string().optional(),
+  delegatedActor: delegatedActorSchema.optional(),
+  scopes: z.array(authScopeSchema).optional()
 });
 
 export const conversationSchema = z.object({
@@ -549,7 +597,9 @@ export const issueSessionTokenRequestSchema = z.object({
   emailVerified: z.boolean().optional(),
   roles: z.array(z.string()).optional(),
   permissionRefs: z.array(z.string()).optional(),
-  correlationId: z.string().optional()
+  correlationId: z.string().optional(),
+  scopes: z.array(chatSessionAuthScopeSchema).optional(),
+  delegatedActor: delegatedActorSchema.optional()
 });
 
 export const issueSessionTokenResponseSchema = z.object({
@@ -635,7 +685,12 @@ export const auditActorSchema = z.object({
   userId: z.string(),
   externalUserId: z.string(),
   displayLabel: z.string(),
-  roles: z.array(z.string())
+  roles: z.array(z.string()),
+  principalKind: z.enum(["user", "service"]).optional(),
+  principalId: z.string().optional(),
+  principalDisplayLabel: z.string().optional(),
+  subjectUserId: z.string().optional(),
+  delegatedActor: delegatedActorSchema.optional()
 });
 
 export const auditEventSchema = z.object({
@@ -893,6 +948,10 @@ export function createOpenApiDocument() {
 export const openApiDocument = createOpenApiDocument();
 
 export type ApiUser = z.infer<typeof apiUserSchema>;
+export type AuthScope = z.infer<typeof authScopeSchema>;
+export type ChatSessionAuthScope = z.infer<typeof chatSessionAuthScopeSchema>;
+export type AuthPrincipal = z.infer<typeof authPrincipalSchema>;
+export type DelegatedActor = z.infer<typeof delegatedActorSchema>;
 export type Conversation = z.infer<typeof conversationSchema>;
 export type ConversationListItem = z.infer<typeof conversationListItemSchema>;
 export type Message = z.infer<typeof messageSchema>;

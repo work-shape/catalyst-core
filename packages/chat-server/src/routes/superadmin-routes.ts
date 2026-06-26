@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { apiOperations } from "@vivd-catalyst/api-contract";
-import { AppError, asUserId } from "@vivd-catalyst/core";
+import { AppError, asUserId, requireAuthScope } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "../types";
 import { authorizeGovernanceAction } from "../governance-actions";
 import { authenticateRequest, parseBody } from "../request-context";
@@ -11,6 +11,7 @@ export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServ
 
   app.get(apiOperations.getUsageSummary.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
+    requireAuthScope(user, "governance:read");
     await authorizeGovernanceAction({
       options,
       user,
@@ -27,11 +28,13 @@ export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServ
 
   app.get(apiOperations.listAdministeredUsers.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
+    requireAuthScope(user, "user_admin:read");
     return userAdministration.listUsers(user, context);
   });
 
   app.post(apiOperations.createAdministeredUser.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
+    requireAuthScope(user, "user_admin:write");
     const body = parseBody(apiOperations.createAdministeredUser.requestSchema, request.body);
     return userAdministration.createUser(user, context, {
       displayLabel: body.displayLabel,
@@ -44,6 +47,7 @@ export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServ
 
   app.patch(apiOperations.updateAdministeredUser.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
+    requireAuthScope(user, "user_admin:write");
     const body = parseBody(apiOperations.updateAdministeredUser.requestSchema, request.body);
     const userId = getUserIdParam(request.params);
     return userAdministration.updateUser(user, context, {
@@ -58,6 +62,7 @@ export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServ
 
   app.put(apiOperations.upsertAdministeredUserIdentity.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
+    requireAuthScope(user, "user_admin:write");
     const body = parseBody(apiOperations.upsertAdministeredUserIdentity.requestSchema, request.body);
     const userId = getUserIdParam(request.params);
     return userAdministration.upsertIdentity(user, context, {
@@ -72,6 +77,7 @@ export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServ
 
   app.post(apiOperations.resetAdministeredUserPassword.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
+    requireAuthScope(user, "user_admin:write");
     const body = parseBody(apiOperations.resetAdministeredUserPassword.requestSchema, request.body);
     const userId = getUserIdParam(request.params);
     return userAdministration.resetPassword(user, context, {
@@ -82,6 +88,7 @@ export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServ
 
   app.delete(apiOperations.deleteAdministeredUserIdentity.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
+    requireAuthScope(user, "user_admin:write");
     const params = getIdentityParams(request.params);
     return userAdministration.deleteIdentity(user, context, params);
   });

@@ -49,6 +49,91 @@
                     },
                     "authSource": {
                       "type": "string"
+                    },
+                    "principal": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "service"
+                          ]
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "displayLabel": {
+                          "type": "string"
+                        },
+                        "clientInstanceId": {
+                          "type": "string"
+                        },
+                        "authSource": {
+                          "type": "string"
+                        },
+                        "externalUserId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "id",
+                        "displayLabel",
+                        "clientInstanceId",
+                        "authSource"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "subjectUserId": {
+                      "type": "string"
+                    },
+                    "delegatedActor": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "default": "service_principal",
+                          "type": "string",
+                          "const": "service_principal"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "displayLabel": {
+                          "type": "string"
+                        },
+                        "authSource": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "id",
+                        "authSource"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "scopes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "*",
+                          "me:read",
+                          "config:read",
+                          "conversation:read",
+                          "conversation:write",
+                          "run:start",
+                          "run:observe",
+                          "run:cancel",
+                          "run:command",
+                          "me:write",
+                          "governance:read",
+                          "governance:write",
+                          "user_admin:read",
+                          "user_admin:write"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -130,6 +215,91 @@
                     },
                     "authSource": {
                       "type": "string"
+                    },
+                    "principal": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "service"
+                          ]
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "displayLabel": {
+                          "type": "string"
+                        },
+                        "clientInstanceId": {
+                          "type": "string"
+                        },
+                        "authSource": {
+                          "type": "string"
+                        },
+                        "externalUserId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "id",
+                        "displayLabel",
+                        "clientInstanceId",
+                        "authSource"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "subjectUserId": {
+                      "type": "string"
+                    },
+                    "delegatedActor": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "default": "service_principal",
+                          "type": "string",
+                          "const": "service_principal"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "displayLabel": {
+                          "type": "string"
+                        },
+                        "authSource": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "id",
+                        "authSource"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "scopes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "*",
+                          "me:read",
+                          "config:read",
+                          "conversation:read",
+                          "conversation:write",
+                          "run:start",
+                          "run:observe",
+                          "run:cancel",
+                          "run:command",
+                          "me:write",
+                          "governance:read",
+                          "governance:write",
+                          "user_admin:read",
+                          "user_admin:write"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -2525,6 +2695,47 @@
                             "items": {
                               "type": "string"
                             }
+                          },
+                          "principalKind": {
+                            "type": "string",
+                            "enum": [
+                              "user",
+                              "service"
+                            ]
+                          },
+                          "principalId": {
+                            "type": "string"
+                          },
+                          "principalDisplayLabel": {
+                            "type": "string"
+                          },
+                          "subjectUserId": {
+                            "type": "string"
+                          },
+                          "delegatedActor": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "default": "service_principal",
+                                "type": "string",
+                                "const": "service_principal"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "displayLabel": {
+                                "type": "string"
+                              },
+                              "authSource": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "id",
+                              "authSource"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -3921,6 +4132,47 @@
                   },
                   "correlationId": {
                     "type": "string"
+                  },
+                  "scopes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "me:read",
+                        "config:read",
+                        "conversation:read",
+                        "conversation:write",
+                        "run:start",
+                        "run:observe",
+                        "run:cancel",
+                        "run:command"
+                      ]
+                    }
+                  },
+                  "delegatedActor": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "default": "service_principal",
+                        "type": "string",
+                        "const": "service_principal"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "displayLabel": {
+                        "type": "string"
+                      },
+                      "authSource": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "id",
+                      "authSource"
+                    ],
+                    "additionalProperties": false
                   }
                 },
                 "required": [

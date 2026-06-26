@@ -8,6 +8,7 @@ import { fromNodeHeaders } from "better-auth/node";
 import postgres from "postgres";
 import {
   AppError,
+  AUTH_SCOPE_WILDCARD,
   type AuthenticatedUser,
   type ClientInstanceId
 } from "@vivd-catalyst/core";
@@ -153,7 +154,17 @@ class BetterAuthAdapter implements AuthAdapter {
       permissionRefs: profile.permissionRefs,
       clientInstanceId: request.clientInstanceId,
       authSource: this.id,
-      correlationId: request.correlationId
+      correlationId: request.correlationId,
+      subjectUserId: profile.authUserId,
+      principal: {
+        kind: "user",
+        id: profile.authUserId,
+        externalUserId: profile.externalUserId,
+        displayLabel: profile.displayLabel,
+        clientInstanceId: request.clientInstanceId,
+        authSource: this.id
+      },
+      scopes: [AUTH_SCOPE_WILDCARD]
     };
   }
 }

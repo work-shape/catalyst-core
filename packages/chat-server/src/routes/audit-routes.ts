@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { apiOperations } from "@vivd-catalyst/api-contract";
+import { requireAuthScope } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "../types";
 import { authorizeGovernanceAction } from "../governance-actions";
 import { authenticateRequest } from "../request-context";
@@ -7,6 +8,7 @@ import { authenticateRequest } from "../request-context";
 export function registerAuditRoutes(app: FastifyInstance, options: ChatServerOptions): void {
   app.get(apiOperations.listAuditEvents.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
+    requireAuthScope(user, "governance:read");
     await authorizeGovernanceAction({
       options,
       user,

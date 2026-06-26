@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { apiOperations } from "@vivd-catalyst/api-contract";
-import { AppError } from "@vivd-catalyst/core";
+import { AppError, CHAT_SESSION_AUTH_SCOPES } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "../types";
 import { createCorrelationId, parseBody } from "../request-context";
 
@@ -23,7 +23,18 @@ export function registerSessionTokenRoutes(app: FastifyInstance, options: ChatSe
       correlationId: body.correlationId ?? createCorrelationId(request),
       metadata: {
         roles: body.roles ?? [],
-        permissionRefs: body.permissionRefs ?? []
+        permissionRefs: body.permissionRefs ?? [],
+        scopes: body.scopes ?? [...CHAT_SESSION_AUTH_SCOPES],
+        ...(body.delegatedActor
+          ? {
+              delegatedActor: {
+                kind: body.delegatedActor.kind,
+                id: body.delegatedActor.id,
+                displayLabel: body.delegatedActor.displayLabel ?? null,
+                authSource: body.delegatedActor.authSource
+              }
+            }
+          : {})
       }
     });
     return issued;

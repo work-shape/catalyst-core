@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { apiOperations } from "@vivd-catalyst/api-contract";
-import { AppError } from "@vivd-catalyst/core";
+import { AppError, requireAuthScope } from "@vivd-catalyst/core";
 import { ConversationWorkflow } from "../conversation-workflow";
 import { authenticateRequest, getConversationId } from "../request-context";
 import type { ChatServerOptions } from "../types";
@@ -10,6 +10,7 @@ export function registerConversationFileRoutes(app: FastifyInstance, options: Ch
 
   app.get(apiOperations.getConversationFileContent.path, async (request, reply) => {
     const { user } = await authenticateRequest(options, request);
+    requireAuthScope(user, "conversation:read");
     const conversationId = getConversationId(request);
     await conversations.requireOwnedActiveConversation(conversationId, user);
     const service = attachments(options);

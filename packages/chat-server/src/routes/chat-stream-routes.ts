@@ -23,7 +23,9 @@ import {
   type RuntimeCallContext,
   asAgentRunId,
   asConversationId,
-  isAppError
+  getSubjectUserId,
+  isAppError,
+  requireAuthScope
 } from "@vivd-catalyst/core";
 import { ConversationWorkflow } from "../conversation-workflow";
 import { createConversationTitle } from "../conversation-title";
@@ -66,6 +68,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
 
   app.post(apiOperations.generateConversationTitle.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
+    requireAuthScope(user, "conversation:write");
     const conversationId = getConversationId(request);
     return (
       (await generateTitleForConversationOnce(conversationId, user, context)) ??
@@ -75,6 +78,8 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
 
   app.post(chatStreamRoutePath, async (request, reply) => {
     const { user, context } = await authenticateRequest(options, request);
+    requireAuthScope(user, "conversation:write");
+    requireAuthScope(user, "run:start");
     const body = parseBody(chatStreamRequestSchema, request.body);
     const localizedContext = withRequestLocale(context, options, request, body.locale);
     const text = extractSubmittedUserText(body.messages);
@@ -95,7 +100,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
     });
     resumableRuns.remember(runId, {
       conversationId,
-      ownerUserId: user.id
+      ownerUserId: getSubjectUserId(user)
     });
     void generateTitleForConversationOnce(conversationId, user, localizedContext).catch((error: unknown) => {
       request.log.warn(
@@ -125,6 +130,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
 
   app.get("/api/chat/runs/:runId/stream", async (request, reply) => {
     const { user, context } = await authenticateRequest(options, request);
+    requireAuthScope(user, "run:observe");
     const params = request.params as { runId?: string };
     const runId = asAgentRunId(params.runId ?? "");
     const afterSequence = readAfterSequence(request);
@@ -147,7 +153,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
       });
     }
 
-    const resumableRun = resumableRuns.readForUser(runId, user.id);
+    const resumableRun = resumableRuns.readForUser(runId, getSubjectUserId(user));
     if (!resumableRun) {
       return reply.status(204).send();
     }
@@ -172,6 +178,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
 
   async function cancelRun(request: FastifyRequest) {
     const { user, context } = await authenticateRequest(options, request);
+    requireAuthScope(user, "run:cancel");
     const params = request.params as { conversationId?: string; runId?: string };
     const conversationId = asConversationId(params.conversationId ?? "");
     const runId = asAgentRunId(params.runId ?? "");
@@ -192,6 +199,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
 
   app.get("/api/conversations/:conversationId/runs/:runId/events", async (request, reply) => {
     const { user, context } = await authenticateRequest(options, request);
+    requireAuthScope(user, "run:observe");
     const params = request.params as { conversationId?: string; runId?: string };
     const conversationId = asConversationId(params.conversationId ?? "");
     const runId = asAgentRunId(params.runId ?? "");
@@ -225,7 +233,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
               clientInstanceId: options.clientInstanceId,
               runId,
               conversationId,
-              ownerUserId: user.id,
+              ownerUserId: getSubjectUserId(user),
               sequence: event.sequence,
               type: event.type,
               payload: event,

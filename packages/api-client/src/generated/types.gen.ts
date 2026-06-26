@@ -25,6 +25,22 @@ export type GetCurrentUserResponses = {
         permissionRefs: Array<string>;
         clientInstanceId: string;
         authSource: string;
+        principal?: {
+            kind: 'user' | 'service';
+            id: string;
+            displayLabel: string;
+            clientInstanceId: string;
+            authSource: string;
+            externalUserId?: string;
+        };
+        subjectUserId?: string;
+        delegatedActor?: {
+            kind: 'service_principal';
+            id: string;
+            displayLabel?: string;
+            authSource: string;
+        };
+        scopes?: Array<'*' | 'me:read' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write'>;
     };
 };
 
@@ -53,6 +69,22 @@ export type UpdateCurrentUserResponses = {
         permissionRefs: Array<string>;
         clientInstanceId: string;
         authSource: string;
+        principal?: {
+            kind: 'user' | 'service';
+            id: string;
+            displayLabel: string;
+            clientInstanceId: string;
+            authSource: string;
+            externalUserId?: string;
+        };
+        subjectUserId?: string;
+        delegatedActor?: {
+            kind: 'service_principal';
+            id: string;
+            displayLabel?: string;
+            authSource: string;
+        };
+        scopes?: Array<'*' | 'me:read' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write'>;
     };
 };
 
@@ -781,6 +813,16 @@ export type ListAuditEventsResponses = {
             externalUserId: string;
             displayLabel: string;
             roles: Array<string>;
+            principalKind?: 'user' | 'service';
+            principalId?: string;
+            principalDisplayLabel?: string;
+            subjectUserId?: string;
+            delegatedActor?: {
+                kind: 'service_principal';
+                id: string;
+                displayLabel?: string;
+                authSource: string;
+            };
         };
         subject?: string;
         reason?: string;
@@ -1163,6 +1205,13 @@ export type IssueSessionTokenData = {
         roles?: Array<string>;
         permissionRefs?: Array<string>;
         correlationId?: string;
+        scopes?: Array<'me:read' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command'>;
+        delegatedActor?: {
+            kind: 'service_principal';
+            id: string;
+            displayLabel?: string;
+            authSource: string;
+        };
     };
     path?: never;
     query?: never;
