@@ -1,8 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import {
-  AlertCircle,
   ArrowLeft,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   KeyRound,
@@ -24,15 +22,31 @@ import type {
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { cn } from "./ui/cn";
 import { Dialog } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Select } from "./ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
-import { avatarGradient } from "./avatar-gradient";
-
-/** Auth source id of the standalone Better Auth adapter; only those identities have passwords. */
-const STANDALONE_AUTH_SOURCE = "better-auth";
+import {
+  DEFAULT_ROWS_PER_PAGE,
+  STANDALONE_AUTH_SOURCE,
+  distinctAuthSources,
+  emptyIdentityForm,
+  emptyUserForm,
+  errorMessage,
+  filterUsers,
+  formToCreateInput,
+  formToIdentityInput,
+  formToUpdateInput,
+  formatDateTime,
+  generatePassword,
+  roleFilterOptions,
+  userToForm,
+  type FormNoticeState,
+  type IdentityFormState,
+  type UserFormState,
+  type UserStatusFilter
+} from "./user-administration-model";
+import { Field, FormNotice, StatusBadge, UserAvatar } from "./user-administration-primitives";
 
 interface UserAdministrationPanelProps {
   users: AdministeredUser[];
@@ -48,45 +62,6 @@ interface UserAdministrationPanelProps {
   onDeleteIdentity(userId: string, identity: AdministeredUserIdentity): Promise<AdministeredUser>;
   onResetPassword(userId: string, password: string): Promise<unknown>;
 }
-
-interface UserFormState {
-  displayLabel: string;
-  email: string;
-  roles: string;
-  permissionRefs: string;
-  status: AdministeredUser["status"];
-}
-
-interface IdentityFormState {
-  authSource: string;
-  externalUserId: string;
-  displayLabel: string;
-  email: string;
-  emailVerified: boolean;
-}
-
-type FormNoticeState = { kind: "success" | "error"; text: string } | undefined;
-
-const emptyUserForm: UserFormState = {
-  displayLabel: "",
-  email: "",
-  roles: "user",
-  permissionRefs: "",
-  status: "active"
-};
-
-const emptyIdentityForm: IdentityFormState = {
-  authSource: "session-token",
-  externalUserId: "",
-  displayLabel: "",
-  email: "",
-  emailVerified: false
-};
-
-type UserStatusFilter = "all" | AdministeredUser["status"];
-
-const DEFAULT_ROWS_PER_PAGE = 10;
-const ROLE_ORDER = ["superadmin", "admin", "user"];
 
 export function UserAdministrationPanel({
   users,
@@ -937,184 +912,4 @@ function UserFields({
       </div>
     </>
   );
-}
-
-function Field({
-  label,
-  hint,
-  children
-}: {
-  label: string;
-  hint?: string;
-  children: ReactNode;
-}) {
-  return (
-    <label className="grid content-start gap-1 text-sm">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      {children}
-      {hint ? <span className="text-xs text-muted-foreground/80">{hint}</span> : null}
-    </label>
-  );
-}
-
-function FormNotice({ notice }: { notice: FormNoticeState }) {
-  if (!notice) {
-    return null;
-  }
-  return (
-    <p
-      role="status"
-      className={cn(
-        "flex items-start gap-1.5 text-sm",
-        notice.kind === "error" ? "text-destructive" : "text-emerald-700"
-      )}
-    >
-      {notice.kind === "error" ? (
-        <AlertCircle size={15} aria-hidden="true" className="mt-0.5 shrink-0" />
-      ) : (
-        <CheckCircle2 size={15} aria-hidden="true" className="mt-0.5 shrink-0" />
-      )}
-      <span>{notice.text}</span>
-    </p>
-  );
-}
-
-function UserAvatar({ displayLabel, size = "md" }: { displayLabel: string; size?: "md" | "lg" }) {
-  return (
-    <span
-      aria-hidden="true"
-      style={{ background: avatarGradient(displayLabel) }}
-      className={cn(
-        "grid shrink-0 place-items-center font-semibold text-white shadow-sm ring-1 ring-white/45",
-        size === "lg" ? "size-11 rounded-[11px] text-sm" : "size-8 rounded-[9px] text-xs"
-      )}
-    >
-      {initials(displayLabel)}
-    </span>
-  );
-}
-
-function StatusBadge({ status }: { status: AdministeredUser["status"] }) {
-  return (
-    <Badge variant={status === "active" ? "success" : "outline"} className="capitalize">
-      {status}
-    </Badge>
-  );
-}
-
-function filterUsers(
-  users: AdministeredUser[],
-  filters: {
-    search: string;
-    statusFilter: UserStatusFilter;
-    roleFilter: string;
-  }
-): AdministeredUser[] {
-  const query = filters.search.trim().toLowerCase();
-  return users.filter((user) => {
-    if (query && ![user.displayLabel, user.email ?? "", ...user.roles].join(" ").toLowerCase().includes(query)) {
-      return false;
-    }
-    if (filters.statusFilter !== "all" && user.status !== filters.statusFilter) {
-      return false;
-    }
-    if (filters.roleFilter !== "all" && !user.roles.includes(filters.roleFilter)) {
-      return false;
-    }
-    return true;
-  });
-}
-
-function roleFilterOptions(users: AdministeredUser[]): string[] {
-  return [...new Set(users.flatMap((user) => user.roles))].sort((left, right) => {
-    const leftIndex = ROLE_ORDER.indexOf(left);
-    const rightIndex = ROLE_ORDER.indexOf(right);
-
-    if (leftIndex !== -1 || rightIndex !== -1) {
-      return (leftIndex === -1 ? ROLE_ORDER.length : leftIndex) - (rightIndex === -1 ? ROLE_ORDER.length : rightIndex);
-    }
-
-    return left.localeCompare(right);
-  });
-}
-
-function distinctAuthSources(identities: AdministeredUserIdentity[]): string[] {
-  return [...new Set(identities.map((identity) => identity.authSource))];
-}
-
-function initials(displayLabel: string): string {
-  const parts = displayLabel.trim().split(/\s+/u).filter(Boolean);
-  const letters = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "");
-  return letters.join("") || "?";
-}
-
-function formatDateTime(value: string | undefined): string | undefined {
-  return value ? new Date(value).toLocaleString() : undefined;
-}
-
-function generatePassword(): string {
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message ? error.message : "Request failed";
-}
-
-function userToForm(user: AdministeredUser): UserFormState {
-  return {
-    displayLabel: user.displayLabel,
-    email: user.email ?? "",
-    roles: formatList(user.roles),
-    permissionRefs: formatList(user.permissionRefs),
-    status: user.status
-  };
-}
-
-function formToCreateInput(form: UserFormState): CreateAdministeredUserRequest {
-  return {
-    displayLabel: form.displayLabel.trim(),
-    email: optionalText(form.email),
-    roles: parseList(form.roles),
-    permissionRefs: parseList(form.permissionRefs),
-    status: form.status
-  };
-}
-
-function formToUpdateInput(form: UserFormState): UpdateAdministeredUserRequest {
-  return {
-    displayLabel: form.displayLabel.trim(),
-    email: form.email.trim() ? form.email.trim() : null,
-    roles: parseList(form.roles),
-    permissionRefs: parseList(form.permissionRefs),
-    status: form.status
-  };
-}
-
-function formToIdentityInput(form: IdentityFormState): UpsertAdministeredUserIdentityRequest {
-  return {
-    authSource: form.authSource.trim(),
-    externalUserId: form.externalUserId.trim(),
-    displayLabel: optionalText(form.displayLabel),
-    email: optionalText(form.email),
-    emailVerified: form.emailVerified
-  };
-}
-
-function parseList(value: string): string[] {
-  return value
-    .split(/[,\n]/u)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function formatList(value: string[]): string {
-  return value.join(", ");
-}
-
-function optionalText(value: string): string | undefined {
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
 }

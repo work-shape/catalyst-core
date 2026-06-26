@@ -36,6 +36,13 @@
       "when": 1781887065032,
       "tag": "0004_strange_leopardon",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782469524751,
+      "tag": "0005_broken_hammerhead",
+      "breakpoints": true
     }
   ]
 }

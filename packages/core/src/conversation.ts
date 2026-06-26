@@ -81,6 +81,19 @@ export interface ConversationStore {
   }): Promise<Conversation>;
 }
 
+export interface ConversationRetentionStore {
+  listExpiredConversations(input: {
+    clientInstanceId: ClientInstanceId;
+    now: ISODateString;
+    limit: number;
+  }): Promise<Conversation[]>;
+  expireConversation(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    expiredAt: ISODateString;
+  }): Promise<Conversation>;
+}
+
 export interface ConversationHistoryReader {
   listMessages(input: {
     clientInstanceId: ClientInstanceId;

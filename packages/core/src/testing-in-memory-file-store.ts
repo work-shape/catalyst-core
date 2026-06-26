@@ -418,33 +418,7 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
     conversationId: ConversationId;
     deletedAt: string;
   }): Promise<ManagedObjectDeletionResult> {
-    const attachments = [...this.conversationAttachments.values()].filter(
-      (attachment) =>
-        attachment.clientInstanceId === input.clientInstanceId &&
-        attachment.conversationId === input.conversationId
-    );
-    const fileIds = [...new Set(attachments.map((attachment) => attachment.fileId))];
-    const sharedFileIds = new Set(
-      [...this.conversationAttachments.values()]
-        .filter(
-          (attachment) =>
-            attachment.clientInstanceId === input.clientInstanceId &&
-            attachment.conversationId !== input.conversationId &&
-            attachment.status !== "deleted" &&
-            fileIds.includes(attachment.fileId)
-        )
-        .map((attachment) => attachment.fileId)
-    );
-    const files = fileIds
-      .filter((fileId) => !sharedFileIds.has(fileId))
-      .map((fileId) => this.managedFiles.get(fileId))
-      .filter((file): file is ManagedFileRecord => file !== undefined);
-    const artifacts = [...this.managedArtifacts.values()].filter(
-      (artifact) =>
-        artifact.clientInstanceId === input.clientInstanceId &&
-        artifact.conversationId === input.conversationId
-    );
-
+    const { attachments, files, artifacts } = this.collectConversationManagedObjectsForDeletion(input);
     for (const attachment of attachments) {
       this.conversationAttachments.set(attachment.id, {
         ...attachment,
@@ -473,6 +447,62 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
       fileObjectKeys: uniqueStrings(files.map((file) => file.objectKey)),
       artifactObjectKeys: uniqueStrings(artifacts.map((artifact) => artifact.objectKey))
     };
+  }
+
+  async listConversationManagedObjectsForDeletion(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+  }): Promise<ManagedObjectDeletionResult> {
+    const { attachments, files, artifacts } = this.collectConversationManagedObjectsForDeletion(input);
+    return {
+      attachmentCount: attachments.length,
+      fileObjectKeys: uniqueStrings(files.map((file) => file.objectKey)),
+      artifactObjectKeys: uniqueStrings(artifacts.map((artifact) => artifact.objectKey))
+    };
+  }
+
+  private collectConversationManagedObjectsForDeletion(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+  }): {
+    attachments: ConversationAttachment[];
+    files: ManagedFileRecord[];
+    artifacts: ManagedArtifactRecord[];
+  } {
+    const attachments = [...this.conversationAttachments.values()].filter(
+      (attachment) =>
+        attachment.clientInstanceId === input.clientInstanceId &&
+        attachment.conversationId === input.conversationId &&
+        attachment.status !== "deleted"
+    );
+    const fileIds = [...new Set(attachments.map((attachment) => attachment.fileId))];
+    const sharedFileIds = new Set(
+      [...this.conversationAttachments.values()]
+        .filter(
+          (attachment) =>
+            attachment.clientInstanceId === input.clientInstanceId &&
+            attachment.conversationId !== input.conversationId &&
+            attachment.status !== "deleted" &&
+            fileIds.includes(attachment.fileId)
+        )
+        .map((attachment) => attachment.fileId)
+    );
+    const files = fileIds
+      .filter((fileId) => !sharedFileIds.has(fileId))
+      .map((fileId) => this.managedFiles.get(fileId))
+      .filter(
+        (file): file is ManagedFileRecord =>
+          file !== undefined &&
+          file.clientInstanceId === input.clientInstanceId &&
+          file.status !== "deleted"
+      );
+    const artifacts = [...this.managedArtifacts.values()].filter(
+      (artifact) =>
+        artifact.clientInstanceId === input.clientInstanceId &&
+        artifact.conversationId === input.conversationId &&
+        artifact.status !== "deleted"
+    );
+    return { attachments, files, artifacts };
   }
 
   deleteAttachmentsForConversation(input: {

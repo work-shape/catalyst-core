@@ -85,6 +85,11 @@ export const conversations = pgTable(
       table.clientInstanceId,
       table.ownerUserId,
       table.updatedAt.desc()
+    ),
+    index("conversations_retention_expiry_idx").on(
+      table.clientInstanceId,
+      table.status,
+      table.retainedUntil
     )
   ]
 );

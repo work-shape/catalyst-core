@@ -1,0 +1,3395 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Vivd Catalyst API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/me": {
+      "get": {
+        "operationId": "getCurrentUser",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "externalUserId": {
+                      "type": "string"
+                    },
+                    "displayLabel": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "emailVerified": {
+                      "type": "boolean"
+                    },
+                    "roles": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "permissionRefs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "authSource": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "externalUserId",
+                    "displayLabel",
+                    "roles",
+                    "permissionRefs",
+                    "clientInstanceId",
+                    "authSource"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateCurrentUser",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "displayLabel": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "displayLabel"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "externalUserId": {
+                      "type": "string"
+                    },
+                    "displayLabel": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "emailVerified": {
+                      "type": "boolean"
+                    },
+                    "roles": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "permissionRefs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "authSource": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "externalUserId",
+                    "displayLabel",
+                    "roles",
+                    "permissionRefs",
+                    "clientInstanceId",
+                    "authSource"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me/password": {
+      "post": {
+        "operationId": "changeCurrentUserPassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "currentPassword": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "minLength": 8
+                  }
+                },
+                "required": [
+                  "currentPassword",
+                  "newPassword"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/branding": {
+      "get": {
+        "operationId": "getBranding",
+        "parameters": [
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "localization": {
+                      "type": "object",
+                      "properties": {
+                        "locale": {
+                          "type": "string",
+                          "enum": [
+                            "en",
+                            "de"
+                          ]
+                        },
+                        "defaultLocale": {
+                          "type": "string",
+                          "enum": [
+                            "en",
+                            "de"
+                          ]
+                        },
+                        "supportedLocales": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "en",
+                              "de"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "locale",
+                        "defaultLocale",
+                        "supportedLocales"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "clientName": {
+                      "type": "string"
+                    },
+                    "logoUrl": {
+                      "type": "string"
+                    },
+                    "logoUrlDark": {
+                      "type": "string"
+                    },
+                    "logoInvertOnDark": {
+                      "type": "boolean"
+                    },
+                    "faviconUrl": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "welcomeMessage": {
+                      "type": "string"
+                    },
+                    "accentColor": {
+                      "type": "string"
+                    },
+                    "theme": {
+                      "type": "object",
+                      "properties": {
+                        "accentColor": {
+                          "type": "string"
+                        },
+                        "accentStrongColor": {
+                          "type": "string"
+                        },
+                        "backgroundColor": {
+                          "type": "string"
+                        },
+                        "surfaceColor": {
+                          "type": "string"
+                        },
+                        "textColor": {
+                          "type": "string"
+                        },
+                        "mutedTextColor": {
+                          "type": "string"
+                        },
+                        "borderColor": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "accentColor",
+                        "accentStrongColor",
+                        "backgroundColor",
+                        "surfaceColor",
+                        "textColor",
+                        "mutedTextColor",
+                        "borderColor"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "darkTheme": {
+                      "type": "object",
+                      "properties": {
+                        "accentColor": {
+                          "type": "string"
+                        },
+                        "accentStrongColor": {
+                          "type": "string"
+                        },
+                        "backgroundColor": {
+                          "type": "string"
+                        },
+                        "surfaceColor": {
+                          "type": "string"
+                        },
+                        "textColor": {
+                          "type": "string"
+                        },
+                        "mutedTextColor": {
+                          "type": "string"
+                        },
+                        "borderColor": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "accentColor",
+                        "accentStrongColor",
+                        "backgroundColor",
+                        "surfaceColor",
+                        "textColor",
+                        "mutedTextColor",
+                        "borderColor"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "defaultThemeMode": {
+                      "type": "string",
+                      "enum": [
+                        "light",
+                        "dark",
+                        "system"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "localization",
+                    "clientName",
+                    "logoInvertOnDark",
+                    "title",
+                    "welcomeMessage",
+                    "accentColor",
+                    "theme",
+                    "darkTheme",
+                    "defaultThemeMode"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/config": {
+      "get": {
+        "operationId": "getConfig",
+        "parameters": [
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "clientInstance": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "displayName": {
+                          "type": "string"
+                        },
+                        "environment": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "displayName",
+                        "environment"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "localization": {
+                      "type": "object",
+                      "properties": {
+                        "locale": {
+                          "type": "string",
+                          "enum": [
+                            "en",
+                            "de"
+                          ]
+                        },
+                        "defaultLocale": {
+                          "type": "string",
+                          "enum": [
+                            "en",
+                            "de"
+                          ]
+                        },
+                        "supportedLocales": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "en",
+                              "de"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "locale",
+                        "defaultLocale",
+                        "supportedLocales"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "retention": {
+                      "type": "object",
+                      "properties": {
+                        "conversationDays": {
+                          "type": "number"
+                        },
+                        "auditDays": {
+                          "type": "number"
+                        },
+                        "allowUserDelete": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "conversationDays",
+                        "auditDays",
+                        "allowUserDelete"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "budget": {
+                          "type": "object",
+                          "properties": {
+                            "monthlySpendLimit": {
+                              "type": "number"
+                            },
+                            "costSafetyMultiplier": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "costSafetyMultiplier"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "safeguards": {
+                          "type": "object",
+                          "properties": {
+                            "modelCallsPerDay": {
+                              "type": "number"
+                            },
+                            "tokensPerDay": {
+                              "type": "number"
+                            },
+                            "tokensPerMonth": {
+                              "type": "number"
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "budget",
+                        "safeguards"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "features": {
+                      "type": "object",
+                      "properties": {
+                        "attachments": {
+                          "type": "object",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            },
+                            "accept": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "enabled",
+                            "accept"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "attachments"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "defaultAgentName": {
+                      "type": "string"
+                    },
+                    "agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "welcomeMessage": {
+                            "type": "string"
+                          },
+                          "initialPrompts": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "title": {
+                                  "type": "string"
+                                },
+                                "prompt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "title",
+                                "prompt"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "displayName",
+                          "initialPrompts"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "ui": {
+                      "type": "object",
+                      "properties": {
+                        "localization": {
+                          "type": "object",
+                          "properties": {
+                            "locale": {
+                              "type": "string",
+                              "enum": [
+                                "en",
+                                "de"
+                              ]
+                            },
+                            "defaultLocale": {
+                              "type": "string",
+                              "enum": [
+                                "en",
+                                "de"
+                              ]
+                            },
+                            "supportedLocales": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "en",
+                                  "de"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "locale",
+                            "defaultLocale",
+                            "supportedLocales"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "clientName": {
+                          "type": "string"
+                        },
+                        "logoUrl": {
+                          "type": "string"
+                        },
+                        "logoUrlDark": {
+                          "type": "string"
+                        },
+                        "logoInvertOnDark": {
+                          "type": "boolean"
+                        },
+                        "faviconUrl": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "welcomeMessage": {
+                          "type": "string"
+                        },
+                        "accentColor": {
+                          "type": "string"
+                        },
+                        "theme": {
+                          "type": "object",
+                          "properties": {
+                            "accentColor": {
+                              "type": "string"
+                            },
+                            "accentStrongColor": {
+                              "type": "string"
+                            },
+                            "backgroundColor": {
+                              "type": "string"
+                            },
+                            "surfaceColor": {
+                              "type": "string"
+                            },
+                            "textColor": {
+                              "type": "string"
+                            },
+                            "mutedTextColor": {
+                              "type": "string"
+                            },
+                            "borderColor": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "accentColor",
+                            "accentStrongColor",
+                            "backgroundColor",
+                            "surfaceColor",
+                            "textColor",
+                            "mutedTextColor",
+                            "borderColor"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "darkTheme": {
+                          "type": "object",
+                          "properties": {
+                            "accentColor": {
+                              "type": "string"
+                            },
+                            "accentStrongColor": {
+                              "type": "string"
+                            },
+                            "backgroundColor": {
+                              "type": "string"
+                            },
+                            "surfaceColor": {
+                              "type": "string"
+                            },
+                            "textColor": {
+                              "type": "string"
+                            },
+                            "mutedTextColor": {
+                              "type": "string"
+                            },
+                            "borderColor": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "accentColor",
+                            "accentStrongColor",
+                            "backgroundColor",
+                            "surfaceColor",
+                            "textColor",
+                            "mutedTextColor",
+                            "borderColor"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "defaultThemeMode": {
+                          "type": "string",
+                          "enum": [
+                            "light",
+                            "dark",
+                            "system"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "localization",
+                        "clientName",
+                        "logoInvertOnDark",
+                        "title",
+                        "welcomeMessage",
+                        "accentColor",
+                        "theme",
+                        "darkTheme",
+                        "defaultThemeMode"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "clientInstance",
+                    "localization",
+                    "retention",
+                    "usage",
+                    "features",
+                    "defaultAgentName",
+                    "agents",
+                    "ui"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/conversations": {
+      "get": {
+        "operationId": "listConversations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "clientInstanceId": {
+                        "type": "string"
+                      },
+                      "ownerUserId": {
+                        "type": "string"
+                      },
+                      "ownerExternalUserId": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      },
+                      "updatedAt": {
+                        "type": "string"
+                      },
+                      "retainedUntil": {
+                        "type": "string"
+                      },
+                      "deletedAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "clientInstanceId",
+                      "ownerUserId",
+                      "ownerExternalUserId",
+                      "title",
+                      "status",
+                      "createdAt",
+                      "updatedAt",
+                      "retainedUntil"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createConversation",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "locale": {
+                    "type": "string",
+                    "enum": [
+                      "en",
+                      "de"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "ownerUserId": {
+                      "type": "string"
+                    },
+                    "ownerExternalUserId": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "retainedUntil": {
+                      "type": "string"
+                    },
+                    "deletedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "clientInstanceId",
+                    "ownerUserId",
+                    "ownerExternalUserId",
+                    "title",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "retainedUntil"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/conversations/{conversationId}/title": {
+      "post": {
+        "operationId": "generateConversationTitle",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "ownerUserId": {
+                      "type": "string"
+                    },
+                    "ownerExternalUserId": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "retainedUntil": {
+                      "type": "string"
+                    },
+                    "deletedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "clientInstanceId",
+                    "ownerUserId",
+                    "ownerExternalUserId",
+                    "title",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "retainedUntil"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/conversations/{conversationId}/messages": {
+      "get": {
+        "operationId": "listConversationMessages",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "conversationId": {
+                        "type": "string"
+                      },
+                      "clientInstanceId": {
+                        "type": "string"
+                      },
+                      "role": {
+                        "type": "string",
+                        "enum": [
+                          "user",
+                          "assistant",
+                          "system",
+                          "tool"
+                        ]
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      },
+                      "metadata": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {}
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "conversationId",
+                      "clientInstanceId",
+                      "role",
+                      "text",
+                      "createdAt"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/conversations/{conversationId}": {
+      "delete": {
+        "operationId": "deleteConversation",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "ownerUserId": {
+                      "type": "string"
+                    },
+                    "ownerExternalUserId": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "retainedUntil": {
+                      "type": "string"
+                    },
+                    "deletedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "clientInstanceId",
+                    "ownerUserId",
+                    "ownerExternalUserId",
+                    "title",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "retainedUntil"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/conversations/{conversationId}/draft-attachments": {
+      "get": {
+        "operationId": "listDraftAttachments",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "conversationId": {
+                        "type": "string"
+                      },
+                      "fileId": {
+                        "type": "string"
+                      },
+                      "filename": {
+                        "type": "string"
+                      },
+                      "mimeType": {
+                        "type": "string"
+                      },
+                      "byteSize": {
+                        "type": "number"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "queued",
+                          "preprocessing",
+                          "ready",
+                          "failed",
+                          "unsupported",
+                          "deleted"
+                        ]
+                      },
+                      "format": {
+                        "type": "string"
+                      },
+                      "artifactRefs": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      },
+                      "processingMetadata": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {}
+                      },
+                      "warnings": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "error": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {}
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      },
+                      "updatedAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "conversationId",
+                      "fileId",
+                      "filename",
+                      "byteSize",
+                      "status",
+                      "artifactRefs",
+                      "processingMetadata",
+                      "warnings",
+                      "createdAt",
+                      "updatedAt"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "uploadDraftAttachment",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "attachment": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "conversationId": {
+                          "type": "string"
+                        },
+                        "fileId": {
+                          "type": "string"
+                        },
+                        "filename": {
+                          "type": "string"
+                        },
+                        "mimeType": {
+                          "type": "string"
+                        },
+                        "byteSize": {
+                          "type": "number"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "queued",
+                            "preprocessing",
+                            "ready",
+                            "failed",
+                            "unsupported",
+                            "deleted"
+                          ]
+                        },
+                        "format": {
+                          "type": "string"
+                        },
+                        "artifactRefs": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "processingMetadata": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        },
+                        "warnings": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "code",
+                              "message"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "error": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "conversationId",
+                        "fileId",
+                        "filename",
+                        "byteSize",
+                        "status",
+                        "artifactRefs",
+                        "processingMetadata",
+                        "warnings",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "attachments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "conversationId": {
+                            "type": "string"
+                          },
+                          "fileId": {
+                            "type": "string"
+                          },
+                          "filename": {
+                            "type": "string"
+                          },
+                          "mimeType": {
+                            "type": "string"
+                          },
+                          "byteSize": {
+                            "type": "number"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "queued",
+                              "preprocessing",
+                              "ready",
+                              "failed",
+                              "unsupported",
+                              "deleted"
+                            ]
+                          },
+                          "format": {
+                            "type": "string"
+                          },
+                          "artifactRefs": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "processingMetadata": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "warnings": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "code": {
+                                  "type": "string"
+                                },
+                                "message": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "code",
+                                "message"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "error": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "conversationId",
+                          "fileId",
+                          "filename",
+                          "byteSize",
+                          "status",
+                          "artifactRefs",
+                          "processingMetadata",
+                          "warnings",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "attachment",
+                    "attachments"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/conversations/{conversationId}/draft-attachments/{attachmentId}/retry": {
+      "post": {
+        "operationId": "retryDraftAttachment",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "attachment": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "conversationId": {
+                          "type": "string"
+                        },
+                        "fileId": {
+                          "type": "string"
+                        },
+                        "filename": {
+                          "type": "string"
+                        },
+                        "mimeType": {
+                          "type": "string"
+                        },
+                        "byteSize": {
+                          "type": "number"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "queued",
+                            "preprocessing",
+                            "ready",
+                            "failed",
+                            "unsupported",
+                            "deleted"
+                          ]
+                        },
+                        "format": {
+                          "type": "string"
+                        },
+                        "artifactRefs": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "processingMetadata": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        },
+                        "warnings": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "code",
+                              "message"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "error": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "conversationId",
+                        "fileId",
+                        "filename",
+                        "byteSize",
+                        "status",
+                        "artifactRefs",
+                        "processingMetadata",
+                        "warnings",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "attachments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "conversationId": {
+                            "type": "string"
+                          },
+                          "fileId": {
+                            "type": "string"
+                          },
+                          "filename": {
+                            "type": "string"
+                          },
+                          "mimeType": {
+                            "type": "string"
+                          },
+                          "byteSize": {
+                            "type": "number"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "queued",
+                              "preprocessing",
+                              "ready",
+                              "failed",
+                              "unsupported",
+                              "deleted"
+                            ]
+                          },
+                          "format": {
+                            "type": "string"
+                          },
+                          "artifactRefs": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "processingMetadata": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "warnings": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "code": {
+                                  "type": "string"
+                                },
+                                "message": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "code",
+                                "message"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "error": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "conversationId",
+                          "fileId",
+                          "filename",
+                          "byteSize",
+                          "status",
+                          "artifactRefs",
+                          "processingMetadata",
+                          "warnings",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "attachment",
+                    "attachments"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/conversations/{conversationId}/draft-attachments/{attachmentId}": {
+      "delete": {
+        "operationId": "deleteDraftAttachment",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "conversationId": {
+                      "type": "string"
+                    },
+                    "fileId": {
+                      "type": "string"
+                    },
+                    "filename": {
+                      "type": "string"
+                    },
+                    "mimeType": {
+                      "type": "string"
+                    },
+                    "byteSize": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "preprocessing",
+                        "ready",
+                        "failed",
+                        "unsupported",
+                        "deleted"
+                      ]
+                    },
+                    "format": {
+                      "type": "string"
+                    },
+                    "artifactRefs": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "processingMetadata": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "error": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "conversationId",
+                    "fileId",
+                    "filename",
+                    "byteSize",
+                    "status",
+                    "artifactRefs",
+                    "processingMetadata",
+                    "warnings",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/conversations/{conversationId}/files/{fileId}/content": {
+      "get": {
+        "operationId": "getConversationFileContent",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Binary response",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/audit-events": {
+      "get": {
+        "operationId": "listAuditEvents",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "clientInstanceId": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "actor": {
+                        "type": "object",
+                        "properties": {
+                          "userId": {
+                            "type": "string"
+                          },
+                          "externalUserId": {
+                            "type": "string"
+                          },
+                          "displayLabel": {
+                            "type": "string"
+                          },
+                          "roles": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "userId",
+                          "externalUserId",
+                          "displayLabel",
+                          "roles"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "subject": {
+                        "type": "string"
+                      },
+                      "reason": {
+                        "type": "string"
+                      },
+                      "correlationId": {
+                        "type": "string"
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      },
+                      "metadata": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {}
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "clientInstanceId",
+                      "type",
+                      "status",
+                      "correlationId",
+                      "createdAt"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/superadmin/usage": {
+      "get": {
+        "operationId": "getUsageSummary",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "generatedAt": {
+                      "type": "string"
+                    },
+                    "budget": {
+                      "type": "object",
+                      "properties": {
+                        "monthlySpendLimit": {
+                          "type": "number"
+                        },
+                        "costSafetyMultiplier": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "costSafetyMultiplier"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "safeguards": {
+                      "type": "object",
+                      "properties": {
+                        "modelCallsPerDay": {
+                          "type": "number"
+                        },
+                        "tokensPerDay": {
+                          "type": "number"
+                        },
+                        "tokensPerMonth": {
+                          "type": "number"
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "pricing": {
+                      "type": "object",
+                      "properties": {
+                        "currency": {
+                          "type": "string"
+                        },
+                        "models": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "providerId": {
+                                "type": "string"
+                              },
+                              "model": {
+                                "type": "string"
+                              },
+                              "inputPricePerMillionTokens": {
+                                "type": "number"
+                              },
+                              "outputPricePerMillionTokens": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "providerId",
+                              "model",
+                              "inputPricePerMillionTokens",
+                              "outputPricePerMillionTokens"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "currency",
+                        "models"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "today": {
+                      "type": "object",
+                      "properties": {
+                        "start": {
+                          "type": "string"
+                        },
+                        "end": {
+                          "type": "string"
+                        },
+                        "modelCallCount": {
+                          "type": "number"
+                        },
+                        "inputTokens": {
+                          "type": "number"
+                        },
+                        "outputTokens": {
+                          "type": "number"
+                        },
+                        "totalTokens": {
+                          "type": "number"
+                        },
+                        "cost": {
+                          "type": "object",
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "inputCostMicros": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "outputCostMicros": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "totalCostMicros": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "budgetedCostMicros": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "costSafetyMultiplier": {
+                              "type": "number"
+                            },
+                            "pricingConfigured": {
+                              "type": "boolean"
+                            },
+                            "pricedModelCallCount": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "unpricedModelCallCount": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "currency",
+                            "inputCostMicros",
+                            "outputCostMicros",
+                            "totalCostMicros",
+                            "budgetedCostMicros",
+                            "costSafetyMultiplier",
+                            "pricingConfigured",
+                            "pricedModelCallCount",
+                            "unpricedModelCallCount"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "modelCallCount",
+                        "inputTokens",
+                        "outputTokens",
+                        "totalTokens",
+                        "cost"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "currentMonth": {
+                      "type": "object",
+                      "properties": {
+                        "start": {
+                          "type": "string"
+                        },
+                        "end": {
+                          "type": "string"
+                        },
+                        "modelCallCount": {
+                          "type": "number"
+                        },
+                        "inputTokens": {
+                          "type": "number"
+                        },
+                        "outputTokens": {
+                          "type": "number"
+                        },
+                        "totalTokens": {
+                          "type": "number"
+                        },
+                        "cost": {
+                          "type": "object",
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "inputCostMicros": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "outputCostMicros": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "totalCostMicros": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "budgetedCostMicros": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "costSafetyMultiplier": {
+                              "type": "number"
+                            },
+                            "pricingConfigured": {
+                              "type": "boolean"
+                            },
+                            "pricedModelCallCount": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "unpricedModelCallCount": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "currency",
+                            "inputCostMicros",
+                            "outputCostMicros",
+                            "totalCostMicros",
+                            "budgetedCostMicros",
+                            "costSafetyMultiplier",
+                            "pricingConfigured",
+                            "pricedModelCallCount",
+                            "unpricedModelCallCount"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "modelCallCount",
+                        "inputTokens",
+                        "outputTokens",
+                        "totalTokens",
+                        "cost"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "allTime": {
+                      "type": "object",
+                      "properties": {
+                        "start": {
+                          "type": "string"
+                        },
+                        "end": {
+                          "type": "string"
+                        },
+                        "modelCallCount": {
+                          "type": "number"
+                        },
+                        "inputTokens": {
+                          "type": "number"
+                        },
+                        "outputTokens": {
+                          "type": "number"
+                        },
+                        "totalTokens": {
+                          "type": "number"
+                        },
+                        "cost": {
+                          "type": "object",
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "inputCostMicros": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "outputCostMicros": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "totalCostMicros": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "budgetedCostMicros": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "costSafetyMultiplier": {
+                              "type": "number"
+                            },
+                            "pricingConfigured": {
+                              "type": "boolean"
+                            },
+                            "pricedModelCallCount": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "unpricedModelCallCount": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "currency",
+                            "inputCostMicros",
+                            "outputCostMicros",
+                            "totalCostMicros",
+                            "budgetedCostMicros",
+                            "costSafetyMultiplier",
+                            "pricingConfigured",
+                            "pricedModelCallCount",
+                            "unpricedModelCallCount"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "modelCallCount",
+                        "inputTokens",
+                        "outputTokens",
+                        "totalTokens",
+                        "cost"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "recentEvents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "clientInstanceId": {
+                            "type": "string"
+                          },
+                          "conversationId": {
+                            "type": "string"
+                          },
+                          "agentRunId": {
+                            "type": "string"
+                          },
+                          "agentName": {
+                            "type": "string"
+                          },
+                          "providerId": {
+                            "type": "string"
+                          },
+                          "model": {
+                            "type": "string"
+                          },
+                          "inputTokens": {
+                            "type": "number"
+                          },
+                          "outputTokens": {
+                            "type": "number"
+                          },
+                          "totalTokens": {
+                            "type": "number"
+                          },
+                          "source": {
+                            "type": "string",
+                            "enum": [
+                              "provider_reported",
+                              "not_reported",
+                              "estimated"
+                            ]
+                          },
+                          "cost": {
+                            "type": "object",
+                            "properties": {
+                              "currency": {
+                                "type": "string"
+                              },
+                              "inputCostMicros": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "outputCostMicros": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "totalCostMicros": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "budgetedCostMicros": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "costSafetyMultiplier": {
+                                "type": "number"
+                              },
+                              "pricingConfigured": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "currency",
+                              "inputCostMicros",
+                              "outputCostMicros",
+                              "totalCostMicros",
+                              "budgetedCostMicros",
+                              "costSafetyMultiplier",
+                              "pricingConfigured"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "correlationId": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "clientInstanceId",
+                          "conversationId",
+                          "agentRunId",
+                          "agentName",
+                          "providerId",
+                          "model",
+                          "inputTokens",
+                          "outputTokens",
+                          "totalTokens",
+                          "source",
+                          "cost",
+                          "correlationId",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "generatedAt",
+                    "budget",
+                    "safeguards",
+                    "pricing",
+                    "today",
+                    "currentMonth",
+                    "allTime",
+                    "recentEvents"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/superadmin/users": {
+      "get": {
+        "operationId": "listAdministeredUsers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "clientInstanceId": {
+                        "type": "string"
+                      },
+                      "displayLabel": {
+                        "type": "string"
+                      },
+                      "email": {
+                        "type": "string"
+                      },
+                      "roles": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "permissionRefs": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "active",
+                          "disabled"
+                        ]
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      },
+                      "updatedAt": {
+                        "type": "string"
+                      },
+                      "lastAuthenticatedAt": {
+                        "type": "string"
+                      },
+                      "identities": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "clientInstanceId": {
+                              "type": "string"
+                            },
+                            "userId": {
+                              "type": "string"
+                            },
+                            "authSource": {
+                              "type": "string"
+                            },
+                            "externalUserId": {
+                              "type": "string"
+                            },
+                            "displayLabel": {
+                              "type": "string"
+                            },
+                            "email": {
+                              "type": "string"
+                            },
+                            "emailVerified": {
+                              "type": "boolean"
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            },
+                            "updatedAt": {
+                              "type": "string"
+                            },
+                            "lastAuthenticatedAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "clientInstanceId",
+                            "userId",
+                            "authSource",
+                            "externalUserId",
+                            "emailVerified",
+                            "createdAt",
+                            "updatedAt"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "clientInstanceId",
+                      "displayLabel",
+                      "roles",
+                      "permissionRefs",
+                      "status",
+                      "createdAt",
+                      "updatedAt",
+                      "identities"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createAdministeredUser",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "displayLabel": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  },
+                  "roles": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "permissionRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "disabled"
+                    ]
+                  }
+                },
+                "required": [
+                  "displayLabel"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "displayLabel": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "roles": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "permissionRefs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "disabled"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "lastAuthenticatedAt": {
+                      "type": "string"
+                    },
+                    "identities": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "clientInstanceId": {
+                            "type": "string"
+                          },
+                          "userId": {
+                            "type": "string"
+                          },
+                          "authSource": {
+                            "type": "string"
+                          },
+                          "externalUserId": {
+                            "type": "string"
+                          },
+                          "displayLabel": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "emailVerified": {
+                            "type": "boolean"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          },
+                          "lastAuthenticatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "clientInstanceId",
+                          "userId",
+                          "authSource",
+                          "externalUserId",
+                          "emailVerified",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "clientInstanceId",
+                    "displayLabel",
+                    "roles",
+                    "permissionRefs",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "identities"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/superadmin/users/{userId}": {
+      "patch": {
+        "operationId": "updateAdministeredUser",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "displayLabel": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "email": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "email",
+                        "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "roles": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "permissionRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "disabled"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "displayLabel": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "roles": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "permissionRefs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "disabled"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "lastAuthenticatedAt": {
+                      "type": "string"
+                    },
+                    "identities": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "clientInstanceId": {
+                            "type": "string"
+                          },
+                          "userId": {
+                            "type": "string"
+                          },
+                          "authSource": {
+                            "type": "string"
+                          },
+                          "externalUserId": {
+                            "type": "string"
+                          },
+                          "displayLabel": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "emailVerified": {
+                            "type": "boolean"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          },
+                          "lastAuthenticatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "clientInstanceId",
+                          "userId",
+                          "authSource",
+                          "externalUserId",
+                          "emailVerified",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "clientInstanceId",
+                    "displayLabel",
+                    "roles",
+                    "permissionRefs",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "identities"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/superadmin/users/{userId}/identities": {
+      "put": {
+        "operationId": "upsertAdministeredUserIdentity",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "authSource": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "externalUserId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "displayLabel": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  },
+                  "emailVerified": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "authSource",
+                  "externalUserId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "displayLabel": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "roles": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "permissionRefs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "disabled"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "lastAuthenticatedAt": {
+                      "type": "string"
+                    },
+                    "identities": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "clientInstanceId": {
+                            "type": "string"
+                          },
+                          "userId": {
+                            "type": "string"
+                          },
+                          "authSource": {
+                            "type": "string"
+                          },
+                          "externalUserId": {
+                            "type": "string"
+                          },
+                          "displayLabel": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "emailVerified": {
+                            "type": "boolean"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          },
+                          "lastAuthenticatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "clientInstanceId",
+                          "userId",
+                          "authSource",
+                          "externalUserId",
+                          "emailVerified",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "clientInstanceId",
+                    "displayLabel",
+                    "roles",
+                    "permissionRefs",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "identities"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/superadmin/users/{userId}/password": {
+      "post": {
+        "operationId": "resetAdministeredUserPassword",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "minLength": 8
+                  }
+                },
+                "required": [
+                  "password"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/superadmin/users/{userId}/identities/{authSource}/{externalUserId}": {
+      "delete": {
+        "operationId": "deleteAdministeredUserIdentity",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "authSource",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "externalUserId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "displayLabel": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "roles": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "permissionRefs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "disabled"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "lastAuthenticatedAt": {
+                      "type": "string"
+                    },
+                    "identities": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "clientInstanceId": {
+                            "type": "string"
+                          },
+                          "userId": {
+                            "type": "string"
+                          },
+                          "authSource": {
+                            "type": "string"
+                          },
+                          "externalUserId": {
+                            "type": "string"
+                          },
+                          "displayLabel": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "emailVerified": {
+                            "type": "boolean"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          },
+                          "lastAuthenticatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "clientInstanceId",
+                          "userId",
+                          "authSource",
+                          "externalUserId",
+                          "emailVerified",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "clientInstanceId",
+                    "displayLabel",
+                    "roles",
+                    "permissionRefs",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "identities"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/session-token": {
+      "post": {
+        "operationId": "issueSessionToken",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "externalUserId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "displayLabel": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  },
+                  "emailVerified": {
+                    "type": "boolean"
+                  },
+                  "roles": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "permissionRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "correlationId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "externalUserId",
+                  "displayLabel"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "chatSessionToken": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "chatSessionToken",
+                    "expiresAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -85,6 +85,22 @@ describe("chat UI thread activity", () => {
     ).toBe(true);
   });
 
+  it("hides the separate pending indicator once the running assistant message owns activity", () => {
+    expect(
+      pendingAssistantPresentation({
+        conversationRunning: true,
+        threadRunning: true,
+        lastMessage: {
+          role: "assistant",
+          status: {
+            type: "running"
+          },
+          parts: [{ type: "step-start" }]
+        }
+      })
+    ).toBe("hidden");
+  });
+
   it("blocks sending only when the conversation is running outside the local assistant stream", () => {
     expect(isComposerBlockedByBackgroundRun({ conversationRunning: true, threadRunning: false })).toBe(true);
     expect(isComposerBlockedByBackgroundRun({ conversationRunning: true, threadRunning: true })).toBe(false);

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { apiOperations } from "@vivd-catalyst/api-contract";
 import { AppError } from "@vivd-catalyst/core";
 import { ConversationWorkflow } from "../conversation-workflow";
 import { authenticateRequest, getConversationId } from "../request-context";
@@ -7,7 +8,7 @@ import type { ChatServerOptions } from "../types";
 export function registerConversationFileRoutes(app: FastifyInstance, options: ChatServerOptions): void {
   const conversations = new ConversationWorkflow(options);
 
-  app.get("/api/conversations/:conversationId/files/:fileId/content", async (request, reply) => {
+  app.get(apiOperations.getConversationFileContent.path, async (request, reply) => {
     const { user } = await authenticateRequest(options, request);
     const conversationId = getConversationId(request);
     await conversations.requireOwnedActiveConversation(conversationId, user);

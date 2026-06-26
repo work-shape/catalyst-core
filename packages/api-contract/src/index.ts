@@ -1,4 +1,9 @@
 import { z } from "zod";
+import { defineBlobApiOperation, defineJsonApiOperation } from "./http-operation";
+import { createOpenApiDocumentFromOperations } from "./openapi";
+
+export * from "./http-operation";
+export * from "./openapi";
 
 export const localeCodeSchema = z.enum(["en", "de"]);
 
@@ -189,6 +194,8 @@ export const chatStreamRequestSchema = z
     messages: z.array(uiMessageSchema).min(1)
   })
   .passthrough();
+
+export const chatStreamRoutePath = "/api/chat";
 
 const chatStreamMessageMetadataSchema = z.record(z.string(), z.unknown());
 
@@ -578,6 +585,169 @@ export const usageSummarySchema = z.object({
   recentEvents: z.array(modelUsageEventSchema)
 });
 
+export const apiOperations = {
+  getCurrentUser: defineJsonApiOperation({
+    operationId: "getCurrentUser",
+    method: "GET",
+    path: "/api/me",
+    responseSchema: apiUserSchema
+  }),
+  updateCurrentUser: defineJsonApiOperation({
+    operationId: "updateCurrentUser",
+    method: "PATCH",
+    path: "/api/me",
+    requestSchema: updateCurrentUserRequestSchema,
+    responseSchema: apiUserSchema
+  }),
+  changeCurrentUserPassword: defineJsonApiOperation({
+    operationId: "changeCurrentUserPassword",
+    method: "POST",
+    path: "/api/me/password",
+    requestSchema: changeCurrentUserPasswordRequestSchema,
+    responseSchema: changeCurrentUserPasswordResponseSchema
+  }),
+  getBranding: defineJsonApiOperation({
+    operationId: "getBranding",
+    method: "GET",
+    path: "/api/branding",
+    queryParams: ["locale"],
+    responseSchema: clientBrandingSchema
+  }),
+  getConfig: defineJsonApiOperation({
+    operationId: "getConfig",
+    method: "GET",
+    path: "/api/config",
+    queryParams: ["locale"],
+    responseSchema: safeConfigSchema
+  }),
+  listConversations: defineJsonApiOperation({
+    operationId: "listConversations",
+    method: "GET",
+    path: "/api/conversations",
+    responseSchema: z.array(conversationSchema)
+  }),
+  createConversation: defineJsonApiOperation({
+    operationId: "createConversation",
+    method: "POST",
+    path: "/api/conversations",
+    requestSchema: createConversationRequestSchema,
+    responseSchema: conversationSchema
+  }),
+  generateConversationTitle: defineJsonApiOperation({
+    operationId: "generateConversationTitle",
+    method: "POST",
+    path: "/api/conversations/:conversationId/title",
+    responseSchema: conversationSchema
+  }),
+  listConversationMessages: defineJsonApiOperation({
+    operationId: "listConversationMessages",
+    method: "GET",
+    path: "/api/conversations/:conversationId/messages",
+    responseSchema: z.array(messageSchema)
+  }),
+  deleteConversation: defineJsonApiOperation({
+    operationId: "deleteConversation",
+    method: "DELETE",
+    path: "/api/conversations/:conversationId",
+    responseSchema: conversationSchema
+  }),
+  listDraftAttachments: defineJsonApiOperation({
+    operationId: "listDraftAttachments",
+    method: "GET",
+    path: "/api/conversations/:conversationId/draft-attachments",
+    responseSchema: z.array(draftAttachmentSchema)
+  }),
+  uploadDraftAttachment: defineJsonApiOperation({
+    operationId: "uploadDraftAttachment",
+    method: "POST",
+    path: "/api/conversations/:conversationId/draft-attachments",
+    requestKind: "multipart",
+    responseSchema: draftAttachmentUploadResponseSchema
+  }),
+  retryDraftAttachment: defineJsonApiOperation({
+    operationId: "retryDraftAttachment",
+    method: "POST",
+    path: "/api/conversations/:conversationId/draft-attachments/:attachmentId/retry",
+    responseSchema: retryDraftAttachmentResponseSchema
+  }),
+  deleteDraftAttachment: defineJsonApiOperation({
+    operationId: "deleteDraftAttachment",
+    method: "DELETE",
+    path: "/api/conversations/:conversationId/draft-attachments/:attachmentId",
+    responseSchema: draftAttachmentSchema
+  }),
+  getConversationFileContent: defineBlobApiOperation({
+    operationId: "getConversationFileContent",
+    method: "GET",
+    path: "/api/conversations/:conversationId/files/:fileId/content"
+  }),
+  listAuditEvents: defineJsonApiOperation({
+    operationId: "listAuditEvents",
+    method: "GET",
+    path: "/api/audit-events",
+    responseSchema: z.array(auditEventSchema)
+  }),
+  getUsageSummary: defineJsonApiOperation({
+    operationId: "getUsageSummary",
+    method: "GET",
+    path: "/api/superadmin/usage",
+    responseSchema: usageSummarySchema
+  }),
+  listAdministeredUsers: defineJsonApiOperation({
+    operationId: "listAdministeredUsers",
+    method: "GET",
+    path: "/api/superadmin/users",
+    responseSchema: z.array(administeredUserSchema)
+  }),
+  createAdministeredUser: defineJsonApiOperation({
+    operationId: "createAdministeredUser",
+    method: "POST",
+    path: "/api/superadmin/users",
+    requestSchema: createAdministeredUserRequestSchema,
+    responseSchema: administeredUserSchema
+  }),
+  updateAdministeredUser: defineJsonApiOperation({
+    operationId: "updateAdministeredUser",
+    method: "PATCH",
+    path: "/api/superadmin/users/:userId",
+    requestSchema: updateAdministeredUserRequestSchema,
+    responseSchema: administeredUserSchema
+  }),
+  upsertAdministeredUserIdentity: defineJsonApiOperation({
+    operationId: "upsertAdministeredUserIdentity",
+    method: "PUT",
+    path: "/api/superadmin/users/:userId/identities",
+    requestSchema: upsertAdministeredUserIdentityRequestSchema,
+    responseSchema: administeredUserSchema
+  }),
+  resetAdministeredUserPassword: defineJsonApiOperation({
+    operationId: "resetAdministeredUserPassword",
+    method: "POST",
+    path: "/api/superadmin/users/:userId/password",
+    requestSchema: resetAdministeredUserPasswordRequestSchema,
+    responseSchema: resetAdministeredUserPasswordResponseSchema
+  }),
+  deleteAdministeredUserIdentity: defineJsonApiOperation({
+    operationId: "deleteAdministeredUserIdentity",
+    method: "DELETE",
+    path: "/api/superadmin/users/:userId/identities/:authSource/:externalUserId",
+    responseSchema: administeredUserSchema
+  }),
+  issueSessionToken: defineJsonApiOperation({
+    operationId: "issueSessionToken",
+    method: "POST",
+    path: "/auth/session-token",
+    requestSchema: issueSessionTokenRequestSchema,
+    responseSchema: issueSessionTokenResponseSchema
+  })
+} as const;
+
+export function createOpenApiDocument() {
+  return createOpenApiDocumentFromOperations(apiOperations);
+}
+
+export const openApiDocument = createOpenApiDocument();
+
 export type ApiUser = z.infer<typeof apiUserSchema>;
 export type Conversation = z.infer<typeof conversationSchema>;
 export type Message = z.infer<typeof messageSchema>;
@@ -606,3 +776,4 @@ export type AuditEvent = z.infer<typeof auditEventSchema>;
 export type ModelUsageEvent = z.infer<typeof modelUsageEventSchema>;
 export type ModelUsageCost = z.infer<typeof modelUsageCostSchema>;
 export type UsageSummary = z.infer<typeof usageSummarySchema>;
+export type ApiOperationName = keyof typeof apiOperations;

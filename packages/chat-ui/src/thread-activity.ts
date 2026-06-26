@@ -9,6 +9,9 @@ export interface ThreadActivityPart {
 export interface ThreadActivityMessage {
   id?: string;
   role?: string;
+  status?: {
+    type?: string;
+  };
   parts?: readonly ThreadActivityPart[];
 }
 
@@ -59,6 +62,9 @@ export function isComposerBlockedByBackgroundRun({
 function lastAssistantPartShowsOwnActivity(message: ThreadActivityMessage | undefined): boolean {
   if (message?.role !== "assistant") {
     return false;
+  }
+  if (message.status?.type === "running") {
+    return true;
   }
 
   const lastPart = message.parts?.at(-1);

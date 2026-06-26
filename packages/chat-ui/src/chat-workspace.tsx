@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { PanelLeft } from "lucide-react";
 import {
   createApiClient,
   type AdministeredUserIdentity,
@@ -9,12 +8,10 @@ import {
   type CreateAdministeredUserRequest,
   type LocaleCode,
   type Message,
-  type SafeConfig,
   type UpdateCurrentUserRequest,
   type UpdateAdministeredUserRequest,
   type UpsertAdministeredUserIdentityRequest
 } from "@vivd-catalyst/api-client";
-import { AgentSelector } from "./agent-selector";
 import { AssistantChatPanel } from "./assistant-chat-panel";
 import { signOut } from "./auth-client";
 import type { ChatShellProps } from "./chat-shell";
@@ -28,7 +25,7 @@ import {
   draftAttachmentsQueryKey,
   useDraftAttachmentController
 } from "./draft-attachment-controller";
-import { readBrowserLocale, TranslationProvider, useTranslation } from "./i18n";
+import { readBrowserLocale, TranslationProvider } from "./i18n";
 import { LoginPanel } from "./login-panel";
 import { clearConversationStreamId } from "./resumable-stream-storage";
 import {
@@ -37,17 +34,36 @@ import {
   resolveThemeModePreference,
   type ResolvedThemeMode
 } from "./theme";
-import { ThemeToggle } from "./theme-toggle";
 import { ToolDisplayPanel, useToolDisplayPanel } from "./tool-display-panel";
 import { cn } from "./ui/cn";
 import { UserMenu } from "./user-menu";
 import { UserSettingsPanel } from "./user-settings-panel";
+import { SessionCheckPanel, WorkspaceChrome } from "./workspace-chrome";
 import { type WorkspaceView, WorkspaceRail } from "./workspace-rail";
+import {
+  defaultWorkspaceRoute,
+  workspaceRouteView,
+  type WorkspaceRoute,
+  type WorkspaceRouteChangeOptions
+} from "./workspace-route";
+import {
+  apiErrorMessage,
+  apiErrorStatus,
+  applyFavicon,
+  createDraftKey,
+  DEFAULT_LOCALES,
+  hasAssistantFinalSince,
+  readStoredLocale,
+  readStoredThemeMode,
+  STANDALONE_AUTH_SOURCE,
+  writeStoredLocale,
+  writeStoredThemeMode
+} from "./workspace-utils";
 
-const STANDALONE_AUTH_SOURCE = "better-auth";
-const THEME_STORAGE_KEY = "vivd-catalyst:theme";
-const LOCALE_STORAGE_KEY = "vivd-catalyst:locale";
-const DEFAULT_LOCALES: LocaleCode[] = ["en", "de"];
+interface ChatWorkspaceProps extends ChatShellProps {
+  route: WorkspaceRoute;
+  onRouteChange(route: WorkspaceRoute, options?: WorkspaceRouteChangeOptions): void;
+}
 
 export function ChatWorkspace({
   apiBaseUrl,
@@ -55,15 +71,16 @@ export function ChatWorkspace({
   getToken,
   adminPanel,
   manageDocumentTitle,
-  className
-}: ChatShellProps) {
+  className,
+  route,
+  onRouteChange
+}: ChatWorkspaceProps) {
   const queryClient = useQueryClient();
-  const [selectedConversationId, setSelectedConversationId] = useState<string | undefined>();
   const selectedConversationIdRef = useRef<string | undefined>(undefined);
+  const lastChatRouteRef = useRef<WorkspaceRoute>(defaultWorkspaceRoute());
   const [draftsByTarget, setDraftsByTarget] = useState<Record<string, string>>({});
   const [conversationActivities, setConversationActivities] = useState<Record<string, ConversationActivity>>({});
   const [notice, setNotice] = useState<string | undefined>();
-  const [view, setView] = useState<WorkspaceView>("chat");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [composerFocusRequestId, setComposerFocusRequestId] = useState(0);
   const [selectedAgentName, setSelectedAgentName] = useState<string | undefined>();
@@ -75,6 +92,8 @@ export function ChatWorkspace({
   const [systemThemeMode, setSystemThemeMode] = useState<ResolvedThemeMode>(() => readSystemThemeMode());
   const displayPanel = useToolDisplayPanel();
   const authScope = "standalone";
+  const selectedConversationId = route.kind === "conversation" ? route.conversationId : undefined;
+  const view = workspaceRouteView(route);
   const draftKey = createDraftKey(authScope, selectedConversationId);
   const draft = draftsByTarget[draftKey] ?? "";
 
@@ -129,6 +148,7 @@ export function ChatWorkspace({
     mutationFn: (conversationId: string) => client.deleteConversation(conversationId),
     onSuccess: (deletedConversation) => {
       let nextSelectedConversationId: string | undefined;
+      const deletedActiveConversation = selectedConversationId === deletedConversation.id;
       queryClient.setQueryData<Conversation[]>(
         ["conversations", apiBaseUrl, authScope],
         (currentConversations = []) => {
@@ -152,7 +172,14 @@ export function ChatWorkspace({
         delete nextActivities[deletedConversation.id];
         return nextActivities;
       });
-      setSelectedConversationId(nextSelectedConversationId);
+      if (deletedActiveConversation) {
+        onRouteChange(
+          nextSelectedConversationId
+            ? { kind: "conversation", conversationId: nextSelectedConversationId }
+            : defaultWorkspaceRoute(),
+          { replace: true }
+        );
+      }
       setNotice(undefined);
       void queryClient.invalidateQueries({ queryKey: ["conversations", apiBaseUrl, authScope] });
     },
@@ -200,8 +227,10 @@ export function ChatWorkspace({
       }
       return nextDrafts;
     });
-    setSelectedConversationId(conversation.id);
-    setView("chat");
+    onRouteChange(
+      { kind: "conversation", conversationId: conversation.id },
+      { replace: route.kind === "new-conversation" }
+    );
     setNotice(undefined);
     void queryClient.invalidateQueries({ queryKey: ["conversations", apiBaseUrl, authScope] });
     return conversation.id;
@@ -237,10 +266,19 @@ export function ChatWorkspace({
 
   useEffect(() => {
     selectedConversationIdRef.current = selectedConversationId;
+    if (route.kind === "new-conversation" || route.kind === "conversation") {
+      lastChatRouteRef.current = route;
+    }
     if (selectedConversationId) {
       markConversationViewed(selectedConversationId);
     }
-  }, [selectedConversationId]);
+  }, [route, selectedConversationId]);
+
+  useEffect(() => {
+    if (isAuthenticated && route.kind === "superadmin" && !isSuperadmin) {
+      onRouteChange(defaultWorkspaceRoute(), { replace: true });
+    }
+  }, [isAuthenticated, isSuperadmin, onRouteChange, route.kind]);
 
   useEffect(() => {
     if (!isAuthenticated || runningConversationEntries.length === 0) {
@@ -331,10 +369,10 @@ export function ChatWorkspace({
   const signOutMutation = useMutation({
     mutationFn: () => signOut(apiBaseUrl),
     onSuccess: () => {
-      setSelectedConversationId(undefined);
       setDraftsByTarget({});
       setConversationActivities({});
-      setView("chat");
+      lastChatRouteRef.current = defaultWorkspaceRoute();
+      onRouteChange(defaultWorkspaceRoute(), { replace: true });
       void queryClient.clear();
       void queryClient.invalidateQueries({ queryKey: ["me", apiBaseUrl] });
     }
@@ -394,7 +432,7 @@ export function ChatWorkspace({
     <UserMenu
       user={meQuery.data}
       signingOut={signOutMutation.isPending}
-      onOpenSettings={() => setView("settings")}
+      onOpenSettings={() => onRouteChange({ kind: "settings" })}
       onSignOut={() => signOutMutation.mutate()}
       placement="top"
       align="start"
@@ -413,8 +451,7 @@ export function ChatWorkspace({
   }
 
   function onCreateConversation() {
-    setSelectedConversationId(undefined);
-    setView("chat");
+    onRouteChange(defaultWorkspaceRoute());
     setNotice(undefined);
     setComposerFocusRequestId((currentRequestId) => currentRequestId + 1);
   }
@@ -518,8 +555,10 @@ export function ChatWorkspace({
     if (startedMessages) {
       queryClient.setQueryData(["messages", apiBaseUrl, authScope, conversationId], startedMessages);
     }
-    setSelectedConversationId(conversationId);
-    setView("chat");
+    onRouteChange(
+      { kind: "conversation", conversationId },
+      { replace: route.kind === "new-conversation" }
+    );
     setNotice(undefined);
     void queryClient.invalidateQueries({ queryKey: ["conversations", apiBaseUrl, authScope] });
   }
@@ -608,9 +647,20 @@ export function ChatWorkspace({
         .catch(() => undefined);
     }
     markConversationViewed(conversationId);
-    setSelectedConversationId(conversationId);
-    setView("chat");
+    onRouteChange({ kind: "conversation", conversationId });
     setNotice(undefined);
+  }
+
+  function onWorkspaceViewChange(nextView: WorkspaceView) {
+    if (nextView === "settings") {
+      onRouteChange({ kind: "settings" });
+      return;
+    }
+    if (nextView === "superadmin") {
+      onRouteChange({ kind: "superadmin", tab: "usage" });
+      return;
+    }
+    onRouteChange(lastChatRouteRef.current);
   }
 
   if (apiErrorStatus(meQuery.error) === 401) {
@@ -674,7 +724,7 @@ export function ChatWorkspace({
             deletingConversation={deleteConversation.isPending}
             userMenu={userMenu}
             onToggleSidebar={() => setSidebarOpen(false)}
-            onViewChange={setView}
+            onViewChange={onWorkspaceViewChange}
             onCreateConversation={onCreateConversation}
             onSelectConversation={onSelectConversation}
             onDeleteConversation={(conversationId) => deleteConversation.mutate(conversationId)}
@@ -720,7 +770,9 @@ export function ChatWorkspace({
           onDeleteUserIdentity: (userId, identity) =>
             deleteUserIdentity.mutateAsync({ userId, identity }),
           onResetUserPassword: (userId, password) =>
-            resetUserPassword.mutateAsync({ userId, password })
+            resetUserPassword.mutateAsync({ userId, password }),
+          selectedTab: route.kind === "superadmin" ? route.tab : "usage",
+          onSelectTab: (tab) => onRouteChange({ kind: "superadmin", tab })
         })
       ) : view === "settings" ? (
         <UserSettingsPanel
@@ -784,179 +836,4 @@ export function ChatWorkspace({
       </main>
     </TranslationProvider>
   );
-}
-
-function SessionCheckPanel({
-  className,
-  error
-}: {
-  className: string | undefined;
-  error: string | undefined;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <main
-      className={cn(
-        "grid h-dvh w-full place-items-center overflow-hidden bg-sidebar p-5 text-foreground",
-        className
-      )}
-    >
-      <div className="grid w-full max-w-[380px] gap-2 rounded-lg border bg-card p-5 text-card-foreground shadow-xs">
-        <strong className="text-sm font-semibold">
-          {error ? t("couldNotVerifySession") : t("checkingSession")}
-        </strong>
-        <p className="text-sm text-muted-foreground">{error ?? t("sessionCheckingDescription")}</p>
-      </div>
-    </main>
-  );
-}
-
-function WorkspaceChrome({
-  agents,
-  displayPanelOpen,
-  sidebarOpen,
-  selectedAgentName,
-  themeMode,
-  onSelectAgent,
-  onToggleSidebar,
-  onToggleTheme
-}: {
-  agents: SafeConfig["agents"];
-  displayPanelOpen: boolean;
-  sidebarOpen: boolean;
-  selectedAgentName: string | undefined;
-  themeMode: ResolvedThemeMode;
-  onSelectAgent: (agentName: string) => void;
-  onToggleSidebar: () => void;
-  onToggleTheme: () => void;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <>
-      <div
-        className={cn(
-          "pointer-events-none absolute left-4 top-3 z-50 flex min-w-0 items-center gap-2 transition-[left] duration-200",
-          sidebarOpen && "max-md:hidden md:left-[19rem]"
-        )}
-      >
-        {!sidebarOpen ? (
-          <button
-            type="button"
-            className={cn(
-              "pointer-events-auto inline-flex size-10 shrink-0 items-center justify-center rounded-md bg-background/95 text-muted-foreground shadow-sm backdrop-blur transition-colors outline-none",
-              "hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40"
-            )}
-            aria-label={t("openSidebar")}
-            title={t("openSidebar")}
-            aria-pressed="false"
-            onClick={onToggleSidebar}
-          >
-            <PanelLeft size={17} aria-hidden="true" />
-          </button>
-        ) : null}
-        {agents.length > 0 ? (
-          <div className="pointer-events-auto min-w-0">
-            <AgentSelector
-              agents={agents}
-              selectedAgentName={selectedAgentName}
-              onSelectAgent={onSelectAgent}
-            />
-          </div>
-        ) : null}
-      </div>
-
-      <div
-        className={cn(
-          "pointer-events-none absolute right-4 top-3 z-50 flex items-center gap-2",
-          displayPanelOpen && "lg:hidden"
-        )}
-      >
-        <div className="pointer-events-auto">
-          <ThemeToggle mode={themeMode} onToggle={onToggleTheme} />
-        </div>
-      </div>
-    </>
-  );
-}
-
-function createDraftKey(authScope: string, conversationId: string | undefined): string {
-  return `${authScope}:${conversationId ?? "new"}`;
-}
-
-function hasAssistantFinalSince(messages: Message[], startedAt: string | undefined): boolean {
-  return messages.some((message) => {
-    if (message.role !== "assistant" || !isAssistantFinalMessage(message)) {
-      return false;
-    }
-    return !startedAt || message.createdAt >= startedAt;
-  });
-}
-
-function isAssistantFinalMessage(message: Message): boolean {
-  const runtime = message.metadata?.agentRuntime;
-  return (
-    typeof runtime === "object" &&
-    runtime !== null &&
-    !Array.isArray(runtime) &&
-    "version" in runtime &&
-    runtime.version === 1 &&
-    "kind" in runtime &&
-    runtime.kind === "assistant_final"
-  );
-}
-
-function apiErrorStatus(error: unknown): number | undefined {
-  if (!error || typeof error !== "object" || Array.isArray(error) || !("status" in error)) {
-    return undefined;
-  }
-  const status = (error as { status?: unknown }).status;
-  return typeof status === "number" ? status : undefined;
-}
-
-function apiErrorMessage(error: unknown, fallback: string | undefined): string | undefined {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-  if (error && typeof error === "object" && !Array.isArray(error) && "message" in error) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === "string" && message) {
-      return message;
-    }
-  }
-  return fallback;
-}
-
-function readStoredThemeMode(): ResolvedThemeMode | undefined {
-  const storedThemeMode = window.localStorage.getItem(THEME_STORAGE_KEY);
-  return storedThemeMode === "dark" || storedThemeMode === "light" ? storedThemeMode : undefined;
-}
-
-function writeStoredThemeMode(themeMode: ResolvedThemeMode): void {
-  window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
-}
-
-function readStoredLocale(): LocaleCode | undefined {
-  const storedLocale = window.localStorage.getItem(LOCALE_STORAGE_KEY);
-  return storedLocale === "en" || storedLocale === "de" ? storedLocale : undefined;
-}
-
-function writeStoredLocale(locale: LocaleCode): void {
-  window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
-}
-
-function applyFavicon(href: string): void {
-  const selector = "link[rel~='icon'][data-vivd-favicon='true']";
-  const existing =
-    document.head.querySelector<HTMLLinkElement>(selector) ??
-    document.head.querySelector<HTMLLinkElement>("link[rel~='icon']");
-  const link = existing ?? document.createElement("link");
-  link.rel = "icon";
-  link.type = href.endsWith(".svg") ? "image/svg+xml" : "image/png";
-  link.href = href;
-  link.dataset.vivdFavicon = "true";
-  if (!existing) {
-    document.head.appendChild(link);
-  }
 }

@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { apiOperations } from "@vivd-catalyst/api-contract";
 import { AppError } from "@vivd-catalyst/core";
 import { ConversationWorkflow } from "../conversation-workflow";
 import { authenticateRequest, getConversationId } from "../request-context";
@@ -7,14 +8,14 @@ import type { ChatServerOptions } from "../types";
 export function registerDraftAttachmentRoutes(app: FastifyInstance, options: ChatServerOptions): void {
   const conversations = new ConversationWorkflow(options);
 
-  app.get("/api/conversations/:conversationId/draft-attachments", async (request) => {
+  app.get(apiOperations.listDraftAttachments.path, async (request) => {
     const { user } = await authenticateRequest(options, request);
     const conversationId = getConversationId(request);
     await conversations.requireOwnedActiveConversation(conversationId, user);
     return attachments(options).listDraftAttachments(conversationId);
   });
 
-  app.post("/api/conversations/:conversationId/draft-attachments", async (request) => {
+  app.post(apiOperations.uploadDraftAttachment.path, async (request) => {
     const { user } = await authenticateRequest(options, request);
     const conversationId = getConversationId(request);
     await conversations.requireOwnedActiveConversation(conversationId, user);
@@ -37,7 +38,7 @@ export function registerDraftAttachmentRoutes(app: FastifyInstance, options: Cha
     };
   });
 
-  app.post("/api/conversations/:conversationId/draft-attachments/:attachmentId/retry", async (request) => {
+  app.post(apiOperations.retryDraftAttachment.path, async (request) => {
     const { user } = await authenticateRequest(options, request);
     const conversationId = getConversationId(request);
     await conversations.requireOwnedActiveConversation(conversationId, user);
@@ -52,7 +53,7 @@ export function registerDraftAttachmentRoutes(app: FastifyInstance, options: Cha
     };
   });
 
-  app.delete("/api/conversations/:conversationId/draft-attachments/:attachmentId", async (request) => {
+  app.delete(apiOperations.deleteDraftAttachment.path, async (request) => {
     const { user } = await authenticateRequest(options, request);
     const conversationId = getConversationId(request);
     await conversations.requireOwnedActiveConversation(conversationId, user);

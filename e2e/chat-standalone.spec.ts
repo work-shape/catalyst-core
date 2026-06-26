@@ -139,6 +139,48 @@ test("new conversation action opens an unsaved draft screen", async ({ page }) =
   await expect(input).toBeFocused();
 });
 
+test("standalone conversation routes are addressable and follow rail navigation", async ({ page }) => {
+  await signInViaApi(page, normalUser);
+  const title = `Route target ${Date.now()}`;
+  const created = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    data: { title }
+  });
+  expect(created.ok()).toBe(true);
+  const conversation = (await created.json()) as { id: string };
+
+  await page.goto(conversationPath(conversation.id));
+  const input = page.getByPlaceholder("Message");
+  const targetConversation = page.getByTestId("conversation-row").filter({ hasText: title });
+  await expect(input).toBeVisible();
+  await expect(targetConversation).toHaveClass(/border-primary/);
+  await expect(page).toHaveURL(new RegExp(`${escapeRegExp(conversationPath(conversation.id))}$`));
+
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await expect(page).toHaveURL(/\/$/u);
+  await input.fill("Route-scoped new draft");
+
+  await targetConversation.getByRole("button").first().click();
+  await expect(page).toHaveURL(new RegExp(`${escapeRegExp(conversationPath(conversation.id))}$`));
+  await expect(input).toHaveValue("");
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/u);
+  await expect(input).toHaveValue("Route-scoped new draft");
+});
+
+test("first message from the root route moves to the persisted conversation route", async ({ page }) => {
+  await signInViaUi(page, normalUser);
+  await expect(page).toHaveURL(/\/$/u);
+
+  const messageText = `Route creation ${Date.now()}`;
+  await page.getByPlaceholder("Message").fill(messageText);
+  await page.getByRole("button", { name: "Send message" }).click();
+
+  await expect(page).toHaveURL(/\/c\/[^/]+$/u);
+  const createdConversation = page.getByTestId("conversation-row").filter({ hasText: messageText });
+  await expect(createdConversation).toHaveClass(/border-primary/);
+});
+
 test("composer drafts are scoped to the new screen and selected conversations", async ({ page }) => {
   await signInViaApi(page, normalUser);
   const title = `Draft target ${Date.now()}`;
@@ -483,6 +525,45 @@ test("standalone auth gates superadmin views", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Open superadmin panel" })).toHaveCount(0);
 });
 
+test("standalone settings and superadmin tabs are route-backed", async ({ page }) => {
+  await signInViaApi(page, superadminUser);
+
+  await page.goto("/settings");
+  await expect(page.getByRole("region", { name: "User settings" })).toBeVisible();
+  await expect(page).toHaveURL(/\/settings$/u);
+
+  await page.goto("/admin");
+  await expect(page).toHaveURL(/\/admin\/usage$/u);
+  await expect(page.getByRole("region", { name: "Superadmin panel" })).toBeVisible();
+  await expect(page.getByText("Budgeted cost today")).toBeVisible();
+
+  await page.getByRole("button", { name: /^Users/ }).click();
+  await expect(page).toHaveURL(/\/admin\/users$/u);
+  await expect(
+    page.getByRole("region", { name: "Superadmin panel" }).getByRole("heading", { name: "Users" })
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Audit log" }).click();
+  await expect(page).toHaveURL(/\/admin\/audit$/u);
+  await expect(page.getByText("Recent audit events")).toBeVisible();
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/admin\/users$/u);
+  await expect(
+    page.getByRole("region", { name: "Superadmin panel" }).getByRole("heading", { name: "Users" })
+  ).toBeVisible();
+});
+
+test("normal users are redirected away from superadmin routes", async ({ page }) => {
+  await signInViaApi(page, normalUser);
+
+  await page.goto("/admin/usage");
+
+  await expect(page.getByText("E2E Customer")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Superadmin panel" })).toHaveCount(0);
+  await expect(page).toHaveURL(/\/$/u);
+});
+
 test("workspace and superadmin keep page scroll locked", async ({ page }) => {
   await signInViaApi(page, superadminUser);
   for (let index = 0; index < 18; index += 1) {
@@ -633,6 +714,14 @@ test("superadmin resets a user's password from the users panel", async ({ page }
   );
   expect(restored.ok()).toBe(true);
 });
+
+function conversationPath(conversationId: string): string {
+  return `/c/${encodeURIComponent(conversationId)}`;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
 
 async function signInViaUi(
   page: Page,

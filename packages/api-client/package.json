@@ -14,13 +14,16 @@
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts",
+    "generate": "pnpm --filter @vivd-catalyst/api-contract generate:openapi && openapi-ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@hey-api/client-fetch": "0.13.1",
     "@vivd-catalyst/api-contract": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@hey-api/openapi-ts": "0.99.0",
     "@types/node": "^24.13.1",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3"

@@ -14,6 +14,7 @@
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts",
+    "generate:openapi": "tsx scripts/write-openapi.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -22,6 +23,7 @@
   "devDependencies": {
     "@types/node": "^24.13.1",
     "tsup": "^8.5.1",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   }
 }

@@ -7,6 +7,7 @@ import {
   type ClientInstanceId,
   type Conversation,
   type ConversationId,
+  type ConversationRetentionStore,
   type ConversationStore,
   type CreateConversationInput,
   type CreateMessageInput,
@@ -33,7 +34,13 @@ import {
 } from "./testing-in-memory-file-store";
 
 export class InMemoryPlatformStore
-  implements ConversationStore, PlatformFileStore, AuditEventStore, ModelUsageEventStore, UserStore
+  implements
+    ConversationStore,
+    ConversationRetentionStore,
+    PlatformFileStore,
+    AuditEventStore,
+    ModelUsageEventStore,
+    UserStore
 {
   private readonly conversations = new Map<string, Conversation>();
   private readonly messages = new Map<string, ChatMessage[]>();
@@ -89,6 +96,24 @@ export class InMemoryPlatformStore
           conversation.status === "active"
       )
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  }
+
+  async listExpiredConversations(input: {
+    clientInstanceId: ClientInstanceId;
+    now: string;
+    limit: number;
+  }): Promise<Conversation[]> {
+    return [...this.conversations.values()]
+      .filter(
+        (conversation) =>
+          conversation.clientInstanceId === input.clientInstanceId &&
+          conversation.status === "active" &&
+          conversation.retainedUntil <= input.now
+      )
+      .sort((left, right) =>
+        `${left.retainedUntil}:${left.id}`.localeCompare(`${right.retainedUntil}:${right.id}`)
+      )
+      .slice(0, input.limit);
   }
 
   async updateConversationTitle(input: {
@@ -248,19 +273,50 @@ export class InMemoryPlatformStore
     return this.fileStore.markConversationManagedObjectsDeleted(input);
   }
 
+  async listConversationManagedObjectsForDeletion(
+    input: Parameters<PlatformFileStore["listConversationManagedObjectsForDeletion"]>[0]
+  ) {
+    return this.fileStore.listConversationManagedObjectsForDeletion(input);
+  }
+
   async deleteConversation(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
     deletedAt: string;
   }): Promise<Conversation> {
+    return this.markConversationDeleted({
+      ...input,
+      status: "deleted"
+    });
+  }
+
+  async expireConversation(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    expiredAt: string;
+  }): Promise<Conversation> {
+    return this.markConversationDeleted({
+      clientInstanceId: input.clientInstanceId,
+      conversationId: input.conversationId,
+      deletedAt: input.expiredAt,
+      status: "retention_expired"
+    });
+  }
+
+  private async markConversationDeleted(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    deletedAt: string;
+    status: Conversation["status"];
+  }): Promise<Conversation> {
     const conversation = await this.getConversation(input.clientInstanceId, input.conversationId);
-    if (!conversation) {
+    if (!conversation || conversation.status !== "active") {
       throw new AppError("NOT_FOUND", "Conversation is not available");
     }
 
     const deleted: Conversation = {
       ...conversation,
-      status: "deleted",
+      status: input.status,
       deletedAt: input.deletedAt,
       updatedAt: input.deletedAt
     };

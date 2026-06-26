@@ -13,9 +13,15 @@ import { registerDraftAttachmentRoutes } from "./routes/draft-attachment-routes"
 import { registerSessionTokenRoutes } from "./routes/session-token-routes";
 import { registerSuperadminRoutes } from "./routes/superadmin-routes";
 import { registerUserAccountRoutes } from "./routes/user-account-routes";
+import { createConversationRetentionJob } from "./retention";
 import type { ChatServerOptions } from "./types";
 
 export type { ChatAttachmentService, UploadDraftAttachmentInput } from "./attachments";
+export type {
+  ConversationRetentionJobOptions,
+  ConversationRetentionRunSummary
+} from "./retention";
+export { ConversationRetentionJob, ConversationRetentionWorkflow } from "./retention";
 export type { ChatServerOptions } from "./types";
 
 export async function createChatServer(options: ChatServerOptions): Promise<FastifyInstance> {
@@ -37,6 +43,16 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
   });
 
   installErrorHandler(app);
+  const retentionJob = createConversationRetentionJob(options, {
+    logger: app.log,
+    jobOptions: options.retentionExpiration
+  });
+  app.addHook("onReady", async () => {
+    retentionJob.start();
+  });
+  app.addHook("onClose", async () => {
+    await retentionJob.stop();
+  });
 
   app.get("/health", async () => ({
     status: "ok",

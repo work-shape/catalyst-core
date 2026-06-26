@@ -1,7 +1,9 @@
 import { createUIMessageStream, createUIMessageStreamResponse, type UIMessage } from "ai";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import {
+  apiOperations,
   chatStreamChunkSchema,
+  chatStreamRoutePath,
   chatStreamRequestSchema,
   type ChatStreamChunk,
   type ChatStreamRequest
@@ -58,7 +60,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
     return conversation;
   }
 
-  app.post("/api/conversations/:conversationId/title", async (request) => {
+  app.post(apiOperations.generateConversationTitle.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
     const conversationId = getConversationId(request);
     return (
@@ -67,7 +69,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
     );
   });
 
-  app.post("/api/chat", async (request, reply) => {
+  app.post(chatStreamRoutePath, async (request, reply) => {
     const { user, context } = await authenticateRequest(options, request);
     const body = parseBody(chatStreamRequestSchema, request.body);
     const localizedContext = withRequestLocale(context, options, request, body.locale);

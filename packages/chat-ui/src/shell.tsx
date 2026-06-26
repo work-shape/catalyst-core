@@ -7,3 +7,8 @@ export type {
   ToolDisplayWidgetRegistry
 } from "./domain-ui-widgets";
 export type { StandaloneChatAppOptions } from "./standalone-chat-app";
+export type {
+  SuperadminRouteTab,
+  WorkspaceRoute,
+  WorkspaceRouteChangeOptions
+} from "./workspace-route";

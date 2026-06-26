@@ -1,10 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import {
-  createAdministeredUserRequestSchema,
-  resetAdministeredUserPasswordRequestSchema,
-  updateAdministeredUserRequestSchema,
-  upsertAdministeredUserIdentityRequestSchema
-} from "@vivd-catalyst/api-contract";
+import { apiOperations } from "@vivd-catalyst/api-contract";
 import { AppError, asUserId } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "../types";
 import { authorizeGovernanceAction } from "../governance-actions";
@@ -14,7 +9,7 @@ import { UserAdministrationWorkflow } from "../user-administration-workflow";
 export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServerOptions): void {
   const userAdministration = new UserAdministrationWorkflow(options);
 
-  app.get("/api/superadmin/usage", async (request) => {
+  app.get(apiOperations.getUsageSummary.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
     await authorizeGovernanceAction({
       options,
@@ -30,14 +25,14 @@ export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServ
     });
   });
 
-  app.get("/api/superadmin/users", async (request) => {
+  app.get(apiOperations.listAdministeredUsers.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
     return userAdministration.listUsers(user, context);
   });
 
-  app.post("/api/superadmin/users", async (request) => {
+  app.post(apiOperations.createAdministeredUser.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
-    const body = parseBody(createAdministeredUserRequestSchema, request.body);
+    const body = parseBody(apiOperations.createAdministeredUser.requestSchema, request.body);
     return userAdministration.createUser(user, context, {
       displayLabel: body.displayLabel,
       email: body.email,
@@ -47,9 +42,9 @@ export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServ
     });
   });
 
-  app.patch("/api/superadmin/users/:userId", async (request) => {
+  app.patch(apiOperations.updateAdministeredUser.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
-    const body = parseBody(updateAdministeredUserRequestSchema, request.body);
+    const body = parseBody(apiOperations.updateAdministeredUser.requestSchema, request.body);
     const userId = getUserIdParam(request.params);
     return userAdministration.updateUser(user, context, {
       userId,
@@ -61,9 +56,9 @@ export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServ
     });
   });
 
-  app.put("/api/superadmin/users/:userId/identities", async (request) => {
+  app.put(apiOperations.upsertAdministeredUserIdentity.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
-    const body = parseBody(upsertAdministeredUserIdentityRequestSchema, request.body);
+    const body = parseBody(apiOperations.upsertAdministeredUserIdentity.requestSchema, request.body);
     const userId = getUserIdParam(request.params);
     return userAdministration.upsertIdentity(user, context, {
       userId,
@@ -75,9 +70,9 @@ export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServ
     });
   });
 
-  app.post("/api/superadmin/users/:userId/password", async (request) => {
+  app.post(apiOperations.resetAdministeredUserPassword.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
-    const body = parseBody(resetAdministeredUserPasswordRequestSchema, request.body);
+    const body = parseBody(apiOperations.resetAdministeredUserPassword.requestSchema, request.body);
     const userId = getUserIdParam(request.params);
     return userAdministration.resetPassword(user, context, {
       userId,
@@ -85,7 +80,7 @@ export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServ
     });
   });
 
-  app.delete("/api/superadmin/users/:userId/identities/:authSource/:externalUserId", async (request) => {
+  app.delete(apiOperations.deleteAdministeredUserIdentity.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
     const params = getIdentityParams(request.params);
     return userAdministration.deleteIdentity(user, context, params);

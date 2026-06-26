@@ -1,27 +1,8 @@
-import { z } from "zod";
+import type { z } from "zod";
 import { ApiError } from "./errors";
-import {
-  apiUserSchema,
-  administeredUserSchema,
-  auditEventSchema,
-  changeCurrentUserPasswordRequestSchema,
-  changeCurrentUserPasswordResponseSchema,
-  clientBrandingSchema,
-  createAdministeredUserRequestSchema,
-  conversationSchema,
-  createConversationRequestSchema,
-  draftAttachmentSchema,
-  draftAttachmentUploadResponseSchema,
-  messageSchema,
-  resetAdministeredUserPasswordRequestSchema,
-  resetAdministeredUserPasswordResponseSchema,
-  retryDraftAttachmentResponseSchema,
-  safeConfigSchema,
-  updateAdministeredUserRequestSchema,
-  updateCurrentUserRequestSchema,
-  upsertAdministeredUserIdentityRequestSchema,
-  usageSummarySchema
-} from "./schemas";
+import { createClient as createGeneratedClient } from "./generated/client";
+import * as generatedSdk from "./generated/sdk.gen";
+import { apiOperations } from "./schemas";
 import type { LocaleCode } from "./schemas";
 
 export interface ApiClientOptions {
@@ -30,165 +11,274 @@ export interface ApiClientOptions {
   fetchImpl?: typeof fetch;
 }
 
+type OperationRequestInput<Operation> = Operation extends {
+  requestSchema: z.ZodType<infer Request>;
+}
+  ? Request
+  : never;
+
+type GeneratedResult<T> =
+  | {
+      data: T;
+      error: undefined;
+      request?: Request;
+      response?: Response;
+    }
+  | {
+      data: undefined;
+      error: unknown;
+      request?: Request;
+      response?: Response;
+    };
+
 export function createApiClient(options: ApiClientOptions) {
-  const fetchImpl = options.fetchImpl ?? fetch;
-  const baseUrl = options.baseUrl.replace(/\/$/u, "");
+  const generatedClient = createGeneratedClient({
+    baseUrl: options.baseUrl.replace(/\/$/u, ""),
+    credentials: "include",
+    fetch: options.fetchImpl
+  });
 
-  async function request<T>(
-    method: string,
-    path: string,
-    schema: z.ZodType<T>,
-    body?: unknown
-  ): Promise<T> {
+  generatedClient.interceptors.request.use(async (request) => {
     const token = await options.getToken?.();
-    const response = await fetchImpl(`${baseUrl}${path}`, {
-      method,
-      credentials: "include",
-      headers: {
-        ...(body === undefined ? {} : { "content-type": "application/json" }),
-        ...(token ? { authorization: `Bearer ${token}` } : {})
-      },
-      body: body === undefined ? undefined : JSON.stringify(body)
-    });
-    const payload = await response.json().catch(() => undefined);
-    if (!response.ok) {
-      throw new ApiError(response.status, payload?.error?.message ?? "API request failed", payload);
+    if (token) {
+      request.headers.set("authorization", `Bearer ${token}`);
     }
-    return schema.parse(payload);
+    return request;
+  });
+
+  async function unwrapJson<T>(
+    result: Promise<GeneratedResult<unknown>>,
+    schema: z.ZodType<T>
+  ): Promise<T> {
+    const payload = await result;
+    if (payload.error !== undefined) {
+      throw apiErrorFromGeneratedResult(payload);
+    }
+    return schema.parse(payload.data);
   }
 
-  async function formRequest<T>(
-    method: string,
-    path: string,
-    schema: z.ZodType<T>,
-    formData?: FormData
-  ): Promise<T> {
-    const token = await options.getToken?.();
-    const response = await fetchImpl(`${baseUrl}${path}`, {
-      method,
-      credentials: "include",
-      headers: {
-        ...(token ? { authorization: `Bearer ${token}` } : {})
-      },
-      body: formData
-    });
-    const payload = await response.json().catch(() => undefined);
-    if (!response.ok) {
-      throw new ApiError(response.status, payload?.error?.message ?? "API request failed", payload);
+  async function unwrapBlob(result: Promise<GeneratedResult<Blob | File>>): Promise<Blob> {
+    const payload = await result;
+    if (payload.error !== undefined) {
+      throw apiErrorFromGeneratedResult(payload);
     }
-    return schema.parse(payload);
-  }
-
-  async function blobRequest(path: string): Promise<Blob> {
-    const token = await options.getToken?.();
-    const response = await fetchImpl(`${baseUrl}${path}`, {
-      method: "GET",
-      credentials: "include",
-      headers: {
-        ...(token ? { authorization: `Bearer ${token}` } : {})
-      }
-    });
-    if (!response.ok) {
-      const payload = await response.json().catch(() => undefined);
-      throw new ApiError(response.status, payload?.error?.message ?? "API request failed", payload);
+    if (!payload.data) {
+      throw new ApiError(payload.response?.status ?? 0, "API request failed", payload.data);
     }
-    return response.blob();
+    return payload.data;
   }
 
   return {
-    me: () => request("GET", "/api/me", apiUserSchema),
-    updateMe: (input: z.infer<typeof updateCurrentUserRequestSchema>) =>
-      request("PATCH", "/api/me", apiUserSchema, updateCurrentUserRequestSchema.parse(input)),
-    changeMyPassword: (input: z.infer<typeof changeCurrentUserPasswordRequestSchema>) =>
-      request(
-        "POST",
-        "/api/me/password",
-        changeCurrentUserPasswordResponseSchema,
-        changeCurrentUserPasswordRequestSchema.parse(input)
+    me: () =>
+      unwrapJson(
+        generatedSdk.getCurrentUser({ client: generatedClient }),
+        apiOperations.getCurrentUser.responseSchema
       ),
-    branding: (locale?: LocaleCode) => request("GET", withLocale("/api/branding", locale), clientBrandingSchema),
-    config: (locale?: LocaleCode) => request("GET", withLocale("/api/config", locale), safeConfigSchema),
-    conversations: () => request("GET", "/api/conversations", z.array(conversationSchema)),
-    createConversation: (input: z.infer<typeof createConversationRequestSchema> = {}) =>
-      request("POST", "/api/conversations", conversationSchema, createConversationRequestSchema.parse(input)),
+    updateMe: (input: OperationRequestInput<typeof apiOperations.updateCurrentUser>) =>
+      unwrapJson(
+        generatedSdk.updateCurrentUser({
+          client: generatedClient,
+          body: apiOperations.updateCurrentUser.requestSchema.parse(input)
+        }),
+        apiOperations.updateCurrentUser.responseSchema
+      ),
+    changeMyPassword: (
+      input: OperationRequestInput<typeof apiOperations.changeCurrentUserPassword>
+    ) =>
+      unwrapJson(
+        generatedSdk.changeCurrentUserPassword({
+          client: generatedClient,
+          body: apiOperations.changeCurrentUserPassword.requestSchema.parse(input)
+        }),
+        apiOperations.changeCurrentUserPassword.responseSchema
+      ),
+    branding: (locale?: LocaleCode) =>
+      unwrapJson(
+        generatedSdk.getBranding({
+          client: generatedClient,
+          query: { locale }
+        }),
+        apiOperations.getBranding.responseSchema
+      ),
+    config: (locale?: LocaleCode) =>
+      unwrapJson(
+        generatedSdk.getConfig({
+          client: generatedClient,
+          query: { locale }
+        }),
+        apiOperations.getConfig.responseSchema
+      ),
+    conversations: () =>
+      unwrapJson(
+        generatedSdk.listConversations({ client: generatedClient }),
+        apiOperations.listConversations.responseSchema
+      ),
+    createConversation: (
+      input: OperationRequestInput<typeof apiOperations.createConversation> = {}
+    ) =>
+      unwrapJson(
+        generatedSdk.createConversation({
+          client: generatedClient,
+          body: apiOperations.createConversation.requestSchema.parse(input)
+        }),
+        apiOperations.createConversation.responseSchema
+      ),
     generateConversationTitle: (conversationId: string) =>
-      request("POST", `/api/conversations/${encodeURIComponent(conversationId)}/title`, conversationSchema),
-    messages: (conversationId: string) =>
-      request("GET", `/api/conversations/${encodeURIComponent(conversationId)}/messages`, z.array(messageSchema)),
-    draftAttachments: (conversationId: string) =>
-      request(
-        "GET",
-        `/api/conversations/${encodeURIComponent(conversationId)}/draft-attachments`,
-        z.array(draftAttachmentSchema)
+      unwrapJson(
+        generatedSdk.generateConversationTitle({
+          client: generatedClient,
+          path: { conversationId }
+        }),
+        apiOperations.generateConversationTitle.responseSchema
       ),
-    uploadDraftAttachment: (conversationId: string, file: File) => {
-      const formData = new FormData();
-      formData.set("file", file, file.name);
-      return formRequest(
-        "POST",
-        `/api/conversations/${encodeURIComponent(conversationId)}/draft-attachments`,
-        draftAttachmentUploadResponseSchema,
-        formData
-      );
-    },
+    messages: (conversationId: string) =>
+      unwrapJson(
+        generatedSdk.listConversationMessages({
+          client: generatedClient,
+          path: { conversationId }
+        }),
+        apiOperations.listConversationMessages.responseSchema
+      ),
+    draftAttachments: (conversationId: string) =>
+      unwrapJson(
+        generatedSdk.listDraftAttachments({
+          client: generatedClient,
+          path: { conversationId }
+        }),
+        apiOperations.listDraftAttachments.responseSchema
+      ),
+    uploadDraftAttachment: (conversationId: string, file: File) =>
+      unwrapJson(
+        generatedSdk.uploadDraftAttachment({
+          client: generatedClient,
+          path: { conversationId },
+          body: { file }
+        }),
+        apiOperations.uploadDraftAttachment.responseSchema
+      ),
     retryDraftAttachment: (conversationId: string, attachmentId: string) =>
-      request(
-        "POST",
-        `/api/conversations/${encodeURIComponent(conversationId)}/draft-attachments/${encodeURIComponent(attachmentId)}/retry`,
-        retryDraftAttachmentResponseSchema
+      unwrapJson(
+        generatedSdk.retryDraftAttachment({
+          client: generatedClient,
+          path: { conversationId, attachmentId }
+        }),
+        apiOperations.retryDraftAttachment.responseSchema
       ),
     deleteDraftAttachment: (conversationId: string, attachmentId: string) =>
-      request(
-        "DELETE",
-        `/api/conversations/${encodeURIComponent(conversationId)}/draft-attachments/${encodeURIComponent(attachmentId)}`,
-        draftAttachmentSchema
+      unwrapJson(
+        generatedSdk.deleteDraftAttachment({
+          client: generatedClient,
+          path: { conversationId, attachmentId }
+        }),
+        apiOperations.deleteDraftAttachment.responseSchema
       ),
     conversationFileContent: (conversationId: string, fileId: string) =>
-      blobRequest(
-        `/api/conversations/${encodeURIComponent(conversationId)}/files/${encodeURIComponent(fileId)}/content`
+      unwrapBlob(
+        generatedSdk.getConversationFileContent({
+          client: generatedClient,
+          path: { conversationId, fileId }
+        })
       ),
     deleteConversation: (conversationId: string) =>
-      request("DELETE", `/api/conversations/${encodeURIComponent(conversationId)}`, conversationSchema),
-    auditEvents: () => request("GET", "/api/audit-events", z.array(auditEventSchema)),
-    usageSummary: () => request("GET", "/api/superadmin/usage", usageSummarySchema),
-    users: () => request("GET", "/api/superadmin/users", z.array(administeredUserSchema)),
-    createUser: (input: z.infer<typeof createAdministeredUserRequestSchema>) =>
-      request("POST", "/api/superadmin/users", administeredUserSchema, createAdministeredUserRequestSchema.parse(input)),
-    updateUser: (userId: string, input: z.infer<typeof updateAdministeredUserRequestSchema>) =>
-      request(
-        "PATCH",
-        `/api/superadmin/users/${encodeURIComponent(userId)}`,
-        administeredUserSchema,
-        updateAdministeredUserRequestSchema.parse(input)
+      unwrapJson(
+        generatedSdk.deleteConversation({
+          client: generatedClient,
+          path: { conversationId }
+        }),
+        apiOperations.deleteConversation.responseSchema
+      ),
+    auditEvents: () =>
+      unwrapJson(
+        generatedSdk.listAuditEvents({ client: generatedClient }),
+        apiOperations.listAuditEvents.responseSchema
+      ),
+    usageSummary: () =>
+      unwrapJson(
+        generatedSdk.getUsageSummary({ client: generatedClient }),
+        apiOperations.getUsageSummary.responseSchema
+      ),
+    users: () =>
+      unwrapJson(
+        generatedSdk.listAdministeredUsers({ client: generatedClient }),
+        apiOperations.listAdministeredUsers.responseSchema
+      ),
+    createUser: (input: OperationRequestInput<typeof apiOperations.createAdministeredUser>) =>
+      unwrapJson(
+        generatedSdk.createAdministeredUser({
+          client: generatedClient,
+          body: apiOperations.createAdministeredUser.requestSchema.parse(input)
+        }),
+        apiOperations.createAdministeredUser.responseSchema
+      ),
+    updateUser: (
+      userId: string,
+      input: OperationRequestInput<typeof apiOperations.updateAdministeredUser>
+    ) =>
+      unwrapJson(
+        generatedSdk.updateAdministeredUser({
+          client: generatedClient,
+          path: { userId },
+          body: apiOperations.updateAdministeredUser.requestSchema.parse(input)
+        }),
+        apiOperations.updateAdministeredUser.responseSchema
       ),
     upsertUserIdentity: (
       userId: string,
-      input: z.infer<typeof upsertAdministeredUserIdentityRequestSchema>
+      input: OperationRequestInput<typeof apiOperations.upsertAdministeredUserIdentity>
     ) =>
-      request(
-        "PUT",
-        `/api/superadmin/users/${encodeURIComponent(userId)}/identities`,
-        administeredUserSchema,
-        upsertAdministeredUserIdentityRequestSchema.parse(input)
+      unwrapJson(
+        generatedSdk.upsertAdministeredUserIdentity({
+          client: generatedClient,
+          path: { userId },
+          body: apiOperations.upsertAdministeredUserIdentity.requestSchema.parse(input)
+        }),
+        apiOperations.upsertAdministeredUserIdentity.responseSchema
       ),
-    resetUserPassword: (userId: string, input: z.infer<typeof resetAdministeredUserPasswordRequestSchema>) =>
-      request(
-        "POST",
-        `/api/superadmin/users/${encodeURIComponent(userId)}/password`,
-        resetAdministeredUserPasswordResponseSchema,
-        resetAdministeredUserPasswordRequestSchema.parse(input)
+    resetUserPassword: (
+      userId: string,
+      input: OperationRequestInput<typeof apiOperations.resetAdministeredUserPassword>
+    ) =>
+      unwrapJson(
+        generatedSdk.resetAdministeredUserPassword({
+          client: generatedClient,
+          path: { userId },
+          body: apiOperations.resetAdministeredUserPassword.requestSchema.parse(input)
+        }),
+        apiOperations.resetAdministeredUserPassword.responseSchema
       ),
     deleteUserIdentity: (userId: string, authSource: string, externalUserId: string) =>
-      request(
-        "DELETE",
-        `/api/superadmin/users/${encodeURIComponent(userId)}/identities/${encodeURIComponent(authSource)}/${encodeURIComponent(externalUserId)}`,
-        administeredUserSchema
+      unwrapJson(
+        generatedSdk.deleteAdministeredUserIdentity({
+          client: generatedClient,
+          path: { userId, authSource, externalUserId }
+        }),
+        apiOperations.deleteAdministeredUserIdentity.responseSchema
       )
   };
 }
 
 export type ApiClient = ReturnType<typeof createApiClient>;
 
-function withLocale(path: string, locale: LocaleCode | undefined): string {
-  return locale ? `${path}?locale=${encodeURIComponent(locale)}` : path;
+function apiErrorFromGeneratedResult(result: {
+  error: unknown;
+  response?: Response;
+}): ApiError {
+  const payload = result.error;
+  const status = result.response?.status ?? 0;
+  return new ApiError(status, apiErrorMessage(payload), payload);
+}
+
+function apiErrorMessage(payload: unknown): string {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "error" in payload &&
+    payload.error &&
+    typeof payload.error === "object" &&
+    "message" in payload.error &&
+    typeof payload.error.message === "string"
+  ) {
+    return payload.error.message;
+  }
+  return "API request failed";
 }

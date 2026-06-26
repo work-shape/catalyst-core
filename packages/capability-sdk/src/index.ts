@@ -66,6 +66,7 @@ export type ClientInstanceCapabilityFiles = Pick<
   | "failClaimedConversationAttachment"
   | "findReadyConversationAttachmentByFile"
   | "findConversationAttachmentByFile"
+  | "listConversationManagedObjectsForDeletion"
   | "listManagedArtifactsForFile"
   | "markConversationManagedObjectsDeleted"
 >;
@@ -379,17 +380,20 @@ class DefaultManagedObjectAccess implements ManagedObjectAccess {
     conversationId: ConversationId;
     deletedAt: string;
   }): Promise<ManagedObjectDeletionResult> {
-    const deletion = await this.files.markConversationManagedObjectsDeleted({
+    const deletion = await this.files.listConversationManagedObjectsForDeletion({
       clientInstanceId: this.clientInstanceId,
-      conversationId: input.conversationId,
-      deletedAt: input.deletedAt
+      conversationId: input.conversationId
     });
     await Promise.all(
       [...deletion.artifactObjectKeys, ...deletion.fileObjectKeys].map((objectKey) =>
         this.byteStore.deleteObject(objectKey)
       )
     );
-    return deletion;
+    return this.files.markConversationManagedObjectsDeleted({
+      clientInstanceId: this.clientInstanceId,
+      conversationId: input.conversationId,
+      deletedAt: input.deletedAt
+    });
   }
 }
 

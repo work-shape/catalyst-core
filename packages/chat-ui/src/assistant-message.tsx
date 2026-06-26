@@ -54,6 +54,23 @@ function AssistantMessage() {
   const messageRunning = useAuiState(
     (state) => state.message.role === "assistant" && state.message.status?.type === "running"
   );
+  const showTrailingActivity = useAuiState((state) => {
+    if (state.message.role !== "assistant" || state.message.status?.type !== "running") {
+      return false;
+    }
+
+    const lastPart = state.message.parts.at(-1);
+    if (!lastPart) {
+      return true;
+    }
+    if (lastPart.type === "reasoning") {
+      return false;
+    }
+    if (lastPart.type === "text") {
+      return lastPart.status.type === "running" && lastPart.text.trim().length === 0;
+    }
+    return lastPart.status.type !== "running";
+  });
 
   return (
     <MessagePrimitive.Root
@@ -93,6 +110,7 @@ function AssistantMessage() {
             }
           }}
         </MessagePrimitive.GroupedParts>
+        {showTrailingActivity ? <AssistantTrailingActivity /> : null}
         <MessageError />
       </div>
       {!messageRunning ? (
@@ -215,6 +233,14 @@ function AssistantStreamingIndicator() {
   return showIndicator ? <AssistantCursor className="my-1" /> : null;
 }
 
+function AssistantTrailingActivity() {
+  return (
+    <div className="chat-assistant-text max-w-3xl">
+      <AssistantCursor className="my-1" />
+    </div>
+  );
+}
+
 function AssistantReasoningPart() {
   const { t } = useTranslation();
   const isRunning = useAuiState((state) => state.part.status.type === "running");
@@ -224,7 +250,7 @@ function AssistantReasoningPart() {
   }
 
   return (
-    <div className="my-1 flex min-h-6 items-center text-sm" role="status" aria-live="polite">
+    <div className="chat-assistant-text my-1 flex min-h-6 max-w-3xl items-center text-sm" role="status" aria-live="polite">
       <span className="chat-reasoning-status leading-6">{t("thinking")}</span>
     </div>
   );

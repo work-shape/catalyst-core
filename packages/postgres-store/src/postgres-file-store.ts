@@ -552,66 +552,8 @@ class PostgresPlatformFileStore implements PlatformFileStore {
   }): Promise<ManagedObjectDeletionResult> {
     const deletedAt = new Date(input.deletedAt);
     return this.db.transaction(async (tx) => {
-      const attachmentRows = await tx
-        .select()
-        .from(conversationAttachments)
-        .where(
-          and(
-            eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-            eq(conversationAttachments.conversationId, input.conversationId)
-          )
-        );
-      const fileIds = [...new Set(attachmentRows.map((attachment) => attachment.fileId))];
-
-      const artifactRows = await tx
-        .select()
-        .from(managedArtifacts)
-        .where(
-          and(
-            eq(managedArtifacts.clientInstanceId, input.clientInstanceId),
-            eq(managedArtifacts.conversationId, input.conversationId)
-          )
-        );
-
-      let fileRows: Array<typeof managedFiles.$inferSelect> = [];
-      if (fileIds.length > 0) {
-        const sharedAttachmentRows = await tx
-          .select({ fileId: conversationAttachments.fileId })
-          .from(conversationAttachments)
-          .where(
-            and(
-              eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-              inArray(conversationAttachments.fileId, fileIds),
-              ne(conversationAttachments.conversationId, input.conversationId),
-              ne(conversationAttachments.status, "deleted")
-            )
-          );
-        const sharedFileIds = new Set(sharedAttachmentRows.map((attachment) => attachment.fileId));
-        const deletableFileIds = fileIds.filter((fileId) => !sharedFileIds.has(fileId));
-        if (deletableFileIds.length > 0) {
-          fileRows = await tx
-            .select()
-            .from(managedFiles)
-            .where(
-              and(
-                eq(managedFiles.clientInstanceId, input.clientInstanceId),
-                inArray(managedFiles.id, deletableFileIds)
-              )
-            );
-          await tx
-            .update(managedFiles)
-            .set({
-              status: "deleted",
-              deletedAt
-            })
-            .where(
-              and(
-                eq(managedFiles.clientInstanceId, input.clientInstanceId),
-                inArray(managedFiles.id, deletableFileIds)
-              )
-            );
-        }
-      }
+      const deletion = await collectConversationManagedObjectsForDeletion(tx, input);
+      const fileIds = deletion.files.map((file) => file.id);
 
       await tx
         .update(conversationAttachments)
@@ -623,9 +565,24 @@ class PostgresPlatformFileStore implements PlatformFileStore {
         .where(
           and(
             eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-            eq(conversationAttachments.conversationId, input.conversationId)
+            eq(conversationAttachments.conversationId, input.conversationId),
+            ne(conversationAttachments.status, "deleted")
           )
         );
+      if (fileIds.length > 0) {
+        await tx
+          .update(managedFiles)
+          .set({
+            status: "deleted",
+            deletedAt
+          })
+          .where(
+            and(
+              eq(managedFiles.clientInstanceId, input.clientInstanceId),
+              inArray(managedFiles.id, fileIds)
+            )
+          );
+      }
       await tx
         .update(managedArtifacts)
         .set({
@@ -635,17 +592,97 @@ class PostgresPlatformFileStore implements PlatformFileStore {
         .where(
           and(
             eq(managedArtifacts.clientInstanceId, input.clientInstanceId),
-            eq(managedArtifacts.conversationId, input.conversationId)
+            eq(managedArtifacts.conversationId, input.conversationId),
+            ne(managedArtifacts.status, "deleted")
           )
         );
 
       return {
-        attachmentCount: attachmentRows.length,
-        fileObjectKeys: uniqueStrings(fileRows.map((file) => file.objectKey)),
-        artifactObjectKeys: uniqueStrings(artifactRows.map((artifact) => artifact.objectKey))
+        attachmentCount: deletion.attachments.length,
+        fileObjectKeys: uniqueStrings(deletion.files.map((file) => file.objectKey)),
+        artifactObjectKeys: uniqueStrings(deletion.artifacts.map((artifact) => artifact.objectKey))
       };
     });
   }
+
+  async listConversationManagedObjectsForDeletion(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+  }): Promise<ManagedObjectDeletionResult> {
+    const deletion = await collectConversationManagedObjectsForDeletion(this.db, input);
+    return {
+      attachmentCount: deletion.attachments.length,
+      fileObjectKeys: uniqueStrings(deletion.files.map((file) => file.objectKey)),
+      artifactObjectKeys: uniqueStrings(deletion.artifacts.map((artifact) => artifact.objectKey))
+    };
+  }
+}
+
+type PostgresFileStoreDatabase = PostgresDatabase | Parameters<Parameters<PostgresDatabase["transaction"]>[0]>[0];
+
+async function collectConversationManagedObjectsForDeletion(
+  db: PostgresFileStoreDatabase,
+  input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+  }
+): Promise<{
+  attachments: Array<typeof conversationAttachments.$inferSelect>;
+  files: Array<typeof managedFiles.$inferSelect>;
+  artifacts: Array<typeof managedArtifacts.$inferSelect>;
+}> {
+  const attachments = await db
+    .select()
+    .from(conversationAttachments)
+    .where(
+      and(
+        eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
+        eq(conversationAttachments.conversationId, input.conversationId),
+        ne(conversationAttachments.status, "deleted")
+      )
+    );
+  const fileIds = [...new Set(attachments.map((attachment) => attachment.fileId))];
+  const artifacts = await db
+    .select()
+    .from(managedArtifacts)
+    .where(
+      and(
+        eq(managedArtifacts.clientInstanceId, input.clientInstanceId),
+        eq(managedArtifacts.conversationId, input.conversationId),
+        ne(managedArtifacts.status, "deleted")
+      )
+    );
+
+  let files: Array<typeof managedFiles.$inferSelect> = [];
+  if (fileIds.length > 0) {
+    const sharedAttachmentRows = await db
+      .select({ fileId: conversationAttachments.fileId })
+      .from(conversationAttachments)
+      .where(
+        and(
+          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
+          inArray(conversationAttachments.fileId, fileIds),
+          ne(conversationAttachments.conversationId, input.conversationId),
+          ne(conversationAttachments.status, "deleted")
+        )
+      );
+    const sharedFileIds = new Set(sharedAttachmentRows.map((attachment) => attachment.fileId));
+    const deletableFileIds = fileIds.filter((fileId) => !sharedFileIds.has(fileId));
+    if (deletableFileIds.length > 0) {
+      files = await db
+        .select()
+        .from(managedFiles)
+        .where(
+          and(
+            eq(managedFiles.clientInstanceId, input.clientInstanceId),
+            inArray(managedFiles.id, deletableFileIds),
+            ne(managedFiles.status, "deleted")
+          )
+        );
+    }
+  }
+
+  return { attachments, files, artifacts };
 }
 
 function uniqueStrings(values: string[]): string[] {

@@ -1,10 +1,11 @@
 import type { FastifyInstance } from "fastify";
+import { apiOperations } from "@vivd-catalyst/api-contract";
 import type { ChatServerOptions } from "../types";
 import { authorizeGovernanceAction } from "../governance-actions";
 import { authenticateRequest } from "../request-context";
 
 export function registerAuditRoutes(app: FastifyInstance, options: ChatServerOptions): void {
-  app.get("/api/audit-events", async (request) => {
+  app.get(apiOperations.listAuditEvents.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
     await authorizeGovernanceAction({
       options,

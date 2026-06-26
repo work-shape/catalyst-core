@@ -16,6 +16,12 @@ import {
   type ToolDisplayWidgetRegistry
 } from "./domain-ui-widgets";
 import { ToolDisplayPanelProvider } from "./tool-display-panel";
+import {
+  defaultWorkspaceRoute,
+  type SuperadminRouteTab,
+  type WorkspaceRoute,
+  type WorkspaceRouteChangeOptions
+} from "./workspace-route";
 
 export interface ChatShellAdminPanel {
   canView(user: ApiUser | undefined): boolean;
@@ -39,6 +45,8 @@ export interface ChatShellAdminPanel {
       identity: AdministeredUserIdentity
     ): Promise<AdministeredUser>;
     onResetUserPassword(userId: string, password: string): Promise<unknown>;
+    selectedTab: SuperadminRouteTab;
+    onSelectTab(tab: SuperadminRouteTab): void;
   }): ReactNode;
 }
 
@@ -50,16 +58,25 @@ export interface ChatShellProps {
   displayWidgets?: ToolDisplayWidgetRegistry;
   manageDocumentTitle?: boolean;
   className?: string;
+  route?: WorkspaceRoute;
+  onRouteChange?: (route: WorkspaceRoute, options?: WorkspaceRouteChangeOptions) => void;
 }
 
-export function ChatShell({ displayWidgets, ...workspaceProps }: ChatShellProps) {
+export function ChatShell({ displayWidgets, route, onRouteChange, ...workspaceProps }: ChatShellProps) {
   const [queryClient] = useState(() => new QueryClient());
+  const [localRoute, setLocalRoute] = useState<WorkspaceRoute>(() => defaultWorkspaceRoute());
+  const resolvedRoute = route ?? localRoute;
+  const resolvedRouteChange = onRouteChange ?? setLocalRoute;
 
   return (
     <QueryClientProvider client={queryClient}>
       <ToolDisplayWidgetProvider widgets={displayWidgets}>
         <ToolDisplayPanelProvider>
-          <ChatWorkspace {...workspaceProps} />
+          <ChatWorkspace
+            {...workspaceProps}
+            route={resolvedRoute}
+            onRouteChange={resolvedRouteChange}
+          />
         </ToolDisplayPanelProvider>
       </ToolDisplayWidgetProvider>
     </QueryClientProvider>

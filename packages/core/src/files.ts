@@ -315,6 +315,10 @@ export interface ConversationAttachmentStore {
     conversationId: ConversationId;
     deletedAt: ISODateString;
   }): Promise<ManagedObjectDeletionResult>;
+  listConversationManagedObjectsForDeletion(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+  }): Promise<ManagedObjectDeletionResult>;
 }
 
 export interface PlatformFileStore

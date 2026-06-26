@@ -1,0 +1,1 @@
+CREATE INDEX "conversations_retention_expiry_idx" ON "conversations" USING btree ("client_instance_id","status","retained_until");

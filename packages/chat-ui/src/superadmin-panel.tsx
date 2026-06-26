@@ -8,7 +8,7 @@ import {
   ShieldCheck,
   Users
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import type {
   AdministeredUser,
   AdministeredUserIdentity,
@@ -23,8 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { cn } from "./ui/cn";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { UserAdministrationPanel } from "./user-administration-panel";
-
-type SuperadminTab = "usage" | "users" | "audit";
+import type { SuperadminRouteTab } from "./workspace-route";
 
 export function SuperadminPanel({
   usage,
@@ -39,7 +38,9 @@ export function SuperadminPanel({
   onUpdateUser,
   onUpsertUserIdentity,
   onDeleteUserIdentity,
-  onResetUserPassword
+  onResetUserPassword,
+  selectedTab,
+  onSelectTab
 }: {
   usage: UsageSummary | undefined;
   auditEvents: AuditEvent[];
@@ -57,9 +58,9 @@ export function SuperadminPanel({
   ): Promise<AdministeredUser>;
   onDeleteUserIdentity(userId: string, identity: AdministeredUserIdentity): Promise<AdministeredUser>;
   onResetUserPassword(userId: string, password: string): Promise<unknown>;
+  selectedTab: SuperadminRouteTab;
+  onSelectTab(tab: SuperadminRouteTab): void;
 }) {
-  const [tab, setTab] = useState<SuperadminTab>("usage");
-
   return (
     <section
       className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background"
@@ -73,32 +74,32 @@ export function SuperadminPanel({
 
         <nav className="flex items-end gap-1 overflow-x-auto" aria-label="Superadmin sections">
           <TabButton
-            active={tab === "usage"}
+            active={selectedTab === "usage"}
             icon={<Activity size={15} aria-hidden="true" />}
             label="Usage"
-            onClick={() => setTab("usage")}
+            onClick={() => onSelectTab("usage")}
           />
           <TabButton
-            active={tab === "users"}
+            active={selectedTab === "users"}
             icon={<Users size={15} aria-hidden="true" />}
             label="Users"
             badge={users.length > 0 ? users.length : undefined}
-            onClick={() => setTab("users")}
+            onClick={() => onSelectTab("users")}
           />
           <TabButton
-            active={tab === "audit"}
+            active={selectedTab === "audit"}
             icon={<ScrollText size={15} aria-hidden="true" />}
             label="Audit log"
-            onClick={() => setTab("audit")}
+            onClick={() => onSelectTab("audit")}
           />
         </nav>
       </div>
 
       <div className="grid min-h-0 content-start gap-4 overflow-auto bg-background p-5">
-        {tab !== "users" && error ? <ErrorBanner message={error} /> : null}
+        {selectedTab !== "users" && error ? <ErrorBanner message={error} /> : null}
 
-        {tab === "usage" ? <UsageView usage={usage} /> : null}
-        {tab === "users" ? (
+        {selectedTab === "usage" ? <UsageView usage={usage} /> : null}
+        {selectedTab === "users" ? (
           <UserAdministrationPanel
             users={users}
             loading={usersLoading}
@@ -111,7 +112,7 @@ export function SuperadminPanel({
             onResetPassword={onResetUserPassword}
           />
         ) : null}
-        {tab === "audit" ? <AuditView auditEvents={auditEvents} /> : null}
+        {selectedTab === "audit" ? <AuditView auditEvents={auditEvents} /> : null}
       </div>
     </section>
   );
