@@ -1,10 +1,12 @@
 import { auditActorFromUser } from "@vivd-catalyst/core";
 import {
   AppError,
+  type AgentRun,
   type AttachmentManifest,
   type AgentRunId,
   type AgentRunStatus,
   type AgentRuntimeEvent,
+  type AgentRuntimeObserveOptions,
   type AuthenticatedUser,
   type ChatMessage,
   type Conversation,
@@ -143,6 +145,7 @@ export class ConversationWorkflow {
       {
         agentName: command.agentName ?? this.options.config.defaultAgentName,
         conversationId,
+        inputMessageId: userMessage.id,
         message: {
           text: command.text,
           attachmentManifest:
@@ -158,12 +161,109 @@ export class ConversationWorkflow {
     };
   }
 
-  observeRun(runId: AgentRunId, context: RuntimeCallContext): AsyncIterable<AgentRuntimeEvent> {
-    return this.options.agentRuntime.observe(runId, context);
+  async *observeRun(
+    runId: AgentRunId,
+    context: RuntimeCallContext,
+    options: AgentRuntimeObserveOptions = {}
+  ): AsyncIterable<AgentRuntimeEvent> {
+    const persistedRun = await this.options.conversationStore.getAgentRun({
+      clientInstanceId: this.options.clientInstanceId,
+      runId
+    });
+    if (!persistedRun) {
+      yield* this.options.agentRuntime.observe(runId, context, options);
+      return;
+    }
+    if (persistedRun.ownerUserId !== context.user.id) {
+      throw new AppError("NOT_FOUND", "Agent run is not available");
+    }
+
+    let lastSequence = options.afterSequence ?? 0;
+    const observations = await this.options.conversationStore.listRunObservations({
+      clientInstanceId: this.options.clientInstanceId,
+      runId,
+      ownerUserId: context.user.id,
+      afterSequence: lastSequence
+    });
+    for (const observation of observations) {
+      lastSequence = Math.max(lastSequence, observation.sequence);
+      yield observation.payload;
+    }
+
+    const latestRun =
+      (await this.options.conversationStore.getAgentRun({
+        clientInstanceId: this.options.clientInstanceId,
+        runId
+      })) ?? persistedRun;
+    if (!isActiveAgentRunStatus(latestRun.status)) {
+      return;
+    }
+
+    try {
+      yield* this.options.agentRuntime.observe(runId, context, {
+        afterSequence: lastSequence
+      });
+    } catch (error) {
+      if (isAppError(error) && error.code === "NOT_FOUND" && observations.length > 0) {
+        return;
+      }
+      throw error;
+    }
   }
 
   async getRunStatus(runId: AgentRunId, context: RuntimeCallContext): Promise<AgentRunStatus> {
+    const run = await this.options.conversationStore.getAgentRun({
+      clientInstanceId: this.options.clientInstanceId,
+      runId
+    });
+    if (run?.ownerUserId === context.user.id) {
+      return run.status;
+    }
+    if (run) {
+      throw new AppError("NOT_FOUND", "Agent run is not available");
+    }
     return this.options.agentRuntime.getStatus(runId, context);
+  }
+
+  async getRunForUser(
+    runId: AgentRunId,
+    user: AuthenticatedUser
+  ): Promise<AgentRun | undefined> {
+    const run = await this.options.conversationStore.getAgentRun({
+      clientInstanceId: this.options.clientInstanceId,
+      runId
+    });
+    return run?.ownerUserId === user.id ? run : undefined;
+  }
+
+  async cancelRun(
+    conversationId: ConversationId,
+    runId: AgentRunId,
+    user: AuthenticatedUser,
+    context: RuntimeCallContext,
+    reason?: string
+  ): Promise<AgentRun> {
+    await this.requireOwnedActiveConversation(conversationId, user);
+    const run = await this.options.conversationStore.getConversationAgentRun({
+      clientInstanceId: this.options.clientInstanceId,
+      conversationId,
+      runId
+    });
+    if (!run || run.ownerUserId !== user.id) {
+      throw new AppError("NOT_FOUND", "Agent run is not available");
+    }
+    if (!isActiveAgentRunStatus(run.status)) {
+      return run;
+    }
+
+    await this.options.agentRuntime.cancel(runId, reason, context);
+    return (
+      (await this.options.conversationStore.getConversationAgentRun({
+        clientInstanceId: this.options.clientInstanceId,
+        conversationId,
+        runId
+      })) ?? run
+    );
   }
 
   async persistAssistantMessage(
@@ -324,6 +424,28 @@ export class ConversationWorkflow {
     });
   }
 
+  async recordRunCancelled(
+    conversationId: ConversationId,
+    user: AuthenticatedUser,
+    context: RuntimeCallContext,
+    runId: AgentRunId,
+    assistantMessageCount: number,
+    event: Extract<AgentRuntimeEvent, { type: "run_cancelled" }>
+  ): Promise<void> {
+    await this.options.auditRecorder.record({
+      type: "message.cancelled",
+      status: "success",
+      actor: auditActorFromUser(user),
+      subject: conversationId,
+      correlationId: context.correlationId,
+      metadata: {
+        assistantMessageCount,
+        runId,
+        ...(event.reason ? { reason: event.reason } : {})
+      }
+    });
+  }
+
   async deleteConversation(
     conversationId: ConversationId,
     user: AuthenticatedUser,
@@ -473,6 +595,15 @@ function readAgentRuntimeMetadata(message: ChatMessage): JsonObject | undefined 
 
 function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isActiveAgentRunStatus(status: AgentRunStatus): boolean {
+  return (
+    status === "queued" ||
+    status === "running" ||
+    status === "waiting_for_permission" ||
+    status === "cancelling"
+  );
 }
 
 function createTitlePrompt(firstUserMessage: ChatMessage): ModelMessage[] {

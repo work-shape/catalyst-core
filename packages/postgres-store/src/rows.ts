@@ -1,5 +1,6 @@
 import {
   AppError,
+  type AgentRun,
   type AuditEvent,
   type ChatMessage,
   type ClientInstanceId,
@@ -8,8 +9,10 @@ import {
   type ManagedArtifactRecord,
   type ModelUsageEvent,
   type ManagedFileRecord,
+  type RunObservation,
   type UserIdentity,
   type UserRecord,
+  asAgentRunId,
   asConversationAttachmentId,
   asConversationId,
   asManagedArtifactId,
@@ -18,6 +21,8 @@ import {
   asUserId
 } from "@vivd-catalyst/core";
 import type {
+  agentRunObservations,
+  agentRuns,
   auditEvents,
   conversationAttachments,
   conversations,
@@ -29,6 +34,8 @@ import type {
   userIdentities
 } from "./schema";
 
+export type AgentRunRow = typeof agentRuns.$inferSelect;
+export type RunObservationRow = typeof agentRunObservations.$inferSelect;
 export type ConversationRow = typeof conversations.$inferSelect;
 export type MessageRow = typeof messages.$inferSelect;
 export type ManagedFileRow = typeof managedFiles.$inferSelect;
@@ -69,6 +76,49 @@ export function mapMessage(row: MessageRow | undefined): ChatMessage {
     text: row.text,
     createdAt: row.createdAt.toISOString(),
     metadata: row.metadata
+  };
+}
+
+export function mapAgentRun(row: AgentRunRow | undefined): AgentRun {
+  if (!row) {
+    throw new AppError("INTERNAL", "Expected agent run row");
+  }
+  return {
+    id: asAgentRunId(row.id),
+    clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    conversationId: asConversationId(row.conversationId),
+    ownerUserId: row.ownerUserId,
+    inputMessageId: asMessageId(row.inputMessageId),
+    agentName: row.agentName,
+    status: row.status,
+    idempotencyKey: row.idempotencyKey ?? undefined,
+    startedAt: row.startedAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    completedAt: row.completedAt?.toISOString(),
+    cancelledAt: row.cancelledAt?.toISOString(),
+    failedAt: row.failedAt?.toISOString(),
+    lastSequence: row.lastSequence,
+    error: row.error ?? undefined,
+    correlationId: row.correlationId,
+    leaseOwner: row.leaseOwner ?? undefined,
+    leaseExpiresAt: row.leaseExpiresAt?.toISOString(),
+    heartbeatAt: row.heartbeatAt?.toISOString()
+  };
+}
+
+export function mapRunObservation(row: RunObservationRow | undefined): RunObservation {
+  if (!row) {
+    throw new AppError("INTERNAL", "Expected agent run observation row");
+  }
+  return {
+    clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    runId: asAgentRunId(row.runId),
+    conversationId: asConversationId(row.conversationId),
+    ownerUserId: row.ownerUserId,
+    sequence: row.sequence,
+    type: row.type,
+    payload: row.payload,
+    createdAt: row.createdAt.toISOString()
   };
 }
 

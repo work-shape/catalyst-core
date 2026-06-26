@@ -199,6 +199,22 @@ export const chatStreamRoutePath = "/api/chat";
 
 const chatStreamMessageMetadataSchema = z.record(z.string(), z.unknown());
 
+export const agentRunStatusSchema = z.enum([
+  "queued",
+  "running",
+  "waiting_for_permission",
+  "cancelling",
+  "completed",
+  "cancelled",
+  "failed"
+]);
+
+export const agentRunErrorSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+  category: z.enum(["app_error", "internal_error", "abort_error", "unknown_error"])
+});
+
 export const chatStreamStartChunkSchema = z.object({
   type: z.literal("start"),
   messageId: z.string(),
@@ -403,6 +419,60 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     })
   })
 ]);
+
+export const agentRunSchema = z.object({
+  id: z.string(),
+  clientInstanceId: z.string(),
+  conversationId: z.string(),
+  ownerUserId: z.string(),
+  inputMessageId: z.string(),
+  agentName: z.string(),
+  status: agentRunStatusSchema,
+  idempotencyKey: z.string().optional(),
+  startedAt: z.string(),
+  updatedAt: z.string(),
+  completedAt: z.string().optional(),
+  cancelledAt: z.string().optional(),
+  failedAt: z.string().optional(),
+  lastSequence: z.number().int().nonnegative(),
+  error: agentRunErrorSchema.optional(),
+  correlationId: z.string(),
+  leaseOwner: z.string().optional(),
+  leaseExpiresAt: z.string().optional(),
+  heartbeatAt: z.string().optional()
+});
+
+export const activeRunSummarySchema = z.object({
+  id: z.string(),
+  conversationId: z.string(),
+  agentName: z.string(),
+  status: z.enum(["queued", "running", "waiting_for_permission", "cancelling"]),
+  startedAt: z.string(),
+  updatedAt: z.string(),
+  lastSequence: z.number().int().nonnegative()
+});
+
+export const runObservationSchema = z.object({
+  clientInstanceId: z.string(),
+  runId: z.string(),
+  conversationId: z.string(),
+  ownerUserId: z.string(),
+  sequence: z.number().int().positive(),
+  type: z.string(),
+  payload: agentRuntimeEventSchema,
+  createdAt: z.string()
+});
+
+export const cancelRunRequestSchema = z
+  .object({
+    reason: z.string().min(1).optional()
+  })
+  .optional()
+  .default({});
+
+export const cancelRunResponseSchema = z.object({
+  run: agentRunSchema
+});
 
 export const chatStreamErrorResponseSchema = z.object({
   error: z.object({
@@ -771,6 +841,11 @@ export type ResetAdministeredUserPasswordRequest = z.infer<
 export type ChatStreamRequest = z.infer<typeof chatStreamRequestSchema>;
 export type ChatStreamChunk = z.infer<typeof chatStreamChunkSchema>;
 export type AgentRuntimeEvent = z.infer<typeof agentRuntimeEventSchema>;
+export type AgentRun = z.infer<typeof agentRunSchema>;
+export type ActiveRunSummary = z.infer<typeof activeRunSummarySchema>;
+export type RunObservation = z.infer<typeof runObservationSchema>;
+export type CancelRunRequest = z.infer<typeof cancelRunRequestSchema>;
+export type CancelRunResponse = z.infer<typeof cancelRunResponseSchema>;
 export type AuditActor = z.infer<typeof auditActorSchema>;
 export type AuditEvent = z.infer<typeof auditEventSchema>;
 export type ModelUsageEvent = z.infer<typeof modelUsageEventSchema>;

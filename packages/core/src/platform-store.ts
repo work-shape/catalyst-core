@@ -1,3 +1,4 @@
+import type { AgentRunStore, RunObservationStore } from "./agent-runtime";
 import type { AuditEventStore } from "./audit";
 import type { ConversationRetentionStore, ConversationStore } from "./conversation";
 import type { PlatformFileStore } from "./files";
@@ -8,6 +9,8 @@ export interface PlatformStore
   extends ConversationStore,
     ConversationRetentionStore,
     PlatformFileStore,
+    AgentRunStore,
+    RunObservationStore,
     AuditEventStore,
     ModelUsageEventStore,
     UserStore {

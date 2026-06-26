@@ -4,6 +4,7 @@ import {
   type AgentRunId,
   type AgentRunStatus,
   type AgentRuntimeEvent,
+  type AgentRuntimeObserveOptions,
   type ChatMessage
 } from "@vivd-catalyst/core";
 
@@ -12,6 +13,10 @@ type AgentRuntimeEventDraft = AgentRuntimeEvent extends infer TEvent
     ? Omit<TEvent, "sequence" | "createdAt">
     : never
   : never;
+
+export interface RunStateOptions {
+  onEvent?: (event: AgentRuntimeEvent) => void | Promise<void>;
+}
 
 export interface RunFailureError {
   code: string;
@@ -49,17 +54,29 @@ export class RunState {
   private closed = false;
   private readonly events: AgentRuntimeEvent[] = [];
   private readonly listeners = new Set<() => void>();
+  private readonly onEvent: RunStateOptions["onEvent"];
+  private eventWriteQueue: Promise<void> = Promise.resolve();
 
-  constructor(runId: AgentRunId) {
+  constructor(runId: AgentRunId, options: RunStateOptions = {}) {
     this.runId = runId;
+    this.onEvent = options.onEvent;
   }
 
   getStatus(): AgentRunStatus {
     return this.status;
   }
 
-  async *observe(): AsyncIterable<AgentRuntimeEvent> {
-    let index = 0;
+  waitForEventWrites(): Promise<void> {
+    return this.eventWriteQueue;
+  }
+
+  async *observe(options: AgentRuntimeObserveOptions = {}): AsyncIterable<AgentRuntimeEvent> {
+    let index = this.events.findIndex(
+      (event) => event.sequence > (options.afterSequence ?? 0)
+    );
+    if (index < 0) {
+      index = this.events.length;
+    }
     while (true) {
       while (index < this.events.length) {
         const event = this.events[index];
@@ -70,6 +87,7 @@ export class RunState {
         yield event;
       }
       if (this.closed) {
+        await this.eventWriteQueue;
         return;
       }
       await this.waitForEvent();
@@ -103,11 +121,13 @@ export class RunState {
       return;
     }
     this.sequence += 1;
-    this.events.push({
+    const runtimeEvent = {
       ...event,
       sequence: this.sequence,
       createdAt: new Date().toISOString()
-    } as AgentRuntimeEvent);
+    } as AgentRuntimeEvent;
+    this.events.push(runtimeEvent);
+    this.persistEvent(runtimeEvent);
     this.flush();
   }
 
@@ -159,5 +179,17 @@ export class RunState {
     for (const listener of this.listeners) {
       listener();
     }
+  }
+
+  private persistEvent(event: AgentRuntimeEvent): void {
+    if (!this.onEvent) {
+      return;
+    }
+    this.eventWriteQueue = this.eventWriteQueue
+      .then(() => this.onEvent?.(event))
+      .then(() => undefined)
+      .catch((error: unknown) => {
+        console.warn("Failed to persist agent run observation", error);
+      });
   }
 }

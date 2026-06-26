@@ -3,10 +3,12 @@ import {
   type AgentConfig,
   type AgentRunHandle,
   type AgentRunId,
+  type AgentRunStore,
   type AgentRunStatus,
   type AgentRuntime,
   type AgentRuntimeCommand,
   type AgentRuntimeEvent,
+  type AgentRuntimeObserveOptions,
   type ChatMessage,
   type Clock,
   type ConversationHistoryStore,
@@ -14,6 +16,7 @@ import {
   type ModelProviderConfig,
   type ReasoningEffortConfig,
   type RuntimeCallContext,
+  type RunObservationStore,
   type SkillConfig,
   type StartAgentRunInput,
   type ToolExecution,
@@ -51,6 +54,8 @@ export interface LocalAgentRuntimeOptions {
   modelBindings?: readonly ModelBindingConfig[];
   defaultModelProvider: ModelProviderConfig;
   conversationHistory: ConversationHistoryStore;
+  agentRunStore?: AgentRunStore;
+  runObservationStore?: RunObservationStore;
   modelProvider: ModelProvider;
   toolRegistry: ToolRegistry;
   toolExecution: ToolExecution;
@@ -96,7 +101,24 @@ export class LocalAgentRuntime implements AgentRuntime {
     context: RuntimeCallContext
   ): Promise<AgentRunHandle> {
     const runId = createPlatformId<"AgentRunId">("run");
-    const state = new RunState(runId);
+    const state = new RunState(runId, {
+      onEvent: (event) => this.persistRunEvent(input, context, event)
+    });
+    if (this.options.agentRunStore) {
+      if (!input.inputMessageId) {
+        throw new AppError("INTERNAL", "Durable agent runs require an input message id");
+      }
+      await this.options.agentRunStore.createAgentRun({
+        id: runId,
+        clientInstanceId: context.clientInstanceId,
+        conversationId: input.conversationId,
+        ownerUserId: context.user.id,
+        inputMessageId: input.inputMessageId,
+        agentName: input.agentName,
+        correlationId: context.correlationId,
+        startedAt: state.startedAt
+      });
+    }
     this.runs.set(runId, state);
 
     queueMicrotask(() => {
@@ -120,16 +142,37 @@ export class LocalAgentRuntime implements AgentRuntime {
     };
   }
 
-  observe(runId: AgentRunId): AsyncIterable<AgentRuntimeEvent> {
+  observe(runId: AgentRunId): AsyncIterable<AgentRuntimeEvent>;
+  observe(
+    runId: AgentRunId,
+    context: RuntimeCallContext,
+    options?: AgentRuntimeObserveOptions
+  ): AsyncIterable<AgentRuntimeEvent>;
+  observe(
+    runId: AgentRunId,
+    _context?: RuntimeCallContext,
+    options?: AgentRuntimeObserveOptions
+  ): AsyncIterable<AgentRuntimeEvent> {
     const state = this.getRun(runId);
-    return state.observe();
+    return state.observe(options);
   }
 
   async getStatus(
     runId: AgentRunId,
-    _context: RuntimeCallContext
+    context: RuntimeCallContext
   ): Promise<AgentRunStatus> {
-    return this.getRun(runId).getStatus();
+    const state = this.runs.get(runId);
+    if (state) {
+      return state.getStatus();
+    }
+    const run = await this.options.agentRunStore?.getAgentRun({
+      clientInstanceId: context.clientInstanceId,
+      runId
+    });
+    if (run?.ownerUserId === context.user.id) {
+      return run.status;
+    }
+    throw new AppError("NOT_FOUND", `Agent run '${runId}' was not found`);
   }
 
   async resume(
@@ -147,10 +190,17 @@ export class LocalAgentRuntime implements AgentRuntime {
   async cancel(
     runId: AgentRunId,
     reason: string | undefined,
-    _context: RuntimeCallContext
+    context: RuntimeCallContext
   ): Promise<void> {
     const state = this.getRun(runId);
+    await this.options.agentRunStore?.updateAgentRunStatus({
+      clientInstanceId: context.clientInstanceId,
+      runId,
+      status: "cancelling",
+      updatedAt: new Date().toISOString()
+    });
     state.cancel(reason);
+    await state.waitForEventWrites();
   }
 
   private async executeRun(
@@ -213,6 +263,9 @@ export class LocalAgentRuntime implements AgentRuntime {
       );
 
       if (completion.toolCalls.length === 0) {
+        if (state.getStatus() === "cancelled") {
+          return;
+        }
         const assistantText = completion.text || "I completed the request.";
         const persisted = await this.options.conversationHistory.appendMessage({
           clientInstanceId: context.clientInstanceId,
@@ -258,6 +311,9 @@ export class LocalAgentRuntime implements AgentRuntime {
           modelContext: this.modelContextOptions(context),
           repeatedToolCall: this.registerToolCall(repeatedToolCalls, toolCall.input, toolCall.toolName)
         });
+        if (state.getStatus() === "cancelled") {
+          return;
+        }
         await this.persistToolResult({
           runId,
           input,
@@ -285,6 +341,56 @@ export class LocalAgentRuntime implements AgentRuntime {
       void Promise.resolve(this.options.runFailureReporter(report)).catch(() => undefined);
     } catch {
       // A diagnostics sink must not change the user-visible run outcome.
+    }
+  }
+
+  private async persistRunEvent(
+    input: StartAgentRunInput,
+    context: RuntimeCallContext,
+    event: AgentRuntimeEvent
+  ): Promise<void> {
+    await this.options.runObservationStore?.appendRunObservation({
+      clientInstanceId: context.clientInstanceId,
+      runId: event.runId,
+      conversationId: input.conversationId,
+      ownerUserId: context.user.id,
+      event
+    });
+
+    if (event.type === "run_completed") {
+      await this.options.agentRunStore?.updateAgentRunStatus({
+        clientInstanceId: context.clientInstanceId,
+        runId: event.runId,
+        status: "completed",
+        updatedAt: event.createdAt,
+        completedAt: event.createdAt,
+        lastSequence: event.sequence
+      });
+      return;
+    }
+
+    if (event.type === "run_cancelled") {
+      await this.options.agentRunStore?.updateAgentRunStatus({
+        clientInstanceId: context.clientInstanceId,
+        runId: event.runId,
+        status: "cancelled",
+        updatedAt: event.createdAt,
+        cancelledAt: event.createdAt,
+        lastSequence: event.sequence
+      });
+      return;
+    }
+
+    if (event.type === "run_failed") {
+      await this.options.agentRunStore?.updateAgentRunStatus({
+        clientInstanceId: context.clientInstanceId,
+        runId: event.runId,
+        status: "failed",
+        updatedAt: event.createdAt,
+        failedAt: event.createdAt,
+        lastSequence: event.sequence,
+        error: event.error
+      });
     }
   }
 

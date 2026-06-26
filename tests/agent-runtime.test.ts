@@ -30,6 +30,99 @@ import {
 } from "../packages/agent-runtime/src/model-context-projection";
 
 describe("local agent runtime", () => {
+  it("observes a completed local run from an event cursor", async () => {
+    const clientInstanceId = asClientInstanceId("cursor-client");
+    const context: RuntimeCallContext = {
+      clientInstanceId,
+      correlationId: "corr-cursor",
+      user: {
+        id: "user-1",
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const store = new InMemoryPlatformStore();
+    const conversationId = await createConversationWithMessages(store, {
+      clientInstanceId,
+      messages: []
+    });
+    const providerConfig: ModelProviderConfig = {
+      id: "test-provider",
+      type: "deterministic",
+      model: "test-model"
+    };
+    const runtime = new LocalAgentRuntime({
+      agents: [
+        {
+          name: "cursor_agent",
+          displayName: "Cursor Agent",
+          instructions: "Help the user.",
+          modelProviderId: "test-provider",
+          toolNames: [],
+          initialPrompts: []
+        }
+      ],
+      modelProviders: [providerConfig],
+      defaultModelProvider: providerConfig,
+      conversationHistory: store,
+      modelProvider: {
+        id: "test-provider",
+        async complete() {
+          return {
+            text: "Cursor response.",
+            toolCalls: [],
+            usage: noReportedUsage()
+          };
+        }
+      },
+      toolRegistry: new ToolRegistry({ tools: [] }),
+      toolExecution: createUnusedToolExecution(),
+      usageGovernance: new ModelUsageGovernance({
+        store,
+        budget: {
+          costSafetyMultiplier: 1
+        },
+        safeguards: {}
+      })
+    });
+
+    const run = await runtime.start(
+      {
+        agentName: "cursor_agent",
+        conversationId,
+        message: {
+          text: "hello"
+        }
+      },
+      context
+    );
+
+    const allEvents = [];
+    for await (const event of runtime.observe(run.runId, context)) {
+      allEvents.push(event);
+    }
+    expect(allEvents.map((event) => event.type)).toEqual([
+      "message_delta",
+      "message_completed",
+      "run_completed"
+    ]);
+
+    const resumedEvents = [];
+    for await (const event of runtime.observe(run.runId, context, { afterSequence: 1 })) {
+      resumedEvents.push(event);
+    }
+
+    expect(resumedEvents.map((event) => event.type)).toEqual([
+      "message_completed",
+      "run_completed"
+    ]);
+    expect(resumedEvents.map((event) => event.sequence)).toEqual([2, 3]);
+  });
+
   it("loads conversation history before the new user message", async () => {
     const clientInstanceId = asClientInstanceId("history-client");
     const context: RuntimeCallContext = {

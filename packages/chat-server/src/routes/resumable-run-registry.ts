@@ -14,8 +14,11 @@ export class ResumableRunRegistry {
 
   readForUser(runId: AgentRunId, userId: string): ResumableRun | undefined {
     const run = this.runs.get(runId);
-    if (!run || run.ownerUserId !== userId) {
+    if (!run) {
       this.runs.delete(runId);
+      return undefined;
+    }
+    if (run.ownerUserId !== userId) {
       return undefined;
     }
     return run;

@@ -1,11 +1,13 @@
 import type { HmacSessionTokenIssuer, StandaloneAuthRuntime } from "@vivd-catalyst/auth";
 import type {
   AgentRuntime,
+  AgentRunStore,
   AuditEventStore,
   ClientInstanceId,
   ConversationRetentionStore,
   ConversationStore,
   PlatformFileStore,
+  RunObservationStore,
   UserStore
 } from "@vivd-catalyst/core";
 import type { AuditRecorder } from "@vivd-catalyst/core";
@@ -20,7 +22,11 @@ export interface ChatServerOptions {
   config: ClientInstanceConfig;
   clientInstanceId: ClientInstanceId;
   authAdapter: AuthAdapter;
-  conversationStore: ConversationStore & ConversationRetentionStore & PlatformFileStore;
+  conversationStore: ConversationStore &
+    ConversationRetentionStore &
+    PlatformFileStore &
+    AgentRunStore &
+    RunObservationStore;
   auditEventStore: AuditEventStore;
   userStore: UserStore;
   usageGovernance: ModelUsageGovernance;

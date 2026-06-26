@@ -145,6 +145,8 @@ export async function createClientInstanceApp(
     modelBindings: config.modelBindings,
     defaultModelProvider,
     conversationHistory: store,
+    agentRunStore: store,
+    runObservationStore: store,
     modelProvider,
     toolRegistry,
     toolExecution,

@@ -145,13 +145,15 @@ describe("client instance app vertical slice", () => {
     expect(resumedChunks.some((chunk) => chunk.type === "finish")).toBe(true);
 
     const completedResume = await fetch(`${baseUrl}/api/chat/runs/${streamId}/stream`);
-    expect(completedResume.status).toBe(204);
-    expect(completedResume.headers.get("x-resumable-stream-id")).toBeNull();
+    expect(completedResume.status).toBe(200);
+    expect(parseSseChunks(await completedResume.text()).some((chunk) => chunk.type === "finish")).toBe(
+      true
+    );
 
     await app.close();
   });
 
-  it("does not resume a run that completed after the original stream was abandoned", async () => {
+  it("resumes completed runs from a cursor and keeps terminal observations available", async () => {
     const app = await createClientInstanceApp({
       config: createTestConfig(),
       env: {},
@@ -184,14 +186,180 @@ describe("client instance app vertical slice", () => {
     expect(sent.status).toBe(200);
     const streamId = sent.headers.get("x-resumable-stream-id");
     expect(streamId).toEqual(expect.stringMatching(/^run_/));
-    await sent.body?.cancel();
-    await new Promise((resolve) => {
-      setTimeout(resolve, 800);
+    const sentChunks = parseSseChunks(await sent.text());
+    const sentTextDeltas = sentChunks
+      .filter((chunk) => chunk.type === "text-delta")
+      .map((chunk) => chunk.delta ?? "");
+    expect(sentTextDeltas.length).toBeGreaterThan(1);
+
+    const cursorResume = await fetch(`${baseUrl}/api/chat/runs/${streamId}/stream?after=1`);
+    expect(cursorResume.status).toBe(200);
+    const cursorDeltas = parseSseChunks(await cursorResume.text())
+      .filter((chunk) => chunk.type === "text-delta")
+      .map((chunk) => chunk.delta ?? "");
+    expect(cursorDeltas.join("")).toBe(sentTextDeltas.slice(1).join(""));
+
+    const terminalAfter = sentTextDeltas.length + 1;
+    const terminalResume = await fetch(`${baseUrl}/api/chat/runs/${streamId}/stream`, {
+      headers: {
+        "last-event-id": String(terminalAfter)
+      }
+    });
+    expect(terminalResume.status).toBe(200);
+    expect(parseSseChunks(await terminalResume.text()).some((chunk) => chunk.type === "finish")).toBe(
+      true
+    );
+
+    const caughtUpResume = await fetch(
+      `${baseUrl}/api/chat/runs/${streamId}/stream?after=${sentTextDeltas.length + 2}`
+    );
+    expect(caughtUpResume.status).toBe(204);
+
+    await app.close();
+  });
+
+  it("does not expose or mutate another user's resumable run", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        developmentAuth: {
+          enabled: true,
+          defaultUserId: "user-1",
+          users: [
+            {
+              id: "user-1",
+              externalUserId: "user-1",
+              displayLabel: "User One",
+              roles: ["user"],
+              permissionRefs: ["demo-tools"]
+            },
+            {
+              id: "user-2",
+              externalUserId: "user-2",
+              displayLabel: "User Two",
+              roles: ["user"],
+              permissionRefs: ["demo-tools"]
+            }
+          ]
+        }
+      }),
+      env: {},
+      storeMode: "memory",
+      tools: []
     });
 
-    const abandonedResume = await fetch(`${baseUrl}/api/chat/runs/${streamId}/stream`);
-    expect(abandonedResume.status).toBe(204);
-    expect(abandonedResume.headers.get("x-resumable-stream-id")).toBeNull();
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      headers: {
+        "x-dev-user-id": "user-1"
+      },
+      payload: { title: "Owner mismatch" }
+    });
+    expect(created.statusCode).toBe(200);
+    const conversation = created.json() as { id: string };
+
+    await app.server.listen({ host: "127.0.0.1", port: 0 });
+    const address = app.server.server.address() as AddressInfo;
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+
+    const sent = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-dev-user-id": "user-1"
+      },
+      body: JSON.stringify({
+        conversationId: conversation.id,
+        messages: [createUserUiMessage("owner mismatch should not clear this run")]
+      })
+    });
+    expect(sent.status).toBe(200);
+    const streamId = sent.headers.get("x-resumable-stream-id");
+    expect(streamId).toEqual(expect.stringMatching(/^run_/));
+    await sent.text();
+
+    const wrongOwnerResume = await fetch(`${baseUrl}/api/chat/runs/${streamId}/stream`, {
+      headers: {
+        "x-dev-user-id": "user-2"
+      }
+    });
+    expect(wrongOwnerResume.status).toBe(204);
+
+    const rightfulResume = await fetch(`${baseUrl}/api/chat/runs/${streamId}/stream`, {
+      headers: {
+        "x-dev-user-id": "user-1"
+      }
+    });
+    expect(rightfulResume.status).toBe(200);
+    expect(parseSseChunks(await rightfulResume.text()).some((chunk) => chunk.type === "finish")).toBe(
+      true
+    );
+
+    await app.close();
+  });
+
+  it("cancels a backend run through the cancel route and records cancellation", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig(),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      payload: { title: "Cancel test" }
+    });
+    expect(created.statusCode).toBe(200);
+    const conversation = created.json() as { id: string };
+
+    await app.server.listen({ host: "127.0.0.1", port: 0 });
+    const address = app.server.server.address() as AddressInfo;
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+
+    const sent = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        conversationId: conversation.id,
+        messages: [createUserUiMessage("cancel this deliberately long enough response")]
+      })
+    });
+    expect(sent.status).toBe(200);
+    const streamId = sent.headers.get("x-resumable-stream-id");
+    expect(streamId).toEqual(expect.stringMatching(/^run_/));
+
+    const cancelled = await fetch(
+      `${baseUrl}/api/chat/conversations/${conversation.id}/runs/${streamId}/cancel`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({ reason: "test cancellation" })
+      }
+    );
+    expect(cancelled.status).toBe(200);
+    expect((await cancelled.json()) as { run: { status: string } }).toMatchObject({
+      run: {
+        status: "cancelled"
+      }
+    });
+    await sent.text();
+
+    const auditEvents = await waitForAuditEvents(app.server, "message.cancelled");
+    expect(auditEvents).toContainEqual(
+      expect.objectContaining({
+        type: "message.cancelled",
+        metadata: expect.objectContaining({
+          runId: streamId,
+          reason: "test cancellation"
+        })
+      })
+    );
 
     await app.close();
   });
@@ -1376,6 +1544,27 @@ function parseSseChunks(text: string): Array<{ type?: string; errorText?: string
     .map((line) => line.slice("data:".length).trim())
     .filter((line) => line !== "[DONE]")
     .map((line) => JSON.parse(line) as { type?: string; errorText?: string; delta?: string });
+}
+
+async function waitForAuditEvents(
+  server: Awaited<ReturnType<typeof createClientInstanceApp>>["server"],
+  type: string
+): Promise<Array<{ type: string; metadata?: Record<string, unknown> }>> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const audit = await server.inject({
+      method: "GET",
+      url: "/api/audit-events"
+    });
+    expect(audit.statusCode).toBe(200);
+    const events = audit.json() as Array<{ type: string; metadata?: Record<string, unknown> }>;
+    if (events.some((event) => event.type === type)) {
+      return events;
+    }
+    await new Promise((resolve) => {
+      setTimeout(resolve, 25);
+    });
+  }
+  return [];
 }
 
 function createMultipartFilePayload(input: {

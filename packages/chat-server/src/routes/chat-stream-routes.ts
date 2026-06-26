@@ -2,6 +2,8 @@ import { createUIMessageStream, createUIMessageStreamResponse, type UIMessage } 
 import type { FastifyInstance, FastifyReply } from "fastify";
 import {
   apiOperations,
+  cancelRunRequestSchema,
+  cancelRunResponseSchema,
   chatStreamChunkSchema,
   chatStreamRoutePath,
   chatStreamRequestSchema,
@@ -99,12 +101,19 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
         "Conversation title generation failed after first user message"
       );
     });
+    monitorRunLifecycle({
+      conversationId,
+      context: localizedContext,
+      runId,
+      user
+    });
 
     return createRunStreamResponse({
+      afterSequence: 0,
       conversationId,
       conversations,
       localizedContext,
-      recordLifecycle: true,
+      recordLifecycle: false,
       reply,
       runId,
       streamId: runId,
@@ -116,6 +125,26 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
     const { user, context } = await authenticateRequest(options, request);
     const params = request.params as { runId?: string };
     const runId = asAgentRunId(params.runId ?? "");
+    const afterSequence = readAfterSequence(request);
+    const persistedRun = await conversations.getRunForUser(runId, user);
+    if (persistedRun) {
+      if (!isObservableRunStatus(persistedRun.status) && afterSequence >= persistedRun.lastSequence) {
+        resumableRuns.forget(runId);
+        return reply.status(204).send();
+      }
+      return createRunStreamResponse({
+        afterSequence,
+        conversationId: persistedRun.conversationId,
+        conversations,
+        localizedContext: withRequestLocale(context, options, request, undefined),
+        recordLifecycle: false,
+        reply,
+        runId,
+        streamId: runId,
+        user
+      });
+    }
+
     const resumableRun = resumableRuns.readForUser(runId, user.id);
     if (!resumableRun) {
       return reply.status(204).send();
@@ -127,6 +156,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
     }
 
     return createRunStreamResponse({
+      afterSequence,
       conversationId: resumableRun.conversationId,
       conversations,
       localizedContext: withRequestLocale(context, options, request, undefined),
@@ -138,7 +168,77 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
     });
   });
 
+  app.post("/api/chat/conversations/:conversationId/runs/:runId/cancel", async (request) => {
+    const { user, context } = await authenticateRequest(options, request);
+    const params = request.params as { conversationId?: string; runId?: string };
+    const conversationId = asConversationId(params.conversationId ?? "");
+    const runId = asAgentRunId(params.runId ?? "");
+    const body = parseBody(cancelRunRequestSchema, request.body ?? {});
+    const run = await conversations.cancelRun(
+      conversationId,
+      runId,
+      user,
+      withRequestLocale(context, options, request, undefined),
+      body.reason
+    );
+    return cancelRunResponseSchema.parse({ run });
+  });
+
+  function monitorRunLifecycle(input: {
+    conversationId: ConversationId;
+    context: RuntimeCallContext;
+    runId: AgentRunId;
+    user: AuthenticatedUser;
+  }): void {
+    void (async () => {
+      let assistantMessageCount = 0;
+      for await (const event of conversations.observeRun(input.runId, input.context)) {
+        if (event.type === "message_completed") {
+          assistantMessageCount += 1;
+        }
+        if (event.type === "run_failed") {
+          resumableRuns.forget(input.runId);
+          await conversations.recordRunFailed(
+            input.conversationId,
+            input.user,
+            input.context,
+            input.runId,
+            assistantMessageCount,
+            event
+          );
+          return;
+        }
+        if (event.type === "run_cancelled") {
+          resumableRuns.forget(input.runId);
+          await conversations.recordRunCancelled(
+            input.conversationId,
+            input.user,
+            input.context,
+            input.runId,
+            assistantMessageCount,
+            event
+          );
+          return;
+        }
+        if (event.type === "run_completed") {
+          resumableRuns.forget(input.runId);
+          await conversations.recordRunCompleted(
+            input.conversationId,
+            input.user,
+            input.context,
+            input.runId,
+            assistantMessageCount
+          );
+          return;
+        }
+      }
+    })().catch((error: unknown) => {
+      app.log.warn({ err: error, conversationId: input.conversationId, runId: input.runId }, "Agent run lifecycle monitor failed");
+    });
+  }
+
   function createRunStreamResponse({
+    afterSequence,
     conversationId,
     conversations,
     localizedContext,
@@ -148,6 +248,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
     streamId,
     user
   }: {
+    afterSequence: number;
     conversationId: ConversationId;
     conversations: ConversationWorkflow;
     localizedContext: RuntimeCallContext;
@@ -225,7 +326,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
           type: "start-step"
         });
 
-        for await (const event of conversations.observeRun(runId, localizedContext)) {
+        for await (const event of conversations.observeRun(runId, localizedContext, { afterSequence })) {
           if (event.type === "reasoning_delta") {
             closeTextPart();
             ensureReasoningPart(event.id);
@@ -321,6 +422,22 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
             return;
           }
 
+          if (event.type === "run_cancelled") {
+            closeTextPart();
+            closeReasoningParts();
+            resumableRuns.forget(runId);
+            if (recordLifecycle) {
+              await conversations.recordRunCancelled(
+                conversationId,
+                user,
+                localizedContext,
+                runId,
+                assistantMessageCount,
+                event
+              );
+            }
+          }
+
           if (event.type === "run_completed") {
             resumableRuns.forget(runId);
             if (recordLifecycle) {
@@ -368,7 +485,31 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
 }
 
 function isObservableRunStatus(status: string | undefined): boolean {
-  return status === "running" || status === "waiting_for_permission";
+  return (
+    status === "queued" ||
+    status === "running" ||
+    status === "waiting_for_permission" ||
+    status === "cancelling"
+  );
+}
+
+function readAfterSequence(request: {
+  query: unknown;
+  headers: Record<string, string | string[] | undefined>;
+}): number {
+  const queryAfter = (request.query as { after?: unknown }).after;
+  const headerAfter = request.headers["last-event-id"];
+  const rawValue =
+    typeof queryAfter === "string"
+      ? queryAfter
+      : Array.isArray(headerAfter)
+        ? headerAfter[0]
+        : headerAfter;
+  if (!rawValue) {
+    return 0;
+  }
+  const parsed = Number(rawValue);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 0;
 }
 
 function extractSubmittedUserText(messages: ChatStreamRequest["messages"]): string {

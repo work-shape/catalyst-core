@@ -1,5 +1,9 @@
 import {
   AppError,
+  type AgentRun,
+  type AgentRunId,
+  type AgentRunStore,
+  type AppendRunObservationInput,
   type AuditEvent,
   type AuditEventInput,
   type AuditEventStore,
@@ -9,9 +13,12 @@ import {
   type ConversationId,
   type ConversationRetentionStore,
   type ConversationStore,
+  type CreateAgentRunInput,
   type CreateConversationInput,
   type CreateMessageInput,
   type PlatformFileStore,
+  type RunObservation,
+  type RunObservationStore,
   type ModelUsageEvent,
   type ModelUsageEventInput,
   type ModelUsageEventStore,
@@ -20,6 +27,7 @@ import {
   type DeleteUserIdentityInput,
   type ResolveUserIdentityInput,
   type UpdateUserInput,
+  type UpdateAgentRunStatusInput,
   type UpsertUserIdentityInput,
   type UserIdentity,
   type UserRecord,
@@ -38,6 +46,8 @@ export class InMemoryPlatformStore
     ConversationStore,
     ConversationRetentionStore,
     PlatformFileStore,
+    AgentRunStore,
+    RunObservationStore,
     AuditEventStore,
     ModelUsageEventStore,
     UserStore
@@ -51,6 +61,8 @@ export class InMemoryPlatformStore
       touchConversation: (conversationId, updatedAt) => this.touchConversation(conversationId, updatedAt)
     });
   private readonly auditEvents: AuditEvent[] = [];
+  private readonly agentRuns = new Map<string, AgentRun>();
+  private readonly runObservations = new Map<string, RunObservation[]>();
   private readonly modelUsageEvents: ModelUsageEvent[] = [];
   private readonly users = new Map<string, UserRecord>();
   private readonly identities = new Map<string, UserIdentity>();
@@ -181,6 +193,141 @@ export class InMemoryPlatformStore
   }): Promise<ChatMessage[]> {
     const messages = await this.listMessages(input);
     return messages.slice(-input.limit);
+  }
+
+  async createAgentRun(input: CreateAgentRunInput): Promise<AgentRun> {
+    const existing = this.agentRuns.get(input.id);
+    if (existing) {
+      throw new AppError("CONFLICT", "Agent run already exists");
+    }
+    const activeRun = [...this.agentRuns.values()].find(
+      (run) =>
+        run.clientInstanceId === input.clientInstanceId &&
+        run.conversationId === input.conversationId &&
+        isActiveAgentRunStatus(run.status)
+    );
+    if (activeRun) {
+      throw new AppError("CONFLICT", "Conversation already has an active agent run");
+    }
+    if (input.idempotencyKey) {
+      const idempotentRun = [...this.agentRuns.values()].find(
+        (run) =>
+          run.clientInstanceId === input.clientInstanceId &&
+          run.conversationId === input.conversationId &&
+          run.idempotencyKey === input.idempotencyKey
+      );
+      if (idempotentRun) {
+        throw new AppError("CONFLICT", "Agent run idempotency key already exists");
+      }
+    }
+
+    const now = input.startedAt ?? new Date().toISOString();
+    const run: AgentRun = {
+      id: input.id,
+      clientInstanceId: input.clientInstanceId,
+      conversationId: input.conversationId,
+      ownerUserId: input.ownerUserId,
+      inputMessageId: input.inputMessageId,
+      agentName: input.agentName,
+      status: "running",
+      idempotencyKey: input.idempotencyKey,
+      startedAt: now,
+      updatedAt: now,
+      lastSequence: 0,
+      correlationId: input.correlationId
+    };
+    this.agentRuns.set(run.id, run);
+    this.runObservations.set(run.id, []);
+    return run;
+  }
+
+  async getAgentRun(input: {
+    clientInstanceId: ClientInstanceId;
+    runId: AgentRunId;
+  }): Promise<AgentRun | undefined> {
+    const run = this.agentRuns.get(input.runId);
+    return run?.clientInstanceId === input.clientInstanceId ? run : undefined;
+  }
+
+  async getConversationAgentRun(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    runId: AgentRunId;
+  }): Promise<AgentRun | undefined> {
+    const run = await this.getAgentRun(input);
+    return run?.conversationId === input.conversationId ? run : undefined;
+  }
+
+  async updateAgentRunStatus(input: UpdateAgentRunStatusInput): Promise<AgentRun> {
+    const run = await this.getAgentRun({
+      clientInstanceId: input.clientInstanceId,
+      runId: input.runId
+    });
+    if (!run) {
+      throw new AppError("NOT_FOUND", "Agent run is not available");
+    }
+    const updated: AgentRun = {
+      ...run,
+      status: input.status,
+      updatedAt: input.updatedAt,
+      lastSequence: input.lastSequence ?? run.lastSequence,
+      completedAt: input.completedAt ?? run.completedAt,
+      cancelledAt: input.cancelledAt ?? run.cancelledAt,
+      failedAt: input.failedAt ?? run.failedAt,
+      error: input.error ?? run.error
+    };
+    this.agentRuns.set(run.id, updated);
+    return updated;
+  }
+
+  async appendRunObservation(input: AppendRunObservationInput): Promise<RunObservation> {
+    const run = await this.getConversationAgentRun(input);
+    if (!run || run.ownerUserId !== input.ownerUserId) {
+      throw new AppError("NOT_FOUND", "Agent run is not available");
+    }
+    const observations = this.runObservations.get(input.runId) ?? [];
+    if (observations.some((observation) => observation.sequence === input.event.sequence)) {
+      throw new AppError("CONFLICT", "Agent run observation sequence already exists");
+    }
+    const observation: RunObservation = {
+      clientInstanceId: input.clientInstanceId,
+      runId: input.runId,
+      conversationId: input.conversationId,
+      ownerUserId: input.ownerUserId,
+      sequence: input.event.sequence,
+      type: input.event.type,
+      payload: input.event,
+      createdAt: input.event.createdAt
+    };
+    observations.push(observation);
+    observations.sort((left, right) => left.sequence - right.sequence);
+    this.runObservations.set(input.runId, observations);
+    this.agentRuns.set(input.runId, {
+      ...run,
+      lastSequence: Math.max(run.lastSequence, observation.sequence),
+      updatedAt: observation.createdAt
+    });
+    return observation;
+  }
+
+  async listRunObservations(input: {
+    clientInstanceId: ClientInstanceId;
+    runId: AgentRunId;
+    ownerUserId: string;
+    afterSequence?: number;
+    limit?: number;
+  }): Promise<RunObservation[]> {
+    const run = await this.getAgentRun(input);
+    if (!run || run.ownerUserId !== input.ownerUserId) {
+      return [];
+    }
+    const afterSequence = input.afterSequence ?? 0;
+    const observations = (this.runObservations.get(input.runId) ?? []).filter(
+      (observation) =>
+        observation.clientInstanceId === input.clientInstanceId &&
+        observation.sequence > afterSequence
+    );
+    return input.limit === undefined ? observations : observations.slice(0, input.limit);
   }
 
   async createManagedFile(input: Parameters<PlatformFileStore["createManagedFile"]>[0]) {
@@ -322,6 +469,12 @@ export class InMemoryPlatformStore
     };
     this.conversations.set(input.conversationId, deleted);
     this.messages.set(input.conversationId, []);
+    for (const run of this.agentRuns.values()) {
+      if (run.clientInstanceId === input.clientInstanceId && run.conversationId === input.conversationId) {
+        this.agentRuns.delete(run.id);
+        this.runObservations.delete(run.id);
+      }
+    }
     this.fileStore.deleteAttachmentsForConversation(input);
     return deleted;
   }
@@ -674,6 +827,15 @@ function createIdentityKey(input: {
   externalUserId: string;
 }): string {
   return `${input.clientInstanceId}:${input.authSource}:${input.externalUserId}`;
+}
+
+function isActiveAgentRunStatus(status: AgentRun["status"]): boolean {
+  return (
+    status === "queued" ||
+    status === "running" ||
+    status === "waiting_for_permission" ||
+    status === "cancelling"
+  );
 }
 
 function replaceIdentity(identities: UserIdentity[], identity: UserIdentity): UserIdentity[] {

@@ -43,6 +43,13 @@
       "when": 1782469524751,
       "tag": "0005_broken_hammerhead",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782507930204,
+      "tag": "0006_many_bromley",
+      "breakpoints": true
     }
   ]
 }

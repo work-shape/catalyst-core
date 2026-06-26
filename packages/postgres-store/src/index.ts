@@ -11,6 +11,10 @@ import {
   type ConversationId,
   type ConversationRetentionStore,
   type ConversationStore,
+  type AgentRun,
+  type AgentRunId,
+  type AgentRunStore,
+  type AppendRunObservationInput,
   type CreateConversationInput,
   type CreateMessageInput,
   type CreateUserInput,
@@ -21,11 +25,22 @@ import {
   type ModelUsageWindowSummary,
   type PlatformFileStore,
   type ResolveUserIdentityInput,
+  type RunObservation,
+  type RunObservationStore,
   type UpdateUserInput,
+  type UpdateAgentRunStatusInput,
   type UpsertUserIdentityInput,
   type UserRecord,
   type UserStore
 } from "@vivd-catalyst/core";
+import {
+  appendRunObservation as appendPostgresRunObservation,
+  createAgentRun as createPostgresAgentRun,
+  getAgentRun as getPostgresAgentRun,
+  getConversationAgentRun as getPostgresConversationAgentRun,
+  listRunObservations as listPostgresRunObservations,
+  updateAgentRunStatus as updatePostgresAgentRunStatus
+} from "./postgres-agent-run-operations";
 import {
   appendAuditEvent as appendPostgresAuditEvent,
   appendModelUsageEvent as appendPostgresModelUsageEvent,
@@ -85,6 +100,8 @@ export class PostgresPlatformStore
     ConversationStore,
     ConversationRetentionStore,
     PlatformFileStore,
+    AgentRunStore,
+    RunObservationStore,
     AuditEventStore,
     ModelUsageEventStore,
     UserStore
@@ -201,6 +218,37 @@ export class PostgresPlatformStore
     limit: number;
   }): Promise<ChatMessage[]> {
     return listPostgresRecentMessages(this.db, input);
+  }
+
+  async createAgentRun(input: Parameters<AgentRunStore["createAgentRun"]>[0]): Promise<AgentRun> {
+    return createPostgresAgentRun(this.db, input);
+  }
+
+  async getAgentRun(input: {
+    clientInstanceId: ClientInstanceId;
+    runId: AgentRunId;
+  }): Promise<AgentRun | undefined> {
+    return getPostgresAgentRun(this.db, input);
+  }
+
+  async getConversationAgentRun(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    runId: AgentRunId;
+  }): Promise<AgentRun | undefined> {
+    return getPostgresConversationAgentRun(this.db, input);
+  }
+
+  async updateAgentRunStatus(input: UpdateAgentRunStatusInput): Promise<AgentRun> {
+    return updatePostgresAgentRunStatus(this.db, input);
+  }
+
+  async appendRunObservation(input: AppendRunObservationInput): Promise<RunObservation> {
+    return appendPostgresRunObservation(this.db, input);
+  }
+
+  async listRunObservations(input: Parameters<RunObservationStore["listRunObservations"]>[0]) {
+    return listPostgresRunObservations(this.db, input);
   }
 
   async createManagedFile(input: Parameters<PlatformFileStore["createManagedFile"]>[0]) {
