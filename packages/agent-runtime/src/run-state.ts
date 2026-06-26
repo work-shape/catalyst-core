@@ -24,6 +24,11 @@ export interface RunFailureError {
   category: AgentRunFailureCategory;
 }
 
+export interface RunStateReasoningSummary {
+  id: string;
+  text: string;
+}
+
 export function toRunFailureError(error: unknown): RunFailureError {
   const appError = error instanceof AppError ? error : undefined;
   return {
@@ -52,6 +57,10 @@ export class RunState {
   private status: AgentRunStatus = "running";
   private sequence = 0;
   private closed = false;
+  private cancellationStarted = false;
+  private messageCompleted = false;
+  private streamedText = "";
+  private readonly reasoningById = new Map<string, string>();
   private readonly events: AgentRuntimeEvent[] = [];
   private readonly listeners = new Set<() => void>();
   private readonly onEvent: RunStateOptions["onEvent"];
@@ -104,7 +113,7 @@ export class RunState {
   }
 
   completeMessage(message: ChatMessage): void {
-    this.emit({
+    this.emitRuntimeEvent({
       type: "message_completed",
       runId: this.runId,
       message: {
@@ -117,7 +126,92 @@ export class RunState {
   }
 
   emit(event: AgentRuntimeEventDraft): void {
+    this.emitRuntimeEvent(event);
+  }
+
+  beginCancellation(): string | undefined {
     if (this.closed) {
+      return undefined;
+    }
+    this.status = "cancelling";
+    this.cancellationStarted = true;
+    return !this.messageCompleted && this.streamedText.length > 0 ? this.streamedText : undefined;
+  }
+
+  getReasoningSummaries(): RunStateReasoningSummary[] {
+    return [...this.reasoningById.entries()]
+      .map(([id, text]) => ({ id, text }))
+      .filter((summary) => summary.text.length > 0);
+  }
+
+  complete(): void {
+    if (this.closed) {
+      return;
+    }
+    this.status = "completed";
+    this.emitRuntimeEvent(
+      {
+        type: "run_completed",
+        runId: this.runId
+      },
+      { allowDuringCancellation: true }
+    );
+    this.close();
+  }
+
+  cancel(reason?: string, partialMessage?: ChatMessage): void {
+    if (this.closed) {
+      return;
+    }
+    this.cancellationStarted = true;
+    this.status = "cancelled";
+    if (partialMessage && !this.messageCompleted) {
+      this.emitRuntimeEvent(
+        {
+          type: "message_completed",
+          runId: this.runId,
+          message: {
+            id: partialMessage.id,
+            role: "assistant",
+            text: partialMessage.text,
+            metadata: partialMessage.metadata
+          }
+        },
+        { allowDuringCancellation: true }
+      );
+    }
+    this.emitRuntimeEvent(
+      {
+        type: "run_cancelled",
+        runId: this.runId,
+        reason
+      },
+      { allowDuringCancellation: true }
+    );
+    this.close();
+  }
+
+  fail(error: unknown, failure: RunFailureError = toRunFailureError(error)): void {
+    if (this.closed) {
+      return;
+    }
+    this.status = "failed";
+    this.emitRuntimeEvent(
+      {
+        type: "run_failed",
+        runId: this.runId,
+        error: failure
+      },
+      { allowDuringCancellation: true }
+    );
+    this.close();
+  }
+
+  private emitRuntimeEvent(
+    event: AgentRuntimeEventDraft,
+    options: { allowDuringCancellation?: boolean } = {}
+  ): void {
+    if (this.closed || (this.cancellationStarted && !options.allowDuringCancellation)) {
       return;
     }
     this.sequence += 1;
@@ -126,38 +220,22 @@ export class RunState {
       sequence: this.sequence,
       createdAt: new Date().toISOString()
     } as AgentRuntimeEvent;
+    if (runtimeEvent.type === "message_delta") {
+      this.streamedText += runtimeEvent.delta;
+    }
+    if (runtimeEvent.type === "reasoning_delta") {
+      this.reasoningById.set(
+        runtimeEvent.id,
+        `${this.reasoningById.get(runtimeEvent.id) ?? ""}${runtimeEvent.delta}`
+      );
+    }
+    if (runtimeEvent.type === "message_completed") {
+      this.messageCompleted = true;
+      this.streamedText = runtimeEvent.message.text;
+    }
     this.events.push(runtimeEvent);
     this.persistEvent(runtimeEvent);
     this.flush();
-  }
-
-  complete(): void {
-    this.status = "completed";
-    this.emit({
-      type: "run_completed",
-      runId: this.runId
-    });
-    this.close();
-  }
-
-  cancel(reason?: string): void {
-    this.status = "cancelled";
-    this.emit({
-      type: "run_cancelled",
-      runId: this.runId,
-      reason
-    });
-    this.close();
-  }
-
-  fail(error: unknown, failure: RunFailureError = toRunFailureError(error)): void {
-    this.status = "failed";
-    this.emit({
-      type: "run_failed",
-      runId: this.runId,
-      error: failure
-    });
-    this.close();
   }
 
   private waitForEvent(): Promise<void> {

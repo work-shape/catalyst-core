@@ -92,6 +92,7 @@ const DEFAULT_MODEL_CONTEXT: ModelContextProjectionOptions = {
 export class LocalAgentRuntime implements AgentRuntime {
   private readonly options: LocalAgentRuntimeOptions;
   private readonly runs = new Map<AgentRunId, RunState>();
+  private readonly runInputs = new Map<AgentRunId, StartAgentRunInput>();
 
   constructor(options: LocalAgentRuntimeOptions) {
     this.options = options;
@@ -121,6 +122,7 @@ export class LocalAgentRuntime implements AgentRuntime {
       });
     }
     this.runs.set(runId, state);
+    this.runInputs.set(runId, input);
 
     queueMicrotask(() => {
       void this.executeRun(runId, input, context).catch((error) => {
@@ -194,13 +196,40 @@ export class LocalAgentRuntime implements AgentRuntime {
     context: RuntimeCallContext
   ): Promise<void> {
     const state = this.getRun(runId);
+    const partialText = state.beginCancellation();
     await this.options.agentRunStore?.updateAgentRunStatus({
       clientInstanceId: context.clientInstanceId,
       runId,
       status: "cancelling",
       updatedAt: new Date().toISOString()
     });
-    state.cancel(reason);
+    let partialMessage: ChatMessage | undefined;
+    if (partialText) {
+      const conversationId =
+        this.runInputs.get(runId)?.conversationId ??
+        (
+          await this.options.agentRunStore?.getAgentRun({
+            clientInstanceId: context.clientInstanceId,
+            runId
+          })
+        )?.conversationId;
+      if (!conversationId) {
+        throw new AppError("INTERNAL", "Cannot persist cancelled assistant response without a conversation id");
+      }
+      partialMessage = await this.options.conversationHistory.appendMessage({
+        clientInstanceId: context.clientInstanceId,
+        conversationId,
+        role: "assistant",
+        text: partialText,
+        metadata: createAssistantFinalMetadata({
+          runId,
+          reasoning: state.getReasoningSummaries(),
+          finishStatus: "cancelled",
+          cancellationReason: reason
+        })
+      });
+    }
+    state.cancel(reason, partialMessage);
     await state.waitForEventWrites();
   }
 
@@ -264,7 +293,7 @@ export class LocalAgentRuntime implements AgentRuntime {
       );
 
       if (completion.toolCalls.length === 0) {
-        if (state.getStatus() === "cancelled") {
+        if (isCancellationRequested(state.getStatus())) {
           return;
         }
         const assistantText = completion.text || "I completed the request.";
@@ -312,7 +341,7 @@ export class LocalAgentRuntime implements AgentRuntime {
           modelContext: this.modelContextOptions(context),
           repeatedToolCall: this.registerToolCall(repeatedToolCalls, toolCall.input, toolCall.toolName)
         });
-        if (state.getStatus() === "cancelled") {
+        if (isCancellationRequested(state.getStatus())) {
           return;
         }
         await this.persistToolResult({
@@ -602,6 +631,10 @@ export class LocalAgentRuntime implements AgentRuntime {
         .filter((summary) => summary.text.length > 0)
     };
   }
+}
+
+function isCancellationRequested(status: AgentRunStatus): boolean {
+  return status === "cancelling" || status === "cancelled";
 }
 
 function getUnstreamedCompletionText(

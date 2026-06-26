@@ -140,12 +140,16 @@ export function createUserMessageMetadata(input: {
 export function createAssistantFinalMetadata(input: {
   runId: AgentRunId;
   reasoning?: readonly StoredReasoningSummary[];
+  finishStatus?: "completed" | "cancelled";
+  cancellationReason?: string;
 }): JsonObject {
   return {
     agentRuntime: {
       version: METADATA_VERSION,
       kind: "assistant_final",
       runId: input.runId,
+      finishStatus: input.finishStatus ?? "completed",
+      ...(input.cancellationReason ? { cancellationReason: input.cancellationReason } : {}),
       ...createReasoningMetadata(input.reasoning)
     }
   };

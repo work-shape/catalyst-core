@@ -549,6 +549,15 @@ describe("client instance app vertical slice", () => {
     expect(sent.status).toBe(200);
     const streamId = sent.headers.get("x-resumable-stream-id");
     expect(streamId).toEqual(expect.stringMatching(/^run_/));
+    const sentReader = sent.body?.getReader();
+    expect(sentReader).toBeDefined();
+    const sentDecoder = new TextDecoder();
+    let sentPayload = "";
+    while (!sentPayload.includes("\"type\":\"text-delta\"")) {
+      const next = await sentReader!.read();
+      expect(next.done).toBe(false);
+      sentPayload += sentDecoder.decode(next.value, { stream: true });
+    }
 
     const cancelled = await fetch(
       `${baseUrl}/api/conversations/${conversation.id}/runs/${streamId}/cancel`,
@@ -566,7 +575,14 @@ describe("client instance app vertical slice", () => {
         status: "cancelled"
       }
     });
-    await sent.text();
+    while (true) {
+      const next = await sentReader!.read();
+      if (next.done) {
+        sentPayload += sentDecoder.decode();
+        break;
+      }
+      sentPayload += sentDecoder.decode(next.value, { stream: true });
+    }
 
     const auditEvents = await waitForAuditEvents(app.server, "message.cancelled");
     expect(auditEvents).toContainEqual(
@@ -578,6 +594,45 @@ describe("client instance app vertical slice", () => {
         })
       })
     );
+
+    const streamedPrefix = parseSseChunks(sentPayload)
+      .filter((chunk) => chunk.type === "text-delta")
+      .map((chunk) => chunk.delta ?? "")
+      .join("");
+    expect(streamedPrefix.length).toBeGreaterThan(0);
+    const messages = await fetch(`${baseUrl}/api/conversations/${conversation.id}/messages`);
+    expect(messages.status).toBe(200);
+    const assistantMessages = ((await messages.json()) as Array<{
+      role: string;
+      text: string;
+      metadata?: { agentRuntime?: Record<string, unknown> };
+    }>).filter((message) => message.role === "assistant");
+    expect(assistantMessages).toHaveLength(1);
+    expect(assistantMessages[0]).toMatchObject({
+      text: streamedPrefix,
+      metadata: {
+        agentRuntime: {
+          kind: "assistant_final",
+          runId: streamId,
+          finishStatus: "cancelled",
+          cancellationReason: "test cancellation"
+        }
+      }
+    });
+
+    const snapshot = await fetch(`${baseUrl}/api/conversations/${conversation.id}/thread`);
+    expect(snapshot.status).toBe(200);
+    expect(await snapshot.json()).toMatchObject({
+      messages: [
+        expect.objectContaining({
+          role: "user"
+        }),
+        expect.objectContaining({
+          role: "assistant",
+          text: streamedPrefix
+        })
+      ]
+    });
 
     await app.close();
   });
