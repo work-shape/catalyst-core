@@ -116,6 +116,31 @@ export interface RunObservation {
   createdAt: ISODateString;
 }
 
+export type RunStartCommandKind = "start_conversation_run" | "create_conversation_run";
+
+export interface RunStartCommand {
+  clientInstanceId: ClientInstanceId;
+  ownerUserId: string;
+  idempotencyKey: string;
+  commandKind: RunStartCommandKind;
+  status: "pending" | "completed" | "failed";
+  conversationId?: ConversationId;
+  userMessageId?: MessageId;
+  runId?: AgentRunId;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+}
+
+export type ClaimRunStartCommandResult =
+  | {
+      status: "claimed";
+      command: RunStartCommand;
+    }
+  | {
+      status: "existing";
+      command: RunStartCommand;
+    };
+
 export interface AgentRuntimeObserveOptions {
   afterSequence?: number;
 }
@@ -275,7 +300,36 @@ export interface UpdateAgentRunStatusInput {
   error?: AgentRunError;
 }
 
+export interface ClaimRunStartCommandInput {
+  clientInstanceId: ClientInstanceId;
+  ownerUserId: string;
+  idempotencyKey: string;
+  commandKind: RunStartCommandKind;
+  createdAt?: ISODateString;
+}
+
+export interface CompleteRunStartCommandInput {
+  clientInstanceId: ClientInstanceId;
+  ownerUserId: string;
+  idempotencyKey: string;
+  commandKind: RunStartCommandKind;
+  conversationId: ConversationId;
+  userMessageId: MessageId;
+  runId: AgentRunId;
+  updatedAt: ISODateString;
+}
+
+export interface ReleaseRunStartCommandInput {
+  clientInstanceId: ClientInstanceId;
+  ownerUserId: string;
+  idempotencyKey: string;
+  commandKind: RunStartCommandKind;
+}
+
 export interface AgentRunStore {
+  claimRunStartCommand(input: ClaimRunStartCommandInput): Promise<ClaimRunStartCommandResult>;
+  completeRunStartCommand(input: CompleteRunStartCommandInput): Promise<RunStartCommand>;
+  releaseRunStartCommand(input: ReleaseRunStartCommandInput): Promise<void>;
   createAgentRun(input: CreateAgentRunInput): Promise<AgentRun>;
   getAgentRun(input: {
     clientInstanceId: ClientInstanceId;
@@ -290,12 +344,6 @@ export interface AgentRunStore {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
     ownerUserId: string;
-  }): Promise<AgentRun | undefined>;
-  getAgentRunByIdempotencyKey(input: {
-    clientInstanceId: ClientInstanceId;
-    ownerUserId: string;
-    idempotencyKey: string;
-    conversationId?: ConversationId;
   }): Promise<AgentRun | undefined>;
   updateAgentRunStatus(input: UpdateAgentRunStatusInput): Promise<AgentRun>;
 }

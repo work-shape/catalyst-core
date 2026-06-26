@@ -19,6 +19,8 @@ import {
   type JsonObject,
   type RuntimeCallContext,
   type RunObservation,
+  type RunStartCommand,
+  type RunStartCommandKind,
   addDays,
   createPlatformId,
   getRuntimeSubjectUserId,
@@ -53,6 +55,8 @@ export interface StartedConversationMessageRun {
 
 const CONVERSATION_TITLE_AGENT_NAME = "conversation_title";
 const MAX_TITLE_SOURCE_CHARS = 800;
+const IDEMPOTENCY_WAIT_ATTEMPTS = 100;
+const IDEMPOTENCY_WAIT_MS = 10;
 
 export class ConversationWorkflow {
   private readonly options: ChatServerOptions;
@@ -165,98 +169,114 @@ export class ConversationWorkflow {
   ): Promise<StartedConversationMessageRun> {
     const conversation = await this.requireOwnedActiveConversation(conversationId, user);
     if (command.idempotencyKey) {
-      const existing = await this.options.conversationStore.getAgentRunByIdempotencyKey({
-        clientInstanceId: this.options.clientInstanceId,
-        conversationId,
-        ownerUserId: getSubjectUserId(user),
-        idempotencyKey: command.idempotencyKey
-      });
-      if (existing) {
-        return {
-          userMessage: await this.requireRunInputMessage(existing),
-          run: existing,
-          runId: existing.id
-        };
-      }
-    }
-
-    const activeRun = await this.options.conversationStore.getActiveConversationAgentRun({
-      clientInstanceId: this.options.clientInstanceId,
-      conversationId,
-      ownerUserId: getSubjectUserId(user)
-    });
-    if (activeRun) {
-      throw new AppError("CONFLICT", "Conversation already has an active agent run");
-    }
-
-    const attachments = this.options.attachments;
-    const draftAttachments = attachments
-      ? await attachments.listDraftAttachments(conversationId)
-      : [];
-    const blockMessage = attachments?.blockingDraftAttachmentMessage(draftAttachments);
-    if (blockMessage) {
-      throw new AppError("CONFLICT", blockMessage);
-    }
-    const attachmentManifest =
-      attachments?.createAttachmentManifest(draftAttachments) ?? createEmptyAttachmentManifest();
-    const userMessageId = createPlatformId<"MessageId">("msg");
-    const userMessage = await this.options.conversationStore.appendMessage({
-      id: userMessageId,
-      clientInstanceId: this.options.clientInstanceId,
-      conversationId,
-      role: "user",
-      text: command.text,
-      metadata: createUserMessageMetadata(attachmentManifest)
-    });
-    if (attachmentManifest.attachments.length > 0) {
-      await this.options.conversationStore.claimReadyDraftAttachmentsForMessage({
-        clientInstanceId: this.options.clientInstanceId,
-        conversationId,
-        messageId: userMessage.id,
-        claimedAt: userMessage.createdAt
-      });
-    }
-
-    await this.options.auditRecorder.record({
-      type: "message.created",
-      status: "success",
-      actor: auditActorFromUser(user),
-      subject: userMessage.id,
-      correlationId: context.correlationId,
-      metadata: {
-        conversationId,
-        attachmentCount: attachmentManifest.attachments.length
-      }
-    });
-
-    const run = await this.options.agentRuntime.start(
-      {
-        agentName: command.agentName ?? this.options.config.defaultAgentName,
+      const claim = await this.claimOrResolveRunStartCommand({
+        commandKind: "start_conversation_run",
         conversationId,
         idempotencyKey: command.idempotencyKey,
-        inputMessageId: userMessage.id,
-        message: {
-          text: command.text,
-          attachmentManifest:
-            attachmentManifest.attachments.length > 0 ? attachmentManifest : undefined
-        }
-      },
-      context
-    );
-    const persistedRun = await this.options.conversationStore.getConversationAgentRun({
-      clientInstanceId: this.options.clientInstanceId,
-      conversationId: conversation.id,
-      runId: run.runId
-    });
-    if (!persistedRun) {
-      throw new AppError("INTERNAL", "Agent run was not persisted");
+        user
+      });
+      if (claim.status === "resolved") {
+        return claim.started;
+      }
     }
 
-    return {
-      userMessage,
-      run: persistedRun,
-      runId: run.runId
-    };
+    try {
+      const activeRun = await this.options.conversationStore.getActiveConversationAgentRun({
+        clientInstanceId: this.options.clientInstanceId,
+        conversationId,
+        ownerUserId: getSubjectUserId(user)
+      });
+      if (activeRun) {
+        throw new AppError("CONFLICT", "Conversation already has an active agent run");
+      }
+
+      const attachments = this.options.attachments;
+      const draftAttachments = attachments
+        ? await attachments.listDraftAttachments(conversationId)
+        : [];
+      const blockMessage = attachments?.blockingDraftAttachmentMessage(draftAttachments);
+      if (blockMessage) {
+        throw new AppError("CONFLICT", blockMessage);
+      }
+      const attachmentManifest =
+        attachments?.createAttachmentManifest(draftAttachments) ?? createEmptyAttachmentManifest();
+      const userMessageId = createPlatformId<"MessageId">("msg");
+      const userMessage = await this.options.conversationStore.appendMessage({
+        id: userMessageId,
+        clientInstanceId: this.options.clientInstanceId,
+        conversationId,
+        role: "user",
+        text: command.text,
+        metadata: createUserMessageMetadata(attachmentManifest)
+      });
+      if (attachmentManifest.attachments.length > 0) {
+        await this.options.conversationStore.claimReadyDraftAttachmentsForMessage({
+          clientInstanceId: this.options.clientInstanceId,
+          conversationId,
+          messageId: userMessage.id,
+          claimedAt: userMessage.createdAt
+        });
+      }
+
+      await this.options.auditRecorder.record({
+        type: "message.created",
+        status: "success",
+        actor: auditActorFromUser(user),
+        subject: userMessage.id,
+        correlationId: context.correlationId,
+        metadata: {
+          conversationId,
+          attachmentCount: attachmentManifest.attachments.length
+        }
+      });
+
+      const run = await this.options.agentRuntime.start(
+        {
+          agentName: command.agentName ?? this.options.config.defaultAgentName,
+          conversationId,
+          idempotencyKey: command.idempotencyKey,
+          inputMessageId: userMessage.id,
+          message: {
+            text: command.text,
+            attachmentManifest:
+              attachmentManifest.attachments.length > 0 ? attachmentManifest : undefined
+          }
+        },
+        context
+      );
+      const persistedRun = await this.options.conversationStore.getConversationAgentRun({
+        clientInstanceId: this.options.clientInstanceId,
+        conversationId: conversation.id,
+        runId: run.runId
+      });
+      if (!persistedRun) {
+        throw new AppError("INTERNAL", "Agent run was not persisted");
+      }
+
+      if (command.idempotencyKey) {
+        await this.options.conversationStore.completeRunStartCommand({
+          clientInstanceId: this.options.clientInstanceId,
+          ownerUserId: getSubjectUserId(user),
+          idempotencyKey: command.idempotencyKey,
+          commandKind: "start_conversation_run",
+          conversationId,
+          userMessageId: userMessage.id,
+          runId: run.runId,
+          updatedAt: persistedRun.startedAt
+        });
+      }
+
+      return {
+        userMessage,
+        run: persistedRun,
+        runId: run.runId
+      };
+    } catch (error) {
+      if (command.idempotencyKey) {
+        await this.releaseRunStartCommand(command.idempotencyKey, "start_conversation_run", user);
+      }
+      throw error;
+    }
   }
 
   async createConversationAndStartMessageRun(
@@ -265,30 +285,53 @@ export class ConversationWorkflow {
     command: SendConversationMessageCommand & CreateConversationCommand
   ): Promise<{ conversation: Conversation; userMessage: ChatMessage; run: AgentRun; runId: AgentRunId }> {
     if (command.idempotencyKey) {
-      const existing = await this.options.conversationStore.getAgentRunByIdempotencyKey({
-        clientInstanceId: this.options.clientInstanceId,
-        ownerUserId: getSubjectUserId(user),
-        idempotencyKey: command.idempotencyKey
+      const claim = await this.claimOrResolveRunStartCommand({
+        commandKind: "create_conversation_run",
+        idempotencyKey: command.idempotencyKey,
+        user
       });
-      if (existing) {
-        const conversation = await this.requireOwnedActiveConversation(existing.conversationId, user);
+      if (claim.status === "resolved") {
+        const conversation = await this.requireOwnedActiveConversation(
+          claim.started.run.conversationId,
+          user
+        );
         return {
           conversation,
-          userMessage: await this.requireRunInputMessage(existing),
-          run: existing,
-          runId: existing.id
+          ...claim.started
         };
       }
     }
 
-    const conversation = await this.createConversation(user, context, {
-      title: command.title ?? createConversationTitle(command.text)
-    });
-    const started = await this.startMessageRun(conversation.id, user, context, command);
-    return {
-      conversation,
-      ...started
-    };
+    try {
+      const conversation = await this.createConversation(user, context, {
+        title: command.title ?? createConversationTitle(command.text)
+      });
+      const started = await this.startMessageRun(conversation.id, user, context, {
+        ...command,
+        idempotencyKey: undefined
+      });
+      if (command.idempotencyKey) {
+        await this.options.conversationStore.completeRunStartCommand({
+          clientInstanceId: this.options.clientInstanceId,
+          ownerUserId: getSubjectUserId(user),
+          idempotencyKey: command.idempotencyKey,
+          commandKind: "create_conversation_run",
+          conversationId: conversation.id,
+          userMessageId: started.userMessage.id,
+          runId: started.runId,
+          updatedAt: started.run.startedAt
+        });
+      }
+      return {
+        conversation,
+        ...started
+      };
+    } catch (error) {
+      if (command.idempotencyKey) {
+        await this.releaseRunStartCommand(command.idempotencyKey, "create_conversation_run", user);
+      }
+      throw error;
+    }
   }
 
   async *observeRun(
@@ -685,6 +728,89 @@ export class ConversationWorkflow {
     return conversation;
   }
 
+  private async claimOrResolveRunStartCommand(input: {
+    commandKind: RunStartCommandKind;
+    conversationId?: ConversationId;
+    idempotencyKey: string;
+    user: AuthenticatedUser;
+  }): Promise<
+    | { status: "claimed" }
+    | { status: "resolved"; started: StartedConversationMessageRun }
+  > {
+    const claimInput = {
+      clientInstanceId: this.options.clientInstanceId,
+      ownerUserId: getSubjectUserId(input.user),
+      idempotencyKey: input.idempotencyKey,
+      commandKind: input.commandKind
+    };
+
+    let claim = await this.options.conversationStore.claimRunStartCommand(claimInput);
+    if (claim.status === "claimed") {
+      return { status: "claimed" };
+    }
+
+    for (let attempt = 0; attempt < IDEMPOTENCY_WAIT_ATTEMPTS; attempt += 1) {
+      if (claim.command.status === "completed") {
+        return {
+          status: "resolved",
+          started: await this.startedRunFromCommand(claim.command, input.user, input.conversationId)
+        };
+      }
+
+      if (claim.command.status === "failed") {
+        throw new AppError("CONFLICT", "Run start command previously failed");
+      }
+
+      await delay(IDEMPOTENCY_WAIT_MS);
+      claim = await this.options.conversationStore.claimRunStartCommand(claimInput);
+      if (claim.status === "claimed") {
+        return { status: "claimed" };
+      }
+    }
+
+    throw new AppError("CONFLICT", "Run start command is still pending");
+  }
+
+  private async startedRunFromCommand(
+    command: RunStartCommand,
+    user: AuthenticatedUser,
+    expectedConversationId?: ConversationId
+  ): Promise<StartedConversationMessageRun> {
+    if (!command.conversationId || !command.userMessageId || !command.runId) {
+      throw new AppError("CONFLICT", "Run start command is still pending");
+    }
+    if (expectedConversationId && command.conversationId !== expectedConversationId) {
+      throw new AppError("NOT_FOUND", "Agent run is not available");
+    }
+    await this.requireOwnedActiveConversation(command.conversationId, user);
+    const run = await this.options.conversationStore.getConversationAgentRun({
+      clientInstanceId: this.options.clientInstanceId,
+      conversationId: command.conversationId,
+      runId: command.runId
+    });
+    if (!run || run.ownerUserId !== getSubjectUserId(user)) {
+      throw new AppError("NOT_FOUND", "Agent run is not available");
+    }
+    return {
+      userMessage: await this.requireRunInputMessage(run),
+      run,
+      runId: run.id
+    };
+  }
+
+  private async releaseRunStartCommand(
+    idempotencyKey: string,
+    commandKind: RunStartCommandKind,
+    user: AuthenticatedUser
+  ): Promise<void> {
+    await this.options.conversationStore.releaseRunStartCommand({
+      clientInstanceId: this.options.clientInstanceId,
+      ownerUserId: getSubjectUserId(user),
+      idempotencyKey,
+      commandKind
+    });
+  }
+
   private async requireRunInputMessage(run: AgentRun): Promise<ChatMessage> {
     const messages = await this.options.conversationStore.listMessages({
       clientInstanceId: this.options.clientInstanceId,
@@ -697,6 +823,10 @@ export class ConversationWorkflow {
     return message;
   }
 
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function createUserMessageMetadata(attachmentManifest: AttachmentManifest): JsonObject | undefined {

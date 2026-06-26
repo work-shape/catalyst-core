@@ -19,6 +19,7 @@ import {
 } from "@vivd-catalyst/api-contract";
 import {
   AppError,
+  type AgentRun,
   type AgentRunId,
   type AgentRuntimeEvent,
   type AuthenticatedUser,
@@ -230,11 +231,13 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
         user
       });
     }
-    return startConversationRunResponseSchema.parse({
-      conversation: await readCurrentConversation(conversationId, user),
-      userMessage: started.userMessage,
-      run: started.run
-    });
+    return createStartRunResponse(
+      request,
+      await readCurrentConversation(conversationId, user),
+      started.userMessage,
+      started.run,
+      user
+    );
   });
 
   app.post(apiOperations.createConversationRun.path, async (request) => {
@@ -267,11 +270,13 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
         user
       });
     }
-    return startConversationRunResponseSchema.parse({
-      conversation: started.conversation,
-      userMessage: started.userMessage,
-      run: started.run
-    });
+    return createStartRunResponse(
+      request,
+      started.conversation,
+      started.userMessage,
+      started.run,
+      user
+    );
   });
 
   app.post(apiOperations.commandConversationRun.path, async (request) => {
@@ -399,6 +404,29 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
     })().catch((error: unknown) => {
       lifecycleMonitorTasks.delete(input.runId);
       app.log.warn({ err: error, conversationId: input.conversationId, runId: input.runId }, "Agent run lifecycle monitor failed");
+    });
+  }
+
+  async function createStartRunResponse(
+    request: FastifyRequest,
+    conversation: Conversation,
+    userMessage: ChatMessage,
+    run: AgentRun,
+    user: AuthenticatedUser
+  ) {
+    const eventsUrl = apiOperations.observeConversationRun.buildPath({
+      params: {
+        conversationId: conversation.id,
+        runId: run.id
+      }
+    });
+    const requestHost = request.headers.host ?? request.hostname;
+    return startConversationRunResponseSchema.parse({
+      conversation,
+      userMessage,
+      run,
+      thread: await conversations.getThreadSnapshot(conversation.id, user),
+      eventsUrl: new URL(eventsUrl, `${request.protocol}://${requestHost}`).toString()
     });
   }
 

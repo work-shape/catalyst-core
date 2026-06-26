@@ -4,15 +4,90 @@ import {
   type AgentRun,
   type AgentRunId,
   type AppendRunObservationInput,
+  type ClaimRunStartCommandInput,
+  type ClaimRunStartCommandResult,
   type ClientInstanceId,
+  type CompleteRunStartCommandInput,
   type ConversationId,
   type CreateAgentRunInput,
+  type ReleaseRunStartCommandInput,
   type RunObservation,
+  asAgentRunId,
+  asClientInstanceId,
+  asConversationId,
+  asMessageId,
+  type RunStartCommand,
   type UpdateAgentRunStatusInput
 } from "@vivd-catalyst/core";
 import type { PostgresDatabase } from "./postgres-database";
 import { mapAgentRun, mapRunObservation } from "./rows";
-import { agentRunObservations, agentRuns } from "./schema";
+import { agentRunObservations, agentRuns, runStartCommands } from "./schema";
+
+export async function claimRunStartCommand(
+  db: PostgresDatabase,
+  input: ClaimRunStartCommandInput
+): Promise<ClaimRunStartCommandResult> {
+  const now = input.createdAt ? new Date(input.createdAt) : new Date();
+  const [inserted] = await db
+    .insert(runStartCommands)
+    .values({
+      clientInstanceId: input.clientInstanceId,
+      ownerUserId: input.ownerUserId,
+      idempotencyKey: input.idempotencyKey,
+      commandKind: input.commandKind,
+      status: "pending",
+      createdAt: now,
+      updatedAt: now
+    })
+    .onConflictDoNothing()
+    .returning();
+
+  if (inserted) {
+    return {
+      status: "claimed",
+      command: mapRunStartCommand(inserted)
+    };
+  }
+
+  const existing = await getRunStartCommand(db, input);
+  if (!existing) {
+    throw new AppError("CONFLICT", "Run start command idempotency key already exists");
+  }
+  return {
+    status: "existing",
+    command: existing
+  };
+}
+
+export async function completeRunStartCommand(
+  db: PostgresDatabase,
+  input: CompleteRunStartCommandInput
+): Promise<RunStartCommand> {
+  const [row] = await db
+    .update(runStartCommands)
+    .set({
+      status: "completed",
+      conversationId: input.conversationId,
+      userMessageId: input.userMessageId,
+      runId: input.runId,
+      updatedAt: new Date(input.updatedAt)
+    })
+    .where(runStartCommandWhere(input))
+    .returning();
+  if (!row) {
+    throw new AppError("NOT_FOUND", "Run start command is not available");
+  }
+  return mapRunStartCommand(row);
+}
+
+export async function releaseRunStartCommand(
+  db: PostgresDatabase,
+  input: ReleaseRunStartCommandInput
+): Promise<void> {
+  await db
+    .delete(runStartCommands)
+    .where(and(runStartCommandWhere(input), eq(runStartCommands.status, "pending")));
+}
 
 export async function createAgentRun(
   db: PostgresDatabase,
@@ -95,33 +170,6 @@ export async function getActiveConversationAgentRun(
         drizzleSql`${agentRuns.status} in ('queued', 'running', 'waiting_for_permission', 'cancelling')`
       )
     )
-    .limit(1);
-  return row ? mapAgentRun(row) : undefined;
-}
-
-export async function getAgentRunByIdempotencyKey(
-  db: PostgresDatabase,
-  input: {
-    clientInstanceId: ClientInstanceId;
-    ownerUserId: string;
-    idempotencyKey: string;
-    conversationId?: ConversationId;
-  }
-): Promise<AgentRun | undefined> {
-  const [row] = await db
-    .select()
-    .from(agentRuns)
-    .where(
-      and(
-        eq(agentRuns.clientInstanceId, input.clientInstanceId),
-        eq(agentRuns.ownerUserId, input.ownerUserId),
-        eq(agentRuns.idempotencyKey, input.idempotencyKey),
-        input.conversationId === undefined
-          ? undefined
-          : eq(agentRuns.conversationId, input.conversationId)
-      )
-    )
-    .orderBy(agentRuns.startedAt)
     .limit(1);
   return row ? mapAgentRun(row) : undefined;
 }
@@ -220,4 +268,45 @@ export async function listRunObservations(
     .orderBy(asc(agentRunObservations.sequence));
   const rows = input.limit === undefined ? await query : await query.limit(input.limit);
   return rows.map(mapRunObservation);
+}
+
+async function getRunStartCommand(
+  db: PostgresDatabase,
+  input: ClaimRunStartCommandInput
+): Promise<RunStartCommand | undefined> {
+  const [row] = await db
+    .select()
+    .from(runStartCommands)
+    .where(runStartCommandWhere(input))
+    .limit(1);
+  return row ? mapRunStartCommand(row) : undefined;
+}
+
+function runStartCommandWhere(input: {
+  clientInstanceId: ClientInstanceId;
+  ownerUserId: string;
+  commandKind: RunStartCommand["commandKind"];
+  idempotencyKey: string;
+}) {
+  return and(
+    eq(runStartCommands.clientInstanceId, input.clientInstanceId),
+    eq(runStartCommands.ownerUserId, input.ownerUserId),
+    eq(runStartCommands.commandKind, input.commandKind),
+    eq(runStartCommands.idempotencyKey, input.idempotencyKey)
+  );
+}
+
+function mapRunStartCommand(row: typeof runStartCommands.$inferSelect): RunStartCommand {
+  return {
+    clientInstanceId: asClientInstanceId(row.clientInstanceId),
+    ownerUserId: row.ownerUserId,
+    idempotencyKey: row.idempotencyKey,
+    commandKind: row.commandKind,
+    status: row.status,
+    conversationId: row.conversationId ? asConversationId(row.conversationId) : undefined,
+    userMessageId: row.userMessageId ? asMessageId(row.userMessageId) : undefined,
+    runId: row.runId ? asAgentRunId(row.runId) : undefined,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString()
+  };
 }

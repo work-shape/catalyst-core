@@ -381,7 +381,19 @@ describe("client instance app vertical slice", () => {
       conversation: { id: string };
       userMessage: { id: string; text: string };
       run: { id: string };
+      thread: { conversation: { id: string } };
+      eventsUrl: string;
     };
+    expect(firstStartBody).toMatchObject({
+      thread: {
+        conversation: {
+          id: conversation.id
+        }
+      }
+    });
+    expect(firstStartBody.eventsUrl).toContain(
+      `/api/conversations/${conversation.id}/runs/${firstStartBody.run.id}/events`
+    );
 
     const retryStart = await fetch(`${baseUrl}/api/conversations/${conversation.id}/runs`, {
       method: "POST",
@@ -426,6 +438,54 @@ describe("client instance app vertical slice", () => {
       })
     );
 
+    const [concurrentStartA, concurrentStartB] = await Promise.all([
+      fetch(`${baseUrl}/api/conversations/${conversation.id}/runs`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          idempotencyKey: "public-existing-run-concurrent-key",
+          message: { text: "concurrent public run start should append once" }
+        })
+      }),
+      fetch(`${baseUrl}/api/conversations/${conversation.id}/runs`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          idempotencyKey: "public-existing-run-concurrent-key",
+          message: { text: "duplicate concurrent public run start" }
+        })
+      })
+    ]);
+    expect(concurrentStartA.status).toBe(200);
+    expect(concurrentStartB.status).toBe(200);
+    const concurrentStartBodyA = (await concurrentStartA.json()) as {
+      userMessage: { id: string; text: string };
+      run: { id: string };
+    };
+    const concurrentStartBodyB = (await concurrentStartB.json()) as {
+      userMessage: { id: string; text: string };
+      run: { id: string };
+    };
+    expect(concurrentStartBodyB).toMatchObject({
+      userMessage: {
+        id: concurrentStartBodyA.userMessage.id,
+        text: "concurrent public run start should append once"
+      },
+      run: {
+        id: concurrentStartBodyA.run.id
+      }
+    });
+
+    const concurrentEvents = await fetch(
+      `${baseUrl}/api/conversations/${conversation.id}/runs/${concurrentStartBodyA.run.id}/events`
+    );
+    expect(concurrentEvents.status).toBe(200);
+    await concurrentEvents.text();
+
     const messages = await fetch(`${baseUrl}/api/conversations/${conversation.id}/messages`);
     expect(messages.status).toBe(200);
     const userMessages = ((await messages.json()) as Array<{ role: string; text: string }>).filter(
@@ -434,6 +494,9 @@ describe("client instance app vertical slice", () => {
     expect(userMessages).toEqual([
       expect.objectContaining({
         text: "start through public run API"
+      }),
+      expect.objectContaining({
+        text: "concurrent public run start should append once"
       })
     ]);
 
@@ -471,6 +534,55 @@ describe("client instance app vertical slice", () => {
       conversation: { id: firstCreateAndStartBody.conversation.id },
       userMessage: { id: firstCreateAndStartBody.userMessage.id },
       run: { id: firstCreateAndStartBody.run.id }
+    });
+
+    const [concurrentCreateA, concurrentCreateB] = await Promise.all([
+      fetch(`${baseUrl}/api/conversations/runs`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          idempotencyKey: "public-create-run-concurrent-key",
+          conversation: { title: "Concurrent create run" },
+          message: { text: "concurrent create and start should create once" }
+        })
+      }),
+      fetch(`${baseUrl}/api/conversations/runs`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          idempotencyKey: "public-create-run-concurrent-key",
+          conversation: { title: "Duplicate concurrent create run" },
+          message: { text: "duplicate concurrent create and start" }
+        })
+      })
+    ]);
+    expect(concurrentCreateA.status).toBe(200);
+    expect(concurrentCreateB.status).toBe(200);
+    const concurrentCreateBodyA = (await concurrentCreateA.json()) as {
+      conversation: { id: string };
+      userMessage: { id: string; text: string };
+      run: { id: string };
+    };
+    const concurrentCreateBodyB = (await concurrentCreateB.json()) as {
+      conversation: { id: string };
+      userMessage: { id: string; text: string };
+      run: { id: string };
+    };
+    expect(concurrentCreateBodyB).toMatchObject({
+      conversation: {
+        id: concurrentCreateBodyA.conversation.id
+      },
+      userMessage: {
+        id: concurrentCreateBodyA.userMessage.id,
+        text: "concurrent create and start should create once"
+      },
+      run: {
+        id: concurrentCreateBodyA.run.id
+      }
     });
 
     const command = await fetch(

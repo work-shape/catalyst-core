@@ -8,7 +8,10 @@ import {
   type AuditEventInput,
   type AuditEventStore,
   type ChatMessage,
+  type ClaimRunStartCommandInput,
+  type ClaimRunStartCommandResult,
   type ClientInstanceId,
+  type CompleteRunStartCommandInput,
   type Conversation,
   type ConversationId,
   type ConversationRetentionStore,
@@ -17,8 +20,10 @@ import {
   type CreateConversationInput,
   type CreateMessageInput,
   type PlatformFileStore,
+  type ReleaseRunStartCommandInput,
   type RunObservation,
   type RunObservationStore,
+  type RunStartCommand,
   type ModelUsageEvent,
   type ModelUsageEventInput,
   type ModelUsageEventStore,
@@ -62,6 +67,7 @@ export class InMemoryPlatformStore
     });
   private readonly auditEvents: AuditEvent[] = [];
   private readonly agentRuns = new Map<string, AgentRun>();
+  private readonly runStartCommands = new Map<string, RunStartCommand>();
   private readonly runObservations = new Map<string, RunObservation[]>();
   private readonly modelUsageEvents: ModelUsageEvent[] = [];
   private readonly users = new Map<string, UserRecord>();
@@ -195,6 +201,62 @@ export class InMemoryPlatformStore
     return messages.slice(-input.limit);
   }
 
+  async claimRunStartCommand(
+    input: ClaimRunStartCommandInput
+  ): Promise<ClaimRunStartCommandResult> {
+    const key = runStartCommandKey(input);
+    const existing = this.runStartCommands.get(key);
+    if (existing) {
+      return {
+        status: "existing",
+        command: existing
+      };
+    }
+
+    const now = input.createdAt ?? new Date().toISOString();
+    const command: RunStartCommand = {
+      clientInstanceId: input.clientInstanceId,
+      ownerUserId: input.ownerUserId,
+      idempotencyKey: input.idempotencyKey,
+      commandKind: input.commandKind,
+      status: "pending",
+      createdAt: now,
+      updatedAt: now
+    };
+    this.runStartCommands.set(key, command);
+    return {
+      status: "claimed",
+      command
+    };
+  }
+
+  async completeRunStartCommand(input: CompleteRunStartCommandInput): Promise<RunStartCommand> {
+    const key = runStartCommandKey(input);
+    const existing = this.runStartCommands.get(key);
+    if (!existing) {
+      throw new AppError("NOT_FOUND", "Run start command is not available");
+    }
+    const completed: RunStartCommand = {
+      ...existing,
+      status: "completed",
+      conversationId: input.conversationId,
+      userMessageId: input.userMessageId,
+      runId: input.runId,
+      updatedAt: input.updatedAt
+    };
+    this.runStartCommands.set(key, completed);
+    return completed;
+  }
+
+  async releaseRunStartCommand(input: ReleaseRunStartCommandInput): Promise<void> {
+    const key = runStartCommandKey(input);
+    const existing = this.runStartCommands.get(key);
+    if (!existing || existing.status !== "pending") {
+      return;
+    }
+    this.runStartCommands.delete(key);
+  }
+
   async createAgentRun(input: CreateAgentRunInput): Promise<AgentRun> {
     const existing = this.agentRuns.get(input.id);
     if (existing) {
@@ -269,21 +331,6 @@ export class InMemoryPlatformStore
         run.conversationId === input.conversationId &&
         run.ownerUserId === input.ownerUserId &&
         isActiveAgentRunStatus(run.status)
-    );
-  }
-
-  async getAgentRunByIdempotencyKey(input: {
-    clientInstanceId: ClientInstanceId;
-    ownerUserId: string;
-    idempotencyKey: string;
-    conversationId?: ConversationId;
-  }): Promise<AgentRun | undefined> {
-    return [...this.agentRuns.values()].find(
-      (run) =>
-        run.clientInstanceId === input.clientInstanceId &&
-        run.ownerUserId === input.ownerUserId &&
-        run.idempotencyKey === input.idempotencyKey &&
-        (input.conversationId === undefined || run.conversationId === input.conversationId)
     );
   }
 
@@ -856,6 +903,20 @@ function createIdentityKey(input: {
   externalUserId: string;
 }): string {
   return `${input.clientInstanceId}:${input.authSource}:${input.externalUserId}`;
+}
+
+function runStartCommandKey(input: {
+  clientInstanceId: ClientInstanceId;
+  ownerUserId: string;
+  commandKind: string;
+  idempotencyKey: string;
+}): string {
+  return [
+    input.clientInstanceId,
+    input.ownerUserId,
+    input.commandKind,
+    input.idempotencyKey
+  ].join("\u0000");
 }
 
 function isActiveAgentRunStatus(status: AgentRun["status"]): boolean {

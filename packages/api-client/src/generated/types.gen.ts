@@ -518,6 +518,474 @@ export type CancelConversationRunResponses = {
 
 export type CancelConversationRunResponse = CancelConversationRunResponses[keyof CancelConversationRunResponses];
 
+export type StartConversationRunData = {
+    body: {
+        idempotencyKey: string;
+        agentName?: string;
+        locale?: 'en' | 'de';
+        message: {
+            text: string;
+        };
+    };
+    path: {
+        conversationId: string;
+    };
+    query?: never;
+    url: '/api/conversations/{conversationId}/runs';
+};
+
+export type StartConversationRunResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        conversation: {
+            id: string;
+            clientInstanceId: string;
+            ownerUserId: string;
+            ownerExternalUserId: string;
+            title: string;
+            status: string;
+            createdAt: string;
+            updatedAt: string;
+            retainedUntil: string;
+            deletedAt?: string;
+        };
+        userMessage: {
+            id: string;
+            conversationId: string;
+            clientInstanceId: string;
+            role: 'user' | 'assistant' | 'system' | 'tool';
+            text: string;
+            createdAt: string;
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        run: {
+            id: string;
+            clientInstanceId: string;
+            conversationId: string;
+            ownerUserId: string;
+            inputMessageId: string;
+            agentName: string;
+            status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
+            idempotencyKey?: string;
+            startedAt: string;
+            updatedAt: string;
+            completedAt?: string;
+            cancelledAt?: string;
+            failedAt?: string;
+            lastSequence: number;
+            error?: {
+                code: string;
+                message: string;
+                category: 'app_error' | 'internal_error' | 'abort_error' | 'unknown_error';
+            };
+            correlationId: string;
+            leaseOwner?: string;
+            leaseExpiresAt?: string;
+            heartbeatAt?: string;
+        };
+        thread: {
+            conversation: {
+                id: string;
+                clientInstanceId: string;
+                ownerUserId: string;
+                ownerExternalUserId: string;
+                title: string;
+                status: string;
+                createdAt: string;
+                updatedAt: string;
+                retainedUntil: string;
+                deletedAt?: string;
+            };
+            messages: Array<{
+                id: string;
+                conversationId: string;
+                clientInstanceId: string;
+                role: 'user' | 'assistant' | 'system' | 'tool';
+                text: string;
+                createdAt: string;
+                metadata?: {
+                    [key: string]: unknown;
+                };
+            }>;
+            activeRun?: {
+                run: {
+                    id: string;
+                    conversationId: string;
+                    agentName: string;
+                    status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling';
+                    startedAt: string;
+                    updatedAt: string;
+                    lastSequence: number;
+                };
+                projection: {
+                    runId: string;
+                    lastSequence: number;
+                    status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
+                    text: string;
+                    reasoning: Array<{
+                        id: string;
+                        text: string;
+                        open: boolean;
+                    }>;
+                    activeToolCalls: Array<{
+                        toolCallId: string;
+                        toolName: string;
+                        input?: unknown;
+                        state: 'input_available' | 'waiting_for_permission' | 'output_available' | 'output_error';
+                        output?: unknown;
+                        errorText?: string;
+                    }>;
+                    error?: {
+                        code: string;
+                        message: string;
+                        category: 'app_error' | 'internal_error' | 'abort_error' | 'unknown_error';
+                    };
+                };
+            };
+            userState: {
+                clientInstanceId: string;
+                conversationId: string;
+                userId: string;
+                lastViewedAt?: string;
+                lastReadMessageId?: string;
+                lastReadRunId?: string;
+                lastReadRunSequence?: number;
+                updatedAt: string;
+            };
+            serverTime: string;
+        };
+        eventsUrl: string;
+    };
+};
+
+export type StartConversationRunResponse = StartConversationRunResponses[keyof StartConversationRunResponses];
+
+export type CreateConversationRunData = {
+    body: {
+        idempotencyKey: string;
+        agentName?: string;
+        locale?: 'en' | 'de';
+        message: {
+            text: string;
+        };
+        conversation?: {
+            title?: string;
+            locale?: 'en' | 'de';
+        };
+    };
+    path?: never;
+    query?: never;
+    url: '/api/conversations/runs';
+};
+
+export type CreateConversationRunResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        conversation: {
+            id: string;
+            clientInstanceId: string;
+            ownerUserId: string;
+            ownerExternalUserId: string;
+            title: string;
+            status: string;
+            createdAt: string;
+            updatedAt: string;
+            retainedUntil: string;
+            deletedAt?: string;
+        };
+        userMessage: {
+            id: string;
+            conversationId: string;
+            clientInstanceId: string;
+            role: 'user' | 'assistant' | 'system' | 'tool';
+            text: string;
+            createdAt: string;
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        run: {
+            id: string;
+            clientInstanceId: string;
+            conversationId: string;
+            ownerUserId: string;
+            inputMessageId: string;
+            agentName: string;
+            status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
+            idempotencyKey?: string;
+            startedAt: string;
+            updatedAt: string;
+            completedAt?: string;
+            cancelledAt?: string;
+            failedAt?: string;
+            lastSequence: number;
+            error?: {
+                code: string;
+                message: string;
+                category: 'app_error' | 'internal_error' | 'abort_error' | 'unknown_error';
+            };
+            correlationId: string;
+            leaseOwner?: string;
+            leaseExpiresAt?: string;
+            heartbeatAt?: string;
+        };
+        thread: {
+            conversation: {
+                id: string;
+                clientInstanceId: string;
+                ownerUserId: string;
+                ownerExternalUserId: string;
+                title: string;
+                status: string;
+                createdAt: string;
+                updatedAt: string;
+                retainedUntil: string;
+                deletedAt?: string;
+            };
+            messages: Array<{
+                id: string;
+                conversationId: string;
+                clientInstanceId: string;
+                role: 'user' | 'assistant' | 'system' | 'tool';
+                text: string;
+                createdAt: string;
+                metadata?: {
+                    [key: string]: unknown;
+                };
+            }>;
+            activeRun?: {
+                run: {
+                    id: string;
+                    conversationId: string;
+                    agentName: string;
+                    status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling';
+                    startedAt: string;
+                    updatedAt: string;
+                    lastSequence: number;
+                };
+                projection: {
+                    runId: string;
+                    lastSequence: number;
+                    status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
+                    text: string;
+                    reasoning: Array<{
+                        id: string;
+                        text: string;
+                        open: boolean;
+                    }>;
+                    activeToolCalls: Array<{
+                        toolCallId: string;
+                        toolName: string;
+                        input?: unknown;
+                        state: 'input_available' | 'waiting_for_permission' | 'output_available' | 'output_error';
+                        output?: unknown;
+                        errorText?: string;
+                    }>;
+                    error?: {
+                        code: string;
+                        message: string;
+                        category: 'app_error' | 'internal_error' | 'abort_error' | 'unknown_error';
+                    };
+                };
+            };
+            userState: {
+                clientInstanceId: string;
+                conversationId: string;
+                userId: string;
+                lastViewedAt?: string;
+                lastReadMessageId?: string;
+                lastReadRunId?: string;
+                lastReadRunSequence?: number;
+                updatedAt: string;
+            };
+            serverTime: string;
+        };
+        eventsUrl: string;
+    };
+};
+
+export type CreateConversationRunResponse = CreateConversationRunResponses[keyof CreateConversationRunResponses];
+
+export type ObserveConversationRunData = {
+    body?: never;
+    path: {
+        conversationId: string;
+        runId: string;
+    };
+    query?: {
+        after?: string;
+    };
+    url: '/api/conversations/{conversationId}/runs/{runId}/events';
+};
+
+export type ObserveConversationRunResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        clientInstanceId: string;
+        runId: string;
+        conversationId: string;
+        ownerUserId: string;
+        sequence: number;
+        type: string;
+        payload: {
+            type: 'message_delta';
+            runId: string;
+            sequence: number;
+            createdAt: string;
+            delta: string;
+        } | {
+            type: 'reasoning_delta';
+            runId: string;
+            sequence: number;
+            createdAt: string;
+            id: string;
+            delta: string;
+        } | {
+            type: 'message_completed';
+            runId: string;
+            sequence: number;
+            createdAt: string;
+            message: {
+                id: string;
+                role: 'assistant';
+                text: string;
+                metadata?: {
+                    [key: string]: unknown;
+                };
+            };
+        } | {
+            type: 'tool_call_started';
+            runId: string;
+            sequence: number;
+            createdAt: string;
+            toolCallId: string;
+            toolName: string;
+            input: unknown;
+        } | {
+            type: 'tool_permission_requested';
+            runId: string;
+            sequence: number;
+            createdAt: string;
+            toolCallId: string;
+            toolName: string;
+            reason: string;
+            preview?: {
+                [key: string]: unknown;
+            };
+        } | {
+            type: 'tool_call_completed';
+            runId: string;
+            sequence: number;
+            createdAt: string;
+            toolCallId: string;
+            toolName: string;
+            result: unknown;
+            modelOutput: string;
+            projectionNotice?: {
+                [key: string]: unknown;
+            };
+        } | {
+            type: 'tool_call_failed';
+            runId: string;
+            sequence: number;
+            createdAt: string;
+            toolCallId: string;
+            toolName: string;
+            result: unknown;
+            modelOutput: string;
+            projectionNotice?: {
+                [key: string]: unknown;
+            };
+        } | {
+            type: 'run_completed';
+            runId: string;
+            sequence: number;
+            createdAt: string;
+        } | {
+            type: 'run_cancelled';
+            runId: string;
+            sequence: number;
+            createdAt: string;
+            reason?: string;
+        } | {
+            type: 'run_failed';
+            runId: string;
+            sequence: number;
+            createdAt: string;
+            error: {
+                code: string;
+                message: string;
+                category: 'app_error' | 'internal_error' | 'abort_error' | 'unknown_error';
+            };
+        };
+        createdAt: string;
+    };
+};
+
+export type ObserveConversationRunResponse = ObserveConversationRunResponses[keyof ObserveConversationRunResponses];
+
+export type CommandConversationRunData = {
+    body: {
+        command: {
+            type: 'tool_permission_decision';
+            toolCallId: string;
+            approved: boolean;
+            reason?: string;
+        } | {
+            type: 'continue';
+        };
+    };
+    path: {
+        conversationId: string;
+        runId: string;
+    };
+    query?: never;
+    url: '/api/conversations/{conversationId}/runs/{runId}/commands';
+};
+
+export type CommandConversationRunResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        run: {
+            id: string;
+            clientInstanceId: string;
+            conversationId: string;
+            ownerUserId: string;
+            inputMessageId: string;
+            agentName: string;
+            status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
+            idempotencyKey?: string;
+            startedAt: string;
+            updatedAt: string;
+            completedAt?: string;
+            cancelledAt?: string;
+            failedAt?: string;
+            lastSequence: number;
+            error?: {
+                code: string;
+                message: string;
+                category: 'app_error' | 'internal_error' | 'abort_error' | 'unknown_error';
+            };
+            correlationId: string;
+            leaseOwner?: string;
+            leaseExpiresAt?: string;
+            heartbeatAt?: string;
+        };
+    };
+};
+
+export type CommandConversationRunResponse = CommandConversationRunResponses[keyof CommandConversationRunResponses];
+
 export type DeleteConversationData = {
     body?: never;
     path: {

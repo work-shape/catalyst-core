@@ -154,7 +154,57 @@ describe("api operation catalog and client", () => {
           updatedAt: "2026-06-27T00:00:00.000Z",
           lastSequence: 0,
           correlationId: "corr_1"
-        }
+        },
+        thread: {
+          conversation: {
+            id: "conv_1",
+            clientInstanceId: "client_1",
+            ownerUserId: "user_1",
+            ownerExternalUserId: "user_1",
+            title: "Started",
+            status: "active",
+            createdAt: "2026-06-27T00:00:00.000Z",
+            updatedAt: "2026-06-27T00:00:00.000Z",
+            retainedUntil: "2026-07-27T00:00:00.000Z"
+          },
+          messages: [
+            {
+              id: "msg_1",
+              conversationId: "conv_1",
+              clientInstanceId: "client_1",
+              role: "user",
+              text: "Hello",
+              createdAt: "2026-06-27T00:00:00.000Z"
+            }
+          ],
+          activeRun: {
+            run: {
+              id: "run_1",
+              conversationId: "conv_1",
+              agentName: "test_agent",
+              status: "running",
+              startedAt: "2026-06-27T00:00:00.000Z",
+              updatedAt: "2026-06-27T00:00:00.000Z",
+              lastSequence: 0
+            },
+            projection: {
+              runId: "run_1",
+              lastSequence: 0,
+              status: "running",
+              text: "",
+              reasoning: [],
+              activeToolCalls: []
+            }
+          },
+          userState: {
+            clientInstanceId: "client_1",
+            conversationId: "conv_1",
+            userId: "user_1",
+            updatedAt: "2026-06-27T00:00:00.000Z"
+          },
+          serverTime: "2026-06-27T00:00:00.000Z"
+        },
+        eventsUrl: "https://chat.example/api/conversations/conv_1/runs/run_1/events"
       });
     };
     const client = createApiClient({

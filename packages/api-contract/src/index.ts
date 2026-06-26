@@ -553,7 +553,9 @@ export const startConversationRunRequestSchema = z.object({
 export const startConversationRunResponseSchema = z.object({
   conversation: conversationSchema,
   userMessage: messageSchema,
-  run: agentRunSchema
+  run: agentRunSchema,
+  thread: z.lazy(() => conversationThreadSnapshotSchema),
+  eventsUrl: z.string()
 });
 
 export const createConversationRunRequestSchema = startConversationRunRequestSchema.extend({

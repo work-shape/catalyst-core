@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { CancelConversationRunData, CancelConversationRunResponses, ChangeCurrentUserPasswordData, ChangeCurrentUserPasswordResponses, CreateAdministeredUserData, CreateAdministeredUserResponses, CreateConversationData, CreateConversationResponses, DeleteAdministeredUserIdentityData, DeleteAdministeredUserIdentityResponses, DeleteConversationData, DeleteConversationResponses, DeleteDraftAttachmentData, DeleteDraftAttachmentResponses, GenerateConversationTitleData, GenerateConversationTitleResponses, GetBrandingData, GetBrandingResponses, GetConfigData, GetConfigResponses, GetConversationFileContentData, GetConversationFileContentResponses, GetConversationThreadData, GetConversationThreadResponses, GetCurrentUserData, GetCurrentUserResponses, GetUsageSummaryData, GetUsageSummaryResponses, IssueSessionTokenData, IssueSessionTokenResponses, ListAdministeredUsersData, ListAdministeredUsersResponses, ListAuditEventsData, ListAuditEventsResponses, ListConversationMessagesData, ListConversationMessagesResponses, ListConversationsData, ListConversationsResponses, ListDraftAttachmentsData, ListDraftAttachmentsResponses, ResetAdministeredUserPasswordData, ResetAdministeredUserPasswordResponses, RetryDraftAttachmentData, RetryDraftAttachmentResponses, UpdateAdministeredUserData, UpdateAdministeredUserResponses, UpdateCurrentUserData, UpdateCurrentUserResponses, UploadDraftAttachmentData, UploadDraftAttachmentResponses, UpsertAdministeredUserIdentityData, UpsertAdministeredUserIdentityResponses } from './types.gen';
+import type { CancelConversationRunData, CancelConversationRunResponses, ChangeCurrentUserPasswordData, ChangeCurrentUserPasswordResponses, CommandConversationRunData, CommandConversationRunResponses, CreateAdministeredUserData, CreateAdministeredUserResponses, CreateConversationData, CreateConversationResponses, CreateConversationRunData, CreateConversationRunResponses, DeleteAdministeredUserIdentityData, DeleteAdministeredUserIdentityResponses, DeleteConversationData, DeleteConversationResponses, DeleteDraftAttachmentData, DeleteDraftAttachmentResponses, GenerateConversationTitleData, GenerateConversationTitleResponses, GetBrandingData, GetBrandingResponses, GetConfigData, GetConfigResponses, GetConversationFileContentData, GetConversationFileContentResponses, GetConversationThreadData, GetConversationThreadResponses, GetCurrentUserData, GetCurrentUserResponses, GetUsageSummaryData, GetUsageSummaryResponses, IssueSessionTokenData, IssueSessionTokenResponses, ListAdministeredUsersData, ListAdministeredUsersResponses, ListAuditEventsData, ListAuditEventsResponses, ListConversationMessagesData, ListConversationMessagesResponses, ListConversationsData, ListConversationsResponses, ListDraftAttachmentsData, ListDraftAttachmentsResponses, ObserveConversationRunData, ObserveConversationRunResponses, ResetAdministeredUserPasswordData, ResetAdministeredUserPasswordResponses, RetryDraftAttachmentData, RetryDraftAttachmentResponses, StartConversationRunData, StartConversationRunResponses, UpdateAdministeredUserData, UpdateAdministeredUserResponses, UpdateCurrentUserData, UpdateCurrentUserResponses, UploadDraftAttachmentData, UploadDraftAttachmentResponses, UpsertAdministeredUserIdentityData, UpsertAdministeredUserIdentityResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -61,6 +61,35 @@ export const listConversationMessages = <ThrowOnError extends boolean = false>(o
 
 export const cancelConversationRun = <ThrowOnError extends boolean = false>(options: Options<CancelConversationRunData, ThrowOnError>): RequestResult<CancelConversationRunResponses, unknown, ThrowOnError> => (options.client ?? client).post<CancelConversationRunResponses, unknown, ThrowOnError>({
     url: '/api/conversations/{conversationId}/runs/{runId}/cancel',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const startConversationRun = <ThrowOnError extends boolean = false>(options: Options<StartConversationRunData, ThrowOnError>): RequestResult<StartConversationRunResponses, unknown, ThrowOnError> => (options.client ?? client).post<StartConversationRunResponses, unknown, ThrowOnError>({
+    url: '/api/conversations/{conversationId}/runs',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const createConversationRun = <ThrowOnError extends boolean = false>(options: Options<CreateConversationRunData, ThrowOnError>): RequestResult<CreateConversationRunResponses, unknown, ThrowOnError> => (options.client ?? client).post<CreateConversationRunResponses, unknown, ThrowOnError>({
+    url: '/api/conversations/runs',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const observeConversationRun = <ThrowOnError extends boolean = false>(options: Options<ObserveConversationRunData, ThrowOnError>): RequestResult<ObserveConversationRunResponses, unknown, ThrowOnError> => (options.client ?? client).get<ObserveConversationRunResponses, unknown, ThrowOnError>({ url: '/api/conversations/{conversationId}/runs/{runId}/events', ...options });
+
+export const commandConversationRun = <ThrowOnError extends boolean = false>(options: Options<CommandConversationRunData, ThrowOnError>): RequestResult<CommandConversationRunResponses, unknown, ThrowOnError> => (options.client ?? client).post<CommandConversationRunResponses, unknown, ThrowOnError>({
+    url: '/api/conversations/{conversationId}/runs/{runId}/commands',
     ...options,
     headers: {
         'Content-Type': 'application/json',

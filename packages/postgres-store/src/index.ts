@@ -15,6 +15,9 @@ import {
   type AgentRunId,
   type AgentRunStore,
   type AppendRunObservationInput,
+  type ClaimRunStartCommandInput,
+  type ClaimRunStartCommandResult,
+  type CompleteRunStartCommandInput,
   type CreateConversationInput,
   type CreateMessageInput,
   type CreateUserInput,
@@ -24,6 +27,7 @@ import {
   type ModelUsageEventStore,
   type ModelUsageWindowSummary,
   type PlatformFileStore,
+  type ReleaseRunStartCommandInput,
   type ResolveUserIdentityInput,
   type RunObservation,
   type RunObservationStore,
@@ -35,12 +39,14 @@ import {
 } from "@vivd-catalyst/core";
 import {
   appendRunObservation as appendPostgresRunObservation,
+  claimRunStartCommand as claimPostgresRunStartCommand,
+  completeRunStartCommand as completePostgresRunStartCommand,
   createAgentRun as createPostgresAgentRun,
   getAgentRun as getPostgresAgentRun,
   getActiveConversationAgentRun as getPostgresActiveConversationAgentRun,
-  getAgentRunByIdempotencyKey as getPostgresAgentRunByIdempotencyKey,
   getConversationAgentRun as getPostgresConversationAgentRun,
   listRunObservations as listPostgresRunObservations,
+  releaseRunStartCommand as releasePostgresRunStartCommand,
   updateAgentRunStatus as updatePostgresAgentRunStatus
 } from "./postgres-agent-run-operations";
 import {
@@ -222,6 +228,18 @@ export class PostgresPlatformStore
     return listPostgresRecentMessages(this.db, input);
   }
 
+  async claimRunStartCommand(input: ClaimRunStartCommandInput): Promise<ClaimRunStartCommandResult> {
+    return claimPostgresRunStartCommand(this.db, input);
+  }
+
+  async completeRunStartCommand(input: CompleteRunStartCommandInput) {
+    return completePostgresRunStartCommand(this.db, input);
+  }
+
+  async releaseRunStartCommand(input: ReleaseRunStartCommandInput): Promise<void> {
+    return releasePostgresRunStartCommand(this.db, input);
+  }
+
   async createAgentRun(input: Parameters<AgentRunStore["createAgentRun"]>[0]): Promise<AgentRun> {
     return createPostgresAgentRun(this.db, input);
   }
@@ -247,12 +265,6 @@ export class PostgresPlatformStore
     ownerUserId: string;
   }): Promise<AgentRun | undefined> {
     return getPostgresActiveConversationAgentRun(this.db, input);
-  }
-
-  async getAgentRunByIdempotencyKey(
-    input: Parameters<AgentRunStore["getAgentRunByIdempotencyKey"]>[0]
-  ): Promise<AgentRun | undefined> {
-    return getPostgresAgentRunByIdempotencyKey(this.db, input);
   }
 
   async updateAgentRunStatus(input: UpdateAgentRunStatusInput): Promise<AgentRun> {

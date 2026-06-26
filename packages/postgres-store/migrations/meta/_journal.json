@@ -50,6 +50,13 @@
       "when": 1782507930204,
       "tag": "0006_many_bromley",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782517827572,
+      "tag": "0007_magical_norman_osborn",
+      "breakpoints": true
     }
   ]
 }

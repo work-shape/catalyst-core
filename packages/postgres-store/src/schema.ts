@@ -20,6 +20,7 @@ import type {
   ManagedFileRecord,
   ModelUsageEvent,
   RunObservation,
+  RunStartCommand,
   UserRecord
 } from "@vivd-catalyst/core";
 
@@ -202,6 +203,37 @@ export const agentRunObservations = pgTable(
   ]
 );
 
+export const runStartCommands = pgTable(
+  "run_start_commands",
+  {
+    clientInstanceId: text("client_instance_id").notNull(),
+    ownerUserId: text("owner_user_id").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    commandKind: text("command_kind").$type<RunStartCommand["commandKind"]>().notNull(),
+    status: text("status").$type<RunStartCommand["status"]>().notNull(),
+    conversationId: text("conversation_id").references(() => conversations.id, {
+      onDelete: "cascade"
+    }),
+    userMessageId: text("user_message_id").references(() => messages.id, {
+      onDelete: "cascade"
+    }),
+    runId: text("run_id").references(() => agentRuns.id, {
+      onDelete: "cascade"
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    uniqueIndex("run_start_commands_idempotency_idx").on(
+      table.clientInstanceId,
+      table.ownerUserId,
+      table.commandKind,
+      table.idempotencyKey
+    ),
+    index("run_start_commands_run_idx").on(table.clientInstanceId, table.runId)
+  ]
+);
+
 export const managedFiles = pgTable(
   "managed_files",
   {
@@ -362,6 +394,7 @@ export const schema = {
   messages,
   agentRuns,
   agentRunObservations,
+  runStartCommands,
   managedFiles,
   managedArtifacts,
   conversationAttachments,
