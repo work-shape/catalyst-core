@@ -260,6 +260,11 @@ export interface AgentRunStore {
     conversationId: ConversationId;
     runId: AgentRunId;
   }): Promise<AgentRun | undefined>;
+  getActiveConversationAgentRun(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    ownerUserId: string;
+  }): Promise<AgentRun | undefined>;
   updateAgentRunStatus(input: UpdateAgentRunStatusInput): Promise<AgentRun>;
 }
 

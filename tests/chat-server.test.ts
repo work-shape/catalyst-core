@@ -364,6 +364,113 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
+  it("rejects a second send during an active run before appending a user message or claiming drafts", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig(),
+      env: {},
+      storeMode: "memory",
+      capabilities: [createTestAttachmentCapability()],
+      tools: []
+    });
+
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      payload: { title: "Active run guard" }
+    });
+    expect(created.statusCode).toBe(200);
+    const conversation = created.json() as { id: string };
+
+    await app.server.listen({ host: "127.0.0.1", port: 0 });
+    const address = app.server.server.address() as AddressInfo;
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+
+    const activePrompt = Array.from({ length: 40 }, (_, index) => `token-${index}`).join(" ");
+    const firstSend = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        conversationId: conversation.id,
+        messages: [createUserUiMessage(activePrompt)]
+      })
+    });
+    expect(firstSend.status).toBe(200);
+
+    const upload = createMultipartFilePayload({
+      fieldName: "file",
+      filename: "second-send-draft.txt",
+      contentType: "text/plain",
+      content: "This draft must remain unclaimed when the send is rejected."
+    });
+    const uploaded = await app.server.inject({
+      method: "POST",
+      url: `/api/conversations/${conversation.id}/draft-attachments`,
+      headers: upload.headers,
+      payload: upload.payload
+    });
+    expect(uploaded.statusCode).toBe(200);
+    const uploadedBody = uploaded.json() as { attachment: { id: string } };
+    await waitForReadyDraftAttachment(app.server, conversation.id);
+
+    const rejectedSend = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        conversationId: conversation.id,
+        messages: [createUserUiMessage("this second send should not be persisted")]
+      })
+    });
+    expect(rejectedSend.status).toBe(409);
+    await rejectedSend.text();
+    await firstSend.text();
+
+    const messages = await app.server.inject({
+      method: "GET",
+      url: `/api/conversations/${conversation.id}/messages`
+    });
+    expect(messages.statusCode).toBe(200);
+    const persistedMessages = messages.json() as Array<{ role: string; text: string }>;
+    const userMessages = persistedMessages.filter((message) => message.role === "user");
+    expect(userMessages).toHaveLength(1);
+    expect(userMessages[0]?.text).toBe(activePrompt);
+    expect(persistedMessages).not.toContainEqual(
+      expect.objectContaining({
+        role: "user",
+        text: "this second send should not be persisted"
+      })
+    );
+
+    const drafts = await app.server.inject({
+      method: "GET",
+      url: `/api/conversations/${conversation.id}/draft-attachments`
+    });
+    expect(drafts.statusCode).toBe(200);
+    expect(drafts.json()).toContainEqual(
+      expect.objectContaining({
+        id: uploadedBody.attachment.id,
+        status: "ready"
+      })
+    );
+
+    const audit = await app.server.inject({
+      method: "GET",
+      url: "/api/audit-events"
+    });
+    expect(audit.statusCode).toBe(200);
+    const messageCreatedEvents = (audit.json() as Array<{ type: string; metadata?: { conversationId?: string } }>)
+      .filter(
+        (event) =>
+          event.type === "message.created" && event.metadata?.conversationId === conversation.id
+      );
+    expect(messageCreatedEvents).toHaveLength(1);
+
+    await app.close();
+  });
+
   it("rejects messages after the configured daily model call limit is reached", async () => {
     const app = await createClientInstanceApp({
       config: createTestConfig({

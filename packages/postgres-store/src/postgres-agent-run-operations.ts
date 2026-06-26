@@ -76,6 +76,29 @@ export async function getConversationAgentRun(
   return row ? mapAgentRun(row) : undefined;
 }
 
+export async function getActiveConversationAgentRun(
+  db: PostgresDatabase,
+  input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    ownerUserId: string;
+  }
+): Promise<AgentRun | undefined> {
+  const [row] = await db
+    .select()
+    .from(agentRuns)
+    .where(
+      and(
+        eq(agentRuns.clientInstanceId, input.clientInstanceId),
+        eq(agentRuns.conversationId, input.conversationId),
+        eq(agentRuns.ownerUserId, input.ownerUserId),
+        drizzleSql`${agentRuns.status} in ('queued', 'running', 'waiting_for_permission', 'cancelling')`
+      )
+    )
+    .limit(1);
+  return row ? mapAgentRun(row) : undefined;
+}
+
 export async function updateAgentRunStatus(
   db: PostgresDatabase,
   input: UpdateAgentRunStatusInput

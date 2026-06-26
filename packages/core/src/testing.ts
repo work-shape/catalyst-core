@@ -258,6 +258,20 @@ export class InMemoryPlatformStore
     return run?.conversationId === input.conversationId ? run : undefined;
   }
 
+  async getActiveConversationAgentRun(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    ownerUserId: string;
+  }): Promise<AgentRun | undefined> {
+    return [...this.agentRuns.values()].find(
+      (run) =>
+        run.clientInstanceId === input.clientInstanceId &&
+        run.conversationId === input.conversationId &&
+        run.ownerUserId === input.ownerUserId &&
+        isActiveAgentRunStatus(run.status)
+    );
+  }
+
   async updateAgentRunStatus(input: UpdateAgentRunStatusInput): Promise<AgentRun> {
     const run = await this.getAgentRun({
       clientInstanceId: input.clientInstanceId,

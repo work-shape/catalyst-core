@@ -37,6 +37,7 @@ import {
   appendRunObservation as appendPostgresRunObservation,
   createAgentRun as createPostgresAgentRun,
   getAgentRun as getPostgresAgentRun,
+  getActiveConversationAgentRun as getPostgresActiveConversationAgentRun,
   getConversationAgentRun as getPostgresConversationAgentRun,
   listRunObservations as listPostgresRunObservations,
   updateAgentRunStatus as updatePostgresAgentRunStatus
@@ -237,6 +238,14 @@ export class PostgresPlatformStore
     runId: AgentRunId;
   }): Promise<AgentRun | undefined> {
     return getPostgresConversationAgentRun(this.db, input);
+  }
+
+  async getActiveConversationAgentRun(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    ownerUserId: string;
+  }): Promise<AgentRun | undefined> {
+    return getPostgresActiveConversationAgentRun(this.db, input);
   }
 
   async updateAgentRunStatus(input: UpdateAgentRunStatusInput): Promise<AgentRun> {

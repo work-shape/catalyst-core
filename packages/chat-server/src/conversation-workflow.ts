@@ -101,6 +101,15 @@ export class ConversationWorkflow {
     command: SendConversationMessageCommand
   ): Promise<StartedConversationMessageRun> {
     await this.requireOwnedActiveConversation(conversationId, user);
+    const activeRun = await this.options.conversationStore.getActiveConversationAgentRun({
+      clientInstanceId: this.options.clientInstanceId,
+      conversationId,
+      ownerUserId: user.id
+    });
+    if (activeRun) {
+      throw new AppError("CONFLICT", "Conversation already has an active agent run");
+    }
+
     const attachments = this.options.attachments;
     const draftAttachments = attachments
       ? await attachments.listDraftAttachments(conversationId)
