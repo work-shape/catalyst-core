@@ -12,18 +12,19 @@ import {
 } from "@assistant-ui/react-ai-sdk";
 import type { UIMessage } from "ai";
 import type { ApiClient, Conversation, DraftAttachment, LocaleCode, Message, SafeConfig } from "@vivd-catalyst/api-client";
+import {
+  createMessageSnapshotKey,
+  toAiSdkMessageRepository,
+  toAttachmentFilePart,
+  toUiMessages,
+  type AssistantUiActiveRun
+} from "./assistant-ui-adapter";
 import { AssistantThread } from "./assistant-thread";
 import type { LocalUploadingAttachment } from "./assistant-composer";
 import { AttachmentContentProvider } from "./attachment-content";
 import { AssistantToolRegistry } from "./assistant-tool-registry";
 import { firstLineTitle } from "./conversation-title";
 import { useTranslation } from "./i18n";
-import {
-  clearConversationStreamId,
-  createConversationResumableStorage,
-  readConversationStreamId,
-  rememberConversationStreamId
-} from "./resumable-stream-storage";
 
 export function AssistantChatPanel({
   apiBaseUrl,
@@ -40,7 +41,7 @@ export function AssistantChatPanel({
   draftAttachments,
   localUploadingAttachments,
   conversationRunning,
-  conversationRunId,
+  activeRun,
   sendBlockedReason,
   attachmentsEnabled,
   attachmentAccept,
@@ -52,9 +53,9 @@ export function AssistantChatPanel({
   onConversationStarted,
   onMessageSubmitted,
   onChatRequestAccepted,
-  onStreamUnavailable,
   onStreamFinished,
-  onStreamError
+  onStreamError,
+  onCancelRun
 }: {
   apiBaseUrl: string;
   client: ApiClient;
@@ -70,7 +71,7 @@ export function AssistantChatPanel({
   draftAttachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
   conversationRunning: boolean;
-  conversationRunId?: string;
+  activeRun?: AssistantUiActiveRun;
   sendBlockedReason?: string;
   attachmentsEnabled: boolean;
   attachmentAccept: string;
@@ -82,26 +83,15 @@ export function AssistantChatPanel({
   onConversationStarted: (conversationId: string, messages?: Message[]) => void;
   onMessageSubmitted: (conversationId: string) => void;
   onChatRequestAccepted: (conversationId: string, runId?: string) => void;
-  onStreamUnavailable: (conversationId: string) => void;
   onStreamFinished: (conversationId: string, viewed: boolean) => void;
   onStreamError: (conversationId: string, message: string, viewed: boolean) => void;
+  onCancelRun: () => void;
 }) {
-  const resumableRunId = useMemo(() => {
-    if (!conversationRunning || !conversationRunId) {
-      return undefined;
-    }
-    const storedStreamId = readConversationStreamId(apiBaseUrl, selectedConversationId);
-    if (storedStreamId !== conversationRunId) {
-      return undefined;
-    }
-    return conversationRunId;
-  }, [apiBaseUrl, conversationRunning, conversationRunId, selectedConversationId]);
-  const resumableMessages = useMemo(
-    () => (resumableRunId ? withoutRunResponseMessages(messages ?? [], resumableRunId) : messages ?? []),
-    [resumableRunId, messages]
+  const initialMessages = useMemo(() => toUiMessages(messages ?? [], activeRun), [activeRun, messages]);
+  const messageSnapshotKey = useMemo(
+    () => createMessageSnapshotKey(messages ?? [], activeRun),
+    [activeRun, messages]
   );
-  const initialMessages = useMemo(() => toUiMessages(resumableMessages), [resumableMessages]);
-  const messageSnapshotKey = useMemo(() => createMessageSnapshotKey(resumableMessages), [resumableMessages]);
   const runtimeKey = selectedConversationId ?? "new";
 
   return (
@@ -122,6 +112,7 @@ export function AssistantChatPanel({
       draftAttachments={draftAttachments}
       localUploadingAttachments={localUploadingAttachments}
       conversationRunning={conversationRunning}
+      onCancelRun={onCancelRun}
       sendBlockedReason={sendBlockedReason}
       attachmentsEnabled={attachmentsEnabled}
       attachmentAccept={attachmentAccept}
@@ -133,7 +124,6 @@ export function AssistantChatPanel({
       onConversationStarted={onConversationStarted}
       onMessageSubmitted={onMessageSubmitted}
       onChatRequestAccepted={onChatRequestAccepted}
-      onStreamUnavailable={onStreamUnavailable}
       onStreamFinished={onStreamFinished}
       onStreamError={onStreamError}
     />
@@ -156,6 +146,7 @@ function AssistantRuntimePane({
   draftAttachments,
   localUploadingAttachments,
   conversationRunning,
+  onCancelRun,
   sendBlockedReason,
   attachmentsEnabled,
   attachmentAccept,
@@ -167,7 +158,6 @@ function AssistantRuntimePane({
   onConversationStarted,
   onMessageSubmitted,
   onChatRequestAccepted,
-  onStreamUnavailable,
   onStreamFinished,
   onStreamError
 }: {
@@ -186,6 +176,7 @@ function AssistantRuntimePane({
   draftAttachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
   conversationRunning: boolean;
+  onCancelRun: () => void;
   sendBlockedReason?: string;
   attachmentsEnabled: boolean;
   attachmentAccept: string;
@@ -197,7 +188,6 @@ function AssistantRuntimePane({
   onConversationStarted: (conversationId: string, messages?: Message[]) => void;
   onMessageSubmitted: (conversationId: string) => void;
   onChatRequestAccepted: (conversationId: string, runId?: string) => void;
-  onStreamUnavailable: (conversationId: string) => void;
   onStreamFinished: (conversationId: string, viewed: boolean) => void;
   onStreamError: (conversationId: string, message: string, viewed: boolean) => void;
 }) {
@@ -254,11 +244,6 @@ function AssistantRuntimePane({
       new AssistantChatTransport<UIMessage>({
         api: `${apiBaseUrl.replace(/\/$/u, "")}/api/chat`,
         credentials: "include",
-        resumable: {
-          storage: createConversationResumableStorage(apiBaseUrl, selectedConversationId),
-          resumeApi: (streamId) =>
-            `${apiBaseUrl.replace(/\/$/u, "")}/api/chat/runs/${encodeURIComponent(streamId)}/stream`
-        },
         body: {
           conversationId: selectedConversationId,
           locale,
@@ -266,17 +251,9 @@ function AssistantRuntimePane({
         },
         fetch: async (input, init) => {
           const response = await fetch(input, init);
-          if (response.status === 204 && selectedConversationId && isResumeRequest(input)) {
-            clearConversationStreamId(apiBaseUrl, selectedConversationId);
-            onStreamUnavailable(selectedConversationId);
-            return createNullBodyResponse(response);
-          }
           const conversationId = titleRequestConversationIdRef.current;
           const runId = response.headers.get(RESUMABLE_STREAM_ID_HEADER) ?? undefined;
           titleRequestConversationIdRef.current = undefined;
-          if (response.ok && conversationId && runId) {
-            rememberConversationStreamId(apiBaseUrl, conversationId, runId);
-          }
           if (response.ok && conversationId) {
             onChatRequestAccepted(conversationId, runId);
           }
@@ -320,7 +297,6 @@ function AssistantRuntimePane({
       onConversationCreated,
       onMessageSubmitted,
       onChatRequestAccepted,
-      onStreamUnavailable,
       pendingConversationIdRef,
       selectedAgentName,
       selectedConversationId,
@@ -338,11 +314,7 @@ function AssistantRuntimePane({
     if (!activeRef.current) {
       return;
     }
-    const persistedMessages = await client.messages(conversationId).catch(() => undefined);
-    if (!activeRef.current) {
-      return;
-    }
-    onConversationStarted(conversationId, persistedMessages);
+    onConversationStarted(conversationId);
   }
 
   function currentRunConversationId(): string | undefined {
@@ -374,7 +346,7 @@ function AssistantRuntimePane({
       if (localStreamConversationIdRef.current === conversationId) {
         localStreamConversationIdRef.current = undefined;
       }
-      if (!conversationId || (!activeRef.current && isAbortLikeError(error))) {
+      if (!conversationId || isAbortLikeError(error)) {
         return;
       }
       onStreamError(conversationId, error.message, viewed);
@@ -442,6 +414,7 @@ function AssistantRuntimePane({
             conversationRunning={conversationRunning}
             optimisticPending={optimisticPending}
             composerFocusRequestId={composerFocusRequestId}
+            onCancelRun={onCancelRun}
             onFilesSelected={onFilesSelected}
             onRemoveDraftAttachment={onRemoveDraftAttachment}
             onRetryDraftAttachment={onRetryDraftAttachment}
@@ -452,44 +425,8 @@ function AssistantRuntimePane({
   );
 }
 
-interface AiSdkMessageFormatRepository {
-  headId: string | null;
-  messages: Array<{
-    parentId: string | null;
-    message: UIMessage;
-  }>;
-}
-
-function toAiSdkMessageRepository(messages: UIMessage[]): AiSdkMessageFormatRepository {
-  let parentId: string | null = null;
-  return {
-    headId: messages.at(-1)?.id ?? null,
-    messages: messages.map((message) => {
-      const item = {
-        parentId,
-        message
-      };
-      parentId = message.id;
-      return item;
-    })
-  };
-}
-
 function isAbortLikeError(error: Error): boolean {
   return error.name === "AbortError" || /abort/u.test(error.message.toLowerCase());
-}
-
-function isResumeRequest(input: RequestInfo | URL): boolean {
-  const url = typeof input === "string" || input instanceof URL ? input.toString() : input.url;
-  return /\/api\/chat\/runs\/[^/]+\/stream$/u.test(new URL(url, window.location.href).pathname);
-}
-
-function createNullBodyResponse(response: Response): Response {
-  return new Response(null, {
-    headers: new Headers(response.headers),
-    status: response.status,
-    statusText: response.statusText
-  });
 }
 
 function DraftBridge({
@@ -588,226 +525,6 @@ function appendOutgoingUiMessagePart(
       data: part.data
     } as UIMessage["parts"][number]);
   }
-}
-
-export function toUiMessages(messages: Message[]): UIMessage[] {
-  const toolResultsByToolCallId = new Map<string, PersistedToolResult>();
-  for (const message of messages) {
-    const toolResult = readPersistedToolResult(message);
-    if (toolResult) {
-      toolResultsByToolCallId.set(toolResult.toolCallId, toolResult);
-    }
-  }
-
-  return messages
-    .filter((message) => message.role === "user" || message.role === "assistant" || message.role === "system")
-    .map((message) => ({
-      id: message.id,
-      role: message.role as UIMessage["role"],
-      parts: toUiMessageParts(message, toolResultsByToolCallId)
-    }));
-}
-
-function createMessageSnapshotKey(messages: Message[]): string {
-  return JSON.stringify(
-    messages.map((message) => ({
-      id: message.id,
-      role: message.role,
-      text: message.text,
-      metadata: message.metadata
-    }))
-  );
-}
-
-function toUiMessageParts(
-  message: Message,
-  toolResultsByToolCallId: Map<string, PersistedToolResult>
-): UIMessage["parts"] {
-  const parts: UIMessage["parts"] = [];
-  if (message.text || message.role !== "assistant") {
-    parts.push({
-      type: "text",
-      text: message.text,
-      state: "done"
-    });
-  }
-  if (message.role === "user") {
-    parts.push(...readUserAttachmentFileParts(message));
-  }
-
-  const toolCalls = readAssistantToolCalls(message);
-  for (const toolCall of toolCalls) {
-    const toolResult = toolResultsByToolCallId.get(toolCall.toolCallId);
-    parts.push({
-      type: "dynamic-tool",
-      toolName: toolCall.toolName,
-      toolCallId: toolCall.toolCallId,
-      title: toolCall.toolName,
-      state: toolResult?.status === "failed" ? "output-error" : toolResult ? "output-available" : "input-available",
-      input: toolCall.input,
-      ...(toolResult?.status === "failed"
-        ? { errorText: toolResult.errorText }
-        : toolResult
-          ? { output: toolResult.output }
-          : {})
-    } as UIMessage["parts"][number]);
-  }
-
-  const display = message.metadata?.display;
-  if (display !== undefined) {
-    parts.push({
-      type: "data-display",
-      data: display
-    } as UIMessage["parts"][number]);
-  }
-  return parts.length > 0
-    ? parts
-    : [
-        {
-          type: "text",
-          text: "",
-          state: "done"
-        }
-      ];
-}
-
-function withoutRunResponseMessages(messages: Message[], runId: string): Message[] {
-  return messages.filter((message) => {
-    const runtime = readAgentRuntimeMetadata(message.metadata);
-    if (runtime?.runId !== runId) {
-      return true;
-    }
-    return message.role === "user" || runtime.kind === "user_message";
-  });
-}
-
-function readUserAttachmentFileParts(message: Message): UIMessage["parts"] {
-  const runtime = readAgentRuntimeMetadata(message.metadata);
-  if (runtime?.kind !== "user_message") {
-    return [];
-  }
-  const manifest = isRecord(runtime.attachmentManifest) ? runtime.attachmentManifest : undefined;
-  if (manifest?.version !== 1 || !Array.isArray(manifest.attachments)) {
-    return [];
-  }
-  return manifest.attachments.flatMap((value): UIMessage["parts"] => {
-    if (!isRecord(value)) {
-      return [];
-    }
-    const fileId = typeof value.fileId === "string" ? value.fileId : undefined;
-    const filename = typeof value.filename === "string" ? value.filename : undefined;
-    if (!fileId || !filename) {
-      return [];
-    }
-    const mimeType = typeof value.mimeType === "string" ? value.mimeType : undefined;
-    return [
-      toAttachmentFilePart({
-        fileId,
-        filename,
-        ...(mimeType ? { mimeType } : {})
-      })
-    ];
-  });
-}
-
-function toAttachmentFilePart(
-  attachment: Pick<DraftAttachment, "fileId" | "filename" | "mimeType">
-): UIMessage["parts"][number] {
-  return {
-    type: "file",
-    mediaType: attachment.mimeType ?? "application/octet-stream",
-    filename: attachment.filename,
-    url: `vivd-file://${encodeURIComponent(attachment.fileId)}`
-  };
-}
-
-interface PersistedToolCall {
-  toolCallId: string;
-  toolName: string;
-  input: unknown;
-}
-
-type PersistedToolResult =
-  | {
-      status: "success";
-      toolCallId: string;
-      output: unknown;
-    }
-  | {
-      status: "failed";
-      toolCallId: string;
-      errorText: string;
-    };
-
-function readAssistantToolCalls(message: Message): PersistedToolCall[] {
-  if (message.role !== "assistant") {
-    return [];
-  }
-  const runtime = readAgentRuntimeMetadata(message.metadata);
-  if (runtime?.kind !== "assistant_tool_calls" || !Array.isArray(runtime.toolCalls)) {
-    return [];
-  }
-  return runtime.toolCalls.flatMap((value): PersistedToolCall[] => {
-    if (!isRecord(value)) {
-      return [];
-    }
-    const toolCallId = typeof value.toolCallId === "string" ? value.toolCallId : undefined;
-    const toolName = typeof value.toolName === "string" ? value.toolName : undefined;
-    if (!toolCallId || !toolName) {
-      return [];
-    }
-    return [
-      {
-        toolCallId,
-        toolName,
-        input: value.input
-      }
-    ];
-  });
-}
-
-function readPersistedToolResult(message: Message): PersistedToolResult | undefined {
-  if (message.role !== "tool") {
-    return undefined;
-  }
-  const runtime = readAgentRuntimeMetadata(message.metadata);
-  if (runtime?.kind !== "tool_result" || typeof runtime.toolCallId !== "string") {
-    return undefined;
-  }
-  const result = isRecord(runtime.result) ? runtime.result : undefined;
-  if (result?.status === "success") {
-    return {
-      status: "success",
-      toolCallId: runtime.toolCallId,
-      output: {
-        status: "success",
-        output: result.output,
-        display: result.display,
-        artifacts: result.artifacts,
-        projectionNotice: runtime.projectionNotice
-      }
-    };
-  }
-  if (
-    (result?.status === "failed" || result?.status === "cancelled" || result?.status === "timed_out") &&
-    isRecord(result.error)
-  ) {
-    return {
-      status: "failed",
-      toolCallId: runtime.toolCallId,
-      errorText: typeof result.error.message === "string" ? result.error.message : "Tool call failed"
-    };
-  }
-  return undefined;
-}
-
-function readAgentRuntimeMetadata(metadata: Message["metadata"]): Record<string, unknown> | undefined {
-  const runtime = isRecord(metadata?.agentRuntime) ? metadata.agentRuntime : undefined;
-  return runtime?.version === 1 ? runtime : undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function extractLastUserText(messages: UIMessage[]): string {

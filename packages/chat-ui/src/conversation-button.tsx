@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ThreadListItemMorePrimitive } from "@assistant-ui/react";
 import { MessageSquare, MoreHorizontal, Trash2 } from "lucide-react";
-import type { Conversation } from "@vivd-catalyst/api-client";
-import { isConversationRunning, type ConversationActivity } from "./conversation-activity";
+import type { ConversationListItem } from "@vivd-catalyst/api-client";
 import { useTranslation } from "./i18n";
 import { Button } from "./ui/button";
 import { cn } from "./ui/cn";
@@ -11,14 +10,12 @@ import { Spinner } from "./ui/spinner";
 
 export function ConversationButton({
   conversation,
-  activity,
   selected,
   onSelect,
   onDelete,
   deleting
 }: {
-  conversation: Conversation;
-  activity?: ConversationActivity;
+  conversation: ConversationListItem;
   selected: boolean;
   onSelect: () => void;
   onDelete: () => void;
@@ -26,9 +23,8 @@ export function ConversationButton({
 }) {
   const { locale, t } = useTranslation();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
-  const running = isConversationRunning(activity);
-  const failed = activity?.status === "failed";
-  const unread = Boolean(activity?.unread && !selected);
+  const running = Boolean(conversation.activeRun);
+  const unread = Boolean(conversation.unread && !selected);
 
   return (
     <>
@@ -57,8 +53,7 @@ export function ConversationButton({
               size={16}
               className={cn(
                 "mt-0.5 shrink-0 text-muted-foreground",
-                unread && "text-primary",
-                failed && "text-destructive"
+                unread && "text-primary"
               )}
               aria-hidden="true"
             />
@@ -84,8 +79,6 @@ export function ConversationButton({
                 <span className="text-primary" data-testid="conversation-unread-label">
                   {t("conversationUnread")}
                 </span>
-              ) : failed ? (
-                <span className="text-destructive">{t("conversationFailed")}</span>
               ) : (
                 formatConversationDate(conversation.updatedAt, locale, t("updatedRecently"))
               )}

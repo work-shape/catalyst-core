@@ -452,6 +452,36 @@ export const activeRunSummarySchema = z.object({
   lastSequence: z.number().int().nonnegative()
 });
 
+export const agentRunProjectionSchema = z.object({
+  runId: z.string(),
+  lastSequence: z.number().int().nonnegative(),
+  status: agentRunStatusSchema,
+  text: z.string(),
+  reasoning: z.array(
+    z.object({
+      id: z.string(),
+      text: z.string(),
+      open: z.boolean()
+    })
+  ),
+  activeToolCalls: z.array(
+    z.object({
+      toolCallId: z.string(),
+      toolName: z.string(),
+      input: z.unknown().optional(),
+      state: z.enum([
+        "input_available",
+        "waiting_for_permission",
+        "output_available",
+        "output_error"
+      ]),
+      output: z.unknown().optional(),
+      errorText: z.string().optional()
+    })
+  ),
+  error: agentRunErrorSchema.optional()
+});
+
 export const runObservationSchema = z.object({
   clientInstanceId: z.string(),
   runId: z.string(),
@@ -461,6 +491,37 @@ export const runObservationSchema = z.object({
   type: z.string(),
   payload: agentRuntimeEventSchema,
   createdAt: z.string()
+});
+
+export const conversationListItemSchema = conversationSchema.extend({
+  latestMessageAt: z.string().optional(),
+  activeRun: activeRunSummarySchema.optional(),
+  unread: z.boolean().optional(),
+  lastViewedAt: z.string().optional()
+});
+
+export const conversationUserStateSchema = z.object({
+  clientInstanceId: z.string(),
+  conversationId: z.string(),
+  userId: z.string(),
+  lastViewedAt: z.string().optional(),
+  lastReadMessageId: z.string().optional(),
+  lastReadRunId: z.string().optional(),
+  lastReadRunSequence: z.number().int().nonnegative().optional(),
+  updatedAt: z.string()
+});
+
+export const conversationThreadSnapshotSchema = z.object({
+  conversation: conversationSchema,
+  messages: z.array(messageSchema),
+  activeRun: z
+    .object({
+      run: activeRunSummarySchema,
+      projection: agentRunProjectionSchema
+    })
+    .optional(),
+  userState: conversationUserStateSchema,
+  serverTime: z.string()
 });
 
 export const cancelRunRequestSchema = z
@@ -694,7 +755,7 @@ export const apiOperations = {
     operationId: "listConversations",
     method: "GET",
     path: "/api/conversations",
-    responseSchema: z.array(conversationSchema)
+    responseSchema: z.array(conversationListItemSchema)
   }),
   createConversation: defineJsonApiOperation({
     operationId: "createConversation",
@@ -709,11 +770,24 @@ export const apiOperations = {
     path: "/api/conversations/:conversationId/title",
     responseSchema: conversationSchema
   }),
+  getConversationThread: defineJsonApiOperation({
+    operationId: "getConversationThread",
+    method: "GET",
+    path: "/api/conversations/:conversationId/thread",
+    responseSchema: conversationThreadSnapshotSchema
+  }),
   listConversationMessages: defineJsonApiOperation({
     operationId: "listConversationMessages",
     method: "GET",
     path: "/api/conversations/:conversationId/messages",
     responseSchema: z.array(messageSchema)
+  }),
+  cancelConversationRun: defineJsonApiOperation({
+    operationId: "cancelConversationRun",
+    method: "POST",
+    path: "/api/conversations/:conversationId/runs/:runId/cancel",
+    requestSchema: cancelRunRequestSchema,
+    responseSchema: cancelRunResponseSchema
   }),
   deleteConversation: defineJsonApiOperation({
     operationId: "deleteConversation",
@@ -820,6 +894,7 @@ export const openApiDocument = createOpenApiDocument();
 
 export type ApiUser = z.infer<typeof apiUserSchema>;
 export type Conversation = z.infer<typeof conversationSchema>;
+export type ConversationListItem = z.infer<typeof conversationListItemSchema>;
 export type Message = z.infer<typeof messageSchema>;
 export type ClientBranding = z.infer<typeof clientBrandingSchema>;
 export type SafeConfig = z.infer<typeof safeConfigSchema>;
@@ -843,7 +918,10 @@ export type ChatStreamChunk = z.infer<typeof chatStreamChunkSchema>;
 export type AgentRuntimeEvent = z.infer<typeof agentRuntimeEventSchema>;
 export type AgentRun = z.infer<typeof agentRunSchema>;
 export type ActiveRunSummary = z.infer<typeof activeRunSummarySchema>;
+export type AgentRunProjection = z.infer<typeof agentRunProjectionSchema>;
 export type RunObservation = z.infer<typeof runObservationSchema>;
+export type ConversationUserState = z.infer<typeof conversationUserStateSchema>;
+export type ConversationThreadSnapshot = z.infer<typeof conversationThreadSnapshotSchema>;
 export type CancelRunRequest = z.infer<typeof cancelRunRequestSchema>;
 export type CancelRunResponse = z.infer<typeof cancelRunResponseSchema>;
 export type AuditActor = z.infer<typeof auditActorSchema>;

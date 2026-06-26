@@ -25,6 +25,7 @@ export function AssistantComposer({
   attachmentsEnabled,
   attachmentAccept,
   focusRequestId,
+  onCancelRun,
   onFilesSelected,
   onRemoveAttachment,
   onRetryAttachment
@@ -36,6 +37,7 @@ export function AssistantComposer({
   attachmentsEnabled: boolean;
   attachmentAccept: string;
   focusRequestId: number;
+  onCancelRun: () => void;
   onFilesSelected: (files: File[]) => void;
   onRemoveAttachment: (attachmentId: string) => void;
   onRetryAttachment: (attachmentId: string) => void;
@@ -120,6 +122,7 @@ export function AssistantComposer({
               disabled={Boolean(sendBlockedReason)}
               disabledReason={sendBlockedReason}
               conversationRunning={conversationRunning}
+              onCancelRun={onCancelRun}
             />
           </div>
         </div>
@@ -273,11 +276,13 @@ function AttachmentStatusIndicator({
 function ComposerAction({
   disabled,
   disabledReason,
-  conversationRunning
+  conversationRunning,
+  onCancelRun
 }: {
   disabled: boolean;
   disabledReason?: string;
   conversationRunning?: boolean;
+  onCancelRun: () => void;
 }) {
   const { t } = useTranslation();
   const threadRunning = useAuiState((state) => state.thread.isRunning);
@@ -291,7 +296,13 @@ function ComposerAction({
     <div className="relative ml-auto size-9">
       {threadRunning ? (
         <ComposerPrimitive.Cancel asChild>
-          <Button type="button" size="icon" className="absolute inset-0 size-9" aria-label={t("stopGenerating")}>
+          <Button
+            type="button"
+            size="icon"
+            className="absolute inset-0 size-9"
+            aria-label={t("stopGenerating")}
+            onClick={onCancelRun}
+          >
             <Square size={14} className="fill-current" aria-hidden="true" />
           </Button>
         </ComposerPrimitive.Cancel>

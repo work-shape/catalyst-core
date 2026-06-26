@@ -1,4 +1,5 @@
-import type { ClientInstanceId, ConversationId, MessageId } from "./ids";
+import type { ActiveRunSummary, AgentRunProjection } from "./agent-runtime";
+import type { AgentRunId, ClientInstanceId, ConversationId, MessageId } from "./ids";
 import type { JsonObject } from "./json";
 import type { ISODateString } from "./time";
 
@@ -17,6 +18,13 @@ export interface Conversation {
   deletedAt?: ISODateString;
 }
 
+export interface ConversationListItem extends Conversation {
+  latestMessageAt?: ISODateString;
+  activeRun?: ActiveRunSummary;
+  unread?: boolean;
+  lastViewedAt?: ISODateString;
+}
+
 export type ChatMessageRole = "user" | "assistant" | "system" | "tool";
 
 export interface ChatMessage {
@@ -27,6 +35,28 @@ export interface ChatMessage {
   text: string;
   createdAt: ISODateString;
   metadata?: JsonObject;
+}
+
+export interface ConversationUserState {
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  userId: string;
+  lastViewedAt?: ISODateString;
+  lastReadMessageId?: MessageId;
+  lastReadRunId?: AgentRunId;
+  lastReadRunSequence?: number;
+  updatedAt: ISODateString;
+}
+
+export interface ConversationThreadSnapshot {
+  conversation: Conversation;
+  messages: ChatMessage[];
+  activeRun?: {
+    run: ActiveRunSummary;
+    projection: AgentRunProjection;
+  };
+  userState: ConversationUserState;
+  serverTime: ISODateString;
 }
 
 export interface CreateConversationInput {

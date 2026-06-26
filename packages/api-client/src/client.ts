@@ -2,8 +2,8 @@ import type { z } from "zod";
 import { ApiError } from "./errors";
 import { createClient as createGeneratedClient } from "./generated/client";
 import * as generatedSdk from "./generated/sdk.gen";
-import { apiOperations } from "./schemas";
-import type { LocaleCode } from "./schemas";
+import { apiOperations, runObservationSchema } from "./schemas";
+import type { LocaleCode, RunObservation } from "./schemas";
 
 export interface ApiClientOptions {
   baseUrl: string;
@@ -32,8 +32,9 @@ type GeneratedResult<T> =
     };
 
 export function createApiClient(options: ApiClientOptions) {
+  const baseUrl = options.baseUrl.replace(/\/$/u, "");
   const generatedClient = createGeneratedClient({
-    baseUrl: options.baseUrl.replace(/\/$/u, ""),
+    baseUrl,
     credentials: "include",
     fetch: options.fetchImpl
   });
@@ -66,6 +67,92 @@ export function createApiClient(options: ApiClientOptions) {
       throw new ApiError(payload.response?.status ?? 0, "API request failed", payload.data);
     }
     return payload.data;
+  }
+
+  async function requestJson<T>(
+    path: string,
+    schema: z.ZodType<T>,
+    init: RequestInit = {}
+  ): Promise<T> {
+    const response = await request(path, init);
+    const payload = await readJsonPayload(response);
+    if (!response.ok) {
+      throw new ApiError(response.status, apiErrorMessage(payload), payload);
+    }
+    return schema.parse(payload);
+  }
+
+  async function request(path: string, init: RequestInit = {}): Promise<Response> {
+    const headers = new Headers(init.headers);
+    const token = await options.getToken?.();
+    if (token) {
+      headers.set("authorization", `Bearer ${token}`);
+    }
+    if (init.body !== undefined && !headers.has("content-type")) {
+      headers.set("content-type", "application/json");
+    }
+    return (options.fetchImpl ?? fetch)(`${baseUrl}${path}`, {
+      ...init,
+      credentials: "include",
+      headers
+    });
+  }
+
+  async function* observeRunEvents(
+    conversationId: string,
+    runId: string,
+    observeOptions: { afterSequence?: number; signal?: AbortSignal } = {}
+  ): AsyncIterable<RunObservation> {
+    const path = `/api/conversations/${encodeURIComponent(conversationId)}/runs/${encodeURIComponent(runId)}/events${
+      observeOptions.afterSequence !== undefined ? `?after=${encodeURIComponent(String(observeOptions.afterSequence))}` : ""
+    }`;
+    const response = await request(path, {
+      method: "GET",
+      headers: {
+        accept: "text/event-stream"
+      },
+      signal: observeOptions.signal
+    });
+    if (response.status === 204) {
+      return;
+    }
+    if (!response.ok) {
+      const payload = await readJsonPayload(response);
+      throw new ApiError(response.status, apiErrorMessage(payload), payload);
+    }
+    if (!response.body) {
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        const events = splitCompleteSseEvents(buffer);
+        buffer = events.remaining;
+        for (const event of events.blocks) {
+          const observation = parseRunObservationSseBlock(event);
+          if (observation) {
+            yield observation;
+          }
+        }
+      }
+      buffer += decoder.decode();
+      if (buffer.trim()) {
+        const observation = parseRunObservationSseBlock(buffer);
+        if (observation) {
+          yield observation;
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
   }
 
   return {
@@ -131,6 +218,11 @@ export function createApiClient(options: ApiClientOptions) {
         }),
         apiOperations.generateConversationTitle.responseSchema
       ),
+    thread: (conversationId: string) =>
+      requestJson(
+        apiOperations.getConversationThread.buildPath({ params: { conversationId } }),
+        apiOperations.getConversationThread.responseSchema
+      ),
     messages: (conversationId: string) =>
       unwrapJson(
         generatedSdk.listConversationMessages({
@@ -139,6 +231,20 @@ export function createApiClient(options: ApiClientOptions) {
         }),
         apiOperations.listConversationMessages.responseSchema
       ),
+    cancelRun: (
+      conversationId: string,
+      runId: string,
+      input: OperationRequestInput<typeof apiOperations.cancelConversationRun> = {}
+    ) =>
+      requestJson(
+        apiOperations.cancelConversationRun.buildPath({ params: { conversationId, runId } }),
+        apiOperations.cancelConversationRun.responseSchema,
+        {
+          method: "POST",
+          body: JSON.stringify(apiOperations.cancelConversationRun.requestSchema.parse(input))
+        }
+      ),
+    observeRunEvents,
     draftAttachments: (conversationId: string) =>
       unwrapJson(
         generatedSdk.listDraftAttachments({
@@ -258,6 +364,43 @@ export function createApiClient(options: ApiClientOptions) {
 }
 
 export type ApiClient = ReturnType<typeof createApiClient>;
+
+async function readJsonPayload(response: Response): Promise<unknown> {
+  if (response.status === 204) {
+    return undefined;
+  }
+  const text = await response.text();
+  if (!text) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
+  }
+}
+
+function splitCompleteSseEvents(buffer: string): { blocks: string[]; remaining: string } {
+  const normalized = buffer.replaceAll("\r\n", "\n");
+  const parts = normalized.split("\n\n");
+  const remaining = parts.pop() ?? "";
+  return {
+    blocks: parts.filter((part) => part.trim().length > 0),
+    remaining
+  };
+}
+
+function parseRunObservationSseBlock(block: string): RunObservation | undefined {
+  const data = block
+    .split("\n")
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice("data:".length).trimStart())
+    .join("\n");
+  if (!data) {
+    return undefined;
+  }
+  return runObservationSchema.parse(JSON.parse(data));
+}
 
 function apiErrorFromGeneratedResult(result: {
   error: unknown;

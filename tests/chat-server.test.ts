@@ -218,6 +218,122 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
+  it("exposes a thread snapshot with active run projection", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig(),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      payload: { title: "Thread snapshot test" }
+    });
+    expect(created.statusCode).toBe(200);
+    const conversation = created.json() as { id: string };
+
+    await app.server.listen({ host: "127.0.0.1", port: 0 });
+    const address = app.server.server.address() as AddressInfo;
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+
+    const sent = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        conversationId: conversation.id,
+        messages: [createUserUiMessage("snapshot should show this run while active")]
+      })
+    });
+    expect(sent.status).toBe(200);
+    const runId = sent.headers.get("x-resumable-stream-id");
+    expect(runId).toEqual(expect.stringMatching(/^run_/));
+
+    const snapshot = await fetch(`${baseUrl}/api/conversations/${conversation.id}/thread`);
+    expect(snapshot.status).toBe(200);
+    expect(await snapshot.json()).toMatchObject({
+      conversation: {
+        id: conversation.id
+      },
+      messages: [
+        expect.objectContaining({
+          role: "user",
+          text: "snapshot should show this run while active"
+        })
+      ],
+      activeRun: {
+        run: {
+          id: runId,
+          status: "running"
+        },
+        projection: {
+          runId,
+          lastSequence: expect.any(Number),
+          text: expect.any(String)
+        }
+      }
+    });
+
+    await sent.text();
+    await app.close();
+  });
+
+  it("streams product run observations from a sequence cursor", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig(),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      payload: { title: "Product event stream test" }
+    });
+    expect(created.statusCode).toBe(200);
+    const conversation = created.json() as { id: string };
+
+    await app.server.listen({ host: "127.0.0.1", port: 0 });
+    const address = app.server.server.address() as AddressInfo;
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+
+    const sent = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        conversationId: conversation.id,
+        messages: [createUserUiMessage("product observations should be cursor resumable")]
+      })
+    });
+    expect(sent.status).toBe(200);
+    const runId = sent.headers.get("x-resumable-stream-id");
+    expect(runId).toEqual(expect.stringMatching(/^run_/));
+    await sent.text();
+
+    const events = await fetch(
+      `${baseUrl}/api/conversations/${conversation.id}/runs/${runId}/events?after=1`
+    );
+    expect(events.status).toBe(200);
+    const observations = parseSseChunks(await events.text());
+    expect(observations.length).toBeGreaterThan(0);
+    expect(observations.every((observation) => Number(observation.sequence) > 1)).toBe(true);
+    expect(observations).toContainEqual(
+      expect.objectContaining({
+        runId,
+        conversationId: conversation.id,
+        type: "run_completed"
+      })
+    );
+
+    await app.close();
+  });
+
   it("does not expose or mutate another user's resumable run", async () => {
     const app = await createClientInstanceApp({
       config: createTestConfig({
@@ -333,7 +449,7 @@ describe("client instance app vertical slice", () => {
     expect(streamId).toEqual(expect.stringMatching(/^run_/));
 
     const cancelled = await fetch(
-      `${baseUrl}/api/chat/conversations/${conversation.id}/runs/${streamId}/cancel`,
+      `${baseUrl}/api/conversations/${conversation.id}/runs/${streamId}/cancel`,
       {
         method: "POST",
         headers: {
@@ -1644,7 +1760,16 @@ function createUserUiMessage(text: string) {
   };
 }
 
-function parseSseChunks(text: string): Array<{ type?: string; errorText?: string; delta?: string }> {
+function parseSseChunks(
+  text: string
+): Array<{
+  type?: string;
+  errorText?: string;
+  delta?: string;
+  sequence?: number;
+  runId?: string;
+  conversationId?: string;
+}> {
   return text
     .split("\n")
     .filter((line) => line.startsWith("data:"))

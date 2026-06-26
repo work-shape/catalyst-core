@@ -79,6 +79,31 @@ export interface ActiveRunSummary {
   lastSequence: number;
 }
 
+export interface AgentRunProjection {
+  runId: AgentRunId;
+  lastSequence: number;
+  status: AgentRunStatus;
+  text: string;
+  reasoning: Array<{
+    id: string;
+    text: string;
+    open: boolean;
+  }>;
+  activeToolCalls: Array<{
+    toolCallId: ToolCallId;
+    toolName: string;
+    input?: unknown;
+    state:
+      | "input_available"
+      | "waiting_for_permission"
+      | "output_available"
+      | "output_error";
+    output?: unknown;
+    errorText?: string;
+  }>;
+  error?: AgentRunError;
+}
+
 export interface RunObservation {
   clientInstanceId: ClientInstanceId;
   runId: AgentRunId;

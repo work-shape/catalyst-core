@@ -20,6 +20,7 @@ export function AssistantThread({
   conversationRunning,
   optimisticPending,
   composerFocusRequestId,
+  onCancelRun,
   onFilesSelected,
   onRemoveDraftAttachment,
   onRetryDraftAttachment
@@ -35,6 +36,7 @@ export function AssistantThread({
   conversationRunning?: boolean;
   optimisticPending?: boolean;
   composerFocusRequestId: number;
+  onCancelRun: () => void;
   onFilesSelected: (files: File[]) => void;
   onRemoveDraftAttachment: (attachmentId: string) => void;
   onRetryDraftAttachment: (attachmentId: string) => void;
@@ -94,6 +96,7 @@ export function AssistantThread({
                   attachmentsEnabled={attachmentsEnabled}
                   attachmentAccept={attachmentAccept}
                   focusRequestId={composerFocusRequestId}
+                  onCancelRun={onCancelRun}
                   onFilesSelected={onFilesSelected}
                   onRemoveAttachment={onRemoveDraftAttachment}
                   onRetryAttachment={onRetryDraftAttachment}

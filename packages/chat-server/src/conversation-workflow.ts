@@ -2,6 +2,8 @@ import { auditActorFromUser } from "@vivd-catalyst/core";
 import {
   AppError,
   type AgentRun,
+  type ActiveRunSummary,
+  type AgentRunProjection,
   type AttachmentManifest,
   type AgentRunId,
   type AgentRunStatus,
@@ -10,9 +12,12 @@ import {
   type AuthenticatedUser,
   type ChatMessage,
   type Conversation,
+  type ConversationListItem,
+  type ConversationThreadSnapshot,
   type ConversationId,
   type JsonObject,
   type RuntimeCallContext,
+  type RunObservation,
   addDays,
   createPlatformId,
   isAppError
@@ -50,11 +55,24 @@ export class ConversationWorkflow {
     this.options = options;
   }
 
-  async listConversations(user: AuthenticatedUser): Promise<Conversation[]> {
-    return this.options.conversationStore.listConversationsForUser({
+  async listConversations(user: AuthenticatedUser): Promise<ConversationListItem[]> {
+    const conversations = await this.options.conversationStore.listConversationsForUser({
       clientInstanceId: this.options.clientInstanceId,
       ownerUserId: user.id
     });
+    return Promise.all(
+      conversations.map(async (conversation): Promise<ConversationListItem> => {
+        const activeRun = await this.options.conversationStore.getActiveConversationAgentRun({
+          clientInstanceId: this.options.clientInstanceId,
+          conversationId: conversation.id,
+          ownerUserId: user.id
+        });
+        return {
+          ...conversation,
+          ...(activeRun ? { activeRun: toActiveRunSummary(activeRun) } : {})
+        };
+      })
+    );
   }
 
   async createConversation(
@@ -92,6 +110,43 @@ export class ConversationWorkflow {
       clientInstanceId: this.options.clientInstanceId,
       conversationId
     });
+  }
+
+  async getThreadSnapshot(
+    conversationId: ConversationId,
+    user: AuthenticatedUser
+  ): Promise<ConversationThreadSnapshot> {
+    const conversation = await this.requireOwnedActiveConversation(conversationId, user);
+    const messages = await this.options.conversationStore.listMessages({
+      clientInstanceId: this.options.clientInstanceId,
+      conversationId
+    });
+    const activeRun = await this.options.conversationStore.getActiveConversationAgentRun({
+      clientInstanceId: this.options.clientInstanceId,
+      conversationId,
+      ownerUserId: user.id
+    });
+    const serverTime = new Date().toISOString();
+
+    return {
+      conversation,
+      messages,
+      ...(activeRun
+        ? {
+            activeRun: {
+              run: toActiveRunSummary(activeRun),
+              projection: await this.createRunProjection(activeRun, user)
+            }
+          }
+        : {}),
+      userState: {
+        clientInstanceId: this.options.clientInstanceId,
+        conversationId,
+        userId: user.id,
+        updatedAt: serverTime
+      },
+      serverTime
+    };
   }
 
   async startMessageRun(
@@ -243,6 +298,19 @@ export class ConversationWorkflow {
       runId
     });
     return run?.ownerUserId === user.id ? run : undefined;
+  }
+
+  private async createRunProjection(
+    run: AgentRun,
+    user: AuthenticatedUser
+  ): Promise<AgentRunProjection> {
+    const observations = await this.options.conversationStore.listRunObservations({
+      clientInstanceId: this.options.clientInstanceId,
+      runId: run.id,
+      ownerUserId: user.id,
+      afterSequence: 0
+    });
+    return buildAgentRunProjection(run, observations);
   }
 
   async cancelRun(
@@ -606,13 +674,154 @@ function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isActiveAgentRunStatus(status: AgentRunStatus): boolean {
+function isActiveAgentRunStatus(
+  status: AgentRunStatus
+): status is Extract<AgentRunStatus, "queued" | "running" | "waiting_for_permission" | "cancelling"> {
   return (
     status === "queued" ||
     status === "running" ||
     status === "waiting_for_permission" ||
     status === "cancelling"
   );
+}
+
+function toActiveRunSummary(run: AgentRun): ActiveRunSummary {
+  if (!isActiveAgentRunStatus(run.status)) {
+    throw new AppError("INTERNAL", "Expected an active agent run");
+  }
+  return {
+    id: run.id,
+    conversationId: run.conversationId,
+    agentName: run.agentName,
+    status: run.status,
+    startedAt: run.startedAt,
+    updatedAt: run.updatedAt,
+    lastSequence: run.lastSequence
+  };
+}
+
+function buildAgentRunProjection(
+  run: AgentRun,
+  observations: RunObservation[]
+): AgentRunProjection {
+  let text = "";
+  let lastSequence = run.lastSequence;
+  let error = run.error;
+  const reasoningById = new Map<string, { id: string; text: string; open: boolean }>();
+  const toolCallsById = new Map<
+    string,
+    AgentRunProjection["activeToolCalls"][number]
+  >();
+
+  for (const observation of observations) {
+    const event = observation.payload;
+    lastSequence = Math.max(lastSequence, event.sequence);
+
+    if (event.type === "message_delta") {
+      text += event.delta;
+    }
+
+    if (event.type === "reasoning_delta") {
+      const reasoning = reasoningById.get(event.id) ?? {
+        id: event.id,
+        text: "",
+        open: true
+      };
+      reasoning.text += event.delta;
+      reasoningById.set(event.id, reasoning);
+    }
+
+    if (event.type === "message_completed") {
+      text = event.message.text;
+    }
+
+    if (event.type === "tool_call_started") {
+      toolCallsById.set(event.toolCallId, {
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+        input: event.input,
+        state: "input_available"
+      });
+    }
+
+    if (event.type === "tool_permission_requested") {
+      const existing = toolCallsById.get(event.toolCallId);
+      toolCallsById.set(event.toolCallId, {
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+        input: existing?.input,
+        state: "waiting_for_permission"
+      });
+    }
+
+    if (event.type === "tool_call_completed") {
+      toolCallsById.set(event.toolCallId, {
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+        input: toolCallsById.get(event.toolCallId)?.input,
+        state: "output_available",
+        output: toProjectionToolOutput(event)
+      });
+    }
+
+    if (event.type === "tool_call_failed") {
+      toolCallsById.set(event.toolCallId, {
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+        input: toolCallsById.get(event.toolCallId)?.input,
+        state: "output_error",
+        errorText: toProjectionToolError(event)
+      });
+    }
+
+    if (event.type === "run_failed") {
+      error = event.error;
+    }
+
+    if (event.type === "run_completed" || event.type === "run_cancelled" || event.type === "run_failed") {
+      for (const reasoning of reasoningById.values()) {
+        reasoning.open = false;
+      }
+    }
+  }
+
+  return {
+    runId: run.id,
+    lastSequence,
+    status: run.status,
+    text,
+    reasoning: [...reasoningById.values()],
+    activeToolCalls: [...toolCallsById.values()],
+    ...(error ? { error } : {})
+  };
+}
+
+function toProjectionToolOutput(
+  event: Extract<AgentRuntimeEvent, { type: "tool_call_completed" }>
+): unknown {
+  if (event.result.status === "success") {
+    return {
+      status: "success",
+      output: event.result.output,
+      display: event.result.display,
+      artifacts: event.result.artifacts,
+      projectionNotice: event.projectionNotice
+    };
+  }
+  return {
+    status: event.result.status,
+    error: event.result.error,
+    projectionNotice: event.projectionNotice
+  };
+}
+
+function toProjectionToolError(
+  event: Extract<AgentRuntimeEvent, { type: "tool_call_failed" }>
+): string {
+  if (event.result.status === "success") {
+    return "Tool call failed";
+  }
+  return event.result.error.message;
 }
 
 function createTitlePrompt(firstUserMessage: ChatMessage): ModelMessage[] {

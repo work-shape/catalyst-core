@@ -5,10 +5,6 @@ import {
   pendingAssistantPresentation,
   shouldShowPendingAssistantMessage
 } from "../packages/chat-ui/src/thread-activity";
-import {
-  isConversationRunning,
-  shouldRefreshConversationMessagesOnSelect
-} from "../packages/chat-ui/src/conversation-activity";
 
 describe("chat UI thread activity", () => {
   it("does not render a fallback cursor after visible assistant content", () => {
@@ -112,13 +108,5 @@ describe("chat UI thread activity", () => {
     expect(isThreadBusy({ optimisticPending: true })).toBe(true);
     expect(isThreadBusy({ threadRunning: true })).toBe(true);
     expect(isThreadBusy({})).toBe(false);
-  });
-
-  it("refreshes selected message history for running or unread conversations", () => {
-    expect(isConversationRunning({ status: "running", unread: false })).toBe(true);
-    expect(shouldRefreshConversationMessagesOnSelect({ status: "running", unread: false })).toBe(true);
-    expect(shouldRefreshConversationMessagesOnSelect({ status: "idle", unread: true })).toBe(true);
-    expect(shouldRefreshConversationMessagesOnSelect({ status: "idle", unread: false })).toBe(false);
-    expect(shouldRefreshConversationMessagesOnSelect(undefined)).toBe(false);
   });
 });

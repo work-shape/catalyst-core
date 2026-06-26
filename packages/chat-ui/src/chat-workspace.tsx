@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createApiClient,
   type AdministeredUserIdentity,
   type ChangeCurrentUserPasswordRequest,
   type Conversation,
+  type ConversationListItem,
+  type ConversationThreadSnapshot,
   type CreateAdministeredUserRequest,
   type LocaleCode,
-  type Message,
+  type RunObservation,
   type UpdateCurrentUserRequest,
   type UpdateAdministeredUserRequest,
   type UpsertAdministeredUserIdentityRequest
@@ -17,17 +19,15 @@ import { signOut } from "./auth-client";
 import type { ChatShellProps } from "./chat-shell";
 import { ChatDropOverlay, useChatFileDropzone } from "./chat-file-dropzone";
 import {
-  isConversationRunning,
-  shouldRefreshConversationMessagesOnSelect,
-  type ConversationActivity
-} from "./conversation-activity";
+  clearRunCursors,
+  useConversationController
+} from "./conversation-controller";
 import {
   draftAttachmentsQueryKey,
   useDraftAttachmentController
 } from "./draft-attachment-controller";
 import { readBrowserLocale, TranslationProvider } from "./i18n";
 import { LoginPanel } from "./login-panel";
-import { clearConversationStreamId } from "./resumable-stream-storage";
 import {
   createThemeStyle,
   readSystemThemeMode,
@@ -52,7 +52,6 @@ import {
   applyFavicon,
   createDraftKey,
   DEFAULT_LOCALES,
-  hasAssistantFinalSince,
   readStoredLocale,
   readStoredThemeMode,
   STANDALONE_AUTH_SOURCE,
@@ -79,7 +78,6 @@ export function ChatWorkspace({
   const selectedConversationIdRef = useRef<string | undefined>(undefined);
   const lastChatRouteRef = useRef<WorkspaceRoute>(defaultWorkspaceRoute());
   const [draftsByTarget, setDraftsByTarget] = useState<Record<string, string>>({});
-  const [conversationActivities, setConversationActivities] = useState<Record<string, ConversationActivity>>({});
   const [notice, setNotice] = useState<string | undefined>();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [composerFocusRequestId, setComposerFocusRequestId] = useState(0);
@@ -122,9 +120,9 @@ export function ChatWorkspace({
     queryFn: client.conversations,
     enabled: isAuthenticated
   });
-  const messagesQuery = useQuery({
-    queryKey: ["messages", apiBaseUrl, authScope, selectedConversationId],
-    queryFn: () => client.messages(selectedConversationId ?? ""),
+  const threadQuery = useQuery({
+    queryKey: threadQueryKey(apiBaseUrl, authScope, selectedConversationId),
+    queryFn: () => client.thread(selectedConversationId ?? ""),
     enabled: isAuthenticated && Boolean(selectedConversationId)
   });
   const isSuperadmin = adminPanel?.canView(meQuery.data) ?? false;
@@ -149,7 +147,7 @@ export function ChatWorkspace({
     onSuccess: (deletedConversation) => {
       let nextSelectedConversationId: string | undefined;
       const deletedActiveConversation = selectedConversationId === deletedConversation.id;
-      queryClient.setQueryData<Conversation[]>(
+      queryClient.setQueryData<ConversationListItem[]>(
         ["conversations", apiBaseUrl, authScope],
         (currentConversations = []) => {
           const remainingConversations = currentConversations.filter(
@@ -164,14 +162,12 @@ export function ChatWorkspace({
       );
       queryClient.removeQueries({ queryKey: ["messages", apiBaseUrl, authScope, deletedConversation.id] });
       queryClient.removeQueries({
+        queryKey: threadQueryKey(apiBaseUrl, authScope, deletedConversation.id)
+      });
+      queryClient.removeQueries({
         queryKey: draftAttachmentsQueryKey(apiBaseUrl, authScope, deletedConversation.id)
       });
       draftAttachmentController.clearConversationUploads(deletedConversation.id);
-      setConversationActivities((currentActivities) => {
-        const nextActivities = { ...currentActivities };
-        delete nextActivities[deletedConversation.id];
-        return nextActivities;
-      });
       if (deletedActiveConversation) {
         onRouteChange(
           nextSelectedConversationId
@@ -188,22 +184,41 @@ export function ChatWorkspace({
     }
   });
 
-  const conversations = conversationsQuery.data ?? [];
-  const messages = selectedConversationId ? messagesQuery.data : [];
-  const messagesLoaded = !selectedConversationId || messagesQuery.data !== undefined;
-  const selectedConversationActivity = selectedConversationId
-    ? conversationActivities[selectedConversationId]
-    : undefined;
-  const selectedConversationRunning = isConversationRunning(selectedConversationActivity);
-  const runningConversationEntries = useMemo(
+  const refreshSelectedThreadSnapshot = useCallback(
     () =>
-      Object.entries(conversationActivities)
-        .filter(([, activity]) => activity.status === "running")
-        .map(([conversationId, activity]) => ({
-          conversationId,
-          startedAt: activity.startedAt
-        })),
-    [conversationActivities]
+      selectedConversationId
+        ? queryClient.fetchQuery({
+            queryKey: threadQueryKey(apiBaseUrl, authScope, selectedConversationId),
+            queryFn: () => client.thread(selectedConversationId),
+            staleTime: 0
+          })
+        : Promise.resolve(undefined),
+    [apiBaseUrl, authScope, client, queryClient, selectedConversationId]
+  );
+  const onTerminalRunObservation = useCallback((observation: RunObservation) => {
+    void queryClient.invalidateQueries({
+      queryKey: threadQueryKey(apiBaseUrl, authScope, observation.conversationId)
+    });
+    void queryClient.invalidateQueries({ queryKey: ["conversations", apiBaseUrl, authScope] });
+    void queryClient.invalidateQueries({ queryKey: ["usage", apiBaseUrl, authScope] });
+    void queryClient.invalidateQueries({ queryKey: ["audit-events", apiBaseUrl, authScope] });
+  }, [apiBaseUrl, authScope, queryClient]);
+
+  const controller = useConversationController({
+    client,
+    conversationId: selectedConversationId,
+    enabled: isAuthenticated && Boolean(selectedConversationId),
+    snapshot: threadQuery.data,
+    snapshotLoading: threadQuery.isLoading,
+    snapshotError: threadQuery.error,
+    refreshSnapshot: refreshSelectedThreadSnapshot,
+    onTerminalObservation: onTerminalRunObservation
+  });
+  const conversations = conversationsQuery.data ?? [];
+  const messages = selectedConversationId ? controller.messages : [];
+  const messagesLoaded = !selectedConversationId || controller.snapshotStatus === "ready";
+  const selectedConversationRunning = Boolean(
+    controller.activeRun && isActiveRunStatus(controller.activeRun.run.status)
   );
   const config = configQuery.data;
   const attachmentsEnabled = config?.features.attachments.enabled ?? false;
@@ -269,9 +284,6 @@ export function ChatWorkspace({
     if (route.kind === "new-conversation" || route.kind === "conversation") {
       lastChatRouteRef.current = route;
     }
-    if (selectedConversationId) {
-      markConversationViewed(selectedConversationId);
-    }
   }, [route, selectedConversationId]);
 
   useEffect(() => {
@@ -279,43 +291,6 @@ export function ChatWorkspace({
       onRouteChange(defaultWorkspaceRoute(), { replace: true });
     }
   }, [isAuthenticated, isSuperadmin, onRouteChange, route.kind]);
-
-  useEffect(() => {
-    if (!isAuthenticated || runningConversationEntries.length === 0) {
-      return undefined;
-    }
-
-    let cancelled = false;
-    const pollRunningConversations = async () => {
-      await Promise.all(
-        runningConversationEntries.map(async ({ conversationId, startedAt }) => {
-          const persistedMessages = await queryClient
-            .fetchQuery({
-              queryKey: ["messages", apiBaseUrl, authScope, conversationId],
-              queryFn: () => client.messages(conversationId),
-              staleTime: 0
-            })
-            .catch(() => undefined);
-          if (!cancelled && persistedMessages && hasAssistantFinalSince(persistedMessages, startedAt)) {
-            markConversationFinished(conversationId, selectedConversationIdRef.current === conversationId);
-          }
-        })
-      );
-      if (!cancelled) {
-        void queryClient.invalidateQueries({ queryKey: ["conversations", apiBaseUrl, authScope] });
-      }
-    };
-
-    void pollRunningConversations();
-    const intervalId = window.setInterval(() => {
-      void pollRunningConversations();
-    }, 2500);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, [apiBaseUrl, authScope, client, isAuthenticated, queryClient, runningConversationEntries]);
 
   useEffect(() => {
     const media = window.matchMedia?.("(prefers-color-scheme: dark)");
@@ -370,11 +345,29 @@ export function ChatWorkspace({
     mutationFn: () => signOut(apiBaseUrl),
     onSuccess: () => {
       setDraftsByTarget({});
-      setConversationActivities({});
+      clearRunCursors();
       lastChatRouteRef.current = defaultWorkspaceRoute();
       onRouteChange(defaultWorkspaceRoute(), { replace: true });
       void queryClient.clear();
       void queryClient.invalidateQueries({ queryKey: ["me", apiBaseUrl] });
+    }
+  });
+  const cancelRunMutation = useMutation({
+    mutationFn: (input: { conversationId: string; runId: string }) =>
+      client.cancelRun(input.conversationId, input.runId, { reason: "user_requested" }),
+    onMutate: ({ conversationId, runId }) => {
+      queryClient.setQueryData<ConversationThreadSnapshot>(
+        threadQueryKey(apiBaseUrl, authScope, conversationId),
+        (current) => markThreadRunCancelling(current, runId)
+      );
+    },
+    onSuccess: (_response, { conversationId }) => {
+      void queryClient.invalidateQueries({ queryKey: threadQueryKey(apiBaseUrl, authScope, conversationId) });
+      void queryClient.invalidateQueries({ queryKey: ["conversations", apiBaseUrl, authScope] });
+      void queryClient.invalidateQueries({ queryKey: ["audit-events", apiBaseUrl, authScope] });
+    },
+    onError: (error) => {
+      setNotice(apiErrorMessage(error, "Cancel failed"));
     }
   });
   const updateCurrentUser = useMutation({
@@ -450,6 +443,16 @@ export function ChatWorkspace({
     writeStoredLocale(locale);
   }
 
+  function onCancelSelectedRun() {
+    if (!selectedConversationId || !controller.activeRun || !isActiveRunStatus(controller.activeRun.run.status)) {
+      return;
+    }
+    cancelRunMutation.mutate({
+      conversationId: selectedConversationId,
+      runId: controller.activeRun.run.id
+    });
+  }
+
   function onCreateConversation() {
     onRouteChange(defaultWorkspaceRoute());
     setNotice(undefined);
@@ -471,7 +474,7 @@ export function ChatWorkspace({
   }
 
   function onConversationCreated(conversation: Conversation) {
-    queryClient.setQueryData<Conversation[]>(
+    queryClient.setQueryData<ConversationListItem[]>(
       ["conversations", apiBaseUrl, authScope],
       (currentConversations = []) => {
         if (currentConversations.some((candidate) => candidate.id === conversation.id)) {
@@ -484,101 +487,29 @@ export function ChatWorkspace({
     );
   }
 
-  function markConversationRunning(conversationId: string, runId?: string) {
-    setConversationActivities((currentActivities) => {
-      const currentActivity = currentActivities[conversationId];
-      return {
-        ...currentActivities,
-        [conversationId]: {
-          ...currentActivity,
-          status: "running",
-          unread: false,
-          startedAt: currentActivity?.status === "running" ? currentActivity.startedAt : new Date().toISOString(),
-          completedAt: undefined,
-          error: undefined,
-          runId: runId ?? currentActivity?.runId
-        }
-      };
-    });
-  }
-
-  function markConversationFinished(conversationId: string, viewed: boolean) {
-    clearConversationStreamId(apiBaseUrl, conversationId);
-    setConversationActivities((currentActivities) => {
-      const currentActivity = currentActivities[conversationId];
-      return {
-        ...currentActivities,
-        [conversationId]: {
-          ...currentActivity,
-          status: "idle",
-          unread: !viewed,
-          completedAt: new Date().toISOString(),
-          error: undefined,
-          runId: undefined
-        }
-      };
-    });
-  }
-
-  function markConversationFailed(conversationId: string, message: string, viewed: boolean) {
-    clearConversationStreamId(apiBaseUrl, conversationId);
-    setConversationActivities((currentActivities) => ({
-      ...currentActivities,
-      [conversationId]: {
-        ...currentActivities[conversationId],
-        status: "failed",
-        unread: !viewed,
-        completedAt: new Date().toISOString(),
-        error: message,
-        runId: undefined
-      }
-    }));
-  }
-
-  function markConversationViewed(conversationId: string) {
-    setConversationActivities((currentActivities) => {
-      const currentActivity = currentActivities[conversationId];
-      if (!currentActivity?.unread) {
-        return currentActivities;
-      }
-      return {
-        ...currentActivities,
-        [conversationId]: {
-          ...currentActivity,
-          unread: false
-        }
-      };
-    });
-  }
-
-  function onConversationStarted(conversationId: string, startedMessages?: Message[]) {
-    if (startedMessages) {
-      queryClient.setQueryData(["messages", apiBaseUrl, authScope, conversationId], startedMessages);
-    }
+  function onConversationStarted(conversationId: string) {
     onRouteChange(
       { kind: "conversation", conversationId },
       { replace: route.kind === "new-conversation" }
     );
     setNotice(undefined);
     void queryClient.invalidateQueries({ queryKey: ["conversations", apiBaseUrl, authScope] });
+    void queryClient.invalidateQueries({ queryKey: threadQueryKey(apiBaseUrl, authScope, conversationId) });
   }
 
   function onMessageSubmitted(conversationId: string) {
-    markConversationRunning(conversationId);
     setDraftForKey(createDraftKey(authScope, conversationId), "");
     queryClient.setQueryData(draftAttachmentsQueryKey(apiBaseUrl, authScope, conversationId), []);
     draftAttachmentController.clearConversationUploads(conversationId);
   }
 
-  function onChatRequestAccepted(conversationId: string, runId?: string) {
-    if (runId) {
-      markConversationRunning(conversationId, runId);
-    }
-    void queryClient.invalidateQueries({ queryKey: ["messages", apiBaseUrl, authScope, conversationId] });
+  function onChatRequestAccepted(conversationId: string) {
+    void queryClient.invalidateQueries({ queryKey: threadQueryKey(apiBaseUrl, authScope, conversationId) });
+    void queryClient.invalidateQueries({ queryKey: ["conversations", apiBaseUrl, authScope] });
     void client
       .generateConversationTitle(conversationId)
       .then((updatedConversation) => {
-        queryClient.setQueryData<Conversation[]>(
+        queryClient.setQueryData<ConversationListItem[]>(
           ["conversations", apiBaseUrl, authScope],
           (currentConversations = []) => {
             if (currentConversations.some((conversation) => conversation.id === updatedConversation.id)) {
@@ -595,58 +526,26 @@ export function ChatWorkspace({
       });
   }
 
-  function onStreamFinished(conversationId: string, viewed: boolean) {
-    markConversationFinished(conversationId, viewed || selectedConversationIdRef.current === conversationId);
+  function onStreamFinished(conversationId: string) {
     setNotice(undefined);
     void queryClient.invalidateQueries({ queryKey: ["conversations", apiBaseUrl, authScope] });
-    void queryClient.invalidateQueries({ queryKey: ["messages", apiBaseUrl, authScope] });
+    void queryClient.invalidateQueries({ queryKey: threadQueryKey(apiBaseUrl, authScope, conversationId) });
     void queryClient.invalidateQueries({ queryKey: ["draft-attachments", apiBaseUrl, authScope] });
     void queryClient.invalidateQueries({ queryKey: ["usage", apiBaseUrl, authScope] });
     void queryClient.invalidateQueries({ queryKey: ["audit-events", apiBaseUrl, authScope] });
   }
 
-  function onStreamUnavailable(conversationId: string) {
-    clearConversationStreamId(apiBaseUrl, conversationId);
-    setConversationActivities((currentActivities) => {
-      const currentActivity = currentActivities[conversationId];
-      if (!currentActivity?.runId) {
-        return currentActivities;
-      }
-      return {
-        ...currentActivities,
-        [conversationId]: {
-          ...currentActivity,
-          status: "idle",
-          completedAt: currentActivity.completedAt ?? new Date().toISOString(),
-          runId: undefined
-        }
-      };
-    });
-    void queryClient.invalidateQueries({ queryKey: ["messages", apiBaseUrl, authScope, conversationId] });
-  }
-
   function onStreamError(conversationId: string, message: string, viewed: boolean) {
     const visible = viewed || selectedConversationIdRef.current === conversationId;
-    markConversationFailed(conversationId, message, visible);
     if (visible) {
       setNotice(message);
     }
     void queryClient.invalidateQueries({ queryKey: ["conversations", apiBaseUrl, authScope] });
-    void queryClient.invalidateQueries({ queryKey: ["messages", apiBaseUrl, authScope] });
+    void queryClient.invalidateQueries({ queryKey: threadQueryKey(apiBaseUrl, authScope, conversationId) });
     void queryClient.invalidateQueries({ queryKey: ["draft-attachments", apiBaseUrl, authScope] });
   }
 
   function onSelectConversation(conversationId: string) {
-    if (shouldRefreshConversationMessagesOnSelect(conversationActivities[conversationId])) {
-      void queryClient
-        .fetchQuery({
-          queryKey: ["messages", apiBaseUrl, authScope, conversationId],
-          queryFn: () => client.messages(conversationId),
-          staleTime: 0
-        })
-        .catch(() => undefined);
-    }
-    markConversationViewed(conversationId);
     onRouteChange({ kind: "conversation", conversationId });
     setNotice(undefined);
   }
@@ -713,11 +612,10 @@ export function ChatWorkspace({
 
       {sidebarOpen ? (
         <div className="fixed inset-y-0 left-0 z-40 w-[min(18rem,calc(100vw-2rem))] min-w-0 translate-x-0 transition-transform duration-200 md:static md:z-auto md:w-auto md:translate-x-0">
-          <WorkspaceRail
-            config={config}
-            conversations={conversations}
-            conversationActivities={conversationActivities}
-            selectedConversationId={selectedConversationId}
+            <WorkspaceRail
+              config={config}
+              conversations={conversations}
+              selectedConversationId={selectedConversationId}
             isSuperadmin={isSuperadmin}
             view={view}
             creatingConversation={false}
@@ -811,7 +709,7 @@ export function ChatWorkspace({
                 draftAttachments={draftAttachmentController.draftAttachments}
                 localUploadingAttachments={draftAttachmentController.visibleUploadingAttachments}
                 conversationRunning={selectedConversationRunning}
-                conversationRunId={selectedConversationActivity?.runId}
+                activeRun={controller.activeRun}
                 sendBlockedReason={draftAttachmentController.sendBlockedReason}
                 attachmentsEnabled={attachmentsEnabled}
                 attachmentAccept={attachmentAccept}
@@ -823,9 +721,9 @@ export function ChatWorkspace({
                 onConversationStarted={onConversationStarted}
                 onMessageSubmitted={onMessageSubmitted}
                 onChatRequestAccepted={onChatRequestAccepted}
-                onStreamUnavailable={onStreamUnavailable}
                 onStreamFinished={onStreamFinished}
                 onStreamError={onStreamError}
+                onCancelRun={onCancelSelectedRun}
               />
               {fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
             </div>
@@ -836,4 +734,44 @@ export function ChatWorkspace({
       </main>
     </TranslationProvider>
   );
+}
+
+function threadQueryKey(
+  apiBaseUrl: string,
+  authScope: string,
+  conversationId: string | undefined
+) {
+  return ["thread", apiBaseUrl, authScope, conversationId] as const;
+}
+
+function isActiveRunStatus(status: string): boolean {
+  return (
+    status === "queued" ||
+    status === "running" ||
+    status === "waiting_for_permission" ||
+    status === "cancelling"
+  );
+}
+
+function markThreadRunCancelling(
+  thread: ConversationThreadSnapshot | undefined,
+  runId: string
+): ConversationThreadSnapshot | undefined {
+  if (!thread?.activeRun || thread.activeRun.run.id !== runId) {
+    return thread;
+  }
+  return {
+    ...thread,
+    activeRun: {
+      run: {
+        ...thread.activeRun.run,
+        status: "cancelling",
+        updatedAt: new Date().toISOString()
+      },
+      projection: {
+        ...thread.activeRun.projection,
+        status: "cancelling"
+      }
+    }
+  };
 }

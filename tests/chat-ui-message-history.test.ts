@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Message } from "@vivd-catalyst/api-client";
-import { toUiMessages } from "../packages/chat-ui/src/assistant-chat-panel";
+import { toUiMessages } from "../packages/chat-ui/src/assistant-ui-adapter";
 
 describe("chat UI message history projection", () => {
   it("replays persisted user document manifests as file attachments", () => {

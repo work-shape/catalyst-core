@@ -27,6 +27,11 @@ export function registerConversationRoutes(app: FastifyInstance, options: ChatSe
     return conversations.listMessages(getConversationId(request), user);
   });
 
+  app.get(apiOperations.getConversationThread.path, async (request) => {
+    const { user } = await authenticateRequest(options, request);
+    return conversations.getThreadSnapshot(getConversationId(request), user);
+  });
+
   app.delete(apiOperations.deleteConversation.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
     return conversations.deleteConversation(getConversationId(request), user, context);

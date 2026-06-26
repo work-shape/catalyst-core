@@ -1,5 +1,6 @@
 import { createUIMessageStream, createUIMessageStreamResponse, type UIMessage } from "ai";
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { Readable } from "node:stream";
 import {
   apiOperations,
   cancelRunRequestSchema,
@@ -7,6 +8,7 @@ import {
   chatStreamChunkSchema,
   chatStreamRoutePath,
   chatStreamRequestSchema,
+  runObservationSchema,
   type ChatStreamChunk,
   type ChatStreamRequest
 } from "@vivd-catalyst/api-contract";
@@ -168,7 +170,7 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
     });
   });
 
-  app.post("/api/chat/conversations/:conversationId/runs/:runId/cancel", async (request) => {
+  async function cancelRun(request: FastifyRequest) {
     const { user, context } = await authenticateRequest(options, request);
     const params = request.params as { conversationId?: string; runId?: string };
     const conversationId = asConversationId(params.conversationId ?? "");
@@ -182,6 +184,59 @@ export function registerChatStreamRoutes(app: FastifyInstance, options: ChatServ
       body.reason
     );
     return cancelRunResponseSchema.parse({ run });
+  }
+
+  app.post(apiOperations.cancelConversationRun.path, cancelRun);
+
+  app.post("/api/chat/conversations/:conversationId/runs/:runId/cancel", cancelRun);
+
+  app.get("/api/conversations/:conversationId/runs/:runId/events", async (request, reply) => {
+    const { user, context } = await authenticateRequest(options, request);
+    const params = request.params as { conversationId?: string; runId?: string };
+    const conversationId = asConversationId(params.conversationId ?? "");
+    const runId = asAgentRunId(params.runId ?? "");
+    const afterSequence = readAfterSequence(request);
+    const localizedContext = withRequestLocale(context, options, request, undefined);
+    await conversations.requireOwnedActiveConversation(conversationId, user);
+
+    const run = await conversations.getRunForUser(runId, user);
+    if (!run || run.conversationId !== conversationId) {
+      return reply.status(204).send();
+    }
+    if (!isObservableRunStatus(run.status) && afterSequence >= run.lastSequence) {
+      return reply.status(204).send();
+    }
+
+    let closed = false;
+    request.raw.on("close", () => {
+      closed = true;
+    });
+
+    reply.header("cache-control", "no-store");
+    reply.header("connection", "keep-alive");
+    reply.header("content-type", "text/event-stream; charset=utf-8");
+    return reply.send(
+      Readable.from(
+        (async function* streamRunObservations() {
+          for await (const event of conversations.observeRun(runId, localizedContext, { afterSequence })) {
+            if (closed) {
+              return;
+            }
+            const observation = runObservationSchema.parse({
+              clientInstanceId: options.clientInstanceId,
+              runId,
+              conversationId,
+              ownerUserId: user.id,
+              sequence: event.sequence,
+              type: event.type,
+              payload: event,
+              createdAt: event.createdAt
+            });
+            yield `id: ${observation.sequence}\nevent: ${observation.type}\ndata: ${JSON.stringify(observation)}\n\n`;
+          }
+        })()
+      )
+    );
   });
 
   function monitorRunLifecycle(input: {

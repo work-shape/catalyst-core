@@ -1,7 +1,6 @@
 import { PanelLeft, Plus, Shield } from "lucide-react";
 import type { ReactNode } from "react";
-import type { Conversation, SafeConfig } from "@vivd-catalyst/api-client";
-import type { ConversationActivity } from "./conversation-activity";
+import type { ConversationListItem, SafeConfig } from "@vivd-catalyst/api-client";
 import { ConversationButton } from "./conversation-button";
 import { useTranslation } from "./i18n";
 import { Button } from "./ui/button";
@@ -12,7 +11,6 @@ export type WorkspaceView = "chat" | "settings" | "superadmin";
 export function WorkspaceRail({
   config,
   conversations,
-  conversationActivities,
   selectedConversationId,
   isSuperadmin,
   view,
@@ -26,8 +24,7 @@ export function WorkspaceRail({
   onDeleteConversation
 }: {
   config: SafeConfig | undefined;
-  conversations: Conversation[];
-  conversationActivities: Record<string, ConversationActivity>;
+  conversations: ConversationListItem[];
   selectedConversationId: string | undefined;
   isSuperadmin: boolean;
   view: WorkspaceView;
@@ -150,7 +147,6 @@ export function WorkspaceRail({
             <ConversationButton
               key={conversation.id}
               conversation={conversation}
-              activity={conversationActivities[conversation.id]}
               selected={conversation.id === selectedConversationId}
               onSelect={() => onSelectConversation(conversation.id)}
               onDelete={() => onDeleteConversation(conversation.id)}
