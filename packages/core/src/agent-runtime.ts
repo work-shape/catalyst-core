@@ -5,12 +5,17 @@ import type { ManagedFileRef } from "./files";
 import type { AttachmentManifest } from "./files";
 import type { RuntimeCallContext } from "./identity";
 import type { ToolExecutionResult } from "./tool-execution";
+import type { ChatMessage } from "./conversation";
 
 export interface StartAgentRunInput {
   agentName: string;
   conversationId: ConversationId;
   idempotencyKey?: string;
   inputMessageId?: MessageId;
+  preparedRun?: {
+    id: AgentRunId;
+    startedAt: ISODateString;
+  };
   message: {
     text: string;
     files?: ManagedFileRef[];
@@ -288,6 +293,28 @@ export interface CreateAgentRunInput {
   startedAt?: ISODateString;
 }
 
+export interface PrepareConversationRunStartInput {
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  ownerUserId: string;
+  userMessage: {
+    id: MessageId;
+    text: string;
+    metadata?: JsonObject;
+  };
+  run: CreateAgentRunInput;
+  runStartCommand?: {
+    idempotencyKey: string;
+    commandKind: RunStartCommandKind;
+  };
+  claimReadyDraftAttachments?: boolean;
+}
+
+export interface PreparedConversationRunStart {
+  userMessage: ChatMessage;
+  run: AgentRun;
+}
+
 export interface UpdateAgentRunStatusInput {
   clientInstanceId: ClientInstanceId;
   runId: AgentRunId;
@@ -330,6 +357,9 @@ export interface AgentRunStore {
   claimRunStartCommand(input: ClaimRunStartCommandInput): Promise<ClaimRunStartCommandResult>;
   completeRunStartCommand(input: CompleteRunStartCommandInput): Promise<RunStartCommand>;
   releaseRunStartCommand(input: ReleaseRunStartCommandInput): Promise<void>;
+  prepareConversationRunStart(
+    input: PrepareConversationRunStartInput
+  ): Promise<PreparedConversationRunStart>;
   createAgentRun(input: CreateAgentRunInput): Promise<AgentRun>;
   getAgentRun(input: {
     clientInstanceId: ClientInstanceId;

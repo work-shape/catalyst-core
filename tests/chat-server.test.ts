@@ -339,6 +339,7 @@ describe("client instance app vertical slice", () => {
       config: createTestConfig(),
       env: {},
       storeMode: "memory",
+      capabilities: [createTestAttachmentCapability()],
       tools: []
     });
 
@@ -499,6 +500,96 @@ describe("client instance app vertical slice", () => {
         text: "concurrent public run start should append once"
       })
     ]);
+
+    const upload = createMultipartFilePayload({
+      fieldName: "file",
+      filename: "different-key-race-draft.txt",
+      contentType: "text/plain",
+      content: "This draft should only be claimed by the accepted run start."
+    });
+    const uploaded = await app.server.inject({
+      method: "POST",
+      url: `/api/conversations/${conversation.id}/draft-attachments`,
+      headers: upload.headers,
+      payload: upload.payload
+    });
+    expect(uploaded.statusCode).toBe(200);
+    const uploadedBody = uploaded.json() as { attachment: { id: string } };
+    await waitForReadyDraftAttachment(app.server, conversation.id);
+
+    const differentKeyStarts = await Promise.all([
+      fetch(`${baseUrl}/api/conversations/${conversation.id}/runs`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          idempotencyKey: "public-existing-run-different-key-a",
+          message: { text: "different key start accepted" }
+        })
+      }),
+      fetch(`${baseUrl}/api/conversations/${conversation.id}/runs`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          idempotencyKey: "public-existing-run-different-key-b",
+          message: { text: "different key start rejected" }
+        })
+      })
+    ]);
+    const acceptedDifferentKeyStarts = differentKeyStarts.filter(
+      (response) => response.status === 200
+    );
+    const rejectedDifferentKeyStarts = differentKeyStarts.filter(
+      (response) => response.status === 409
+    );
+    expect(acceptedDifferentKeyStarts).toHaveLength(1);
+    expect(rejectedDifferentKeyStarts).toHaveLength(1);
+    const acceptedDifferentKeyStart = (await acceptedDifferentKeyStarts[0]?.json()) as {
+      userMessage: { id: string; text: string };
+      run: { id: string };
+    };
+    await rejectedDifferentKeyStarts[0]?.text();
+    const differentKeyEvents = await fetch(
+      `${baseUrl}/api/conversations/${conversation.id}/runs/${acceptedDifferentKeyStart.run.id}/events`
+    );
+    expect(differentKeyEvents.status).toBe(200);
+    await differentKeyEvents.text();
+
+    const afterDifferentKeyMessages = await fetch(
+      `${baseUrl}/api/conversations/${conversation.id}/messages`
+    );
+    expect(afterDifferentKeyMessages.status).toBe(200);
+    const afterDifferentKeyUserMessages = (
+      (await afterDifferentKeyMessages.json()) as Array<{
+        id: string;
+        role: string;
+        text: string;
+        metadata?: {
+          agentRuntime?: {
+            attachmentManifest?: {
+              attachments?: Array<{ attachmentId?: string }>;
+            };
+          };
+        };
+      }>
+    ).filter((message) => message.role === "user");
+    const racedMessages = afterDifferentKeyUserMessages.filter((message) =>
+      ["different key start accepted", "different key start rejected"].includes(message.text)
+    );
+    expect(racedMessages).toEqual([
+      expect.objectContaining({
+        id: acceptedDifferentKeyStart.userMessage.id,
+        text: acceptedDifferentKeyStart.userMessage.text
+      })
+    ]);
+    expect(racedMessages[0]?.metadata?.agentRuntime?.attachmentManifest?.attachments).toContainEqual(
+      expect.objectContaining({
+        attachmentId: uploadedBody.attachment.id
+      })
+    );
 
     const firstCreateAndStart = await fetch(`${baseUrl}/api/conversations/runs`, {
       method: "POST",

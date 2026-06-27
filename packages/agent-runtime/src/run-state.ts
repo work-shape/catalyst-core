@@ -5,7 +5,8 @@ import {
   type AgentRunStatus,
   type AgentRuntimeEvent,
   type AgentRuntimeObserveOptions,
-  type ChatMessage
+  type ChatMessage,
+  type ISODateString
 } from "@vivd-catalyst/core";
 
 type AgentRuntimeEventDraft = AgentRuntimeEvent extends infer TEvent
@@ -16,6 +17,7 @@ type AgentRuntimeEventDraft = AgentRuntimeEvent extends infer TEvent
 
 export interface RunStateOptions {
   onEvent?: (event: AgentRuntimeEvent) => void | Promise<void>;
+  startedAt?: ISODateString;
 }
 
 export interface RunFailureError {
@@ -53,7 +55,7 @@ function categorizeRunFailure(error: unknown): AgentRunFailureCategory {
 
 export class RunState {
   readonly runId: AgentRunId;
-  readonly startedAt = new Date().toISOString();
+  readonly startedAt: ISODateString;
   private status: AgentRunStatus = "running";
   private sequence = 0;
   private closed = false;
@@ -69,6 +71,7 @@ export class RunState {
 
   constructor(runId: AgentRunId, options: RunStateOptions = {}) {
     this.runId = runId;
+    this.startedAt = options.startedAt ?? new Date().toISOString();
     this.onEvent = options.onEvent;
   }
 

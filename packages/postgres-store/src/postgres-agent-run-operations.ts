@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, sql as drizzleSql } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, sql as drizzleSql } from "drizzle-orm";
 import {
   AppError,
   type AgentRun,
@@ -10,6 +10,8 @@ import {
   type CompleteRunStartCommandInput,
   type ConversationId,
   type CreateAgentRunInput,
+  type PrepareConversationRunStartInput,
+  type PreparedConversationRunStart,
   type ReleaseRunStartCommandInput,
   type RunObservation,
   asAgentRunId,
@@ -20,8 +22,15 @@ import {
   type UpdateAgentRunStatusInput
 } from "@vivd-catalyst/core";
 import type { PostgresDatabase } from "./postgres-database";
-import { mapAgentRun, mapRunObservation } from "./rows";
-import { agentRunObservations, agentRuns, runStartCommands } from "./schema";
+import { mapAgentRun, mapMessage, mapRunObservation } from "./rows";
+import {
+  agentRunObservations,
+  agentRuns,
+  conversationAttachments,
+  conversations,
+  messages,
+  runStartCommands
+} from "./schema";
 
 export async function claimRunStartCommand(
   db: PostgresDatabase,
@@ -87,6 +96,133 @@ export async function releaseRunStartCommand(
   await db
     .delete(runStartCommands)
     .where(and(runStartCommandWhere(input), eq(runStartCommands.status, "pending")));
+}
+
+export async function prepareConversationRunStart(
+  db: PostgresDatabase,
+  input: PrepareConversationRunStartInput
+): Promise<PreparedConversationRunStart> {
+  return db.transaction(async (tx) => {
+    const locked = (await tx.execute(drizzleSql<{ id: string }>`
+      select id
+      from conversations
+      where client_instance_id = ${input.clientInstanceId}
+        and id = ${input.conversationId}
+        and owner_user_id = ${input.ownerUserId}
+        and status = 'active'
+      for update
+    `)) as unknown as Array<{ id: string }>;
+    if (!locked[0]) {
+      throw new AppError("NOT_FOUND", "Conversation is not available");
+    }
+
+    const [activeRun] = await tx
+      .select()
+      .from(agentRuns)
+      .where(
+        and(
+          eq(agentRuns.clientInstanceId, input.clientInstanceId),
+          eq(agentRuns.conversationId, input.conversationId),
+          eq(agentRuns.ownerUserId, input.ownerUserId),
+          drizzleSql`${agentRuns.status} in ('queued', 'running', 'waiting_for_permission', 'cancelling')`
+        )
+      )
+      .limit(1);
+    if (activeRun) {
+      throw new AppError("CONFLICT", "Conversation already has an active agent run");
+    }
+
+    const createdAt = input.run.startedAt ? new Date(input.run.startedAt) : new Date();
+    const [messageRow] = await tx
+      .insert(messages)
+      .values({
+        id: input.userMessage.id,
+        clientInstanceId: input.clientInstanceId,
+        conversationId: input.conversationId,
+        role: "user",
+        text: input.userMessage.text,
+        createdAt,
+        metadata: input.userMessage.metadata ?? {}
+      })
+      .returning();
+
+    if (input.claimReadyDraftAttachments) {
+      await tx
+        .update(conversationAttachments)
+        .set({
+          messageId: input.userMessage.id,
+          updatedAt: createdAt
+        })
+        .where(
+          and(
+            eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
+            eq(conversationAttachments.conversationId, input.conversationId),
+            eq(conversationAttachments.status, "ready"),
+            isNull(conversationAttachments.messageId)
+          )
+        );
+    }
+
+    const [runRow] = await tx
+      .insert(agentRuns)
+      .values({
+        id: input.run.id,
+        clientInstanceId: input.clientInstanceId,
+        conversationId: input.conversationId,
+        ownerUserId: input.ownerUserId,
+        inputMessageId: input.userMessage.id,
+        agentName: input.run.agentName,
+        status: "running",
+        idempotencyKey: input.run.idempotencyKey,
+        startedAt: createdAt,
+        updatedAt: createdAt,
+        lastSequence: 0,
+        correlationId: input.run.correlationId
+      })
+      .returning();
+
+    if (input.runStartCommand) {
+      const [commandRow] = await tx
+        .update(runStartCommands)
+        .set({
+          status: "completed",
+          conversationId: input.conversationId,
+          userMessageId: input.userMessage.id,
+          runId: input.run.id,
+          updatedAt: createdAt
+        })
+        .where(
+          and(
+            runStartCommandWhere({
+              clientInstanceId: input.clientInstanceId,
+              ownerUserId: input.ownerUserId,
+              commandKind: input.runStartCommand.commandKind,
+              idempotencyKey: input.runStartCommand.idempotencyKey
+            }),
+            eq(runStartCommands.status, "pending")
+          )
+        )
+        .returning();
+      if (!commandRow) {
+        throw new AppError("NOT_FOUND", "Run start command is not available");
+      }
+    }
+
+    await tx
+      .update(conversations)
+      .set({ updatedAt: createdAt })
+      .where(
+        and(
+          eq(conversations.clientInstanceId, input.clientInstanceId),
+          eq(conversations.id, input.conversationId)
+        )
+      );
+
+    return {
+      userMessage: mapMessage(messageRow),
+      run: mapAgentRun(runRow)
+    };
+  });
 }
 
 export async function createAgentRun(

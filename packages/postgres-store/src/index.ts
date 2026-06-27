@@ -46,6 +46,7 @@ import {
   getActiveConversationAgentRun as getPostgresActiveConversationAgentRun,
   getConversationAgentRun as getPostgresConversationAgentRun,
   listRunObservations as listPostgresRunObservations,
+  prepareConversationRunStart as preparePostgresConversationRunStart,
   releaseRunStartCommand as releasePostgresRunStartCommand,
   updateAgentRunStatus as updatePostgresAgentRunStatus
 } from "./postgres-agent-run-operations";
@@ -238,6 +239,10 @@ export class PostgresPlatformStore
 
   async releaseRunStartCommand(input: ReleaseRunStartCommandInput): Promise<void> {
     return releasePostgresRunStartCommand(this.db, input);
+  }
+
+  async prepareConversationRunStart(input: Parameters<AgentRunStore["prepareConversationRunStart"]>[0]) {
+    return preparePostgresConversationRunStart(this.db, input);
   }
 
   async createAgentRun(input: Parameters<AgentRunStore["createAgentRun"]>[0]): Promise<AgentRun> {

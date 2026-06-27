@@ -20,6 +20,8 @@ import {
   type CreateConversationInput,
   type CreateMessageInput,
   type PlatformFileStore,
+  type PrepareConversationRunStartInput,
+  type PreparedConversationRunStart,
   type ReleaseRunStartCommandInput,
   type RunObservation,
   type RunObservationStore,
@@ -255,6 +257,67 @@ export class InMemoryPlatformStore
       return;
     }
     this.runStartCommands.delete(key);
+  }
+
+  async prepareConversationRunStart(
+    input: PrepareConversationRunStartInput
+  ): Promise<PreparedConversationRunStart> {
+    const conversation = await this.getConversation(input.clientInstanceId, input.conversationId);
+    if (!conversation || conversation.status !== "active" || conversation.ownerUserId !== input.ownerUserId) {
+      throw new AppError("NOT_FOUND", "Conversation is not available");
+    }
+    const activeRun = await this.getActiveConversationAgentRun({
+      clientInstanceId: input.clientInstanceId,
+      conversationId: input.conversationId,
+      ownerUserId: input.ownerUserId
+    });
+    if (activeRun) {
+      throw new AppError("CONFLICT", "Conversation already has an active agent run");
+    }
+    if (input.runStartCommand) {
+      const command = this.runStartCommands.get(
+        runStartCommandKey({
+          clientInstanceId: input.clientInstanceId,
+          ownerUserId: input.ownerUserId,
+          commandKind: input.runStartCommand.commandKind,
+          idempotencyKey: input.runStartCommand.idempotencyKey
+        })
+      );
+      if (!command || command.status !== "pending") {
+        throw new AppError("NOT_FOUND", "Run start command is not available");
+      }
+    }
+
+    const userMessage = await this.appendMessage({
+      id: input.userMessage.id,
+      clientInstanceId: input.clientInstanceId,
+      conversationId: input.conversationId,
+      role: "user",
+      text: input.userMessage.text,
+      metadata: input.userMessage.metadata
+    });
+    if (input.claimReadyDraftAttachments) {
+      await this.claimReadyDraftAttachmentsForMessage({
+        clientInstanceId: input.clientInstanceId,
+        conversationId: input.conversationId,
+        messageId: userMessage.id,
+        claimedAt: userMessage.createdAt
+      });
+    }
+    const run = await this.createAgentRun(input.run);
+    if (input.runStartCommand) {
+      await this.completeRunStartCommand({
+        clientInstanceId: input.clientInstanceId,
+        ownerUserId: input.ownerUserId,
+        idempotencyKey: input.runStartCommand.idempotencyKey,
+        commandKind: input.runStartCommand.commandKind,
+        conversationId: input.conversationId,
+        userMessageId: userMessage.id,
+        runId: run.id,
+        updatedAt: run.startedAt
+      });
+    }
+    return { userMessage, run };
   }
 
   async createAgentRun(input: CreateAgentRunInput): Promise<AgentRun> {

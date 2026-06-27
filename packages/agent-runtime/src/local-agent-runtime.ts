@@ -102,11 +102,15 @@ export class LocalAgentRuntime implements AgentRuntime {
     input: StartAgentRunInput,
     context: RuntimeCallContext
   ): Promise<AgentRunHandle> {
-    const runId = createPlatformId<"AgentRunId">("run");
+    const runId = input.preparedRun?.id ?? createPlatformId<"AgentRunId">("run");
+    if (this.runs.has(runId)) {
+      throw new AppError("CONFLICT", "Agent run is already active");
+    }
     const state = new RunState(runId, {
+      startedAt: input.preparedRun?.startedAt,
       onEvent: (event) => this.persistRunEvent(input, context, event)
     });
-    if (this.options.agentRunStore) {
+    if (this.options.agentRunStore && !input.preparedRun) {
       if (!input.inputMessageId) {
         throw new AppError("INTERNAL", "Durable agent runs require an input message id");
       }

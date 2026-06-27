@@ -167,7 +167,7 @@ export class ConversationWorkflow {
     context: RuntimeCallContext,
     command: SendConversationMessageCommand
   ): Promise<StartedConversationMessageRun> {
-    const conversation = await this.requireOwnedActiveConversation(conversationId, user);
+    await this.requireOwnedActiveConversation(conversationId, user);
     if (command.idempotencyKey) {
       const claim = await this.claimOrResolveRunStartCommand({
         commandKind: "start_conversation_run",
@@ -181,15 +181,6 @@ export class ConversationWorkflow {
     }
 
     try {
-      const activeRun = await this.options.conversationStore.getActiveConversationAgentRun({
-        clientInstanceId: this.options.clientInstanceId,
-        conversationId,
-        ownerUserId: getSubjectUserId(user)
-      });
-      if (activeRun) {
-        throw new AppError("CONFLICT", "Conversation already has an active agent run");
-      }
-
       const attachments = this.options.attachments;
       const draftAttachments = attachments
         ? await attachments.listDraftAttachments(conversationId)
@@ -201,41 +192,49 @@ export class ConversationWorkflow {
       const attachmentManifest =
         attachments?.createAttachmentManifest(draftAttachments) ?? createEmptyAttachmentManifest();
       const userMessageId = createPlatformId<"MessageId">("msg");
-      const userMessage = await this.options.conversationStore.appendMessage({
-        id: userMessageId,
+      const runId = createPlatformId<"AgentRunId">("run");
+      const startedAt = new Date().toISOString();
+      const prepared = await this.options.conversationStore.prepareConversationRunStart({
         clientInstanceId: this.options.clientInstanceId,
         conversationId,
-        role: "user",
-        text: command.text,
-        metadata: createUserMessageMetadata(attachmentManifest)
-      });
-      if (attachmentManifest.attachments.length > 0) {
-        await this.options.conversationStore.claimReadyDraftAttachmentsForMessage({
+        ownerUserId: getSubjectUserId(user),
+        userMessage: {
+          id: userMessageId,
+          text: command.text,
+          metadata: createUserMessageMetadata(attachmentManifest)
+        },
+        run: {
+          id: runId,
           clientInstanceId: this.options.clientInstanceId,
           conversationId,
-          messageId: userMessage.id,
-          claimedAt: userMessage.createdAt
-        });
-      }
-
-      await this.options.auditRecorder.record({
-        type: "message.created",
-        status: "success",
-        actor: auditActorFromUser(user),
-        subject: userMessage.id,
-        correlationId: context.correlationId,
-        metadata: {
-          conversationId,
-          attachmentCount: attachmentManifest.attachments.length
-        }
+          ownerUserId: getSubjectUserId(user),
+          inputMessageId: userMessageId,
+          agentName: command.agentName ?? this.options.config.defaultAgentName,
+          idempotencyKey: command.idempotencyKey,
+          correlationId: context.correlationId,
+          startedAt
+        },
+        ...(command.idempotencyKey
+          ? {
+              runStartCommand: {
+                idempotencyKey: command.idempotencyKey,
+                commandKind: "start_conversation_run" as const
+              }
+            }
+          : {}),
+        claimReadyDraftAttachments: attachmentManifest.attachments.length > 0
       });
 
       const run = await this.options.agentRuntime.start(
         {
-          agentName: command.agentName ?? this.options.config.defaultAgentName,
+          agentName: prepared.run.agentName,
           conversationId,
           idempotencyKey: command.idempotencyKey,
-          inputMessageId: userMessage.id,
+          inputMessageId: prepared.userMessage.id,
+          preparedRun: {
+            id: prepared.run.id,
+            startedAt: prepared.run.startedAt
+          },
           message: {
             text: command.text,
             attachmentManifest:
@@ -244,32 +243,26 @@ export class ConversationWorkflow {
         },
         context
       );
-      const persistedRun = await this.options.conversationStore.getConversationAgentRun({
-        clientInstanceId: this.options.clientInstanceId,
-        conversationId: conversation.id,
-        runId: run.runId
-      });
-      if (!persistedRun) {
-        throw new AppError("INTERNAL", "Agent run was not persisted");
+      if (run.runId !== prepared.run.id) {
+        throw new AppError("INTERNAL", "Prepared agent run id was not started");
       }
 
-      if (command.idempotencyKey) {
-        await this.options.conversationStore.completeRunStartCommand({
-          clientInstanceId: this.options.clientInstanceId,
-          ownerUserId: getSubjectUserId(user),
-          idempotencyKey: command.idempotencyKey,
-          commandKind: "start_conversation_run",
+      await this.options.auditRecorder.record({
+        type: "message.created",
+        status: "success",
+        actor: auditActorFromUser(user),
+        subject: prepared.userMessage.id,
+        correlationId: context.correlationId,
+        metadata: {
           conversationId,
-          userMessageId: userMessage.id,
-          runId: run.runId,
-          updatedAt: persistedRun.startedAt
-        });
-      }
+          attachmentCount: attachmentManifest.attachments.length
+        }
+      });
 
       return {
-        userMessage,
-        run: persistedRun,
-        runId: run.runId
+        userMessage: prepared.userMessage,
+        run: prepared.run,
+        runId: prepared.run.id
       };
     } catch (error) {
       if (command.idempotencyKey) {
