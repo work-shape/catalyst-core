@@ -265,15 +265,16 @@ async function toModelHistoryMessage(
 
   if (message.role === "assistant") {
     const toolCalls = readAssistantToolCalls(message.metadata);
+    const content = appendAssistantFinalStatusForModel(message.text, message.metadata);
     return toolCalls
       ? {
           role: "assistant",
-          content: message.text,
+          content,
           toolCalls
         }
       : {
           role: "assistant",
-          content: message.text
+          content
         };
   }
 
@@ -469,6 +470,15 @@ function readToolResultMetadata(metadata: JsonObject | undefined):
 function readRuntimeMetadata(metadata: JsonObject | undefined): JsonObject | undefined {
   const runtime = metadata?.agentRuntime;
   return isJsonObject(runtime) && runtime.version === METADATA_VERSION ? runtime : undefined;
+}
+
+function appendAssistantFinalStatusForModel(text: string, metadata: JsonObject | undefined): string {
+  const runtime = readRuntimeMetadata(metadata);
+  if (runtime?.kind !== "assistant_final" || runtime.finishStatus !== "cancelled") {
+    return text;
+  }
+  const marker = "[Assistant response stopped by the user before completion. Treat the text above as incomplete.]";
+  return text.trim().length > 0 ? `${text}\n\n${marker}` : marker;
 }
 
 function readUserAttachmentManifest(metadata: JsonObject | undefined): AttachmentManifest | undefined {

@@ -13,6 +13,7 @@ import {
   type ToolExecutionResult
 } from "@vivd-catalyst/core";
 import {
+  createAssistantFinalMetadata,
   createAssistantToolCallsMetadata,
   createModelVisibleToolOutput,
   createToolResultMetadata,
@@ -135,6 +136,30 @@ describe("model context projection", () => {
     });
     expect(modelContentText(projected[1]?.content ?? "")).toContain("validation_failed");
     expect(modelContentText(projected[1]?.content ?? "")).toContain("Expected string");
+  });
+
+  it("marks cancelled assistant final messages as incomplete in model-visible history", async () => {
+    const runId = asAgentRunId("run_cancelled_projection");
+    const projected = await projectAgentVisibleHistory(
+      [
+        createMessage(
+          "assistant",
+          "I started answering but was cut off",
+          createAssistantFinalMetadata({
+            runId,
+            finishStatus: "cancelled",
+            cancellationReason: "user_requested"
+          })
+        )
+      ],
+      modelContextOptions()
+    );
+
+    const content = modelContentText(projected[0]?.content ?? "");
+    expect(content).toContain("I started answering but was cut off");
+    expect(content).toContain("Assistant response stopped by the user before completion");
+    expect(content).toContain("incomplete");
+    expect(content).not.toContain("user_requested");
   });
 
   it("keeps tool-call blocks complete when selecting a bounded active history", async () => {
