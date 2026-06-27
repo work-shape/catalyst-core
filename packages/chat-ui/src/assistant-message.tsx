@@ -54,22 +54,11 @@ function AssistantMessage() {
   const messageRunning = useAuiState(
     (state) => state.message.role === "assistant" && state.message.status?.type === "running"
   );
-  const showTrailingActivity = useAuiState((state) => {
+  const showFallbackCursor = useAuiState((state) => {
     if (state.message.role !== "assistant" || state.message.status?.type !== "running") {
       return false;
     }
-
-    const lastPart = state.message.parts.at(-1);
-    if (!lastPart) {
-      return true;
-    }
-    if (lastPart.type === "reasoning") {
-      return false;
-    }
-    if (lastPart.type === "text") {
-      return lastPart.status.type === "running" && lastPart.text.trim().length === 0;
-    }
-    return lastPart.status.type !== "running";
+    return !state.message.parts.some(partShowsOwnActivity);
   });
 
   return (
@@ -78,7 +67,7 @@ function AssistantMessage() {
       data-role="assistant"
     >
       <div className="min-w-0 rounded-md px-1 py-1 text-sm leading-6">
-        <MessagePrimitive.GroupedParts groupBy={assistantMessageGroupBy} indicator="no-text">
+        <MessagePrimitive.GroupedParts groupBy={assistantMessageGroupBy}>
           {({ part, children }) => {
             switch (part.type) {
               case "group-work":
@@ -103,14 +92,12 @@ function AssistantMessage() {
                 return <ImagePart />;
               case "file":
                 return <FilePart />;
-              case "indicator":
-                return <AssistantStreamingIndicator />;
               default:
                 return null;
             }
           }}
         </MessagePrimitive.GroupedParts>
-        {showTrailingActivity ? <AssistantTrailingActivity /> : null}
+        {showFallbackCursor ? <AssistantFallbackCursor /> : null}
         <MessageError />
       </div>
       {!messageRunning ? (
@@ -172,6 +159,21 @@ function partHasDisplay(part: unknown): boolean {
   return isRecord(part.result.display);
 }
 
+function partShowsOwnActivity(part: unknown): boolean {
+  if (!isRecord(part)) {
+    return false;
+  }
+  const type = typeof part.type === "string" ? part.type : undefined;
+  const status = isRecord(part.status) && typeof part.status.type === "string" ? part.status.type : undefined;
+  if (type === "reasoning" && status === "running") {
+    return true;
+  }
+  if (type === "text") {
+    return status === "running" && typeof part.text === "string" && part.text.trim().length > 0;
+  }
+  return status === "running";
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -221,19 +223,7 @@ function AssistantTextPart() {
   );
 }
 
-function AssistantStreamingIndicator() {
-  const showIndicator = useAuiState((state) => {
-    const lastPart = state.message.parts.at(-1);
-    if (lastPart === undefined || lastPart.type !== "text") {
-      return true;
-    }
-    return lastPart.text.trim().length === 0;
-  });
-
-  return showIndicator ? <AssistantCursor className="my-1" /> : null;
-}
-
-function AssistantTrailingActivity() {
+function AssistantFallbackCursor() {
   return (
     <div className="chat-assistant-text max-w-3xl">
       <AssistantCursor className="my-1" />

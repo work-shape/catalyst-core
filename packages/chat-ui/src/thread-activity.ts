@@ -41,6 +41,10 @@ export function pendingAssistantPresentation(input: ThreadActivityInput): Pendin
     return "hidden";
   }
 
+  if (input.threadRunning) {
+    return "hidden";
+  }
+
   if (lastAssistantPartShowsOwnActivity(input.lastMessage)) {
     return "hidden";
   }

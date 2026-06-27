@@ -178,13 +178,13 @@ function PendingAssistantMessage({
   conversationRunning?: boolean;
   optimisticPending?: boolean;
 }) {
-  const showPendingMessage = useAuiState((state) => {
-    return shouldShowPendingAssistantMessage({
-      conversationRunning,
-      optimisticPending,
-      threadRunning: state.thread.isRunning,
-      lastMessage: state.thread.messages.at(-1)
-    });
+  const threadRunning = useAuiState((state) => state.thread.isRunning);
+  const lastMessage = useAuiState((state) => state.thread.messages.at(-1));
+  const showPendingMessage = shouldShowPendingAssistantMessage({
+    conversationRunning,
+    optimisticPending,
+    threadRunning,
+    lastMessage
   });
 
   if (!showPendingMessage) {

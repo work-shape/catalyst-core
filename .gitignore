@@ -6,6 +6,7 @@ build/
 .turbo/
 .vite/
 .astro/
+.tmp/
 coverage/
 playwright-report/
 test-results/

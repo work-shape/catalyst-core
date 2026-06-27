@@ -1102,6 +1102,79 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
+  it("cancels the current conversation run instead of letting the stream complete in the background", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig(),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+
+    try {
+      const created = await app.server.inject({
+        method: "POST",
+        url: "/api/conversations",
+        payload: { title: "Cancel stream test" }
+      });
+      expect(created.statusCode).toBe(200);
+      const conversation = created.json() as { id: string };
+
+      await app.server.listen({ host: "127.0.0.1", port: 0 });
+      const address = app.server.server.address() as AddressInfo;
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+      const messageTokens = Array.from({ length: 240 }, (_, index) => `cancel-token-${index}`);
+      const lateToken = messageTokens.at(-1) ?? "";
+
+      const sent = await fetch(`${baseUrl}/api/chat`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          conversationId: conversation.id,
+          messages: [createUserUiMessage(messageTokens.join(" "))]
+        })
+      });
+      expect(sent.status).toBe(200);
+      const streamId = sent.headers.get("x-resumable-stream-id");
+      expect(streamId).toEqual(expect.stringMatching(/^run_/));
+
+      const cancelled = await fetch(`${baseUrl}/api/conversations/${conversation.id}/runs/${streamId}/cancel`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({ reason: "test cancellation" })
+      });
+      expect(cancelled.status).toBe(200);
+      expect(await cancelled.json()).toMatchObject({
+        run: {
+          id: streamId,
+          status: "cancelled"
+        }
+      });
+
+      const chunks = parseSseChunks(await sent.text());
+      expect(chunks.some((chunk) => chunk.type === "finish")).toBe(true);
+      expect(chunks.map((chunk) => chunk.delta ?? "").join("")).not.toContain(lateToken);
+
+      await new Promise((resolve) => {
+        setTimeout(resolve, 6_000);
+      });
+
+      const messages = await fetch(`${baseUrl}/api/conversations/${conversation.id}/messages`);
+      expect(messages.status).toBe(200);
+      const persistedMessages = (await messages.json()) as Array<{ role: string; text: string }>;
+      const assistantText = persistedMessages
+        .filter((message) => message.role === "assistant")
+        .map((message) => message.text)
+        .join("\n");
+      expect(assistantText).not.toContain(lateToken);
+    } finally {
+      await app.close();
+    }
+  }, 12_000);
+
   it("rejects messages after the configured daily model call limit is reached", async () => {
     const app = await createClientInstanceApp({
       config: createTestConfig({

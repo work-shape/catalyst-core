@@ -14,7 +14,10 @@
     "docs:dev": "pnpm --filter @vivd-catalyst/docs dev",
     "docs:preview": "pnpm --filter @vivd-catalyst/docs preview",
     "test": "vitest run",
-    "test:e2e": "VITE_CHAT_API_URL=http://127.0.0.1:4210 pnpm build && playwright test",
+    "test:e2e": "node scripts/run-chat-e2e.mjs --all",
+    "test:e2e:chat": "node scripts/run-chat-e2e.mjs --all",
+    "test:e2e:chat-state": "node scripts/run-chat-e2e.mjs --state",
+    "test:e2e:chat-state:headed": "node scripts/run-chat-e2e.mjs --state -- --headed",
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {

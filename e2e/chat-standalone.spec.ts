@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const apiBaseUrl = "http://127.0.0.1:4210";
+const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const normalUser = {
   email: "e2e-user@example.test",
   password: "e2e-user-password"
@@ -139,6 +139,46 @@ test("new conversation action opens an unsaved draft screen", async ({ page }) =
   await expect(input).toBeFocused();
 });
 
+test("new conversation action resets a pending root-created conversation", async ({ page }) => {
+  await signInViaUi(page, normalUser);
+
+  let chatRequestStarted = false;
+  let releaseChat: () => void = () => {};
+  const chatGate = new Promise<void>((resolve) => {
+    releaseChat = resolve;
+  });
+  await page.route(`${apiBaseUrl}/api/chat`, async (route) => {
+    chatRequestStarted = true;
+    await chatGate;
+    await route.abort("aborted").catch(() => undefined);
+  });
+
+  try {
+    await page.goto("/");
+    const input = page.getByPlaceholder("Message");
+    const chatRegion = page.getByRole("region", { name: "Chat" });
+    const messageText = `Pending root reset ${Date.now()}`;
+
+    await input.fill(messageText);
+    await page.getByRole("button", { name: "Send message" }).click();
+
+    await expect.poll(() => chatRequestStarted).toBe(true);
+    await expect(page).toHaveURL(/\/$/u);
+    await expect(chatRegion.getByText(messageText)).toBeVisible();
+
+    await page.getByRole("button", { name: "New", exact: true }).click();
+
+    await expect(page).toHaveURL(/\/$/u);
+    await expect(chatRegion.getByText(messageText)).toHaveCount(0);
+    await expect(page.getByTestId("assistant-cursor")).toHaveCount(0);
+    await expect(input).toHaveValue("");
+    await expect(input).toBeFocused();
+  } finally {
+    releaseChat();
+    await page.unroute(`${apiBaseUrl}/api/chat`);
+  }
+});
+
 test("standalone conversation routes are addressable and follow rail navigation", async ({ page }) => {
   await signInViaApi(page, normalUser);
   const title = `Route target ${Date.now()}`;
@@ -172,13 +212,53 @@ test("first message from the root route moves to the persisted conversation rout
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(/\/$/u);
 
+  const newRouteStorageKey = streamStorageKey(apiBaseUrl, "new");
   const messageText = `Route creation ${Date.now()}`;
   await page.getByPlaceholder("Message").fill(messageText);
   await page.getByRole("button", { name: "Send message" }).click();
 
   await expect(page).toHaveURL(/\/c\/[^/]+$/u);
+  await expect
+    .poll(() => page.evaluate((key) => window.sessionStorage.getItem(key), newRouteStorageKey))
+    .toBeNull();
   const createdConversation = page.getByTestId("conversation-row").filter({ hasText: messageText });
   await expect(createdConversation).toHaveClass(/border-primary/);
+});
+
+test("stop generating cancels the active stream instead of only hiding the button", async ({ page }) => {
+  await signInViaUi(page, normalUser);
+
+  await page.goto("/");
+  const suffix = Date.now();
+  const input = page.getByPlaceholder("Message");
+  const messageTokens = Array.from({ length: 240 }, (_, index) => `stop-token-${suffix}-${index}`);
+  const lateToken = messageTokens.at(-1) ?? "";
+  const messageText = messageTokens.join(" ");
+  expect(lateToken).not.toBe("");
+  await input.fill(messageText);
+  await input.press("Enter");
+  await expect(page).toHaveURL(/\/c\/[^/]+$/u);
+
+  const stopButton = page.getByRole("button", { name: "Stop generating" });
+  await expect(stopButton).toBeVisible();
+  await expect(stopButton).toBeEnabled();
+  await stopButton.click({ timeout: 5_000 });
+
+  await expect(page.getByRole("button", { name: "Send message" })).toBeVisible({ timeout: 10_000 });
+  await expect(stopButton).toHaveCount(0);
+  await page.waitForTimeout(6_000);
+
+  await expect(page.locator('[data-role="assistant"]').filter({ hasText: lateToken })).toHaveCount(0);
+
+  const conversationId = currentConversationId(page);
+  const messages = await page.request.get(`${apiBaseUrl}/api/conversations/${conversationId}/messages`);
+  expect(messages.ok()).toBe(true);
+  const persistedMessages = (await messages.json()) as Array<{ role: string; text: string }>;
+  const persistedAssistantText = persistedMessages
+    .filter((message) => message.role === "assistant")
+    .map((message) => message.text)
+    .join("\n");
+  expect(persistedAssistantText).not.toContain(lateToken);
 });
 
 test("composer drafts are scoped to the new screen and selected conversations", async ({ page }) => {
@@ -206,7 +286,7 @@ test("composer drafts are scoped to the new screen and selected conversations", 
   await expect(input).toHaveValue("Selected conversation draft");
 });
 
-test("conversation switching isolates pending stream state", async ({ page }) => {
+test("conversation switching isolates pending stream state", { tag: "@chat-state" }, async ({ page }) => {
   await signInViaUi(page, normalUser);
   const suffix = Date.now();
   const sourceTitle = `Streaming source ${suffix}`;
@@ -246,24 +326,27 @@ test("conversation switching isolates pending stream state", async ({ page }) =>
     const messageText = `Session isolation ${suffix}`;
     await input.fill(messageText);
     await sendButton.click();
-    await expect(page.getByTestId("pending-assistant-message")).toBeVisible();
+    await expect(chatRegion.getByText(messageText)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
     await expect.poll(() => chatRequestStarted).toBe(true);
     await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
 
     await targetConversation.getByRole("button").first().click();
     await expect(chatRegion.getByText(messageText)).toHaveCount(0);
     await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
+    await expect(page.getByTestId("assistant-cursor")).toHaveCount(0);
     await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
 
     await sourceConversation.getByRole("button").first().click();
-    await expect(page.getByTestId("pending-assistant-message")).toBeVisible();
+    await expect(page.getByTestId("assistant-cursor")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Send message" })).toBeDisabled();
   } finally {
     releaseChat();
     await page.unroute(`${apiBaseUrl}/api/chat`);
   }
 });
 
-test("switching back to a running conversation resumes one stream indicator", async ({ page }) => {
+test("switching back to a running conversation resumes one stream indicator", { tag: "@chat-state" }, async ({ page }) => {
   await signInViaUi(page, normalUser);
   const suffix = Date.now();
   const sourceTitle = `Resume source ${suffix}`;
@@ -312,9 +395,54 @@ test("switching back to a running conversation resumes one stream indicator", as
   });
   expect(await sampleMaxCursorCount(page, 1_000)).toBeLessThanOrEqual(1);
   await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
+  await stopActiveRun(page);
 });
 
-test("unavailable resume clears stream state without rendering a response construction error", async ({ page }) => {
+test("direct conversation links resume a running stream from stored state", { tag: "@chat-state" }, async ({ page }) => {
+  await signInViaUi(page, normalUser);
+  const suffix = Date.now();
+  const sourceTitle = `Direct resume source ${suffix}`;
+  const source = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    data: { title: sourceTitle }
+  });
+  expect(source.ok()).toBe(true);
+  const conversation = (await source.json()) as { id: string };
+
+  const resumeRequests: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (request.method() === "GET" && /^\/api\/chat\/runs\/[^/]+\/stream$/u.test(url.pathname)) {
+      resumeRequests.push(request.url());
+    }
+  });
+
+  await page.goto(conversationPath(conversation.id));
+  const input = page.getByPlaceholder("Message");
+  const chatRegion = page.getByRole("region", { name: "Chat" });
+  const sourceConversation = page.getByTestId("conversation-row").filter({ hasText: sourceTitle });
+  await expect(sourceConversation).toHaveCount(1);
+
+  const uniqueToken = `direct-resume-token-${suffix}`;
+  await input.fill(Array.from({ length: 100 }, (_, index) => `${uniqueToken}-${index}`).join(" "));
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
+  await expectStoredStreamId(page, conversation.id);
+
+  await page.goto(conversationPath(conversation.id));
+  const runningConversation = page.getByTestId("conversation-row").filter({
+    has: page.getByTestId("conversation-running-indicator")
+  });
+  await expect(runningConversation).toHaveCount(1);
+  await expect(runningConversation).toHaveClass(/border-primary/);
+  await expect.poll(() => resumeRequests.length, { timeout: 10_000 }).toBeGreaterThan(0);
+  await expect(chatRegion.locator('[data-role="assistant"]').filter({ hasText: uniqueToken }).first()).toBeVisible({
+    timeout: 15_000
+  });
+  await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
+  await stopActiveRun(page);
+});
+
+test("unavailable resume clears stream state without rendering a response construction error", { tag: "@chat-state" }, async ({ page }) => {
   await signInViaUi(page, normalUser);
   const suffix = Date.now();
   const sourceTitle = `Unavailable resume source ${suffix}`;
@@ -329,6 +457,7 @@ test("unavailable resume clears stream state without rendering a response constr
   expect(target.ok()).toBe(true);
 
   const resumeRequests: string[] = [];
+  const responseConstructionErrors = collectResponseConstructionErrors(page);
 
   await page.goto("/");
   const input = page.getByPlaceholder("Message");
@@ -354,11 +483,44 @@ test("unavailable resume clears stream state without rendering a response constr
 
   await expect.poll(() => resumeRequests.length, { timeout: 10_000 }).toBeGreaterThan(0);
   await expect(page.getByText("Failed to construct 'Response'")).toHaveCount(0);
+  expect(responseConstructionErrors).toEqual([]);
   await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
   await expect(page.getByTestId("assistant-cursor")).toHaveCount(0);
 });
 
-test("new conversation stream completion does not steal the selected conversation", async ({ page }) => {
+test("legacy new-route stream state is ignored and cleared", { tag: "@chat-state" }, async ({ page }) => {
+  await signInViaApi(page, normalUser);
+  const legacyRunId = "run_legacy_new_route";
+  const legacyStorageKey = streamStorageKey(apiBaseUrl, "new");
+  const resumeRequests: string[] = [];
+  const responseConstructionErrors = collectResponseConstructionErrors(page);
+
+  await page.addInitScript(
+    ({ storageKey, runId }) => {
+      window.sessionStorage.setItem(storageKey, runId);
+    },
+    { storageKey: legacyStorageKey, runId: legacyRunId }
+  );
+  await page.route(new RegExp(`/api/chat/runs/${legacyRunId}/stream$`, "u"), async (route) => {
+    resumeRequests.push(route.request().url());
+    await route.fulfill({ status: 204 });
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByText("E2E Customer")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Send message" })).toBeEnabled();
+  await expect(page.getByText("Failed to construct 'Response'")).toHaveCount(0);
+  await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
+  await expect(page.getByTestId("assistant-cursor")).toHaveCount(0);
+  await expect
+    .poll(() => page.evaluate((key) => window.sessionStorage.getItem(key), legacyStorageKey))
+    .toBeNull();
+  expect(resumeRequests).toEqual([]);
+  expect(responseConstructionErrors).toEqual([]);
+});
+
+test("new conversation stream completion does not steal the selected conversation", { tag: "@chat-state" }, async ({ page }) => {
   await signInViaUi(page, normalUser);
   const suffix = Date.now();
   const targetTitle = `Switch target ${suffix}`;
@@ -387,8 +549,10 @@ test("new conversation stream completion does not steal the selected conversatio
     const messageText = `New session isolation ${suffix}`;
     await input.fill(messageText);
     await sendButton.click();
-    await expect(page.getByTestId("pending-assistant-message")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
     await expect.poll(() => chatRequestStarted).toBe(true);
+    await expect(page.getByTestId("assistant-cursor")).toBeVisible();
+    expect(await sampleMaxCursorCount(page, 300)).toBeLessThanOrEqual(1);
     const newConversation = page.getByTestId("conversation-row").filter({ hasText: messageText });
     await expect(newConversation.getByTestId("conversation-running-indicator")).toBeVisible();
 
@@ -404,7 +568,7 @@ test("new conversation stream completion does not steal the selected conversatio
   }
 });
 
-test("completed background turns are marked unread until viewed", async ({ page }) => {
+test("completed background turns are marked unread until viewed", { tag: "@chat-state" }, async ({ page }) => {
   await signInViaUi(page, normalUser);
   const suffix = Date.now();
   const sourceTitle = `Unread source ${suffix}`;
@@ -719,6 +883,48 @@ function conversationPath(conversationId: string): string {
   return `/c/${encodeURIComponent(conversationId)}`;
 }
 
+function currentConversationId(page: Page): string {
+  const match = /^\/c\/([^/]+)$/u.exec(new URL(page.url()).pathname);
+  if (!match?.[1]) {
+    throw new Error(`Current route is not a conversation route: ${page.url()}`);
+  }
+  return decodeURIComponent(match[1]);
+}
+
+function streamStorageKey(apiUrl: string, conversationId: string): string {
+  return `vivd-catalyst:chat-stream:${apiUrl.replace(/\/$/u, "")}:${conversationId}`;
+}
+
+async function expectStoredStreamId(page: Page, conversationId: string): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate((targetConversationId) => {
+          const entry = Object.entries(window.sessionStorage).find(([key]) =>
+            key.endsWith(`:${targetConversationId}`)
+          );
+          return entry?.[1] ?? "";
+        }, conversationId),
+      { timeout: 10_000 }
+    )
+    .toMatch(/^run_/u);
+}
+
+function collectResponseConstructionErrors(page: Page): string[] {
+  const errors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" && message.text().includes("Failed to construct 'Response'")) {
+      errors.push(message.text());
+    }
+  });
+  page.on("pageerror", (error) => {
+    if (error.message.includes("Failed to construct 'Response'")) {
+      errors.push(error.message);
+    }
+  });
+  return errors;
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
@@ -772,6 +978,15 @@ async function sampleMaxCursorCount(page: Page, durationMs: number): Promise<num
     await page.waitForTimeout(50);
   }
   return maxCount;
+}
+
+async function stopActiveRun(page: Page): Promise<void> {
+  const stopButton = page.getByRole("button", { name: "Stop generating" });
+  if ((await stopButton.count()) === 0) {
+    return;
+  }
+  await stopButton.click();
+  await expect(page.getByRole("button", { name: "Send message" })).toBeVisible({ timeout: 10_000 });
 }
 
 async function expectDocumentScrollLocked(page: Page): Promise<void> {

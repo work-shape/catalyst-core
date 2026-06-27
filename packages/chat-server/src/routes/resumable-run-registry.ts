@@ -5,6 +5,10 @@ export interface ResumableRun {
   ownerUserId: string;
 }
 
+export interface ResumableRunEntry extends ResumableRun {
+  runId: AgentRunId;
+}
+
 export class ResumableRunRegistry {
   private readonly runs = new Map<string, ResumableRun>();
 
@@ -22,6 +26,18 @@ export class ResumableRunRegistry {
       return undefined;
     }
     return run;
+  }
+
+  readCurrentForConversation(conversationId: ConversationId, userId: string): ResumableRunEntry | undefined {
+    for (const [runId, run] of [...this.runs.entries()].reverse()) {
+      if (run.conversationId === conversationId && run.ownerUserId === userId) {
+        return {
+          ...run,
+          runId: runId as AgentRunId
+        };
+      }
+    }
+    return undefined;
   }
 
   forget(runId: AgentRunId): void {

@@ -51,9 +51,28 @@ pnpm test
 pnpm build
 pnpm check
 pnpm test:e2e
+pnpm test:e2e:chat-state
 ```
 
 `pnpm test:e2e` uses a deterministic fixture config so it does not require an OpenAI key.
+It runs the standalone chat Playwright suite through `scripts/run-chat-e2e.mjs`, which builds
+the required packages, starts an isolated Postgres/API/Vite stack, runs Playwright, and tears the
+stack down again. `pnpm test:e2e:chat-state` runs only the `@chat-state` regression subset for
+streaming, resume, loading indicators, and session-switching behavior.
+
+The e2e runner defaults to API `4210`, UI `5273`, and Postgres `55433`. Override ports when local
+development servers are already using them:
+
+```bash
+E2E_API_PORT=4211 E2E_UI_PORT=5274 E2E_POSTGRES_PORT=55434 pnpm test:e2e:chat-state
+```
+
+Use `E2E_SKIP_BUILD=1` for a faster rerun when the package dist output is already fresh, or pass
+Playwright flags after `--`:
+
+```bash
+pnpm test:e2e:chat-state -- --headed
+```
 
 The deterministic model provider is kept for local tests and repeatable debugging. The demo client config uses OpenAI by default and lets the model call registered tools automatically.
 
