@@ -4,6 +4,8 @@ import {
   AppError,
   asAgentRunId,
   asClientInstanceId,
+  asConversationId,
+  asMessageId,
   type ChatMessage,
   type JsonObject,
   type ModelProviderConfig,
@@ -31,6 +33,53 @@ import {
 } from "../packages/agent-runtime/src/model-context-projection";
 
 describe("local agent runtime", () => {
+  it("reclaims stale pending run-start idempotency commands", async () => {
+    const store = new InMemoryPlatformStore();
+    const clientInstanceId = asClientInstanceId("run-start-reclaim-client");
+    const baseInput = {
+      clientInstanceId,
+      ownerUserId: "user-1",
+      idempotencyKey: "idem-reclaim",
+      commandKind: "start_conversation_run" as const
+    };
+
+    const firstClaim = await store.claimRunStartCommand({
+      ...baseInput,
+      createdAt: "2026-06-27T00:00:00.000Z"
+    });
+    expect(firstClaim.status).toBe("claimed");
+
+    const freshRetry = await store.claimRunStartCommand({
+      ...baseInput,
+      createdAt: "2026-06-27T00:01:00.000Z",
+      reclaimPendingBefore: "2026-06-26T23:59:00.000Z"
+    });
+    expect(freshRetry.status).toBe("existing");
+
+    const reclaimed = await store.claimRunStartCommand({
+      ...baseInput,
+      createdAt: "2026-06-27T00:06:00.000Z",
+      reclaimPendingBefore: "2026-06-27T00:05:00.000Z"
+    });
+    expect(reclaimed.status).toBe("claimed");
+    expect(reclaimed.command).toMatchObject({
+      status: "pending",
+      updatedAt: "2026-06-27T00:06:00.000Z"
+    });
+    await expect(
+      store.completeRunStartCommand({
+        ...baseInput,
+        claimedAt: firstClaim.command.updatedAt,
+        conversationId: asConversationId("conv_reclaim_old"),
+        userMessageId: asMessageId("msg_reclaim_old"),
+        runId: asAgentRunId("run_reclaim_old"),
+        updatedAt: "2026-06-27T00:07:00.000Z"
+      })
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND"
+    });
+  });
+
   it("observes a completed local run from an event cursor", async () => {
     const clientInstanceId = asClientInstanceId("cursor-client");
     const context: RuntimeCallContext = {

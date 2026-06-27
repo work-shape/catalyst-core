@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, isNull, sql as drizzleSql } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, lt, sql as drizzleSql } from "drizzle-orm";
 import {
   AppError,
   type AgentRun,
@@ -58,6 +58,32 @@ export async function claimRunStartCommand(
     };
   }
 
+  if (input.reclaimPendingBefore) {
+    const [reclaimed] = await db
+      .update(runStartCommands)
+      .set({
+        status: "pending",
+        conversationId: null,
+        userMessageId: null,
+        runId: null,
+        updatedAt: now
+      })
+      .where(
+        and(
+          runStartCommandWhere(input),
+          eq(runStartCommands.status, "pending"),
+          lt(runStartCommands.updatedAt, new Date(input.reclaimPendingBefore))
+        )
+      )
+      .returning();
+    if (reclaimed) {
+      return {
+        status: "claimed",
+        command: mapRunStartCommand(reclaimed)
+      };
+    }
+  }
+
   const existing = await getRunStartCommand(db, input);
   if (!existing) {
     throw new AppError("CONFLICT", "Run start command idempotency key already exists");
@@ -81,7 +107,7 @@ export async function completeRunStartCommand(
       runId: input.runId,
       updatedAt: new Date(input.updatedAt)
     })
-    .where(runStartCommandWhere(input))
+    .where(runStartCommandPendingClaimWhere(input))
     .returning();
   if (!row) {
     throw new AppError("NOT_FOUND", "Run start command is not available");
@@ -95,7 +121,7 @@ export async function releaseRunStartCommand(
 ): Promise<void> {
   await db
     .delete(runStartCommands)
-    .where(and(runStartCommandWhere(input), eq(runStartCommands.status, "pending")));
+    .where(runStartCommandPendingClaimWhere(input));
 }
 
 export async function prepareConversationRunStart(
@@ -199,7 +225,10 @@ export async function prepareConversationRunStart(
               commandKind: input.runStartCommand.commandKind,
               idempotencyKey: input.runStartCommand.idempotencyKey
             }),
-            eq(runStartCommands.status, "pending")
+            eq(runStartCommands.status, "pending"),
+            ...(input.runStartCommand.claimedAt
+              ? [eq(runStartCommands.updatedAt, new Date(input.runStartCommand.claimedAt))]
+              : [])
           )
         )
         .returning();
@@ -429,6 +458,20 @@ function runStartCommandWhere(input: {
     eq(runStartCommands.ownerUserId, input.ownerUserId),
     eq(runStartCommands.commandKind, input.commandKind),
     eq(runStartCommands.idempotencyKey, input.idempotencyKey)
+  );
+}
+
+function runStartCommandPendingClaimWhere(input: {
+  clientInstanceId: ClientInstanceId;
+  ownerUserId: string;
+  commandKind: RunStartCommand["commandKind"];
+  idempotencyKey: string;
+  claimedAt?: string;
+}) {
+  return and(
+    runStartCommandWhere(input),
+    eq(runStartCommands.status, "pending"),
+    ...(input.claimedAt ? [eq(runStartCommands.updatedAt, new Date(input.claimedAt))] : [])
   );
 }
 

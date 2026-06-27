@@ -57,6 +57,7 @@ const CONVERSATION_TITLE_AGENT_NAME = "conversation_title";
 const MAX_TITLE_SOURCE_CHARS = 800;
 const IDEMPOTENCY_WAIT_ATTEMPTS = 100;
 const IDEMPOTENCY_WAIT_MS = 10;
+const IDEMPOTENCY_PENDING_RECLAIM_MS = 5 * 60 * 1000;
 
 export class ConversationWorkflow {
   private readonly options: ChatServerOptions;
@@ -168,6 +169,7 @@ export class ConversationWorkflow {
     command: SendConversationMessageCommand
   ): Promise<StartedConversationMessageRun> {
     await this.requireOwnedActiveConversation(conversationId, user);
+    let runStartCommand: RunStartCommand | undefined;
     if (command.idempotencyKey) {
       const claim = await this.claimOrResolveRunStartCommand({
         commandKind: "start_conversation_run",
@@ -178,6 +180,7 @@ export class ConversationWorkflow {
       if (claim.status === "resolved") {
         return claim.started;
       }
+      runStartCommand = claim.command;
     }
 
     try {
@@ -218,7 +221,8 @@ export class ConversationWorkflow {
           ? {
               runStartCommand: {
                 idempotencyKey: command.idempotencyKey,
-                commandKind: "start_conversation_run" as const
+                commandKind: "start_conversation_run" as const,
+                claimedAt: runStartCommand?.updatedAt
               }
             }
           : {}),
@@ -266,7 +270,12 @@ export class ConversationWorkflow {
       };
     } catch (error) {
       if (command.idempotencyKey) {
-        await this.releaseRunStartCommand(command.idempotencyKey, "start_conversation_run", user);
+        await this.releaseRunStartCommand(
+          command.idempotencyKey,
+          "start_conversation_run",
+          user,
+          runStartCommand?.updatedAt
+        );
       }
       throw error;
     }
@@ -277,6 +286,7 @@ export class ConversationWorkflow {
     context: RuntimeCallContext,
     command: SendConversationMessageCommand & CreateConversationCommand
   ): Promise<{ conversation: Conversation; userMessage: ChatMessage; run: AgentRun; runId: AgentRunId }> {
+    let runStartCommand: RunStartCommand | undefined;
     if (command.idempotencyKey) {
       const claim = await this.claimOrResolveRunStartCommand({
         commandKind: "create_conversation_run",
@@ -293,6 +303,7 @@ export class ConversationWorkflow {
           ...claim.started
         };
       }
+      runStartCommand = claim.command;
     }
 
     try {
@@ -309,6 +320,7 @@ export class ConversationWorkflow {
           ownerUserId: getSubjectUserId(user),
           idempotencyKey: command.idempotencyKey,
           commandKind: "create_conversation_run",
+          claimedAt: runStartCommand?.updatedAt,
           conversationId: conversation.id,
           userMessageId: started.userMessage.id,
           runId: started.runId,
@@ -321,7 +333,12 @@ export class ConversationWorkflow {
       };
     } catch (error) {
       if (command.idempotencyKey) {
-        await this.releaseRunStartCommand(command.idempotencyKey, "create_conversation_run", user);
+        await this.releaseRunStartCommand(
+          command.idempotencyKey,
+          "create_conversation_run",
+          user,
+          runStartCommand?.updatedAt
+        );
       }
       throw error;
     }
@@ -727,19 +744,20 @@ export class ConversationWorkflow {
     idempotencyKey: string;
     user: AuthenticatedUser;
   }): Promise<
-    | { status: "claimed" }
+    | { status: "claimed"; command: RunStartCommand }
     | { status: "resolved"; started: StartedConversationMessageRun }
   > {
     const claimInput = {
       clientInstanceId: this.options.clientInstanceId,
       ownerUserId: getSubjectUserId(input.user),
       idempotencyKey: input.idempotencyKey,
-      commandKind: input.commandKind
+      commandKind: input.commandKind,
+      reclaimPendingBefore: new Date(Date.now() - IDEMPOTENCY_PENDING_RECLAIM_MS).toISOString()
     };
 
     let claim = await this.options.conversationStore.claimRunStartCommand(claimInput);
     if (claim.status === "claimed") {
-      return { status: "claimed" };
+      return { status: "claimed", command: claim.command };
     }
 
     for (let attempt = 0; attempt < IDEMPOTENCY_WAIT_ATTEMPTS; attempt += 1) {
@@ -757,7 +775,7 @@ export class ConversationWorkflow {
       await delay(IDEMPOTENCY_WAIT_MS);
       claim = await this.options.conversationStore.claimRunStartCommand(claimInput);
       if (claim.status === "claimed") {
-        return { status: "claimed" };
+        return { status: "claimed", command: claim.command };
       }
     }
 
@@ -794,13 +812,15 @@ export class ConversationWorkflow {
   private async releaseRunStartCommand(
     idempotencyKey: string,
     commandKind: RunStartCommandKind,
-    user: AuthenticatedUser
+    user: AuthenticatedUser,
+    claimedAt: string | undefined
   ): Promise<void> {
     await this.options.conversationStore.releaseRunStartCommand({
       clientInstanceId: this.options.clientInstanceId,
       ownerUserId: getSubjectUserId(user),
       idempotencyKey,
-      commandKind
+      commandKind,
+      claimedAt
     });
   }
 

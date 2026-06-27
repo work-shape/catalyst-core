@@ -209,6 +209,26 @@ export class InMemoryPlatformStore
     const key = runStartCommandKey(input);
     const existing = this.runStartCommands.get(key);
     if (existing) {
+      if (
+        existing.status === "pending" &&
+        input.reclaimPendingBefore &&
+        existing.updatedAt < input.reclaimPendingBefore
+      ) {
+        const now = input.createdAt ?? new Date().toISOString();
+        const command: RunStartCommand = {
+          ...existing,
+          status: "pending",
+          conversationId: undefined,
+          userMessageId: undefined,
+          runId: undefined,
+          updatedAt: now
+        };
+        this.runStartCommands.set(key, command);
+        return {
+          status: "claimed",
+          command
+        };
+      }
       return {
         status: "existing",
         command: existing
@@ -238,6 +258,9 @@ export class InMemoryPlatformStore
     if (!existing) {
       throw new AppError("NOT_FOUND", "Run start command is not available");
     }
+    if (input.claimedAt && existing.updatedAt !== input.claimedAt) {
+      throw new AppError("NOT_FOUND", "Run start command is not available");
+    }
     const completed: RunStartCommand = {
       ...existing,
       status: "completed",
@@ -254,6 +277,9 @@ export class InMemoryPlatformStore
     const key = runStartCommandKey(input);
     const existing = this.runStartCommands.get(key);
     if (!existing || existing.status !== "pending") {
+      return;
+    }
+    if (input.claimedAt && existing.updatedAt !== input.claimedAt) {
       return;
     }
     this.runStartCommands.delete(key);
@@ -286,6 +312,9 @@ export class InMemoryPlatformStore
       if (!command || command.status !== "pending") {
         throw new AppError("NOT_FOUND", "Run start command is not available");
       }
+      if (input.runStartCommand.claimedAt && command.updatedAt !== input.runStartCommand.claimedAt) {
+        throw new AppError("NOT_FOUND", "Run start command is not available");
+      }
     }
 
     const userMessage = await this.appendMessage({
@@ -311,6 +340,7 @@ export class InMemoryPlatformStore
         ownerUserId: input.ownerUserId,
         idempotencyKey: input.runStartCommand.idempotencyKey,
         commandKind: input.runStartCommand.commandKind,
+        claimedAt: input.runStartCommand.claimedAt,
         conversationId: input.conversationId,
         userMessageId: userMessage.id,
         runId: run.id,

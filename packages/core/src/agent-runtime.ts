@@ -306,6 +306,7 @@ export interface PrepareConversationRunStartInput {
   runStartCommand?: {
     idempotencyKey: string;
     commandKind: RunStartCommandKind;
+    claimedAt?: ISODateString;
   };
   claimReadyDraftAttachments?: boolean;
 }
@@ -333,6 +334,7 @@ export interface ClaimRunStartCommandInput {
   idempotencyKey: string;
   commandKind: RunStartCommandKind;
   createdAt?: ISODateString;
+  reclaimPendingBefore?: ISODateString;
 }
 
 export interface CompleteRunStartCommandInput {
@@ -340,6 +342,7 @@ export interface CompleteRunStartCommandInput {
   ownerUserId: string;
   idempotencyKey: string;
   commandKind: RunStartCommandKind;
+  claimedAt?: ISODateString;
   conversationId: ConversationId;
   userMessageId: MessageId;
   runId: AgentRunId;
@@ -351,6 +354,7 @@ export interface ReleaseRunStartCommandInput {
   ownerUserId: string;
   idempotencyKey: string;
   commandKind: RunStartCommandKind;
+  claimedAt?: ISODateString;
 }
 
 export interface AgentRunStore {
