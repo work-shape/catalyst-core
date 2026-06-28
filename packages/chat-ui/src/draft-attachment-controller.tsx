@@ -5,6 +5,7 @@ import {
   type ApiClient,
   type DraftAttachment
 } from "@vivd-catalyst/api-client";
+import { workspaceQueryKeys } from "./api/workspace-query-keys";
 import type { LocalUploadingAttachment } from "./assistant-composer";
 
 export interface DraftAttachmentControllerInput {
@@ -38,7 +39,11 @@ export function useDraftAttachmentController(
     LocalUploadingConversationAttachment[]
   >([]);
   const draftAttachmentsQuery = useQuery({
-    queryKey: draftAttachmentsQueryKey(input.apiBaseUrl, input.authScope, input.selectedConversationId),
+    queryKey: workspaceQueryKeys.draftAttachments(
+      input.apiBaseUrl,
+      input.authScope,
+      input.selectedConversationId
+    ),
     queryFn: () => input.client.draftAttachments(input.selectedConversationId ?? ""),
     enabled: input.enabled && input.isAuthenticated && Boolean(input.selectedConversationId),
     refetchInterval: (query) =>
@@ -93,13 +98,15 @@ export function useDraftAttachmentController(
       .uploadDraftAttachment(conversationId, file)
       .then((response) => {
         queryClient.setQueryData(
-          draftAttachmentsQueryKey(input.apiBaseUrl, input.authScope, conversationId),
+          workspaceQueryKeys.draftAttachments(input.apiBaseUrl, input.authScope, conversationId),
           response.attachments
         );
         void queryClient.invalidateQueries({
-          queryKey: draftAttachmentsQueryKey(input.apiBaseUrl, input.authScope, conversationId)
+          queryKey: workspaceQueryKeys.draftAttachments(input.apiBaseUrl, input.authScope, conversationId)
         });
-        void queryClient.invalidateQueries({ queryKey: ["conversations", input.apiBaseUrl, input.authScope] });
+        void queryClient.invalidateQueries({
+          queryKey: workspaceQueryKeys.conversations(input.apiBaseUrl, input.authScope)
+        });
       })
       .catch((error) => {
         input.onError(error instanceof ApiError ? error.message : "File upload failed");
@@ -119,7 +126,11 @@ export function useDraftAttachmentController(
       .deleteDraftAttachment(input.selectedConversationId, attachmentId)
       .then(() => {
         void queryClient.invalidateQueries({
-          queryKey: draftAttachmentsQueryKey(input.apiBaseUrl, input.authScope, input.selectedConversationId)
+          queryKey: workspaceQueryKeys.draftAttachments(
+            input.apiBaseUrl,
+            input.authScope,
+            input.selectedConversationId
+          )
         });
       })
       .catch((error) => input.onError(error instanceof ApiError ? error.message : "Remove failed"));
@@ -133,7 +144,11 @@ export function useDraftAttachmentController(
       .retryDraftAttachment(input.selectedConversationId, attachmentId)
       .then((response) => {
         queryClient.setQueryData(
-          draftAttachmentsQueryKey(input.apiBaseUrl, input.authScope, input.selectedConversationId),
+          workspaceQueryKeys.draftAttachments(
+            input.apiBaseUrl,
+            input.authScope,
+            input.selectedConversationId
+          ),
           response.attachments
         );
       })
@@ -155,14 +170,6 @@ export function useDraftAttachmentController(
     onRetryDraftAttachment,
     clearConversationUploads
   };
-}
-
-export function draftAttachmentsQueryKey(
-  apiBaseUrl: string,
-  authScope: string,
-  conversationId: string | undefined
-) {
-  return ["draft-attachments", apiBaseUrl, authScope, conversationId] as const;
 }
 
 function hasProcessingDraftAttachments(attachments: DraftAttachment[]): boolean {
