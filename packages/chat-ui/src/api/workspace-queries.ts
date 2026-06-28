@@ -103,6 +103,7 @@ export interface WorkspaceCacheActions {
   refreshSelectedThreadSnapshot(): Promise<ConversationThreadSnapshot | undefined>;
   invalidateCurrentUser(): void;
   invalidateConversations(): void;
+  removeThreadSnapshot(conversationId: string): void;
   invalidateConversationStarted(conversationId: string): void;
   invalidateTerminalRunObservation(observation: RunObservation): void;
   clearDraftAttachments(conversationId: string): void;
@@ -129,6 +130,15 @@ export function useWorkspaceCacheActions(
       queryKey: workspaceQueryKeys.conversations(apiBaseUrl, authScope)
     });
   }, [apiBaseUrl, authScope, queryClient]);
+
+  const removeThreadSnapshot = useCallback(
+    (conversationId: string) => {
+      queryClient.removeQueries({
+        queryKey: workspaceQueryKeys.thread(apiBaseUrl, authScope, conversationId)
+      });
+    },
+    [apiBaseUrl, authScope, queryClient]
+  );
 
   const invalidateThread = useCallback(
     (conversationId: string) => {
@@ -287,6 +297,7 @@ export function useWorkspaceCacheActions(
       refreshSelectedThreadSnapshot,
       invalidateCurrentUser,
       invalidateConversations,
+      removeThreadSnapshot,
       invalidateConversationStarted,
       invalidateTerminalRunObservation,
       clearDraftAttachments,
@@ -302,6 +313,7 @@ export function useWorkspaceCacheActions(
       invalidateConversationStarted,
       invalidateConversations,
       invalidateCurrentUser,
+      removeThreadSnapshot,
       invalidateStreamError,
       invalidateStreamFinished,
       invalidateTerminalRunObservation,
