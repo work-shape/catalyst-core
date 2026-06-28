@@ -25,10 +25,8 @@ import {
 import { AssistantChatPanel } from "./assistant-chat-panel";
 import type { ChatShellProps } from "./chat-shell";
 import { ChatDropOverlay, useChatFileDropzone } from "./chat-file-dropzone";
-import {
-  clearRunCursors,
-  useConversationController
-} from "./conversation-controller";
+import { clearRunCursors } from "./conversation/run-connection-manager";
+import { useConversationController } from "./conversation/use-conversation-controller";
 import { useDraftAttachmentController } from "./draft-attachment-controller";
 import { readBrowserLocale, TranslationProvider } from "./i18n";
 import { LoginPanel } from "./login-panel";
