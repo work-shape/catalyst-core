@@ -206,22 +206,9 @@ function SidePanelToolCall({
 }) {
   const { t } = useTranslation();
   const panel = useToolDisplayPanel();
-  const openedKeyRef = useRef<string | undefined>(undefined);
   const panelKey = displayPanelKey(display, toolCallId);
   const title = displayPanelTitle(display, toolName);
-
-  useEffect(() => {
-    if (!panel.available || openedKeyRef.current === panelKey) {
-      return;
-    }
-    openedKeyRef.current = panelKey;
-    panel.show({
-      key: panelKey,
-      title,
-      subtitle: toolName,
-      node: displayNode
-    });
-  }, [panel, panelKey, title, toolName]);
+  const panelActive = panel.open && panel.entry?.key === panelKey;
 
   return (
     <div
@@ -246,7 +233,9 @@ function SidePanelToolCall({
         <ToolStatusIcon state={state} />
         <span className="truncate font-medium text-foreground">{toolName}</span>
         <span className="shrink-0">{statusLabel}</span>
-        <span className="ml-auto shrink-0 rounded-md bg-muted px-2 py-1">{t("shownInSidePanel")}</span>
+        <span className="ml-auto shrink-0 rounded-md bg-muted px-2 py-1">
+          {t(panelActive ? "shownInSidePanel" : "openDisplayPanel")}
+        </span>
       </button>
       <ToolDetailDisclosure
         sections={detailSections}
@@ -269,22 +258,9 @@ function SidePanelDataPart({
 }) {
   const { t } = useTranslation();
   const panel = useToolDisplayPanel();
-  const openedKeyRef = useRef<string | undefined>(undefined);
   const panelKey = displayPanelKey(display, `data:${name}`);
   const title = displayPanelTitle(display, t("structuredOutput", { name }));
-
-  useEffect(() => {
-    if (!panel.available || openedKeyRef.current === panelKey) {
-      return;
-    }
-    openedKeyRef.current = panelKey;
-    panel.show({
-      key: panelKey,
-      title,
-      subtitle: t("structuredOutput", { name }),
-      node: displayNode
-    });
-  }, [name, panel, panelKey, title]);
+  const panelActive = panel.open && panel.entry?.key === panelKey;
 
   return (
     <div className="chat-tool-part my-2 max-w-3xl rounded-md border border-border/60 bg-card/40 text-xs">
@@ -302,7 +278,9 @@ function SidePanelDataPart({
       >
         <Wrench size={14} className="shrink-0" aria-hidden="true" />
         <span className="truncate font-medium text-foreground">{title}</span>
-        <span className="ml-auto shrink-0 rounded-md bg-muted px-2 py-1">{t("shownInSidePanel")}</span>
+        <span className="ml-auto shrink-0 rounded-md bg-muted px-2 py-1">
+          {t(panelActive ? "shownInSidePanel" : "openDisplayPanel")}
+        </span>
       </button>
     </div>
   );
