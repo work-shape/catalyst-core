@@ -11,8 +11,6 @@ export const workspaceQueryKeys = {
   ) => ["config", apiBaseUrl, authScope, localePreference ?? "auto"] as const,
   conversations: (apiBaseUrl: string, authScope: string) =>
     ["conversations", apiBaseUrl, authScope] as const,
-  messages: (apiBaseUrl: string, authScope: string, conversationId: string) =>
-    ["messages", apiBaseUrl, authScope, conversationId] as const,
   thread: (
     apiBaseUrl: string,
     authScope: string,

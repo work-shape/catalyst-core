@@ -144,6 +144,47 @@ describe("chat UI message history projection", () => {
     });
   });
 
+  it("ignores malformed compatibility attachment manifest entries", () => {
+    const messages: Message[] = [
+      {
+        id: "msg_user",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "user",
+        text: "summarize this",
+        createdAt: "2026-06-15T00:00:00.000Z",
+        metadata: {
+          agentRuntime: {
+            version: 1,
+            kind: "user_message",
+            attachmentManifest: {
+              version: 1,
+              attachments: [
+                {
+                  fileId: 42,
+                  filename: "bad.pdf"
+                },
+                {
+                  fileId: "file_without_name"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ];
+
+    const projected = toUiMessages(messages);
+
+    expect(projected[0]?.parts).toEqual([
+      {
+        type: "text",
+        text: "summarize this",
+        state: "done"
+      }
+    ]);
+  });
+
   it("replays persisted tool displays as completed dynamic tool parts", () => {
     const messages: Message[] = [
       {
@@ -244,6 +285,74 @@ describe("chat UI message history projection", () => {
               }
             }
           }
+        }
+      ]
+    });
+  });
+
+  it("replays persisted tool failures as dynamic tool errors", () => {
+    const messages: Message[] = [
+      {
+        id: "msg_tool_call",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "assistant",
+        text: "",
+        createdAt: "2026-06-15T00:00:01.000Z",
+        metadata: createAssistantToolCallsMetadata({
+          runId: "run_test",
+          toolCalls: [
+            {
+              toolCallId: "call_failed",
+              toolName: "fetch_record",
+              input: {
+                id: "record_1"
+              }
+            }
+          ]
+        })
+      },
+      {
+        id: "msg_tool_result",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "tool",
+        text: "Tool failed",
+        createdAt: "2026-06-15T00:00:02.000Z",
+        metadata: createToolResultMetadata({
+          runId: "run_test",
+          toolCall: {
+            toolCallId: "call_failed",
+            toolName: "fetch_record",
+            input: {
+              id: "record_1"
+            }
+          },
+          result: {
+            status: "failed",
+            error: {
+              code: "handler_failed",
+              message: "Record service failed"
+            }
+          },
+          modelOutput: {
+            text: "Tool failed"
+          }
+        })
+      }
+    ];
+
+    const projected = toUiMessages(messages);
+
+    expect(projected[0]).toMatchObject({
+      role: "assistant",
+      parts: [
+        {
+          type: "dynamic-tool",
+          toolName: "fetch_record",
+          toolCallId: "call_failed",
+          state: "output-error",
+          errorText: "Record service failed"
         }
       ]
     });

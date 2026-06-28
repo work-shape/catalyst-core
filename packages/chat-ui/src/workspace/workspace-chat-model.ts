@@ -145,10 +145,10 @@ export interface SelectedChatModel {
   selectFiles(files: File[]): void;
   removeDraftAttachment(attachmentId: string): void;
   retryDraftAttachment(attachmentId: string): void;
-  conversationStarted(conversationId: string, messages?: Message[]): void;
+  conversationStarted(conversationId: string): void;
   messageSubmitted(conversationId: string): void;
   runStarted(response: StartConversationRunResponse): void;
-  streamFinished(conversationId: string, viewed: boolean): void;
+  streamFinished(conversationId: string): void;
   streamError(conversationId: string, message: string, viewed: boolean): void;
   cancelSelectedRun(): void;
 }
@@ -387,11 +387,11 @@ export function useWorkspaceChatModel({
   function runStarted(response: StartConversationRunResponse) {
     workspaceCache.cacheRunStarted(response);
     conversationStarted(response.conversation.id);
-    chatRequestAccepted(response.conversation.id);
+    runRequestAccepted(response.conversation.id);
   }
 
-  function chatRequestAccepted(conversationId: string) {
-    workspaceCache.handleChatRequestAccepted(conversationId);
+  function runRequestAccepted(conversationId: string) {
+    workspaceCache.handleRunRequestAccepted(conversationId);
   }
 
   function streamFinished(conversationId: string) {

@@ -1,11 +1,12 @@
 import type { UIMessage } from "ai";
 import type { AgentRunProjection, DraftAttachment, Message } from "@vivd-catalyst/api-client";
 import {
-  readAgentRuntimeMessageMetadata,
-  readAssistantToolCallsMetadata,
-  readToolResultMetadata,
-  readUserMessageMetadata
-} from "@vivd-catalyst/core";
+  readCompatibleAssistantToolCalls,
+  readCompatibleMessageRunId,
+  readCompatiblePersistedToolResult,
+  readCompatibleUserAttachmentRefs,
+  type PersistedToolResult
+} from "./assistant/assistant-message-compat";
 
 export interface AssistantUiActiveRun {
   run: {
@@ -84,7 +85,7 @@ export function toAttachmentFilePart(
 function toPersistedUiMessages(messages: Message[]): UIMessage[] {
   const toolResultsByToolCallId = new Map<string, PersistedToolResult>();
   for (const message of messages) {
-    const toolResult = readPersistedToolResult(message);
+    const toolResult = readCompatiblePersistedToolResult(message);
     if (toolResult) {
       toolResultsByToolCallId.set(toolResult.toolCallId, toolResult);
     }
@@ -176,7 +177,7 @@ function toUiMessageParts(
     parts.push(...readUserAttachmentFileParts(message));
   }
 
-  const toolCalls = readAssistantToolCalls(message);
+  const toolCalls = readCompatibleAssistantToolCalls(message);
   for (const toolCall of toolCalls) {
     const toolResult = toolResultsByToolCallId.get(toolCall.toolCallId);
     parts.push({
@@ -214,8 +215,8 @@ function toUiMessageParts(
 
 function withoutRunResponseMessages(messages: Message[], runId: string): Message[] {
   return messages.filter((message) => {
-    const runtime = readAgentRuntimeMessageMetadata(message.metadata);
-    if (!runtime || !("runId" in runtime) || runtime.runId !== runId) {
+    const messageRunId = readCompatibleMessageRunId(message);
+    if (messageRunId !== runId) {
       return true;
     }
     return message.role === "user";
@@ -223,102 +224,5 @@ function withoutRunResponseMessages(messages: Message[], runId: string): Message
 }
 
 function readUserAttachmentFileParts(message: Message): UIMessage["parts"] {
-  const runtime = readUserMessageMetadata(message.metadata);
-  if (!runtime) {
-    return [];
-  }
-  const manifest = isRecord(runtime.attachmentManifest) ? runtime.attachmentManifest : undefined;
-  if (manifest?.version !== 1 || !Array.isArray(manifest.attachments)) {
-    return [];
-  }
-  return manifest.attachments.flatMap((value): UIMessage["parts"] => {
-    if (!isRecord(value)) {
-      return [];
-    }
-    const fileId = typeof value.fileId === "string" ? value.fileId : undefined;
-    const filename = typeof value.filename === "string" ? value.filename : undefined;
-    if (!fileId || !filename) {
-      return [];
-    }
-    const mimeType = typeof value.mimeType === "string" ? value.mimeType : undefined;
-    return [
-      toAttachmentFilePart({
-        fileId,
-        filename,
-        ...(mimeType ? { mimeType } : {})
-      })
-    ];
-  });
-}
-
-interface PersistedToolCall {
-  toolCallId: string;
-  toolName: string;
-  input: unknown;
-}
-
-type PersistedToolResult =
-  | {
-      status: "success";
-      toolCallId: string;
-      output: unknown;
-    }
-  | {
-      status: "failed";
-      toolCallId: string;
-      errorText: string;
-    };
-
-function readAssistantToolCalls(message: Message): PersistedToolCall[] {
-  if (message.role !== "assistant") {
-    return [];
-  }
-  const runtime = readAssistantToolCallsMetadata(message.metadata);
-  if (!runtime) {
-    return [];
-  }
-  return runtime.toolCalls.map((toolCall) => ({
-    toolCallId: toolCall.toolCallId,
-    toolName: toolCall.toolName,
-    input: toolCall.input
-  }));
-}
-
-function readPersistedToolResult(message: Message): PersistedToolResult | undefined {
-  if (message.role !== "tool") {
-    return undefined;
-  }
-  const runtime = readToolResultMetadata(message.metadata);
-  if (!runtime) {
-    return undefined;
-  }
-  const result = isRecord(runtime.result) ? runtime.result : undefined;
-  if (result?.status === "success") {
-    return {
-      status: "success",
-      toolCallId: runtime.toolCallId,
-      output: {
-        status: "success",
-        output: result.output,
-        display: result.display,
-        artifacts: result.artifacts,
-        projectionNotice: runtime.projectionNotice
-      }
-    };
-  }
-  if (
-    (result?.status === "failed" || result?.status === "cancelled" || result?.status === "timed_out") &&
-    isRecord(result.error)
-  ) {
-    return {
-      status: "failed",
-      toolCallId: runtime.toolCallId,
-      errorText: typeof result.error.message === "string" ? result.error.message : "Tool call failed"
-    };
-  }
-  return undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  return readCompatibleUserAttachmentRefs(message).map(toAttachmentFilePart);
 }

@@ -141,11 +141,9 @@ function AssistantRuntimePane({
       locale,
       onMessageSubmitted,
       onRunStarted,
-      pendingConversationIdRef,
       selectedAgentName,
       selectedConversationId,
-      sendDisabledReason,
-      setOptimisticPendingIfActive
+      sendDisabledReason
     ]
   );
   async function selectPendingConversation(): Promise<void> {
@@ -172,11 +170,10 @@ function AssistantRuntimePane({
     toCreateMessage: toCreateMessageWithAttachments,
     async onFinish() {
       const conversationId = currentRunConversationId();
-      const viewed = activeRef.current;
       setOptimisticPendingIfActive(false);
       await selectPendingConversation();
       if (conversationId) {
-        onStreamFinished(conversationId, viewed);
+        onStreamFinished(conversationId);
       }
     },
     async onError(error) {
