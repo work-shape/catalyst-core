@@ -136,12 +136,16 @@ export function useConversationController({
 
     void (async () => {
       try {
+        let streamCaughtUp = false;
         let sawObservation = false;
         for await (const observation of client.observeRunEvents(
           activeRunConnection.conversationId,
           activeRunConnection.runId,
           {
             afterSequence: activeRunConnection.afterSequence,
+            onCaughtUp: () => {
+              streamCaughtUp = true;
+            },
             signal: abortController.signal
           }
         )) {
@@ -166,10 +170,15 @@ export function useConversationController({
           }
         }
         if (!cancelled) {
-          setState((current) => ({
-            ...current,
-            connectionStatus: sawObservation ? "caught_up" : "disconnected"
-          }));
+          setState((current) =>
+            completeRunObservationStreamInControllerState(current, {
+              streamCaughtUp,
+              sawObservation
+            })
+          );
+          if (streamCaughtUp && !sawObservation) {
+            await refreshSnapshot();
+          }
         }
       } catch (error) {
         if (cancelled || isAbortLikeError(error)) {
@@ -289,6 +298,34 @@ export function applyRunObservationToControllerState(
     },
     applied: true,
     refreshRequired: false
+  };
+}
+
+export function completeRunObservationStreamInControllerState(
+  state: ConversationControllerState,
+  input: {
+    sawObservation: boolean;
+    streamCaughtUp: boolean;
+  }
+): ConversationControllerState {
+  if (input.streamCaughtUp || input.sawObservation) {
+    const { error: currentError, ...rest } = state;
+    const preservedError =
+      currentError?.class === "stream_disconnected" ? undefined : currentError;
+    return {
+      ...rest,
+      connectionStatus: "caught_up",
+      ...(preservedError ? { error: preservedError } : {})
+    };
+  }
+
+  return {
+    ...state,
+    connectionStatus: "disconnected",
+    error: {
+      class: "stream_disconnected",
+      message: "Run observation stream disconnected"
+    }
   };
 }
 

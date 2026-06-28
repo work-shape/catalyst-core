@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ConversationThreadSnapshot, RunObservation } from "@vivd-catalyst/api-client";
 import {
   applyRunObservationToControllerState,
+  completeRunObservationStreamInControllerState,
   createControllerStateFromSnapshot
 } from "../packages/chat-ui/src/conversation-controller";
 
@@ -186,6 +187,58 @@ describe("chat UI conversation controller", () => {
       class: "run_failed",
       message: "Agent run was interrupted after the local runtime state was lost"
     });
+  });
+
+  it("treats caught-up no-observation streams as caught up rather than disconnected", () => {
+    const state = createControllerStateFromSnapshot(createSnapshot({ lastSequence: 3, text: "Final" }));
+    const reconnected = completeRunObservationStreamInControllerState(
+      {
+        ...state,
+        connectionStatus: "reconnecting",
+        error: {
+          class: "stream_disconnected",
+          message: "Previous stream disconnected"
+        }
+      },
+      {
+        sawObservation: false,
+        streamCaughtUp: true
+      }
+    );
+
+    expect(reconnected.connectionStatus).toBe("caught_up");
+    expect(reconnected.error).toBeUndefined();
+    expect(reconnected.activeRun?.lastAppliedSequence).toBe(3);
+  });
+
+  it("keeps real no-observation stream closures user-visible as disconnected", () => {
+    const state = createControllerStateFromSnapshot(createSnapshot({ lastSequence: 3, text: "Waiting" }));
+    const disconnected = completeRunObservationStreamInControllerState(state, {
+      sawObservation: false,
+      streamCaughtUp: false
+    });
+
+    expect(disconnected.connectionStatus).toBe("disconnected");
+    expect(disconnected.error).toMatchObject({
+      class: "stream_disconnected",
+      message: "Run observation stream disconnected"
+    });
+  });
+
+  it("uses refreshed snapshots to resolve stale active run state after caught-up streams", () => {
+    const stale = createControllerStateFromSnapshot(createSnapshot({ lastSequence: 3, text: "Final" }));
+    const caughtUp = completeRunObservationStreamInControllerState(stale, {
+      sawObservation: false,
+      streamCaughtUp: true
+    });
+    const refreshed = createControllerStateFromSnapshot(
+      createSnapshot({ lastSequence: 3, text: "", activeRun: false }),
+      caughtUp
+    );
+
+    expect(refreshed.connectionStatus).toBe("idle");
+    expect(refreshed.activeRun).toBeUndefined();
+    expect(refreshed.error).toBeUndefined();
   });
 });
 

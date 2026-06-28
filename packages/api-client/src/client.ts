@@ -11,6 +11,12 @@ export interface ApiClientOptions {
   fetchImpl?: typeof fetch;
 }
 
+export interface ObserveRunEventsOptions {
+  afterSequence?: number;
+  signal?: AbortSignal;
+  onCaughtUp?: () => void;
+}
+
 type OperationRequestInput<Operation> = Operation extends {
   requestSchema: z.ZodType<infer Request>;
 }
@@ -101,7 +107,7 @@ export function createApiClient(options: ApiClientOptions) {
   async function* observeRunEvents(
     conversationId: string,
     runId: string,
-    observeOptions: { afterSequence?: number; signal?: AbortSignal } = {}
+    observeOptions: ObserveRunEventsOptions = {}
   ): AsyncIterable<RunObservation> {
     const path = apiOperations.observeConversationRun.buildPath({
       params: { conversationId, runId },
@@ -118,6 +124,7 @@ export function createApiClient(options: ApiClientOptions) {
       signal: observeOptions.signal
     });
     if (response.status === 204) {
+      observeOptions.onCaughtUp?.();
       return;
     }
     if (!response.ok) {

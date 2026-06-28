@@ -246,6 +246,36 @@ describe("api operation catalog and client", () => {
     ]);
   });
 
+  it("exposes caught-up 204 observation streams without yielding events", async () => {
+    const calls: Request[] = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      calls.push(request);
+      return new Response(null, { status: 204 });
+    };
+    const client = createApiClient({
+      baseUrl: "https://chat.example",
+      fetchImpl
+    });
+    const observed = [];
+    let caughtUp = false;
+
+    for await (const observation of client.observeRunEvents("conv_1", "run_1", {
+      afterSequence: 7,
+      onCaughtUp: () => {
+        caughtUp = true;
+      }
+    })) {
+      observed.push(observation);
+    }
+
+    expect(calls.map((request) => `${request.method} ${new URL(request.url).pathname}${new URL(request.url).search}`)).toEqual([
+      "GET /api/conversations/conv_1/runs/run_1/events?after=7"
+    ]);
+    expect(observed).toEqual([]);
+    expect(caughtUp).toBe(true);
+  });
+
   it("keeps normal server route registrations tied to the operation catalog", async () => {
     const routeFiles = [
       "packages/chat-server/src/routes/audit-routes.ts",
