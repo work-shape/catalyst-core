@@ -50,9 +50,6 @@ export function useDeleteConversationMutation(
         }
       );
       queryClient.removeQueries({
-        queryKey: workspaceQueryKeys.messages(input.apiBaseUrl, input.authScope, deletedConversation.id)
-      });
-      queryClient.removeQueries({
         queryKey: workspaceQueryKeys.thread(input.apiBaseUrl, input.authScope, deletedConversation.id)
       });
       queryClient.removeQueries({

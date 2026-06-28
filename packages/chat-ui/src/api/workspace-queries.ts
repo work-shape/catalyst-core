@@ -107,7 +107,7 @@ export interface WorkspaceCacheActions {
   invalidateTerminalRunObservation(observation: RunObservation): void;
   clearDraftAttachments(conversationId: string): void;
   cacheRunStarted(response: StartConversationRunResponse): void;
-  handleChatRequestAccepted(conversationId: string): void;
+  handleRunRequestAccepted(conversationId: string): void;
   invalidateStreamFinished(conversationId: string): void;
   invalidateStreamError(conversationId: string): void;
 }
@@ -175,14 +175,33 @@ export function useWorkspaceCacheActions(
     [invalidateConversations, invalidateThread]
   );
 
-  const invalidateTerminalRunObservation = useCallback(
-    (observation: RunObservation) => {
-      invalidateThread(observation.conversationId);
+  const invalidateRunCompletion = useCallback(
+    (
+      conversationId: string,
+      options: { draftAttachmentsChanged?: boolean } = {}
+    ) => {
       invalidateConversations();
+      invalidateThread(conversationId);
+      if (options.draftAttachmentsChanged) {
+        invalidateDraftAttachmentsScope();
+      }
       invalidateUsage();
       invalidateAuditEvents();
     },
-    [invalidateAuditEvents, invalidateConversations, invalidateThread, invalidateUsage]
+    [
+      invalidateAuditEvents,
+      invalidateConversations,
+      invalidateDraftAttachmentsScope,
+      invalidateThread,
+      invalidateUsage
+    ]
+  );
+
+  const invalidateTerminalRunObservation = useCallback(
+    (observation: RunObservation) => {
+      invalidateRunCompletion(observation.conversationId);
+    },
+    [invalidateRunCompletion]
   );
 
   const clearDraftAttachments = useCallback(
@@ -221,7 +240,7 @@ export function useWorkspaceCacheActions(
     [apiBaseUrl, authScope, queryClient]
   );
 
-  const handleChatRequestAccepted = useCallback(
+  const handleRunRequestAccepted = useCallback(
     (conversationId: string) => {
       invalidateThread(conversationId);
       invalidateConversations();
@@ -249,19 +268,9 @@ export function useWorkspaceCacheActions(
 
   const invalidateStreamFinished = useCallback(
     (conversationId: string) => {
-      invalidateConversations();
-      invalidateThread(conversationId);
-      invalidateDraftAttachmentsScope();
-      invalidateUsage();
-      invalidateAuditEvents();
+      invalidateRunCompletion(conversationId, { draftAttachmentsChanged: true });
     },
-    [
-      invalidateAuditEvents,
-      invalidateConversations,
-      invalidateDraftAttachmentsScope,
-      invalidateThread,
-      invalidateUsage
-    ]
+    [invalidateRunCompletion]
   );
 
   const invalidateStreamError = useCallback(
@@ -282,14 +291,14 @@ export function useWorkspaceCacheActions(
       invalidateTerminalRunObservation,
       clearDraftAttachments,
       cacheRunStarted,
-      handleChatRequestAccepted,
+      handleRunRequestAccepted,
       invalidateStreamFinished,
       invalidateStreamError
     }),
     [
       cacheRunStarted,
       clearDraftAttachments,
-      handleChatRequestAccepted,
+      handleRunRequestAccepted,
       invalidateConversationStarted,
       invalidateConversations,
       invalidateCurrentUser,
