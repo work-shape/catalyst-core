@@ -212,7 +212,7 @@ function AssistantRuntimePane({
     onFinish() {
       setOptimisticPendingIfActive(false);
       if (selectedConversationId) {
-        onStreamFinished(selectedConversationId, activeRef.current);
+        onStreamFinished(selectedConversationId);
       }
     },
     onError(error) {
