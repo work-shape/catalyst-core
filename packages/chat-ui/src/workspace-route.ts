@@ -1,4 +1,5 @@
 export type SuperadminRouteTab = "usage" | "users" | "audit";
+export type WorkspaceRouteView = "chat" | "settings" | "superadmin";
 
 export type WorkspaceRoute =
   | { kind: "new-conversation" }
@@ -14,7 +15,7 @@ export function defaultWorkspaceRoute(): WorkspaceRoute {
   return { kind: "new-conversation" };
 }
 
-export function workspaceRouteView(route: WorkspaceRoute): "chat" | "settings" | "superadmin" {
+export function workspaceRouteView(route: WorkspaceRoute): WorkspaceRouteView {
   if (route.kind === "settings") {
     return "settings";
   }

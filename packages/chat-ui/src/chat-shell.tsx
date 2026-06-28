@@ -15,7 +15,6 @@ import {
   ToolDisplayWidgetProvider,
   type ToolDisplayWidgetRegistry
 } from "./domain-ui-widgets";
-import { ToolDisplayPanelProvider } from "./tool-display-panel";
 import {
   defaultWorkspaceRoute,
   type SuperadminRouteTab,
@@ -71,13 +70,11 @@ export function ChatShell({ displayWidgets, route, onRouteChange, ...workspacePr
   return (
     <QueryClientProvider client={queryClient}>
       <ToolDisplayWidgetProvider widgets={displayWidgets}>
-        <ToolDisplayPanelProvider>
-          <ChatWorkspace
-            {...workspaceProps}
-            route={resolvedRoute}
-            onRouteChange={resolvedRouteChange}
-          />
-        </ToolDisplayPanelProvider>
+        <ChatWorkspace
+          {...workspaceProps}
+          route={resolvedRoute}
+          onRouteChange={resolvedRouteChange}
+        />
       </ToolDisplayWidgetProvider>
     </QueryClientProvider>
   );

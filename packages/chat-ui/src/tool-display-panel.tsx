@@ -33,14 +33,7 @@ interface ToolDisplayPanelContextValue {
   close(): void;
 }
 
-const defaultToolDisplayPanelContext: ToolDisplayPanelContextValue = {
-  available: false,
-  open: false,
-  show() {},
-  close() {}
-};
-
-const ToolDisplayPanelContext = createContext<ToolDisplayPanelContextValue>(defaultToolDisplayPanelContext);
+const ToolDisplayPanelContext = createContext<ToolDisplayPanelContextValue | undefined>(undefined);
 
 export function ToolDisplayPanelProvider({ children }: { children: ReactNode }) {
   const [entry, setEntry] = useState<ToolDisplayPanelEntry | undefined>();
@@ -71,7 +64,11 @@ export function ToolDisplayPanelProvider({ children }: { children: ReactNode }) 
 }
 
 export function useToolDisplayPanel(): ToolDisplayPanelContextValue {
-  return useContext(ToolDisplayPanelContext);
+  const value = useContext(ToolDisplayPanelContext);
+  if (!value) {
+    throw new Error("useToolDisplayPanel must be used within ToolDisplayPanelProvider");
+  }
+  return value;
 }
 
 export function ToolDisplayPanel({ className }: { className?: string }) {
