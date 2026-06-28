@@ -1,9 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import {
-  createApiClient,
-  type LocaleCode,
-  type StartConversationRunResponse
-} from "@vivd-catalyst/api-client";
+import { useEffect, useState } from "react";
+import { type StartConversationRunResponse } from "@vivd-catalyst/api-client";
+import { useWorkspaceApiClient } from "./api/workspace-api-client";
 import {
   useCancelRunMutation,
   useChangeCurrentUserPasswordMutation,
@@ -28,38 +25,33 @@ import { ChatDropOverlay, useChatFileDropzone } from "./chat-file-dropzone";
 import { clearRunCursors } from "./conversation/run-connection-manager";
 import { useConversationController } from "./conversation/use-conversation-controller";
 import { useDraftAttachmentController } from "./draft-attachment-controller";
-import { readBrowserLocale, TranslationProvider } from "./i18n";
+import { TranslationProvider } from "./i18n";
 import { LoginPanel } from "./login-panel";
-import {
-  createThemeStyle,
-  readSystemThemeMode,
-  resolveThemeModePreference,
-  type ResolvedThemeMode
-} from "./theme";
 import { ToolDisplayPanel, useToolDisplayPanel } from "./tool-display-panel";
 import { cn } from "./ui/cn";
 import { UserMenu } from "./user-menu";
 import { UserSettingsPanel } from "./user-settings-panel";
 import { SessionCheckPanel, WorkspaceChrome } from "./workspace-chrome";
 import { type WorkspaceView, WorkspaceRail } from "./workspace-rail";
-import {
-  defaultWorkspaceRoute,
-  workspaceRouteView,
-  type WorkspaceRoute,
-  type WorkspaceRouteChangeOptions
-} from "./workspace-route";
+import { type WorkspaceRoute, type WorkspaceRouteChangeOptions } from "./workspace-route";
 import {
   apiErrorMessage,
   apiErrorStatus,
   applyFavicon,
-  createDraftKey,
-  DEFAULT_LOCALES,
-  readStoredLocale,
-  readStoredThemeMode,
-  STANDALONE_AUTH_SOURCE,
-  writeStoredLocale,
-  writeStoredThemeMode
+  STANDALONE_AUTH_SOURCE
 } from "./workspace-utils";
+import {
+  useWorkspaceDraft,
+  useWorkspaceDraftController
+} from "./workspace/workspace-drafts";
+import { WorkspaceProviders } from "./workspace/workspace-providers";
+import {
+  useWorkspaceChromeState,
+  useWorkspaceLocale,
+  useWorkspacePreferences,
+  useWorkspaceRouteState,
+  useWorkspaceTheme
+} from "./workspace/workspace-ui-state";
 
 interface ChatWorkspaceProps extends ChatShellProps {
   route: WorkspaceRoute;
@@ -76,34 +68,39 @@ export function ChatWorkspace({
   route,
   onRouteChange
 }: ChatWorkspaceProps) {
-  const selectedConversationIdRef = useRef<string | undefined>(undefined);
-  const lastChatRouteRef = useRef<WorkspaceRoute>(defaultWorkspaceRoute());
-  const [draftsByTarget, setDraftsByTarget] = useState<Record<string, string>>({});
-  const [notice, setNotice] = useState<string | undefined>();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [composerFocusRequestId, setComposerFocusRequestId] = useState(0);
-  const [selectedAgentName, setSelectedAgentName] = useState<string | undefined>();
-  const [browserLocale] = useState<LocaleCode | undefined>(() => readBrowserLocale());
-  const [localePreference, setLocalePreference] = useState<LocaleCode | undefined>(() => readStoredLocale());
-  const [themeOverride, setThemeOverride] = useState<ResolvedThemeMode | undefined>(() =>
-    readStoredThemeMode()
+  return (
+    <WorkspaceProviders
+      apiBaseUrl={apiBaseUrl}
+      token={token}
+      getToken={getToken}
+      route={route}
+      onRouteChange={onRouteChange}
+    >
+      <ChatWorkspaceContent
+        adminPanel={adminPanel}
+        manageDocumentTitle={manageDocumentTitle}
+        className={className}
+      />
+    </WorkspaceProviders>
   );
-  const [systemThemeMode, setSystemThemeMode] = useState<ResolvedThemeMode>(() => readSystemThemeMode());
+}
+
+function ChatWorkspaceContent({
+  adminPanel,
+  manageDocumentTitle,
+  className
+}: Pick<ChatWorkspaceProps, "adminPanel" | "manageDocumentTitle" | "className">) {
+  const [notice, setNotice] = useState<string | undefined>();
+  const [selectedAgentName, setSelectedAgentName] = useState<string | undefined>();
+  const { apiBaseUrl, client } = useWorkspaceApiClient();
+  const routeState = useWorkspaceRouteState();
+  const chrome = useWorkspaceChromeState();
+  const preferences = useWorkspacePreferences();
+  const draftController = useWorkspaceDraftController();
   const displayPanel = useToolDisplayPanel();
   const authScope = "standalone";
-  const selectedConversationId = route.kind === "conversation" ? route.conversationId : undefined;
-  const view = workspaceRouteView(route);
-  const draftKey = createDraftKey(authScope, selectedConversationId);
-  const draft = draftsByTarget[draftKey] ?? "";
-
-  const client = useMemo(
-    () =>
-      createApiClient({
-        baseUrl: apiBaseUrl,
-        getToken: getToken ?? (() => token)
-      }),
-    [apiBaseUrl, getToken, token]
-  );
+  const { route, selectedConversationId, view } = routeState;
+  const activeDraft = useWorkspaceDraft({ authScope, conversationId: selectedConversationId });
 
   const meQuery = useWorkspaceMeQuery({ apiBaseUrl, client });
   const isAuthenticated = Boolean(meQuery.data);
@@ -111,7 +108,7 @@ export function ChatWorkspace({
     apiBaseUrl,
     authScope,
     client,
-    localePreference,
+    localePreference: preferences.localePreference,
     enabled: isAuthenticated
   });
   const conversationsQuery = useWorkspaceConversationsQuery({
@@ -177,7 +174,7 @@ export function ChatWorkspace({
   const config = configQuery.data;
   const attachmentsEnabled = config?.features.attachments.enabled ?? false;
   const attachmentAccept = config?.features.attachments.accept ?? "";
-  const activeLocale = config?.localization.locale ?? localePreference ?? browserLocale ?? "en";
+  const activeLocale = useWorkspaceLocale(config?.localization.locale);
   async function ensureConversationForFiles(files: File[]): Promise<string> {
     if (selectedConversationId) {
       return selectedConversationId;
@@ -187,19 +184,12 @@ export function ChatWorkspace({
       title,
       locale: activeLocale
     });
-    setDraftsByTarget((currentDrafts) => {
-      const nextDrafts = { ...currentDrafts };
-      const currentDraft = nextDrafts[draftKey];
-      delete nextDrafts[draftKey];
-      if (currentDraft) {
-        nextDrafts[createDraftKey(authScope, conversation.id)] = currentDraft;
-      }
-      return nextDrafts;
+    draftController.moveDraft({
+      authScope,
+      fromConversationId: undefined,
+      toConversationId: conversation.id
     });
-    onRouteChange(
-      { kind: "conversation", conversationId: conversation.id },
-      { replace: route.kind === "new-conversation" }
-    );
+    routeState.showConversation(conversation.id, { replace: route.kind === "new-conversation" });
     setNotice(undefined);
     workspaceCache.invalidateConversations();
     return conversation.id;
@@ -219,13 +209,8 @@ export function ChatWorkspace({
     enabled: attachmentsEnabled,
     onFilesSelected: draftAttachmentController.onFilesSelected
   });
-  const supportedLocales = config?.localization.supportedLocales ?? DEFAULT_LOCALES;
-  const resolvedThemeMode =
-    themeOverride ?? resolveThemeModePreference(config?.ui.defaultThemeMode, systemThemeMode);
-  const themeStyle = createThemeStyle(config?.ui, resolvedThemeMode);
-  const workspaceStyle = {
-    ...(themeStyle ?? {})
-  } as CSSProperties;
+  const supportedLocales = config?.localization.supportedLocales ?? preferences.supportedFallbackLocales;
+  const { resolvedThemeMode, workspaceStyle, toggleTheme } = useWorkspaceTheme(config?.ui);
   const activeAgentName = selectedAgentName ?? config?.defaultAgentName ?? config?.agents[0]?.name;
   const displayPanelOpen = Boolean(displayPanel.entry && displayPanel.open);
 
@@ -234,33 +219,10 @@ export function ChatWorkspace({
   }, [displayPanel.close, selectedConversationId]);
 
   useEffect(() => {
-    selectedConversationIdRef.current = selectedConversationId;
-    if (route.kind === "new-conversation" || route.kind === "conversation") {
-      lastChatRouteRef.current = route;
-    }
-  }, [route, selectedConversationId]);
-
-  useEffect(() => {
     if (isAuthenticated && route.kind === "superadmin" && !isSuperadmin) {
-      onRouteChange(defaultWorkspaceRoute(), { replace: true });
+      routeState.goToDefaultChat({ replace: true });
     }
-  }, [isAuthenticated, isSuperadmin, onRouteChange, route.kind]);
-
-  useEffect(() => {
-    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
-    if (!media) {
-      return undefined;
-    }
-
-    function onChange(event: MediaQueryListEvent) {
-      setSystemThemeMode(event.matches ? "dark" : "light");
-    }
-
-    media.addEventListener("change", onChange);
-    return () => {
-      media.removeEventListener("change", onChange);
-    };
-  }, []);
+  }, [isAuthenticated, isSuperadmin, route.kind, routeState]);
 
   useEffect(() => {
     if (!config?.agents.length) {
@@ -302,12 +264,11 @@ export function ChatWorkspace({
     selectedConversationId,
     clearConversationUploads: draftAttachmentController.clearConversationUploads,
     onDeletedActiveConversation: (nextSelectedConversationId) => {
-      onRouteChange(
-        nextSelectedConversationId
-          ? { kind: "conversation", conversationId: nextSelectedConversationId }
-          : defaultWorkspaceRoute(),
-        { replace: true }
-      );
+      if (nextSelectedConversationId) {
+        routeState.showConversation(nextSelectedConversationId, { replace: true });
+        return;
+      }
+      routeState.goToDefaultChat({ replace: true });
     },
     onDeletedConversation: () => setNotice(undefined),
     onErrorMessage: setNotice
@@ -315,10 +276,10 @@ export function ChatWorkspace({
   const signOutMutation = useWorkspaceSignOutMutation({
     apiBaseUrl,
     onSignedOut: () => {
-      setDraftsByTarget({});
+      draftController.clearDrafts();
       clearRunCursors();
-      lastChatRouteRef.current = defaultWorkspaceRoute();
-      onRouteChange(defaultWorkspaceRoute(), { replace: true });
+      routeState.resetRouteMemory();
+      routeState.goToDefaultChat({ replace: true });
     }
   });
   const cancelRunMutation = useCancelRunMutation({
@@ -346,23 +307,12 @@ export function ChatWorkspace({
     <UserMenu
       user={meQuery.data}
       signingOut={signOutMutation.isPending}
-      onOpenSettings={() => onRouteChange({ kind: "settings" })}
+      onOpenSettings={routeState.showSettings}
       onSignOut={() => signOutMutation.mutate()}
       placement="top"
       align="start"
     />
   );
-
-  function onToggleTheme() {
-    const nextThemeMode = resolvedThemeMode === "dark" ? "light" : "dark";
-    setThemeOverride(nextThemeMode);
-    writeStoredThemeMode(nextThemeMode);
-  }
-
-  function onSelectLocale(locale: LocaleCode) {
-    setLocalePreference(locale);
-    writeStoredLocale(locale);
-  }
 
   function onCancelSelectedRun() {
     if (!selectedConversationId || !controller.activeRun || !isActiveRunStatus(controller.activeRun.run.status)) {
@@ -375,37 +325,20 @@ export function ChatWorkspace({
   }
 
   function onCreateConversation() {
-    onRouteChange(defaultWorkspaceRoute());
+    routeState.goToDefaultChat();
     setNotice(undefined);
-    setComposerFocusRequestId((currentRequestId) => currentRequestId + 1);
-  }
-
-  function setDraftForKey(key: string, value: string) {
-    setDraftsByTarget((currentDrafts) => {
-      if (value.length === 0) {
-        const remainingDrafts = { ...currentDrafts };
-        delete remainingDrafts[key];
-        return remainingDrafts;
-      }
-      return {
-        ...currentDrafts,
-        [key]: value
-      };
-    });
+    chrome.requestComposerFocus();
   }
 
   function onConversationStarted(conversationId: string) {
-    onRouteChange(
-      { kind: "conversation", conversationId },
-      { replace: route.kind === "new-conversation" }
-    );
+    routeState.showConversation(conversationId, { replace: route.kind === "new-conversation" });
     setNotice(undefined);
     workspaceCache.invalidateConversationStarted(conversationId);
   }
 
   function onMessageSubmitted(conversationId: string) {
-    setDraftForKey(draftKey, "");
-    setDraftForKey(createDraftKey(authScope, conversationId), "");
+    activeDraft.clearDraft();
+    draftController.clearDraft({ authScope, conversationId });
     workspaceCache.clearDraftAttachments(conversationId);
     draftAttachmentController.clearConversationUploads(conversationId);
   }
@@ -426,7 +359,7 @@ export function ChatWorkspace({
   }
 
   function onStreamError(conversationId: string, message: string, viewed: boolean) {
-    const visible = viewed || selectedConversationIdRef.current === conversationId;
+    const visible = viewed || routeState.isConversationVisible(conversationId);
     if (visible) {
       setNotice(message);
     }
@@ -434,20 +367,12 @@ export function ChatWorkspace({
   }
 
   function onSelectConversation(conversationId: string) {
-    onRouteChange({ kind: "conversation", conversationId });
+    routeState.showConversation(conversationId);
     setNotice(undefined);
   }
 
   function onWorkspaceViewChange(nextView: WorkspaceView) {
-    if (nextView === "settings") {
-      onRouteChange({ kind: "settings" });
-      return;
-    }
-    if (nextView === "superadmin") {
-      onRouteChange({ kind: "superadmin", tab: "usage" });
-      return;
-    }
-    onRouteChange(lastChatRouteRef.current);
+    routeState.selectWorkspaceView(nextView);
   }
 
   if (apiErrorStatus(meQuery.error) === 401) {
@@ -455,9 +380,9 @@ export function ChatWorkspace({
       <TranslationProvider locale={activeLocale}>
         <LoginPanel
           apiBaseUrl={apiBaseUrl}
-          localePreference={localePreference}
+          localePreference={preferences.localePreference}
           fallbackLocale={activeLocale}
-          onLocaleChange={onSelectLocale}
+          onLocaleChange={preferences.selectLocale}
           manageDocumentTitle={manageDocumentTitle}
           onSignedIn={workspaceCache.invalidateCurrentUser}
         />
@@ -481,22 +406,22 @@ export function ChatWorkspace({
       <main
         className={cn(
           "relative grid h-dvh w-full min-h-0 overflow-hidden bg-background text-foreground transition-colors md:grid-rows-[minmax(0,1fr)] max-md:grid-cols-1",
-          sidebarOpen ? "md:grid-cols-[18rem_minmax(0,1fr)]" : "md:grid-cols-[minmax(0,1fr)]",
+          chrome.sidebarOpen ? "md:grid-cols-[18rem_minmax(0,1fr)]" : "md:grid-cols-[minmax(0,1fr)]",
           resolvedThemeMode === "dark" && "dark",
           className
         )}
         style={workspaceStyle}
       >
-      {sidebarOpen ? (
+      {chrome.sidebarOpen ? (
         <button
           type="button"
           className="fixed inset-0 z-30 bg-black/35 backdrop-blur-[1px] md:hidden"
           aria-label="Close sidebar"
-          onClick={() => setSidebarOpen(false)}
+          onClick={chrome.closeSidebar}
         />
       ) : null}
 
-      {sidebarOpen ? (
+      {chrome.sidebarOpen ? (
         <div className="fixed inset-y-0 left-0 z-40 w-[min(18rem,calc(100vw-2rem))] min-w-0 translate-x-0 transition-transform duration-200 md:static md:z-auto md:w-auto md:translate-x-0">
             <WorkspaceRail
               config={config}
@@ -507,7 +432,7 @@ export function ChatWorkspace({
             creatingConversation={false}
             deletingConversation={deleteConversation.isPending}
             userMenu={userMenu}
-            onToggleSidebar={() => setSidebarOpen(false)}
+            onToggleSidebar={chrome.closeSidebar}
             onViewChange={onWorkspaceViewChange}
             onCreateConversation={onCreateConversation}
             onSelectConversation={onSelectConversation}
@@ -519,12 +444,12 @@ export function ChatWorkspace({
       <WorkspaceChrome
         agents={config?.agents ?? []}
         displayPanelOpen={displayPanelOpen}
-        sidebarOpen={sidebarOpen}
+        sidebarOpen={chrome.sidebarOpen}
         selectedAgentName={activeAgentName}
         themeMode={resolvedThemeMode}
         onSelectAgent={setSelectedAgentName}
-        onToggleSidebar={() => setSidebarOpen((currentOpen) => !currentOpen)}
-        onToggleTheme={onToggleTheme}
+        onToggleSidebar={chrome.toggleSidebar}
+        onToggleTheme={toggleTheme}
       />
 
       {view === "superadmin" && isSuperadmin ? (
@@ -552,7 +477,7 @@ export function ChatWorkspace({
           onResetUserPassword: (userId, password) =>
             superadminUserMutations.resetUserPassword.mutateAsync({ userId, password }),
           selectedTab: route.kind === "superadmin" ? route.tab : "usage",
-          onSelectTab: (tab) => onRouteChange({ kind: "superadmin", tab })
+          onSelectTab: (tab) => routeState.showSuperadmin(tab)
         })
       ) : view === "settings" ? (
         <UserSettingsPanel
@@ -564,7 +489,7 @@ export function ChatWorkspace({
           locale={activeLocale}
           onUpdateProfile={(input) => updateCurrentUser.mutateAsync(input)}
           onChangePassword={(input) => changeCurrentUserPassword.mutateAsync(input)}
-          onSelectLocale={onSelectLocale}
+          onSelectLocale={preferences.selectLocale}
         />
       ) : (
         <section className="relative h-full min-h-0 min-w-0">
@@ -583,8 +508,8 @@ export function ChatWorkspace({
                 messages={messages}
                 messagesLoaded={messagesLoaded}
                 notice={visibleNotice}
-                draft={draft}
-                composerFocusRequestId={composerFocusRequestId}
+                draft={activeDraft.draft}
+                composerFocusRequestId={chrome.composerFocusRequestId}
                 locale={activeLocale}
                 selectedAgentName={activeAgentName}
                 draftAttachments={draftAttachmentController.draftAttachments}
@@ -594,7 +519,7 @@ export function ChatWorkspace({
                 sendBlockedReason={draftAttachmentController.sendBlockedReason}
                 attachmentsEnabled={attachmentsEnabled}
                 attachmentAccept={attachmentAccept}
-                onDraftChange={(value) => setDraftForKey(draftKey, value)}
+                onDraftChange={activeDraft.setDraft}
                 onFilesSelected={draftAttachmentController.onFilesSelected}
                 onRemoveDraftAttachment={draftAttachmentController.onRemoveDraftAttachment}
                 onRetryDraftAttachment={draftAttachmentController.onRetryDraftAttachment}
