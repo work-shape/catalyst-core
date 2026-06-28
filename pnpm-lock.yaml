@@ -118,9 +118,6 @@ importers:
 
   packages/api-client:
     dependencies:
-      '@hey-api/client-fetch':
-        specifier: 0.13.1
-        version: 0.13.1(@hey-api/openapi-ts@0.99.0(magicast@0.5.3)(typescript@6.0.3))
       '@vivd-catalyst/api-contract':
         specifier: workspace:*
         version: link:../api-contract
@@ -1625,12 +1622,6 @@ packages:
 
   '@floating-ui/utils@0.2.11':
     resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
-
-  '@hey-api/client-fetch@0.13.1':
-    resolution: {integrity: sha512-29jBRYNdxVGlx5oewFgOrkulZckpIpBIRHth3uHFn1PrL2ucMy52FvWOY3U3dVx2go1Z3kUmMi6lr07iOpUqqA==}
-    deprecated: Starting with v0.73.0, this package is bundled directly inside @hey-api/openapi-ts.
-    peerDependencies:
-      '@hey-api/openapi-ts': < 2
 
   '@hey-api/codegen-core@0.9.1':
     resolution: {integrity: sha512-s97jL1dgTMuiMHv2BZ1X4Tgd99Mf9GOvGdNqNcGwIMmnR+PgYNoraj4Zvp134MKsNCap/m7k0r0vKKnl56pj4w==}
@@ -6362,10 +6353,6 @@ snapshots:
       react-dom: 19.2.7(react@19.2.7)
 
   '@floating-ui/utils@0.2.11': {}
-
-  '@hey-api/client-fetch@0.13.1(@hey-api/openapi-ts@0.99.0(magicast@0.5.3)(typescript@6.0.3))':
-    dependencies:
-      '@hey-api/openapi-ts': 0.99.0(magicast@0.5.3)(typescript@6.0.3)
 
   '@hey-api/codegen-core@0.9.1(magicast@0.5.3)':
     dependencies:
