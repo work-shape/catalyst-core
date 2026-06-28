@@ -31,11 +31,13 @@ import {
   useWorkspaceUsersQuery
 } from "../api/workspace-queries";
 import type { LocalUploadingAttachment } from "../assistant-composer";
-import type { AssistantUiActiveRun } from "../assistant-ui-adapter";
 import type { ChatFileDropzoneController } from "../chat-file-dropzone";
 import type { ChatShellAdminPanel } from "../chat-shell";
 import { clearRunCursors } from "../conversation/run-connection-manager";
-import { isLiveRunStatus } from "../conversation/conversation-controller-state";
+import {
+  isLiveRunStatus,
+  type ConversationControllerState
+} from "../conversation/conversation-controller-state";
 import { useConversationController } from "../conversation/use-conversation-controller";
 import { useDraftAttachmentController } from "../draft-attachment-controller";
 import { useChatFileDropzone } from "../chat-file-dropzone";
@@ -143,7 +145,7 @@ export interface SelectedChatModel {
   draftAttachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
   conversationRunning: boolean;
-  activeRun: AssistantUiActiveRun | undefined;
+  activeRun: ConversationControllerState["activeRun"];
   sendBlockedReason: string | undefined;
   attachmentsEnabled: boolean;
   attachmentAccept: string;
