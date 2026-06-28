@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ShieldCheck } from "lucide-react";
 import { createApiClient, type LocaleCode } from "@vivd-catalyst/api-client";
+import { workspaceQueryKeys } from "./api/workspace-query-keys";
 import { signInWithEmail } from "./auth-client";
 import { useTranslation } from "./i18n";
 import { LocaleSelector } from "./locale-selector";
@@ -36,7 +37,7 @@ export function LoginPanel({
   const [systemThemeMode, setSystemThemeMode] = useState(() => readSystemThemeMode());
   const client = useMemo(() => createApiClient({ baseUrl: apiBaseUrl }), [apiBaseUrl]);
   const brandingQuery = useQuery({
-    queryKey: ["branding", apiBaseUrl, localePreference ?? "auto"],
+    queryKey: workspaceQueryKeys.branding(apiBaseUrl, localePreference),
     queryFn: () => client.branding(localePreference),
     retry: false
   });
