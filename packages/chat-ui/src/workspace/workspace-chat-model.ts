@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type {
   ApiClient,
   ApiUser,
@@ -45,6 +45,7 @@ import { apiErrorMessage, apiErrorStatus, applyFavicon } from "../workspace-util
 import { useWorkspaceDraft, useWorkspaceDraftController } from "./workspace-drafts";
 import {
   useWorkspaceChromeState,
+  useWorkspaceConversationActivityState,
   useWorkspaceLocale,
   useWorkspacePreferences,
   useWorkspaceRouteState,
@@ -167,6 +168,7 @@ export function useWorkspaceChatModel({
   const routeState = useWorkspaceRouteState();
   const chrome = useWorkspaceChromeState();
   const preferences = useWorkspacePreferences();
+  const conversationActivity = useWorkspaceConversationActivityState();
   const draftController = useWorkspaceDraftController();
   const displayPanel = useToolDisplayPanel();
   const { route, selectedConversationId, view } = routeState;
@@ -214,7 +216,49 @@ export function useWorkspaceChatModel({
     refreshSnapshot: workspaceCache.refreshSelectedThreadSnapshot,
     onTerminalObservation: workspaceCache.invalidateTerminalRunObservation
   });
-  const conversations = conversationsQuery.data ?? [];
+  const serverConversations = conversationsQuery.data ?? [];
+  const hasListedActiveRun = serverConversations.some((conversation) => conversation.activeRun);
+
+  useEffect(() => {
+    if (!isAuthenticated || !hasListedActiveRun) {
+      return undefined;
+    }
+    const intervalId = window.setInterval(() => {
+      workspaceCache.invalidateConversations();
+    }, 1_000);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [hasListedActiveRun, isAuthenticated, workspaceCache.invalidateConversations]);
+
+  useEffect(() => {
+    const completedBackgroundConversationIds =
+      conversationActivity.syncConversationActivity(serverConversations);
+    for (const conversationId of completedBackgroundConversationIds) {
+      workspaceCache.removeThreadSnapshot(conversationId);
+    }
+  }, [
+    conversationActivity.syncConversationActivity,
+    serverConversations,
+    workspaceCache.removeThreadSnapshot
+  ]);
+
+  useEffect(() => {
+    if (selectedConversationId) {
+      conversationActivity.clearUnreadConversation(selectedConversationId);
+    }
+  }, [conversationActivity.clearUnreadConversation, selectedConversationId]);
+
+  const conversations = useMemo(() => {
+    if (conversationActivity.locallyUnreadConversationIds.size === 0) {
+      return serverConversations;
+    }
+    return serverConversations.map((conversation) =>
+      conversationActivity.locallyUnreadConversationIds.has(conversation.id)
+        ? { ...conversation, unread: true }
+        : conversation
+    );
+  }, [conversationActivity.locallyUnreadConversationIds, serverConversations]);
   const messages = selectedConversationId ? controller.messages : [];
   const messagesLoaded = !selectedConversationId || controller.snapshotStatus === "ready";
   const selectedConversationRunning = Boolean(
@@ -343,6 +387,7 @@ export function useWorkspaceChatModel({
     apiBaseUrl,
     onSignedOut: () => {
       draftController.clearDrafts();
+      conversationActivity.resetConversationActivity();
       clearRunCursors();
       routeState.resetRouteMemory();
       routeState.goToDefaultChat({ replace: true });

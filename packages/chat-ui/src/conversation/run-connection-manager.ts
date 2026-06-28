@@ -107,6 +107,14 @@ export function clearRunCursors(): void {
   browserRunCursorStorage.clearCursors();
 }
 
+export function rememberRunCursor(
+  conversationId: string,
+  runId: string,
+  sequence: number
+): void {
+  browserRunCursorStorage.rememberCursor(conversationId, runId, sequence);
+}
+
 const RUN_CURSOR_STORAGE_PREFIX = "vivd-catalyst:run-cursor";
 
 const browserRunCursorStorage: RunCursorStorage = {

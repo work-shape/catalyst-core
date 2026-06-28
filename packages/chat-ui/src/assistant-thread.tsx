@@ -19,6 +19,7 @@ export function AssistantThread({
   attachmentAccept,
   conversationRunning,
   optimisticPending,
+  messageIdentityKey,
   composerFocusRequestId,
   onCancelRun,
   onFilesSelected,
@@ -35,6 +36,7 @@ export function AssistantThread({
   attachmentAccept: string;
   conversationRunning?: boolean;
   optimisticPending?: boolean;
+  messageIdentityKey: string;
   composerFocusRequestId: number;
   onCancelRun: () => void;
   onFilesSelected: (files: File[]) => void;
@@ -72,7 +74,7 @@ export function AssistantThread({
             </AuiIf>
 
             <div className="flex flex-col gap-6 pb-8 empty:hidden">
-              <ThreadPrimitive.Messages>
+              <ThreadPrimitive.Messages key={messageIdentityKey}>
                 {() => (
                   <ThreadMessage
                     conversationRunning={conversationRunning}

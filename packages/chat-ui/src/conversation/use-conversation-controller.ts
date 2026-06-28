@@ -13,6 +13,7 @@ import {
   type ConversationControllerState
 } from "./conversation-controller-state";
 import {
+  rememberRunCursor,
   startRunConnectionManager,
   type RunConnectionTarget
 } from "./run-connection-manager";
@@ -69,6 +70,13 @@ export function useConversationController({
       return;
     }
     if (snapshot) {
+      if (snapshot.activeRun) {
+        rememberRunCursor(
+          conversationId,
+          snapshot.activeRun.run.id,
+          snapshot.activeRun.projection.lastSequence
+        );
+      }
       setState((current) => createControllerStateFromSnapshot(snapshot, current));
     }
   }, [conversationId, enabled, snapshot, snapshotError, snapshotLoading, snapshotRunKey]);

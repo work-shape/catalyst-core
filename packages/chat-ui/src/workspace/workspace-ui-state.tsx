@@ -65,9 +65,23 @@ interface WorkspacePreferencesContextValue {
   selectThemeMode(themeMode: ResolvedThemeMode): void;
 }
 
+interface ListedConversationActivity {
+  id: string;
+  activeRun?: unknown;
+}
+
+interface WorkspaceConversationActivityContextValue {
+  locallyUnreadConversationIds: ReadonlySet<string>;
+  syncConversationActivity(conversations: ReadonlyArray<ListedConversationActivity>): string[];
+  clearUnreadConversation(conversationId: string): void;
+  resetConversationActivity(): void;
+}
+
 const WorkspaceRouteContext = createContext<WorkspaceRouteContextValue | undefined>(undefined);
 const WorkspaceChromeContext = createContext<WorkspaceChromeContextValue | undefined>(undefined);
 const WorkspacePreferencesContext = createContext<WorkspacePreferencesContextValue | undefined>(undefined);
+const WorkspaceConversationActivityContext =
+  createContext<WorkspaceConversationActivityContextValue | undefined>(undefined);
 
 export function WorkspaceUiStateProvider({
   route,
@@ -81,7 +95,11 @@ export function WorkspaceUiStateProvider({
   const selectedConversationId = route.kind === "conversation" ? route.conversationId : undefined;
   const selectedConversationIdRef = useRef<string | undefined>(undefined);
   const lastChatRouteRef = useRef<WorkspaceRoute>(defaultWorkspaceRoute());
+  const backgroundActiveRunsRef = useRef<Set<string>>(new Set());
   const view = useMemo(() => workspaceRouteView(route), [route]);
+  const [locallyUnreadConversationIds, setLocallyUnreadConversationIds] = useState<ReadonlySet<string>>(
+    () => new Set()
+  );
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [composerFocusRequestId, setComposerFocusRequestId] = useState(0);
   const [browserLocale] = useState<LocaleCode | undefined>(() => readBrowserLocale());
@@ -164,6 +182,63 @@ export function WorkspaceUiStateProvider({
     lastChatRouteRef.current = defaultWorkspaceRoute();
   }, []);
 
+  const syncConversationActivity = useCallback(
+    (conversations: ReadonlyArray<ListedConversationActivity>) => {
+      const activeRunConversationIds = new Set<string>();
+      const listedConversationIds = new Set<string>();
+      for (const conversation of conversations) {
+        listedConversationIds.add(conversation.id);
+        if (conversation.activeRun) {
+          activeRunConversationIds.add(conversation.id);
+        }
+      }
+
+      const completedBackgroundConversationIds: string[] = [];
+      for (const conversationId of backgroundActiveRunsRef.current) {
+        if (!listedConversationIds.has(conversationId) || activeRunConversationIds.has(conversationId)) {
+          continue;
+        }
+        if (selectedConversationIdRef.current !== conversationId) {
+          completedBackgroundConversationIds.push(conversationId);
+        }
+      }
+      backgroundActiveRunsRef.current = activeRunConversationIds;
+
+      if (completedBackgroundConversationIds.length > 0) {
+        setLocallyUnreadConversationIds((currentIds) => {
+          const nextIds = new Set(currentIds);
+          let changed = false;
+          for (const conversationId of completedBackgroundConversationIds) {
+            if (!nextIds.has(conversationId)) {
+              nextIds.add(conversationId);
+              changed = true;
+            }
+          }
+          return changed ? nextIds : currentIds;
+        });
+      }
+
+      return completedBackgroundConversationIds;
+    },
+    []
+  );
+
+  const clearUnreadConversation = useCallback((conversationId: string) => {
+    setLocallyUnreadConversationIds((currentIds) => {
+      if (!currentIds.has(conversationId)) {
+        return currentIds;
+      }
+      const nextIds = new Set(currentIds);
+      nextIds.delete(conversationId);
+      return nextIds;
+    });
+  }, []);
+
+  const resetConversationActivity = useCallback(() => {
+    backgroundActiveRunsRef.current = new Set();
+    setLocallyUnreadConversationIds(new Set());
+  }, []);
+
   const closeSidebar = useCallback(() => {
     setSidebarOpen(false);
   }, []);
@@ -237,11 +312,28 @@ export function WorkspaceUiStateProvider({
     [browserLocale, localePreference, selectLocale, selectThemeMode, systemThemeMode, themeOverride]
   );
 
+  const conversationActivityValue = useMemo<WorkspaceConversationActivityContextValue>(
+    () => ({
+      locallyUnreadConversationIds,
+      syncConversationActivity,
+      clearUnreadConversation,
+      resetConversationActivity
+    }),
+    [
+      clearUnreadConversation,
+      locallyUnreadConversationIds,
+      resetConversationActivity,
+      syncConversationActivity
+    ]
+  );
+
   return (
     <WorkspaceRouteContext.Provider value={routeValue}>
       <WorkspaceChromeContext.Provider value={chromeValue}>
         <WorkspacePreferencesContext.Provider value={preferencesValue}>
-          {children}
+          <WorkspaceConversationActivityContext.Provider value={conversationActivityValue}>
+            {children}
+          </WorkspaceConversationActivityContext.Provider>
         </WorkspacePreferencesContext.Provider>
       </WorkspaceChromeContext.Provider>
     </WorkspaceRouteContext.Provider>
@@ -260,6 +352,14 @@ export function useWorkspacePreferences(): WorkspacePreferencesContextValue {
   return useStrictContext(
     WorkspacePreferencesContext,
     "useWorkspacePreferences",
+    "WorkspaceUiStateProvider"
+  );
+}
+
+export function useWorkspaceConversationActivityState(): WorkspaceConversationActivityContextValue {
+  return useStrictContext(
+    WorkspaceConversationActivityContext,
+    "useWorkspaceConversationActivityState",
     "WorkspaceUiStateProvider"
   );
 }
