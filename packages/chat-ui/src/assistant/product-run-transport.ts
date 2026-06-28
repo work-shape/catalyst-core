@@ -5,7 +5,7 @@ import type {
   RunObservation,
   StartConversationRunResponse
 } from "@vivd-catalyst/api-client";
-import { firstLineTitle } from "./conversation-title";
+import { firstLineTitle } from "../conversation-title";
 
 export interface ProductRunTransportOptions {
   client: Pick<ApiClient, "createConversationRun" | "observeRunEvents" | "startConversationRun">;

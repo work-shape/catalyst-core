@@ -162,35 +162,7 @@ function ChatWorkspaceContent({
                 onDragLeave={chat.fileDropzone.onChatDragLeave}
                 onDrop={chat.fileDropzone.onChatDrop}
               >
-                <AssistantChatPanel
-                  client={chat.client}
-                  config={chat.config}
-                  selectedConversationId={chat.selectedConversationId}
-                  messages={chat.messages}
-                  messagesLoaded={chat.messagesLoaded}
-                  notice={chat.notice}
-                  draft={chat.draft}
-                  composerFocusRequestId={chat.composerFocusRequestId}
-                  locale={chat.locale}
-                  selectedAgentName={chat.selectedAgentName}
-                  draftAttachments={chat.draftAttachments}
-                  localUploadingAttachments={chat.localUploadingAttachments}
-                  conversationRunning={chat.conversationRunning}
-                  activeRun={chat.activeRun}
-                  sendBlockedReason={chat.sendBlockedReason}
-                  attachmentsEnabled={chat.attachmentsEnabled}
-                  attachmentAccept={chat.attachmentAccept}
-                  onDraftChange={chat.changeDraft}
-                  onFilesSelected={chat.selectFiles}
-                  onRemoveDraftAttachment={chat.removeDraftAttachment}
-                  onRetryDraftAttachment={chat.retryDraftAttachment}
-                  onConversationStarted={chat.conversationStarted}
-                  onMessageSubmitted={chat.messageSubmitted}
-                  onRunStarted={chat.runStarted}
-                  onStreamFinished={chat.streamFinished}
-                  onStreamError={chat.streamError}
-                  onCancelRun={chat.cancelSelectedRun}
-                />
+                <AssistantChatPanel chat={chat} />
                 {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
               </div>
               <ToolDisplayPanel />
