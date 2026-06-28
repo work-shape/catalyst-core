@@ -2,6 +2,7 @@ export * from "./identity";
 export * from "./user";
 export * from "./files";
 export * from "./conversation";
+export * from "./message-metadata";
 export * from "./tool-execution";
 export * from "./agent-runtime";
 export * from "./audit";

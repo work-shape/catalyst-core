@@ -1,5 +1,16 @@
+import {
+  createAssistantFinalMetadata,
+  createAssistantToolCallsMetadata,
+  createToolResultMetadata,
+  createUserMessageMetadata,
+  readAssistantFinalMetadata,
+  readAssistantReasoningSummaries,
+  readAssistantToolCallsMetadata,
+  readToolResultMetadata as readAgentRuntimeToolResultMetadata,
+  readUserMessageMetadata,
+  unknownToJsonValue
+} from "@vivd-catalyst/core";
 import type {
-  AgentRunId,
   AttachmentManifest,
   AttachmentManifestEntry,
   ChatMessage,
@@ -22,8 +33,16 @@ import {
 } from "./model-visible-artifacts";
 
 export type { ModelContextArtifactReader } from "./model-visible-artifacts";
+export {
+  createAssistantFinalMetadata,
+  createAssistantToolCallsMetadata,
+  createToolResultMetadata,
+  createUserMessageMetadata,
+  readAssistantReasoningSummaries,
+  unknownToJsonValue
+};
+export type { StoredReasoningSummary } from "@vivd-catalyst/core";
 
-const METADATA_VERSION = 1;
 const CHARS_PER_TOKEN = 4;
 
 export interface ModelContextProjectionOptions {
@@ -50,17 +69,6 @@ export interface ModelOutputProjection {
   text: string;
   content: ModelContent;
   notice?: JsonObject;
-}
-
-export interface StoredToolCall {
-  toolCallId: string;
-  toolName: string;
-  input: JsonValue;
-}
-
-export interface StoredReasoningSummary {
-  id: string;
-  text: string;
 }
 
 export async function projectAgentVisibleHistory(
@@ -100,103 +108,6 @@ export function selectRecentCompleteHistory(
   }
 
   return selected.flat();
-}
-
-export function createAssistantToolCallsMetadata(input: {
-  runId: AgentRunId;
-  toolCalls: readonly ModelToolCall[];
-  reasoning?: readonly StoredReasoningSummary[];
-}): JsonObject {
-  return {
-    agentRuntime: {
-      version: METADATA_VERSION,
-      kind: "assistant_tool_calls",
-      runId: input.runId,
-      toolCalls: input.toolCalls.map((toolCall) => ({
-        toolCallId: toolCall.toolCallId,
-        toolName: toolCall.toolName,
-        input: unknownToJsonValue(toolCall.input)
-      })),
-      ...createReasoningMetadata(input.reasoning)
-    }
-  };
-}
-
-export function createUserMessageMetadata(input: {
-  attachmentManifest?: AttachmentManifest;
-}): JsonObject | undefined {
-  if (!input.attachmentManifest || input.attachmentManifest.attachments.length === 0) {
-    return undefined;
-  }
-  return {
-    agentRuntime: {
-      version: METADATA_VERSION,
-      kind: "user_message",
-      attachmentManifest: unknownToJsonValue(input.attachmentManifest)
-    }
-  };
-}
-
-export function createAssistantFinalMetadata(input: {
-  runId: AgentRunId;
-  reasoning?: readonly StoredReasoningSummary[];
-  finishStatus?: "completed" | "cancelled";
-  cancellationReason?: string;
-}): JsonObject {
-  return {
-    agentRuntime: {
-      version: METADATA_VERSION,
-      kind: "assistant_final",
-      runId: input.runId,
-      finishStatus: input.finishStatus ?? "completed",
-      ...(input.cancellationReason ? { cancellationReason: input.cancellationReason } : {}),
-      ...createReasoningMetadata(input.reasoning)
-    }
-  };
-}
-
-export function readAssistantReasoningSummaries(
-  metadata: JsonObject | undefined
-): StoredReasoningSummary[] {
-  const runtime = readRuntimeMetadata(metadata);
-  if (
-    (runtime?.kind !== "assistant_tool_calls" && runtime?.kind !== "assistant_final") ||
-    !Array.isArray(runtime.reasoning)
-  ) {
-    return [];
-  }
-  return runtime.reasoning.flatMap((value): StoredReasoningSummary[] => {
-    if (!isJsonObject(value)) {
-      return [];
-    }
-    const id = typeof value.id === "string" ? value.id : undefined;
-    const text = typeof value.text === "string" ? value.text : undefined;
-    if (!id || !text) {
-      return [];
-    }
-    return [{ id, text }];
-  });
-}
-
-export function createToolResultMetadata(input: {
-  runId: AgentRunId;
-  toolCall: ModelToolCall;
-  result: ToolExecutionResult;
-  modelOutput: ModelOutputProjection;
-}): JsonObject {
-  return {
-    agentRuntime: {
-      version: METADATA_VERSION,
-      kind: "tool_result",
-      runId: input.runId,
-      toolCallId: input.toolCall.toolCallId,
-      toolName: input.toolCall.toolName,
-      input: unknownToJsonValue(input.toolCall.input),
-      result: unknownToJsonValue(input.result),
-      modelOutput: input.modelOutput.text,
-      ...(input.modelOutput.notice ? { projectionNotice: input.modelOutput.notice } : {})
-    }
-  };
 }
 
 export async function createModelVisibleToolOutput(
@@ -408,41 +319,16 @@ function hasTextContent(content: ModelContent): boolean {
   return content.some((part) => part.type === "text" && part.text.length > 0);
 }
 
-function createReasoningMetadata(
-  reasoning: readonly StoredReasoningSummary[] | undefined
-): { reasoning?: JsonValue } {
-  const summaries =
-    reasoning
-      ?.map((summary) => ({
-        id: summary.id,
-        text: summary.text
-      }))
-      .filter((summary) => summary.text.length > 0) ?? [];
-  return summaries.length > 0 ? { reasoning: summaries } : {};
-}
-
 function readAssistantToolCalls(metadata: JsonObject | undefined): ModelToolCall[] | undefined {
-  const runtime = readRuntimeMetadata(metadata);
-  if (runtime?.kind !== "assistant_tool_calls" || !Array.isArray(runtime.toolCalls)) {
+  const runtime = readAssistantToolCallsMetadata(metadata);
+  if (!runtime || runtime.toolCalls.length === 0) {
     return undefined;
   }
-  const toolCalls: ModelToolCall[] = [];
-  for (const value of runtime.toolCalls) {
-    if (!isJsonObject(value)) {
-      continue;
-    }
-    const toolCallId = typeof value.toolCallId === "string" ? value.toolCallId : undefined;
-    const toolName = typeof value.toolName === "string" ? value.toolName : undefined;
-    if (!toolCallId || !toolName) {
-      continue;
-    }
-    toolCalls.push({
-      toolCallId,
-      toolName,
-      input: value.input
-    });
-  }
-  return toolCalls.length > 0 ? toolCalls : undefined;
+  return runtime.toolCalls.map((toolCall) => ({
+    toolCallId: toolCall.toolCallId,
+    toolName: toolCall.toolName,
+    input: toolCall.input
+  }));
 }
 
 function readToolResultMetadata(metadata: JsonObject | undefined):
@@ -452,29 +338,20 @@ function readToolResultMetadata(metadata: JsonObject | undefined):
       modelOutput?: JsonValue;
     }
   | undefined {
-  const runtime = readRuntimeMetadata(metadata);
-  if (runtime?.kind !== "tool_result") {
-    return undefined;
-  }
-  const toolCallId = typeof runtime.toolCallId === "string" ? runtime.toolCallId : undefined;
-  if (!toolCallId) {
+  const runtime = readAgentRuntimeToolResultMetadata(metadata);
+  if (!runtime) {
     return undefined;
   }
   return {
-    toolCallId,
+    toolCallId: runtime.toolCallId,
     result: runtime.result,
     modelOutput: runtime.modelOutput
   };
 }
 
-function readRuntimeMetadata(metadata: JsonObject | undefined): JsonObject | undefined {
-  const runtime = metadata?.agentRuntime;
-  return isJsonObject(runtime) && runtime.version === METADATA_VERSION ? runtime : undefined;
-}
-
 function appendAssistantFinalStatusForModel(text: string, metadata: JsonObject | undefined): string {
-  const runtime = readRuntimeMetadata(metadata);
-  if (runtime?.kind !== "assistant_final" || runtime.finishStatus !== "cancelled") {
+  const runtime = readAssistantFinalMetadata(metadata);
+  if (!runtime || runtime.finishStatus !== "cancelled") {
     return text;
   }
   const marker = "[Assistant response stopped by the user before completion. Treat the text above as incomplete.]";
@@ -482,8 +359,8 @@ function appendAssistantFinalStatusForModel(text: string, metadata: JsonObject |
 }
 
 function readUserAttachmentManifest(metadata: JsonObject | undefined): AttachmentManifest | undefined {
-  const runtime = readRuntimeMetadata(metadata);
-  if (runtime?.kind !== "user_message" || !isJsonObject(runtime.attachmentManifest)) {
+  const runtime = readUserMessageMetadata(metadata);
+  if (!runtime || !isJsonObject(runtime.attachmentManifest)) {
     return undefined;
   }
   const manifest = runtime.attachmentManifest;
@@ -715,28 +592,6 @@ function stringifyForModel(value: unknown): string {
     return value;
   }
   return JSON.stringify(unknownToJsonValue(value), null, 2);
-}
-
-export function unknownToJsonValue(value: unknown): JsonValue {
-  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-    return Number.isFinite(value as number) || typeof value !== "number" ? value : String(value);
-  }
-  if (Array.isArray(value)) {
-    return value.map(unknownToJsonValue);
-  }
-  if (typeof value === "object" && value !== null) {
-    const result: JsonObject = {};
-    for (const [key, nested] of Object.entries(value)) {
-      if (typeof nested !== "undefined" && typeof nested !== "function" && typeof nested !== "symbol") {
-        result[key] = unknownToJsonValue(nested);
-      }
-    }
-    return result;
-  }
-  if (typeof value === "undefined") {
-    return null;
-  }
-  return String(value);
 }
 
 function sortForStableStringify(value: JsonValue): JsonValue {

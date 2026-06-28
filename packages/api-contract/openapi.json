@@ -1308,8 +1308,203 @@
                           },
                           "metadata": {
                             "type": "object",
-                            "propertyNames": {
-                              "type": "string"
+                            "properties": {
+                              "agentRuntime": {
+                                "anyOf": [
+                                  {
+                                    "oneOf": [
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "version": {
+                                            "type": "number",
+                                            "const": 1
+                                          },
+                                          "kind": {
+                                            "type": "string",
+                                            "const": "user_message"
+                                          },
+                                          "attachmentManifest": {}
+                                        },
+                                        "required": [
+                                          "version",
+                                          "kind",
+                                          "attachmentManifest"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "version": {
+                                            "type": "number",
+                                            "const": 1
+                                          },
+                                          "kind": {
+                                            "type": "string",
+                                            "const": "assistant_tool_calls"
+                                          },
+                                          "runId": {
+                                            "type": "string"
+                                          },
+                                          "toolCalls": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "toolCallId": {
+                                                  "type": "string"
+                                                },
+                                                "toolName": {
+                                                  "type": "string"
+                                                },
+                                                "input": {}
+                                              },
+                                              "required": [
+                                                "toolCallId",
+                                                "toolName",
+                                                "input"
+                                              ],
+                                              "additionalProperties": false
+                                            }
+                                          },
+                                          "reasoning": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "id": {
+                                                  "type": "string"
+                                                },
+                                                "text": {
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "required": [
+                                                "id",
+                                                "text"
+                                              ],
+                                              "additionalProperties": false
+                                            }
+                                          }
+                                        },
+                                        "required": [
+                                          "version",
+                                          "kind",
+                                          "runId",
+                                          "toolCalls"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "version": {
+                                            "type": "number",
+                                            "const": 1
+                                          },
+                                          "kind": {
+                                            "type": "string",
+                                            "const": "assistant_final"
+                                          },
+                                          "runId": {
+                                            "type": "string"
+                                          },
+                                          "finishStatus": {
+                                            "type": "string",
+                                            "enum": [
+                                              "completed",
+                                              "cancelled"
+                                            ]
+                                          },
+                                          "cancellationReason": {
+                                            "type": "string"
+                                          },
+                                          "reasoning": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "id": {
+                                                  "type": "string"
+                                                },
+                                                "text": {
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "required": [
+                                                "id",
+                                                "text"
+                                              ],
+                                              "additionalProperties": false
+                                            }
+                                          }
+                                        },
+                                        "required": [
+                                          "version",
+                                          "kind",
+                                          "runId",
+                                          "finishStatus"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "version": {
+                                            "type": "number",
+                                            "const": 1
+                                          },
+                                          "kind": {
+                                            "type": "string",
+                                            "const": "tool_result"
+                                          },
+                                          "runId": {
+                                            "type": "string"
+                                          },
+                                          "toolCallId": {
+                                            "type": "string"
+                                          },
+                                          "toolName": {
+                                            "type": "string"
+                                          },
+                                          "input": {},
+                                          "result": {},
+                                          "modelOutput": {
+                                            "type": "string"
+                                          },
+                                          "projectionNotice": {
+                                            "type": "object",
+                                            "propertyNames": {
+                                              "type": "string"
+                                            },
+                                            "additionalProperties": {}
+                                          }
+                                        },
+                                        "required": [
+                                          "version",
+                                          "kind",
+                                          "runId",
+                                          "toolCallId",
+                                          "toolName",
+                                          "input",
+                                          "result",
+                                          "modelOutput"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "propertyNames": {
+                                      "type": "string"
+                                    },
+                                    "additionalProperties": {}
+                                  }
+                                ]
+                              },
+                              "display": {}
                             },
                             "additionalProperties": {}
                           }
@@ -1608,8 +1803,203 @@
                       },
                       "metadata": {
                         "type": "object",
-                        "propertyNames": {
-                          "type": "string"
+                        "properties": {
+                          "agentRuntime": {
+                            "anyOf": [
+                              {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "version": {
+                                        "type": "number",
+                                        "const": 1
+                                      },
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "user_message"
+                                      },
+                                      "attachmentManifest": {}
+                                    },
+                                    "required": [
+                                      "version",
+                                      "kind",
+                                      "attachmentManifest"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "version": {
+                                        "type": "number",
+                                        "const": 1
+                                      },
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "assistant_tool_calls"
+                                      },
+                                      "runId": {
+                                        "type": "string"
+                                      },
+                                      "toolCalls": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "toolCallId": {
+                                              "type": "string"
+                                            },
+                                            "toolName": {
+                                              "type": "string"
+                                            },
+                                            "input": {}
+                                          },
+                                          "required": [
+                                            "toolCallId",
+                                            "toolName",
+                                            "input"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "reasoning": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "id": {
+                                              "type": "string"
+                                            },
+                                            "text": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "id",
+                                            "text"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "version",
+                                      "kind",
+                                      "runId",
+                                      "toolCalls"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "version": {
+                                        "type": "number",
+                                        "const": 1
+                                      },
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "assistant_final"
+                                      },
+                                      "runId": {
+                                        "type": "string"
+                                      },
+                                      "finishStatus": {
+                                        "type": "string",
+                                        "enum": [
+                                          "completed",
+                                          "cancelled"
+                                        ]
+                                      },
+                                      "cancellationReason": {
+                                        "type": "string"
+                                      },
+                                      "reasoning": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "id": {
+                                              "type": "string"
+                                            },
+                                            "text": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "id",
+                                            "text"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "version",
+                                      "kind",
+                                      "runId",
+                                      "finishStatus"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "version": {
+                                        "type": "number",
+                                        "const": 1
+                                      },
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "tool_result"
+                                      },
+                                      "runId": {
+                                        "type": "string"
+                                      },
+                                      "toolCallId": {
+                                        "type": "string"
+                                      },
+                                      "toolName": {
+                                        "type": "string"
+                                      },
+                                      "input": {},
+                                      "result": {},
+                                      "modelOutput": {
+                                        "type": "string"
+                                      },
+                                      "projectionNotice": {
+                                        "type": "object",
+                                        "propertyNames": {
+                                          "type": "string"
+                                        },
+                                        "additionalProperties": {}
+                                      }
+                                    },
+                                    "required": [
+                                      "version",
+                                      "kind",
+                                      "runId",
+                                      "toolCallId",
+                                      "toolName",
+                                      "input",
+                                      "result",
+                                      "modelOutput"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              }
+                            ]
+                          },
+                          "display": {}
                         },
                         "additionalProperties": {}
                       }
@@ -1943,8 +2333,203 @@
                         },
                         "metadata": {
                           "type": "object",
-                          "propertyNames": {
-                            "type": "string"
+                          "properties": {
+                            "agentRuntime": {
+                              "anyOf": [
+                                {
+                                  "oneOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "version": {
+                                          "type": "number",
+                                          "const": 1
+                                        },
+                                        "kind": {
+                                          "type": "string",
+                                          "const": "user_message"
+                                        },
+                                        "attachmentManifest": {}
+                                      },
+                                      "required": [
+                                        "version",
+                                        "kind",
+                                        "attachmentManifest"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "version": {
+                                          "type": "number",
+                                          "const": 1
+                                        },
+                                        "kind": {
+                                          "type": "string",
+                                          "const": "assistant_tool_calls"
+                                        },
+                                        "runId": {
+                                          "type": "string"
+                                        },
+                                        "toolCalls": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "toolCallId": {
+                                                "type": "string"
+                                              },
+                                              "toolName": {
+                                                "type": "string"
+                                              },
+                                              "input": {}
+                                            },
+                                            "required": [
+                                              "toolCallId",
+                                              "toolName",
+                                              "input"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        },
+                                        "reasoning": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "id": {
+                                                "type": "string"
+                                              },
+                                              "text": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "id",
+                                              "text"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        }
+                                      },
+                                      "required": [
+                                        "version",
+                                        "kind",
+                                        "runId",
+                                        "toolCalls"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "version": {
+                                          "type": "number",
+                                          "const": 1
+                                        },
+                                        "kind": {
+                                          "type": "string",
+                                          "const": "assistant_final"
+                                        },
+                                        "runId": {
+                                          "type": "string"
+                                        },
+                                        "finishStatus": {
+                                          "type": "string",
+                                          "enum": [
+                                            "completed",
+                                            "cancelled"
+                                          ]
+                                        },
+                                        "cancellationReason": {
+                                          "type": "string"
+                                        },
+                                        "reasoning": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "id": {
+                                                "type": "string"
+                                              },
+                                              "text": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "id",
+                                              "text"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        }
+                                      },
+                                      "required": [
+                                        "version",
+                                        "kind",
+                                        "runId",
+                                        "finishStatus"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "version": {
+                                          "type": "number",
+                                          "const": 1
+                                        },
+                                        "kind": {
+                                          "type": "string",
+                                          "const": "tool_result"
+                                        },
+                                        "runId": {
+                                          "type": "string"
+                                        },
+                                        "toolCallId": {
+                                          "type": "string"
+                                        },
+                                        "toolName": {
+                                          "type": "string"
+                                        },
+                                        "input": {},
+                                        "result": {},
+                                        "modelOutput": {
+                                          "type": "string"
+                                        },
+                                        "projectionNotice": {
+                                          "type": "object",
+                                          "propertyNames": {
+                                            "type": "string"
+                                          },
+                                          "additionalProperties": {}
+                                        }
+                                      },
+                                      "required": [
+                                        "version",
+                                        "kind",
+                                        "runId",
+                                        "toolCallId",
+                                        "toolName",
+                                        "input",
+                                        "result",
+                                        "modelOutput"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "propertyNames": {
+                                    "type": "string"
+                                  },
+                                  "additionalProperties": {}
+                                }
+                              ]
+                            },
+                            "display": {}
                           },
                           "additionalProperties": {}
                         }
@@ -2151,8 +2736,203 @@
                               },
                               "metadata": {
                                 "type": "object",
-                                "propertyNames": {
-                                  "type": "string"
+                                "properties": {
+                                  "agentRuntime": {
+                                    "anyOf": [
+                                      {
+                                        "oneOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "version": {
+                                                "type": "number",
+                                                "const": 1
+                                              },
+                                              "kind": {
+                                                "type": "string",
+                                                "const": "user_message"
+                                              },
+                                              "attachmentManifest": {}
+                                            },
+                                            "required": [
+                                              "version",
+                                              "kind",
+                                              "attachmentManifest"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "version": {
+                                                "type": "number",
+                                                "const": 1
+                                              },
+                                              "kind": {
+                                                "type": "string",
+                                                "const": "assistant_tool_calls"
+                                              },
+                                              "runId": {
+                                                "type": "string"
+                                              },
+                                              "toolCalls": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "toolCallId": {
+                                                      "type": "string"
+                                                    },
+                                                    "toolName": {
+                                                      "type": "string"
+                                                    },
+                                                    "input": {}
+                                                  },
+                                                  "required": [
+                                                    "toolCallId",
+                                                    "toolName",
+                                                    "input"
+                                                  ],
+                                                  "additionalProperties": false
+                                                }
+                                              },
+                                              "reasoning": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "id": {
+                                                      "type": "string"
+                                                    },
+                                                    "text": {
+                                                      "type": "string"
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "id",
+                                                    "text"
+                                                  ],
+                                                  "additionalProperties": false
+                                                }
+                                              }
+                                            },
+                                            "required": [
+                                              "version",
+                                              "kind",
+                                              "runId",
+                                              "toolCalls"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "version": {
+                                                "type": "number",
+                                                "const": 1
+                                              },
+                                              "kind": {
+                                                "type": "string",
+                                                "const": "assistant_final"
+                                              },
+                                              "runId": {
+                                                "type": "string"
+                                              },
+                                              "finishStatus": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "completed",
+                                                  "cancelled"
+                                                ]
+                                              },
+                                              "cancellationReason": {
+                                                "type": "string"
+                                              },
+                                              "reasoning": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "id": {
+                                                      "type": "string"
+                                                    },
+                                                    "text": {
+                                                      "type": "string"
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "id",
+                                                    "text"
+                                                  ],
+                                                  "additionalProperties": false
+                                                }
+                                              }
+                                            },
+                                            "required": [
+                                              "version",
+                                              "kind",
+                                              "runId",
+                                              "finishStatus"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "version": {
+                                                "type": "number",
+                                                "const": 1
+                                              },
+                                              "kind": {
+                                                "type": "string",
+                                                "const": "tool_result"
+                                              },
+                                              "runId": {
+                                                "type": "string"
+                                              },
+                                              "toolCallId": {
+                                                "type": "string"
+                                              },
+                                              "toolName": {
+                                                "type": "string"
+                                              },
+                                              "input": {},
+                                              "result": {},
+                                              "modelOutput": {
+                                                "type": "string"
+                                              },
+                                              "projectionNotice": {
+                                                "type": "object",
+                                                "propertyNames": {
+                                                  "type": "string"
+                                                },
+                                                "additionalProperties": {}
+                                              }
+                                            },
+                                            "required": [
+                                              "version",
+                                              "kind",
+                                              "runId",
+                                              "toolCallId",
+                                              "toolName",
+                                              "input",
+                                              "result",
+                                              "modelOutput"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "type": "object",
+                                        "propertyNames": {
+                                          "type": "string"
+                                        },
+                                        "additionalProperties": {}
+                                      }
+                                    ]
+                                  },
+                                  "display": {}
                                 },
                                 "additionalProperties": {}
                               }
@@ -2565,8 +3345,203 @@
                         },
                         "metadata": {
                           "type": "object",
-                          "propertyNames": {
-                            "type": "string"
+                          "properties": {
+                            "agentRuntime": {
+                              "anyOf": [
+                                {
+                                  "oneOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "version": {
+                                          "type": "number",
+                                          "const": 1
+                                        },
+                                        "kind": {
+                                          "type": "string",
+                                          "const": "user_message"
+                                        },
+                                        "attachmentManifest": {}
+                                      },
+                                      "required": [
+                                        "version",
+                                        "kind",
+                                        "attachmentManifest"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "version": {
+                                          "type": "number",
+                                          "const": 1
+                                        },
+                                        "kind": {
+                                          "type": "string",
+                                          "const": "assistant_tool_calls"
+                                        },
+                                        "runId": {
+                                          "type": "string"
+                                        },
+                                        "toolCalls": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "toolCallId": {
+                                                "type": "string"
+                                              },
+                                              "toolName": {
+                                                "type": "string"
+                                              },
+                                              "input": {}
+                                            },
+                                            "required": [
+                                              "toolCallId",
+                                              "toolName",
+                                              "input"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        },
+                                        "reasoning": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "id": {
+                                                "type": "string"
+                                              },
+                                              "text": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "id",
+                                              "text"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        }
+                                      },
+                                      "required": [
+                                        "version",
+                                        "kind",
+                                        "runId",
+                                        "toolCalls"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "version": {
+                                          "type": "number",
+                                          "const": 1
+                                        },
+                                        "kind": {
+                                          "type": "string",
+                                          "const": "assistant_final"
+                                        },
+                                        "runId": {
+                                          "type": "string"
+                                        },
+                                        "finishStatus": {
+                                          "type": "string",
+                                          "enum": [
+                                            "completed",
+                                            "cancelled"
+                                          ]
+                                        },
+                                        "cancellationReason": {
+                                          "type": "string"
+                                        },
+                                        "reasoning": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "id": {
+                                                "type": "string"
+                                              },
+                                              "text": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "id",
+                                              "text"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        }
+                                      },
+                                      "required": [
+                                        "version",
+                                        "kind",
+                                        "runId",
+                                        "finishStatus"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "version": {
+                                          "type": "number",
+                                          "const": 1
+                                        },
+                                        "kind": {
+                                          "type": "string",
+                                          "const": "tool_result"
+                                        },
+                                        "runId": {
+                                          "type": "string"
+                                        },
+                                        "toolCallId": {
+                                          "type": "string"
+                                        },
+                                        "toolName": {
+                                          "type": "string"
+                                        },
+                                        "input": {},
+                                        "result": {},
+                                        "modelOutput": {
+                                          "type": "string"
+                                        },
+                                        "projectionNotice": {
+                                          "type": "object",
+                                          "propertyNames": {
+                                            "type": "string"
+                                          },
+                                          "additionalProperties": {}
+                                        }
+                                      },
+                                      "required": [
+                                        "version",
+                                        "kind",
+                                        "runId",
+                                        "toolCallId",
+                                        "toolName",
+                                        "input",
+                                        "result",
+                                        "modelOutput"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "propertyNames": {
+                                    "type": "string"
+                                  },
+                                  "additionalProperties": {}
+                                }
+                              ]
+                            },
+                            "display": {}
                           },
                           "additionalProperties": {}
                         }
@@ -2773,8 +3748,203 @@
                               },
                               "metadata": {
                                 "type": "object",
-                                "propertyNames": {
-                                  "type": "string"
+                                "properties": {
+                                  "agentRuntime": {
+                                    "anyOf": [
+                                      {
+                                        "oneOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "version": {
+                                                "type": "number",
+                                                "const": 1
+                                              },
+                                              "kind": {
+                                                "type": "string",
+                                                "const": "user_message"
+                                              },
+                                              "attachmentManifest": {}
+                                            },
+                                            "required": [
+                                              "version",
+                                              "kind",
+                                              "attachmentManifest"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "version": {
+                                                "type": "number",
+                                                "const": 1
+                                              },
+                                              "kind": {
+                                                "type": "string",
+                                                "const": "assistant_tool_calls"
+                                              },
+                                              "runId": {
+                                                "type": "string"
+                                              },
+                                              "toolCalls": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "toolCallId": {
+                                                      "type": "string"
+                                                    },
+                                                    "toolName": {
+                                                      "type": "string"
+                                                    },
+                                                    "input": {}
+                                                  },
+                                                  "required": [
+                                                    "toolCallId",
+                                                    "toolName",
+                                                    "input"
+                                                  ],
+                                                  "additionalProperties": false
+                                                }
+                                              },
+                                              "reasoning": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "id": {
+                                                      "type": "string"
+                                                    },
+                                                    "text": {
+                                                      "type": "string"
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "id",
+                                                    "text"
+                                                  ],
+                                                  "additionalProperties": false
+                                                }
+                                              }
+                                            },
+                                            "required": [
+                                              "version",
+                                              "kind",
+                                              "runId",
+                                              "toolCalls"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "version": {
+                                                "type": "number",
+                                                "const": 1
+                                              },
+                                              "kind": {
+                                                "type": "string",
+                                                "const": "assistant_final"
+                                              },
+                                              "runId": {
+                                                "type": "string"
+                                              },
+                                              "finishStatus": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "completed",
+                                                  "cancelled"
+                                                ]
+                                              },
+                                              "cancellationReason": {
+                                                "type": "string"
+                                              },
+                                              "reasoning": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "id": {
+                                                      "type": "string"
+                                                    },
+                                                    "text": {
+                                                      "type": "string"
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "id",
+                                                    "text"
+                                                  ],
+                                                  "additionalProperties": false
+                                                }
+                                              }
+                                            },
+                                            "required": [
+                                              "version",
+                                              "kind",
+                                              "runId",
+                                              "finishStatus"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "version": {
+                                                "type": "number",
+                                                "const": 1
+                                              },
+                                              "kind": {
+                                                "type": "string",
+                                                "const": "tool_result"
+                                              },
+                                              "runId": {
+                                                "type": "string"
+                                              },
+                                              "toolCallId": {
+                                                "type": "string"
+                                              },
+                                              "toolName": {
+                                                "type": "string"
+                                              },
+                                              "input": {},
+                                              "result": {},
+                                              "modelOutput": {
+                                                "type": "string"
+                                              },
+                                              "projectionNotice": {
+                                                "type": "object",
+                                                "propertyNames": {
+                                                  "type": "string"
+                                                },
+                                                "additionalProperties": {}
+                                              }
+                                            },
+                                            "required": [
+                                              "version",
+                                              "kind",
+                                              "runId",
+                                              "toolCallId",
+                                              "toolName",
+                                              "input",
+                                              "result",
+                                              "modelOutput"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "type": "object",
+                                        "propertyNames": {
+                                          "type": "string"
+                                        },
+                                        "additionalProperties": {}
+                                      }
+                                    ]
+                                  },
+                                  "display": {}
                                 },
                                 "additionalProperties": {}
                               }

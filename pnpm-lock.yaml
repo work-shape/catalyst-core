@@ -325,6 +325,9 @@ importers:
       '@vivd-catalyst/api-client':
         specifier: workspace:*
         version: link:../api-client
+      '@vivd-catalyst/core':
+        specifier: workspace:*
+        version: link:../core
       ai:
         specifier: ^6.0.199
         version: 6.0.199(zod@4.4.3)

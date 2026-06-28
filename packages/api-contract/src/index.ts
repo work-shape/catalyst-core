@@ -86,6 +86,70 @@ export const conversationSchema = z.object({
   deletedAt: z.string().optional()
 });
 
+export const messageMetadataVersionSchema = z.literal(1);
+
+export const storedReasoningSummarySchema = z.object({
+  id: z.string(),
+  text: z.string()
+});
+
+export const storedToolCallSchema = z.object({
+  toolCallId: z.string(),
+  toolName: z.string(),
+  input: z.unknown()
+});
+
+export const userMessageMetadataSchema = z.object({
+  version: messageMetadataVersionSchema,
+  kind: z.literal("user_message"),
+  attachmentManifest: z.unknown()
+});
+
+export const assistantToolCallsMessageMetadataSchema = z.object({
+  version: messageMetadataVersionSchema,
+  kind: z.literal("assistant_tool_calls"),
+  runId: z.string(),
+  toolCalls: z.array(storedToolCallSchema),
+  reasoning: z.array(storedReasoningSummarySchema).optional()
+});
+
+export const assistantFinalMessageMetadataSchema = z.object({
+  version: messageMetadataVersionSchema,
+  kind: z.literal("assistant_final"),
+  runId: z.string(),
+  finishStatus: z.enum(["completed", "cancelled"]),
+  cancellationReason: z.string().optional(),
+  reasoning: z.array(storedReasoningSummarySchema).optional()
+});
+
+export const toolResultMessageMetadataSchema = z.object({
+  version: messageMetadataVersionSchema,
+  kind: z.literal("tool_result"),
+  runId: z.string(),
+  toolCallId: z.string(),
+  toolName: z.string(),
+  input: z.unknown(),
+  result: z.unknown(),
+  modelOutput: z.string(),
+  projectionNotice: z.record(z.string(), z.unknown()).optional()
+});
+
+export const agentRuntimeMessageMetadataSchema = z.discriminatedUnion("kind", [
+  userMessageMetadataSchema,
+  assistantToolCallsMessageMetadataSchema,
+  assistantFinalMessageMetadataSchema,
+  toolResultMessageMetadataSchema
+]);
+
+export const messageMetadataSchema = z
+  .object({
+    agentRuntime: z
+      .union([agentRuntimeMessageMetadataSchema, z.record(z.string(), z.unknown())])
+      .optional(),
+    display: z.unknown().optional()
+  })
+  .catchall(z.unknown());
+
 export const messageSchema = z.object({
   id: z.string(),
   conversationId: z.string(),
@@ -93,7 +157,7 @@ export const messageSchema = z.object({
   role: z.enum(["user", "assistant", "system", "tool"]),
   text: z.string(),
   createdAt: z.string(),
-  metadata: z.record(z.string(), z.unknown()).optional()
+  metadata: messageMetadataSchema.optional()
 });
 
 export const draftAttachmentStatusSchema = z.enum([
@@ -245,7 +309,7 @@ export const chatStreamRequestSchema = z
 
 export const chatStreamRoutePath = "/api/chat";
 
-const chatStreamMessageMetadataSchema = z.record(z.string(), z.unknown());
+const chatStreamMessageMetadataSchema = messageMetadataSchema;
 
 export const agentRunStatusSchema = z.enum([
   "queued",
@@ -1036,6 +1100,12 @@ export type DelegatedActor = z.infer<typeof delegatedActorSchema>;
 export type Conversation = z.infer<typeof conversationSchema>;
 export type ConversationListItem = z.infer<typeof conversationListItemSchema>;
 export type Message = z.infer<typeof messageSchema>;
+export type MessageMetadata = z.infer<typeof messageMetadataSchema>;
+export type AgentRuntimeMessageMetadata = z.infer<typeof agentRuntimeMessageMetadataSchema>;
+export type UserMessageMetadata = z.infer<typeof userMessageMetadataSchema>;
+export type AssistantToolCallsMessageMetadata = z.infer<typeof assistantToolCallsMessageMetadataSchema>;
+export type AssistantFinalMessageMetadata = z.infer<typeof assistantFinalMessageMetadataSchema>;
+export type ToolResultMessageMetadata = z.infer<typeof toolResultMessageMetadataSchema>;
 export type ClientBranding = z.infer<typeof clientBrandingSchema>;
 export type SafeConfig = z.infer<typeof safeConfigSchema>;
 export type LocaleCode = z.infer<typeof localeCodeSchema>;

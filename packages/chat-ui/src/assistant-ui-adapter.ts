@@ -1,5 +1,11 @@
 import type { UIMessage } from "ai";
 import type { AgentRunProjection, DraftAttachment, Message } from "@vivd-catalyst/api-client";
+import {
+  readAgentRuntimeMessageMetadata,
+  readAssistantToolCallsMetadata,
+  readToolResultMetadata,
+  readUserMessageMetadata
+} from "@vivd-catalyst/core";
 
 export interface AssistantUiActiveRun {
   run: {
@@ -208,17 +214,17 @@ function toUiMessageParts(
 
 function withoutRunResponseMessages(messages: Message[], runId: string): Message[] {
   return messages.filter((message) => {
-    const runtime = readAgentRuntimeMetadata(message.metadata);
-    if (runtime?.runId !== runId) {
+    const runtime = readAgentRuntimeMessageMetadata(message.metadata);
+    if (!runtime || !("runId" in runtime) || runtime.runId !== runId) {
       return true;
     }
-    return message.role === "user" || runtime.kind === "user_message";
+    return message.role === "user";
   });
 }
 
 function readUserAttachmentFileParts(message: Message): UIMessage["parts"] {
-  const runtime = readAgentRuntimeMetadata(message.metadata);
-  if (runtime?.kind !== "user_message") {
+  const runtime = readUserMessageMetadata(message.metadata);
+  if (!runtime) {
     return [];
   }
   const manifest = isRecord(runtime.attachmentManifest) ? runtime.attachmentManifest : undefined;
@@ -267,35 +273,23 @@ function readAssistantToolCalls(message: Message): PersistedToolCall[] {
   if (message.role !== "assistant") {
     return [];
   }
-  const runtime = readAgentRuntimeMetadata(message.metadata);
-  if (runtime?.kind !== "assistant_tool_calls" || !Array.isArray(runtime.toolCalls)) {
+  const runtime = readAssistantToolCallsMetadata(message.metadata);
+  if (!runtime) {
     return [];
   }
-  return runtime.toolCalls.flatMap((value): PersistedToolCall[] => {
-    if (!isRecord(value)) {
-      return [];
-    }
-    const toolCallId = typeof value.toolCallId === "string" ? value.toolCallId : undefined;
-    const toolName = typeof value.toolName === "string" ? value.toolName : undefined;
-    if (!toolCallId || !toolName) {
-      return [];
-    }
-    return [
-      {
-        toolCallId,
-        toolName,
-        input: value.input
-      }
-    ];
-  });
+  return runtime.toolCalls.map((toolCall) => ({
+    toolCallId: toolCall.toolCallId,
+    toolName: toolCall.toolName,
+    input: toolCall.input
+  }));
 }
 
 function readPersistedToolResult(message: Message): PersistedToolResult | undefined {
   if (message.role !== "tool") {
     return undefined;
   }
-  const runtime = readAgentRuntimeMetadata(message.metadata);
-  if (runtime?.kind !== "tool_result" || typeof runtime.toolCallId !== "string") {
+  const runtime = readToolResultMetadata(message.metadata);
+  if (!runtime) {
     return undefined;
   }
   const result = isRecord(runtime.result) ? runtime.result : undefined;
@@ -323,11 +317,6 @@ function readPersistedToolResult(message: Message): PersistedToolResult | undefi
     };
   }
   return undefined;
-}
-
-function readAgentRuntimeMetadata(metadata: Message["metadata"]): Record<string, unknown> | undefined {
-  const runtime = isRecord(metadata?.agentRuntime) ? metadata.agentRuntime : undefined;
-  return runtime?.version === 1 ? runtime : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

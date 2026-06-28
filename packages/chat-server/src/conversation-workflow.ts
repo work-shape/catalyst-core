@@ -4,7 +4,6 @@ import {
   type AgentRun,
   type ActiveRunSummary,
   type AgentRunProjection,
-  type AttachmentManifest,
   type AgentRunId,
   type AgentRunStatus,
   type AgentRuntimeCommand,
@@ -22,10 +21,12 @@ import {
   type RunStartCommand,
   type RunStartCommandKind,
   addDays,
+  createUserMessageMetadata,
   createPlatformId,
   getRuntimeSubjectUserId,
   getSubjectUserId,
-  isAppError
+  isAppError,
+  readUserMessageMetadata
 } from "@vivd-catalyst/core";
 import { getModelSelectionForConversationTitles } from "@vivd-catalyst/config-schema";
 import type { ModelMessage } from "@vivd-catalyst/model-provider";
@@ -159,6 +160,7 @@ export class ConversationWorkflow {
             }
           }
         : {}),
+      // Synthetic until a backend read-marker mutation makes unread/read state product scope.
       userState: {
         clientInstanceId: this.options.clientInstanceId,
         conversationId,
@@ -211,7 +213,7 @@ export class ConversationWorkflow {
         userMessage: {
           id: userMessageId,
           text: command.text,
-          metadata: createUserMessageMetadata(attachmentManifest)
+          metadata: createUserMessageMetadata({ attachmentManifest })
         },
         run: {
           id: runId,
@@ -863,59 +865,6 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function createUserMessageMetadata(attachmentManifest: AttachmentManifest): JsonObject | undefined {
-  if (attachmentManifest.attachments.length === 0) {
-    return undefined;
-  }
-  return {
-    agentRuntime: {
-      version: 1,
-      kind: "user_message",
-      attachmentManifest: toJsonAttachmentManifest(attachmentManifest)
-    }
-  };
-}
-
-function toJsonAttachmentManifest(attachmentManifest: AttachmentManifest): JsonObject {
-  const attachments = attachmentManifest.attachments.map((attachment): JsonObject => {
-    const entry: JsonObject = {
-      kind: attachment.kind,
-      fileId: attachment.fileId,
-      attachmentId: attachment.attachmentId,
-      filename: attachment.filename,
-      byteSize: attachment.byteSize,
-      status: attachment.status
-    };
-    if (attachment.mimeType) {
-      entry.mimeType = attachment.mimeType;
-    }
-    if (attachment.readable !== undefined) {
-      entry.readable = attachment.readable;
-    }
-    if (attachment.modelVisibility) {
-      entry.modelVisibility = {
-        type: attachment.modelVisibility.type,
-        mimeType: attachment.modelVisibility.mimeType
-      };
-    }
-    if (attachment.modelContext) {
-      entry.modelContext = {
-        section: attachment.modelContext.section,
-        text: attachment.modelContext.text
-      };
-    }
-    if (attachment.metadata) {
-      entry.metadata = attachment.metadata;
-    }
-    return entry;
-  });
-
-  return {
-    version: attachmentManifest.version,
-    attachments
-  };
-}
-
 function findFirstUserMessage(messages: ChatMessage[]): ChatMessage | undefined {
   return messages.find((message) => message.role === "user");
 }
@@ -937,20 +886,12 @@ function temporaryAttachmentTitles(message: ChatMessage): string[] {
 }
 
 function readAttachmentManifestEntries(message: ChatMessage): JsonObject[] {
-  const runtime = readAgentRuntimeMetadata(message);
-  const manifest = runtime?.kind === "user_message" ? runtime.attachmentManifest : undefined;
+  const runtime = readUserMessageMetadata(message.metadata);
+  const manifest = runtime?.attachmentManifest;
   if (!isJsonObject(manifest) || manifest.version !== 1 || !Array.isArray(manifest.attachments)) {
     return [];
   }
   return manifest.attachments.filter(isJsonObject);
-}
-
-function readAgentRuntimeMetadata(message: ChatMessage): JsonObject | undefined {
-  const runtime = message.metadata?.agentRuntime;
-  if (!isJsonObject(runtime) || runtime.version !== 1) {
-    return undefined;
-  }
-  return runtime;
 }
 
 function isJsonObject(value: unknown): value is JsonObject {

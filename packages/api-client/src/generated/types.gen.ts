@@ -389,6 +389,49 @@ export type GetConversationThreadResponses = {
             text: string;
             createdAt: string;
             metadata?: {
+                agentRuntime?: {
+                    version: 1;
+                    kind: 'user_message';
+                    attachmentManifest: unknown;
+                } | {
+                    version: 1;
+                    kind: 'assistant_tool_calls';
+                    runId: string;
+                    toolCalls: Array<{
+                        toolCallId: string;
+                        toolName: string;
+                        input: unknown;
+                    }>;
+                    reasoning?: Array<{
+                        id: string;
+                        text: string;
+                    }>;
+                } | {
+                    version: 1;
+                    kind: 'assistant_final';
+                    runId: string;
+                    finishStatus: 'completed' | 'cancelled';
+                    cancellationReason?: string;
+                    reasoning?: Array<{
+                        id: string;
+                        text: string;
+                    }>;
+                } | {
+                    version: 1;
+                    kind: 'tool_result';
+                    runId: string;
+                    toolCallId: string;
+                    toolName: string;
+                    input: unknown;
+                    result: unknown;
+                    modelOutput: string;
+                    projectionNotice?: {
+                        [key: string]: unknown;
+                    };
+                } | {
+                    [key: string]: unknown;
+                };
+                display?: unknown;
                 [key: string]: unknown;
             };
         }>;
@@ -464,6 +507,49 @@ export type ListConversationMessagesResponses = {
         text: string;
         createdAt: string;
         metadata?: {
+            agentRuntime?: {
+                version: 1;
+                kind: 'user_message';
+                attachmentManifest: unknown;
+            } | {
+                version: 1;
+                kind: 'assistant_tool_calls';
+                runId: string;
+                toolCalls: Array<{
+                    toolCallId: string;
+                    toolName: string;
+                    input: unknown;
+                }>;
+                reasoning?: Array<{
+                    id: string;
+                    text: string;
+                }>;
+            } | {
+                version: 1;
+                kind: 'assistant_final';
+                runId: string;
+                finishStatus: 'completed' | 'cancelled';
+                cancellationReason?: string;
+                reasoning?: Array<{
+                    id: string;
+                    text: string;
+                }>;
+            } | {
+                version: 1;
+                kind: 'tool_result';
+                runId: string;
+                toolCallId: string;
+                toolName: string;
+                input: unknown;
+                result: unknown;
+                modelOutput: string;
+                projectionNotice?: {
+                    [key: string]: unknown;
+                };
+            } | {
+                [key: string]: unknown;
+            };
+            display?: unknown;
             [key: string]: unknown;
         };
     }>;
@@ -559,6 +645,49 @@ export type StartConversationRunResponses = {
             text: string;
             createdAt: string;
             metadata?: {
+                agentRuntime?: {
+                    version: 1;
+                    kind: 'user_message';
+                    attachmentManifest: unknown;
+                } | {
+                    version: 1;
+                    kind: 'assistant_tool_calls';
+                    runId: string;
+                    toolCalls: Array<{
+                        toolCallId: string;
+                        toolName: string;
+                        input: unknown;
+                    }>;
+                    reasoning?: Array<{
+                        id: string;
+                        text: string;
+                    }>;
+                } | {
+                    version: 1;
+                    kind: 'assistant_final';
+                    runId: string;
+                    finishStatus: 'completed' | 'cancelled';
+                    cancellationReason?: string;
+                    reasoning?: Array<{
+                        id: string;
+                        text: string;
+                    }>;
+                } | {
+                    version: 1;
+                    kind: 'tool_result';
+                    runId: string;
+                    toolCallId: string;
+                    toolName: string;
+                    input: unknown;
+                    result: unknown;
+                    modelOutput: string;
+                    projectionNotice?: {
+                        [key: string]: unknown;
+                    };
+                } | {
+                    [key: string]: unknown;
+                };
+                display?: unknown;
                 [key: string]: unknown;
             };
         };
@@ -608,6 +737,49 @@ export type StartConversationRunResponses = {
                 text: string;
                 createdAt: string;
                 metadata?: {
+                    agentRuntime?: {
+                        version: 1;
+                        kind: 'user_message';
+                        attachmentManifest: unknown;
+                    } | {
+                        version: 1;
+                        kind: 'assistant_tool_calls';
+                        runId: string;
+                        toolCalls: Array<{
+                            toolCallId: string;
+                            toolName: string;
+                            input: unknown;
+                        }>;
+                        reasoning?: Array<{
+                            id: string;
+                            text: string;
+                        }>;
+                    } | {
+                        version: 1;
+                        kind: 'assistant_final';
+                        runId: string;
+                        finishStatus: 'completed' | 'cancelled';
+                        cancellationReason?: string;
+                        reasoning?: Array<{
+                            id: string;
+                            text: string;
+                        }>;
+                    } | {
+                        version: 1;
+                        kind: 'tool_result';
+                        runId: string;
+                        toolCallId: string;
+                        toolName: string;
+                        input: unknown;
+                        result: unknown;
+                        modelOutput: string;
+                        projectionNotice?: {
+                            [key: string]: unknown;
+                        };
+                    } | {
+                        [key: string]: unknown;
+                    };
+                    display?: unknown;
                     [key: string]: unknown;
                 };
             }>;
@@ -707,6 +879,49 @@ export type CreateConversationRunResponses = {
             text: string;
             createdAt: string;
             metadata?: {
+                agentRuntime?: {
+                    version: 1;
+                    kind: 'user_message';
+                    attachmentManifest: unknown;
+                } | {
+                    version: 1;
+                    kind: 'assistant_tool_calls';
+                    runId: string;
+                    toolCalls: Array<{
+                        toolCallId: string;
+                        toolName: string;
+                        input: unknown;
+                    }>;
+                    reasoning?: Array<{
+                        id: string;
+                        text: string;
+                    }>;
+                } | {
+                    version: 1;
+                    kind: 'assistant_final';
+                    runId: string;
+                    finishStatus: 'completed' | 'cancelled';
+                    cancellationReason?: string;
+                    reasoning?: Array<{
+                        id: string;
+                        text: string;
+                    }>;
+                } | {
+                    version: 1;
+                    kind: 'tool_result';
+                    runId: string;
+                    toolCallId: string;
+                    toolName: string;
+                    input: unknown;
+                    result: unknown;
+                    modelOutput: string;
+                    projectionNotice?: {
+                        [key: string]: unknown;
+                    };
+                } | {
+                    [key: string]: unknown;
+                };
+                display?: unknown;
                 [key: string]: unknown;
             };
         };
@@ -756,6 +971,49 @@ export type CreateConversationRunResponses = {
                 text: string;
                 createdAt: string;
                 metadata?: {
+                    agentRuntime?: {
+                        version: 1;
+                        kind: 'user_message';
+                        attachmentManifest: unknown;
+                    } | {
+                        version: 1;
+                        kind: 'assistant_tool_calls';
+                        runId: string;
+                        toolCalls: Array<{
+                            toolCallId: string;
+                            toolName: string;
+                            input: unknown;
+                        }>;
+                        reasoning?: Array<{
+                            id: string;
+                            text: string;
+                        }>;
+                    } | {
+                        version: 1;
+                        kind: 'assistant_final';
+                        runId: string;
+                        finishStatus: 'completed' | 'cancelled';
+                        cancellationReason?: string;
+                        reasoning?: Array<{
+                            id: string;
+                            text: string;
+                        }>;
+                    } | {
+                        version: 1;
+                        kind: 'tool_result';
+                        runId: string;
+                        toolCallId: string;
+                        toolName: string;
+                        input: unknown;
+                        result: unknown;
+                        modelOutput: string;
+                        projectionNotice?: {
+                            [key: string]: unknown;
+                        };
+                    } | {
+                        [key: string]: unknown;
+                    };
+                    display?: unknown;
                     [key: string]: unknown;
                 };
             }>;

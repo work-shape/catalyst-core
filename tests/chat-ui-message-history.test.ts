@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Message } from "@vivd-catalyst/api-client";
+import {
+  createAssistantFinalMetadata,
+  createAssistantToolCallsMetadata,
+  createToolResultMetadata
+} from "@vivd-catalyst/core";
 import { toUiMessages } from "../packages/chat-ui/src/assistant-ui-adapter";
 
 describe("chat UI message history projection", () => {
@@ -156,22 +161,18 @@ describe("chat UI message history projection", () => {
         role: "assistant",
         text: "",
         createdAt: "2026-06-15T00:00:01.000Z",
-        metadata: {
-          agentRuntime: {
-            version: 1,
-            kind: "assistant_tool_calls",
-            runId: "run_test",
-            toolCalls: [
-              {
-                toolCallId: "call_render",
-                toolName: "show_view",
-                input: {
-                  html: "<section>Dashboard</section>"
-                }
+        metadata: createAssistantToolCallsMetadata({
+          runId: "run_test",
+          toolCalls: [
+            {
+              toolCallId: "call_render",
+              toolName: "show_view",
+              input: {
+                html: "<section>Dashboard</section>"
               }
-            ]
-          }
-        }
+            }
+          ]
+        })
       },
       {
         id: "msg_tool_result",
@@ -180,34 +181,34 @@ describe("chat UI message history projection", () => {
         role: "tool",
         text: "{\"displayed\":true}",
         createdAt: "2026-06-15T00:00:02.000Z",
-        metadata: {
-          agentRuntime: {
-            version: 1,
-            kind: "tool_result",
-            runId: "run_test",
+        metadata: createToolResultMetadata({
+          runId: "run_test",
+          toolCall: {
             toolCallId: "call_render",
             toolName: "show_view",
             input: {
               html: "<section>Dashboard</section>"
+            }
+          },
+          result: {
+            status: "success",
+            output: {
+              displayed: true
             },
-            result: {
-              status: "success",
-              output: {
-                displayed: true
-              },
-              display: {
-                kind: "html.rendered",
-                version: 1,
-                mode: "inline",
-                data: {
-                  html: "<section>Dashboard</section>",
-                  title: "Dashboard"
-                }
+            display: {
+              kind: "html.rendered",
+              version: 1,
+              mode: "inline",
+              data: {
+                html: "<section>Dashboard</section>",
+                title: "Dashboard"
               }
-            },
-            modelOutput: "{\"displayed\":true}"
+            }
+          },
+          modelOutput: {
+            text: "{\"displayed\":true}"
           }
-        }
+        })
       },
       {
         id: "msg_final",
@@ -215,7 +216,10 @@ describe("chat UI message history projection", () => {
         clientInstanceId: "client_test",
         role: "assistant",
         text: "Here is the dashboard.",
-        createdAt: "2026-06-15T00:00:03.000Z"
+        createdAt: "2026-06-15T00:00:03.000Z",
+        metadata: createAssistantFinalMetadata({
+          runId: "run_test"
+        })
       }
     ];
 
@@ -243,5 +247,43 @@ describe("chat UI message history projection", () => {
         }
       ]
     });
+  });
+
+  it("falls back to text rendering for unknown message metadata", () => {
+    const messages: Message[] = [
+      {
+        id: "msg_future",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "assistant",
+        text: "Future metadata should not hide this response.",
+        createdAt: "2026-06-15T00:00:00.000Z",
+        metadata: {
+          agentRuntime: {
+            version: 1,
+            kind: "future_variant",
+            runId: "run_future",
+            payload: {
+              unsupported: true
+            }
+          }
+        }
+      }
+    ];
+
+    const projected = toUiMessages(messages);
+
+    expect(projected).toEqual([
+      expect.objectContaining({
+        role: "assistant",
+        parts: [
+          {
+            type: "text",
+            text: "Future metadata should not hide this response.",
+            state: "done"
+          }
+        ]
+      })
+    ]);
   });
 });
