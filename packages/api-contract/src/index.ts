@@ -260,7 +260,13 @@ export const agentRunStatusSchema = z.enum([
 export const agentRunErrorSchema = z.object({
   code: z.string(),
   message: z.string(),
-  category: z.enum(["app_error", "internal_error", "abort_error", "unknown_error"])
+  category: z.enum([
+    "app_error",
+    "internal_error",
+    "runtime_interrupted",
+    "abort_error",
+    "unknown_error"
+  ])
 });
 
 export const chatStreamStartChunkSchema = z.object({
@@ -463,7 +469,13 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     error: z.object({
       code: z.string(),
       message: z.string(),
-      category: z.enum(["app_error", "internal_error", "abort_error", "unknown_error"])
+      category: z.enum([
+        "app_error",
+        "internal_error",
+        "runtime_interrupted",
+        "abort_error",
+        "unknown_error"
+      ])
     })
   })
 ]);
@@ -494,7 +506,7 @@ export const activeRunSummarySchema = z.object({
   id: z.string(),
   conversationId: z.string(),
   agentName: z.string(),
-  status: z.enum(["queued", "running", "waiting_for_permission", "cancelling"]),
+  status: agentRunStatusSchema,
   startedAt: z.string(),
   updatedAt: z.string(),
   lastSequence: z.number().int().nonnegative()

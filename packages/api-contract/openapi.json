@@ -998,7 +998,10 @@
                               "queued",
                               "running",
                               "waiting_for_permission",
-                              "cancelling"
+                              "cancelling",
+                              "completed",
+                              "cancelled",
+                              "failed"
                             ]
                           },
                           "startedAt": {
@@ -1343,7 +1346,10 @@
                                 "queued",
                                 "running",
                                 "waiting_for_permission",
-                                "cancelling"
+                                "cancelling",
+                                "completed",
+                                "cancelled",
+                                "failed"
                               ]
                             },
                             "startedAt": {
@@ -1466,6 +1472,7 @@
                                   "enum": [
                                     "app_error",
                                     "internal_error",
+                                    "runtime_interrupted",
                                     "abort_error",
                                     "unknown_error"
                                   ]
@@ -1741,6 +1748,7 @@
                               "enum": [
                                 "app_error",
                                 "internal_error",
+                                "runtime_interrupted",
                                 "abort_error",
                                 "unknown_error"
                               ]
@@ -2021,6 +2029,7 @@
                               "enum": [
                                 "app_error",
                                 "internal_error",
+                                "runtime_interrupted",
                                 "abort_error",
                                 "unknown_error"
                               ]
@@ -2180,7 +2189,10 @@
                                     "queued",
                                     "running",
                                     "waiting_for_permission",
-                                    "cancelling"
+                                    "cancelling",
+                                    "completed",
+                                    "cancelled",
+                                    "failed"
                                   ]
                                 },
                                 "startedAt": {
@@ -2303,6 +2315,7 @@
                                       "enum": [
                                         "app_error",
                                         "internal_error",
+                                        "runtime_interrupted",
                                         "abort_error",
                                         "unknown_error"
                                       ]
@@ -2638,6 +2651,7 @@
                               "enum": [
                                 "app_error",
                                 "internal_error",
+                                "runtime_interrupted",
                                 "abort_error",
                                 "unknown_error"
                               ]
@@ -2797,7 +2811,10 @@
                                     "queued",
                                     "running",
                                     "waiting_for_permission",
-                                    "cancelling"
+                                    "cancelling",
+                                    "completed",
+                                    "cancelled",
+                                    "failed"
                                   ]
                                 },
                                 "startedAt": {
@@ -2920,6 +2937,7 @@
                                       "enum": [
                                         "app_error",
                                         "internal_error",
+                                        "runtime_interrupted",
                                         "abort_error",
                                         "unknown_error"
                                       ]
@@ -3448,6 +3466,7 @@
                                   "enum": [
                                     "app_error",
                                     "internal_error",
+                                    "runtime_interrupted",
                                     "abort_error",
                                     "unknown_error"
                                   ]
@@ -3652,6 +3671,7 @@
                               "enum": [
                                 "app_error",
                                 "internal_error",
+                                "runtime_interrupted",
                                 "abort_error",
                                 "unknown_error"
                               ]

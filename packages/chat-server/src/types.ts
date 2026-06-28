@@ -17,6 +17,7 @@ import type { ModelProvider } from "@vivd-catalyst/model-provider";
 import type { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import type { ChatAttachmentService } from "./attachments";
 import type { ConversationRetentionJobOptions } from "./retention";
+import type { RunRecoveryOptions } from "./run-recovery";
 
 export interface ChatServerOptions {
   config: ClientInstanceConfig;
@@ -34,6 +35,7 @@ export interface ChatServerOptions {
   agentRuntime: AgentRuntime;
   attachments?: ChatAttachmentService;
   retentionExpiration?: ConversationRetentionJobOptions;
+  runRecovery?: RunRecoveryOptions;
   modelProvider: ModelProvider;
   corsOrigin?: string | string[];
   standaloneAuth?: Pick<

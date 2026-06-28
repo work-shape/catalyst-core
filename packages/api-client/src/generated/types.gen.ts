@@ -284,7 +284,7 @@ export type ListConversationsResponses = {
             id: string;
             conversationId: string;
             agentName: string;
-            status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling';
+            status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
             startedAt: string;
             updatedAt: string;
             lastSequence: number;
@@ -397,7 +397,7 @@ export type GetConversationThreadResponses = {
                 id: string;
                 conversationId: string;
                 agentName: string;
-                status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling';
+                status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
                 startedAt: string;
                 updatedAt: string;
                 lastSequence: number;
@@ -423,7 +423,7 @@ export type GetConversationThreadResponses = {
                 error?: {
                     code: string;
                     message: string;
-                    category: 'app_error' | 'internal_error' | 'abort_error' | 'unknown_error';
+                    category: 'app_error' | 'internal_error' | 'runtime_interrupted' | 'abort_error' | 'unknown_error';
                 };
             };
         };
@@ -506,7 +506,7 @@ export type CancelConversationRunResponses = {
             error?: {
                 code: string;
                 message: string;
-                category: 'app_error' | 'internal_error' | 'abort_error' | 'unknown_error';
+                category: 'app_error' | 'internal_error' | 'runtime_interrupted' | 'abort_error' | 'unknown_error';
             };
             correlationId: string;
             leaseOwner?: string;
@@ -580,7 +580,7 @@ export type StartConversationRunResponses = {
             error?: {
                 code: string;
                 message: string;
-                category: 'app_error' | 'internal_error' | 'abort_error' | 'unknown_error';
+                category: 'app_error' | 'internal_error' | 'runtime_interrupted' | 'abort_error' | 'unknown_error';
             };
             correlationId: string;
             leaseOwner?: string;
@@ -616,7 +616,7 @@ export type StartConversationRunResponses = {
                     id: string;
                     conversationId: string;
                     agentName: string;
-                    status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling';
+                    status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
                     startedAt: string;
                     updatedAt: string;
                     lastSequence: number;
@@ -642,7 +642,7 @@ export type StartConversationRunResponses = {
                     error?: {
                         code: string;
                         message: string;
-                        category: 'app_error' | 'internal_error' | 'abort_error' | 'unknown_error';
+                        category: 'app_error' | 'internal_error' | 'runtime_interrupted' | 'abort_error' | 'unknown_error';
                     };
                 };
             };
@@ -728,7 +728,7 @@ export type CreateConversationRunResponses = {
             error?: {
                 code: string;
                 message: string;
-                category: 'app_error' | 'internal_error' | 'abort_error' | 'unknown_error';
+                category: 'app_error' | 'internal_error' | 'runtime_interrupted' | 'abort_error' | 'unknown_error';
             };
             correlationId: string;
             leaseOwner?: string;
@@ -764,7 +764,7 @@ export type CreateConversationRunResponses = {
                     id: string;
                     conversationId: string;
                     agentName: string;
-                    status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling';
+                    status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
                     startedAt: string;
                     updatedAt: string;
                     lastSequence: number;
@@ -790,7 +790,7 @@ export type CreateConversationRunResponses = {
                     error?: {
                         code: string;
                         message: string;
-                        category: 'app_error' | 'internal_error' | 'abort_error' | 'unknown_error';
+                        category: 'app_error' | 'internal_error' | 'runtime_interrupted' | 'abort_error' | 'unknown_error';
                     };
                 };
             };
@@ -923,7 +923,7 @@ export type ObserveConversationRunResponses = {
             error: {
                 code: string;
                 message: string;
-                category: 'app_error' | 'internal_error' | 'abort_error' | 'unknown_error';
+                category: 'app_error' | 'internal_error' | 'runtime_interrupted' | 'abort_error' | 'unknown_error';
             };
         };
         createdAt: string;
@@ -974,7 +974,7 @@ export type CommandConversationRunResponses = {
             error?: {
                 code: string;
                 message: string;
-                category: 'app_error' | 'internal_error' | 'abort_error' | 'unknown_error';
+                category: 'app_error' | 'internal_error' | 'runtime_interrupted' | 'abort_error' | 'unknown_error';
             };
             correlationId: string;
             leaseOwner?: string;

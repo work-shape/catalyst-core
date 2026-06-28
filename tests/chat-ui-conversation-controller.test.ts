@@ -161,18 +161,48 @@ describe("chat UI conversation controller", () => {
       message: "user_requested"
     });
   });
+
+  it("renders recovered terminal run snapshots without opening a live connection state", () => {
+    const recovered = createControllerStateFromSnapshot(
+      createSnapshot({
+        lastSequence: 2,
+        text: "Partial answer",
+        runStatus: "failed",
+        error: {
+          code: "AGENT_RUN_RUNTIME_INTERRUPTED",
+          message: "Agent run was interrupted after the local runtime state was lost",
+          category: "runtime_interrupted"
+        }
+      })
+    );
+
+    expect(recovered.connectionStatus).toBe("caught_up");
+    expect(recovered.activeRun?.run.status).toBe("failed");
+    expect(recovered.activeRun?.projection.error).toMatchObject({
+      code: "AGENT_RUN_RUNTIME_INTERRUPTED",
+      category: "runtime_interrupted"
+    });
+    expect(recovered.error).toMatchObject({
+      class: "run_failed",
+      message: "Agent run was interrupted after the local runtime state was lost"
+    });
+  });
 });
 
 function createSnapshot({
   lastSequence,
   text,
   messages = [],
-  activeRun = true
+  activeRun = true,
+  runStatus = "running",
+  error
 }: {
   lastSequence: number;
   text: string;
   messages?: ConversationThreadSnapshot["messages"];
   activeRun?: boolean;
+  runStatus?: NonNullable<ConversationThreadSnapshot["activeRun"]>["run"]["status"];
+  error?: NonNullable<ConversationThreadSnapshot["activeRun"]>["projection"]["error"];
 }): ConversationThreadSnapshot {
   return {
     conversation: {
@@ -194,7 +224,7 @@ function createSnapshot({
               id: "run_1",
               conversationId: "conv_1",
               agentName: "test_agent",
-              status: "running",
+              status: runStatus,
               startedAt: "2026-06-26T10:00:00.000Z",
               updatedAt: "2026-06-26T10:00:00.000Z",
               lastSequence
@@ -202,10 +232,11 @@ function createSnapshot({
             projection: {
               runId: "run_1",
               lastSequence,
-              status: "running",
+              status: runStatus,
               text,
               reasoning: [],
-              activeToolCalls: []
+              activeToolCalls: [],
+              ...(error ? { error } : {})
             }
           }
         }

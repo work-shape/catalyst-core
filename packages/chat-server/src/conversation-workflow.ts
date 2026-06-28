@@ -35,6 +35,11 @@ import {
   isTemporaryConversationTitle,
   normalizeGeneratedConversationTitle
 } from "./conversation-title";
+import {
+  isMissingLocalRuntimeState,
+  recoverStaleRun,
+  recoveryEventFromObservation
+} from "./run-recovery";
 import type { ChatServerOptions } from "./types";
 
 export interface CreateConversationCommand {
@@ -139,16 +144,18 @@ export class ConversationWorkflow {
       conversationId,
       ownerUserId: getSubjectUserId(user)
     });
+    const recovered = activeRun ? await recoverStaleRun(this.options, activeRun) : undefined;
+    const runForSnapshot = recovered?.run ?? activeRun;
     const serverTime = new Date().toISOString();
 
     return {
       conversation,
       messages,
-      ...(activeRun
+      ...(runForSnapshot
         ? {
             activeRun: {
-              run: toActiveRunSummary(activeRun),
-              projection: await this.createRunProjection(activeRun, user)
+              run: toActiveRunSummary(runForSnapshot),
+              projection: await this.createRunProjection(runForSnapshot, user)
             }
           }
         : {}),
@@ -387,8 +394,22 @@ export class ConversationWorkflow {
         afterSequence: lastSequence
       });
     } catch (error) {
-      if (isAppError(error) && error.code === "NOT_FOUND" && observations.length > 0) {
-        return;
+      if (isMissingLocalRuntimeState(error)) {
+        const staleRun =
+          (await this.options.conversationStore.getAgentRun({
+            clientInstanceId: this.options.clientInstanceId,
+            runId
+          })) ?? latestRun;
+        if (staleRun.ownerUserId === getRuntimeSubjectUserId(context)) {
+          const recovered = await recoverStaleRun(this.options, staleRun);
+          const recoveryEvent = recoveryEventFromObservation(recovered?.observation);
+          if (recoveryEvent && recoveryEvent.sequence > lastSequence) {
+            yield recoveryEvent;
+          }
+          if (recovered || observations.length > 0) {
+            return;
+          }
+        }
       }
       throw error;
     }
@@ -948,9 +969,6 @@ function isActiveAgentRunStatus(
 }
 
 function toActiveRunSummary(run: AgentRun): ActiveRunSummary {
-  if (!isActiveAgentRunStatus(run.status)) {
-    throw new AppError("INTERNAL", "Expected an active agent run");
-  }
   return {
     id: run.id,
     conversationId: run.conversationId,

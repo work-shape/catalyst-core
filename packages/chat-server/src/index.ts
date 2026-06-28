@@ -14,6 +14,7 @@ import { registerSessionTokenRoutes } from "./routes/session-token-routes";
 import { registerSuperadminRoutes } from "./routes/superadmin-routes";
 import { registerUserAccountRoutes } from "./routes/user-account-routes";
 import { createConversationRetentionJob } from "./retention";
+import { RunRecoveryWatchdog } from "./run-recovery";
 import type { ChatServerOptions } from "./types";
 
 export type { ChatAttachmentService, UploadDraftAttachmentInput } from "./attachments";
@@ -22,6 +23,8 @@ export type {
   ConversationRetentionRunSummary
 } from "./retention";
 export { ConversationRetentionJob, ConversationRetentionWorkflow } from "./retention";
+export { RUN_RECOVERY_ERROR, RunRecoveryWatchdog, recoverStaleRun } from "./run-recovery";
+export type { RunRecoveryOptions, RunRecoverySweepSummary } from "./run-recovery";
 export type { ChatServerOptions } from "./types";
 
 export async function createChatServer(options: ChatServerOptions): Promise<FastifyInstance> {
@@ -47,10 +50,13 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
     logger: app.log,
     jobOptions: options.retentionExpiration
   });
+  const runRecoveryWatchdog = new RunRecoveryWatchdog(options, app.log, options.runRecovery);
   app.addHook("onReady", async () => {
     retentionJob.start();
+    runRecoveryWatchdog.start();
   });
   app.addHook("onClose", async () => {
+    runRecoveryWatchdog.stop();
     await retentionJob.stop();
   });
 

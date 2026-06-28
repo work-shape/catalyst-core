@@ -110,6 +110,9 @@ export function useConversationController({
     if (!enabled || !conversationId || !snapshot?.activeRun) {
       return undefined;
     }
+    if (!isLiveRunStatus(snapshot.activeRun.run.status)) {
+      return undefined;
+    }
     return {
       conversationId,
       runId: snapshot.activeRun.run.id,
@@ -205,9 +208,14 @@ export function createControllerStateFromSnapshot(
   previousState?: ConversationControllerState
 ): ConversationControllerState {
   const preservedTerminalRun = terminalRunForSnapshot(snapshot, previousState);
+  const snapshotTerminalError = snapshot.activeRun ? terminalErrorFromSnapshot(snapshot.activeRun) : undefined;
   return {
     snapshotStatus: "ready",
-    connectionStatus: snapshot.activeRun ? "connecting" : "idle",
+    connectionStatus: snapshot.activeRun
+      ? isLiveRunStatus(snapshot.activeRun.run.status)
+        ? "connecting"
+        : "caught_up"
+      : "idle",
     conversation: snapshot.conversation,
     messages: snapshot.messages,
     ...(snapshot.activeRun
@@ -223,7 +231,8 @@ export function createControllerStateFromSnapshot(
             activeRun: preservedTerminalRun,
             ...(previousState?.error ? { error: previousState.error } : {})
           }
-        : {})
+        : {}),
+    ...(snapshotTerminalError ? { error: snapshotTerminalError } : {})
   };
 }
 
@@ -476,6 +485,33 @@ function terminalRunForSnapshot(
 
 function isUserVisibleTerminalRunStatus(status: AgentRun["status"]): boolean {
   return status === "cancelled" || status === "failed";
+}
+
+function isLiveRunStatus(status: AgentRun["status"]): boolean {
+  return (
+    status === "queued" ||
+    status === "running" ||
+    status === "waiting_for_permission" ||
+    status === "cancelling"
+  );
+}
+
+function terminalErrorFromSnapshot(
+  activeRun: NonNullable<ConversationThreadSnapshot["activeRun"]>
+): ConversationControllerState["error"] | undefined {
+  if (activeRun.run.status === "failed") {
+    return {
+      class: "run_failed",
+      message: activeRun.projection.error?.message ?? "Run failed"
+    };
+  }
+  if (activeRun.run.status === "cancelled") {
+    return {
+      class: "run_cancelled",
+      message: "Run cancelled"
+    };
+  }
+  return undefined;
 }
 
 function terminalError(

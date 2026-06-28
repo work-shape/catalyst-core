@@ -47,7 +47,9 @@ import {
   getConversationAgentRun as getPostgresConversationAgentRun,
   listRunObservations as listPostgresRunObservations,
   prepareConversationRunStart as preparePostgresConversationRunStart,
+  listStaleActiveAgentRuns as listPostgresStaleActiveAgentRuns,
   releaseRunStartCommand as releasePostgresRunStartCommand,
+  recoverStaleAgentRun as recoverPostgresStaleAgentRun,
   updateAgentRunStatus as updatePostgresAgentRunStatus
 } from "./postgres-agent-run-operations";
 import {
@@ -274,6 +276,14 @@ export class PostgresPlatformStore
 
   async updateAgentRunStatus(input: UpdateAgentRunStatusInput): Promise<AgentRun> {
     return updatePostgresAgentRunStatus(this.db, input);
+  }
+
+  async listStaleActiveAgentRuns(input: Parameters<AgentRunStore["listStaleActiveAgentRuns"]>[0]) {
+    return listPostgresStaleActiveAgentRuns(this.db, input);
+  }
+
+  async recoverStaleAgentRun(input: Parameters<AgentRunStore["recoverStaleAgentRun"]>[0]) {
+    return recoverPostgresStaleAgentRun(this.db, input);
   }
 
   async appendRunObservation(input: AppendRunObservationInput): Promise<RunObservation> {

@@ -41,6 +41,7 @@ export type AgentRunStatus =
 export type AgentRunFailureCategory =
   | "app_error"
   | "internal_error"
+  | "runtime_interrupted"
   | "abort_error"
   | "unknown_error";
 
@@ -76,10 +77,7 @@ export interface ActiveRunSummary {
   id: AgentRunId;
   conversationId: ConversationId;
   agentName: string;
-  status: Extract<
-    AgentRunStatus,
-    "queued" | "running" | "waiting_for_permission" | "cancelling"
-  >;
+  status: AgentRunStatus;
   startedAt: ISODateString;
   updatedAt: ISODateString;
   lastSequence: number;
@@ -328,6 +326,26 @@ export interface UpdateAgentRunStatusInput {
   error?: AgentRunError;
 }
 
+export interface RecoverStaleAgentRunInput {
+  clientInstanceId: ClientInstanceId;
+  runId: AgentRunId;
+  ownerUserId: string;
+  staleUpdatedBefore: ISODateString;
+  recoveredAt: ISODateString;
+  error: AgentRunError;
+}
+
+export type RecoverStaleAgentRunResult =
+  | {
+      status: "recovered";
+      run: AgentRun;
+      observation?: RunObservation;
+    }
+  | {
+      status: "not_recovered";
+      run?: AgentRun;
+    };
+
 export interface ClaimRunStartCommandInput {
   clientInstanceId: ClientInstanceId;
   ownerUserId: string;
@@ -380,6 +398,12 @@ export interface AgentRunStore {
     ownerUserId: string;
   }): Promise<AgentRun | undefined>;
   updateAgentRunStatus(input: UpdateAgentRunStatusInput): Promise<AgentRun>;
+  listStaleActiveAgentRuns(input: {
+    clientInstanceId: ClientInstanceId;
+    staleUpdatedBefore: ISODateString;
+    limit: number;
+  }): Promise<AgentRun[]>;
+  recoverStaleAgentRun(input: RecoverStaleAgentRunInput): Promise<RecoverStaleAgentRunResult>;
 }
 
 export interface AppendRunObservationInput {

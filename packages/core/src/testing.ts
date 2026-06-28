@@ -23,6 +23,8 @@ import {
   type PrepareConversationRunStartInput,
   type PreparedConversationRunStart,
   type ReleaseRunStartCommandInput,
+  type RecoverStaleAgentRunInput,
+  type RecoverStaleAgentRunResult,
   type RunObservation,
   type RunObservationStore,
   type RunStartCommand,
@@ -447,6 +449,83 @@ export class InMemoryPlatformStore
     };
     this.agentRuns.set(run.id, updated);
     return updated;
+  }
+
+  async listStaleActiveAgentRuns(input: {
+    clientInstanceId: ClientInstanceId;
+    staleUpdatedBefore: string;
+    limit: number;
+  }): Promise<AgentRun[]> {
+    return [...this.agentRuns.values()]
+      .filter(
+        (run) =>
+          run.clientInstanceId === input.clientInstanceId &&
+          isActiveAgentRunStatus(run.status) &&
+          run.updatedAt < input.staleUpdatedBefore
+      )
+      .sort((left, right) => `${left.updatedAt}:${left.id}`.localeCompare(`${right.updatedAt}:${right.id}`))
+      .slice(0, input.limit);
+  }
+
+  async recoverStaleAgentRun(
+    input: RecoverStaleAgentRunInput
+  ): Promise<RecoverStaleAgentRunResult> {
+    const run = await this.getAgentRun({
+      clientInstanceId: input.clientInstanceId,
+      runId: input.runId
+    });
+    if (!run || run.ownerUserId !== input.ownerUserId) {
+      return { status: "not_recovered" };
+    }
+    if (!isActiveAgentRunStatus(run.status) || run.updatedAt >= input.staleUpdatedBefore) {
+      return { status: "not_recovered", run };
+    }
+
+    const terminalObservation = [...(this.runObservations.get(input.runId) ?? [])]
+      .reverse()
+      .find((observation) => isTerminalRunObservation(observation));
+    if (terminalObservation) {
+      const updated = terminalRunFromObservation(run, terminalObservation);
+      this.agentRuns.set(run.id, updated);
+      return {
+        status: "recovered",
+        run: updated
+      };
+    }
+
+    const sequence = run.lastSequence + 1;
+    const event = {
+      type: "run_failed" as const,
+      runId: run.id,
+      sequence,
+      createdAt: input.recoveredAt,
+      error: input.error
+    };
+    const observation: RunObservation = {
+      clientInstanceId: run.clientInstanceId,
+      runId: run.id,
+      conversationId: run.conversationId,
+      ownerUserId: run.ownerUserId,
+      sequence,
+      type: "run_failed",
+      payload: event,
+      createdAt: input.recoveredAt
+    };
+    this.runObservations.set(run.id, [...(this.runObservations.get(run.id) ?? []), observation]);
+    const updated: AgentRun = {
+      ...run,
+      status: "failed",
+      updatedAt: input.recoveredAt,
+      failedAt: input.recoveredAt,
+      lastSequence: sequence,
+      error: input.error
+    };
+    this.agentRuns.set(run.id, updated);
+    return {
+      status: "recovered",
+      run: updated,
+      observation
+    };
   }
 
   async appendRunObservation(input: AppendRunObservationInput): Promise<RunObservation> {
@@ -1019,6 +1098,47 @@ function isActiveAgentRunStatus(status: AgentRun["status"]): boolean {
     status === "waiting_for_permission" ||
     status === "cancelling"
   );
+}
+
+function isTerminalRunObservation(observation: RunObservation): boolean {
+  return (
+    observation.payload.type === "run_completed" ||
+    observation.payload.type === "run_cancelled" ||
+    observation.payload.type === "run_failed"
+  );
+}
+
+function terminalRunFromObservation(run: AgentRun, observation: RunObservation): AgentRun {
+  const event = observation.payload;
+  if (event.type === "run_completed") {
+    return {
+      ...run,
+      status: "completed",
+      updatedAt: event.createdAt,
+      completedAt: event.createdAt,
+      lastSequence: Math.max(run.lastSequence, event.sequence)
+    };
+  }
+  if (event.type === "run_cancelled") {
+    return {
+      ...run,
+      status: "cancelled",
+      updatedAt: event.createdAt,
+      cancelledAt: event.createdAt,
+      lastSequence: Math.max(run.lastSequence, event.sequence)
+    };
+  }
+  if (event.type !== "run_failed") {
+    throw new AppError("INTERNAL", "Expected terminal run observation");
+  }
+  return {
+    ...run,
+    status: "failed",
+    updatedAt: event.createdAt,
+    failedAt: event.createdAt,
+    lastSequence: Math.max(run.lastSequence, event.sequence),
+    error: event.error
+  };
 }
 
 function replaceIdentity(identities: UserIdentity[], identity: UserIdentity): UserIdentity[] {
