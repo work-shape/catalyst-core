@@ -83,7 +83,7 @@ test("composer sends on Enter and inserts a newline on Shift+Enter", async ({ pa
   await signInViaUi(page, normalUser);
   let messageRequests = 0;
   page.on("request", (request) => {
-    if (request.method() === "POST" && new URL(request.url()).pathname === "/api/chat") {
+    if (request.method() === "POST" && isRunStartPath(new URL(request.url()).pathname)) {
       messageRequests += 1;
     }
   });
@@ -105,7 +105,7 @@ test("composer sends on Enter and inserts a newline on Shift+Enter", async ({ pa
   const messageResponse = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
-      new URL(response.url()).pathname === "/api/chat"
+      isRunStartPath(new URL(response.url()).pathname)
   );
   await input.press("Enter");
   await messageResponse;
@@ -147,7 +147,7 @@ test("new conversation action resets a pending root-created conversation", async
   const chatGate = new Promise<void>((resolve) => {
     releaseChat = resolve;
   });
-  await page.route(`${apiBaseUrl}/api/chat`, async (route) => {
+  await page.route(`${apiBaseUrl}/api/conversations/runs`, async (route) => {
     chatRequestStarted = true;
     await chatGate;
     await route.abort("aborted").catch(() => undefined);
@@ -175,7 +175,7 @@ test("new conversation action resets a pending root-created conversation", async
     await expect(input).toBeFocused();
   } finally {
     releaseChat();
-    await page.unroute(`${apiBaseUrl}/api/chat`);
+    await page.unroute(`${apiBaseUrl}/api/conversations/runs`);
   }
 });
 
@@ -212,15 +212,11 @@ test("first message from the root route moves to the persisted conversation rout
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(/\/$/u);
 
-  const newRouteStorageKey = streamStorageKey(apiBaseUrl, "new");
   const messageText = `Route creation ${Date.now()}`;
   await page.getByPlaceholder("Message").fill(messageText);
   await page.getByRole("button", { name: "Send message" }).click();
 
   await expect(page).toHaveURL(/\/c\/[^/]+$/u);
-  await expect
-    .poll(() => page.evaluate((key) => window.sessionStorage.getItem(key), newRouteStorageKey))
-    .toBeNull();
   const createdConversation = page.getByTestId("conversation-row").filter({ hasText: messageText });
   await expect(createdConversation).toHaveClass(/border-primary/);
 });
@@ -305,7 +301,8 @@ test("conversation switching isolates pending stream state", { tag: "@chat-state
   const chatGate = new Promise<void>((resolve) => {
     releaseChat = resolve;
   });
-  await page.route(`${apiBaseUrl}/api/chat`, async (route) => {
+  const runStartRoute = new RegExp(`${escapeRegExp(apiBaseUrl)}/api/conversations/[^/]+/runs$`, "u");
+  await page.route(runStartRoute, async (route) => {
     chatRequestStarted = true;
     await chatGate;
     await route.abort("aborted").catch(() => undefined);
@@ -342,7 +339,7 @@ test("conversation switching isolates pending stream state", { tag: "@chat-state
     await expect(page.getByRole("button", { name: "Send message" })).toBeDisabled();
   } finally {
     releaseChat();
-    await page.unroute(`${apiBaseUrl}/api/chat`);
+    await page.unroute(runStartRoute);
   }
 });
 
@@ -360,11 +357,11 @@ test("switching back to a running conversation resumes one stream indicator", { 
   expect(source.ok()).toBe(true);
   expect(target.ok()).toBe(true);
 
-  const resumeRequests: string[] = [];
+  const eventRequests: string[] = [];
   page.on("request", (request) => {
     const url = new URL(request.url());
-    if (request.method() === "GET" && /^\/api\/chat\/runs\/[^/]+\/stream$/u.test(url.pathname)) {
-      resumeRequests.push(request.url());
+    if (request.method() === "GET" && isRunEventsPath(url.pathname)) {
+      eventRequests.push(request.url());
     }
   });
 
@@ -389,7 +386,7 @@ test("switching back to a running conversation resumes one stream indicator", { 
   await expect(chatRegion.getByText(uniqueToken)).toHaveCount(0);
 
   await sourceConversation.getByRole("button").first().click();
-  await expect.poll(() => resumeRequests.length, { timeout: 10_000 }).toBeGreaterThan(0);
+  await expect.poll(() => eventRequests.length, { timeout: 10_000 }).toBeGreaterThan(0);
   await expect(chatRegion.getByText(uniqueToken, { exact: false }).first()).toBeVisible({
     timeout: 15_000
   });
@@ -408,11 +405,11 @@ test("direct conversation links resume a running stream from stored state", { ta
   expect(source.ok()).toBe(true);
   const conversation = (await source.json()) as { id: string };
 
-  const resumeRequests: string[] = [];
+  const eventRequests: string[] = [];
   page.on("request", (request) => {
     const url = new URL(request.url());
-    if (request.method() === "GET" && /^\/api\/chat\/runs\/[^/]+\/stream$/u.test(url.pathname)) {
-      resumeRequests.push(request.url());
+    if (request.method() === "GET" && isRunEventsPath(url.pathname)) {
+      eventRequests.push(request.url());
     }
   });
 
@@ -426,7 +423,6 @@ test("direct conversation links resume a running stream from stored state", { ta
   await input.fill(Array.from({ length: 100 }, (_, index) => `${uniqueToken}-${index}`).join(" "));
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
-  await expectStoredStreamId(page, conversation.id);
 
   await page.goto(conversationPath(conversation.id));
   const runningConversation = page.getByTestId("conversation-row").filter({
@@ -434,90 +430,12 @@ test("direct conversation links resume a running stream from stored state", { ta
   });
   await expect(runningConversation).toHaveCount(1);
   await expect(runningConversation).toHaveClass(/border-primary/);
-  await expect.poll(() => resumeRequests.length, { timeout: 10_000 }).toBeGreaterThan(0);
+  await expect.poll(() => eventRequests.length, { timeout: 10_000 }).toBeGreaterThan(0);
   await expect(chatRegion.locator('[data-role="assistant"]').filter({ hasText: uniqueToken }).first()).toBeVisible({
     timeout: 15_000
   });
   await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
   await stopActiveRun(page);
-});
-
-test("unavailable resume clears stream state without rendering a response construction error", { tag: "@chat-state" }, async ({ page }) => {
-  await signInViaUi(page, normalUser);
-  const suffix = Date.now();
-  const sourceTitle = `Unavailable resume source ${suffix}`;
-  const targetTitle = `Unavailable resume target ${suffix}`;
-  const source = await page.request.post(`${apiBaseUrl}/api/conversations`, {
-    data: { title: sourceTitle }
-  });
-  const target = await page.request.post(`${apiBaseUrl}/api/conversations`, {
-    data: { title: targetTitle }
-  });
-  expect(source.ok()).toBe(true);
-  expect(target.ok()).toBe(true);
-
-  const resumeRequests: string[] = [];
-  const responseConstructionErrors = collectResponseConstructionErrors(page);
-
-  await page.goto("/");
-  const input = page.getByPlaceholder("Message");
-  const chatRegion = page.getByRole("region", { name: "Chat" });
-  const sourceConversation = page.getByTestId("conversation-row").filter({ hasText: sourceTitle });
-  const targetConversation = page.getByTestId("conversation-row").filter({ hasText: targetTitle });
-  await expect(sourceConversation).toHaveCount(1);
-  await expect(targetConversation).toHaveCount(1);
-
-  await sourceConversation.getByRole("button").first().click();
-  await input.fill(Array.from({ length: 90 }, (_, index) => `unavailable-resume-${suffix}-${index}`).join(" "));
-  await page.getByRole("button", { name: "Send message" }).click();
-  await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
-
-  await targetConversation.getByRole("button").first().click();
-  await expect(chatRegion.getByText(`unavailable-resume-${suffix}`, { exact: false })).toHaveCount(0);
-
-  await page.route(/\/api\/chat\/runs\/[^/]+\/stream$/u, async (route) => {
-    resumeRequests.push(route.request().url());
-    await route.fulfill({ status: 204 });
-  });
-  await sourceConversation.getByRole("button").first().click();
-
-  await expect.poll(() => resumeRequests.length, { timeout: 10_000 }).toBeGreaterThan(0);
-  await expect(page.getByText("Failed to construct 'Response'")).toHaveCount(0);
-  expect(responseConstructionErrors).toEqual([]);
-  await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
-  await expect(page.getByTestId("assistant-cursor")).toHaveCount(0);
-});
-
-test("legacy new-route stream state is ignored and cleared", { tag: "@chat-state" }, async ({ page }) => {
-  await signInViaApi(page, normalUser);
-  const legacyRunId = "run_legacy_new_route";
-  const legacyStorageKey = streamStorageKey(apiBaseUrl, "new");
-  const resumeRequests: string[] = [];
-  const responseConstructionErrors = collectResponseConstructionErrors(page);
-
-  await page.addInitScript(
-    ({ storageKey, runId }) => {
-      window.sessionStorage.setItem(storageKey, runId);
-    },
-    { storageKey: legacyStorageKey, runId: legacyRunId }
-  );
-  await page.route(new RegExp(`/api/chat/runs/${legacyRunId}/stream$`, "u"), async (route) => {
-    resumeRequests.push(route.request().url());
-    await route.fulfill({ status: 204 });
-  });
-
-  await page.goto("/");
-
-  await expect(page.getByText("E2E Customer")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Send message" })).toBeEnabled();
-  await expect(page.getByText("Failed to construct 'Response'")).toHaveCount(0);
-  await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
-  await expect(page.getByTestId("assistant-cursor")).toHaveCount(0);
-  await expect
-    .poll(() => page.evaluate((key) => window.sessionStorage.getItem(key), legacyStorageKey))
-    .toBeNull();
-  expect(resumeRequests).toEqual([]);
-  expect(responseConstructionErrors).toEqual([]);
 });
 
 test("new conversation stream completion does not steal the selected conversation", { tag: "@chat-state" }, async ({ page }) => {
@@ -534,7 +452,7 @@ test("new conversation stream completion does not steal the selected conversatio
   const chatGate = new Promise<void>((resolve) => {
     releaseChat = resolve;
   });
-  await page.route(`${apiBaseUrl}/api/chat`, async (route) => {
+  await page.route(`${apiBaseUrl}/api/conversations/runs`, async (route) => {
     chatRequestStarted = true;
     await chatGate;
     await route.abort("aborted").catch(() => undefined);
@@ -564,7 +482,7 @@ test("new conversation stream completion does not steal the selected conversatio
     await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
   } finally {
     releaseChat();
-    await page.unroute(`${apiBaseUrl}/api/chat`);
+    await page.unroute(`${apiBaseUrl}/api/conversations/runs`);
   }
 });
 
@@ -582,11 +500,11 @@ test("completed background turns are marked unread until viewed", { tag: "@chat-
   expect(source.ok()).toBe(true);
   expect(target.ok()).toBe(true);
 
-  const resumeRequests: string[] = [];
+  const eventRequests: string[] = [];
   page.on("request", (request) => {
     const url = new URL(request.url());
-    if (request.method() === "GET" && /^\/api\/chat\/runs\/[^/]+\/stream$/u.test(url.pathname)) {
-      resumeRequests.push(request.url());
+    if (request.method() === "GET" && isRunEventsPath(url.pathname)) {
+      eventRequests.push(request.url());
     }
   });
 
@@ -614,10 +532,10 @@ test("completed background turns are marked unread until viewed", { tag: "@chat-
   });
   await expect(sourceConversation.getByTestId("conversation-unread-label")).toBeVisible();
 
-  const resumeRequestCountBeforeView = resumeRequests.length;
+  const eventRequestCountBeforeView = eventRequests.length;
   await sourceConversation.getByRole("button").first().click();
   await page.waitForTimeout(500);
-  expect(resumeRequests).toHaveLength(resumeRequestCountBeforeView);
+  expect(eventRequests).toHaveLength(eventRequestCountBeforeView);
   await expect(sourceConversation.getByTestId("conversation-unread-indicator")).toHaveCount(0);
   await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
   await expect(page.getByTestId("assistant-cursor")).toHaveCount(0);
@@ -883,46 +801,20 @@ function conversationPath(conversationId: string): string {
   return `/c/${encodeURIComponent(conversationId)}`;
 }
 
+function isRunStartPath(pathname: string): boolean {
+  return pathname === "/api/conversations/runs" || /^\/api\/conversations\/[^/]+\/runs$/u.test(pathname);
+}
+
+function isRunEventsPath(pathname: string): boolean {
+  return /^\/api\/conversations\/[^/]+\/runs\/[^/]+\/events$/u.test(pathname);
+}
+
 function currentConversationId(page: Page): string {
   const match = /^\/c\/([^/]+)$/u.exec(new URL(page.url()).pathname);
   if (!match?.[1]) {
     throw new Error(`Current route is not a conversation route: ${page.url()}`);
   }
   return decodeURIComponent(match[1]);
-}
-
-function streamStorageKey(apiUrl: string, conversationId: string): string {
-  return `vivd-catalyst:chat-stream:${apiUrl.replace(/\/$/u, "")}:${conversationId}`;
-}
-
-async function expectStoredStreamId(page: Page, conversationId: string): Promise<void> {
-  await expect
-    .poll(
-      () =>
-        page.evaluate((targetConversationId) => {
-          const entry = Object.entries(window.sessionStorage).find(([key]) =>
-            key.endsWith(`:${targetConversationId}`)
-          );
-          return entry?.[1] ?? "";
-        }, conversationId),
-      { timeout: 10_000 }
-    )
-    .toMatch(/^run_/u);
-}
-
-function collectResponseConstructionErrors(page: Page): string[] {
-  const errors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error" && message.text().includes("Failed to construct 'Response'")) {
-      errors.push(message.text());
-    }
-  });
-  page.on("pageerror", (error) => {
-    if (error.message.includes("Failed to construct 'Response'")) {
-      errors.push(error.message);
-    }
-  });
-  return errors;
 }
 
 function escapeRegExp(value: string): string {

@@ -21,6 +21,7 @@ import {
   type ChatMessage,
   type ConversationAttachment,
   type DraftAttachment,
+  type AttachmentManifestEntry,
   type FileAttachmentFormat,
   type ImageFileFormat,
   type ManagedFileId,
@@ -63,17 +64,12 @@ describe("client instance app vertical slice", () => {
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
 
-    const sent = await app.server.inject({
-      method: "POST",
-      url: "/api/chat",
-      payload: {
-        conversationId: conversation.id,
-        messages: [createUserUiMessage('/tool demo.echo {"text":"hello"}')]
-      }
-    });
-
-    expect(sent.statusCode).toBe(200);
-    expect(parseSseChunks(sent.payload).some((chunk) => chunk.type === "finish")).toBe(true);
+    const started = await injectStartConversationRun(
+      app.server,
+      conversation.id,
+      '/tool demo.echo {"text":"hello"}'
+    );
+    await drainRunEvents(app.server, conversation.id, started.run.id);
 
     const messages = await app.server.inject({
       method: "GET",
@@ -117,123 +113,6 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
-  it("exposes active chat runs as resumable streams", async () => {
-    const app = await createClientInstanceApp({
-      config: createTestConfig(),
-      env: {},
-      storeMode: "memory",
-      tools: []
-    });
-
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
-      payload: { title: "Resume test" }
-    });
-    expect(created.statusCode).toBe(200);
-    const conversation = created.json() as { id: string };
-
-    await app.server.listen({ host: "127.0.0.1", port: 0 });
-    const address = app.server.server.address() as AddressInfo;
-    const baseUrl = `http://127.0.0.1:${address.port}`;
-
-    const sent = await fetch(`${baseUrl}/api/chat`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        conversationId: conversation.id,
-        messages: [createUserUiMessage("resume this response while it is active")]
-      })
-    });
-    expect(sent.status).toBe(200);
-    const streamId = sent.headers.get("x-resumable-stream-id");
-    expect(streamId).toEqual(expect.stringMatching(/^run_/));
-
-    const resumed = await fetch(`${baseUrl}/api/chat/runs/${streamId}/stream`);
-    expect(resumed.status).toBe(200);
-    expect(resumed.headers.get("x-resumable-stream-id")).toBe(streamId);
-    const [sentPayload, resumedPayload] = await Promise.all([sent.text(), resumed.text()]);
-    expect(parseSseChunks(sentPayload).some((chunk) => chunk.type === "finish")).toBe(true);
-    const resumedChunks = parseSseChunks(resumedPayload);
-    expect(resumedChunks.some((chunk) => chunk.type === "text-delta")).toBe(true);
-    expect(resumedChunks.some((chunk) => chunk.type === "finish")).toBe(true);
-
-    const completedResume = await fetch(`${baseUrl}/api/chat/runs/${streamId}/stream`);
-    expect(completedResume.status).toBe(200);
-    expect(parseSseChunks(await completedResume.text()).some((chunk) => chunk.type === "finish")).toBe(
-      true
-    );
-
-    await app.close();
-  });
-
-  it("resumes completed runs from a cursor and keeps terminal observations available", async () => {
-    const app = await createClientInstanceApp({
-      config: createTestConfig(),
-      env: {},
-      storeMode: "memory",
-      tools: []
-    });
-
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
-      payload: { title: "Abandoned resume test" }
-    });
-    expect(created.statusCode).toBe(200);
-    const conversation = created.json() as { id: string };
-
-    await app.server.listen({ host: "127.0.0.1", port: 0 });
-    const address = app.server.server.address() as AddressInfo;
-    const baseUrl = `http://127.0.0.1:${address.port}`;
-
-    const sent = await fetch(`${baseUrl}/api/chat`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        conversationId: conversation.id,
-        messages: [createUserUiMessage("complete after abandoned stream")]
-      })
-    });
-    expect(sent.status).toBe(200);
-    const streamId = sent.headers.get("x-resumable-stream-id");
-    expect(streamId).toEqual(expect.stringMatching(/^run_/));
-    const sentChunks = parseSseChunks(await sent.text());
-    const sentTextDeltas = sentChunks
-      .filter((chunk) => chunk.type === "text-delta")
-      .map((chunk) => chunk.delta ?? "");
-    expect(sentTextDeltas.length).toBeGreaterThan(1);
-
-    const cursorResume = await fetch(`${baseUrl}/api/chat/runs/${streamId}/stream?after=1`);
-    expect(cursorResume.status).toBe(200);
-    const cursorDeltas = parseSseChunks(await cursorResume.text())
-      .filter((chunk) => chunk.type === "text-delta")
-      .map((chunk) => chunk.delta ?? "");
-    expect(cursorDeltas.join("")).toBe(sentTextDeltas.slice(1).join(""));
-
-    const terminalAfter = sentTextDeltas.length + 1;
-    const terminalResume = await fetch(`${baseUrl}/api/chat/runs/${streamId}/stream`, {
-      headers: {
-        "last-event-id": String(terminalAfter)
-      }
-    });
-    expect(terminalResume.status).toBe(200);
-    expect(parseSseChunks(await terminalResume.text()).some((chunk) => chunk.type === "finish")).toBe(
-      true
-    );
-
-    const caughtUpResume = await fetch(
-      `${baseUrl}/api/chat/runs/${streamId}/stream?after=${sentTextDeltas.length + 2}`
-    );
-    expect(caughtUpResume.status).toBe(204);
-
-    await app.close();
-  });
-
   it("exposes a thread snapshot with active run projection", async () => {
     const app = await createClientInstanceApp({
       config: createTestConfig(),
@@ -254,19 +133,12 @@ describe("client instance app vertical slice", () => {
     const address = app.server.server.address() as AddressInfo;
     const baseUrl = `http://127.0.0.1:${address.port}`;
 
-    const sent = await fetch(`${baseUrl}/api/chat`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        conversationId: conversation.id,
-        messages: [createUserUiMessage("snapshot should show this run while active")]
-      })
-    });
-    expect(sent.status).toBe(200);
-    const runId = sent.headers.get("x-resumable-stream-id");
-    expect(runId).toEqual(expect.stringMatching(/^run_/));
+    const started = await fetchStartConversationRun(
+      baseUrl,
+      conversation.id,
+      "snapshot should show this run while active"
+    );
+    const runId = started.run.id;
 
     const snapshot = await fetch(`${baseUrl}/api/conversations/${conversation.id}/thread`);
     expect(snapshot.status).toBe(200);
@@ -293,7 +165,7 @@ describe("client instance app vertical slice", () => {
       }
     });
 
-    await sent.text();
+    await fetchRunEvents(baseUrl, conversation.id, runId);
     await app.close();
   });
 
@@ -317,20 +189,13 @@ describe("client instance app vertical slice", () => {
     const address = app.server.server.address() as AddressInfo;
     const baseUrl = `http://127.0.0.1:${address.port}`;
 
-    const sent = await fetch(`${baseUrl}/api/chat`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        conversationId: conversation.id,
-        messages: [createUserUiMessage("product observations should be cursor resumable")]
-      })
-    });
-    expect(sent.status).toBe(200);
-    const runId = sent.headers.get("x-resumable-stream-id");
-    expect(runId).toEqual(expect.stringMatching(/^run_/));
-    await sent.text();
+    const started = await fetchStartConversationRun(
+      baseUrl,
+      conversation.id,
+      "product observations should be cursor readable"
+    );
+    const runId = started.run.id;
+    await fetchRunEvents(baseUrl, conversation.id, runId);
 
     const events = await fetch(
       `${baseUrl}/api/conversations/${conversation.id}/runs/${runId}/events?after=1`
@@ -875,86 +740,6 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
-  it("does not expose or mutate another user's resumable run", async () => {
-    const app = await createClientInstanceApp({
-      config: createTestConfig({
-        developmentAuth: {
-          enabled: true,
-          defaultUserId: "user-1",
-          users: [
-            {
-              id: "user-1",
-              externalUserId: "user-1",
-              displayLabel: "User One",
-              roles: ["user"],
-              permissionRefs: ["demo-tools"]
-            },
-            {
-              id: "user-2",
-              externalUserId: "user-2",
-              displayLabel: "User Two",
-              roles: ["user"],
-              permissionRefs: ["demo-tools"]
-            }
-          ]
-        }
-      }),
-      env: {},
-      storeMode: "memory",
-      tools: []
-    });
-
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
-      headers: {
-        "x-dev-user-id": "user-1"
-      },
-      payload: { title: "Owner mismatch" }
-    });
-    expect(created.statusCode).toBe(200);
-    const conversation = created.json() as { id: string };
-
-    await app.server.listen({ host: "127.0.0.1", port: 0 });
-    const address = app.server.server.address() as AddressInfo;
-    const baseUrl = `http://127.0.0.1:${address.port}`;
-
-    const sent = await fetch(`${baseUrl}/api/chat`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-dev-user-id": "user-1"
-      },
-      body: JSON.stringify({
-        conversationId: conversation.id,
-        messages: [createUserUiMessage("owner mismatch should not clear this run")]
-      })
-    });
-    expect(sent.status).toBe(200);
-    const streamId = sent.headers.get("x-resumable-stream-id");
-    expect(streamId).toEqual(expect.stringMatching(/^run_/));
-    await sent.text();
-
-    const wrongOwnerResume = await fetch(`${baseUrl}/api/chat/runs/${streamId}/stream`, {
-      headers: {
-        "x-dev-user-id": "user-2"
-      }
-    });
-    expect(wrongOwnerResume.status).toBe(204);
-
-    const rightfulResume = await fetch(`${baseUrl}/api/chat/runs/${streamId}/stream`, {
-      headers: {
-        "x-dev-user-id": "user-1"
-      }
-    });
-    expect(rightfulResume.status).toBe(200);
-    expect(parseSseChunks(await rightfulResume.text()).some((chunk) => chunk.type === "finish")).toBe(
-      true
-    );
-
-    await app.close();
-  });
-
   it("does not disclose or mutate product run routes for the wrong owner", async () => {
     const app = await createClientInstanceApp({
       config: createTestConfig({
@@ -999,20 +784,17 @@ describe("client instance app vertical slice", () => {
     const address = app.server.server.address() as AddressInfo;
     const baseUrl = `http://127.0.0.1:${address.port}`;
 
-    const sent = await fetch(`${baseUrl}/api/chat`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-dev-user-id": "user-1"
-      },
-      body: JSON.stringify({
-        conversationId: conversation.id,
-        messages: [createUserUiMessage("wrong owner product route checks should not cancel this run")]
-      })
-    });
-    expect(sent.status).toBe(200);
-    const runId = sent.headers.get("x-resumable-stream-id");
-    expect(runId).toEqual(expect.stringMatching(/^run_/));
+    const started = await fetchStartConversationRun(
+      baseUrl,
+      conversation.id,
+      "wrong owner product route checks should not cancel this run",
+      {
+        headers: {
+          "x-dev-user-id": "user-1"
+        }
+      }
+    );
+    const runId = started.run.id;
 
     const wrongOwnerEvents = await fetch(
       `${baseUrl}/api/conversations/${conversation.id}/runs/${runId}/events`,
@@ -1039,7 +821,11 @@ describe("client instance app vertical slice", () => {
     expect(wrongOwnerCancel.status).toBe(404);
     await wrongOwnerCancel.text();
 
-    expect(parseSseChunks(await sent.text()).some((chunk) => chunk.type === "finish")).toBe(true);
+    expect(
+      parseSseChunks(await fetchRunEvents(baseUrl, conversation.id, runId)).some(
+        (chunk) => chunk.type === "run_completed"
+      )
+    ).toBe(true);
     const audit = await app.server.inject({
       method: "GET",
       url: "/api/audit-events"
@@ -1077,31 +863,26 @@ describe("client instance app vertical slice", () => {
     const address = app.server.server.address() as AddressInfo;
     const baseUrl = `http://127.0.0.1:${address.port}`;
 
-    const sent = await fetch(`${baseUrl}/api/chat`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        conversationId: conversation.id,
-        messages: [createUserUiMessage("cancel this deliberately long enough response")]
-      })
-    });
-    expect(sent.status).toBe(200);
-    const streamId = sent.headers.get("x-resumable-stream-id");
-    expect(streamId).toEqual(expect.stringMatching(/^run_/));
-    const sentReader = sent.body?.getReader();
+    const started = await fetchStartConversationRun(
+      baseUrl,
+      conversation.id,
+      "cancel this deliberately long enough response"
+    );
+    const runId = started.run.id;
+    const events = await fetch(`${baseUrl}/api/conversations/${conversation.id}/runs/${runId}/events`);
+    expect(events.status).toBe(200);
+    const sentReader = events.body?.getReader();
     expect(sentReader).toBeDefined();
     const sentDecoder = new TextDecoder();
     let sentPayload = "";
-    while (!sentPayload.includes("\"type\":\"text-delta\"")) {
+    while (!sentPayload.includes("\"type\":\"message_delta\"")) {
       const next = await sentReader!.read();
       expect(next.done).toBe(false);
       sentPayload += sentDecoder.decode(next.value, { stream: true });
     }
 
     const cancelled = await fetch(
-      `${baseUrl}/api/conversations/${conversation.id}/runs/${streamId}/cancel`,
+      `${baseUrl}/api/conversations/${conversation.id}/runs/${runId}/cancel`,
       {
         method: "POST",
         headers: {
@@ -1130,15 +911,15 @@ describe("client instance app vertical slice", () => {
       expect.objectContaining({
         type: "message.cancelled",
         metadata: expect.objectContaining({
-          runId: streamId,
+          runId,
           reason: "test cancellation"
         })
       })
     );
 
     const streamedPrefix = parseSseChunks(sentPayload)
-      .filter((chunk) => chunk.type === "text-delta")
-      .map((chunk) => chunk.delta ?? "")
+      .filter((chunk) => chunk.type === "message_delta")
+      .map((chunk) => chunk.payload?.delta ?? "")
       .join("");
     expect(streamedPrefix.length).toBeGreaterThan(0);
     const messages = await fetch(`${baseUrl}/api/conversations/${conversation.id}/messages`);
@@ -1154,7 +935,7 @@ describe("client instance app vertical slice", () => {
       metadata: {
         agentRuntime: {
           kind: "assistant_final",
-          runId: streamId,
+          runId,
           finishStatus: "cancelled",
           cancellationReason: "test cancellation"
         }
@@ -1200,17 +981,9 @@ describe("client instance app vertical slice", () => {
     const baseUrl = `http://127.0.0.1:${address.port}`;
 
     const activePrompt = Array.from({ length: 40 }, (_, index) => `token-${index}`).join(" ");
-    const firstSend = await fetch(`${baseUrl}/api/chat`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        conversationId: conversation.id,
-        messages: [createUserUiMessage(activePrompt)]
-      })
+    const firstRun = await fetchStartConversationRun(baseUrl, conversation.id, activePrompt, {
+      idempotencyKey: "active-run-first"
     });
-    expect(firstSend.status).toBe(200);
 
     const upload = createMultipartFilePayload({
       fieldName: "file",
@@ -1228,19 +1001,21 @@ describe("client instance app vertical slice", () => {
     const uploadedBody = uploaded.json() as { attachment: { id: string } };
     await waitForReadyDraftAttachment(app.server, conversation.id);
 
-    const rejectedSend = await fetch(`${baseUrl}/api/chat`, {
+    const rejectedSend = await fetch(`${baseUrl}/api/conversations/${conversation.id}/runs`, {
       method: "POST",
       headers: {
         "content-type": "application/json"
       },
       body: JSON.stringify({
-        conversationId: conversation.id,
-        messages: [createUserUiMessage("this second send should not be persisted")]
+        idempotencyKey: "active-run-second",
+        message: {
+          text: "this second send should not be persisted"
+        }
       })
     });
     expect(rejectedSend.status).toBe(409);
     await rejectedSend.text();
-    await firstSend.text();
+    await fetchRunEvents(baseUrl, conversation.id, firstRun.run.id);
 
     const messages = await app.server.inject({
       method: "GET",
@@ -1308,21 +1083,10 @@ describe("client instance app vertical slice", () => {
       const messageTokens = Array.from({ length: 240 }, (_, index) => `cancel-token-${index}`);
       const lateToken = messageTokens.at(-1) ?? "";
 
-      const sent = await fetch(`${baseUrl}/api/chat`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          conversationId: conversation.id,
-          messages: [createUserUiMessage(messageTokens.join(" "))]
-        })
-      });
-      expect(sent.status).toBe(200);
-      const streamId = sent.headers.get("x-resumable-stream-id");
-      expect(streamId).toEqual(expect.stringMatching(/^run_/));
+      const started = await fetchStartConversationRun(baseUrl, conversation.id, messageTokens.join(" "));
+      const runId = started.run.id;
 
-      const cancelled = await fetch(`${baseUrl}/api/conversations/${conversation.id}/runs/${streamId}/cancel`, {
+      const cancelled = await fetch(`${baseUrl}/api/conversations/${conversation.id}/runs/${runId}/cancel`, {
         method: "POST",
         headers: {
           "content-type": "application/json"
@@ -1332,14 +1096,14 @@ describe("client instance app vertical slice", () => {
       expect(cancelled.status).toBe(200);
       expect(await cancelled.json()).toMatchObject({
         run: {
-          id: streamId,
+          id: runId,
           status: "cancelled"
         }
       });
 
-      const chunks = parseSseChunks(await sent.text());
-      expect(chunks.some((chunk) => chunk.type === "finish")).toBe(true);
-      expect(chunks.map((chunk) => chunk.delta ?? "").join("")).not.toContain(lateToken);
+      const chunks = parseSseChunks(await fetchRunEvents(baseUrl, conversation.id, runId));
+      expect(chunks.some((chunk) => chunk.type === "run_cancelled")).toBe(true);
+      expect(chunks.map((chunk) => chunk.payload?.delta ?? "").join("")).not.toContain(lateToken);
 
       await new Promise((resolve) => {
         setTimeout(resolve, 6_000);
@@ -1378,29 +1142,25 @@ describe("client instance app vertical slice", () => {
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
 
-    const firstMessage = await app.server.inject({
-      method: "POST",
-      url: "/api/chat",
-      payload: {
-        conversationId: conversation.id,
-        messages: [createUserUiMessage("hello")]
-      }
+    const firstMessage = await injectStartConversationRun(app.server, conversation.id, "hello", {
+      idempotencyKey: "usage-limit-first"
     });
-    expect(firstMessage.statusCode).toBe(200);
+    await drainRunEvents(app.server, conversation.id, firstMessage.run.id);
 
-    const secondMessage = await app.server.inject({
-      method: "POST",
-      url: "/api/chat",
-      payload: {
-        conversationId: conversation.id,
-        messages: [createUserUiMessage("hello again")]
-      }
+    const secondMessage = await injectStartConversationRun(app.server, conversation.id, "hello again", {
+      idempotencyKey: "usage-limit-second"
     });
-    expect(secondMessage.statusCode).toBe(200);
-    expect(parseSseChunks(secondMessage.payload)).toContainEqual(
+    const failedEvents = parseSseChunks(
+      await drainRunEvents(app.server, conversation.id, secondMessage.run.id)
+    );
+    expect(failedEvents).toContainEqual(
       expect.objectContaining({
-        type: "error",
-        errorText: "Daily model call safeguard has been reached"
+        type: "run_failed",
+        payload: expect.objectContaining({
+          error: expect.objectContaining({
+            message: "Daily model call safeguard has been reached"
+          })
+        })
       })
     );
 
@@ -1531,18 +1291,10 @@ describe("client instance app vertical slice", () => {
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
 
-    const sent = await app.server.inject({
-      method: "POST",
-      url: "/api/chat",
-      payload: {
-        conversationId: conversation.id,
-        messages: [createUserUiMessage(firstMessage)]
-      }
+    const sent = await injectStartConversationRun(app.server, conversation.id, firstMessage, {
+      idempotencyKey: "title-generation-run"
     });
-    expect(sent.statusCode).toBe(200);
-    expect(parseSseChunks(sent.payload), sent.payload).toEqual(
-      expect.arrayContaining([expect.objectContaining({ type: "finish" })])
-    );
+    await drainRunEvents(app.server, conversation.id, sent.run.id);
 
     const generatedTitle = await app.server.inject({
       method: "POST",
@@ -1613,18 +1365,15 @@ describe("client instance app vertical slice", () => {
     ).toBe(200);
     await waitForReadyDraftAttachment(app.server, conversation.id);
 
-    const sent = await app.server.inject({
-      method: "POST",
-      url: "/api/chat",
-      payload: {
-        conversationId: conversation.id,
-        messages: [createUserUiMessage("Please summarize this boarding pass")]
+    const sent = await injectStartConversationRun(
+      app.server,
+      conversation.id,
+      "Please summarize this boarding pass",
+      {
+        idempotencyKey: "attachment-title-generation-run"
       }
-    });
-    expect(sent.statusCode).toBe(200);
-    expect(parseSseChunks(sent.payload), sent.payload).toEqual(
-      expect.arrayContaining([expect.objectContaining({ type: "finish" })])
     );
+    await drainRunEvents(app.server, conversation.id, sent.run.id);
 
     const listed = await app.server.inject({
       method: "GET",
@@ -1790,18 +1539,10 @@ describe("client instance app vertical slice", () => {
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
 
-    const sent = await app.server.inject({
-      method: "POST",
-      url: "/api/chat",
-      payload: {
-        conversationId: conversation.id,
-        messages: [createUserUiMessage(firstMessage)]
-      }
+    const sent = await injectStartConversationRun(app.server, conversation.id, firstMessage, {
+      idempotencyKey: "tool-title-generation-run"
     });
-    expect(sent.statusCode).toBe(200);
-    expect(parseSseChunks(sent.payload), sent.payload).toEqual(
-      expect.arrayContaining([expect.objectContaining({ type: "finish" })])
-    );
+    await drainRunEvents(app.server, conversation.id, sent.run.id);
 
     const listed = await app.server.inject({
       method: "GET",
@@ -2956,39 +2697,121 @@ function createTestConfig(input: {
   });
 }
 
-function createUserUiMessage(text: string) {
-  return {
-    id: `user-${Math.random().toString(36).slice(2)}`,
-    role: "user",
-    parts: [
-      {
-        type: "text",
+type TestServer = Awaited<ReturnType<typeof createClientInstanceApp>>["server"];
+
+interface StartedRunBody {
+  conversation: { id: string };
+  userMessage: { id: string; text: string };
+  run: { id: string; status: string; lastSequence: number };
+  eventsUrl: string;
+}
+
+async function injectStartConversationRun(
+  server: TestServer,
+  conversationId: string,
+  text: string,
+  options: {
+    headers?: Record<string, string>;
+    idempotencyKey?: string;
+  } = {}
+): Promise<StartedRunBody> {
+  const response = await server.inject({
+    method: "POST",
+    url: `/api/conversations/${conversationId}/runs`,
+    headers: options.headers,
+    payload: {
+      idempotencyKey: options.idempotencyKey ?? `test-run-${Math.random().toString(36).slice(2)}`,
+      message: {
         text
       }
-    ]
-  };
+    }
+  });
+  expect(response.statusCode).toBe(200);
+  return response.json() as StartedRunBody;
+}
+
+async function drainRunEvents(
+  server: TestServer,
+  conversationId: string,
+  runId: string,
+  options: {
+    headers?: Record<string, string>;
+    afterSequence?: number;
+  } = {}
+): Promise<string> {
+  const response = await server.inject({
+    method: "GET",
+    url: `/api/conversations/${conversationId}/runs/${runId}/events${
+      options.afterSequence === undefined ? "" : `?after=${options.afterSequence}`
+    }`,
+    headers: options.headers
+  });
+  expect(response.statusCode).toBe(200);
+  return response.payload;
+}
+
+async function fetchStartConversationRun(
+  baseUrl: string,
+  conversationId: string,
+  text: string,
+  options: {
+    headers?: Record<string, string>;
+    idempotencyKey?: string;
+  } = {}
+): Promise<StartedRunBody> {
+  const response = await fetch(`${baseUrl}/api/conversations/${conversationId}/runs`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...options.headers
+    },
+    body: JSON.stringify({
+      idempotencyKey: options.idempotencyKey ?? `test-run-${Math.random().toString(36).slice(2)}`,
+      message: {
+        text
+      }
+    })
+  });
+  expect(response.status).toBe(200);
+  return (await response.json()) as StartedRunBody;
+}
+
+async function fetchRunEvents(baseUrl: string, conversationId: string, runId: string): Promise<string> {
+  const response = await fetch(`${baseUrl}/api/conversations/${conversationId}/runs/${runId}/events`);
+  expect(response.status).toBe(200);
+  return response.text();
 }
 
 function parseSseChunks(
   text: string
 ): Array<{
   type?: string;
-  errorText?: string;
-  delta?: string;
   sequence?: number;
   runId?: string;
   conversationId?: string;
+  payload?: {
+    type?: string;
+    delta?: string;
+    error?: {
+      code?: string;
+      category?: string;
+      message?: string;
+    };
+  };
 }> {
   return text
     .split("\n")
     .filter((line) => line.startsWith("data:"))
     .map((line) => line.slice("data:".length).trim())
     .filter((line) => line !== "[DONE]")
-    .map((line) => JSON.parse(line) as { type?: string; errorText?: string; delta?: string });
+    .map((line) => JSON.parse(line) as {
+      type?: string;
+      payload?: { type?: string; delta?: string };
+    });
 }
 
 async function waitForAuditEvents(
-  server: Awaited<ReturnType<typeof createClientInstanceApp>>["server"],
+  server: TestServer,
   type: string
 ): Promise<Array<{ type: string; metadata?: Record<string, unknown> }>> {
   for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -3165,7 +2988,7 @@ function createTestAttachmentCapability(options: {
   };
 }
 
-function manifestEntryForAttachment(attachment: ConversationAttachment) {
+function manifestEntryForAttachment(attachment: ConversationAttachment): AttachmentManifestEntry[] {
   if (attachment.mimeType === "image/gif") {
     return [
       {
@@ -3214,9 +3037,9 @@ function manifestEntryForAttachment(attachment: ConversationAttachment) {
       metadata: {
         fileId: attachment.fileId,
         filename: attachment.filename,
-        mimeType: attachment.mimeType,
+        mimeType: attachment.mimeType ?? null,
         byteSize: attachment.byteSize,
-        format: attachment.format === "txt" ? "txt" : undefined,
+        format: attachment.format === "txt" ? "txt" : null,
         warnings: []
       }
     }

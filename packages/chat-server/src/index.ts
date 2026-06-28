@@ -3,9 +3,8 @@ import multipart from "@fastify/multipart";
 import Fastify, { type FastifyInstance } from "fastify";
 import { installErrorHandler } from "./errors";
 import { registerAuditRoutes } from "./routes/audit-routes";
+import { registerAgentRunRoutes } from "./routes/agent-run-routes";
 import { registerBetterAuthRoutes } from "./routes/better-auth-routes";
-import { RESUMABLE_STREAM_ID_HEADER } from "./routes/chat-stream-headers";
-import { registerChatStreamRoutes } from "./routes/chat-stream-routes";
 import { registerConfigRoutes } from "./routes/config-routes";
 import { registerConversationFileRoutes } from "./routes/conversation-file-routes";
 import { registerConversationRoutes } from "./routes/conversation-routes";
@@ -36,7 +35,6 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
     origin: options.corsOrigin ?? true,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
-    exposedHeaders: [RESUMABLE_STREAM_ID_HEADER],
     allowedHeaders: ["authorization", "content-type", "x-correlation-id", "x-server-credential"]
   });
   await app.register(multipart, {
@@ -68,7 +66,7 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
 
   registerBetterAuthRoutes(app, options);
   registerSessionTokenRoutes(app, options);
-  registerChatStreamRoutes(app, options);
+  registerAgentRunRoutes(app, options);
   registerConfigRoutes(app, options);
   registerUserAccountRoutes(app, options);
   registerConversationRoutes(app, options);
