@@ -1,12 +1,12 @@
 import { AssistantChatPanel } from "./assistant-chat-panel";
 import { ChatDropOverlay } from "./chat-file-dropzone";
 import type { ChatShellProps } from "./chat-shell";
+import { ControlPlaneRoutes } from "./control-plane/control-plane-routes";
 import { TranslationProvider } from "./i18n";
 import { LoginPanel } from "./login-panel";
 import { ToolDisplayPanel } from "./tool-display-panel";
 import { cn } from "./ui/cn";
 import { UserMenu } from "./user-menu";
-import { UserSettingsPanel } from "./user-settings-panel";
 import { SessionCheckPanel, WorkspaceChrome } from "./workspace-chrome";
 import { WorkspaceRail } from "./workspace-rail";
 import { type WorkspaceRoute, type WorkspaceRouteChangeOptions } from "./workspace-route";
@@ -138,21 +138,7 @@ function ChatWorkspaceContent({
           onToggleTheme={model.config.toggleTheme}
         />
 
-        {model.controlPlane.superadmin.shouldRender ? (
-          adminPanel?.renderPanel(model.controlPlane.superadmin.panelInput)
-        ) : model.route.view === "settings" ? (
-          <UserSettingsPanel
-            user={model.controlPlane.settings.user}
-            canChangePassword={model.controlPlane.settings.canChangePassword}
-            updatingProfile={model.controlPlane.settings.updatingProfile}
-            changingPassword={model.controlPlane.settings.changingPassword}
-            locales={model.controlPlane.settings.locales}
-            locale={model.controlPlane.settings.locale}
-            onUpdateProfile={model.controlPlane.settings.updateProfile}
-            onChangePassword={model.controlPlane.settings.changePassword}
-            onSelectLocale={model.controlPlane.settings.selectLocale}
-          />
-        ) : (
+        <ControlPlaneRoutes adminPanel={adminPanel} controlPlane={model.controlPlane}>
           <section className="relative h-full min-h-0 min-w-0">
             <div className="flex h-full min-h-0 min-w-0">
               <div
@@ -168,7 +154,7 @@ function ChatWorkspaceContent({
               <ToolDisplayPanel />
             </div>
           </section>
-        )}
+        </ControlPlaneRoutes>
       </main>
     </TranslationProvider>
   );
