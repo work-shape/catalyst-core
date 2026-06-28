@@ -19,12 +19,14 @@ export function AssistantThread({
   attachmentAccept,
   conversationRunning,
   optimisticPending,
-  messageIdentityKey,
+  messagesEnabled,
+  messageRenderKey,
   composerFocusRequestId,
   onCancelRun,
   onFilesSelected,
   onRemoveDraftAttachment,
-  onRetryDraftAttachment
+  onRetryDraftAttachment,
+  onSubmitMessage
 }: {
   config: SafeConfig | undefined;
   selectedAgentName: string | undefined;
@@ -36,12 +38,14 @@ export function AssistantThread({
   attachmentAccept: string;
   conversationRunning?: boolean;
   optimisticPending?: boolean;
-  messageIdentityKey: string;
+  messagesEnabled: boolean;
+  messageRenderKey: string;
   composerFocusRequestId: number;
   onCancelRun: () => void;
   onFilesSelected: (files: File[]) => void;
   onRemoveDraftAttachment: (attachmentId: string) => void;
   onRetryDraftAttachment: (attachmentId: string) => void;
+  onSubmitMessage?: (text: string) => boolean;
 }) {
   const { t } = useTranslation();
   const agent = getSelectedAgent(config, selectedAgentName);
@@ -73,22 +77,26 @@ export function AssistantThread({
               />
             </AuiIf>
 
-            <div className="flex flex-col gap-6 pb-8 empty:hidden">
-              <ThreadPrimitive.Messages key={messageIdentityKey}>
-                {() => (
-                  <ThreadMessage
-                    conversationRunning={conversationRunning}
-                    optimisticPending={optimisticPending}
-                  />
-                )}
-              </ThreadPrimitive.Messages>
-              <PendingAssistantMessage conversationRunning={conversationRunning} optimisticPending={optimisticPending} />
-            </div>
+            {messagesEnabled ? (
+              <div className="flex flex-col gap-6 pb-8 empty:hidden">
+                <ThreadPrimitive.Messages key={messageRenderKey}>
+                  {() => (
+                    <ThreadMessage
+                      conversationRunning={conversationRunning}
+                      optimisticPending={optimisticPending}
+                    />
+                  )}
+                </ThreadPrimitive.Messages>
+                <PendingAssistantMessage conversationRunning={conversationRunning} optimisticPending={optimisticPending} />
+              </div>
+            ) : null}
 
             <ThreadPrimitive.ViewportFooter className="relative sticky bottom-0 z-10 mt-auto pb-4 pt-5 before:pointer-events-none before:absolute before:-top-11 before:inset-x-0 before:z-0 before:h-16 before:bg-gradient-to-t before:from-background before:to-background/0 before:content-[''] after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:top-5 after:z-0 after:bg-background after:content-['']">
-              <AuiIf condition={(state) => !state.thread.isEmpty}>
-                <ThreadScrollToBottom />
-              </AuiIf>
+              {messagesEnabled ? (
+                <AuiIf condition={(state) => !state.thread.isEmpty}>
+                  <ThreadScrollToBottom />
+                </AuiIf>
+              ) : null}
               <div className="relative z-10">
                 <AssistantComposer
                   attachments={draftAttachments}
@@ -102,6 +110,7 @@ export function AssistantThread({
                   onFilesSelected={onFilesSelected}
                   onRemoveAttachment={onRemoveDraftAttachment}
                   onRetryAttachment={onRetryDraftAttachment}
+                  onSubmitMessage={onSubmitMessage}
                 />
               </div>
             </ThreadPrimitive.ViewportFooter>

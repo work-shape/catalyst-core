@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AssistantRuntimeProvider,
   useComposer,
@@ -9,7 +9,6 @@ import type { UIMessage } from "ai";
 import type { SelectedChatModel } from "../workspace/workspace-chat-model";
 import {
   createMessageSnapshotKey,
-  toAiSdkMessageRepository,
   toAttachmentFilePart,
   toUiMessages
 } from "../assistant-ui-adapter";
@@ -17,7 +16,11 @@ import { AssistantThread } from "../assistant-thread";
 import { AttachmentContentProvider } from "../attachment-content";
 import { AssistantToolRegistry } from "../assistant-tool-registry";
 import { useTranslation } from "../i18n";
-import { ProductConversationRunTransport } from "./product-run-transport";
+import {
+  createRunIdempotencyKey,
+  ProductConversationRunTransport,
+  startProductConversationRun
+} from "./product-run-transport";
 
 export function AssistantRuntimePanel({ chat }: { chat: SelectedChatModel }) {
   const { activeRun, messages, selectedConversationId } = chat;
@@ -26,7 +29,7 @@ export function AssistantRuntimePanel({ chat }: { chat: SelectedChatModel }) {
     () => createMessageSnapshotKey(messages ?? [], activeRun),
     [activeRun, messages]
   );
-  const runtimeKey = selectedConversationId ?? "new";
+  const runtimeKey = `${selectedConversationId ?? "new"}:${messageSnapshotKey}`;
 
   return (
     <AssistantRuntimePane
@@ -67,7 +70,6 @@ function AssistantRuntimePane({
     selectFiles: onFilesSelected,
     removeDraftAttachment: onRemoveDraftAttachment,
     retryDraftAttachment: onRetryDraftAttachment,
-    conversationStarted: onConversationStarted,
     messageSubmitted: onMessageSubmitted,
     runStarted: onRunStarted,
     streamFinished: onStreamFinished,
@@ -75,16 +77,17 @@ function AssistantRuntimePane({
     cancelSelectedRun: onCancelRun
   } = chat;
   const { t } = useTranslation();
-  const importedTargetRef = useRef<string | undefined>(undefined);
-  const importedSnapshotRef = useRef<string | undefined>(undefined);
-  const clearedTargetRef = useRef<string | undefined>(undefined);
-  const pendingConversationIdRef = useRef<string | undefined>(undefined);
-  const streamedConversationIdRef = useRef<string | undefined>(undefined);
   const activeRef = useRef(true);
+  const rootSubmitPendingRef = useRef(false);
   const [optimisticPending, setOptimisticPending] = useState(false);
-  const sendDisabledReason = sendBlockedReason ?? (!messagesLoaded ? t("loadingConversation") : undefined);
+  const [rootSubmitPending, setRootSubmitPending] = useState(false);
+  const [rootSubmitError, setRootSubmitError] = useState<string | undefined>(undefined);
+  const baseSendDisabledReason = sendBlockedReason ?? (!messagesLoaded ? t("loadingConversation") : undefined);
+  const sendDisabledReason = rootSubmitPending ? t("loadingConversation") : baseSendDisabledReason;
+  const visibleNotice = rootSubmitError ?? notice;
 
   useEffect(() => {
+    activeRef.current = true;
     return () => {
       activeRef.current = false;
     };
@@ -96,6 +99,65 @@ function AssistantRuntimePane({
     }
   }, []);
 
+  const setRootSubmitPendingIfActive = useCallback((pending: boolean) => {
+    rootSubmitPendingRef.current = pending;
+    if (activeRef.current) {
+      setRootSubmitPending(pending);
+    }
+  }, []);
+
+  const submitRootDraftMessage = useCallback(
+    (text: string): boolean => {
+      if (selectedConversationId) {
+        return false;
+      }
+
+      const trimmedText = text.trim();
+      if (!trimmedText || rootSubmitPendingRef.current || baseSendDisabledReason) {
+        return true;
+      }
+
+      setRootSubmitPendingIfActive(true);
+      setRootSubmitError(undefined);
+      void startProductConversationRun({
+        agentName: selectedAgentName,
+        client,
+        conversationId: undefined,
+        idempotencyKey: createRunIdempotencyKey(),
+        locale,
+        text: trimmedText
+      })
+        .then((response) => {
+          if (!activeRef.current) {
+            return;
+          }
+          onMessageSubmitted(response.conversation.id);
+          onRunStarted(response);
+        })
+        .catch((error: unknown) => {
+          if (!activeRef.current) {
+            return;
+          }
+          setRootSubmitError(error instanceof Error ? error.message : "Message send failed");
+        })
+        .finally(() => {
+          setRootSubmitPendingIfActive(false);
+        });
+
+      return true;
+    },
+    [
+      baseSendDisabledReason,
+      client,
+      locale,
+      onMessageSubmitted,
+      onRunStarted,
+      selectedAgentName,
+      selectedConversationId,
+      setRootSubmitPendingIfActive
+    ]
+  );
+
   const attachmentFileParts = useMemo(
     () =>
       draftAttachments
@@ -106,7 +168,7 @@ function AssistantRuntimePane({
   const toCreateMessageWithAttachments = useCallback(
     ((message: ComposerAppendMessage) => {
       const parts = toOutgoingUiMessageParts(message);
-      if (message.role === "user" && !sendDisabledReason) {
+      if (message.role === "user" && selectedConversationId && !sendDisabledReason) {
         setOptimisticPendingIfActive(true);
       }
       if (message.role === "user" && attachmentFileParts.length > 0) {
@@ -118,7 +180,7 @@ function AssistantRuntimePane({
         metadata: message.metadata
       };
     }) as NonNullable<UseChatRuntimeOptions<UIMessage>["toCreateMessage"]>,
-    [attachmentFileParts, sendDisabledReason, setOptimisticPendingIfActive]
+    [attachmentFileParts, selectedConversationId, sendDisabledReason, setOptimisticPendingIfActive]
   );
   const transport = useMemo(
     () =>
@@ -129,12 +191,7 @@ function AssistantRuntimePane({
         selectedAgentName,
         isSendDisabled: () => sendDisabledReason,
         onMessageSubmitted,
-        onRunStarted: (response) => {
-          if (!selectedConversationId) {
-            pendingConversationIdRef.current = response.conversation.id;
-          }
-          onRunStarted(response);
-        }
+        onRunStarted
       }),
     [
       client,
@@ -146,87 +203,27 @@ function AssistantRuntimePane({
       sendDisabledReason
     ]
   );
-  async function selectPendingConversation(): Promise<void> {
-    const conversationId = pendingConversationIdRef.current;
-    if (!conversationId) {
-      return;
-    }
-    pendingConversationIdRef.current = undefined;
-    streamedConversationIdRef.current = conversationId;
-    if (!activeRef.current) {
-      return;
-    }
-    onConversationStarted(conversationId);
-  }
-
-  function currentRunConversationId(): string | undefined {
-    return pendingConversationIdRef.current ?? streamedConversationIdRef.current ?? selectedConversationId;
-  }
 
   const runtime = useChatRuntime({
     messages: initialMessages,
     transport,
-    isSendDisabled: Boolean(sendDisabledReason),
+    isSendDisabled: Boolean(sendDisabledReason) || !selectedConversationId,
     toCreateMessage: toCreateMessageWithAttachments,
-    async onFinish() {
-      const conversationId = currentRunConversationId();
+    onFinish() {
       setOptimisticPendingIfActive(false);
-      await selectPendingConversation();
-      if (conversationId) {
-        onStreamFinished(conversationId);
+      if (selectedConversationId) {
+        onStreamFinished(selectedConversationId, activeRef.current);
       }
     },
-    async onError(error) {
-      const conversationId = currentRunConversationId();
+    onError(error) {
       const viewed = activeRef.current;
       setOptimisticPendingIfActive(false);
-      await selectPendingConversation();
-      if (!conversationId || isAbortLikeError(error)) {
+      if (!selectedConversationId || isAbortLikeError(error)) {
         return;
       }
-      onStreamError(conversationId, error.message, viewed);
+      onStreamError(selectedConversationId, error.message, viewed);
     }
   });
-
-  useLayoutEffect(() => {
-    const targetKey = selectedConversationId ?? "new";
-
-    if (!selectedConversationId) {
-      if (importedTargetRef.current !== targetKey || importedSnapshotRef.current !== messageSnapshotKey) {
-        runtime.thread.importExternalState(toAiSdkMessageRepository([]));
-        importedTargetRef.current = targetKey;
-        importedSnapshotRef.current = messageSnapshotKey;
-        clearedTargetRef.current = undefined;
-      }
-      return;
-    }
-
-    if (streamedConversationIdRef.current === selectedConversationId) {
-      streamedConversationIdRef.current = undefined;
-      importedTargetRef.current = targetKey;
-      importedSnapshotRef.current = messageSnapshotKey;
-      clearedTargetRef.current = undefined;
-      return;
-    }
-
-    if (!messagesLoaded) {
-      if (clearedTargetRef.current !== targetKey) {
-        runtime.thread.importExternalState(toAiSdkMessageRepository([]));
-        clearedTargetRef.current = targetKey;
-        importedSnapshotRef.current = undefined;
-      }
-      return;
-    }
-
-    if (importedTargetRef.current === targetKey && importedSnapshotRef.current === messageSnapshotKey) {
-      return;
-    }
-
-    runtime.thread.importExternalState(toAiSdkMessageRepository(initialMessages));
-    importedTargetRef.current = targetKey;
-    importedSnapshotRef.current = messageSnapshotKey;
-    clearedTargetRef.current = undefined;
-  }, [initialMessages, messageSnapshotKey, messagesLoaded, runtime, selectedConversationId]);
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
@@ -236,7 +233,7 @@ function AssistantRuntimePane({
           <AssistantThread
             config={config}
             selectedAgentName={selectedAgentName}
-            notice={notice}
+            notice={visibleNotice}
             draftAttachments={draftAttachments}
             localUploadingAttachments={localUploadingAttachments}
             sendBlockedReason={sendDisabledReason}
@@ -244,11 +241,14 @@ function AssistantRuntimePane({
             attachmentAccept={attachmentAccept}
             conversationRunning={conversationRunning}
             optimisticPending={optimisticPending}
+            messagesEnabled={Boolean(selectedConversationId)}
+            messageRenderKey={messageSnapshotKey}
             composerFocusRequestId={composerFocusRequestId}
             onCancelRun={onCancelRun}
             onFilesSelected={onFilesSelected}
             onRemoveDraftAttachment={onRemoveDraftAttachment}
             onRetryDraftAttachment={onRetryDraftAttachment}
+            onSubmitMessage={selectedConversationId ? undefined : submitRootDraftMessage}
           />
         </AttachmentContentProvider>
       </AssistantToolRegistry>

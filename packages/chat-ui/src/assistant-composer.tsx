@@ -1,6 +1,7 @@
-import { ComposerPrimitive, useAuiState } from "@assistant-ui/react";
+import { ComposerPrimitive, useAuiState, useComposer } from "@assistant-ui/react";
 import { CheckCircle2, FileText, ImageIcon, Paperclip, RotateCcw, Send, Square, X } from "lucide-react";
-import { useLayoutEffect, useRef } from "react";
+import type { FormEvent, KeyboardEvent } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 import type { DraftAttachment } from "@vivd-catalyst/api-client";
 import { AttachmentPreview } from "./attachment-preview";
 import { useTranslation } from "./i18n";
@@ -28,7 +29,8 @@ export function AssistantComposer({
   onCancelRun,
   onFilesSelected,
   onRemoveAttachment,
-  onRetryAttachment
+  onRetryAttachment,
+  onSubmitMessage
 }: {
   attachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
@@ -41,28 +43,81 @@ export function AssistantComposer({
   onFilesSelected: (files: File[]) => void;
   onRemoveAttachment: (attachmentId: string) => void;
   onRetryAttachment: (attachmentId: string) => void;
+  onSubmitMessage?: (text: string) => boolean;
 }) {
   const { t } = useTranslation();
+  const currentText = useComposer((state) => state.text);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const hasAttachments = attachments.length > 0 || localUploadingAttachments.length > 0;
+  const handleSubmit = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      if (onSubmitMessage?.(currentText)) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    },
+    [currentText, onSubmitMessage]
+  );
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (
+        !onSubmitMessage ||
+        event.key !== "Enter" ||
+        event.shiftKey ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.nativeEvent.isComposing
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      onSubmitMessage(currentText);
+    },
+    [currentText, onSubmitMessage]
+  );
 
   useLayoutEffect(() => {
     if (focusRequestId === 0) {
       return;
     }
 
-    const input = composerInputRef.current;
-    if (!input || input.disabled) {
-      return;
+    let cancelled = false;
+    const animationFrameIds: number[] = [];
+    const timeoutIds: number[] = [];
+
+    function focusInput() {
+      if (cancelled) {
+        return;
+      }
+      const input = composerInputRef.current;
+      if (!input || input.disabled) {
+        return;
+      }
+      input.focus({ preventScroll: true });
+      input.setSelectionRange(input.value.length, input.value.length);
     }
 
-    input.focus({ preventScroll: true });
-    input.setSelectionRange(input.value.length, input.value.length);
+    focusInput();
+    animationFrameIds.push(window.requestAnimationFrame(focusInput));
+    timeoutIds.push(window.setTimeout(focusInput, 0));
+    timeoutIds.push(window.setTimeout(focusInput, 50));
+
+    return () => {
+      cancelled = true;
+      for (const frameId of animationFrameIds) {
+        window.cancelAnimationFrame(frameId);
+      }
+      for (const timeoutId of timeoutIds) {
+        window.clearTimeout(timeoutId);
+      }
+    };
   }, [focusRequestId]);
 
   return (
-    <ComposerPrimitive.Root className="relative grid w-full gap-2">
+    <ComposerPrimitive.Root className="relative grid w-full gap-2" onSubmitCapture={handleSubmit}>
       <ComposerPrimitive.Attachments>
         {() => <AttachmentPreview removable />}
       </ComposerPrimitive.Attachments>
@@ -86,7 +141,8 @@ export function AssistantComposer({
             className="max-h-40 min-h-12 w-full resize-none bg-transparent px-2 py-1.5 text-sm leading-6 outline-none placeholder:text-muted-foreground"
             placeholder={t("messagePlaceholder")}
             rows={1}
-            submitMode="enter"
+            submitMode={onSubmitMessage ? "none" : "enter"}
+            onKeyDown={handleKeyDown}
           />
           <div className="flex items-center justify-between gap-2">
             {attachmentsEnabled ? (
@@ -122,7 +178,9 @@ export function AssistantComposer({
               disabled={Boolean(sendBlockedReason)}
               disabledReason={sendBlockedReason}
               conversationRunning={conversationRunning}
+              currentText={currentText}
               onCancelRun={onCancelRun}
+              onSubmitMessage={onSubmitMessage}
             />
           </div>
         </div>
@@ -277,12 +335,16 @@ function ComposerAction({
   disabled,
   disabledReason,
   conversationRunning,
-  onCancelRun
+  currentText,
+  onCancelRun,
+  onSubmitMessage
 }: {
   disabled: boolean;
   disabledReason?: string;
   conversationRunning?: boolean;
+  currentText: string;
   onCancelRun: () => void;
+  onSubmitMessage?: (text: string) => boolean;
 }) {
   const { t } = useTranslation();
   const threadRunning = useAuiState((state) => state.thread.isRunning);
@@ -295,6 +357,13 @@ function ComposerAction({
     threadRunning
   });
   const effectiveDisabledReason = disabledReason ?? (backgroundRunBlocked ? t("conversationStillRunning") : undefined);
+  const sendDisabled = disabled || backgroundRunBlocked || Boolean(onSubmitMessage && currentText.trim().length === 0);
+  const handleSendClick = useCallback(
+    () => {
+      onSubmitMessage?.(currentText);
+    },
+    [currentText, onSubmitMessage]
+  );
   const cancelButton = (
     <Button
       type="button"
@@ -316,18 +385,32 @@ function ComposerAction({
           cancelButton
         )
       ) : (
-        <ComposerPrimitive.Send asChild>
+        onSubmitMessage ? (
           <Button
             type="button"
             size="icon"
             className="absolute inset-0 size-9"
             aria-label={t("sendMessage")}
             title={effectiveDisabledReason ?? t("sendMessage")}
-            disabled={disabled || backgroundRunBlocked}
+            disabled={sendDisabled}
+            onClick={handleSendClick}
           >
             <Send size={17} aria-hidden="true" />
           </Button>
-        </ComposerPrimitive.Send>
+        ) : (
+          <ComposerPrimitive.Send asChild>
+            <Button
+              type="button"
+              size="icon"
+              className="absolute inset-0 size-9"
+              aria-label={t("sendMessage")}
+              title={effectiveDisabledReason ?? t("sendMessage")}
+              disabled={sendDisabled}
+            >
+              <Send size={17} aria-hidden="true" />
+            </Button>
+          </ComposerPrimitive.Send>
+        )
       )}
     </div>
   );
