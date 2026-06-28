@@ -4,14 +4,16 @@ import {
   useComposer,
   useComposerRuntime,
 } from "@assistant-ui/react";
-import {
-  AssistantChatTransport,
-  RESUMABLE_STREAM_ID_HEADER,
-  useChatRuntime,
-  type UseChatRuntimeOptions
-} from "@assistant-ui/react-ai-sdk";
+import { useChatRuntime, type UseChatRuntimeOptions } from "@assistant-ui/react-ai-sdk";
 import type { UIMessage } from "ai";
-import type { ApiClient, Conversation, DraftAttachment, LocaleCode, Message, SafeConfig } from "@vivd-catalyst/api-client";
+import type {
+  ApiClient,
+  DraftAttachment,
+  LocaleCode,
+  Message,
+  SafeConfig,
+  StartConversationRunResponse
+} from "@vivd-catalyst/api-client";
 import {
   createMessageSnapshotKey,
   toAiSdkMessageRepository,
@@ -23,11 +25,10 @@ import { AssistantThread } from "./assistant-thread";
 import type { LocalUploadingAttachment } from "./assistant-composer";
 import { AttachmentContentProvider } from "./attachment-content";
 import { AssistantToolRegistry } from "./assistant-tool-registry";
-import { firstLineTitle } from "./conversation-title";
 import { useTranslation } from "./i18n";
+import { ProductConversationRunTransport } from "./product-run-transport";
 
 export function AssistantChatPanel({
-  apiBaseUrl,
   client,
   config,
   selectedConversationId,
@@ -49,15 +50,13 @@ export function AssistantChatPanel({
   onFilesSelected,
   onRemoveDraftAttachment,
   onRetryDraftAttachment,
-  onConversationCreated,
   onConversationStarted,
   onMessageSubmitted,
-  onChatRequestAccepted,
+  onRunStarted,
   onStreamFinished,
   onStreamError,
   onCancelRun
 }: {
-  apiBaseUrl: string;
   client: ApiClient;
   config: SafeConfig | undefined;
   selectedConversationId: string | undefined;
@@ -79,10 +78,9 @@ export function AssistantChatPanel({
   onFilesSelected: (files: File[]) => void;
   onRemoveDraftAttachment: (attachmentId: string) => void;
   onRetryDraftAttachment: (attachmentId: string) => void;
-  onConversationCreated: (conversation: Conversation) => void;
   onConversationStarted: (conversationId: string, messages?: Message[]) => void;
   onMessageSubmitted: (conversationId: string) => void;
-  onChatRequestAccepted: (conversationId: string, runId?: string) => void;
+  onRunStarted: (response: StartConversationRunResponse) => void;
   onStreamFinished: (conversationId: string, viewed: boolean) => void;
   onStreamError: (conversationId: string, message: string, viewed: boolean) => void;
   onCancelRun: () => void;
@@ -97,7 +95,6 @@ export function AssistantChatPanel({
   return (
     <AssistantRuntimePane
       key={runtimeKey}
-      apiBaseUrl={apiBaseUrl}
       client={client}
       config={config}
       selectedConversationId={selectedConversationId}
@@ -120,10 +117,9 @@ export function AssistantChatPanel({
       onFilesSelected={onFilesSelected}
       onRemoveDraftAttachment={onRemoveDraftAttachment}
       onRetryDraftAttachment={onRetryDraftAttachment}
-      onConversationCreated={onConversationCreated}
       onConversationStarted={onConversationStarted}
       onMessageSubmitted={onMessageSubmitted}
-      onChatRequestAccepted={onChatRequestAccepted}
+      onRunStarted={onRunStarted}
       onStreamFinished={onStreamFinished}
       onStreamError={onStreamError}
     />
@@ -131,7 +127,6 @@ export function AssistantChatPanel({
 }
 
 function AssistantRuntimePane({
-  apiBaseUrl,
   client,
   config,
   selectedConversationId,
@@ -154,14 +149,12 @@ function AssistantRuntimePane({
   onFilesSelected,
   onRemoveDraftAttachment,
   onRetryDraftAttachment,
-  onConversationCreated,
   onConversationStarted,
   onMessageSubmitted,
-  onChatRequestAccepted,
+  onRunStarted,
   onStreamFinished,
   onStreamError
 }: {
-  apiBaseUrl: string;
   client: ApiClient;
   config: SafeConfig | undefined;
   selectedConversationId: string | undefined;
@@ -184,10 +177,9 @@ function AssistantRuntimePane({
   onFilesSelected: (files: File[]) => void;
   onRemoveDraftAttachment: (attachmentId: string) => void;
   onRetryDraftAttachment: (attachmentId: string) => void;
-  onConversationCreated: (conversation: Conversation) => void;
   onConversationStarted: (conversationId: string, messages?: Message[]) => void;
   onMessageSubmitted: (conversationId: string) => void;
-  onChatRequestAccepted: (conversationId: string, runId?: string) => void;
+  onRunStarted: (response: StartConversationRunResponse) => void;
   onStreamFinished: (conversationId: string, viewed: boolean) => void;
   onStreamError: (conversationId: string, message: string, viewed: boolean) => void;
 }) {
@@ -195,10 +187,8 @@ function AssistantRuntimePane({
   const importedTargetRef = useRef<string | undefined>(undefined);
   const importedSnapshotRef = useRef<string | undefined>(undefined);
   const clearedTargetRef = useRef<string | undefined>(undefined);
-  const localStreamConversationIdRef = useRef<string | undefined>(undefined);
   const pendingConversationIdRef = useRef<string | undefined>(undefined);
   const streamedConversationIdRef = useRef<string | undefined>(undefined);
-  const titleRequestConversationIdRef = useRef<string | undefined>(undefined);
   const activeRef = useRef(true);
   const [optimisticPending, setOptimisticPending] = useState(false);
   const sendDisabledReason = sendBlockedReason ?? (!messagesLoaded ? t("loadingConversation") : undefined);
@@ -241,62 +231,25 @@ function AssistantRuntimePane({
   );
   const transport = useMemo(
     () =>
-      new AssistantChatTransport<UIMessage>({
-        api: `${apiBaseUrl.replace(/\/$/u, "")}/api/chat`,
-        credentials: "include",
-        body: {
-          conversationId: selectedConversationId,
-          locale,
-          agentName: selectedAgentName
-        },
-        fetch: async (input, init) => {
-          const response = await fetch(input, init);
-          const conversationId = titleRequestConversationIdRef.current;
-          const runId = response.headers.get(RESUMABLE_STREAM_ID_HEADER) ?? undefined;
-          titleRequestConversationIdRef.current = undefined;
-          if (response.ok && conversationId) {
-            onChatRequestAccepted(conversationId, runId);
+      new ProductConversationRunTransport({
+        client,
+        selectedConversationId,
+        locale,
+        selectedAgentName,
+        isSendDisabled: () => sendDisabledReason,
+        onMessageSubmitted,
+        onRunStarted: (response) => {
+          if (!selectedConversationId) {
+            pendingConversationIdRef.current = response.conversation.id;
           }
-          return response;
-        },
-        prepareSendMessagesRequest: async (options) => {
-          if (sendDisabledReason) {
-            throw new Error(sendDisabledReason);
-          }
-          const text = extractLastUserText(options.messages);
-          let conversationId = selectedConversationId;
-          if (!conversationId) {
-            const conversation = await client.createConversation({
-              title: firstLineTitle(text),
-              locale
-            });
-            conversationId = conversation.id;
-            pendingConversationIdRef.current = conversation.id;
-            onConversationCreated(conversation);
-          }
-          localStreamConversationIdRef.current = conversationId;
-          onMessageSubmitted(conversationId);
-          titleRequestConversationIdRef.current = conversationId;
-
-          return {
-            credentials: "include",
-            body: {
-              ...options.body,
-              conversationId,
-              locale,
-              agentName: selectedAgentName,
-              messages: options.messages
-            }
-          };
+          onRunStarted(response);
         }
       }),
     [
-      apiBaseUrl,
       client,
       locale,
-      onConversationCreated,
       onMessageSubmitted,
-      onChatRequestAccepted,
+      onRunStarted,
       pendingConversationIdRef,
       selectedAgentName,
       selectedConversationId,
@@ -331,9 +284,6 @@ function AssistantRuntimePane({
       const viewed = activeRef.current;
       setOptimisticPendingIfActive(false);
       await selectPendingConversation();
-      if (localStreamConversationIdRef.current === conversationId) {
-        localStreamConversationIdRef.current = undefined;
-      }
       if (conversationId) {
         onStreamFinished(conversationId, viewed);
       }
@@ -343,9 +293,6 @@ function AssistantRuntimePane({
       const viewed = activeRef.current;
       setOptimisticPendingIfActive(false);
       await selectPendingConversation();
-      if (localStreamConversationIdRef.current === conversationId) {
-        localStreamConversationIdRef.current = undefined;
-      }
       if (!conversationId || isAbortLikeError(error)) {
         return;
       }
@@ -363,10 +310,6 @@ function AssistantRuntimePane({
         importedSnapshotRef.current = messageSnapshotKey;
         clearedTargetRef.current = undefined;
       }
-      return;
-    }
-
-    if (localStreamConversationIdRef.current === selectedConversationId) {
       return;
     }
 
@@ -525,15 +468,4 @@ function appendOutgoingUiMessagePart(
       data: part.data
     } as UIMessage["parts"][number]);
   }
-}
-
-function extractLastUserText(messages: UIMessage[]): string {
-  const userMessage = messages.findLast((message) => message.role === "user");
-  return (
-    userMessage?.parts
-      .filter((part) => part.type === "text")
-      .map((part) => part.text)
-      .join("\n")
-      .trim() ?? ""
-  );
 }

@@ -4,12 +4,12 @@ import {
   createApiClient,
   type AdministeredUserIdentity,
   type ChangeCurrentUserPasswordRequest,
-  type Conversation,
   type ConversationListItem,
   type ConversationThreadSnapshot,
   type CreateAdministeredUserRequest,
   type LocaleCode,
   type RunObservation,
+  type StartConversationRunResponse,
   type UpdateCurrentUserRequest,
   type UpdateAdministeredUserRequest,
   type UpsertAdministeredUserIdentityRequest
@@ -477,20 +477,6 @@ export function ChatWorkspace({
     });
   }
 
-  function onConversationCreated(conversation: Conversation) {
-    queryClient.setQueryData<ConversationListItem[]>(
-      ["conversations", apiBaseUrl, authScope],
-      (currentConversations = []) => {
-        if (currentConversations.some((candidate) => candidate.id === conversation.id)) {
-          return currentConversations.map((candidate) =>
-            candidate.id === conversation.id ? conversation : candidate
-          );
-        }
-        return [conversation, ...currentConversations];
-      }
-    );
-  }
-
   function onConversationStarted(conversationId: string) {
     onRouteChange(
       { kind: "conversation", conversationId },
@@ -502,9 +488,35 @@ export function ChatWorkspace({
   }
 
   function onMessageSubmitted(conversationId: string) {
+    setDraftForKey(draftKey, "");
     setDraftForKey(createDraftKey(authScope, conversationId), "");
     queryClient.setQueryData(draftAttachmentsQueryKey(apiBaseUrl, authScope, conversationId), []);
     draftAttachmentController.clearConversationUploads(conversationId);
+  }
+
+  function onRunStarted(response: StartConversationRunResponse) {
+    queryClient.setQueryData(
+      threadQueryKey(apiBaseUrl, authScope, response.conversation.id),
+      response.thread
+    );
+    queryClient.setQueryData<ConversationListItem[]>(
+      ["conversations", apiBaseUrl, authScope],
+      (currentConversations = []) => {
+        const existing = currentConversations.filter(
+          (conversation) => conversation.id !== response.conversation.id
+        );
+        return [
+          {
+            ...response.conversation,
+            activeRun: response.thread.activeRun?.run,
+            latestMessageAt: response.userMessage.createdAt
+          },
+          ...existing
+        ];
+      }
+    );
+    onConversationStarted(response.conversation.id);
+    onChatRequestAccepted(response.conversation.id);
   }
 
   function onChatRequestAccepted(conversationId: string) {
@@ -699,7 +711,6 @@ export function ChatWorkspace({
               onDrop={fileDropzone.onChatDrop}
             >
               <AssistantChatPanel
-                apiBaseUrl={apiBaseUrl}
                 client={client}
                 config={config}
                 selectedConversationId={selectedConversationId}
@@ -721,10 +732,9 @@ export function ChatWorkspace({
                 onFilesSelected={draftAttachmentController.onFilesSelected}
                 onRemoveDraftAttachment={draftAttachmentController.onRemoveDraftAttachment}
                 onRetryDraftAttachment={draftAttachmentController.onRetryDraftAttachment}
-                onConversationCreated={onConversationCreated}
                 onConversationStarted={onConversationStarted}
                 onMessageSubmitted={onMessageSubmitted}
-                onChatRequestAccepted={onChatRequestAccepted}
+                onRunStarted={onRunStarted}
                 onStreamFinished={onStreamFinished}
                 onStreamError={onStreamError}
                 onCancelRun={onCancelSelectedRun}
