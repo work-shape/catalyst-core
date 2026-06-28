@@ -4,7 +4,7 @@ import {
   ProductConversationRunTransport,
   createRunUiMessageChunkStream,
   startProductConversationRun
-} from "../packages/chat-ui/src/product-run-transport";
+} from "../packages/chat-ui/src/assistant/product-run-transport";
 
 type ProductUiMessage = Parameters<ProductConversationRunTransport["sendMessages"]>[0]["messages"][number];
 type ProductUiMessageChunk =
