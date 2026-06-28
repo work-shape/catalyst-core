@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   apiOperations,
   buildApiPath,
-  chatStreamRoutePath,
   openApiDocument
 } from "@vivd-catalyst/api-contract";
 import { createApiClient } from "@vivd-catalyst/api-client";
@@ -279,6 +278,7 @@ describe("api operation catalog and client", () => {
   it("keeps normal server route registrations tied to the operation catalog", async () => {
     const routeFiles = [
       "packages/chat-server/src/routes/audit-routes.ts",
+      "packages/chat-server/src/routes/agent-run-routes.ts",
       "packages/chat-server/src/routes/config-routes.ts",
       "packages/chat-server/src/routes/conversation-file-routes.ts",
       "packages/chat-server/src/routes/conversation-routes.ts",
@@ -295,13 +295,15 @@ describe("api operation catalog and client", () => {
     }
   });
 
-  it("keeps the live chat stream path in the API contract", async () => {
-    const source = await readFile("packages/chat-server/src/routes/chat-stream-routes.ts", "utf8");
+  it("does not keep the deleted legacy live chat stream path in the API contract", async () => {
+    const [contractSource, routeSource] = await Promise.all([
+      readFile("packages/api-contract/src/index.ts", "utf8"),
+      readFile("packages/chat-server/src/routes/agent-run-routes.ts", "utf8")
+    ]);
 
-    expect(chatStreamRoutePath).toBe("/api/chat");
-    expect(source).toContain("chatStreamRoutePath");
-    expect(source).toContain("chatStreamRequestSchema");
-    expect(source).toContain("chatStreamChunkSchema");
-    expect(source).not.toContain('app.post("/api/chat"');
+    expect(contractSource).not.toContain("chatStreamRoutePath");
+    expect(contractSource).not.toContain("chatStreamRequestSchema");
+    expect(contractSource).not.toContain("chatStreamChunkSchema");
+    expect(routeSource).not.toContain("/api/chat");
   });
 });

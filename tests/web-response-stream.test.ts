@@ -79,40 +79,36 @@ describe("web response bridge", () => {
       expect(conversationResponse.ok).toBe(true);
       const conversation = (await conversationResponse.json()) as { id: string };
 
-      const chatResponse = await fetch(`${baseUrl}/api/chat`, {
+      const startResponse = await fetch(`${baseUrl}/api/conversations/${conversation.id}/runs`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          conversationId: conversation.id,
-          messages: [
-            {
-              id: "user-message-1",
-              role: "user",
-              parts: [
-                {
-                  type: "text",
-                  text:
-                    "hello streaming one two three four five six seven eight nine ten eleven twelve thirteen fourteen"
-                }
-              ]
-            }
-          ]
+          idempotencyKey: "streaming-deltas-run",
+          message: {
+            text:
+              "hello streaming one two three four five six seven eight nine ten eleven twelve thirteen fourteen"
+          }
         })
       });
 
-      expect(chatResponse.ok).toBe(true);
-      const reader = chatResponse.body?.getReader();
+      expect(startResponse.ok).toBe(true);
+      const started = (await startResponse.json()) as { run: { id: string } };
+      const eventsResponse = await fetch(
+        `${baseUrl}/api/conversations/${conversation.id}/runs/${started.run.id}/events`
+      );
+      expect(eventsResponse.ok).toBe(true);
+      const reader = eventsResponse.body?.getReader();
       expect(reader).toBeDefined();
       const firstChunk = await Promise.race([
         readChunk(reader!),
         delay(250).then(() => undefined)
       ]);
-      expect(firstChunk).toContain('"type":"start"');
+      expect(firstChunk).toContain('"type":"message_delta"');
 
       const streamText = `${firstChunk}${await readRemaining(reader!)}`;
       const textDeltas = parseSseChunks(streamText)
-        .filter((chunk) => chunk.type === "text-delta")
-        .map((chunk) => chunk.delta);
+        .filter((chunk) => chunk.type === "message_delta")
+        .map((chunk) => chunk.payload?.delta);
 
       expect(textDeltas.length).toBeGreaterThan(1);
       expect(textDeltas.join("")).toContain("Local agent response");
@@ -155,37 +151,33 @@ describe("web response bridge", () => {
       expect(conversationResponse.ok).toBe(true);
       const conversation = (await conversationResponse.json()) as { id: string };
 
-      const chatResponse = await fetch(`${baseUrl}/api/chat`, {
+      const startResponse = await fetch(`${baseUrl}/api/conversations/${conversation.id}/runs`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          conversationId: conversation.id,
-          messages: [
-            {
-              id: "user-message-1",
-              role: "user",
-              parts: [
-                {
-                  type: "text",
-                  text: '/tool demo.echo {"text":"hello"}'
-                }
-              ]
-            }
-          ]
+          idempotencyKey: "streaming-tool-run",
+          message: {
+            text: '/tool demo.echo {"text":"hello"}'
+          }
         })
       });
 
-      expect(chatResponse.ok).toBe(true);
-      const reader = chatResponse.body?.getReader();
+      expect(startResponse.ok).toBe(true);
+      const started = (await startResponse.json()) as { run: { id: string } };
+      const eventsResponse = await fetch(
+        `${baseUrl}/api/conversations/${conversation.id}/runs/${started.run.id}/events`
+      );
+      expect(eventsResponse.ok).toBe(true);
+      const reader = eventsResponse.body?.getReader();
       expect(reader).toBeDefined();
       const streamText = await readRemaining(reader!);
       const chunks = parseSseChunks(streamText);
       const textDeltas = chunks
-        .filter((chunk) => chunk.type === "text-delta")
-        .map((chunk) => chunk.delta);
+        .filter((chunk) => chunk.type === "message_delta")
+        .map((chunk) => chunk.payload?.delta);
       const toolInputs = chunks
-        .filter((chunk) => chunk.type === "tool-input-available")
-        .map((chunk) => chunk.input);
+        .filter((chunk) => chunk.type === "tool_call_started")
+        .map((chunk) => chunk.payload?.input);
 
       expect(textDeltas.join("")).toContain("I will run demo.echo with the provided input.");
       expect(toolInputs).toEqual([{ text: "hello" }]);
@@ -195,13 +187,15 @@ describe("web response bridge", () => {
   });
 });
 
-function parseSseChunks(text: string): Array<{ type?: string; delta?: string; input?: unknown }> {
+function parseSseChunks(
+  text: string
+): Array<{ type?: string; payload?: { delta?: string; input?: unknown } }> {
   return text
     .split("\n")
     .filter((line) => line.startsWith("data:"))
     .map((line) => line.slice("data:".length).trim())
     .filter((line) => line !== "[DONE]")
-    .map((line) => JSON.parse(line) as { type?: string; delta?: string; input?: unknown });
+    .map((line) => JSON.parse(line) as { type?: string; payload?: { delta?: string; input?: unknown } });
 }
 
 function createTestConfig(input: {

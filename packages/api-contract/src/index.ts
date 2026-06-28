@@ -283,34 +283,6 @@ export const createConversationRequestSchema = z.object({
   locale: localeCodeSchema.optional()
 });
 
-const uiMessagePartSchema = z
-  .object({
-    type: z.string(),
-    text: z.string().optional()
-  })
-  .passthrough();
-
-const uiMessageSchema = z
-  .object({
-    id: z.string(),
-    role: z.enum(["system", "user", "assistant"]),
-    parts: z.array(uiMessagePartSchema)
-  })
-  .passthrough();
-
-export const chatStreamRequestSchema = z
-  .object({
-    conversationId: z.string().min(1).optional(),
-    agentName: z.string().min(1).optional(),
-    locale: localeCodeSchema.optional(),
-    messages: z.array(uiMessageSchema).min(1)
-  })
-  .passthrough();
-
-export const chatStreamRoutePath = "/api/chat";
-
-const chatStreamMessageMetadataSchema = messageMetadataSchema;
-
 export const agentRunStatusSchema = z.enum([
   "queued",
   "running",
@@ -332,116 +304,6 @@ export const agentRunErrorSchema = z.object({
     "unknown_error"
   ])
 });
-
-export const chatStreamStartChunkSchema = z.object({
-  type: z.literal("start"),
-  messageId: z.string(),
-  messageMetadata: chatStreamMessageMetadataSchema
-});
-
-export const chatStreamStartStepChunkSchema = z.object({
-  type: z.literal("start-step")
-});
-
-export const chatStreamTextStartChunkSchema = z.object({
-  type: z.literal("text-start"),
-  id: z.string()
-});
-
-export const chatStreamTextDeltaChunkSchema = z.object({
-  type: z.literal("text-delta"),
-  id: z.string(),
-  delta: z.string()
-});
-
-export const chatStreamMessageMetadataChunkSchema = z.object({
-  type: z.literal("message-metadata"),
-  messageMetadata: chatStreamMessageMetadataSchema
-});
-
-export const chatStreamTextEndChunkSchema = z.object({
-  type: z.literal("text-end"),
-  id: z.string()
-});
-
-export const chatStreamReasoningStartChunkSchema = z.object({
-  type: z.literal("reasoning-start"),
-  id: z.string()
-});
-
-export const chatStreamReasoningDeltaChunkSchema = z.object({
-  type: z.literal("reasoning-delta"),
-  id: z.string(),
-  delta: z.string()
-});
-
-export const chatStreamReasoningEndChunkSchema = z.object({
-  type: z.literal("reasoning-end"),
-  id: z.string()
-});
-
-export const chatStreamToolInputAvailableChunkSchema = z.object({
-  type: z.literal("tool-input-available"),
-  toolCallId: z.string(),
-  toolName: z.string(),
-  input: z.unknown(),
-  dynamic: z.boolean().optional(),
-  title: z.string().optional()
-});
-
-export const chatStreamToolApprovalRequestChunkSchema = z.object({
-  type: z.literal("tool-approval-request"),
-  approvalId: z.string(),
-  toolCallId: z.string()
-});
-
-export const chatStreamToolOutputAvailableChunkSchema = z.object({
-  type: z.literal("tool-output-available"),
-  toolCallId: z.string(),
-  output: z.unknown(),
-  dynamic: z.boolean().optional()
-});
-
-export const chatStreamToolOutputErrorChunkSchema = z.object({
-  type: z.literal("tool-output-error"),
-  toolCallId: z.string(),
-  errorText: z.string(),
-  dynamic: z.boolean().optional()
-});
-
-export const chatStreamFinishStepChunkSchema = z.object({
-  type: z.literal("finish-step")
-});
-
-export const chatStreamFinishChunkSchema = z.object({
-  type: z.literal("finish"),
-  finishReason: z.string(),
-  messageMetadata: chatStreamMessageMetadataSchema.optional()
-});
-
-export const chatStreamErrorChunkSchema = z.object({
-  type: z.literal("error"),
-  errorText: z.string()
-});
-
-export const chatStreamChunkSchema = z.discriminatedUnion("type", [
-  chatStreamStartChunkSchema,
-  chatStreamStartStepChunkSchema,
-  chatStreamTextStartChunkSchema,
-  chatStreamTextDeltaChunkSchema,
-  chatStreamMessageMetadataChunkSchema,
-  chatStreamTextEndChunkSchema,
-  chatStreamReasoningStartChunkSchema,
-  chatStreamReasoningDeltaChunkSchema,
-  chatStreamReasoningEndChunkSchema,
-  chatStreamToolInputAvailableChunkSchema,
-  chatStreamToolApprovalRequestChunkSchema,
-  chatStreamToolOutputAvailableChunkSchema,
-  chatStreamToolOutputErrorChunkSchema,
-  chatStreamFinishStepChunkSchema,
-  chatStreamFinishChunkSchema,
-  chatStreamErrorChunkSchema
-]);
 
 export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
   z.object({
@@ -698,13 +560,6 @@ export const cancelRunRequestSchema = z
 
 export const cancelRunResponseSchema = z.object({
   run: agentRunSchema
-});
-
-export const chatStreamErrorResponseSchema = z.object({
-  error: z.object({
-    code: z.string(),
-    message: z.string()
-  })
 });
 
 export const issueSessionTokenRequestSchema = z.object({
@@ -1123,8 +978,6 @@ export type UpsertAdministeredUserIdentityRequest = z.infer<
 export type ResetAdministeredUserPasswordRequest = z.infer<
   typeof resetAdministeredUserPasswordRequestSchema
 >;
-export type ChatStreamRequest = z.infer<typeof chatStreamRequestSchema>;
-export type ChatStreamChunk = z.infer<typeof chatStreamChunkSchema>;
 export type AgentRuntimeEvent = z.infer<typeof agentRuntimeEventSchema>;
 export type AgentRun = z.infer<typeof agentRunSchema>;
 export type ActiveRunSummary = z.infer<typeof activeRunSummarySchema>;
