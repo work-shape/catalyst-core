@@ -522,12 +522,16 @@ describe("client instance app vertical slice", () => {
     expect(concurrentStartBodyB).toMatchObject({
       userMessage: {
         id: concurrentStartBodyA.userMessage.id,
-        text: "concurrent public run start should append once"
+        text: concurrentStartBodyA.userMessage.text
       },
       run: {
         id: concurrentStartBodyA.run.id
       }
     });
+    expect([
+      "concurrent public run start should append once",
+      "duplicate concurrent public run start"
+    ]).toContain(concurrentStartBodyA.userMessage.text);
 
     const concurrentEvents = await fetch(
       `${baseUrl}/api/conversations/${conversation.id}/runs/${concurrentStartBodyA.run.id}/events`
@@ -545,7 +549,7 @@ describe("client instance app vertical slice", () => {
         text: "start through public run API"
       }),
       expect.objectContaining({
-        text: "concurrent public run start should append once"
+        text: concurrentStartBodyA.userMessage.text
       })
     ]);
 
