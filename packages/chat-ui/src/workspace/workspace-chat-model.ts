@@ -2,37 +2,33 @@ import { useEffect, useState, type CSSProperties } from "react";
 import type {
   ApiClient,
   ApiUser,
-  ChangeCurrentUserPasswordRequest,
   ConversationListItem,
   DraftAttachment,
   LocaleCode,
   Message,
   SafeConfig,
-  StartConversationRunResponse,
-  UpdateCurrentUserRequest
+  StartConversationRunResponse
 } from "@vivd-catalyst/api-client";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import {
   useCancelRunMutation,
-  useChangeCurrentUserPasswordMutation,
   useDeleteConversationMutation,
-  useSuperadminUserMutations,
-  useUpdateCurrentUserMutation,
   useWorkspaceSignOutMutation
 } from "../api/workspace-mutations";
 import {
-  useWorkspaceAuditEventsQuery,
   useWorkspaceCacheActions,
   useWorkspaceConfigQuery,
   useWorkspaceConversationsQuery,
   useWorkspaceMeQuery,
-  useWorkspaceThreadQuery,
-  useWorkspaceUsageQuery,
-  useWorkspaceUsersQuery
+  useWorkspaceThreadQuery
 } from "../api/workspace-queries";
 import type { LocalUploadingAttachment } from "../assistant-composer";
 import type { ChatFileDropzoneController } from "../chat-file-dropzone";
 import type { ChatShellAdminPanel } from "../chat-shell";
+import {
+  useControlPlaneModel,
+  type ControlPlaneModel
+} from "../control-plane/control-plane-model";
 import { clearRunCursors } from "../conversation/run-connection-manager";
 import {
   isLiveRunStatus,
@@ -45,12 +41,7 @@ import { useToolDisplayPanel } from "../tool-display-panel";
 import type { ResolvedThemeMode } from "../theme";
 import type { WorkspaceView } from "../workspace-rail";
 import type { WorkspaceRoute } from "../workspace-route";
-import {
-  apiErrorMessage,
-  apiErrorStatus,
-  applyFavicon,
-  STANDALONE_AUTH_SOURCE
-} from "../workspace-utils";
+import { apiErrorMessage, apiErrorStatus, applyFavicon } from "../workspace-utils";
 import { useWorkspaceDraft, useWorkspaceDraftController } from "./workspace-drafts";
 import {
   useWorkspaceChromeState,
@@ -162,30 +153,6 @@ export interface SelectedChatModel {
   cancelSelectedRun(): void;
 }
 
-export interface ControlPlaneModel {
-  settings: SettingsModel;
-  superadmin: SuperadminModel;
-}
-
-export interface SettingsModel {
-  user: ApiUser | undefined;
-  canChangePassword: boolean;
-  updatingProfile: boolean;
-  changingPassword: boolean;
-  locales: LocaleCode[];
-  locale: LocaleCode;
-  updateProfile(input: UpdateCurrentUserRequest): Promise<ApiUser>;
-  changePassword(input: ChangeCurrentUserPasswordRequest): Promise<unknown>;
-  selectLocale(locale: LocaleCode): void;
-}
-
-export interface SuperadminModel {
-  shouldRender: boolean;
-  panelInput: SuperadminPanelInput;
-}
-
-export type SuperadminPanelInput = Parameters<ChatShellAdminPanel["renderPanel"]>[0];
-
 export interface ToolDisplayModel {
   open: boolean;
 }
@@ -229,25 +196,6 @@ export function useWorkspaceChatModel({
     client,
     conversationId: selectedConversationId,
     enabled: isAuthenticated && Boolean(selectedConversationId)
-  });
-  const isSuperadmin = adminPanel?.canView(meQuery.data) ?? false;
-  const usageQuery = useWorkspaceUsageQuery({
-    apiBaseUrl,
-    authScope: WORKSPACE_AUTH_SCOPE,
-    client,
-    enabled: isSuperadmin && view === "superadmin"
-  });
-  const auditQuery = useWorkspaceAuditEventsQuery({
-    apiBaseUrl,
-    authScope: WORKSPACE_AUTH_SCOPE,
-    client,
-    enabled: isSuperadmin && view === "superadmin"
-  });
-  const usersQuery = useWorkspaceUsersQuery({
-    apiBaseUrl,
-    authScope: WORKSPACE_AUTH_SCOPE,
-    client,
-    enabled: isSuperadmin && view === "superadmin"
   });
 
   const workspaceCache = useWorkspaceCacheActions({
@@ -321,16 +269,26 @@ export function useWorkspaceChatModel({
   const { resolvedThemeMode, workspaceStyle, toggleTheme } = useWorkspaceTheme(config?.ui);
   const activeAgentName = selectedAgentName ?? config?.defaultAgentName ?? config?.agents[0]?.name;
   const displayPanelOpen = Boolean(displayPanel.entry && displayPanel.open);
+  const controlPlane = useControlPlaneModel({
+    apiBaseUrl,
+    authScope: WORKSPACE_AUTH_SCOPE,
+    client,
+    adminPanel,
+    user: meQuery.data,
+    isAuthenticated,
+    route,
+    view,
+    supportedLocales,
+    activeLocale,
+    selectLocale: preferences.selectLocale,
+    goToDefaultChat: routeState.goToDefaultChat,
+    showSuperadmin: routeState.showSuperadmin
+  });
+  const isSuperadmin = controlPlane.isSuperadmin;
 
   useEffect(() => {
     displayPanel.close();
   }, [displayPanel.close, selectedConversationId]);
-
-  useEffect(() => {
-    if (isAuthenticated && route.kind === "superadmin" && !isSuperadmin) {
-      routeState.goToDefaultChat({ replace: true });
-    }
-  }, [isAuthenticated, isSuperadmin, route.kind, routeState]);
 
   useEffect(() => {
     if (!config?.agents.length) {
@@ -395,21 +353,6 @@ export function useWorkspaceChatModel({
     authScope: WORKSPACE_AUTH_SCOPE,
     client,
     onErrorMessage: setNotice
-  });
-  const updateCurrentUser = useUpdateCurrentUserMutation({
-    apiBaseUrl,
-    authScope: WORKSPACE_AUTH_SCOPE,
-    client
-  });
-  const changeCurrentUserPassword = useChangeCurrentUserPasswordMutation({
-    apiBaseUrl,
-    authScope: WORKSPACE_AUTH_SCOPE,
-    client
-  });
-  const superadminUserMutations = useSuperadminUserMutations({
-    apiBaseUrl,
-    authScope: WORKSPACE_AUTH_SCOPE,
-    client
   });
 
   function cancelSelectedRun() {
@@ -548,47 +491,7 @@ export function useWorkspaceChatModel({
       streamError,
       cancelSelectedRun
     },
-    controlPlane: {
-      settings: {
-        user: meQuery.data,
-        canChangePassword: meQuery.data?.authSource === STANDALONE_AUTH_SOURCE,
-        updatingProfile: updateCurrentUser.isPending,
-        changingPassword: changeCurrentUserPassword.isPending,
-        locales: supportedLocales,
-        locale: activeLocale,
-        updateProfile: (input) => updateCurrentUser.mutateAsync(input),
-        changePassword: (input) => changeCurrentUserPassword.mutateAsync(input),
-        selectLocale: preferences.selectLocale
-      },
-      superadmin: {
-        shouldRender: view === "superadmin" && isSuperadmin,
-        panelInput: {
-          usage: usageQuery.data,
-          auditEvents: auditQuery.data ?? [],
-          users: usersQuery.data ?? [],
-          loading: usageQuery.isLoading || auditQuery.isLoading,
-          usersLoading: usersQuery.isLoading,
-          error: usageQuery.error
-            ? apiErrorMessage(usageQuery.error, undefined)
-            : auditQuery.error
-              ? apiErrorMessage(auditQuery.error, undefined)
-              : undefined,
-          usersError: usersQuery.error ? apiErrorMessage(usersQuery.error, undefined) : undefined,
-          usersMutating: superadminUserMutations.isPending,
-          onCreateUser: (input) => superadminUserMutations.createUser.mutateAsync(input),
-          onUpdateUser: (userId, update) =>
-            superadminUserMutations.updateUser.mutateAsync({ userId, update }),
-          onUpsertUserIdentity: (userId, identity) =>
-            superadminUserMutations.upsertUserIdentity.mutateAsync({ userId, identity }),
-          onDeleteUserIdentity: (userId, identity) =>
-            superadminUserMutations.deleteUserIdentity.mutateAsync({ userId, identity }),
-          onResetUserPassword: (userId, password) =>
-            superadminUserMutations.resetUserPassword.mutateAsync({ userId, password }),
-          selectedTab: route.kind === "superadmin" ? route.tab : "usage",
-          onSelectTab: routeState.showSuperadmin
-        }
-      }
-    },
+    controlPlane,
     toolDisplay: {
       open: displayPanelOpen
     }
