@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { RunObservation, StartConversationRunResponse } from "@vivd-catalyst/api-client";
+import type { StartConversationRunResponse } from "@vivd-catalyst/api-client";
 import {
   ProductConversationRunTransport,
-  createRunUiMessageChunkStream,
   startProductConversationRun
 } from "../packages/chat-ui/src/assistant/product-run-transport";
 
@@ -93,9 +92,6 @@ describe("chat UI product run transport", () => {
       },
       async startConversationRun() {
         throw new Error("startConversationRun should not be called");
-      },
-      async *observeRunEvents(): AsyncIterable<RunObservation> {
-        yield createObservation({ sequence: 1, type: "run_completed" });
       }
     };
     const transport = new ProductConversationRunTransport({
@@ -127,65 +123,43 @@ describe("chat UI product run transport", () => {
     expect(idempotencyKeys).toEqual(["idem-1", "idem-1"]);
   });
 
-  it("converts product run observations into assistant-ui stream chunks from the snapshot cursor", async () => {
-    const afterSequences: Array<number | undefined> = [];
+  it("hands started runs to the workspace observer without assistant-ui stream chunks", async () => {
+    const submittedConversationIds: string[] = [];
+    const startedRuns: StartConversationRunResponse[] = [];
+    const response = createStartResponse({ conversationId: "conv_new", lastSequence: 2 });
     const client = {
-      async *observeRunEvents(
-        _conversationId: string,
-        _runId: string,
-        options: { afterSequence?: number } = {}
-      ): AsyncIterable<RunObservation> {
-        afterSequences.push(options.afterSequence);
-        yield createObservation({
-          sequence: 3,
-          type: "message_delta",
-          payload: { delta: "Hello" }
-        });
-        yield createObservation({
-          sequence: 4,
-          type: "message_completed",
-          payload: {
-            message: {
-              id: "msg_assistant",
-              role: "assistant",
-              text: "Hello",
-              metadata: {
-                agentRuntime: {
-                  version: 1,
-                  kind: "assistant_final",
-                  runId: "run_1"
-                }
-              }
-            }
-          }
-        });
-        yield createObservation({ sequence: 5, type: "run_completed" });
+      async createConversationRun() {
+        return response;
+      },
+      async startConversationRun() {
+        throw new Error("startConversationRun should not be called");
       }
     };
+    const transport = new ProductConversationRunTransport({
+      client,
+      locale: "en",
+      onMessageSubmitted(conversationId) {
+        submittedConversationIds.push(conversationId);
+      },
+      onRunStarted(startedRun) {
+        startedRuns.push(startedRun);
+      }
+    });
+    const message = createUserMessage("user_msg_1", "Please answer");
 
     const chunks = await drainStream(
-      createRunUiMessageChunkStream({
-        client,
-        conversationId: "conv_1",
-        runId: "run_1",
-        afterSequence: 2
+      await transport.sendMessages({
+        trigger: "submit-message",
+        chatId: "chat",
+        messageId: message.id,
+        messages: [message],
+        abortSignal: undefined
       })
     );
 
-    expect(afterSequences).toEqual([2]);
-    expect(chunks).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ type: "start", messageId: "run_1" }),
-        expect.objectContaining({ type: "text-delta", delta: "Hello" }),
-        expect.objectContaining({
-          type: "message-metadata",
-          messageMetadata: expect.objectContaining({
-            persistedMessageId: "msg_assistant"
-          })
-        }),
-        expect.objectContaining({ type: "finish" })
-      ])
-    );
+    expect(submittedConversationIds).toEqual(["conv_new"]);
+    expect(startedRuns).toEqual([response]);
+    expect(chunks).toEqual([]);
   });
 });
 
@@ -295,33 +269,5 @@ function createStartResponse({
       serverTime: "2026-06-26T10:00:01.000Z"
     },
     eventsUrl: `https://example.test/api/conversations/${conversationId}/runs/run_1/events`
-  };
-}
-
-function createObservation<TType extends RunObservation["payload"]["type"]>({
-  sequence,
-  type,
-  payload
-}: {
-  sequence: number;
-  type: TType;
-  payload?: Partial<Omit<Extract<RunObservation["payload"], { type: TType }>, "runId" | "sequence" | "createdAt" | "type">>;
-}): RunObservation {
-  const createdAt = `2026-06-26T10:00:0${sequence}.000Z`;
-  return {
-    clientInstanceId: "client_1",
-    conversationId: "conv_1",
-    ownerUserId: "user_1",
-    runId: "run_1",
-    sequence,
-    type,
-    payload: {
-      ...payload,
-      type,
-      runId: "run_1",
-      sequence,
-      createdAt
-    } as RunObservation["payload"],
-    createdAt
   };
 }
