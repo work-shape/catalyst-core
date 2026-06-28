@@ -1593,6 +1593,92 @@
                                 "failed"
                               ]
                             },
+                            "parts": {
+                              "default": [],
+                              "type": "array",
+                              "items": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "const": "text"
+                                      },
+                                      "text": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "text"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "const": "reasoning"
+                                      },
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "text": {
+                                        "type": "string"
+                                      },
+                                      "open": {
+                                        "type": "boolean"
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "id",
+                                      "text",
+                                      "open"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "const": "tool_call"
+                                      },
+                                      "toolCallId": {
+                                        "type": "string"
+                                      },
+                                      "toolName": {
+                                        "type": "string"
+                                      },
+                                      "input": {},
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "input_available",
+                                          "waiting_for_permission",
+                                          "output_available",
+                                          "output_error"
+                                        ]
+                                      },
+                                      "output": {},
+                                      "errorText": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "toolCallId",
+                                      "toolName",
+                                      "state"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ]
+                              }
+                            },
                             "text": {
                               "type": "string"
                             },
@@ -1685,6 +1771,7 @@
                             "runId",
                             "lastSequence",
                             "status",
+                            "parts",
                             "text",
                             "reasoning",
                             "activeToolCalls"
@@ -3021,6 +3108,92 @@
                                     "failed"
                                   ]
                                 },
+                                "parts": {
+                                  "default": [],
+                                  "type": "array",
+                                  "items": {
+                                    "oneOf": [
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "const": "text"
+                                          },
+                                          "text": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "text"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "const": "reasoning"
+                                          },
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "text": {
+                                            "type": "string"
+                                          },
+                                          "open": {
+                                            "type": "boolean"
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "id",
+                                          "text",
+                                          "open"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "const": "tool_call"
+                                          },
+                                          "toolCallId": {
+                                            "type": "string"
+                                          },
+                                          "toolName": {
+                                            "type": "string"
+                                          },
+                                          "input": {},
+                                          "state": {
+                                            "type": "string",
+                                            "enum": [
+                                              "input_available",
+                                              "waiting_for_permission",
+                                              "output_available",
+                                              "output_error"
+                                            ]
+                                          },
+                                          "output": {},
+                                          "errorText": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "toolCallId",
+                                          "toolName",
+                                          "state"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    ]
+                                  }
+                                },
                                 "text": {
                                   "type": "string"
                                 },
@@ -3113,6 +3286,7 @@
                                 "runId",
                                 "lastSequence",
                                 "status",
+                                "parts",
                                 "text",
                                 "reasoning",
                                 "activeToolCalls"
@@ -4033,6 +4207,92 @@
                                     "failed"
                                   ]
                                 },
+                                "parts": {
+                                  "default": [],
+                                  "type": "array",
+                                  "items": {
+                                    "oneOf": [
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "const": "text"
+                                          },
+                                          "text": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "text"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "const": "reasoning"
+                                          },
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "text": {
+                                            "type": "string"
+                                          },
+                                          "open": {
+                                            "type": "boolean"
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "id",
+                                          "text",
+                                          "open"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "const": "tool_call"
+                                          },
+                                          "toolCallId": {
+                                            "type": "string"
+                                          },
+                                          "toolName": {
+                                            "type": "string"
+                                          },
+                                          "input": {},
+                                          "state": {
+                                            "type": "string",
+                                            "enum": [
+                                              "input_available",
+                                              "waiting_for_permission",
+                                              "output_available",
+                                              "output_error"
+                                            ]
+                                          },
+                                          "output": {},
+                                          "errorText": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "toolCallId",
+                                          "toolName",
+                                          "state"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    ]
+                                  }
+                                },
                                 "text": {
                                   "type": "string"
                                 },
@@ -4125,6 +4385,7 @@
                                 "runId",
                                 "lastSequence",
                                 "status",
+                                "parts",
                                 "text",
                                 "reasoning",
                                 "activeToolCalls"

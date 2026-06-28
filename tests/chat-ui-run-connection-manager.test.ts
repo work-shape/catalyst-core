@@ -12,6 +12,7 @@ describe("chat UI run connection manager", () => {
     const afterSequences: Array<number | undefined> = [];
     const signals: AbortSignal[] = [];
     const appliedSequences: number[] = [];
+    const refreshedConversationIds: string[] = [];
     const rememberedCursors: Array<[string, string, number]> = [];
     const cursorStorage = createCursorStorage(rememberedCursors);
     let manager: RunConnectionManager | undefined;
@@ -49,7 +50,8 @@ describe("chat UI run connection manager", () => {
         failStream(error) {
           reject(toError(error));
         },
-        async refreshSnapshot() {
+        async refreshSnapshot(conversationId) {
+          refreshedConversationIds.push(conversationId);
           resolve();
         },
         cursorStorage
@@ -60,6 +62,7 @@ describe("chat UI run connection manager", () => {
 
     expect(afterSequences).toEqual([2]);
     expect(appliedSequences).toEqual([4]);
+    expect(refreshedConversationIds).toEqual(["conv_1"]);
     expect(rememberedCursors).toEqual([["conv_1", "run_1", 4]]);
     expect(signals[0]?.aborted).toBe(true);
     manager?.stop();
@@ -67,6 +70,7 @@ describe("chat UI run connection manager", () => {
 
   it("reports caught-up empty streams and requests a snapshot refresh", async () => {
     const completions: RunConnectionCompletion[] = [];
+    const refreshedConversationIds: string[] = [];
     const refreshed = new Promise<void>((resolve, reject) => {
       startRunConnectionManager({
         client: {
@@ -90,7 +94,8 @@ describe("chat UI run connection manager", () => {
         failStream(error) {
           reject(toError(error));
         },
-        async refreshSnapshot() {
+        async refreshSnapshot(conversationId) {
+          refreshedConversationIds.push(conversationId);
           resolve();
         }
       });
@@ -98,6 +103,7 @@ describe("chat UI run connection manager", () => {
 
     await refreshed;
 
+    expect(refreshedConversationIds).toEqual(["conv_1"]);
     expect(completions).toEqual([
       {
         sawObservation: false,

@@ -62,32 +62,32 @@ export function createControllerStateFromSnapshot(
   snapshot: ConversationThreadSnapshot,
   previousState?: ConversationControllerState
 ): ConversationControllerState {
-  const preservedTerminalRun = terminalRunForSnapshot(snapshot, previousState);
-  const snapshotTerminalError = snapshot.activeRun ? terminalErrorFromSnapshot(snapshot.activeRun) : undefined;
+  const snapshotRun = activeRunForSnapshot(snapshot, previousState);
+  const snapshotTerminalError = snapshotRun ? terminalErrorFromSnapshot(snapshotRun) : undefined;
+  const preservedTerminalError = preservedTerminalErrorForSnapshotRun(
+    snapshotRun,
+    previousState
+  );
+  const error = preservedTerminalError ?? snapshotTerminalError;
   return {
     snapshotStatus: "ready",
-    connectionStatus: snapshot.activeRun
-      ? isLiveRunStatus(snapshot.activeRun.run.status)
+    connectionStatus: snapshotRun
+      ? isLiveRunStatus(snapshotRun.run.status)
         ? "connecting"
         : "caught_up"
       : "idle",
     conversation: snapshot.conversation,
     messages: snapshot.messages,
-    ...(snapshot.activeRun
+    ...(snapshotRun
       ? {
           activeRun: {
-            run: snapshot.activeRun.run,
-            projection: snapshot.activeRun.projection,
-            lastAppliedSequence: snapshot.activeRun.projection.lastSequence
+            run: snapshotRun.run,
+            projection: snapshotRun.projection,
+            lastAppliedSequence: snapshotRun.projection.lastSequence
           }
         }
-      : preservedTerminalRun
-        ? {
-            activeRun: preservedTerminalRun,
-            ...(previousState?.error ? { error: previousState.error } : {})
-          }
-        : {}),
-    ...(snapshotTerminalError ? { error: snapshotTerminalError } : {})
+      : {}),
+    ...(error ? { error } : {})
   };
 }
 
@@ -197,6 +197,7 @@ function applyObservationToProjection(
   observation: RunObservation
 ): AgentRunProjection {
   const event = observation.payload;
+  const parts = cloneProjectionParts(projection);
   const reasoning = projection.reasoning.map((entry) => ({ ...entry }));
   const toolCalls = projection.activeToolCalls.map((entry) => ({ ...entry }));
   let text = projection.text;
@@ -204,9 +205,11 @@ function applyObservationToProjection(
 
   if (event.type === "message_delta") {
     text += event.delta;
+    appendProjectionTextPart(parts, event.delta);
   }
   if (event.type === "message_completed") {
     text = event.message.text;
+    replaceLatestProjectionTextPart(parts, event.message.text);
   }
   if (event.type === "reasoning_delta") {
     const existing = reasoning.find((entry) => entry.id === event.id);
@@ -216,28 +219,44 @@ function applyObservationToProjection(
     } else {
       reasoning.push({ id: event.id, text: event.delta, open: true });
     }
+    upsertProjectionPart(parts, {
+      type: "reasoning",
+      id: event.id,
+      text: reasoning.find((entry) => entry.id === event.id)?.text ?? event.delta,
+      open: true
+    });
   }
   if (event.type === "tool_call_started") {
-    upsertToolCall(toolCalls, {
+    const toolCall = {
       toolCallId: event.toolCallId,
       toolName: event.toolName,
       input: event.input,
       state: "input_available"
+    } as const;
+    upsertToolCall(toolCalls, toolCall);
+    upsertProjectionPart(parts, {
+      type: "tool_call",
+      ...toolCall
     });
   }
   if (event.type === "tool_permission_requested") {
     const existing = toolCalls.find((entry) => entry.toolCallId === event.toolCallId);
-    upsertToolCall(toolCalls, {
+    const toolCall = {
       toolCallId: event.toolCallId,
       toolName: event.toolName,
       input: existing?.input,
       state: "waiting_for_permission"
+    } as const;
+    upsertToolCall(toolCalls, toolCall);
+    upsertProjectionPart(parts, {
+      type: "tool_call",
+      ...toolCall
     });
   }
   if (event.type === "tool_call_completed") {
     const existing = toolCalls.find((entry) => entry.toolCallId === event.toolCallId);
     const result = isRecord(event.result) ? event.result : undefined;
-    upsertToolCall(toolCalls, {
+    const toolCall = {
       toolCallId: event.toolCallId,
       toolName: event.toolName,
       input: existing?.input,
@@ -257,18 +276,28 @@ function applyObservationToProjection(
               projectionNotice: event.projectionNotice
             }
         : undefined
+    } as const;
+    upsertToolCall(toolCalls, toolCall);
+    upsertProjectionPart(parts, {
+      type: "tool_call",
+      ...toolCall
     });
   }
   if (event.type === "tool_call_failed") {
     const existing = toolCalls.find((entry) => entry.toolCallId === event.toolCallId);
     const result = isRecord(event.result) ? event.result : undefined;
     const error = isRecord(result?.error) ? result.error : undefined;
-    upsertToolCall(toolCalls, {
+    const toolCall = {
       toolCallId: event.toolCallId,
       toolName: event.toolName,
       input: existing?.input,
       state: "output_error",
       errorText: typeof error?.message === "string" ? error.message : "Tool call failed"
+    } as const;
+    upsertToolCall(toolCalls, toolCall);
+    upsertProjectionPart(parts, {
+      type: "tool_call",
+      ...toolCall
     });
   }
   if (event.type === "run_failed") {
@@ -278,12 +307,18 @@ function applyObservationToProjection(
     for (const entry of reasoning) {
       entry.open = false;
     }
+    for (const part of parts) {
+      if (part.type === "reasoning") {
+        part.open = false;
+      }
+    }
   }
 
   return {
     ...projection,
     lastSequence: Math.max(projection.lastSequence, observation.sequence),
     status: applyObservationStatus(projection.status, observation),
+    parts,
     text,
     reasoning,
     activeToolCalls: toolCalls,
@@ -338,6 +373,92 @@ function upsertToolCall(
   toolCalls.push(toolCall);
 }
 
+function cloneProjectionParts(
+  projection: AgentRunProjection
+): AgentRunProjection["parts"] {
+  const projectionParts = projection.parts ?? [];
+  if (projectionParts.length > 0) {
+    return projectionParts.map((part) => ({ ...part }));
+  }
+  const parts: AgentRunProjection["parts"] = [
+    ...projection.reasoning.map((entry) => ({
+      type: "reasoning" as const,
+      id: entry.id,
+      text: entry.text,
+      open: entry.open
+    })),
+    ...projection.activeToolCalls.map((entry) => ({
+      type: "tool_call" as const,
+      ...entry
+    }))
+  ];
+  if (projection.text.length > 0 || parts.length === 0) {
+    parts.push({
+      type: "text",
+      text: projection.text
+    });
+  }
+  return parts;
+}
+
+function appendProjectionTextPart(
+  parts: AgentRunProjection["parts"],
+  delta: string
+): void {
+  if (delta.length === 0) {
+    return;
+  }
+  const lastPart = parts.at(-1);
+  if (lastPart?.type === "text") {
+    lastPart.text += delta;
+    return;
+  }
+  parts.push({
+    type: "text",
+    text: delta
+  });
+}
+
+function replaceLatestProjectionTextPart(
+  parts: AgentRunProjection["parts"],
+  text: string
+): void {
+  const latestTextPart = parts.findLast((part) => part.type === "text");
+  if (latestTextPart) {
+    latestTextPart.text = text;
+    return;
+  }
+  if (text.length > 0 || parts.length === 0) {
+    parts.push({
+      type: "text",
+      text
+    });
+  }
+}
+
+function upsertProjectionPart(
+  parts: AgentRunProjection["parts"],
+  part: AgentRunProjection["parts"][number]
+): void {
+  const index = parts.findIndex((candidate) => {
+    if (candidate.type !== part.type) {
+      return false;
+    }
+    if (part.type === "tool_call") {
+      return candidate.type === "tool_call" && candidate.toolCallId === part.toolCallId;
+    }
+    if (part.type === "reasoning") {
+      return candidate.type === "reasoning" && candidate.id === part.id;
+    }
+    return false;
+  });
+  if (index >= 0) {
+    parts[index] = part;
+    return;
+  }
+  parts.push(part);
+}
+
 function applyObservationStatus(
   currentStatus: AgentRun["status"],
   observation: RunObservation
@@ -354,11 +475,23 @@ function applyObservationStatus(
   return currentStatus;
 }
 
-function terminalRunForSnapshot(
+function activeRunForSnapshot(
   snapshot: ConversationThreadSnapshot,
   previousState: ConversationControllerState | undefined
-): ConversationControllerState["activeRun"] | undefined {
-  if (snapshot.activeRun || !previousState?.activeRun) {
+): NonNullable<ConversationThreadSnapshot["activeRun"]> | undefined {
+  if (snapshot.activeRun) {
+    if (
+      previousState?.activeRun?.run.id === snapshot.activeRun.run.id &&
+      previousState.activeRun.lastAppliedSequence > snapshot.activeRun.projection.lastSequence
+    ) {
+      return {
+        run: previousState.activeRun.run,
+        projection: previousState.activeRun.projection
+      };
+    }
+    return snapshot.activeRun;
+  }
+  if (!previousState?.activeRun) {
     return undefined;
   }
   const previousRun = previousState.activeRun.run;
@@ -368,11 +501,38 @@ function terminalRunForSnapshot(
   ) {
     return undefined;
   }
-  return previousState.activeRun;
+  return {
+    run: previousState.activeRun.run,
+    projection: previousState.activeRun.projection
+  };
 }
 
 function isUserVisibleTerminalRunStatus(status: AgentRun["status"]): boolean {
   return status === "cancelled" || status === "failed";
+}
+
+function preservedTerminalErrorForSnapshotRun(
+  snapshotRun: NonNullable<ConversationThreadSnapshot["activeRun"]> | undefined,
+  previousState: ConversationControllerState | undefined
+): ConversationControllerState["error"] | undefined {
+  if (!snapshotRun || !previousState?.activeRun) {
+    return undefined;
+  }
+  if (previousState.activeRun.run.id !== snapshotRun.run.id) {
+    return undefined;
+  }
+  if (previousState.activeRun.lastAppliedSequence < snapshotRun.projection.lastSequence) {
+    return undefined;
+  }
+  return isUserVisibleTerminalControllerError(previousState.error?.class)
+    ? previousState.error
+    : undefined;
+}
+
+function isUserVisibleTerminalControllerError(
+  errorClass: ConversationControllerErrorClass | undefined
+): boolean {
+  return errorClass === "run_cancelled" || errorClass === "run_failed";
 }
 
 function terminalErrorFromSnapshot(

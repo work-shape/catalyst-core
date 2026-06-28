@@ -925,6 +925,7 @@ function buildAgentRunProjection(
   run: AgentRun,
   observations: RunObservation[]
 ): AgentRunProjection {
+  const parts: AgentRunProjection["parts"] = [];
   let text = "";
   let lastSequence = run.lastSequence;
   let error = run.error;
@@ -940,6 +941,7 @@ function buildAgentRunProjection(
 
     if (event.type === "message_delta") {
       text += event.delta;
+      appendProjectionTextPart(parts, event.delta);
     }
 
     if (event.type === "reasoning_delta") {
@@ -950,48 +952,75 @@ function buildAgentRunProjection(
       };
       reasoning.text += event.delta;
       reasoningById.set(event.id, reasoning);
+      upsertProjectionPart(parts, {
+        type: "reasoning",
+        id: event.id,
+        text: reasoning.text,
+        open: true
+      });
     }
 
     if (event.type === "message_completed") {
       text = event.message.text;
+      replaceLatestProjectionTextPart(parts, event.message.text);
     }
 
     if (event.type === "tool_call_started") {
-      toolCallsById.set(event.toolCallId, {
+      const toolCall = {
         toolCallId: event.toolCallId,
         toolName: event.toolName,
         input: event.input,
         state: "input_available"
+      } as const;
+      toolCallsById.set(event.toolCallId, toolCall);
+      upsertProjectionPart(parts, {
+        type: "tool_call",
+        ...toolCall
       });
     }
 
     if (event.type === "tool_permission_requested") {
       const existing = toolCallsById.get(event.toolCallId);
-      toolCallsById.set(event.toolCallId, {
+      const toolCall = {
         toolCallId: event.toolCallId,
         toolName: event.toolName,
         input: existing?.input,
         state: "waiting_for_permission"
+      } as const;
+      toolCallsById.set(event.toolCallId, toolCall);
+      upsertProjectionPart(parts, {
+        type: "tool_call",
+        ...toolCall
       });
     }
 
     if (event.type === "tool_call_completed") {
-      toolCallsById.set(event.toolCallId, {
+      const toolCall = {
         toolCallId: event.toolCallId,
         toolName: event.toolName,
         input: toolCallsById.get(event.toolCallId)?.input,
         state: "output_available",
         output: toProjectionToolOutput(event)
+      } as const;
+      toolCallsById.set(event.toolCallId, toolCall);
+      upsertProjectionPart(parts, {
+        type: "tool_call",
+        ...toolCall
       });
     }
 
     if (event.type === "tool_call_failed") {
-      toolCallsById.set(event.toolCallId, {
+      const toolCall = {
         toolCallId: event.toolCallId,
         toolName: event.toolName,
         input: toolCallsById.get(event.toolCallId)?.input,
         state: "output_error",
         errorText: toProjectionToolError(event)
+      } as const;
+      toolCallsById.set(event.toolCallId, toolCall);
+      upsertProjectionPart(parts, {
+        type: "tool_call",
+        ...toolCall
       });
     }
 
@@ -1003,6 +1032,11 @@ function buildAgentRunProjection(
       for (const reasoning of reasoningById.values()) {
         reasoning.open = false;
       }
+      for (const part of parts) {
+        if (part.type === "reasoning") {
+          part.open = false;
+        }
+      }
     }
   }
 
@@ -1010,11 +1044,70 @@ function buildAgentRunProjection(
     runId: run.id,
     lastSequence,
     status: run.status,
+    parts,
     text,
     reasoning: [...reasoningById.values()],
     activeToolCalls: [...toolCallsById.values()],
     ...(error ? { error } : {})
   };
+}
+
+function appendProjectionTextPart(
+  parts: AgentRunProjection["parts"],
+  delta: string
+): void {
+  if (delta.length === 0) {
+    return;
+  }
+  const lastPart = parts.at(-1);
+  if (lastPart?.type === "text") {
+    lastPart.text += delta;
+    return;
+  }
+  parts.push({
+    type: "text",
+    text: delta
+  });
+}
+
+function replaceLatestProjectionTextPart(
+  parts: AgentRunProjection["parts"],
+  text: string
+): void {
+  const latestTextPart = parts.findLast((part) => part.type === "text");
+  if (latestTextPart) {
+    latestTextPart.text = text;
+    return;
+  }
+  if (text.length > 0 || parts.length === 0) {
+    parts.push({
+      type: "text",
+      text
+    });
+  }
+}
+
+function upsertProjectionPart(
+  parts: AgentRunProjection["parts"],
+  part: AgentRunProjection["parts"][number]
+): void {
+  const index = parts.findIndex((candidate) => {
+    if (candidate.type !== part.type) {
+      return false;
+    }
+    if (part.type === "tool_call") {
+      return candidate.type === "tool_call" && candidate.toolCallId === part.toolCallId;
+    }
+    if (part.type === "reasoning") {
+      return candidate.type === "reasoning" && candidate.id === part.id;
+    }
+    return false;
+  });
+  if (index >= 0) {
+    parts[index] = part;
+    return;
+  }
+  parts.push(part);
 }
 
 function toProjectionToolOutput(

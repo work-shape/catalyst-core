@@ -449,6 +449,23 @@ export type GetConversationThreadResponses = {
                 runId: string;
                 lastSequence: number;
                 status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
+                parts: Array<{
+                    type: 'text';
+                    text: string;
+                } | {
+                    type: 'reasoning';
+                    id: string;
+                    text: string;
+                    open: boolean;
+                } | {
+                    type: 'tool_call';
+                    toolCallId: string;
+                    toolName: string;
+                    input?: unknown;
+                    state: 'input_available' | 'waiting_for_permission' | 'output_available' | 'output_error';
+                    output?: unknown;
+                    errorText?: string;
+                }>;
                 text: string;
                 reasoning: Array<{
                     id: string;
@@ -797,6 +814,23 @@ export type StartConversationRunResponses = {
                     runId: string;
                     lastSequence: number;
                     status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
+                    parts: Array<{
+                        type: 'text';
+                        text: string;
+                    } | {
+                        type: 'reasoning';
+                        id: string;
+                        text: string;
+                        open: boolean;
+                    } | {
+                        type: 'tool_call';
+                        toolCallId: string;
+                        toolName: string;
+                        input?: unknown;
+                        state: 'input_available' | 'waiting_for_permission' | 'output_available' | 'output_error';
+                        output?: unknown;
+                        errorText?: string;
+                    }>;
                     text: string;
                     reasoning: Array<{
                         id: string;
@@ -1031,6 +1065,23 @@ export type CreateConversationRunResponses = {
                     runId: string;
                     lastSequence: number;
                     status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
+                    parts: Array<{
+                        type: 'text';
+                        text: string;
+                    } | {
+                        type: 'reasoning';
+                        id: string;
+                        text: string;
+                        open: boolean;
+                    } | {
+                        type: 'tool_call';
+                        toolCallId: string;
+                        toolName: string;
+                        input?: unknown;
+                        state: 'input_available' | 'waiting_for_permission' | 'output_available' | 'output_error';
+                        output?: unknown;
+                        errorText?: string;
+                    }>;
                     text: string;
                     reasoning: Array<{
                         id: string;

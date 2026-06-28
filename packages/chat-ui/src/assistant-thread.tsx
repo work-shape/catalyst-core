@@ -18,9 +18,9 @@ export function AssistantThread({
   attachmentsEnabled,
   attachmentAccept,
   conversationRunning,
+  activeRunId,
   optimisticPending,
   messagesEnabled,
-  messageRenderKey,
   composerFocusRequestId,
   onCancelRun,
   onFilesSelected,
@@ -37,9 +37,9 @@ export function AssistantThread({
   attachmentsEnabled: boolean;
   attachmentAccept: string;
   conversationRunning?: boolean;
+  activeRunId?: string;
   optimisticPending?: boolean;
   messagesEnabled: boolean;
-  messageRenderKey: string;
   composerFocusRequestId: number;
   onCancelRun: () => void;
   onFilesSelected: (files: File[]) => void;
@@ -79,15 +79,20 @@ export function AssistantThread({
 
             {messagesEnabled ? (
               <div className="flex flex-col gap-6 pb-8 empty:hidden">
-                <ThreadPrimitive.Messages key={messageRenderKey}>
+                <ThreadPrimitive.Messages>
                   {() => (
                     <ThreadMessage
                       conversationRunning={conversationRunning}
+                      activeRunId={activeRunId}
                       optimisticPending={optimisticPending}
                     />
                   )}
                 </ThreadPrimitive.Messages>
-                <PendingAssistantMessage conversationRunning={conversationRunning} optimisticPending={optimisticPending} />
+                <PendingAssistantMessage
+                  activeRunId={activeRunId}
+                  conversationRunning={conversationRunning}
+                  optimisticPending={optimisticPending}
+                />
               </div>
             ) : null}
 
@@ -183,14 +188,19 @@ function ThreadScrollToBottom() {
 }
 
 function PendingAssistantMessage({
+  activeRunId,
   conversationRunning,
   optimisticPending
 }: {
+  activeRunId?: string;
   conversationRunning?: boolean;
   optimisticPending?: boolean;
 }) {
   const threadRunning = useAuiState((state) => state.thread.isRunning);
   const lastMessage = useAuiState((state) => state.thread.messages.at(-1));
+  if (activeRunId && lastMessage?.role === "assistant" && lastMessage.id === activeRunId) {
+    return null;
+  }
   const showPendingMessage = shouldShowPendingAssistantMessage({
     conversationRunning,
     optimisticPending,

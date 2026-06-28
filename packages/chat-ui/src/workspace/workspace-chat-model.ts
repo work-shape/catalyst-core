@@ -149,7 +149,6 @@ export interface SelectedChatModel {
   conversationStarted(conversationId: string): void;
   messageSubmitted(conversationId: string): void;
   runStarted(response: StartConversationRunResponse): void;
-  streamFinished(conversationId: string): void;
   streamError(conversationId: string, message: string, viewed: boolean): void;
   cancelSelectedRun(): void;
 }
@@ -203,8 +202,7 @@ export function useWorkspaceChatModel({
   const workspaceCache = useWorkspaceCacheActions({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
-    client,
-    selectedConversationId
+    client
   });
   const controller = useConversationController({
     client,
@@ -213,7 +211,7 @@ export function useWorkspaceChatModel({
     snapshot: threadQuery.data,
     snapshotLoading: threadQuery.isLoading,
     snapshotError: threadQuery.error,
-    refreshSnapshot: workspaceCache.refreshSelectedThreadSnapshot,
+    refreshSnapshot: workspaceCache.refreshThreadSnapshot,
     onTerminalObservation: workspaceCache.invalidateTerminalRunObservation
   });
   const serverConversations = conversationsQuery.data ?? [];
@@ -431,17 +429,13 @@ export function useWorkspaceChatModel({
 
   function runStarted(response: StartConversationRunResponse) {
     workspaceCache.cacheRunStarted(response);
-    conversationStarted(response.conversation.id);
+    routeState.showConversation(response.conversation.id, { replace: route.kind === "new-conversation" });
+    setNotice(undefined);
     runRequestAccepted(response.conversation.id);
   }
 
   function runRequestAccepted(conversationId: string) {
     workspaceCache.handleRunRequestAccepted(conversationId);
-  }
-
-  function streamFinished(conversationId: string) {
-    setNotice(undefined);
-    workspaceCache.invalidateStreamFinished(conversationId);
   }
 
   function streamError(conversationId: string, message: string, viewed: boolean) {
@@ -532,7 +526,6 @@ export function useWorkspaceChatModel({
       conversationStarted,
       messageSubmitted,
       runStarted,
-      streamFinished,
       streamError,
       cancelSelectedRun
     },

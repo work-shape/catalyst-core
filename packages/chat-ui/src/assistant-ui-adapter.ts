@@ -1,5 +1,9 @@
 import type { UIMessage } from "ai";
-import type { AgentRunProjection, DraftAttachment, Message } from "@vivd-catalyst/api-client";
+import type {
+  AgentRunProjection,
+  DraftAttachment,
+  Message
+} from "@vivd-catalyst/api-client";
 import {
   readCompatibleAssistantToolCalls,
   readCompatibleMessageRunId,
@@ -105,39 +109,42 @@ function toActiveRunUiMessage(activeRun: AssistantUiActiveRun): UIMessage {
     activeRun.run.status === "completed" ||
     activeRun.run.status === "cancelled" ||
     activeRun.run.status === "failed";
-  const parts: UIMessage["parts"] = [];
-
-  for (const reasoning of activeRun.projection.reasoning) {
-    if (!reasoning.text.trim() && !reasoning.open) {
-      continue;
+  const projectionParts = activeRun.projection.parts ?? [];
+  const orderedParts = projectionParts.length > 0
+    ? projectionParts
+    : legacyActiveRunParts(activeRun.projection);
+  const parts = orderedParts.flatMap((part, index): UIMessage["parts"] => {
+    if (part.type === "text") {
+      if (part.text.trim().length === 0 && orderedParts.length > 1) {
+        return [];
+      }
+      return [
+        {
+          type: "text",
+          text: part.text,
+          state: !terminal && index === orderedParts.length - 1 ? "streaming" : "done"
+        } as UIMessage["parts"][number]
+      ];
     }
-    parts.push({
-      type: "reasoning",
-      text: reasoning.text,
-      state: reasoning.open && !terminal ? "streaming" : "done"
-    } as UIMessage["parts"][number]);
-  }
+    if (part.type === "reasoning") {
+      if (!part.text.trim() && !part.open) {
+        return [];
+      }
+      return [
+        {
+          type: "reasoning",
+          text: part.text,
+          state: part.open && !terminal ? "streaming" : "done"
+        } as UIMessage["parts"][number]
+      ];
+    }
+    return [toToolCallUiPart(part)];
+  });
 
-  for (const toolCall of activeRun.projection.activeToolCalls) {
-    parts.push({
-      type: "dynamic-tool",
-      toolName: toolCall.toolName,
-      toolCallId: toolCall.toolCallId,
-      title: toolCall.toolName,
-      state: toAssistantToolState(toolCall.state),
-      input: toolCall.input,
-      ...(toolCall.state === "output_error"
-        ? { errorText: toolCall.errorText ?? "Tool call failed" }
-        : toolCall.state === "output_available"
-          ? { output: toolCall.output }
-          : {})
-    } as UIMessage["parts"][number]);
-  }
-
-  if (activeRun.projection.text.trim().length > 0 || parts.length === 0) {
+  if (parts.length === 0) {
     parts.push({
       type: "text",
-      text: activeRun.projection.text,
+      text: "",
       state: terminal ? "done" : "streaming"
     } as UIMessage["parts"][number]);
   }
@@ -147,6 +154,48 @@ function toActiveRunUiMessage(activeRun: AssistantUiActiveRun): UIMessage {
     role: "assistant",
     parts
   };
+}
+
+function legacyActiveRunParts(
+  projection: AgentRunProjection
+): AgentRunProjection["parts"] {
+  const parts: AgentRunProjection["parts"] = [
+    ...projection.reasoning.map((entry) => ({
+      type: "reasoning" as const,
+      id: entry.id,
+      text: entry.text,
+      open: entry.open
+    })),
+    ...projection.activeToolCalls.map((entry) => ({
+      type: "tool_call" as const,
+      ...entry
+    }))
+  ];
+  if (projection.text.trim().length > 0 || parts.length === 0) {
+    parts.push({
+      type: "text",
+      text: projection.text
+    });
+  }
+  return parts;
+}
+
+function toToolCallUiPart(
+  toolCall: Extract<AgentRunProjection["parts"][number], { type: "tool_call" }>
+): UIMessage["parts"][number] {
+  return {
+    type: "dynamic-tool",
+    toolName: toolCall.toolName,
+    toolCallId: toolCall.toolCallId,
+    title: toolCall.toolName,
+    state: toAssistantToolState(toolCall.state),
+    input: toolCall.input,
+    ...(toolCall.state === "output_error"
+      ? { errorText: toolCall.errorText ?? "Tool call failed" }
+      : toolCall.state === "output_available"
+        ? { output: toolCall.output }
+        : {})
+  } as UIMessage["parts"][number];
 }
 
 function toAssistantToolState(

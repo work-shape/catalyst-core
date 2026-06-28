@@ -27,10 +27,12 @@ const assistantMessageGroupBy = groupPartByType({
 });
 
 export function ThreadMessage({
-  conversationRunning: _conversationRunning,
+  conversationRunning,
+  activeRunId,
   optimisticPending: _optimisticPending
 }: {
   conversationRunning?: boolean;
+  activeRunId?: string;
   optimisticPending?: boolean;
 }) {
   const role = useAuiState((state) => state.message.role);
@@ -45,20 +47,37 @@ export function ThreadMessage({
   }
 
   return (
-    <AssistantMessage />
+    <AssistantMessage activeRunId={activeRunId} conversationRunning={conversationRunning} />
   );
 }
 
-function AssistantMessage() {
+function AssistantMessage({
+  activeRunId,
+  conversationRunning
+}: {
+  activeRunId?: string;
+  conversationRunning?: boolean;
+}) {
   const { t } = useTranslation();
+  const messageId = useAuiState((state) => state.message.id);
+  const lastPartIndex = useAuiState((state) => state.message.parts.length - 1);
+  const activeRunMessage = Boolean(conversationRunning && activeRunId && messageId === activeRunId);
   const messageRunning = useAuiState(
-    (state) => state.message.role === "assistant" && state.message.status?.type === "running"
+    (state) =>
+      state.message.role === "assistant" &&
+      (state.message.status?.type === "running" || activeRunMessage)
   );
   const showFallbackCursor = useAuiState((state) => {
-    if (state.message.role !== "assistant" || state.message.status?.type !== "running") {
+    if (
+      state.message.role !== "assistant" ||
+      (state.message.status?.type !== "running" && !activeRunMessage)
+    ) {
       return false;
     }
-    return !state.message.parts.some(partShowsOwnActivity);
+    return (
+      !state.message.parts.some(partShowsOwnActivity) &&
+      !state.message.parts.some(partHasVisibleAssistantContent)
+    );
   });
 
   return (
@@ -74,20 +93,20 @@ function AssistantMessage() {
                 return (
                   <AssistantWorkGroup
                     count={part.indices.length}
-                    active={part.status.type === "running"}
+                    active={part.status.type === "running" || (activeRunMessage && part.indices.includes(lastPartIndex))}
                     indices={part.indices}
                   >
                     {children}
                   </AssistantWorkGroup>
                 );
               case "text":
-                return <AssistantTextPart />;
+                return <AssistantTextPart active={activeRunMessage} />;
               case "tool-call":
                 return part.toolUI ?? <ToolCallPart {...part} />;
               case "data":
                 return part.dataRendererUI ?? <DataPart {...part} />;
               case "reasoning":
-                return <AssistantReasoningPart />;
+                return <AssistantReasoningPart activeRunMessage={activeRunMessage} />;
               case "image":
                 return <ImagePart />;
               case "file":
@@ -174,6 +193,23 @@ function partShowsOwnActivity(part: unknown): boolean {
   return status === "running";
 }
 
+function partHasVisibleAssistantContent(part: unknown): boolean {
+  if (!isRecord(part)) {
+    return false;
+  }
+  const type = typeof part.type === "string" ? part.type : undefined;
+  if (type === "text") {
+    return typeof part.text === "string" && part.text.trim().length > 0;
+  }
+  if (type === "indicator" || type === "step-start") {
+    return false;
+  }
+  if (type === "reasoning") {
+    return typeof part.text === "string" && part.text.trim().length > 0;
+  }
+  return true;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -206,14 +242,22 @@ function UserTextPart() {
   return <MarkdownText />;
 }
 
-function AssistantTextPart() {
+function AssistantTextPart({ active }: { active?: boolean }) {
   const showCursor = useAuiState((state) => {
-    if (state.part.type !== "text" || state.part.status.type !== "running" || state.part.text.trim().length === 0) {
+    if (
+      state.part.type !== "text" ||
+      (state.part.status.type !== "running" && !active) ||
+      state.part.text.trim().length === 0
+    ) {
       return false;
     }
 
     const lastPart = state.message.parts.at(-1);
-    return lastPart?.type === "text" && lastPart.text === state.part.text && lastPart.status.type === "running";
+    return (
+      lastPart?.type === "text" &&
+      lastPart.text === state.part.text &&
+      (lastPart.status.type === "running" || active)
+    );
   });
 
   return (
@@ -231,11 +275,17 @@ function AssistantFallbackCursor() {
   );
 }
 
-function AssistantReasoningPart() {
+function AssistantReasoningPart({ activeRunMessage }: { activeRunMessage?: boolean }) {
   const { t } = useTranslation();
-  const isRunning = useAuiState((state) => state.part.status.type === "running");
+  const active = useAuiState((state) => {
+    if (state.part.status.type === "running") {
+      return true;
+    }
+    const lastPart = state.message.parts.at(-1);
+    return activeRunMessage && lastPart === state.part;
+  });
 
-  if (!isRunning) {
+  if (!active) {
     return null;
   }
 

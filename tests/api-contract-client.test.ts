@@ -235,7 +235,8 @@ describe("api operation catalog and client", () => {
       "GET /api/conversations/conv_1/runs/run_1/events?after=7"
     ]);
     expect(calls.every((request) => request.headers.get("authorization") === "Bearer test-token")).toBe(true);
-    expect(calls[4]?.headers.get("last-event-id")).toBe("7");
+    expect(calls[4]?.headers.get("last-event-id")).toBeNull();
+    expect(calls[4]?.headers.get("accept")).toBe("text/event-stream");
     expect(observed).toEqual([
       expect.objectContaining({
         runId: "run_1",

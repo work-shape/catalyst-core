@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ConversationThreadSnapshot, RunObservation } from "@vivd-catalyst/api-client";
+import { toUiMessages } from "../packages/chat-ui/src/assistant-ui-adapter";
 import {
   applyRunObservationToControllerState,
   completeRunObservationStreamInControllerState,
@@ -105,6 +106,98 @@ describe("chat UI conversation controller", () => {
     );
     expect(result.state.activeRun?.projection.text).toBe("Canonical final");
     expect(result.state.activeRun?.lastAppliedSequence).toBe(3);
+  });
+
+  it("preserves live text and tool call chronology for active-run rendering", () => {
+    let state = createControllerStateFromSnapshot(createSnapshot({ lastSequence: 0, text: "" }));
+    for (const observation of [
+      createObservation({
+        sequence: 1,
+        type: "message_delta",
+        payload: {
+          delta: "First step."
+        }
+      }),
+      createObservation({
+        sequence: 2,
+        type: "tool_call_started",
+        payload: {
+          toolCallId: "tool_1",
+          toolName: "demo.lookup",
+          input: { query: "first" }
+        }
+      }),
+      createObservation({
+        sequence: 3,
+        type: "tool_call_completed",
+        payload: {
+          toolCallId: "tool_1",
+          toolName: "demo.lookup",
+          result: {
+            status: "success",
+            output: { ok: true }
+          },
+          modelOutput: "{\"ok\":true}"
+        }
+      }),
+      createObservation({
+        sequence: 4,
+        type: "message_delta",
+        payload: {
+          delta: "Second step."
+        }
+      })
+    ]) {
+      state = applyRunObservationToControllerState(state, observation).state;
+    }
+
+    expect(state.activeRun?.projection.parts).toEqual([
+      {
+        type: "text",
+        text: "First step."
+      },
+      expect.objectContaining({
+        type: "tool_call",
+        toolCallId: "tool_1",
+        state: "output_available"
+      }),
+      {
+        type: "text",
+        text: "Second step."
+      }
+    ]);
+
+    const [message] = toUiMessages([], state.activeRun);
+    expect(message?.parts.map((part) => part.type)).toEqual([
+      "text",
+      "dynamic-tool",
+      "text"
+    ]);
+  });
+
+  it("keeps a newer local active-run projection when a stale same-run snapshot arrives", () => {
+    const staleSnapshot = createSnapshot({ lastSequence: 0, text: "" });
+    const live = applyRunObservationToControllerState(
+      createControllerStateFromSnapshot(staleSnapshot),
+      createObservation({
+        sequence: 1,
+        type: "message_delta",
+        payload: {
+          delta: "Live text"
+        }
+      })
+    ).state;
+
+    const refreshed = createControllerStateFromSnapshot(staleSnapshot, live);
+
+    expect(refreshed.activeRun?.lastAppliedSequence).toBe(1);
+    expect(refreshed.activeRun?.projection.text).toBe("Live text");
+    expect(refreshed.activeRun?.projection.parts).toEqual([
+      {
+        type: "text",
+        text: "Live text"
+      }
+    ]);
   });
 
   it("keeps failed terminal run state visible across snapshot refresh", () => {
@@ -286,6 +379,14 @@ function createSnapshot({
               runId: "run_1",
               lastSequence,
               status: runStatus,
+              parts: text.length > 0
+                ? [
+                    {
+                      type: "text",
+                      text
+                    }
+                  ]
+                : [],
               text,
               reasoning: [],
               activeToolCalls: [],
@@ -311,7 +412,7 @@ function createObservation<TType extends RunObservation["payload"]["type"]>({
 }: {
   sequence: number;
   type: TType;
-  payload: Omit<Extract<RunObservation["payload"], { type: TType }>, "runId" | "sequence" | "createdAt" | "type">;
+  payload: Record<string, unknown>;
 }): RunObservation {
   const createdAt = `2026-06-26T10:00:0${sequence}.000Z`;
   return {

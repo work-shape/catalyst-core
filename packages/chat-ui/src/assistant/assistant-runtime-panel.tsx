@@ -9,6 +9,7 @@ import type { UIMessage } from "ai";
 import type { SelectedChatModel } from "../workspace/workspace-chat-model";
 import {
   createMessageSnapshotKey,
+  toAiSdkMessageRepository,
   toAttachmentFilePart,
   toUiMessages
 } from "../assistant-ui-adapter";
@@ -29,14 +30,14 @@ export function AssistantRuntimePanel({ chat }: { chat: SelectedChatModel }) {
     () => createMessageSnapshotKey(messages ?? [], activeRun),
     [activeRun, messages]
   );
-  const runtimeKey = `${selectedConversationId ?? "new"}:${messageSnapshotKey}`;
+  const runtimeKey = selectedConversationId ?? "new";
 
   return (
     <AssistantRuntimePane
       key={runtimeKey}
       chat={chat}
       initialMessages={initialMessages}
-      messageSnapshotKey={messageSnapshotKey}
+      messagesSyncKey={messageSnapshotKey}
     />
   );
 }
@@ -44,11 +45,11 @@ export function AssistantRuntimePanel({ chat }: { chat: SelectedChatModel }) {
 function AssistantRuntimePane({
   chat,
   initialMessages,
-  messageSnapshotKey
+  messagesSyncKey
 }: {
   chat: SelectedChatModel;
   initialMessages: UIMessage[];
-  messageSnapshotKey: string;
+  messagesSyncKey: string;
 }) {
   const {
     client,
@@ -63,6 +64,7 @@ function AssistantRuntimePane({
     draftAttachments,
     localUploadingAttachments,
     conversationRunning,
+    activeRun,
     sendBlockedReason,
     attachmentsEnabled,
     attachmentAccept,
@@ -72,7 +74,6 @@ function AssistantRuntimePane({
     retryDraftAttachment: onRetryDraftAttachment,
     messageSubmitted: onMessageSubmitted,
     runStarted: onRunStarted,
-    streamFinished: onStreamFinished,
     streamError: onStreamError,
     cancelSelectedRun: onCancelRun
   } = chat;
@@ -211,9 +212,6 @@ function AssistantRuntimePane({
     toCreateMessage: toCreateMessageWithAttachments,
     onFinish() {
       setOptimisticPendingIfActive(false);
-      if (selectedConversationId) {
-        onStreamFinished(selectedConversationId);
-      }
     },
     onError(error) {
       const viewed = activeRef.current;
@@ -227,6 +225,11 @@ function AssistantRuntimePane({
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
+      <RuntimeMessagesBridge
+        runtime={runtime}
+        messages={initialMessages}
+        syncKey={messagesSyncKey}
+      />
       <AssistantToolRegistry>
         <DraftBridge draftKey={selectedConversationId ?? "new"} draft={draft} onDraftChange={onDraftChange} />
         <AttachmentContentProvider client={client} selectedConversationId={selectedConversationId}>
@@ -240,9 +243,9 @@ function AssistantRuntimePane({
             attachmentsEnabled={attachmentsEnabled}
             attachmentAccept={attachmentAccept}
             conversationRunning={conversationRunning}
+            activeRunId={activeRun?.run.id}
             optimisticPending={optimisticPending}
             messagesEnabled={Boolean(selectedConversationId)}
-            messageRenderKey={messageSnapshotKey}
             composerFocusRequestId={composerFocusRequestId}
             onCancelRun={onCancelRun}
             onFilesSelected={onFilesSelected}
@@ -254,6 +257,22 @@ function AssistantRuntimePane({
       </AssistantToolRegistry>
     </AssistantRuntimeProvider>
   );
+}
+
+function RuntimeMessagesBridge({
+  runtime,
+  messages,
+  syncKey
+}: {
+  runtime: ReturnType<typeof useChatRuntime>;
+  messages: UIMessage[];
+  syncKey: string;
+}) {
+  useEffect(() => {
+    runtime.thread.importExternalState(toAiSdkMessageRepository(messages));
+  }, [messages, runtime, syncKey]);
+
+  return null;
 }
 
 function isAbortLikeError(error: Error): boolean {

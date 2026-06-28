@@ -30,7 +30,7 @@ export interface StartRunConnectionManagerInput {
   };
   completeStream(completion: RunConnectionCompletion): void;
   failStream(error: unknown): void;
-  refreshSnapshot(): Promise<unknown>;
+  refreshSnapshot(conversationId: string): Promise<unknown>;
   onTerminalObservation?: (observation: RunObservation) => void;
   cursorStorage?: RunCursorStorage;
 }
@@ -74,7 +74,7 @@ export function startRunConnectionManager(
         }
         if (applied.refreshRequired) {
           abortController.abort();
-          await input.refreshSnapshot();
+          await input.refreshSnapshot(input.connection.conversationId);
           return;
         }
       }
@@ -84,7 +84,7 @@ export function startRunConnectionManager(
           sawObservation
         });
         if (streamCaughtUp && !sawObservation) {
-          await input.refreshSnapshot();
+          await input.refreshSnapshot(input.connection.conversationId);
         }
       }
     } catch (error) {

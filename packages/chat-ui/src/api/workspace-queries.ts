@@ -100,7 +100,7 @@ export function useWorkspaceUsersQuery(
 }
 
 export interface WorkspaceCacheActions {
-  refreshSelectedThreadSnapshot(): Promise<ConversationThreadSnapshot | undefined>;
+  refreshThreadSnapshot(conversationId: string): Promise<ConversationThreadSnapshot>;
   invalidateCurrentUser(): void;
   invalidateConversations(): void;
   removeThreadSnapshot(conversationId: string): void;
@@ -109,17 +109,14 @@ export interface WorkspaceCacheActions {
   clearDraftAttachments(conversationId: string): void;
   cacheRunStarted(response: StartConversationRunResponse): void;
   handleRunRequestAccepted(conversationId: string): void;
-  invalidateStreamFinished(conversationId: string): void;
   invalidateStreamError(conversationId: string): void;
 }
 
 export function useWorkspaceCacheActions(
-  input: WorkspaceQueryInput & {
-    selectedConversationId: string | undefined;
-  }
+  input: WorkspaceQueryInput
 ): WorkspaceCacheActions {
   const queryClient = useQueryClient();
-  const { apiBaseUrl, authScope, client, selectedConversationId } = input;
+  const { apiBaseUrl, authScope, client } = input;
 
   const invalidateCurrentUser = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.me(apiBaseUrl) });
@@ -165,16 +162,14 @@ export function useWorkspaceCacheActions(
     });
   }, [apiBaseUrl, authScope, queryClient]);
 
-  const refreshSelectedThreadSnapshot = useCallback(
-    () =>
-      selectedConversationId
-        ? queryClient.fetchQuery({
-            queryKey: workspaceQueryKeys.thread(apiBaseUrl, authScope, selectedConversationId),
-            queryFn: () => client.thread(selectedConversationId),
-            staleTime: 0
-          })
-        : Promise.resolve(undefined),
-    [apiBaseUrl, authScope, client, queryClient, selectedConversationId]
+  const refreshThreadSnapshot = useCallback(
+    (conversationId: string) =>
+      queryClient.fetchQuery({
+        queryKey: workspaceQueryKeys.thread(apiBaseUrl, authScope, conversationId),
+        queryFn: () => client.thread(conversationId),
+        staleTime: 0
+      }),
+    [apiBaseUrl, authScope, client, queryClient]
   );
 
   const invalidateConversationStarted = useCallback(
@@ -252,7 +247,6 @@ export function useWorkspaceCacheActions(
 
   const handleRunRequestAccepted = useCallback(
     (conversationId: string) => {
-      invalidateThread(conversationId);
       invalidateConversations();
       void client
         .generateConversationTitle(conversationId)
@@ -262,7 +256,9 @@ export function useWorkspaceCacheActions(
             (currentConversations = []) => {
               if (currentConversations.some((conversation) => conversation.id === updatedConversation.id)) {
                 return currentConversations.map((conversation) =>
-                  conversation.id === updatedConversation.id ? updatedConversation : conversation
+                  conversation.id === updatedConversation.id
+                    ? { ...conversation, ...updatedConversation }
+                    : conversation
                 );
               }
               return [updatedConversation, ...currentConversations];
@@ -273,14 +269,7 @@ export function useWorkspaceCacheActions(
           invalidateConversations();
         });
     },
-    [apiBaseUrl, authScope, client, invalidateConversations, invalidateThread, queryClient]
-  );
-
-  const invalidateStreamFinished = useCallback(
-    (conversationId: string) => {
-      invalidateRunCompletion(conversationId, { draftAttachmentsChanged: true });
-    },
-    [invalidateRunCompletion]
+    [apiBaseUrl, authScope, client, invalidateConversations, queryClient]
   );
 
   const invalidateStreamError = useCallback(
@@ -294,7 +283,7 @@ export function useWorkspaceCacheActions(
 
   return useMemo(
     () => ({
-      refreshSelectedThreadSnapshot,
+      refreshThreadSnapshot,
       invalidateCurrentUser,
       invalidateConversations,
       removeThreadSnapshot,
@@ -303,7 +292,6 @@ export function useWorkspaceCacheActions(
       clearDraftAttachments,
       cacheRunStarted,
       handleRunRequestAccepted,
-      invalidateStreamFinished,
       invalidateStreamError
     }),
     [
@@ -315,9 +303,8 @@ export function useWorkspaceCacheActions(
       invalidateCurrentUser,
       removeThreadSnapshot,
       invalidateStreamError,
-      invalidateStreamFinished,
       invalidateTerminalRunObservation,
-      refreshSelectedThreadSnapshot
+      refreshThreadSnapshot
     ]
   );
 }

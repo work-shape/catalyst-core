@@ -438,10 +438,40 @@ export const activeRunSummarySchema = z.object({
   lastSequence: z.number().int().nonnegative()
 });
 
+const agentRunProjectionToolCallStateSchema = z.enum([
+  "input_available",
+  "waiting_for_permission",
+  "output_available",
+  "output_error"
+]);
+
+export const agentRunProjectionPartSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("text"),
+    text: z.string()
+  }),
+  z.object({
+    type: z.literal("reasoning"),
+    id: z.string(),
+    text: z.string(),
+    open: z.boolean()
+  }),
+  z.object({
+    type: z.literal("tool_call"),
+    toolCallId: z.string(),
+    toolName: z.string(),
+    input: z.unknown().optional(),
+    state: agentRunProjectionToolCallStateSchema,
+    output: z.unknown().optional(),
+    errorText: z.string().optional()
+  })
+]);
+
 export const agentRunProjectionSchema = z.object({
   runId: z.string(),
   lastSequence: z.number().int().nonnegative(),
   status: agentRunStatusSchema,
+  parts: z.array(agentRunProjectionPartSchema).default([]),
   text: z.string(),
   reasoning: z.array(
     z.object({
@@ -455,12 +485,7 @@ export const agentRunProjectionSchema = z.object({
       toolCallId: z.string(),
       toolName: z.string(),
       input: z.unknown().optional(),
-      state: z.enum([
-        "input_available",
-        "waiting_for_permission",
-        "output_available",
-        "output_error"
-      ]),
+      state: agentRunProjectionToolCallStateSchema,
       output: z.unknown().optional(),
       errorText: z.string().optional()
     })

@@ -116,10 +116,7 @@ export function createApiClient(options: ApiClientOptions) {
     const response = await request(path, {
       method: "GET",
       headers: {
-        accept: "text/event-stream",
-        ...(observeOptions.afterSequence === undefined
-          ? {}
-          : { "last-event-id": String(observeOptions.afterSequence) })
+        accept: "text/event-stream"
       },
       signal: observeOptions.signal
     });

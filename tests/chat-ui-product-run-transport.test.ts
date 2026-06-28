@@ -255,6 +255,7 @@ function createStartResponse({
           runId: "run_1",
           lastSequence,
           status: "running",
+          parts: [],
           text: "",
           reasoning: [],
           activeToolCalls: []

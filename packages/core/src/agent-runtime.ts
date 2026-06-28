@@ -83,10 +83,36 @@ export interface ActiveRunSummary {
   lastSequence: number;
 }
 
+export type AgentRunProjectionPart =
+  | {
+      type: "text";
+      text: string;
+    }
+  | {
+      type: "reasoning";
+      id: string;
+      text: string;
+      open: boolean;
+    }
+  | {
+      type: "tool_call";
+      toolCallId: ToolCallId;
+      toolName: string;
+      input?: unknown;
+      state:
+        | "input_available"
+        | "waiting_for_permission"
+        | "output_available"
+        | "output_error";
+      output?: unknown;
+      errorText?: string;
+    };
+
 export interface AgentRunProjection {
   runId: AgentRunId;
   lastSequence: number;
   status: AgentRunStatus;
+  parts: AgentRunProjectionPart[];
   text: string;
   reasoning: Array<{
     id: string;

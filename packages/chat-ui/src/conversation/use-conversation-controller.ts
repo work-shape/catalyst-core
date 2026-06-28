@@ -25,7 +25,7 @@ export interface UseConversationControllerInput {
   snapshot: ConversationThreadSnapshot | undefined;
   snapshotLoading: boolean;
   snapshotError: unknown;
-  refreshSnapshot: () => Promise<unknown>;
+  refreshSnapshot: (conversationId: string) => Promise<unknown>;
   onTerminalObservation?: (observation: RunObservation) => void;
 }
 
@@ -82,18 +82,31 @@ export function useConversationController({
   }, [conversationId, enabled, snapshot, snapshotError, snapshotLoading, snapshotRunKey]);
 
   const activeRunConnection = useMemo<RunConnectionTarget | undefined>(() => {
-    if (!enabled || !conversationId || !snapshot?.activeRun) {
+    const snapshotActiveRun = snapshot?.activeRun;
+    const stateActiveRun = state.activeRun;
+    const liveActiveRun =
+      snapshotActiveRun && stateActiveRun?.run.id === snapshotActiveRun.run.id &&
+      stateActiveRun.lastAppliedSequence >= snapshotActiveRun.projection.lastSequence
+        ? stateActiveRun
+        : snapshotActiveRun ?? stateActiveRun;
+    if (!enabled || !conversationId || !liveActiveRun) {
       return undefined;
     }
-    if (!isLiveRunStatus(snapshot.activeRun.run.status)) {
+    if (!isLiveRunStatus(liveActiveRun.run.status)) {
       return undefined;
     }
     return {
       conversationId,
-      runId: snapshot.activeRun.run.id,
-      afterSequence: snapshot.activeRun.projection.lastSequence
+      runId: liveActiveRun.run.id,
+      afterSequence: liveActiveRun.projection.lastSequence
     };
-  }, [conversationId, enabled, snapshotRunKey]);
+  }, [
+    conversationId,
+    enabled,
+    snapshotRunKey,
+    state.activeRun?.run.id,
+    state.activeRun?.run.status
+  ]);
 
   useEffect(() => {
     if (!activeRunConnection) {
