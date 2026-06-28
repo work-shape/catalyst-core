@@ -4,7 +4,7 @@ import {
   applyRunObservationToControllerState,
   completeRunObservationStreamInControllerState,
   createControllerStateFromSnapshot
-} from "../packages/chat-ui/src/conversation-controller";
+} from "../packages/chat-ui/src/conversation/conversation-controller-state";
 
 describe("chat UI conversation controller", () => {
   it("ignores duplicate or already-applied run observations", () => {
