@@ -1,4 +1,3 @@
-import { spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import {
   lstat,
@@ -31,12 +30,16 @@ import {
   normalizeWorkspaceFilePath,
   resolveWorkspaceFilesystemPath
 } from "./workspace-paths";
+import {
+  DEFAULT_WORKSPACE_COMMAND_PATH,
+  LocalWorkspaceCommandProcessExecutor,
+  type ProcessResult,
+  type WorkspaceCommandProcessExecutor
+} from "./workspace-command-executor";
 
 const DEFAULT_MAX_PATH_LENGTH = 512;
 const DEFAULT_LEASE_DURATION_MS = 10 * 60 * 1000;
-const DEFAULT_STDIO_BYTES = 64 * 1024;
 const DEFAULT_WORKSPACE_BYTES = 100 * 1024 * 1024;
-const DEFAULT_PATH = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
 
 export type WorkspaceCommandRunnerStore = Pick<
   PlatformStore,
@@ -46,6 +49,7 @@ export type WorkspaceCommandRunnerStore = Pick<
   | "claimNextWorkspaceCommand"
   | "completeWorkspaceCommand"
   | "failWorkspaceCommand"
+  | "cancelClaimedWorkspaceCommand"
   | "createManagedArtifact"
 >;
 
@@ -57,6 +61,7 @@ export interface LocalWorkspaceCommandRunnerOptions {
   leaseDurationMs?: number;
   maxPathLength?: number;
   shellPath?: string;
+  processExecutor?: WorkspaceCommandProcessExecutor;
   now?: () => string;
 }
 
@@ -67,6 +72,7 @@ export interface RunNextWorkspaceCommandInput {
 interface CommandExecutionResult {
   output?: WorkspaceCommandOutput;
   error?: WorkspaceCommandError;
+  cancelled?: boolean;
 }
 
 interface HydratedWorkspace {
@@ -83,17 +89,8 @@ interface ScannedWorkspaceFile {
   mimeType?: string;
 }
 
-interface ProcessResult {
-  exitCode: number;
-  stdoutPreview: string;
-  stderrPreview: string;
-  truncated: {
-    stdout: boolean;
-    stderr: boolean;
-  };
-  durationMs: number;
-  timeoutKind?: "wall" | "idle";
-  spawnError?: Error;
+export interface RunClaimedWorkspaceCommandOptions {
+  signal?: AbortSignal;
 }
 
 export class LocalWorkspaceCommandRunner {
@@ -103,7 +100,7 @@ export class LocalWorkspaceCommandRunner {
   private readonly tempRootDirectory: string;
   private readonly leaseDurationMs: number;
   private readonly maxPathLength: number;
-  private readonly shellPath: string;
+  private readonly processExecutor: WorkspaceCommandProcessExecutor;
   private readonly now: () => string;
 
   constructor(options: LocalWorkspaceCommandRunnerOptions) {
@@ -113,7 +110,8 @@ export class LocalWorkspaceCommandRunner {
     this.tempRootDirectory = options.tempRootDirectory ?? tmpdir();
     this.leaseDurationMs = options.leaseDurationMs ?? DEFAULT_LEASE_DURATION_MS;
     this.maxPathLength = options.maxPathLength ?? DEFAULT_MAX_PATH_LENGTH;
-    this.shellPath = options.shellPath ?? "/bin/sh";
+    this.processExecutor =
+      options.processExecutor ?? new LocalWorkspaceCommandProcessExecutor({ shellPath: options.shellPath });
     this.now = options.now ?? (() => new Date().toISOString());
   }
 
@@ -132,14 +130,27 @@ export class LocalWorkspaceCommandRunner {
     return this.runClaimedCommand(claimed);
   }
 
-  async runClaimedCommand(command: WorkspaceCommand): Promise<WorkspaceCommand> {
+  async runClaimedCommand(
+    command: WorkspaceCommand,
+    options: RunClaimedWorkspaceCommandOptions = {}
+  ): Promise<WorkspaceCommand> {
     const leaseToken = command.leaseToken;
     if (!leaseToken) {
       throw new Error("Workspace command must be claimed before local execution");
     }
 
-    const result = await this.executeCommand(command);
+    const result = await this.executeCommand(command, options);
     const completedAt = this.now();
+    if (result.cancelled) {
+      return this.store.cancelClaimedWorkspaceCommand({
+        clientInstanceId: command.clientInstanceId,
+        commandId: command.id,
+        leaseToken,
+        reason: result.error?.message,
+        output: result.output,
+        cancelledAt: completedAt
+      });
+    }
     if (result.error) {
       return this.store.failWorkspaceCommand({
         clientInstanceId: command.clientInstanceId,
@@ -172,7 +183,10 @@ export class LocalWorkspaceCommandRunner {
     });
   }
 
-  private async executeCommand(command: WorkspaceCommand): Promise<CommandExecutionResult> {
+  private async executeCommand(
+    command: WorkspaceCommand,
+    options: RunClaimedWorkspaceCommandOptions
+  ): Promise<CommandExecutionResult> {
     let hydrated: HydratedWorkspace | undefined;
     let processResult: ProcessResult | undefined;
     let changedFiles: WorkspaceCommandChangedFile[] = [];
@@ -183,7 +197,8 @@ export class LocalWorkspaceCommandRunner {
       processResult = await this.runProcess(
         command,
         hydrated.workspaceDirectory,
-        join(hydrated.executionDirectory, "tmp")
+        join(hydrated.executionDirectory, "tmp"),
+        options.signal
       );
       const scannedFiles = await this.scanWorkspaceFiles(hydrated.workspaceDirectory, command);
       changedFiles = await this.syncChangedFiles(
@@ -197,7 +212,8 @@ export class LocalWorkspaceCommandRunner {
       const processError = this.processError(command, processResult);
       return {
         output,
-        error: processError
+        error: processError,
+        cancelled: processResult.cancelled
       };
     } catch (error) {
       return {
@@ -282,7 +298,8 @@ export class LocalWorkspaceCommandRunner {
   private async runProcess(
     command: WorkspaceCommand,
     workspaceDirectory: string,
-    tempDirectory: string
+    tempDirectory: string,
+    signal?: AbortSignal
   ): Promise<ProcessResult> {
     const normalizedCwd = command.cwd
       ? normalizeWorkspaceDirectory(command.cwd, { maxPathLength: this.maxPathLength })
@@ -306,86 +323,19 @@ export class LocalWorkspaceCommandRunner {
         cwd.details
       );
     }
-    const stdout = new BoundedOutput(command.limits.maxStdoutBytes ?? DEFAULT_STDIO_BYTES);
-    const stderr = new BoundedOutput(command.limits.maxStderrBytes ?? DEFAULT_STDIO_BYTES);
-    await mkdir(tempDirectory, { recursive: true });
-    const startedAt = Date.now();
-    return new Promise((resolvePromise) => {
-      let settled = false;
-      let timeoutKind: ProcessResult["timeoutKind"];
-      let spawnError: Error | undefined;
-      let killTimer: NodeJS.Timeout | undefined;
-      const child = spawn(this.shellPath, ["-c", command.command], {
-        cwd: cwd.value,
-        detached: true,
-        env: {
-          HOME: workspaceDirectory,
-          PATH: process.env.PATH ?? DEFAULT_PATH,
-          TMPDIR: tempDirectory,
-          WORKSPACE_DIR: workspaceDirectory
-        },
-        stdio: ["ignore", "pipe", "pipe"]
-      });
-      const finish = (exitCode: number, signal?: NodeJS.Signals | null) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        clearTimeout(wallTimer);
-        clearTimeout(idleTimer);
-        clearTimeout(killTimer);
-        resolvePromise({
-          exitCode: timeoutKind ? 124 : exitCodeFromProcess(exitCode, signal),
-          stdoutPreview: stdout.text(),
-          stderrPreview: stderr.text(),
-          truncated: {
-            stdout: stdout.truncated,
-            stderr: stderr.truncated
-          },
-          durationMs: Date.now() - startedAt,
-          timeoutKind,
-          spawnError
-        });
-      };
-      const terminate = (kind: NonNullable<ProcessResult["timeoutKind"]>) => {
-        if (settled || timeoutKind) {
-          return;
-        }
-        timeoutKind = kind;
-        terminateProcessGroup(child, "SIGTERM");
-        killTimer = setTimeout(() => terminateProcessGroup(child, "SIGKILL"), 500);
-      };
-      const resetIdleTimer = () => {
-        if (!command.limits.idleTimeoutSeconds || settled || timeoutKind) {
-          return;
-        }
-        clearTimeout(idleTimer);
-        idleTimer = setTimeout(
-          () => terminate("idle"),
-          command.limits.idleTimeoutSeconds * 1000
-        );
-      };
-      const wallTimer = setTimeout(
-        () => terminate("wall"),
-        command.limits.timeoutSeconds * 1000
-      );
-      let idleTimer: NodeJS.Timeout | undefined;
-      resetIdleTimer();
-      child.stdout.on("data", (chunk: Buffer) => {
-        stdout.append(chunk);
-        resetIdleTimer();
-      });
-      child.stderr.on("data", (chunk: Buffer) => {
-        stderr.append(chunk);
-        resetIdleTimer();
-      });
-      child.on("error", (error) => {
-        spawnError = error;
-        finish(127);
-      });
-      child.on("close", (code, signal) => {
-        finish(code ?? 1, signal);
-      });
+    return this.processExecutor.execute({
+      command,
+      workspaceDirectory,
+      workspaceCwd: normalizedCwd.value,
+      cwd: cwd.value,
+      tempDirectory,
+      env: {
+        HOME: workspaceDirectory,
+        PATH: process.env.PATH ?? DEFAULT_WORKSPACE_COMMAND_PATH,
+        TMPDIR: tempDirectory,
+        WORKSPACE_DIR: workspaceDirectory
+      },
+      signal
     });
   }
 
@@ -581,6 +531,13 @@ export class LocalWorkspaceCommandRunner {
     command: WorkspaceCommand,
     processResult: ProcessResult
   ): WorkspaceCommandError | undefined {
+    if (processResult.cancelled) {
+      return workspaceCommandError(
+        "WORKSPACE_COMMAND_CANCELLED",
+        processResult.cancellationReason ?? "Workspace command was cancelled",
+        "cancelled"
+      );
+    }
     if (processResult.spawnError) {
       return workspaceCommandError(
         "WORKSPACE_COMMAND_SPAWN_FAILED",
@@ -633,30 +590,6 @@ export class LocalWorkspaceCommandResultSource implements WorkspaceCommandResult
       clientInstanceId: input.command.clientInstanceId
     });
     return resolved?.id === input.command.id ? resolved : input.command;
-  }
-}
-
-class BoundedOutput {
-  private readonly chunks: Buffer[] = [];
-  private byteLength = 0;
-  truncated = false;
-
-  constructor(private readonly maxBytes: number) {}
-
-  append(chunk: Buffer): void {
-    const remaining = this.maxBytes - this.byteLength;
-    if (remaining > 0) {
-      const kept = chunk.subarray(0, remaining);
-      this.chunks.push(kept);
-      this.byteLength += kept.byteLength;
-    }
-    if (chunk.byteLength > remaining) {
-      this.truncated = true;
-    }
-  }
-
-  text(): string {
-    return Buffer.concat(this.chunks, this.byteLength).toString("utf8");
   }
 }
 
@@ -746,27 +679,6 @@ function inferWorkspaceMimeType(path: string): string | undefined {
     return "image/jpeg";
   }
   return undefined;
-}
-
-function terminateProcessGroup(
-  child: ChildProcess,
-  signal: NodeJS.Signals
-): void {
-  if (!child.pid) {
-    return;
-  }
-  try {
-    process.kill(-child.pid, signal);
-  } catch {
-    child.kill(signal);
-  }
-}
-
-function exitCodeFromProcess(code: number, signal?: NodeJS.Signals | null): number {
-  if (code !== null && code !== undefined) {
-    return code;
-  }
-  return signal ? 128 : 1;
 }
 
 function addMilliseconds(isoDate: string, milliseconds: number): string {

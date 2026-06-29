@@ -20,6 +20,7 @@ import {
 } from "@vivd-catalyst/data-source";
 import {
   createBuiltInToolDefinitions,
+  createLocalWorkspaceFileByteStore,
   createReadSkillTool,
   createWorkspaceToolDefinitions,
   InProcessToolExecution,
@@ -92,11 +93,20 @@ export async function createClientInstanceApp(
   const skillCatalog = new SkillCatalog({
     skills: config.skills
   });
+  const workspaceTools = config.executionWorkspaces.enabled
+    ? createWorkspaceToolDefinitions({
+        store,
+        objectStore: createLocalWorkspaceFileByteStore({
+          rootDirectory: requiredEnv(env, "EXECUTION_WORKSPACE_OBJECT_ROOT")
+        }),
+        limits: config.executionWorkspaces.command
+      })
+    : [];
   const tools = createToolDefinitions({
     config,
     tools: [
       ...createBuiltInToolDefinitions(),
-      ...createWorkspaceToolDefinitions({ store }),
+      ...workspaceTools,
       ...createDataSourceQueryTools({ dataSources }),
       createReadSkillTool({
         catalog: skillCatalog,
@@ -336,6 +346,14 @@ function createCompositeManagedObjectReader(
       return tryManagedObjectReaders(readers, (reader) => reader.readFile(input), input.fileId);
     }
   };
+}
+
+function requiredEnv(env: ClientInstanceEnv, name: string): string {
+  const value = env[name];
+  if (!value) {
+    throw new AppError("VALIDATION_FAILED", `${name} is required`);
+  }
+  return value;
 }
 
 async function tryAttachmentHandlers<T>(

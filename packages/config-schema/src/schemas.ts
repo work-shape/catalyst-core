@@ -5,6 +5,7 @@ import type {
   CapabilityConfigMap,
   LocalizationConfig,
   AgentRuntimeConfig,
+  ExecutionWorkspacesConfig,
   ModelContextConfig,
   ModelBindingConfig,
   ModelProviderConfig,
@@ -249,6 +250,123 @@ export const modelContextConfigSchema = z
     }
   });
 
+export const executionWorkspacesConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    runner: z
+      .object({
+        mode: z.enum(["local", "docker"]).default("docker"),
+        image: z
+          .string()
+          .min(1)
+          .default("ghcr.io/vivd-solutions/catalyst-runner-base:placeholder"),
+        networkMode: z.literal("none").default("none"),
+        readOnlyRootFilesystem: z.boolean().default(true),
+        cpuCount: z.number().positive().default(1),
+        memoryBytes: z.number().int().positive().default(512 * 1024 * 1024),
+        pidsLimit: z.number().int().positive().default(128)
+      })
+      .default({
+        mode: "docker",
+        image: "ghcr.io/vivd-solutions/catalyst-runner-base:placeholder",
+        networkMode: "none",
+        readOnlyRootFilesystem: true,
+        cpuCount: 1,
+        memoryBytes: 512 * 1024 * 1024,
+        pidsLimit: 128
+      }),
+    command: z
+      .object({
+        defaultTimeoutSeconds: z.number().int().positive().max(300).default(60),
+        maxTimeoutSeconds: z.number().int().positive().max(300).default(300),
+        idleTimeoutSeconds: z.number().int().positive().max(300).default(30),
+        maxStdoutBytes: z.number().int().positive().max(1024 * 1024).default(64 * 1024),
+        maxStderrBytes: z.number().int().positive().max(1024 * 1024).default(64 * 1024),
+        maxWorkspaceBytes: z.number().int().positive().default(100 * 1024 * 1024),
+        perConversationActiveCommands: z.number().int().positive().default(1),
+        perUserActiveCommands: z.number().int().positive().default(1),
+        globalActiveCommands: z.number().int().positive().default(4)
+      })
+      .default({
+        defaultTimeoutSeconds: 60,
+        maxTimeoutSeconds: 300,
+        idleTimeoutSeconds: 30,
+        maxStdoutBytes: 64 * 1024,
+        maxStderrBytes: 64 * 1024,
+        maxWorkspaceBytes: 100 * 1024 * 1024,
+        perConversationActiveCommands: 1,
+        perUserActiveCommands: 1,
+        globalActiveCommands: 4
+      }),
+    worker: z
+      .object({
+        concurrency: z.number().int().positive().default(1),
+        pollIntervalMs: z.number().int().positive().default(1000),
+        leaseDurationMs: z.number().int().positive().default(10 * 60 * 1000),
+        heartbeatIntervalMs: z.number().int().positive().default(5000),
+        cancellationPollIntervalMs: z.number().int().positive().default(1000),
+        staleRecoveryIntervalMs: z.number().int().positive().default(30000),
+        staleRecoveryLimit: z.number().int().positive().default(50)
+      })
+      .default({
+        concurrency: 1,
+        pollIntervalMs: 1000,
+        leaseDurationMs: 10 * 60 * 1000,
+        heartbeatIntervalMs: 5000,
+        cancellationPollIntervalMs: 1000,
+        staleRecoveryIntervalMs: 30000,
+        staleRecoveryLimit: 50
+      })
+  })
+  .superRefine((config, context) => {
+    if (config.command.defaultTimeoutSeconds > config.command.maxTimeoutSeconds) {
+      context.addIssue({
+        code: "custom",
+        path: ["command", "defaultTimeoutSeconds"],
+        message: "Default workspace command timeout must not exceed the maximum timeout"
+      });
+    }
+    if (config.worker.heartbeatIntervalMs >= config.worker.leaseDurationMs) {
+      context.addIssue({
+        code: "custom",
+        path: ["worker", "heartbeatIntervalMs"],
+        message: "Workspace command heartbeat interval must be shorter than the lease duration"
+      });
+    }
+  })
+  .default({
+    enabled: false,
+    runner: {
+      mode: "docker",
+      image: "ghcr.io/vivd-solutions/catalyst-runner-base:placeholder",
+      networkMode: "none",
+      readOnlyRootFilesystem: true,
+      cpuCount: 1,
+      memoryBytes: 512 * 1024 * 1024,
+      pidsLimit: 128
+    },
+    command: {
+      defaultTimeoutSeconds: 60,
+      maxTimeoutSeconds: 300,
+      idleTimeoutSeconds: 30,
+      maxStdoutBytes: 64 * 1024,
+      maxStderrBytes: 64 * 1024,
+      maxWorkspaceBytes: 100 * 1024 * 1024,
+      perConversationActiveCommands: 1,
+      perUserActiveCommands: 1,
+      globalActiveCommands: 4
+    },
+    worker: {
+      concurrency: 1,
+      pollIntervalMs: 1000,
+      leaseDurationMs: 10 * 60 * 1000,
+      heartbeatIntervalMs: 5000,
+      cancellationPollIntervalMs: 1000,
+      staleRecoveryIntervalMs: 30000,
+      staleRecoveryLimit: 50
+    }
+  });
+
 const defaultLightUiTheme = {
   accentColor: "#0f766e",
   accentStrongColor: "#0b5f59",
@@ -360,6 +478,7 @@ export const clientInstanceConfigSchema = z.object({
   conversationTitles: conversationTitleConfigSchema,
   runtime: agentRuntimeConfigSchema,
   modelContext: modelContextConfigSchema,
+  executionWorkspaces: executionWorkspacesConfigSchema,
   capabilities: z.record(z.string(), z.unknown()).default({}),
   usage: z
     .object({
@@ -408,6 +527,7 @@ export type {
   AgentConfig,
   DataSourceConfig,
   CapabilityConfigMap,
+  ExecutionWorkspacesConfig,
   LocalizationConfig,
   ModelBindingConfig,
   ModelProviderConfig,

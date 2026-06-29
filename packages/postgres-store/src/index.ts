@@ -94,6 +94,7 @@ import {
   getExecutionWorkspace as getPostgresExecutionWorkspace,
   getExecutionWorkspaceForConversation as getPostgresExecutionWorkspaceForConversation,
   getWorkspaceCommand as getPostgresWorkspaceCommand,
+  heartbeatWorkspaceCommand as heartbeatPostgresWorkspaceCommand,
   listWorkspaceFiles as listPostgresWorkspaceFiles,
   recoverStaleWorkspaceCommands as recoverStalePostgresWorkspaceCommands,
   requestWorkspaceCommandCancellation as requestPostgresWorkspaceCommandCancellation,
@@ -399,6 +400,12 @@ export class PostgresPlatformStore
     input: Parameters<WorkspaceCommandStore["cancelClaimedWorkspaceCommand"]>[0]
   ): Promise<WorkspaceCommand> {
     return cancelClaimedPostgresWorkspaceCommand(this.db, input);
+  }
+
+  async heartbeatWorkspaceCommand(
+    input: Parameters<WorkspaceCommandStore["heartbeatWorkspaceCommand"]>[0]
+  ): Promise<WorkspaceCommand> {
+    return heartbeatPostgresWorkspaceCommand(this.db, input);
   }
 
   async recoverStaleWorkspaceCommands(

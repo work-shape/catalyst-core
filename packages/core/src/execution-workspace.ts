@@ -209,7 +209,16 @@ export interface CancelClaimedWorkspaceCommandInput {
   commandId: WorkspaceCommandId;
   leaseToken: string;
   reason?: string;
+  output?: WorkspaceCommandOutput;
   cancelledAt: ISODateString;
+}
+
+export interface HeartbeatWorkspaceCommandInput {
+  clientInstanceId: ClientInstanceId;
+  commandId: WorkspaceCommandId;
+  leaseToken: string;
+  heartbeatAt: ISODateString;
+  leaseExpiresAt: ISODateString;
 }
 
 export interface RecoverStaleWorkspaceCommandsInput {
@@ -275,6 +284,7 @@ export interface WorkspaceCommandStore {
     input: RequestWorkspaceCommandCancellationInput
   ): Promise<WorkspaceCommand>;
   cancelClaimedWorkspaceCommand(input: CancelClaimedWorkspaceCommandInput): Promise<WorkspaceCommand>;
+  heartbeatWorkspaceCommand(input: HeartbeatWorkspaceCommandInput): Promise<WorkspaceCommand>;
   recoverStaleWorkspaceCommands(
     input: RecoverStaleWorkspaceCommandsInput
   ): Promise<WorkspaceCommand[]>;
