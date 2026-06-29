@@ -73,6 +73,39 @@ describe("api operation catalog and client", () => {
     expect(request?.headers.get("authorization")).toBe("Bearer test-token");
   });
 
+  it("downloads promoted managed artifact content through the API client", async () => {
+    const calls: Request[] = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      calls.push(request);
+      return new Response("artifact-bytes", {
+        headers: {
+          "content-type": "application/pdf"
+        }
+      });
+    };
+    const client = createApiClient({
+      baseUrl: "https://chat.example/",
+      getToken: () => "test-token",
+      fetchImpl
+    });
+
+    const blob = await client.conversationArtifactContent("conv 1", "art/final");
+
+    expect(await blob.text()).toBe("artifact-bytes");
+    expect(blob.type).toBe("application/pdf");
+    expect(calls).toHaveLength(1);
+    const request = calls[0];
+    expect(request?.url).toBe(
+      `https://chat.example${apiOperations.getConversationArtifactContent.buildPath({
+        params: { conversationId: "conv 1", artifactId: "art/final" }
+      })}`
+    );
+    expect(request?.method).toBe("GET");
+    expect(request?.credentials).toBe("include");
+    expect(request?.headers.get("authorization")).toBe("Bearer test-token");
+  });
+
   it("validates request bodies through operation schemas before fetch", async () => {
     const fetchImpl: typeof fetch = async () => {
       throw new Error("fetch should not run for invalid request input");

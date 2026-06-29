@@ -76,7 +76,7 @@ export function ChatDropOverlay() {
           <Upload size={18} className="text-primary" aria-hidden="true" />
           <div className="grid gap-0.5 text-left">
             <strong className="text-sm font-semibold leading-none">Drop files to attach</strong>
-            <span className="text-xs text-muted-foreground">PDF, DOCX, TXT, Markdown, and images</span>
+            <span className="text-xs text-muted-foreground">Office files, PDFs, images, text, and Markdown</span>
           </div>
         </div>
       </div>

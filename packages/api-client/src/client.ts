@@ -75,6 +75,15 @@ export function createApiClient(options: ApiClientOptions) {
     return payload.data;
   }
 
+  async function requestBlob(path: string, init: RequestInit = {}): Promise<Blob> {
+    const response = await request(path, init);
+    if (!response.ok) {
+      const payload = await readJsonPayload(response);
+      throw new ApiError(response.status, apiErrorMessage(payload), payload);
+    }
+    return response.blob();
+  }
+
   async function requestJson<T>(
     path: string,
     schema: z.ZodType<T>,
@@ -359,6 +368,12 @@ export function createApiClient(options: ApiClientOptions) {
         generatedSdk.getConversationFileContent({
           client: generatedClient,
           path: { conversationId, fileId }
+        })
+      ),
+    conversationArtifactContent: (conversationId: string, artifactId: string) =>
+      requestBlob(
+        apiOperations.getConversationArtifactContent.buildPath({
+          params: { conversationId, artifactId }
         })
       ),
     deleteConversation: (conversationId: string) =>

@@ -41,6 +41,10 @@ import type { ClientInstanceEnv } from "./env";
 import { createRuntimeFailureReporter } from "./runtime-error-logging";
 import { createPlatformStore, type PlatformStoreMode } from "./store";
 import { createToolDefinitions } from "./tools";
+import {
+  createExecutionWorkspaceManagedObjectReader,
+  createExecutionWorkspaceSourceAttachmentHandler
+} from "./workspace-source-attachments";
 
 export interface CreateClientInstanceAppInput {
   config?: ClientInstanceConfig;
@@ -71,6 +75,14 @@ export async function createClientInstanceApp(
     configs: config.dataSources,
     secretResolver: createEnvSecretResolver(env)
   });
+  const executionWorkspaceObjectRoot = config.executionWorkspaces.enabled
+    ? requiredEnv(env, "EXECUTION_WORKSPACE_OBJECT_ROOT")
+    : undefined;
+  const workspaceFileByteStore = executionWorkspaceObjectRoot
+    ? createLocalWorkspaceFileByteStore({
+        rootDirectory: executionWorkspaceObjectRoot
+      })
+    : undefined;
   const capabilityContributions = await createCapabilityContributions(input.capabilities ?? [], {
     capabilitiesConfig: config.capabilities,
     clientInstanceId,
@@ -88,18 +100,51 @@ export async function createClientInstanceApp(
     },
     storeMode: resolvedStoreMode
   });
-  const attachments = resolveAttachmentContribution(capabilityContributions);
-  const managedObjects = resolveManagedObjectContribution(capabilityContributions);
+  const capabilityAttachmentHandlers = capabilityContributions.flatMap(
+    (contribution) => contribution.attachments ?? []
+  );
+  const workspaceSourceAttachment = executionWorkspaceObjectRoot
+    ? createExecutionWorkspaceSourceAttachmentHandler({
+        clientInstanceId,
+        files: store,
+        objectRootDirectory: executionWorkspaceObjectRoot,
+        markDeletedOnDelete: capabilityAttachmentHandlers.length === 0
+      })
+    : undefined;
+  const attachments = resolveAttachmentHandlers([
+    ...(workspaceSourceAttachment ? [workspaceSourceAttachment] : []),
+    ...capabilityAttachmentHandlers
+  ]);
+  const managedObjects = resolveManagedObjectReaders([
+    ...capabilityContributions.flatMap((contribution) => contribution.managedObjects ?? []),
+    ...(workspaceFileByteStore
+      ? [
+          createExecutionWorkspaceManagedObjectReader({
+            clientInstanceId,
+            files: store,
+            byteStore: workspaceFileByteStore
+          })
+        ]
+      : [])
+  ]);
   const skillCatalog = new SkillCatalog({
     skills: config.skills
   });
   const workspaceTools = config.executionWorkspaces.enabled
     ? createWorkspaceToolDefinitions({
         store,
-        objectStore: createLocalWorkspaceFileByteStore({
-          rootDirectory: requiredEnv(env, "EXECUTION_WORKSPACE_OBJECT_ROOT")
-        }),
-        limits: config.executionWorkspaces.command
+        fileStore: workspaceFileByteStore,
+        limits: config.executionWorkspaces.command,
+        sourceFileReader: attachments
+          ? {
+              readSourceFile(readInput) {
+                return attachments.readConversationFile({
+                  conversationId: readInput.conversationId,
+                  fileId: readInput.fileId
+                });
+              }
+            }
+          : undefined
       })
     : [];
   const tools = createToolDefinitions({
@@ -201,6 +246,7 @@ export async function createClientInstanceApp(
     auditRecorder,
     agentRuntime,
     attachments,
+    managedObjects,
     modelProvider,
     corsOrigin: input.corsOrigin,
     standaloneAuth,
@@ -236,10 +282,9 @@ async function createCapabilityContributions(
   return contributions;
 }
 
-function resolveAttachmentContribution(
-  contributions: readonly ClientInstanceCapabilityContribution[]
+function resolveAttachmentHandlers(
+  handlers: readonly ClientInstanceAttachmentHandler[]
 ): ChatAttachmentService | undefined {
-  const handlers = contributions.flatMap((contribution) => contribution.attachments ?? []);
   if (handlers.length === 0) {
     return undefined;
   }
@@ -249,10 +294,9 @@ function resolveAttachmentContribution(
   return createCompositeAttachmentService(handlers);
 }
 
-function resolveManagedObjectContribution(
-  contributions: readonly ClientInstanceCapabilityContribution[]
+function resolveManagedObjectReaders(
+  readers: readonly ClientInstanceManagedObjectReaderContribution[]
 ) {
-  const readers = contributions.flatMap((contribution) => contribution.managedObjects ?? []);
   if (readers.length === 0) {
     return undefined;
   }
@@ -276,7 +320,7 @@ function createCompositeAttachmentService(
     async uploadDraftAttachment(input) {
       const matchingHandlers = handlers.filter((handler) => handler.acceptsFile(input));
       if (matchingHandlers.length === 0) {
-        throw new AppError("BAD_REQUEST", "No configured attachment capability accepts this file");
+        throw new AppError("BAD_REQUEST", "This file type is not supported for uploads in this chat");
       }
       if (matchingHandlers.length > 1) {
         throw new AppError(

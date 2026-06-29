@@ -1442,6 +1442,101 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
+  it("serves promoted managed artifacts as conversation-scoped downloads", async () => {
+    const clientInstanceId = asClientInstanceId("demo-local");
+    const store = new InMemoryPlatformStore();
+    const config = createTestConfig();
+    const owner = createTestUser("user-1", clientInstanceId);
+    const usageGovernance = new ModelUsageGovernance({
+      store,
+      budget: config.usage.budget,
+      safeguards: config.usage.safeguards,
+      pricing: config.usage.pricing
+    });
+    const readArtifacts: Array<{ clientInstanceId: string; artifactId: string }> = [];
+    const server = await createChatServer({
+      config,
+      clientInstanceId,
+      authAdapter: {
+        id: "test-auth",
+        async authenticate() {
+          return owner;
+        }
+      },
+      conversationStore: store,
+      auditEventStore: store,
+      userStore: store,
+      usageGovernance,
+      auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store }),
+      agentRuntime: createMissingRuntime(),
+      modelProvider: createUnusedModelProvider(),
+      managedObjects: {
+        async readArtifact(input) {
+          readArtifacts.push(input);
+          return {
+            bytes: new TextEncoder().encode("final,report\n"),
+            mimeType: "text/csv"
+          };
+        }
+      }
+    });
+    try {
+      const conversation = await store.createConversation({
+        clientInstanceId,
+        ownerUserId: owner.id,
+        ownerExternalUserId: owner.externalUserId,
+        title: "Artifact download",
+        retainedUntil: "2030-01-01T00:00:00.000Z"
+      });
+      const otherConversation = await store.createConversation({
+        clientInstanceId,
+        ownerUserId: owner.id,
+        ownerExternalUserId: owner.externalUserId,
+        title: "Other conversation",
+        retainedUntil: "2030-01-01T00:00:00.000Z"
+      });
+      const artifact = await store.createManagedArtifact({
+        clientInstanceId,
+        conversationId: conversation.id,
+        kind: "document.csv",
+        objectKey: "execution-workspaces/private/final.csv",
+        filename: "final.csv",
+        mimeType: "text/csv",
+        byteSize: 13,
+        checksum: "sha256:final",
+        metadata: {
+          source: "execution_workspace"
+        }
+      });
+
+      const content = await server.inject({
+        method: "GET",
+        url: `/api/conversations/${conversation.id}/artifacts/${artifact.id}/content`
+      });
+
+      expect(content.statusCode).toBe(200);
+      expect(content.headers["content-type"]).toContain("text/csv");
+      expect(content.headers["content-disposition"]).toBe('attachment; filename="final.csv"');
+      expect(content.payload).toBe("final,report\n");
+      expect(JSON.stringify(content.headers)).not.toContain("execution-workspaces/private");
+      expect(readArtifacts).toEqual([
+        {
+          clientInstanceId,
+          artifactId: artifact.id
+        }
+      ]);
+
+      const wrongConversation = await server.inject({
+        method: "GET",
+        url: `/api/conversations/${otherConversation.id}/artifacts/${artifact.id}/content`
+      });
+      expect(wrongConversation.statusCode).toBe(404);
+      expect(readArtifacts).toHaveLength(1);
+    } finally {
+      await server.close();
+    }
+  });
+
   it("deletes attachment bytes when deleting a conversation", async () => {
     const deletedFileObjectKeys: string[] = [];
     const app = await createClientInstanceApp({
@@ -2629,6 +2724,7 @@ describe("client instance app vertical slice", () => {
     const workspaceToolNames = [
       "workspace.exec",
       "workspace.list_files",
+      "workspace.import_files",
       "workspace.read_file",
       "workspace.promote_artifact"
     ];

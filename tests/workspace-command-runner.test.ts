@@ -300,13 +300,20 @@ describe("local workspace command runner", () => {
       changedFiles: [expect.objectContaining({ path: "report.pdf", artifactId: expect.any(String) })],
       promotedArtifacts: [expect.objectContaining({ path: "report.pdf", kind: "document.pdf" })]
     });
+    expect(result.output.changedFiles[0]).not.toHaveProperty("objectKey");
+    const workspaceFiles = await harness.store.listWorkspaceFiles({
+      clientInstanceId: harness.clientInstanceId,
+      workspaceId: asExecutionWorkspaceId(result.output.workspaceId)
+    });
+    const reportFile = workspaceFiles.find((file) => file.path === "report.pdf");
+    expect(reportFile).toBeDefined();
     const artifact = await harness.store.getManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       artifactId: result.output!.promotedArtifacts[0]!.artifactId
     });
     expect(artifact).toMatchObject({
       kind: "document.pdf",
-      objectKey: result.output!.changedFiles[0]!.objectKey
+      objectKey: reportFile?.objectKey
     });
   });
 

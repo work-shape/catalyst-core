@@ -2,16 +2,20 @@ import { describe, expect, it } from "vitest";
 import {
   asAgentRunId,
   asClientInstanceId,
+  asExecutionWorkspaceId,
+  asManagedFileId,
   asToolCallId,
   type ClientInstanceId,
   type Conversation,
-  type ToolExecutionContext
+  type ToolExecutionContext,
+  type WorkspaceCommand
 } from "@vivd-catalyst/core";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 import {
   createWorkspaceToolDefinitions,
   shapeWorkspaceCommandOutput,
   WorkspaceCommandService,
+  type WorkspaceFileByteStore,
   type WorkspaceObjectStore
 } from "@vivd-catalyst/tool-execution";
 import { InProcessToolExecution, ToolRegistry } from "@vivd-catalyst/tool-execution";
@@ -244,6 +248,110 @@ describe("workspace tools", () => {
     }
   });
 
+  it("imports uploaded managed files into workspace storage without leaking object keys", async () => {
+    const sourceBytes = new TextEncoder().encode("name,total\nAda,42\n");
+    const harness = await createWorkspaceHarness({
+      sourceFiles: {
+        file_source_csv: {
+          filename: "source.csv",
+          mimeType: "text/csv",
+          bytes: sourceBytes
+        }
+      }
+    });
+
+    const imported = await harness.runTool("workspace.import_files", {
+      files: [{ fileId: "file_source_csv", path: "inputs/source.csv" }]
+    });
+
+    expect(imported.status).toBe("success");
+    if (imported.status !== "success") {
+      throw new Error("Expected import_files to succeed");
+    }
+    expect(imported.output).toMatchObject({
+      workspaceId: expect.any(String),
+      importedFiles: [
+        {
+          fileId: "file_source_csv",
+          path: "inputs/source.csv",
+          filename: "source.csv",
+          byteSize: sourceBytes.byteLength,
+          mimeType: "text/csv"
+        }
+      ]
+    });
+    expect(JSON.stringify(imported)).not.toContain("objectKey");
+
+    const workspaceFiles = await harness.store.listWorkspaceFiles({
+      clientInstanceId: harness.clientInstanceId,
+      workspaceId: asExecutionWorkspaceId(imported.output.workspaceId)
+    });
+    expect(workspaceFiles).toEqual([
+      expect.objectContaining({
+        path: "inputs/source.csv",
+        byteSize: sourceBytes.byteLength,
+        mimeType: "text/csv",
+        metadata: expect.objectContaining({
+          source: "managed_file_upload",
+          sourceFileId: "file_source_csv",
+          filename: "source.csv"
+        })
+      })
+    ]);
+    const storedBytes = await harness.objectStore.getObject(workspaceFiles[0]!.objectKey);
+    expect(new TextDecoder().decode(storedBytes)).toBe("name,total\nAda,42\n");
+  });
+
+  it("projects workspace command changed files without raw object storage keys", async () => {
+    const harness = await createWorkspaceHarness({
+      commandResults: {
+        async resolveWorkspaceCommand({ command }) {
+          return {
+            ...command,
+            status: "completed",
+            output: shapeWorkspaceCommandOutput(
+              {
+                exitCode: 0,
+                stdout: "created report",
+                stderr: "",
+                durationMs: 12,
+                changedFiles: [
+                  {
+                    path: "reports/final.csv",
+                    objectKey: "execution-workspaces/private/final.csv",
+                    byteSize: 12,
+                    checksum: "sha256:final",
+                    mimeType: "text/csv"
+                  }
+                ]
+              },
+              command.limits
+            )
+          } satisfies WorkspaceCommand;
+        }
+      }
+    });
+
+    const executed = await harness.runTool("workspace.exec", {
+      command: "node scripts/build-report.js"
+    });
+
+    expect(executed.status).toBe("success");
+    if (executed.status !== "success") {
+      throw new Error("Expected exec to succeed");
+    }
+    expect(executed.output.changedFiles).toEqual([
+      {
+        path: "reports/final.csv",
+        byteSize: 12,
+        checksum: "sha256:final",
+        mimeType: "text/csv"
+      }
+    ]);
+    expect(JSON.stringify(executed)).not.toContain("objectKey");
+    expect(JSON.stringify(executed)).not.toContain("execution-workspaces/private");
+  });
+
   it("promotes a workspace file as a managed artifact while unpromoted files stay hidden", async () => {
     const harness = await createWorkspaceHarness();
     await harness.putWorkspaceFile({
@@ -356,7 +464,16 @@ async function expectToolFailure(
 
 async function createWorkspaceHarness(input: {
   agentToolNames?: string[];
+  commandResults?: ConstructorParameters<typeof WorkspaceCommandService>[0]["commandResults"];
   limits?: ConstructorParameters<typeof WorkspaceCommandService>[0]["limits"];
+  sourceFiles?: Record<
+    string,
+    {
+      filename: string;
+      mimeType?: string;
+      bytes: Uint8Array;
+    }
+  >;
 } = {}) {
   const clientInstanceId = asClientInstanceId(`workspace_tools_${globalThis.crypto.randomUUID()}`);
   const ownerUserId = "user-1";
@@ -372,6 +489,27 @@ async function createWorkspaceHarness(input: {
   const service = new WorkspaceCommandService({
     store,
     objectStore,
+    ...(input.sourceFiles
+      ? {
+          fileStore: objectStore,
+          sourceFileReader: {
+            async readSourceFile(readInput) {
+              const source = input.sourceFiles?.[readInput.fileId];
+              if (!source) {
+                throw new Error("Managed source file is not available");
+              }
+              return {
+                fileId: asManagedFileId(readInput.fileId),
+                filename: source.filename,
+                ...(source.mimeType ? { mimeType: source.mimeType } : {}),
+                byteSize: source.bytes.byteLength,
+                bytes: source.bytes
+              };
+            }
+          }
+        }
+      : {}),
+    ...(input.commandResults ? { commandResults: input.commandResults } : {}),
     limits: input.limits,
     now: () => "2026-06-29T12:00:00.000Z"
   });
@@ -485,7 +623,7 @@ function createToolRequest(conversation: Conversation, toolName: string, input: 
   };
 }
 
-class TestWorkspaceObjectStore implements WorkspaceObjectStore {
+class TestWorkspaceObjectStore implements WorkspaceFileByteStore, WorkspaceObjectStore {
   private readonly objects = new Map<string, Uint8Array>();
 
   putObject(key: string, body: Uint8Array): void {
@@ -498,5 +636,18 @@ class TestWorkspaceObjectStore implements WorkspaceObjectStore {
       throw new Error(`Object '${key}' not found`);
     }
     return object;
+  }
+
+  async putWorkspaceFile(input: Parameters<WorkspaceFileByteStore["putWorkspaceFile"]>[0]) {
+    const objectKey = [
+      "execution-workspaces",
+      input.clientInstanceId,
+      input.conversationId,
+      input.workspaceId,
+      input.commandId,
+      input.path
+    ].join("/");
+    this.putObject(objectKey, input.bytes);
+    return { objectKey };
   }
 }

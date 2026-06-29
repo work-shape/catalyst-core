@@ -6,6 +6,7 @@ import {
   createToolResultMetadata
 } from "@vivd-catalyst/core";
 import { toUiMessages } from "../packages/chat-ui/src/assistant-ui-adapter";
+import { readToolArtifactRefs } from "../packages/chat-ui/src/tool-call";
 
 describe("chat UI message history projection", () => {
   it("replays persisted user document manifests as file attachments", () => {
@@ -288,6 +289,117 @@ describe("chat UI message history projection", () => {
         }
       ]
     });
+  });
+
+  it("replays promoted workspace artifact refs while keeping internal workspace files hidden", () => {
+    const messages: Message[] = [
+      {
+        id: "msg_tool_call",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "assistant",
+        text: "",
+        createdAt: "2026-06-15T00:00:01.000Z",
+        metadata: createAssistantToolCallsMetadata({
+          runId: "run_test",
+          toolCalls: [
+            {
+              toolCallId: "call_workspace",
+              toolName: "workspace.exec",
+              input: {
+                command: "build final report"
+              }
+            }
+          ]
+        })
+      },
+      {
+        id: "msg_tool_result",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "tool",
+        text: "{\"status\":\"completed\"}",
+        createdAt: "2026-06-15T00:00:02.000Z",
+        metadata: createToolResultMetadata({
+          runId: "run_test",
+          toolCall: {
+            toolCallId: "call_workspace",
+            toolName: "workspace.exec",
+            input: {
+              command: "build final report"
+            }
+          },
+          result: {
+            status: "success",
+            output: {
+              commandId: "wcmd_test",
+              workspaceId: "ews_test",
+              status: "completed",
+              changedFiles: [
+                {
+                  path: "scratch/final-report.pdf",
+                  byteSize: 128,
+                  checksum: "sha256:final",
+                  mimeType: "application/pdf",
+                  artifactId: "art_final"
+                }
+              ],
+              promotedArtifacts: [
+                {
+                  artifactId: "art_final",
+                  path: "scratch/final-report.pdf",
+                  kind: "application/pdf",
+                  mimeType: "application/pdf"
+                }
+              ]
+            },
+            artifacts: [
+              {
+                artifactId: "art_final",
+                kind: "application/pdf",
+                filename: "final-report.pdf",
+                mimeType: "application/pdf",
+                metadata: {
+                  source: "execution_workspace",
+                  workspacePath: "scratch/final-report.pdf"
+                }
+              }
+            ]
+          },
+          modelOutput: {
+            text: "{\"status\":\"completed\"}"
+          }
+        })
+      }
+    ];
+
+    const projected = toUiMessages(messages);
+    const toolPart = projected[0]?.parts[0] as
+      | { type: string; output?: unknown }
+      | undefined;
+
+    expect(toolPart).toMatchObject({
+      type: "dynamic-tool",
+      output: {
+        status: "success",
+        artifacts: [
+          {
+            artifactId: "art_final",
+            filename: "final-report.pdf"
+          }
+        ]
+      }
+    });
+    expect(readToolArtifactRefs(toolPart?.output)).toEqual([
+      {
+        artifactId: "art_final",
+        kind: "application/pdf",
+        filename: "final-report.pdf",
+        mimeType: "application/pdf"
+      }
+    ]);
+    expect(JSON.stringify(toolPart?.output)).not.toContain("objectKey");
+    expect(JSON.stringify(toolPart?.output)).not.toContain("execution-workspaces/");
   });
 
   it("replays persisted tool failures as dynamic tool errors", () => {

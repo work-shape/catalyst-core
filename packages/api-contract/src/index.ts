@@ -910,6 +910,11 @@ export const apiOperations = {
     method: "GET",
     path: "/api/conversations/:conversationId/files/:fileId/content"
   }),
+  getConversationArtifactContent: defineBlobApiOperation({
+    operationId: "getConversationArtifactContent",
+    method: "GET",
+    path: "/api/conversations/:conversationId/artifacts/:artifactId/content"
+  }),
   listAuditEvents: defineJsonApiOperation({
     operationId: "listAuditEvents",
     method: "GET",
