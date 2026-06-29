@@ -19,6 +19,8 @@ import {
   type CreateAgentRunInput,
   type CreateConversationInput,
   type CreateMessageInput,
+  type ExecutionWorkspaceFileStore,
+  type ExecutionWorkspaceMetadataStore,
   type PlatformFileStore,
   type PrepareConversationRunStartInput,
   type PreparedConversationRunStart,
@@ -41,10 +43,15 @@ import {
   type UserIdentity,
   type UserRecord,
   type UserStore,
+  type WorkspaceCommandStore,
   authenticatedUserFromRecord,
   createUserId,
   createPlatformId
 } from "./index";
+import {
+  createInMemoryExecutionWorkspaceStore,
+  type InMemoryExecutionWorkspaceStore
+} from "./testing-in-memory-execution-workspace-store";
 import {
   createInMemoryPlatformFileStore,
   type InMemoryPlatformFileStore
@@ -57,6 +64,9 @@ export class InMemoryPlatformStore
     PlatformFileStore,
     AgentRunStore,
     RunObservationStore,
+    ExecutionWorkspaceMetadataStore,
+    ExecutionWorkspaceFileStore,
+    WorkspaceCommandStore,
     AuditEventStore,
     ModelUsageEventStore,
     UserStore
@@ -73,6 +83,11 @@ export class InMemoryPlatformStore
   private readonly agentRuns = new Map<string, AgentRun>();
   private readonly runStartCommands = new Map<string, RunStartCommand>();
   private readonly runObservations = new Map<string, RunObservation[]>();
+  private readonly executionWorkspaceStore: InMemoryExecutionWorkspaceStore =
+    createInMemoryExecutionWorkspaceStore({
+      requireOwnedActiveConversation: (clientInstanceId, conversationId, ownerUserId) =>
+        this.requireOwnedActiveConversation(clientInstanceId, conversationId, ownerUserId)
+    });
   private readonly modelUsageEvents: ModelUsageEvent[] = [];
   private readonly users = new Map<string, UserRecord>();
   private readonly identities = new Map<string, UserIdentity>();
@@ -578,6 +593,80 @@ export class InMemoryPlatformStore
     return input.limit === undefined ? observations : observations.slice(0, input.limit);
   }
 
+  async ensureExecutionWorkspace(
+    input: Parameters<ExecutionWorkspaceMetadataStore["ensureExecutionWorkspace"]>[0]
+  ) {
+    return this.executionWorkspaceStore.ensureExecutionWorkspace(input);
+  }
+
+  async getExecutionWorkspace(
+    input: Parameters<ExecutionWorkspaceMetadataStore["getExecutionWorkspace"]>[0]
+  ) {
+    return this.executionWorkspaceStore.getExecutionWorkspace(input);
+  }
+
+  async getExecutionWorkspaceForConversation(
+    input: Parameters<ExecutionWorkspaceMetadataStore["getExecutionWorkspaceForConversation"]>[0]
+  ) {
+    return this.executionWorkspaceStore.getExecutionWorkspaceForConversation(input);
+  }
+
+  async upsertWorkspaceFile(
+    input: Parameters<ExecutionWorkspaceFileStore["upsertWorkspaceFile"]>[0]
+  ) {
+    return this.executionWorkspaceStore.upsertWorkspaceFile(input);
+  }
+
+  async listWorkspaceFiles(
+    input: Parameters<ExecutionWorkspaceFileStore["listWorkspaceFiles"]>[0]
+  ) {
+    return this.executionWorkspaceStore.listWorkspaceFiles(input);
+  }
+
+  async enqueueWorkspaceCommand(
+    input: Parameters<WorkspaceCommandStore["enqueueWorkspaceCommand"]>[0]
+  ) {
+    return this.executionWorkspaceStore.enqueueWorkspaceCommand(input);
+  }
+
+  async getWorkspaceCommand(input: Parameters<WorkspaceCommandStore["getWorkspaceCommand"]>[0]) {
+    return this.executionWorkspaceStore.getWorkspaceCommand(input);
+  }
+
+  async claimNextWorkspaceCommand(
+    input: Parameters<WorkspaceCommandStore["claimNextWorkspaceCommand"]>[0]
+  ) {
+    return this.executionWorkspaceStore.claimNextWorkspaceCommand(input);
+  }
+
+  async completeWorkspaceCommand(
+    input: Parameters<WorkspaceCommandStore["completeWorkspaceCommand"]>[0]
+  ) {
+    return this.executionWorkspaceStore.completeWorkspaceCommand(input);
+  }
+
+  async failWorkspaceCommand(input: Parameters<WorkspaceCommandStore["failWorkspaceCommand"]>[0]) {
+    return this.executionWorkspaceStore.failWorkspaceCommand(input);
+  }
+
+  async requestWorkspaceCommandCancellation(
+    input: Parameters<WorkspaceCommandStore["requestWorkspaceCommandCancellation"]>[0]
+  ) {
+    return this.executionWorkspaceStore.requestWorkspaceCommandCancellation(input);
+  }
+
+  async cancelClaimedWorkspaceCommand(
+    input: Parameters<WorkspaceCommandStore["cancelClaimedWorkspaceCommand"]>[0]
+  ) {
+    return this.executionWorkspaceStore.cancelClaimedWorkspaceCommand(input);
+  }
+
+  async recoverStaleWorkspaceCommands(
+    input: Parameters<WorkspaceCommandStore["recoverStaleWorkspaceCommands"]>[0]
+  ) {
+    return this.executionWorkspaceStore.recoverStaleWorkspaceCommands(input);
+  }
+
   async createManagedFile(input: Parameters<PlatformFileStore["createManagedFile"]>[0]) {
     return this.fileStore.createManagedFile(input);
   }
@@ -979,6 +1068,21 @@ export class InMemoryPlatformStore
   ): Promise<void> {
     const conversation = await this.getConversation(clientInstanceId, conversationId);
     if (!conversation || conversation.status !== "active") {
+      throw new AppError("NOT_FOUND", "Conversation is not available");
+    }
+  }
+
+  private async requireOwnedActiveConversation(
+    clientInstanceId: ClientInstanceId,
+    conversationId: ConversationId,
+    ownerUserId: string
+  ): Promise<void> {
+    const conversation = await this.getConversation(clientInstanceId, conversationId);
+    if (
+      !conversation ||
+      conversation.status !== "active" ||
+      conversation.ownerUserId !== ownerUserId
+    ) {
       throw new AppError("NOT_FOUND", "Conversation is not available");
     }
   }
