@@ -57,6 +57,13 @@
       "when": 1782517827572,
       "tag": "0007_magical_norman_osborn",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1782762527653,
+      "tag": "0008_familiar_prowler",
+      "breakpoints": true
     }
   ]
 }

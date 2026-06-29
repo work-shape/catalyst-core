@@ -6,6 +6,8 @@ export type AgentRunId = Brand<string, "AgentRunId">;
 export type ClientInstanceId = Brand<string, "ClientInstanceId">;
 export type ConversationId = Brand<string, "ConversationId">;
 export type ConversationAttachmentId = Brand<string, "ConversationAttachmentId">;
+export type ExecutionWorkspaceId = Brand<string, "ExecutionWorkspaceId">;
+export type WorkspaceCommandId = Brand<string, "WorkspaceCommandId">;
 export type MessageId = Brand<string, "MessageId">;
 export type ManagedArtifactId = Brand<string, "ManagedArtifactId">;
 export type ManagedFileId = Brand<string, "ManagedFileId">;
@@ -35,6 +37,14 @@ export function asConversationId(value: string): ConversationId {
 
 export function asConversationAttachmentId(value: string): ConversationAttachmentId {
   return value as ConversationAttachmentId;
+}
+
+export function asExecutionWorkspaceId(value: string): ExecutionWorkspaceId {
+  return value as ExecutionWorkspaceId;
+}
+
+export function asWorkspaceCommandId(value: string): WorkspaceCommandId {
+  return value as WorkspaceCommandId;
 }
 
 export function asMessageId(value: string): MessageId {

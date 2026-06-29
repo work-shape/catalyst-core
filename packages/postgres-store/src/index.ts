@@ -22,6 +22,10 @@ import {
   type CreateMessageInput,
   type CreateUserInput,
   type DeleteUserIdentityInput,
+  type ExecutionWorkspace,
+  type ExecutionWorkspaceFileStore,
+  type ExecutionWorkspaceMetadataStore,
+  type ExecutionWorkspaceId,
   type ModelUsageEvent,
   type ModelUsageEventInput,
   type ModelUsageEventStore,
@@ -35,7 +39,11 @@ import {
   type UpdateAgentRunStatusInput,
   type UpsertUserIdentityInput,
   type UserRecord,
-  type UserStore
+  type UserStore,
+  type WorkspaceCommand,
+  type WorkspaceCommandId,
+  type WorkspaceCommandStore,
+  type WorkspaceFile
 } from "@vivd-catalyst/core";
 import {
   appendRunObservation as appendPostgresRunObservation,
@@ -75,6 +83,21 @@ import {
 } from "./postgres-conversation-operations";
 import type { PostgresDatabase } from "./postgres-database";
 import { createPostgresPlatformFileStore } from "./postgres-file-store";
+import {
+  cancelClaimedWorkspaceCommand as cancelClaimedPostgresWorkspaceCommand,
+  claimNextWorkspaceCommand as claimNextPostgresWorkspaceCommand,
+  completeWorkspaceCommand as completePostgresWorkspaceCommand,
+  enqueueWorkspaceCommand as enqueuePostgresWorkspaceCommand,
+  ensureExecutionWorkspace as ensurePostgresExecutionWorkspace,
+  failWorkspaceCommand as failPostgresWorkspaceCommand,
+  getExecutionWorkspace as getPostgresExecutionWorkspace,
+  getExecutionWorkspaceForConversation as getPostgresExecutionWorkspaceForConversation,
+  getWorkspaceCommand as getPostgresWorkspaceCommand,
+  listWorkspaceFiles as listPostgresWorkspaceFiles,
+  recoverStaleWorkspaceCommands as recoverStalePostgresWorkspaceCommands,
+  requestWorkspaceCommandCancellation as requestPostgresWorkspaceCommandCancellation,
+  upsertWorkspaceFile as upsertPostgresWorkspaceFile
+} from "./postgres-execution-workspace-operations";
 import { runPostgresMigrations } from "./migrations";
 import {
   createUser as createPostgresUser,
@@ -113,6 +136,9 @@ export class PostgresPlatformStore
     PlatformFileStore,
     AgentRunStore,
     RunObservationStore,
+    ExecutionWorkspaceMetadataStore,
+    ExecutionWorkspaceFileStore,
+    WorkspaceCommandStore,
     AuditEventStore,
     ModelUsageEventStore,
     UserStore
@@ -292,6 +318,86 @@ export class PostgresPlatformStore
 
   async listRunObservations(input: Parameters<RunObservationStore["listRunObservations"]>[0]) {
     return listPostgresRunObservations(this.db, input);
+  }
+
+  async ensureExecutionWorkspace(
+    input: Parameters<ExecutionWorkspaceMetadataStore["ensureExecutionWorkspace"]>[0]
+  ): Promise<ExecutionWorkspace> {
+    return ensurePostgresExecutionWorkspace(this.db, input);
+  }
+
+  async getExecutionWorkspace(input: {
+    clientInstanceId: ClientInstanceId;
+    workspaceId: ExecutionWorkspaceId;
+  }): Promise<ExecutionWorkspace | undefined> {
+    return getPostgresExecutionWorkspace(this.db, input);
+  }
+
+  async getExecutionWorkspaceForConversation(
+    input: Parameters<ExecutionWorkspaceMetadataStore["getExecutionWorkspaceForConversation"]>[0]
+  ): Promise<ExecutionWorkspace | undefined> {
+    return getPostgresExecutionWorkspaceForConversation(this.db, input);
+  }
+
+  async upsertWorkspaceFile(
+    input: Parameters<ExecutionWorkspaceFileStore["upsertWorkspaceFile"]>[0]
+  ): Promise<WorkspaceFile> {
+    return upsertPostgresWorkspaceFile(this.db, input);
+  }
+
+  async listWorkspaceFiles(
+    input: Parameters<ExecutionWorkspaceFileStore["listWorkspaceFiles"]>[0]
+  ): Promise<WorkspaceFile[]> {
+    return listPostgresWorkspaceFiles(this.db, input);
+  }
+
+  async enqueueWorkspaceCommand(
+    input: Parameters<WorkspaceCommandStore["enqueueWorkspaceCommand"]>[0]
+  ): Promise<WorkspaceCommand> {
+    return enqueuePostgresWorkspaceCommand(this.db, input);
+  }
+
+  async getWorkspaceCommand(input: {
+    clientInstanceId: ClientInstanceId;
+    commandId: WorkspaceCommandId;
+  }): Promise<WorkspaceCommand | undefined> {
+    return getPostgresWorkspaceCommand(this.db, input);
+  }
+
+  async claimNextWorkspaceCommand(
+    input: Parameters<WorkspaceCommandStore["claimNextWorkspaceCommand"]>[0]
+  ): Promise<WorkspaceCommand | undefined> {
+    return claimNextPostgresWorkspaceCommand(this.db, input);
+  }
+
+  async completeWorkspaceCommand(
+    input: Parameters<WorkspaceCommandStore["completeWorkspaceCommand"]>[0]
+  ): Promise<WorkspaceCommand> {
+    return completePostgresWorkspaceCommand(this.db, input);
+  }
+
+  async failWorkspaceCommand(
+    input: Parameters<WorkspaceCommandStore["failWorkspaceCommand"]>[0]
+  ): Promise<WorkspaceCommand> {
+    return failPostgresWorkspaceCommand(this.db, input);
+  }
+
+  async requestWorkspaceCommandCancellation(
+    input: Parameters<WorkspaceCommandStore["requestWorkspaceCommandCancellation"]>[0]
+  ): Promise<WorkspaceCommand> {
+    return requestPostgresWorkspaceCommandCancellation(this.db, input);
+  }
+
+  async cancelClaimedWorkspaceCommand(
+    input: Parameters<WorkspaceCommandStore["cancelClaimedWorkspaceCommand"]>[0]
+  ): Promise<WorkspaceCommand> {
+    return cancelClaimedPostgresWorkspaceCommand(this.db, input);
+  }
+
+  async recoverStaleWorkspaceCommands(
+    input: Parameters<WorkspaceCommandStore["recoverStaleWorkspaceCommands"]>[0]
+  ): Promise<WorkspaceCommand[]> {
+    return recoverStalePostgresWorkspaceCommands(this.db, input);
   }
 
   async createManagedFile(input: Parameters<PlatformFileStore["createManagedFile"]>[0]) {

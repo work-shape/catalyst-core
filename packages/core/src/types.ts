@@ -1,6 +1,7 @@
 export * from "./identity";
 export * from "./user";
 export * from "./files";
+export * from "./execution-workspace";
 export * from "./conversation";
 export * from "./message-metadata";
 export * from "./tool-execution";

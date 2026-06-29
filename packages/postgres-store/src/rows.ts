@@ -6,19 +6,25 @@ import {
   type ClientInstanceId,
   type Conversation,
   type ConversationAttachment,
+  type ExecutionWorkspace,
   type ManagedArtifactRecord,
   type ModelUsageEvent,
   type ManagedFileRecord,
   type RunObservation,
+  type WorkspaceCommand,
+  type WorkspaceFile,
   type UserIdentity,
   type UserRecord,
   asAgentRunId,
   asConversationAttachmentId,
   asConversationId,
+  asExecutionWorkspaceId,
   asManagedArtifactId,
   asManagedFileId,
   asMessageId,
-  asUserId
+  asToolCallId,
+  asUserId,
+  asWorkspaceCommandId
 } from "@vivd-catalyst/core";
 import type {
   agentRunObservations,
@@ -26,18 +32,24 @@ import type {
   auditEvents,
   conversationAttachments,
   conversations,
+  executionWorkspaceFiles,
+  executionWorkspaces,
   managedArtifacts,
   managedFiles,
   messages,
   modelUsageEvents,
   productUsers,
-  userIdentities
+  userIdentities,
+  workspaceCommands
 } from "./schema";
 
 export type AgentRunRow = typeof agentRuns.$inferSelect;
 export type RunObservationRow = typeof agentRunObservations.$inferSelect;
 export type ConversationRow = typeof conversations.$inferSelect;
 export type MessageRow = typeof messages.$inferSelect;
+export type ExecutionWorkspaceRow = typeof executionWorkspaces.$inferSelect;
+export type WorkspaceFileRow = typeof executionWorkspaceFiles.$inferSelect;
+export type WorkspaceCommandRow = typeof workspaceCommands.$inferSelect;
 export type ManagedFileRow = typeof managedFiles.$inferSelect;
 export type ManagedArtifactRow = typeof managedArtifacts.$inferSelect;
 export type ConversationAttachmentRow = typeof conversationAttachments.$inferSelect;
@@ -119,6 +131,75 @@ export function mapRunObservation(row: RunObservationRow | undefined): RunObserv
     type: row.type,
     payload: row.payload,
     createdAt: row.createdAt.toISOString()
+  };
+}
+
+export function mapExecutionWorkspace(row: ExecutionWorkspaceRow | undefined): ExecutionWorkspace {
+  if (!row) {
+    throw new AppError("INTERNAL", "Expected execution workspace row");
+  }
+  return {
+    id: asExecutionWorkspaceId(row.id),
+    clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    conversationId: asConversationId(row.conversationId),
+    ownerUserId: row.ownerUserId,
+    status: row.status,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    deletedAt: row.deletedAt?.toISOString()
+  };
+}
+
+export function mapWorkspaceFile(row: WorkspaceFileRow | undefined): WorkspaceFile {
+  if (!row) {
+    throw new AppError("INTERNAL", "Expected workspace file row");
+  }
+  return {
+    workspaceId: asExecutionWorkspaceId(row.workspaceId),
+    clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    conversationId: asConversationId(row.conversationId),
+    path: row.path,
+    objectKey: row.objectKey,
+    byteSize: row.byteSize,
+    checksum: row.checksum,
+    mimeType: row.mimeType ?? undefined,
+    metadata: row.metadata,
+    lastCommandId: row.lastCommandId ? asWorkspaceCommandId(row.lastCommandId) : undefined,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString()
+  };
+}
+
+export function mapWorkspaceCommand(row: WorkspaceCommandRow | undefined): WorkspaceCommand {
+  if (!row) {
+    throw new AppError("INTERNAL", "Expected workspace command row");
+  }
+  return {
+    id: asWorkspaceCommandId(row.id),
+    workspaceId: asExecutionWorkspaceId(row.workspaceId),
+    clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    conversationId: asConversationId(row.conversationId),
+    ownerUserId: row.ownerUserId,
+    agentRunId: row.agentRunId ? asAgentRunId(row.agentRunId) : undefined,
+    toolCallId: row.toolCallId ? asToolCallId(row.toolCallId) : undefined,
+    command: row.command,
+    cwd: row.cwd ?? undefined,
+    status: row.status,
+    limits: row.limits,
+    expectedOutputs: row.expectedOutputs,
+    output: row.output ?? undefined,
+    error: row.error ?? undefined,
+    leaseOwner: row.leaseOwner ?? undefined,
+    leaseToken: row.leaseToken ?? undefined,
+    leaseExpiresAt: row.leaseExpiresAt?.toISOString(),
+    heartbeatAt: row.heartbeatAt?.toISOString(),
+    attempts: row.attempts,
+    cancellationReason: row.cancellationReason ?? undefined,
+    cancellationRequestedAt: row.cancellationRequestedAt?.toISOString(),
+    queuedAt: row.queuedAt.toISOString(),
+    startedAt: row.startedAt?.toISOString(),
+    completedAt: row.completedAt?.toISOString(),
+    updatedAt: row.updatedAt.toISOString()
   };
 }
 
