@@ -160,6 +160,17 @@ describePostgres("Postgres execution workspace store", () => {
       status: "queued",
       attempts: 0
     });
+    await expect(
+      store.countActiveWorkspaceCommands({
+        clientInstanceId: fixture.clientInstanceId,
+        conversationId: fixture.conversation.id
+      })
+    ).resolves.toEqual({
+      queued: 1,
+      running: 0,
+      cancelling: 0,
+      total: 1
+    });
 
     const claimed = await secondStore.claimNextWorkspaceCommand({
       clientInstanceId: fixture.clientInstanceId,
@@ -175,6 +186,17 @@ describePostgres("Postgres execution workspace store", () => {
       leaseToken: "lease-a",
       attempts: 1,
       startedAt: "2026-06-29T10:21:00.000Z"
+    });
+    await expect(
+      store.countActiveWorkspaceCommands({
+        clientInstanceId: fixture.clientInstanceId,
+        ownerUserId: fixture.ownerUserId
+      })
+    ).resolves.toEqual({
+      queued: 0,
+      running: 1,
+      cancelling: 0,
+      total: 1
     });
 
     const output = commandOutput({
@@ -211,6 +233,16 @@ describePostgres("Postgres execution workspace store", () => {
     ).resolves.toMatchObject({
       status: "completed",
       output
+    });
+    await expect(
+      store.countActiveWorkspaceCommands({
+        clientInstanceId: fixture.clientInstanceId
+      })
+    ).resolves.toEqual({
+      queued: 0,
+      running: 0,
+      cancelling: 0,
+      total: 0
     });
   });
 

@@ -1,10 +1,12 @@
 import { and, asc, eq, inArray, ne, sql as drizzleSql } from "drizzle-orm";
 import {
   AppError,
+  type ActiveWorkspaceCommandCounts,
   type CancelClaimedWorkspaceCommandInput,
   type ClaimWorkspaceCommandInput,
   type ClientInstanceId,
   type CompleteWorkspaceCommandInput,
+  type CountActiveWorkspaceCommandsInput,
   type ConversationId,
   type EnqueueWorkspaceCommandInput,
   type EnsureExecutionWorkspaceInput,
@@ -235,6 +237,46 @@ export async function getWorkspaceCommand(
     )
     .limit(1);
   return row ? mapWorkspaceCommand(row) : undefined;
+}
+
+export async function countActiveWorkspaceCommands(
+  db: PostgresDatabase,
+  input: CountActiveWorkspaceCommandsInput
+): Promise<ActiveWorkspaceCommandCounts> {
+  const filters = [
+    drizzleSql`wc.client_instance_id = ${input.clientInstanceId}`,
+    drizzleSql`wc.status in ('queued', 'running', 'cancelling')`,
+    drizzleSql`ew.status = 'active'`
+  ];
+  if (input.conversationId !== undefined) {
+    filters.push(drizzleSql`wc.conversation_id = ${input.conversationId}`);
+  }
+  if (input.ownerUserId !== undefined) {
+    filters.push(drizzleSql`wc.owner_user_id = ${input.ownerUserId}`);
+  }
+
+  const rows = (await db.execute(drizzleSql<{ status: string; count: number }>`
+    select wc.status, count(*)::int as count
+    from workspace_commands wc
+    join execution_workspaces ew on ew.id = wc.workspace_id
+    where ${drizzleSql.join(filters, drizzleSql` and `)}
+    group by wc.status
+  `)) as unknown as Array<{ status: string; count: number | string }>;
+
+  const counts: ActiveWorkspaceCommandCounts = {
+    queued: 0,
+    running: 0,
+    cancelling: 0,
+    total: 0
+  };
+  for (const row of rows) {
+    const count = Number(row.count);
+    if (row.status === "queued" || row.status === "running" || row.status === "cancelling") {
+      counts[row.status] = count;
+      counts.total += count;
+    }
+  }
+  return counts;
 }
 
 export async function claimNextWorkspaceCommand(

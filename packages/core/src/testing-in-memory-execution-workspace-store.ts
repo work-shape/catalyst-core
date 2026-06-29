@@ -1,7 +1,9 @@
 import {
   AppError,
+  type ActiveWorkspaceCommandCounts,
   type CancelClaimedWorkspaceCommandInput,
   type ClaimWorkspaceCommandInput,
+  type CountActiveWorkspaceCommandsInput,
   type ClientInstanceId,
   type CompleteWorkspaceCommandInput,
   type ConversationId,
@@ -151,6 +153,34 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
           file.clientInstanceId === input.clientInstanceId && file.workspaceId === input.workspaceId
       )
       .sort((left, right) => left.path.localeCompare(right.path));
+  }
+
+  async countActiveWorkspaceCommands(
+    input: CountActiveWorkspaceCommandsInput
+  ): Promise<ActiveWorkspaceCommandCounts> {
+    const counts: ActiveWorkspaceCommandCounts = {
+      queued: 0,
+      running: 0,
+      cancelling: 0,
+      total: 0
+    };
+    for (const command of this.workspaceCommands.values()) {
+      if (
+        command.clientInstanceId !== input.clientInstanceId ||
+        (input.conversationId !== undefined && command.conversationId !== input.conversationId) ||
+        (input.ownerUserId !== undefined && command.ownerUserId !== input.ownerUserId) ||
+        !isActiveWorkspaceCommand(command)
+      ) {
+        continue;
+      }
+      const workspace = this.executionWorkspaces.get(command.workspaceId);
+      if (workspace?.status !== "active") {
+        continue;
+      }
+      counts[command.status] += 1;
+      counts.total += 1;
+    }
+    return counts;
   }
 
   async enqueueWorkspaceCommand(input: EnqueueWorkspaceCommandInput): Promise<WorkspaceCommand> {
@@ -402,4 +432,10 @@ function isTerminalWorkspaceCommand(command: WorkspaceCommand): boolean {
     command.status === "failed" ||
     command.status === "cancelled"
   );
+}
+
+function isActiveWorkspaceCommand(
+  command: WorkspaceCommand
+): command is WorkspaceCommand & { status: "queued" | "running" | "cancelling" } {
+  return command.status === "queued" || command.status === "running" || command.status === "cancelling";
 }

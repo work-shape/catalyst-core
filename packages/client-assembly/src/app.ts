@@ -21,6 +21,7 @@ import {
 import {
   createBuiltInToolDefinitions,
   createReadSkillTool,
+  createWorkspaceToolDefinitions,
   InProcessToolExecution,
   SkillCatalog,
   ToolRegistry
@@ -95,6 +96,7 @@ export async function createClientInstanceApp(
     config,
     tools: [
       ...createBuiltInToolDefinitions(),
+      ...createWorkspaceToolDefinitions({ store }),
       ...createDataSourceQueryTools({ dataSources }),
       createReadSkillTool({
         catalog: skillCatalog,
