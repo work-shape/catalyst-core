@@ -143,6 +143,40 @@ describe("workspace command worker", () => {
       }
     });
   });
+
+  it("cancels active execution promptly when stop requests active cancellation", async () => {
+    const harness = await createWorkerHarness({
+      pollIntervalMs: 5
+    });
+    const queued = await harness.enqueue("sleep 60");
+    const loop = harness.worker.start();
+    await harness.executor.started;
+
+    const stop = harness.worker.stop({
+      cancelActive: true,
+      reason: "Received SIGTERM"
+    });
+
+    const stopResult = Promise.race([
+      stop.then(() => "stopped"),
+      sleep(100).then(() => "timeout")
+    ]);
+    await expect(stopResult).resolves.toBe("stopped");
+    await loop;
+
+    await expect(
+      harness.store.getWorkspaceCommand({
+        clientInstanceId: harness.clientInstanceId,
+        commandId: queued.id
+      })
+    ).resolves.toMatchObject({
+      status: "cancelled",
+      cancellationReason: "Received SIGTERM",
+      output: {
+        exitCode: 130
+      }
+    });
+  });
 });
 
 async function createWorkerHarness(input: { pollIntervalMs?: number } = {}) {

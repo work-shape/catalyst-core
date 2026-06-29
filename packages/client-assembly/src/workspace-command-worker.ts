@@ -90,6 +90,7 @@ export async function runClientInstanceWorkspaceCommandWorker(
     stopping = true;
     service
       .stop({
+        cancelActive: true,
         reason: `Received ${signal}`
       })
       .catch((error: unknown) => {

@@ -23,7 +23,8 @@ import {
   WorkspaceCommandService,
   type DockerCommandClient,
   type DockerCommandRunInput,
-  type ProcessResult
+  type ProcessResult,
+  type WorkspaceCommandProcessInput
 } from "@vivd-catalyst/tool-execution";
 
 const cleanupDirectories: string[] = [];
@@ -172,6 +173,46 @@ describe("docker workspace command runner", () => {
     });
     expect(harness.fakeDocker.removedContainers).toEqual(["fake-container"]);
   });
+
+  it("removes cancelled Docker containers when active execution is aborted", async () => {
+    const controller = new AbortController();
+    const fakeDocker = new FakeDockerCommandClient(
+      (input) =>
+        new Promise((resolve) => {
+          input.signal?.addEventListener(
+            "abort",
+            () =>
+              resolve(
+                processResult({
+                  exitCode: 130,
+                  cancelled: true,
+                  cancellationReason:
+                    typeof input.signal?.reason === "string" ? input.signal.reason : undefined
+                })
+              ),
+            { once: true }
+          );
+        })
+    );
+    const executor = new DockerWorkspaceCommandProcessExecutor({
+      image: "runner:test",
+      commandClient: fakeDocker,
+      createContainerName: () => "fake-container"
+    });
+
+    const running = executor.execute(
+      dockerProcessInput({
+        signal: controller.signal
+      })
+    );
+    controller.abort("Received SIGTERM");
+
+    await expect(running).resolves.toMatchObject({
+      cancelled: true,
+      cancellationReason: "Received SIGTERM"
+    });
+    expect(fakeDocker.removedContainers).toEqual(["fake-container"]);
+  });
 });
 
 async function createDockerHarness(input: {
@@ -261,6 +302,33 @@ function processResult(input: Partial<ProcessResult> & { exitCode: number }): Pr
       stdout: false,
       stderr: false
     },
+    ...input
+  };
+}
+
+function dockerProcessInput(
+  input: Partial<WorkspaceCommandProcessInput> = {}
+): WorkspaceCommandProcessInput {
+  return {
+    command: {
+      id: asWorkspaceCommandId("wcmd_docker_cancel"),
+      workspaceId: asExecutionWorkspaceId("ews_docker_cancel"),
+      clientInstanceId: asClientInstanceId("client_docker_cancel"),
+      conversationId: asConversationId("conv_docker_cancel"),
+      ownerUserId: "user-1",
+      command: "sleep 600",
+      status: "running",
+      limits: { timeoutSeconds: 60 },
+      expectedOutputs: [],
+      attempts: 1,
+      queuedAt: "2026-06-29T10:00:00.000Z",
+      updatedAt: "2026-06-29T10:00:00.000Z"
+    },
+    workspaceDirectory: "/host/workspace",
+    workspaceCwd: ".",
+    cwd: "/host/workspace",
+    tempDirectory: "/host/tmp",
+    env: {},
     ...input
   };
 }
