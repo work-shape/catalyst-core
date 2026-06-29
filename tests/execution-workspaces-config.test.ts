@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { applyWorkspaceRunnerImageEnvOverride } from "@vivd-catalyst/client-assembly";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 
 describe("execution workspaces config", () => {
@@ -110,6 +111,31 @@ describe("execution workspaces config", () => {
           })
         ),
       /heartbeat interval/u
+    );
+  });
+
+  it("lets the workspace command worker use the deployment-built runner image tag", () => {
+    const config = parseClientInstanceConfig(
+      baseConfig({
+        executionWorkspaces: {
+          enabled: true,
+          runner: {
+            image: "ghcr.io/example/catalyst-runner-base:placeholder"
+          }
+        }
+      })
+    );
+
+    const resolved = applyWorkspaceRunnerImageEnvOverride(config, {
+      EXECUTION_WORKSPACE_RUNNER_IMAGE:
+        "ghcr.io/example/vivd-catalyst-musterbau-catalyst-runner-base:staging-20260629"
+    });
+
+    expect(resolved.executionWorkspaces.runner.image).toBe(
+      "ghcr.io/example/vivd-catalyst-musterbau-catalyst-runner-base:staging-20260629"
+    );
+    expect(config.executionWorkspaces.runner.image).toBe(
+      "ghcr.io/example/catalyst-runner-base:placeholder"
     );
   });
 });
