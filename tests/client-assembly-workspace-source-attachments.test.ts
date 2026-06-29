@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -264,6 +265,79 @@ describe("execution workspace source attachments", () => {
     }
   });
 
+  it("deletes workspace bytes before broad cleanup handlers mark records deleted", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vivd-workspace-cleanup-app-"));
+    const expectedDeletedObjectKeys: string[] = [];
+    const app = await createClientInstanceApp({
+      config: createWorkspaceAttachmentConfig(),
+      env: {
+        EXECUTION_WORKSPACE_OBJECT_ROOT: root
+      },
+      storeMode: "memory",
+      capabilities: [
+        createWorkspaceArtifactSeedingCapability(root),
+        createBroadCleanupMarkerCapability(root, expectedDeletedObjectKeys)
+      ],
+      tools: []
+    });
+    try {
+      const created = await app.server.inject({
+        method: "POST",
+        url: "/api/conversations",
+        payload: { title: "Workspace cleanup ordering test" }
+      });
+      expect(created.statusCode).toBe(200);
+      const conversation = created.json() as { id: string };
+
+      const sourceContent = "source,total\nAda,42\n";
+      const uploadedSource = await uploadFile(app.server, conversation.id, {
+        filename: "source.csv",
+        contentType: "text/csv",
+        content: sourceContent
+      });
+      expect(uploadedSource.statusCode).toBe(200);
+      const sourceObjectKey = createExpectedSourceObjectKey({
+        clientInstanceId: "workspace-source-local",
+        conversationId: conversation.id,
+        checksum: checksumString(sourceContent),
+        filename: "source.csv"
+      });
+
+      const artifactContent = "name,total\nAda,42\n";
+      const uploadedArtifact = await uploadFile(app.server, conversation.id, {
+        filename: "source.seed",
+        contentType: "text/x-workspace-artifact-test",
+        content: artifactContent
+      });
+      expect(uploadedArtifact.statusCode).toBe(200);
+      const artifactObjectKey = createExpectedSeedArtifactObjectKey({
+        clientInstanceId: "workspace-source-local",
+        conversationId: conversation.id,
+        checksum: checksumString(artifactContent),
+        filename: "final.csv"
+      });
+      expectedDeletedObjectKeys.push(sourceObjectKey, artifactObjectKey);
+
+      await expect(access(objectPath(root, sourceObjectKey))).resolves.toBeUndefined();
+      await expect(access(objectPath(root, artifactObjectKey))).resolves.toBeUndefined();
+
+      const deleted = await app.server.inject({
+        method: "DELETE",
+        url: `/api/conversations/${conversation.id}`
+      });
+      expect(deleted.statusCode).toBe(200);
+      await expect(access(objectPath(root, sourceObjectKey))).rejects.toMatchObject({
+        code: "ENOENT"
+      });
+      await expect(access(objectPath(root, artifactObjectKey))).rejects.toMatchObject({
+        code: "ENOENT"
+      });
+    } finally {
+      await app.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("serves promoted workspace artifacts before broad managed-object readers", async () => {
     const root = await mkdtemp(join(tmpdir(), "vivd-workspace-source-app-"));
     const app = await createClientInstanceApp({
@@ -395,6 +469,66 @@ function createBroadManagedObjectReaderCapability(): ClientInstanceCapability {
   };
 }
 
+function createBroadCleanupMarkerCapability(
+  root: string,
+  expectedDeletedObjectKeys: readonly string[]
+): ClientInstanceCapability {
+  return {
+    name: "broad-cleanup-marker",
+    create(context) {
+      return {
+        attachments: [
+          {
+            name: "broad-cleanup-marker",
+            maxFileBytes: 1,
+            acceptedFileTypes: [],
+            acceptsFile() {
+              return false;
+            },
+            async listDraftAttachments() {
+              return [];
+            },
+            async uploadDraftAttachment() {
+              throw new AppError("NOT_FOUND", "Attachment is not available");
+            },
+            async retryDraftAttachment() {
+              throw new AppError("NOT_FOUND", "Attachment is not available");
+            },
+            async deleteDraftAttachment() {
+              throw new AppError("NOT_FOUND", "Attachment is not available");
+            },
+            async deleteConversationAttachments(input) {
+              for (const objectKey of expectedDeletedObjectKeys) {
+                await expectObjectMissing(root, objectKey);
+              }
+              return context.files.markConversationManagedObjectsDeleted({
+                clientInstanceId: context.clientInstanceId,
+                conversationId: input.conversationId,
+                deletedAt: input.deletedAt
+              });
+            },
+            async readConversationFile() {
+              throw new AppError("NOT_FOUND", "Attachment is not available");
+            },
+            blockingDraftAttachmentMessage() {
+              return undefined;
+            },
+            createAttachmentManifest() {
+              return {
+                version: 1,
+                attachments: []
+              };
+            },
+            isInlineDisplayMimeType() {
+              return false;
+            }
+          }
+        ]
+      };
+    }
+  };
+}
+
 function createWorkspaceArtifactSeedingCapability(root: string): ClientInstanceCapability {
   return {
     name: "workspace-artifact-seeding",
@@ -494,15 +628,15 @@ function createWorkspaceArtifactSeedingCapability(root: string): ClientInstanceC
 function createWorkspaceArtifactSeedByteStore(root: string) {
   return {
     async putObject(input: { key: string; body: Uint8Array }) {
-      const path = join(root, ...input.key.split("/"));
+      const path = objectPath(root, input.key);
       await mkdir(dirname(path), { recursive: true });
       await writeFile(path, input.body);
     },
     async getObject(key: string) {
-      return readFile(join(root, ...key.split("/")));
+      return readFile(objectPath(root, key));
     },
     async deleteObject(key: string) {
-      await rm(join(root, ...key.split("/")), { force: true });
+      await rm(objectPath(root, key), { force: true });
     }
   };
 }
@@ -540,6 +674,67 @@ function createWorkspaceArtifactSeedKeyFactory() {
       ].join("/");
     }
   };
+}
+
+async function expectObjectMissing(root: string, objectKey: string): Promise<void> {
+  try {
+    await access(objectPath(root, objectKey));
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      return;
+    }
+    throw error;
+  }
+  throw new Error(`Expected workspace object '${objectKey}' to be deleted before broad cleanup`);
+}
+
+function objectPath(root: string, objectKey: string): string {
+  return join(root, ...objectKey.split("/"));
+}
+
+function createExpectedSourceObjectKey(input: {
+  clientInstanceId: string;
+  conversationId: string;
+  checksum: string;
+  filename: string;
+}): string {
+  return [
+    "execution-workspace-source-files",
+    encodeURIComponent(input.clientInstanceId),
+    encodeURIComponent(input.conversationId),
+    encodeURIComponent(input.checksum),
+    encodeURIComponent(input.filename)
+  ].join("/");
+}
+
+function createExpectedSeedArtifactObjectKey(input: {
+  clientInstanceId: string;
+  conversationId: string;
+  checksum: string;
+  filename: string;
+}): string {
+  return [
+    "execution-workspaces",
+    encodeURIComponent(input.clientInstanceId),
+    encodeURIComponent(input.conversationId),
+    "ews_seed",
+    "wcmd_seed",
+    encodeURIComponent(input.checksum),
+    encodeURIComponent(input.filename)
+  ].join("/");
+}
+
+function checksumString(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function isNotFoundError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "ENOENT"
+  );
 }
 
 function createStrictUploadCapability(): ClientInstanceCapability {

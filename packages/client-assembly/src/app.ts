@@ -342,9 +342,13 @@ function createCompositeAttachmentService(
       return tryAttachmentHandlers(handlers, (handler) => handler.deleteDraftAttachment(input), input.attachmentId);
     },
     async deleteConversationAttachments(input) {
-      const deletions = await Promise.all(
-        handlers.map((handler) => handler.deleteConversationAttachments(input))
-      );
+      const deletions: Array<
+        Awaited<ReturnType<ClientInstanceAttachmentHandler["deleteConversationAttachments"]>>
+      > = [];
+      // Preserve handler order so namespace-specific byte cleanup runs before broad record markers.
+      for (const handler of handlers) {
+        deletions.push(await handler.deleteConversationAttachments(input));
+      }
       return {
         attachmentCount: deletions.reduce((count, deletion) => count + deletion.attachmentCount, 0),
         fileObjectKeys: uniqueStrings(deletions.flatMap((deletion) => deletion.fileObjectKeys)),
