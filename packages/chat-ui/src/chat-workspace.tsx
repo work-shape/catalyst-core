@@ -113,7 +113,7 @@ function ChatWorkspaceContent({
               config={model.config.config}
               conversations={model.conversationRail.conversations}
               selectedConversationId={model.conversationRail.selectedConversationId}
-              isSuperadmin={model.conversationRail.isSuperadmin}
+              canViewAdministration={model.conversationRail.canViewAdministration}
               view={model.conversationRail.view}
               creatingConversation={model.conversationRail.creatingConversation}
               deletingConversation={model.conversationRail.deletingConversation}

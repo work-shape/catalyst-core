@@ -17,6 +17,7 @@ export function Dialog({
   className?: string;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const pointerStartedOnBackdropRef = useRef(false);
   const titleId = useId();
 
   useEffect(() => {
@@ -40,10 +41,14 @@ export function Dialog({
         className
       )}
       onClose={onClose}
+      onPointerDown={(event) => {
+        pointerStartedOnBackdropRef.current = event.target === dialogRef.current;
+      }}
       onClick={(event) => {
-        if (event.target === dialogRef.current) {
+        if (pointerStartedOnBackdropRef.current && event.target === dialogRef.current) {
           onClose();
         }
+        pointerStartedOnBackdropRef.current = false;
       }}
     >
       <div className="flex items-center justify-between gap-3 border-b px-5 py-3">

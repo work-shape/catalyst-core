@@ -45,6 +45,21 @@ export interface SetStandalonePasswordInput {
   password: string;
 }
 
+export interface SetOrCreateStandalonePasswordSignInInput {
+  email: string;
+  displayLabel: string;
+  roles: string[];
+  permissionRefs: string[];
+  password: string;
+}
+
+export interface StandalonePasswordSignIn {
+  externalUserId: string;
+  displayLabel: string;
+  email: string;
+  emailVerified: boolean;
+}
+
 export interface ChangeStandalonePasswordInput {
   externalUserId: string;
   currentPassword: string;
@@ -57,6 +72,9 @@ export interface StandaloneAuthRuntime {
   baseUrl: string;
   seedUsers(): Promise<void>;
   setPassword(input: SetStandalonePasswordInput): Promise<void>;
+  setOrCreatePasswordSignIn(
+    input: SetOrCreateStandalonePasswordSignInInput
+  ): Promise<StandalonePasswordSignIn>;
   changePassword(input: ChangeStandalonePasswordInput): Promise<void>;
   close(): Promise<void>;
 }
@@ -116,6 +134,7 @@ export async function createStandaloneAuthRuntime(
     baseUrl: options.baseUrl,
     seedUsers,
     setPassword: (input) => profileStore.setPassword(input),
+    setOrCreatePasswordSignIn: (input) => profileStore.setOrCreatePasswordSignIn(input),
     changePassword: (input) => profileStore.changePassword(input),
     async close() {
       await sql.end();
@@ -196,6 +215,28 @@ class StandaloneAuthProfileStore {
     }
     await this.upsertCredentialAccount(profile.authUserId, input.password);
     await this.db.delete(authSessions).where(eq(authSessions.userId, profile.authUserId));
+  }
+
+  async setOrCreatePasswordSignIn(
+    input: SetOrCreateStandalonePasswordSignInInput
+  ): Promise<StandalonePasswordSignIn> {
+    const email = input.email.trim().toLowerCase();
+    const authUser = await this.upsertAuthUser(email, input.displayLabel);
+    await this.upsertCredentialAccount(authUser.id, input.password);
+    await this.upsertProfile({
+      authUserId: authUser.id,
+      externalUserId: authUser.id,
+      displayLabel: input.displayLabel,
+      roles: input.roles,
+      permissionRefs: input.permissionRefs
+    });
+    await this.db.delete(authSessions).where(eq(authSessions.userId, authUser.id));
+    return {
+      externalUserId: authUser.id,
+      displayLabel: input.displayLabel,
+      email,
+      emailVerified: true
+    };
   }
 
   async changePassword(input: ChangeStandalonePasswordInput): Promise<void> {

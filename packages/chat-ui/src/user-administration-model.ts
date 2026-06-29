@@ -12,9 +12,14 @@ export const STANDALONE_AUTH_SOURCE = "better-auth";
 export interface UserFormState {
   displayLabel: string;
   email: string;
-  roles: string;
+  accessLevel: AccessLevel;
   permissionRefs: string;
   status: AdministeredUser["status"];
+}
+
+export interface CreateUserFormState extends UserFormState {
+  createPasswordSignIn: boolean;
+  password: string;
 }
 
 export interface IdentityFormState {
@@ -27,13 +32,45 @@ export interface IdentityFormState {
 
 export type FormNoticeState = { kind: "success" | "error"; text: string } | undefined;
 
+export type AccessLevel = "user" | "admin" | "superadmin";
+
+export const ACCESS_LEVEL_OPTIONS: Array<{
+  value: AccessLevel;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "user",
+    label: "User",
+    description: "Can use chat and assigned capabilities."
+  },
+  {
+    value: "admin",
+    label: "Admin",
+    description: "Can use chat and operational governance views."
+  },
+  {
+    value: "superadmin",
+    label: "Superadmin",
+    description: "Can manage users, audit, and sensitive governance."
+  }
+];
+
 export const emptyUserForm: UserFormState = {
   displayLabel: "",
   email: "",
-  roles: "user",
+  accessLevel: "user",
   permissionRefs: "",
   status: "active"
 };
+
+export function createEmptyCreateUserForm(): CreateUserFormState {
+  return {
+    ...emptyUserForm,
+    createPasswordSignIn: true,
+    password: generatePassword()
+  };
+}
 
 export const emptyIdentityForm: IdentityFormState = {
   authSource: "session-token",
@@ -114,19 +151,20 @@ export function userToForm(user: AdministeredUser): UserFormState {
   return {
     displayLabel: user.displayLabel,
     email: user.email ?? "",
-    roles: formatList(user.roles),
+    accessLevel: rolesToAccessLevel(user.roles),
     permissionRefs: formatList(user.permissionRefs),
     status: user.status
   };
 }
 
-export function formToCreateInput(form: UserFormState): CreateAdministeredUserRequest {
+export function formToCreateInput(form: CreateUserFormState): CreateAdministeredUserRequest {
   return {
     displayLabel: form.displayLabel.trim(),
     email: optionalText(form.email),
-    roles: parseList(form.roles),
+    roles: accessLevelToRoles(form.accessLevel),
     permissionRefs: parseList(form.permissionRefs),
-    status: form.status
+    status: form.status,
+    passwordSignIn: form.createPasswordSignIn ? { password: form.password } : undefined
   };
 }
 
@@ -134,7 +172,7 @@ export function formToUpdateInput(form: UserFormState): UpdateAdministeredUserRe
   return {
     displayLabel: form.displayLabel.trim(),
     email: form.email.trim() ? form.email.trim() : null,
-    roles: parseList(form.roles),
+    roles: accessLevelToRoles(form.accessLevel),
     permissionRefs: parseList(form.permissionRefs),
     status: form.status
   };
@@ -150,6 +188,30 @@ export function formToIdentityInput(
     email: optionalText(form.email),
     emailVerified: form.emailVerified
   };
+}
+
+export function rolesToAccessLevel(roles: string[]): AccessLevel {
+  if (roles.includes("superadmin")) {
+    return "superadmin";
+  }
+  if (roles.includes("admin")) {
+    return "admin";
+  }
+  return "user";
+}
+
+export function accessLevelToRoles(accessLevel: AccessLevel): string[] {
+  if (accessLevel === "superadmin") {
+    return ["user", "admin", "superadmin"];
+  }
+  if (accessLevel === "admin") {
+    return ["user", "admin"];
+  }
+  return ["user"];
+}
+
+export function accessLevelLabel(accessLevel: AccessLevel): string {
+  return ACCESS_LEVEL_OPTIONS.find((option) => option.value === accessLevel)?.label ?? "User";
 }
 
 function parseList(value: string): string[] {

@@ -30,6 +30,16 @@ auth:
           - user
         permissionRefs:
           - demo-tools
+      - email: e2e-admin@example.test
+        emailEnvName: E2E_ADMIN_EMAIL
+        displayLabel: E2E Admin
+        passwordEnvName: E2E_ADMIN_PASSWORD
+        developmentPassword: e2e-admin-password
+        roles:
+          - user
+          - admin
+        permissionRefs:
+          - demo-tools
 retention:
   conversationDays: 1
   auditDays: 30

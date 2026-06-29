@@ -100,7 +100,7 @@ export interface WorkspaceRouteModel {
   route: WorkspaceRoute;
   view: WorkspaceView;
   selectedConversationId: string | undefined;
-  isSuperadmin: boolean;
+  canViewAdministration: boolean;
 }
 
 export interface WorkspaceChromeModel {
@@ -113,7 +113,7 @@ export interface WorkspaceChromeModel {
 export interface ConversationRailModel {
   conversations: ConversationListItem[];
   selectedConversationId: string | undefined;
-  isSuperadmin: boolean;
+  canViewAdministration: boolean;
   view: WorkspaceView;
   creatingConversation: boolean;
   deletingConversation: boolean;
@@ -326,7 +326,7 @@ export function useWorkspaceChatModel({
     goToDefaultChat: routeState.goToDefaultChat,
     showSuperadmin: routeState.showSuperadmin
   });
-  const isSuperadmin = controlPlane.isSuperadmin;
+  const canViewAdministration = controlPlane.canViewAdministration;
 
   useEffect(() => {
     displayPanel.close();
@@ -480,7 +480,7 @@ export function useWorkspaceChatModel({
       route,
       view,
       selectedConversationId,
-      isSuperadmin
+      canViewAdministration
     },
     chrome: {
       sidebarOpen: chrome.sidebarOpen,
@@ -491,7 +491,7 @@ export function useWorkspaceChatModel({
     conversationRail: {
       conversations,
       selectedConversationId,
-      isSuperadmin,
+      canViewAdministration,
       view,
       creatingConversation: false,
       deletingConversation: deleteConversationMutation.isPending,

@@ -17,6 +17,7 @@ import {
   useWorkspaceUsersQuery
 } from "../api/workspace-queries";
 import type { ChatShellAdminPanel } from "../chat-shell";
+import { canViewUsageGovernance } from "../governance";
 import type {
   SuperadminRouteTab,
   WorkspaceRoute,
@@ -38,11 +39,11 @@ export interface ControlPlaneModelInput {
   activeLocale: LocaleCode;
   selectLocale(locale: LocaleCode): void;
   goToDefaultChat(options?: WorkspaceRouteChangeOptions): void;
-  showSuperadmin(tab: SuperadminRouteTab): void;
+  showSuperadmin(tab: SuperadminRouteTab, options?: WorkspaceRouteChangeOptions): void;
 }
 
 export interface ControlPlaneModel {
-  isSuperadmin: boolean;
+  canViewAdministration: boolean;
   settings: ControlPlaneSettingsModel;
   superadmin: ControlPlaneSuperadminModel;
 }
@@ -82,25 +83,35 @@ export function useControlPlaneModel({
   goToDefaultChat,
   showSuperadmin
 }: ControlPlaneModelInput): ControlPlaneModel {
-  const isSuperadmin = adminPanel?.canView(user) ?? false;
-  const superadminEnabled = isSuperadmin && view === "superadmin";
+  const canViewAdministration = adminPanel?.canView(user) ?? false;
+  const canViewUsage = canViewUsageGovernance(user);
+  const administrationEnabled = canViewAdministration && view === "superadmin";
+  const routeTab = route.kind === "superadmin" ? route.tab : undefined;
+  const selectedAdministrationTab =
+    routeTab !== undefined
+      ? routeTab === "usage" && !canViewUsage
+        ? "users"
+        : routeTab
+      : canViewUsage
+        ? "usage"
+        : "users";
   const usageQuery = useWorkspaceUsageQuery({
     apiBaseUrl,
     authScope,
     client,
-    enabled: superadminEnabled
+    enabled: administrationEnabled && canViewUsage
   });
   const auditQuery = useWorkspaceAuditEventsQuery({
     apiBaseUrl,
     authScope,
     client,
-    enabled: superadminEnabled
+    enabled: administrationEnabled
   });
   const usersQuery = useWorkspaceUsersQuery({
     apiBaseUrl,
     authScope,
     client,
-    enabled: superadminEnabled
+    enabled: administrationEnabled
   });
   const updateCurrentUser = useUpdateCurrentUserMutation({
     apiBaseUrl,
@@ -119,13 +130,17 @@ export function useControlPlaneModel({
   });
 
   useEffect(() => {
-    if (isAuthenticated && route.kind === "superadmin" && !isSuperadmin) {
+    if (isAuthenticated && route.kind === "superadmin" && !canViewAdministration) {
       goToDefaultChat({ replace: true });
+      return;
     }
-  }, [goToDefaultChat, isAuthenticated, isSuperadmin, route.kind]);
+    if (isAuthenticated && route.kind === "superadmin" && routeTab === "usage" && !canViewUsage) {
+      showSuperadmin("users", { replace: true });
+    }
+  }, [canViewAdministration, canViewUsage, goToDefaultChat, isAuthenticated, route.kind, routeTab, showSuperadmin]);
 
   return {
-    isSuperadmin,
+    canViewAdministration,
     settings: {
       shouldRender: view === "settings",
       user,
@@ -139,14 +154,15 @@ export function useControlPlaneModel({
       selectLocale
     },
     superadmin: {
-      shouldRender: superadminEnabled,
+      shouldRender: administrationEnabled,
       panelInput: {
         usage: usageQuery.data,
         auditEvents: auditQuery.data ?? [],
         users: usersQuery.data ?? [],
+        canViewUsageGovernance: canViewUsage,
         loading: usageQuery.isLoading || auditQuery.isLoading,
         usersLoading: usersQuery.isLoading,
-        error: usageQuery.error
+        error: canViewUsage && usageQuery.error
           ? apiErrorMessage(usageQuery.error, undefined)
           : auditQuery.error
             ? apiErrorMessage(auditQuery.error, undefined)
@@ -162,7 +178,7 @@ export function useControlPlaneModel({
           superadminUserMutations.deleteUserIdentity.mutateAsync({ userId, identity }),
         onResetUserPassword: (userId, password) =>
           superadminUserMutations.resetUserPassword.mutateAsync({ userId, password }),
-        selectedTab: route.kind === "superadmin" ? route.tab : "usage",
+        selectedTab: selectedAdministrationTab,
         onSelectTab: showSuperadmin
       }
     }

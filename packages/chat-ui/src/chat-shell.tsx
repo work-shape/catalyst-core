@@ -30,6 +30,7 @@ export interface ChatShellAdminPanel {
     users: AdministeredUser[];
     loading: boolean;
     usersLoading: boolean;
+    canViewUsageGovernance: boolean;
     error?: string;
     usersError?: string;
     usersMutating: boolean;

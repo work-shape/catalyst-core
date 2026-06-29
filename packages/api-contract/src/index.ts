@@ -633,12 +633,17 @@ export const administeredUserSchema = z.object({
   identities: z.array(administeredUserIdentitySchema)
 });
 
+export const administeredUserPasswordSignInRequestSchema = z.object({
+  password: z.string().min(8)
+});
+
 export const createAdministeredUserRequestSchema = z.object({
   displayLabel: z.string().min(1),
   email: z.string().email().optional(),
   roles: z.array(z.string()).optional(),
   permissionRefs: z.array(z.string()).optional(),
-  status: userStatusSchema.optional()
+  status: userStatusSchema.optional(),
+  passwordSignIn: administeredUserPasswordSignInRequestSchema.optional()
 });
 
 export const updateAdministeredUserRequestSchema = z.object({

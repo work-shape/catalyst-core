@@ -41,7 +41,7 @@ interface WorkspaceRouteContextValue {
   goToDefaultChat(options?: WorkspaceRouteChangeOptions): void;
   showConversation(conversationId: string, options?: WorkspaceRouteChangeOptions): void;
   showSettings(): void;
-  showSuperadmin(tab?: SuperadminRouteTab): void;
+  showSuperadmin(tab?: SuperadminRouteTab, options?: WorkspaceRouteChangeOptions): void;
   selectWorkspaceView(view: WorkspaceRouteView): void;
   isConversationVisible(conversationId: string): boolean;
   resetRouteMemory(): void;
@@ -151,8 +151,8 @@ export function WorkspaceUiStateProvider({
   }, [onRouteChange]);
 
   const showSuperadmin = useCallback(
-    (tab: SuperadminRouteTab = "usage") => {
-      onRouteChange({ kind: "superadmin", tab });
+    (tab: SuperadminRouteTab = "usage", options?: WorkspaceRouteChangeOptions) => {
+      onRouteChange({ kind: "superadmin", tab }, options);
     },
     [onRouteChange]
   );

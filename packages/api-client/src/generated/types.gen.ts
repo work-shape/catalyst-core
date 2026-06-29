@@ -1776,6 +1776,9 @@ export type CreateAdministeredUserData = {
         roles?: Array<string>;
         permissionRefs?: Array<string>;
         status?: 'active' | 'disabled';
+        passwordSignIn?: {
+            password: string;
+        };
     };
     path?: never;
     query?: never;

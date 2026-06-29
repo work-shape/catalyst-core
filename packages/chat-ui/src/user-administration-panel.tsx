@@ -1,8 +1,11 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FocusEvent, type FormEvent, type ReactNode } from "react";
 import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
+  Copy,
+  Eye,
+  EyeOff,
   KeyRound,
   Link2,
   Plus,
@@ -29,9 +32,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import {
   DEFAULT_ROWS_PER_PAGE,
   STANDALONE_AUTH_SOURCE,
+  ACCESS_LEVEL_OPTIONS,
+  accessLevelLabel,
+  createEmptyCreateUserForm,
   distinctAuthSources,
   emptyIdentityForm,
-  emptyUserForm,
   errorMessage,
   filterUsers,
   formToCreateInput,
@@ -40,7 +45,9 @@ import {
   formatDateTime,
   generatePassword,
   roleFilterOptions,
+  rolesToAccessLevel,
   userToForm,
+  type CreateUserFormState,
   type FormNoticeState,
   type IdentityFormState,
   type UserFormState,
@@ -52,6 +59,7 @@ interface UserAdministrationPanelProps {
   users: AdministeredUser[];
   loading: boolean;
   error?: string;
+  canManageSuperadminAccess: boolean;
   mutating: boolean;
   onCreateUser(input: CreateAdministeredUserRequest): Promise<AdministeredUser>;
   onUpdateUser(userId: string, input: UpdateAdministeredUserRequest): Promise<AdministeredUser>;
@@ -67,6 +75,7 @@ export function UserAdministrationPanel({
   users,
   loading,
   error,
+  canManageSuperadminAccess,
   mutating,
   onCreateUser,
   onUpdateUser,
@@ -98,9 +107,10 @@ export function UserAdministrationPanel({
 
   if (selectedUser) {
     return (
-      <UserDetail
-        user={selectedUser}
-        mutating={mutating}
+        <UserDetail
+          user={selectedUser}
+          canManageSuperadminAccess={canManageSuperadminAccess}
+          mutating={mutating}
         onBack={() => setSelectedUserId(undefined)}
         onUpdateUser={onUpdateUser}
         onUpsertIdentity={onUpsertIdentity}
@@ -255,7 +265,7 @@ export function UserAdministrationPanel({
                   User
                 </TableHead>
                 <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] uppercase">
-                  Roles
+                  Access
                 </TableHead>
                 <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] uppercase">
                   Status
@@ -304,17 +314,9 @@ export function UserAdministrationPanel({
                     </button>
                   </TableCell>
                   <TableCell className="px-4">
-                    <span className="flex flex-wrap gap-1">
-                      {user.roles.length > 0 ? (
-                        user.roles.map((role) => (
-                          <Badge key={role} variant="outline">
-                            {role}
-                          </Badge>
-                        ))
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </span>
+                    <Badge variant="outline">
+                      {accessLevelLabel(rolesToAccessLevel(user.roles))}
+                    </Badge>
                   </TableCell>
                   <TableCell className="px-4">
                     <StatusBadge status={user.status} />
@@ -386,6 +388,7 @@ export function UserAdministrationPanel({
 
       <CreateUserDialog
         open={createOpen}
+        canManageSuperadminAccess={canManageSuperadminAccess}
         mutating={mutating}
         onClose={() => setCreateOpen(false)}
         onCreateUser={onCreateUser}
@@ -400,42 +403,124 @@ export function UserAdministrationPanel({
 
 function CreateUserDialog({
   open,
+  canManageSuperadminAccess,
   mutating,
   onClose,
   onCreateUser,
   onCreated
 }: {
   open: boolean;
+  canManageSuperadminAccess: boolean;
   mutating: boolean;
   onClose(): void;
   onCreateUser(input: CreateAdministeredUserRequest): Promise<AdministeredUser>;
   onCreated(user: AdministeredUser): void;
 }) {
-  const [form, setForm] = useState<UserFormState>(emptyUserForm);
+  const [form, setForm] = useState<CreateUserFormState>(() => createEmptyCreateUserForm());
+  const [createdResult, setCreatedResult] = useState<{
+    user: AdministeredUser;
+    password?: string;
+  }>();
   const [notice, setNotice] = useState<FormNoticeState>();
+
+  useEffect(() => {
+    if (open) {
+      setForm(createEmptyCreateUserForm());
+      setCreatedResult(undefined);
+      setNotice(undefined);
+    }
+  }, [open]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setNotice(undefined);
     try {
       const created = await onCreateUser(formToCreateInput(form));
-      setForm(emptyUserForm);
+      if (form.createPasswordSignIn) {
+        setCreatedResult({ user: created, password: form.password });
+        setNotice({
+          kind: "success",
+          text: "User created. Share this password over a secure channel."
+        });
+        return;
+      }
+      setForm(createEmptyCreateUserForm());
       onCreated(created);
     } catch (error) {
       setNotice({ kind: "error", text: errorMessage(error) });
     }
   }
 
+  async function copyPassword() {
+    if (!createdResult?.password) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(createdResult.password);
+      setNotice({ kind: "success", text: "Password copied." });
+    } catch {
+      setNotice({ kind: "error", text: "Password could not be copied automatically." });
+    }
+  }
+
+  if (createdResult) {
+    return (
+      <Dialog open={open} title="User created" onClose={onClose}>
+        <div className="grid gap-4">
+          <div className="grid gap-1">
+            <strong className="text-sm">{createdResult.user.displayLabel}</strong>
+            <span className="text-sm text-muted-foreground">{createdResult.user.email}</span>
+          </div>
+          {createdResult.password ? (
+            <Field label="Initial password" hint="This is only shown here. Share it securely.">
+              <div className="flex gap-2">
+                <MaskedPasswordInput
+                  readOnly
+                  value={createdResult.password}
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+                <Button type="button" variant="outline" className="shrink-0" onClick={() => void copyPassword()}>
+                  <Copy size={16} aria-hidden="true" />
+                  Copy
+                </Button>
+              </div>
+            </Field>
+          ) : null}
+          <FormNotice notice={notice} />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Close
+            </Button>
+            <Button type="button" onClick={() => onCreated(createdResult.user)}>
+              Open user
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog open={open} title="New user" onClose={onClose}>
       <form className="grid gap-3" onSubmit={submit}>
-        <UserFields form={form} onChange={setForm} />
+        <CreateUserFields
+          form={form}
+          canManageSuperadminAccess={canManageSuperadminAccess}
+          onChange={setForm}
+        />
         <FormNotice notice={notice} />
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" disabled={mutating || !form.displayLabel.trim()}>
+          <Button
+            type="submit"
+            disabled={
+              mutating ||
+              !form.displayLabel.trim() ||
+              (form.createPasswordSignIn && (!form.email.trim() || form.password.length < 8))
+            }
+          >
             <UserPlus size={16} aria-hidden="true" />
             Create user
           </Button>
@@ -447,6 +532,7 @@ function CreateUserDialog({
 
 function UserDetail({
   user,
+  canManageSuperadminAccess,
   mutating,
   onBack,
   onUpdateUser,
@@ -455,6 +541,7 @@ function UserDetail({
   onResetPassword
 }: {
   user: AdministeredUser;
+  canManageSuperadminAccess: boolean;
   mutating: boolean;
   onBack(): void;
   onUpdateUser(userId: string, input: UpdateAdministeredUserRequest): Promise<AdministeredUser>;
@@ -465,6 +552,11 @@ function UserDetail({
   onDeleteIdentity(userId: string, identity: AdministeredUserIdentity): Promise<AdministeredUser>;
   onResetPassword(userId: string, password: string): Promise<unknown>;
 }) {
+  const canManageUser = canManageSuperadminAccess || !user.roles.includes("superadmin");
+  const managementDisabledReason = canManageUser
+    ? undefined
+    : "Only superadmins can manage superadmin users.";
+
   return (
     <div className="grid content-start gap-4">
       <div>
@@ -485,16 +577,28 @@ function UserDetail({
 
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]">
         <div className="grid content-start gap-4">
-          <ProfileCard user={user} mutating={mutating} onUpdateUser={onUpdateUser} />
+          <ProfileCard
+            user={user}
+            canManageSuperadminAccess={canManageSuperadminAccess}
+            disabledReason={managementDisabledReason}
+            mutating={mutating}
+            onUpdateUser={onUpdateUser}
+          />
           <IdentitiesCard
             user={user}
+            disabledReason={managementDisabledReason}
             mutating={mutating}
             onUpsertIdentity={onUpsertIdentity}
             onDeleteIdentity={onDeleteIdentity}
           />
         </div>
         <div className="grid content-start gap-4">
-          <PasswordCard user={user} mutating={mutating} onResetPassword={onResetPassword} />
+          <PasswordCard
+            user={user}
+            disabledReason={managementDisabledReason}
+            mutating={mutating}
+            onResetPassword={onResetPassword}
+          />
           <AccountMetaCard user={user} />
         </div>
       </div>
@@ -504,10 +608,14 @@ function UserDetail({
 
 function ProfileCard({
   user,
+  canManageSuperadminAccess,
+  disabledReason,
   mutating,
   onUpdateUser
 }: {
   user: AdministeredUser;
+  canManageSuperadminAccess: boolean;
+  disabledReason?: string;
   mutating: boolean;
   onUpdateUser(userId: string, input: UpdateAdministeredUserRequest): Promise<AdministeredUser>;
 }) {
@@ -537,9 +645,18 @@ function ProfileCard({
       </CardHeader>
       <CardContent className="p-4 pt-2">
         <form className="grid gap-3" onSubmit={submit}>
-          <UserFields form={form} onChange={setForm} />
+          <UserFields
+            form={form}
+            canManageSuperadminAccess={canManageSuperadminAccess}
+            disabled={Boolean(disabledReason)}
+            onChange={setForm}
+          />
+          {disabledReason ? <p className="text-sm text-muted-foreground">{disabledReason}</p> : null}
           <div className="flex items-center gap-3">
-            <Button type="submit" disabled={mutating || !form.displayLabel.trim()}>
+            <Button
+              type="submit"
+              disabled={mutating || Boolean(disabledReason) || !form.displayLabel.trim()}
+            >
               <Save size={16} aria-hidden="true" />
               Save changes
             </Button>
@@ -553,11 +670,13 @@ function ProfileCard({
 
 function IdentitiesCard({
   user,
+  disabledReason,
   mutating,
   onUpsertIdentity,
   onDeleteIdentity
 }: {
   user: AdministeredUser;
+  disabledReason?: string;
   mutating: boolean;
   onUpsertIdentity(
     userId: string,
@@ -614,6 +733,7 @@ function IdentitiesCard({
             type="button"
             size="sm"
             variant="outline"
+            disabled={Boolean(disabledReason)}
             onClick={() => setFormOpen((open) => !open)}
           >
             <Plus size={15} aria-hidden="true" />
@@ -623,7 +743,7 @@ function IdentitiesCard({
       </CardHeader>
       <CardContent className="grid gap-3 p-4 pt-2">
         <p className="text-sm text-muted-foreground">
-          Identities connect this user to the auth systems they can sign in with.
+          External auth systems can be linked here when password sign-in is not the right path.
         </p>
         <div className="grid gap-2">
           {user.identities.map((identity) => {
@@ -655,7 +775,7 @@ function IdentitiesCard({
                       type="button"
                       size="sm"
                       variant="danger"
-                      disabled={mutating}
+                      disabled={mutating || Boolean(disabledReason)}
                       onClick={() => void deleteIdentity(identity)}
                     >
                       Remove
@@ -676,7 +796,7 @@ function IdentitiesCard({
                     variant="ghost"
                     className="shrink-0 text-muted-foreground hover:text-destructive"
                     aria-label={`Delete ${identity.authSource} identity`}
-                    disabled={mutating}
+                    disabled={mutating || Boolean(disabledReason)}
                     onClick={() => setConfirmingKey(key)}
                   >
                     <Trash2 size={16} aria-hidden="true" />
@@ -691,6 +811,8 @@ function IdentitiesCard({
             </p>
           ) : null}
         </div>
+
+        {disabledReason ? <p className="text-sm text-muted-foreground">{disabledReason}</p> : null}
 
         {formOpen ? (
           <form className="grid gap-3 rounded-md border bg-muted/30 p-3" onSubmit={submit}>
@@ -754,10 +876,12 @@ function IdentitiesCard({
 
 function PasswordCard({
   user,
+  disabledReason,
   mutating,
   onResetPassword
 }: {
   user: AdministeredUser;
+  disabledReason?: string;
   mutating: boolean;
   onResetPassword(userId: string, password: string): Promise<unknown>;
 }) {
@@ -779,7 +903,9 @@ function PasswordCard({
       await onResetPassword(user.id, password);
       setNotice({
         kind: "success",
-        text: "Password updated. The user was signed out everywhere."
+        text: hasPasswordIdentity
+          ? "Password updated. The user was signed out everywhere."
+          : "Password sign-in created."
       });
     } catch (error) {
       setNotice({ kind: "error", text: errorMessage(error) });
@@ -795,42 +921,53 @@ function PasswordCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="p-4 pt-2">
-        {hasPasswordIdentity ? (
-          <form className="grid gap-3" onSubmit={submit}>
-            <Field
-              label="New password"
-              hint="At least 8 characters. Share it with the user over a secure channel."
-            >
-              <div className="flex gap-2">
-                <Input
-                  value={password}
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="font-mono"
-                  onChange={(event) => setPassword(event.target.value)}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="shrink-0"
-                  onClick={() => setPassword(generatePassword())}
-                >
-                  Generate
-                </Button>
-              </div>
-            </Field>
-            <Button type="submit" disabled={mutating || password.length < 8}>
-              <KeyRound size={16} aria-hidden="true" />
-              Reset password
-            </Button>
-            <FormNotice notice={notice} />
-          </form>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            This user has no password sign-in. Link a {STANDALONE_AUTH_SOURCE} identity to manage a
-            password.
-          </p>
-        )}
+        <form className="grid gap-3" onSubmit={submit}>
+          {!hasPasswordIdentity ? (
+            <p className="text-sm text-muted-foreground">
+              This user has no password sign-in yet. Creating one uses their profile email.
+            </p>
+          ) : null}
+          {disabledReason ? <p className="text-sm text-muted-foreground">{disabledReason}</p> : null}
+          <Field
+            label={hasPasswordIdentity ? "New password" : "Initial password"}
+            hint={
+              user.email
+                ? "At least 8 characters. Share it with the user over a secure channel."
+                : "Add an email in Profile before creating a password sign-in."
+            }
+          >
+            <div className="flex gap-2">
+              <MaskedPasswordInput
+                value={password}
+                autoComplete={hasPasswordIdentity ? "off" : "new-password"}
+                disabled={Boolean(disabledReason)}
+                onChange={setPassword}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="shrink-0"
+                disabled={Boolean(disabledReason)}
+                onClick={() => setPassword(generatePassword())}
+              >
+                Generate
+              </Button>
+            </div>
+          </Field>
+          <Button
+            type="submit"
+            disabled={
+              mutating ||
+              Boolean(disabledReason) ||
+              password.length < 8 ||
+              (!hasPasswordIdentity && !user.email)
+            }
+          >
+            <KeyRound size={16} aria-hidden="true" />
+            {hasPasswordIdentity ? "Reset password" : "Create password sign-in"}
+          </Button>
+          <FormNotice notice={notice} />
+        </form>
       </CardContent>
     </Card>
   );
@@ -863,10 +1000,73 @@ function MetaRow({ label, value }: { label: string; value: ReactNode }) {
 
 function UserFields({
   form,
+  canManageSuperadminAccess,
+  disabled = false,
   onChange
 }: {
   form: UserFormState;
+  canManageSuperadminAccess: boolean;
+  disabled?: boolean;
   onChange(nextForm: UserFormState): void;
+}) {
+  return (
+    <>
+      <div className="grid gap-3 md:grid-cols-2">
+        <Field label="Display label">
+          <Input
+            value={form.displayLabel}
+            disabled={disabled}
+            onChange={(event) => onChange({ ...form, displayLabel: event.target.value })}
+          />
+        </Field>
+        <Field label="Email">
+          <Input
+            type="email"
+            value={form.email}
+            disabled={disabled}
+            onChange={(event) => onChange({ ...form, email: event.target.value })}
+          />
+        </Field>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        <Field label="Status">
+          <Select
+            value={form.status}
+            disabled={disabled}
+            onChange={(event) =>
+              onChange({ ...form, status: event.target.value as UserFormState["status"] })
+            }
+          >
+            <option value="active">Active</option>
+            <option value="disabled">Disabled</option>
+          </Select>
+        </Field>
+        <AccessLevelField
+          value={form.accessLevel}
+          canManageSuperadminAccess={canManageSuperadminAccess}
+          disabled={disabled}
+          onChange={(accessLevel) => onChange({ ...form, accessLevel })}
+        />
+        <Field label="Permission refs" hint="Comma-separated tool permissions">
+          <Input
+            value={form.permissionRefs}
+            disabled={disabled}
+            onChange={(event) => onChange({ ...form, permissionRefs: event.target.value })}
+          />
+        </Field>
+      </div>
+    </>
+  );
+}
+
+function CreateUserFields({
+  form,
+  canManageSuperadminAccess,
+  onChange
+}: {
+  form: CreateUserFormState;
+  canManageSuperadminAccess: boolean;
+  onChange(nextForm: CreateUserFormState): void;
 }) {
   return (
     <>
@@ -877,7 +1077,7 @@ function UserFields({
             onChange={(event) => onChange({ ...form, displayLabel: event.target.value })}
           />
         </Field>
-        <Field label="Email">
+        <Field label="Email" hint={form.createPasswordSignIn ? "Required for password sign-in." : undefined}>
           <Input
             type="email"
             value={form.email}
@@ -885,31 +1085,140 @@ function UserFields({
           />
         </Field>
       </div>
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2">
+        <AccessLevelField
+          value={form.accessLevel}
+          canManageSuperadminAccess={canManageSuperadminAccess}
+          onChange={(accessLevel) => onChange({ ...form, accessLevel })}
+        />
         <Field label="Status">
           <Select
             value={form.status}
             onChange={(event) =>
-              onChange({ ...form, status: event.target.value as UserFormState["status"] })
+              onChange({ ...form, status: event.target.value as CreateUserFormState["status"] })
             }
           >
             <option value="active">Active</option>
             <option value="disabled">Disabled</option>
           </Select>
         </Field>
-        <Field label="Roles" hint="Comma-separated: user, admin, superadmin">
-          <Input
-            value={form.roles}
-            onChange={(event) => onChange({ ...form, roles: event.target.value })}
-          />
-        </Field>
-        <Field label="Permission refs" hint="Comma-separated tool permissions">
-          <Input
-            value={form.permissionRefs}
-            onChange={(event) => onChange({ ...form, permissionRefs: event.target.value })}
-          />
-        </Field>
       </div>
+      <label className="inline-flex w-fit items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={form.createPasswordSignIn}
+          onChange={(event) => onChange({ ...form, createPasswordSignIn: event.target.checked })}
+        />
+        <span>Create password sign-in</span>
+      </label>
+      {form.createPasswordSignIn ? (
+        <Field label="Initial password" hint="At least 8 characters. Share it with the user securely.">
+          <div className="flex gap-2">
+            <MaskedPasswordInput
+              value={form.password}
+              autoComplete="new-password"
+              onChange={(password) => onChange({ ...form, password })}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              className="shrink-0"
+              onClick={() => onChange({ ...form, password: generatePassword() })}
+            >
+              Generate
+            </Button>
+          </div>
+        </Field>
+      ) : null}
+      <details className="rounded-md border bg-muted/20 p-3">
+        <summary className="cursor-pointer text-sm font-medium">Advanced permissions</summary>
+        <div className="mt-3">
+          <Field label="Permission refs" hint="Comma-separated tool permissions">
+            <Input
+              value={form.permissionRefs}
+              onChange={(event) => onChange({ ...form, permissionRefs: event.target.value })}
+            />
+          </Field>
+        </div>
+      </details>
     </>
+  );
+}
+
+function MaskedPasswordInput({
+  value,
+  onChange,
+  autoComplete,
+  readOnly = false,
+  disabled = false,
+  onFocus
+}: {
+  value: string;
+  onChange?(value: string): void;
+  autoComplete?: string;
+  readOnly?: boolean;
+  disabled?: boolean;
+  onFocus?(event: FocusEvent<HTMLInputElement>): void;
+}) {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <div className="relative min-w-0 flex-1">
+      <Input
+        type={visible ? "text" : "password"}
+        value={value}
+        autoComplete={autoComplete}
+        readOnly={readOnly}
+        disabled={disabled}
+        spellCheck={false}
+        className="font-mono pr-10"
+        onFocus={onFocus}
+        onChange={(event) => onChange?.(event.target.value)}
+      />
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        className="absolute right-1 top-1/2 size-8 -translate-y-1/2 text-muted-foreground"
+        aria-label={visible ? "Hide password" : "Show password"}
+        disabled={disabled}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => setVisible((currentVisible) => !currentVisible)}
+      >
+        {visible ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+      </Button>
+    </div>
+  );
+}
+
+function AccessLevelField({
+  value,
+  canManageSuperadminAccess,
+  disabled = false,
+  onChange
+}: {
+  value: CreateUserFormState["accessLevel"];
+  canManageSuperadminAccess: boolean;
+  disabled?: boolean;
+  onChange(value: CreateUserFormState["accessLevel"]): void;
+}) {
+  const selected = ACCESS_LEVEL_OPTIONS.find((option) => option.value === value);
+  const options = ACCESS_LEVEL_OPTIONS.filter(
+    (option) => canManageSuperadminAccess || option.value !== "superadmin" || value === "superadmin"
+  );
+  return (
+    <Field label="Access level" hint={selected?.description}>
+      <Select
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value as typeof value)}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </Select>
+    </Field>
   );
 }

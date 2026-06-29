@@ -12,7 +12,7 @@ export function WorkspaceRail({
   config,
   conversations,
   selectedConversationId,
-  isSuperadmin,
+  canViewAdministration,
   view,
   creatingConversation,
   deletingConversation,
@@ -26,7 +26,7 @@ export function WorkspaceRail({
   config: SafeConfig | undefined;
   conversations: ConversationListItem[];
   selectedConversationId: string | undefined;
-  isSuperadmin: boolean;
+  canViewAdministration: boolean;
   view: WorkspaceView;
   creatingConversation: boolean;
   deletingConversation: boolean;
@@ -42,7 +42,7 @@ export function WorkspaceRail({
   const logoUrl = config?.ui.logoUrl;
   const logoUrlDark = config?.ui.logoUrlDark;
   const invertLogoOnDark = Boolean(config?.ui.logoInvertOnDark && !logoUrlDark);
-  const superadminButton = isSuperadmin ? (
+  const administrationButton = canViewAdministration ? (
     <Button
       type="button"
       variant="ghost"
@@ -158,7 +158,7 @@ export function WorkspaceRail({
 
       <footer className="-mx-4 flex min-w-0 items-center justify-between gap-2 border-t border-sidebar-border px-4 pt-3">
         {userMenu}
-        {superadminButton}
+        {administrationButton}
       </footer>
     </aside>
   );

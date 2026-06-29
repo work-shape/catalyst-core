@@ -9,6 +9,10 @@ const superadminUser = {
   email: "e2e-superadmin@example.test",
   password: "e2e-superadmin-password"
 };
+const adminUser = {
+  email: "e2e-admin@example.test",
+  password: "e2e-admin-password"
+};
 
 test("standalone login renders the authenticated chat workspace", async ({ page }) => {
   await page.goto("/");
@@ -28,7 +32,7 @@ test("standalone login renders the authenticated chat workspace", async ({ page 
   await expect(page.getByRole("button", { name: /Switch to (dark|light) theme/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Language" })).toHaveCount(0);
   await expect(page.locator("header").getByText("Ready", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Open superadmin panel" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Open administration panel" })).toHaveCount(0);
 
   await page.getByRole("button", { name: "E2E User account" }).click();
   await page.getByRole("button", { name: "Settings" }).click();
@@ -669,13 +673,13 @@ test("conversation rail deletes a conversation", async ({ page }) => {
 test("standalone auth gates superadmin views", async ({ page }) => {
   await signInViaUi(page, superadminUser);
   await expect(page.getByRole("button", { name: "Usage" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Open superadmin panel" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open administration panel" })).toBeVisible();
 
   await page.getByRole("button", { name: "E2E Superadmin account" }).click();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("main", { name: "Sign in" })).toBeVisible();
   await signInViaUi(page, normalUser, { alreadyOnLogin: true });
-  await expect(page.getByRole("button", { name: "Open superadmin panel" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Open administration panel" })).toHaveCount(0);
 });
 
 test("standalone settings and superadmin tabs are route-backed", async ({ page }) => {
@@ -687,13 +691,13 @@ test("standalone settings and superadmin tabs are route-backed", async ({ page }
 
   await page.goto("/admin");
   await expect(page).toHaveURL(/\/admin\/usage$/u);
-  await expect(page.getByRole("region", { name: "Superadmin panel" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
   await expect(page.getByText("Budgeted cost today")).toBeVisible();
 
   await page.getByRole("button", { name: /^Users/ }).click();
   await expect(page).toHaveURL(/\/admin\/users$/u);
   await expect(
-    page.getByRole("region", { name: "Superadmin panel" }).getByRole("heading", { name: "Users" })
+    page.getByRole("region", { name: "Administration panel" }).getByRole("heading", { name: "Users" })
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Audit log" }).click();
@@ -703,7 +707,7 @@ test("standalone settings and superadmin tabs are route-backed", async ({ page }
   await page.goBack();
   await expect(page).toHaveURL(/\/admin\/users$/u);
   await expect(
-    page.getByRole("region", { name: "Superadmin panel" }).getByRole("heading", { name: "Users" })
+    page.getByRole("region", { name: "Administration panel" }).getByRole("heading", { name: "Users" })
   ).toBeVisible();
 });
 
@@ -713,7 +717,7 @@ test("normal users are redirected away from superadmin routes", async ({ page })
   await page.goto("/admin/usage");
 
   await expect(page.getByText("E2E Customer")).toBeVisible();
-  await expect(page.getByRole("region", { name: "Superadmin panel" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Administration panel" })).toHaveCount(0);
   await expect(page).toHaveURL(/\/$/u);
 });
 
@@ -730,17 +734,17 @@ test("workspace and superadmin keep page scroll locked", async ({ page }) => {
   await expect(page.getByText("E2E Customer")).toBeVisible();
   await expectDocumentScrollLocked(page);
 
-  await page.getByRole("button", { name: "Open superadmin panel" }).click();
-  await expect(page.getByRole("region", { name: "Superadmin panel" })).toBeVisible();
+  await page.getByRole("button", { name: "Open administration panel" }).click();
+  await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
   await expectDocumentScrollLocked(page);
 });
 
 test("superadmin can open usage and audit views", async ({ page }) => {
   await signInViaUi(page, superadminUser);
   await ensureDarkMode(page);
-  await expect(page.getByRole("button", { name: "Open superadmin panel" })).toBeVisible();
-  await page.getByRole("button", { name: "Open superadmin panel" }).click();
-  await expect(page.getByRole("region", { name: "Superadmin panel" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open administration panel" })).toBeVisible();
+  await page.getByRole("button", { name: "Open administration panel" }).click();
+  await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
   await expect(page.getByText("Administration")).toBeVisible();
   await expect(page.getByRole("button", { name: /^Usage/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Users/ })).toBeVisible();
@@ -753,6 +757,37 @@ test("superadmin can open usage and audit views", async ({ page }) => {
     )
     .not.toBe("rgb(255, 255, 255)");
   await expect(page.getByRole("button", { name: "Audit log" })).toBeVisible();
+});
+
+test("admin can manage users without usage governance", async ({ page }) => {
+  await signInViaUi(page, adminUser);
+  await expect(page.getByRole("button", { name: "Open administration panel" })).toBeVisible();
+  await page.getByRole("button", { name: "Open administration panel" }).click();
+  await expect(page).toHaveURL(/\/admin\/users$/u);
+  const adminPanel = page.getByRole("region", { name: "Administration panel" });
+  await expect(adminPanel).toBeVisible();
+  await expect(adminPanel.getByText("Admin", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Usage/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Users/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Audit log" })).toBeVisible();
+
+  await page.getByRole("button", { name: "New user" }).click();
+  const timestamp = Date.now();
+  const createdUser = {
+    displayLabel: `E2E Admin Created ${timestamp}`,
+    email: `e2e-admin-created-${timestamp}@example.test`,
+    password: `e2e-admin-created-${timestamp}`
+  };
+  const dialog = page.getByRole("dialog", { name: "New user" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel("Access level").locator("option[value=\"superadmin\"]")).toHaveCount(0);
+  await dialog.getByLabel("Display label").fill(createdUser.displayLabel);
+  await dialog.getByLabel("Email").fill(createdUser.email);
+  await dialog.getByLabel("Initial password").fill(createdUser.password);
+  await dialog.getByRole("button", { name: "Create user" }).click();
+  await expect(page.getByRole("dialog", { name: "User created" })).toBeVisible();
+  await page.getByRole("button", { name: "Open user" }).click();
+  await expect(page.getByText(createdUser.displayLabel, { exact: true })).toBeVisible();
 });
 
 test("demo chat can run a configured tool widget", async ({ page }) => {
@@ -800,8 +835,8 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
   await expect(toolCallCard).toBeVisible();
   await expect(toolCallCard).toContainText("Completed");
 
-  await page.getByRole("button", { name: "Open superadmin panel" }).click();
-  await expect(page.getByRole("region", { name: "Superadmin panel" })).toBeVisible();
+  await page.getByRole("button", { name: "Open administration panel" }).click();
+  await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
   await expect(page.getByText("Administration")).toBeVisible();
   await expect(page.getByText("Budgeted cost today")).toBeVisible();
   await expect(page.getByText("Calls today")).toBeVisible();
@@ -829,8 +864,8 @@ test("superadmin resets a user's password from the users panel", async ({ page }
   await page.context().clearCookies();
 
   await signInViaUi(page, superadminUser);
-  await page.getByRole("button", { name: "Open superadmin panel" }).click();
-  await expect(page.getByRole("region", { name: "Superadmin panel" })).toBeVisible();
+  await page.getByRole("button", { name: "Open administration panel" }).click();
+  await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
 
   await page.getByRole("button", { name: /^Users/ }).click();
   await page.getByRole("button", { name: `E2E User ${normalUser.email}` }).click();
@@ -866,6 +901,57 @@ test("superadmin resets a user's password from the users panel", async ({ page }
     { data: { password: normalUser.password } }
   );
   expect(restored.ok()).toBe(true);
+});
+
+test("superadmin creates a user with a password from the users panel", async ({ page }) => {
+  await signInViaUi(page, superadminUser);
+  await page.getByRole("button", { name: "Open administration panel" }).click();
+  await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
+
+  await page.getByRole("button", { name: /^Users/ }).click();
+  await page.getByRole("button", { name: "New user" }).click();
+
+  const timestamp = Date.now();
+  const createdUser = {
+    displayLabel: `E2E Created ${timestamp}`,
+    email: `e2e-created-${timestamp}@example.test`,
+    password: `e2e-created-${timestamp}`
+  };
+  const dialog = page.getByRole("dialog", { name: "New user" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("Display label").fill(createdUser.displayLabel);
+  await dialog.getByLabel("Email").fill(createdUser.email);
+  const initialPasswordInput = dialog.getByLabel("Initial password");
+  await expect(initialPasswordInput).toHaveAttribute("type", "password");
+  await initialPasswordInput.fill(createdUser.password);
+  await dialog.getByRole("button", { name: "Show password" }).click();
+  await expect(initialPasswordInput).toHaveAttribute("type", "text");
+  await expect(initialPasswordInput).toHaveValue(createdUser.password);
+  await dialog.getByRole("button", { name: "Hide password" }).click();
+  await expect(initialPasswordInput).toHaveAttribute("type", "password");
+  await dialog.getByRole("button", { name: "Create user" }).click();
+  const createdDialog = page.getByRole("dialog", { name: "User created" });
+  await expect(createdDialog).toBeVisible();
+  const createdPasswordInput = createdDialog.getByLabel("Initial password");
+  await expect(createdPasswordInput).toHaveAttribute("type", "password");
+  await createdDialog.getByRole("button", { name: "Show password" }).click();
+  await expect(createdPasswordInput).toHaveAttribute("type", "text");
+  await expect(createdPasswordInput).toHaveValue(createdUser.password);
+  await page.getByRole("button", { name: "Open user" }).click();
+  await expect(page.getByText(createdUser.displayLabel, { exact: true })).toBeVisible();
+  await expect(page.getByText("better-auth")).toBeVisible();
+
+  await page.getByRole("button", { name: "E2E Superadmin account" }).click();
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByRole("main", { name: "Sign in" })).toBeVisible();
+
+  await signInViaUi(
+    page,
+    { email: createdUser.email, password: createdUser.password },
+    { alreadyOnLogin: true }
+  );
+  await expect(page.getByRole("button", { name: `${createdUser.displayLabel} account` })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open administration panel" })).toHaveCount(0);
 });
 
 function conversationPath(conversationId: string): string {

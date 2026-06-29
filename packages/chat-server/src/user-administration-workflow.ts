@@ -18,6 +18,9 @@ interface CreateUserCommand {
   roles?: UserRole[];
   permissionRefs?: string[];
   status?: UserStatus;
+  passwordSignIn?: {
+    password: string;
+  };
 }
 
 interface UpdateUserCommand {
@@ -65,7 +68,12 @@ export class UserAdministrationWorkflow {
     command: CreateUserCommand
   ): Promise<UserRecord> {
     await this.authorize(actor, context, "governance.user_create_authorized");
-    const created = await this.options.userStore.createUser({
+    this.requireAssignableRoles(actor, command.roles);
+    if (command.passwordSignIn && !command.email) {
+      throw new AppError("VALIDATION_FAILED", "Email is required to create a password sign-in");
+    }
+
+    let created = await this.options.userStore.createUser({
       clientInstanceId: this.options.clientInstanceId,
       displayLabel: command.displayLabel,
       email: command.email,
@@ -74,6 +82,12 @@ export class UserAdministrationWorkflow {
       status: command.status
     });
     await this.recordUserMutation(actor, context, "user.created", created);
+    if (command.passwordSignIn) {
+      created = await this.setOrCreatePasswordSignIn(actor, context, created, {
+        password: command.passwordSignIn.password,
+        auditType: "user.password_sign_in_created"
+      });
+    }
     return created;
   }
 
@@ -83,6 +97,9 @@ export class UserAdministrationWorkflow {
     command: UpdateUserCommand
   ): Promise<UserRecord> {
     await this.authorize(actor, context, "governance.user_update_authorized");
+    const existing = await this.getUserOrThrow(command.userId);
+    this.requireManageableUser(actor, existing);
+    this.requireAssignableRoles(actor, command.roles);
     const updated = await this.options.userStore.updateUser({
       clientInstanceId: this.options.clientInstanceId,
       userId: command.userId,
@@ -102,6 +119,8 @@ export class UserAdministrationWorkflow {
     command: UpsertUserIdentityCommand
   ): Promise<UserRecord> {
     await this.authorize(actor, context, "governance.user_identity_upsert_authorized");
+    const existing = await this.getUserOrThrow(command.userId);
+    this.requireManageableUser(actor, existing);
     const updated = await this.options.userStore.upsertUserIdentity({
       clientInstanceId: this.options.clientInstanceId,
       userId: command.userId,
@@ -132,6 +151,8 @@ export class UserAdministrationWorkflow {
     command: DeleteUserIdentityCommand
   ): Promise<UserRecord> {
     await this.authorize(actor, context, "governance.user_identity_delete_authorized");
+    const existing = await this.getUserOrThrow(command.userId);
+    this.requireManageableUser(actor, existing);
     const updated = await this.options.userStore.deleteUserIdentity({
       clientInstanceId: this.options.clientInstanceId,
       userId: command.userId,
@@ -165,21 +186,17 @@ export class UserAdministrationWorkflow {
         "Password reset requires standalone auth to be enabled for this client instance"
       );
     }
-    const users = await this.options.userStore.listUsers({
-      clientInstanceId: this.options.clientInstanceId
-    });
-    const user = users.find((candidate) => candidate.id === command.userId);
-    if (!user) {
-      throw new AppError("NOT_FOUND", "User not found");
-    }
+    const user = await this.getUserOrThrow(command.userId);
+    this.requireManageableUser(actor, user);
     const identity = user.identities.find(
       (candidate) => candidate.authSource === STANDALONE_AUTH_SOURCE
     );
     if (!identity) {
-      throw new AppError(
-        "VALIDATION_FAILED",
-        "User has no standalone auth identity, so there is no password to reset"
-      );
+      await this.setOrCreatePasswordSignIn(actor, context, user, {
+        password: command.password,
+        auditType: "user.password_sign_in_created"
+      });
+      return { ok: true };
     }
     await setPassword({
       externalUserId: identity.externalUserId,
@@ -198,6 +215,134 @@ export class UserAdministrationWorkflow {
     return { ok: true };
   }
 
+  private async setOrCreatePasswordSignIn(
+    actor: AuthenticatedUser,
+    context: RuntimeCallContext,
+    user: UserRecord,
+    input: {
+      password: string;
+      auditType: "user.password_sign_in_created" | "user.password_reset";
+    }
+  ): Promise<UserRecord> {
+    const setOrCreatePasswordSignIn = this.options.standaloneAuth?.setOrCreatePasswordSignIn;
+    if (!setOrCreatePasswordSignIn) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "Password sign-in requires standalone auth to be enabled for this client instance"
+      );
+    }
+    if (!user.email) {
+      throw new AppError("VALIDATION_FAILED", "Email is required to create a password sign-in");
+    }
+    await this.requireAvailablePasswordEmail(user);
+
+    const signIn = await setOrCreatePasswordSignIn({
+      email: user.email,
+      displayLabel: user.displayLabel,
+      roles: user.roles,
+      permissionRefs: user.permissionRefs,
+      password: input.password
+    });
+    await this.requireAvailablePasswordIdentity(user, signIn.externalUserId);
+    const updated = await this.options.userStore.upsertUserIdentity({
+      clientInstanceId: this.options.clientInstanceId,
+      userId: user.id,
+      authSource: STANDALONE_AUTH_SOURCE,
+      externalUserId: signIn.externalUserId,
+      displayLabel: signIn.displayLabel,
+      email: signIn.email,
+      emailVerified: signIn.emailVerified
+    });
+    await this.options.auditRecorder.record({
+      type: input.auditType,
+      status: "success",
+      actor: auditActorFromUser(actor),
+      subject: user.id,
+      correlationId: context.correlationId,
+      metadata: {
+        authSource: STANDALONE_AUTH_SOURCE
+      }
+    });
+    return updated;
+  }
+
+  private async requireAvailablePasswordEmail(user: UserRecord): Promise<void> {
+    const normalizedEmail = user.email?.trim().toLowerCase();
+    if (!normalizedEmail) {
+      return;
+    }
+    const users = await this.options.userStore.listUsers({
+      clientInstanceId: this.options.clientInstanceId
+    });
+    const conflict = users.find(
+      (candidate) =>
+        candidate.id !== user.id &&
+        (candidate.email?.trim().toLowerCase() === normalizedEmail ||
+          candidate.identities.some(
+            (identity) =>
+              identity.authSource === STANDALONE_AUTH_SOURCE &&
+              identity.email?.trim().toLowerCase() === normalizedEmail
+          ))
+    );
+    if (conflict) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "Another user already uses this email, so a password sign-in would be ambiguous"
+      );
+    }
+  }
+
+  private async requireAvailablePasswordIdentity(
+    user: UserRecord,
+    externalUserId: string
+  ): Promise<void> {
+    const users = await this.options.userStore.listUsers({
+      clientInstanceId: this.options.clientInstanceId
+    });
+    const conflict = users.find(
+      (candidate) =>
+        candidate.id !== user.id &&
+        candidate.identities.some(
+          (identity) =>
+            identity.authSource === STANDALONE_AUTH_SOURCE &&
+            identity.externalUserId === externalUserId
+        )
+    );
+    if (conflict) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "This password sign-in is already linked to another user"
+      );
+    }
+  }
+
+  private async getUserOrThrow(userId: UserId): Promise<UserRecord> {
+    const users = await this.options.userStore.listUsers({
+      clientInstanceId: this.options.clientInstanceId
+    });
+    const user = users.find((candidate) => candidate.id === userId);
+    if (!user) {
+      throw new AppError("NOT_FOUND", "User not found");
+    }
+    return user;
+  }
+
+  private requireAssignableRoles(actor: AuthenticatedUser, roles: UserRole[] | undefined): void {
+    if (roles?.includes("superadmin") && !this.isSuperadmin(actor)) {
+      throw new AppError("FORBIDDEN", "Only superadmins can assign superadmin access");
+    }
+  }
+
+  private requireManageableUser(actor: AuthenticatedUser, user: UserRecord): void {
+    if (user.roles.includes("superadmin") && !this.isSuperadmin(actor)) {
+      throw new AppError("FORBIDDEN", "Only superadmins can manage superadmin users");
+    }
+  }
+
+  private isSuperadmin(user: AuthenticatedUser): boolean {
+    return user.roles.includes("superadmin");
+  }
+
   private async authorize(
     user: AuthenticatedUser,
     context: RuntimeCallContext,
@@ -207,9 +352,9 @@ export class UserAdministrationWorkflow {
       options: this.options,
       user,
       context,
-      requiredRole: "superadmin",
+      requiredRole: "admin",
       auditType,
-      deniedMessage: "User administration requires a superadmin role"
+      deniedMessage: "User administration requires an admin role"
     });
   }
 

@@ -31,6 +31,7 @@ export function SuperadminPanel({
   users,
   loading,
   usersLoading,
+  canViewUsageGovernance,
   error,
   usersError,
   usersMutating,
@@ -47,6 +48,7 @@ export function SuperadminPanel({
   users: AdministeredUser[];
   loading: boolean;
   usersLoading: boolean;
+  canViewUsageGovernance: boolean;
   error?: string;
   usersError?: string;
   usersMutating: boolean;
@@ -64,21 +66,25 @@ export function SuperadminPanel({
   return (
     <section
       className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background"
-      aria-label="Superadmin panel"
+      aria-label="Administration panel"
     >
       <div className="grid gap-3 border-b px-5 pt-20">
         <div className="grid min-w-0 gap-1">
-          <span className="text-xs text-muted-foreground">Superadmin</span>
+          <span className="text-xs text-muted-foreground">
+            {canViewUsageGovernance ? "Superadmin" : "Admin"}
+          </span>
           <h1 className="text-xl font-semibold tracking-normal">Administration</h1>
         </div>
 
-        <nav className="flex items-end gap-1 overflow-x-auto" aria-label="Superadmin sections">
-          <TabButton
-            active={selectedTab === "usage"}
-            icon={<Activity size={15} aria-hidden="true" />}
-            label="Usage"
-            onClick={() => onSelectTab("usage")}
-          />
+        <nav className="flex items-end gap-1 overflow-x-auto" aria-label="Administration sections">
+          {canViewUsageGovernance ? (
+            <TabButton
+              active={selectedTab === "usage"}
+              icon={<Activity size={15} aria-hidden="true" />}
+              label="Usage"
+              onClick={() => onSelectTab("usage")}
+            />
+          ) : null}
           <TabButton
             active={selectedTab === "users"}
             icon={<Users size={15} aria-hidden="true" />}
@@ -98,12 +104,13 @@ export function SuperadminPanel({
       <div className="grid min-h-0 content-start gap-4 overflow-auto bg-background p-5">
         {selectedTab !== "users" && error ? <ErrorBanner message={error} /> : null}
 
-        {selectedTab === "usage" ? <UsageView usage={usage} /> : null}
+        {selectedTab === "usage" && canViewUsageGovernance ? <UsageView usage={usage} /> : null}
         {selectedTab === "users" ? (
           <UserAdministrationPanel
             users={users}
             loading={usersLoading}
             error={usersError}
+            canManageSuperadminAccess={canViewUsageGovernance}
             mutating={usersMutating}
             onCreateUser={onCreateUser}
             onUpdateUser={onUpdateUser}

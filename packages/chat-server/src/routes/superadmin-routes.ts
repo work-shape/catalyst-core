@@ -41,7 +41,8 @@ export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServ
       email: body.email,
       roles: body.roles,
       permissionRefs: body.permissionRefs,
-      status: body.status
+      status: body.status,
+      passwordSignIn: body.passwordSignIn
     });
   });
 
