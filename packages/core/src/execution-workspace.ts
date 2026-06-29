@@ -168,6 +168,7 @@ export interface EnqueueWorkspaceCommandInput {
   cwd?: string;
   limits: WorkspaceCommandLimits;
   expectedOutputs?: WorkspaceExpectedOutput[];
+  capacity?: WorkspaceCommandCapacityLimits;
   queuedAt?: ISODateString;
 }
 
@@ -230,6 +231,12 @@ export interface ActiveWorkspaceCommandCounts {
   running: number;
   cancelling: number;
   total: number;
+}
+
+export interface WorkspaceCommandCapacityLimits {
+  perConversationActiveCommands: number;
+  perUserActiveCommands: number;
+  globalActiveCommands: number;
 }
 
 export interface ExecutionWorkspaceMetadataStore {

@@ -10,6 +10,7 @@ import {
   type ToolExecutionErrorCode,
   type ToolHandlerResult,
   type WorkspaceCommand,
+  type WorkspaceCommandCapacityLimits,
   type WorkspaceCommandChangedFile,
   type WorkspaceCommandLimits,
   type WorkspaceCommandOutput,
@@ -17,6 +18,7 @@ import {
   type WorkspaceExpectedOutput,
   type WorkspaceFile,
   getRuntimeSubjectUserId,
+  isAppError,
   isJsonObject
 } from "@vivd-catalyst/core";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
@@ -174,7 +176,7 @@ const workspacePromoteArtifactInputJsonSchema: JsonObject = {
 export type WorkspaceToolStore = Pick<
   PlatformStore,
   | "ensureExecutionWorkspace" | "listWorkspaceFiles" | "upsertWorkspaceFile"
-  | "countActiveWorkspaceCommands" | "enqueueWorkspaceCommand" | "createManagedArtifact"
+  | "enqueueWorkspaceCommand" | "createManagedArtifact"
 >;
 
 export interface WorkspaceObjectStore {
@@ -246,28 +248,16 @@ export class WorkspaceCommandService {
     if (workspace.status === "failed") {
       return workspace.result;
     }
-    const concurrency = await this.checkConcurrency(context);
-    if (concurrency.status === "failed") {
-      return concurrency.result;
-    }
 
-    const command = await this.store.enqueueWorkspaceCommand({
-      clientInstanceId: context.clientInstanceId,
-      workspaceId: workspace.value.id,
-      ownerUserId: getRuntimeSubjectUserId(context),
-      agentRunId: context.toolRequest?.agentRunId,
-      toolCallId: context.toolRequest?.toolCallId,
-      command: normalized.value.command,
-      cwd: normalized.value.cwd,
-      limits: normalized.value.limits,
-      expectedOutputs: normalized.value.expectedOutputs,
-      queuedAt: this.now()
-    });
-    const resolved = await this.commandResults?.resolveWorkspaceCommand({ command, context });
-    if (resolved && resolved.id !== command.id) {
+    const command = await this.enqueueCommand(context, workspace.value.id, normalized.value);
+    if (command.status === "failed") {
+      return command.result;
+    }
+    const resolved = await this.commandResults?.resolveWorkspaceCommand({ command: command.value, context });
+    if (resolved && resolved.id !== command.value.id) {
       return failed("handler_failed", "Workspace command result source returned the wrong command");
     }
-    const resultCommand = resolved ?? command;
+    const resultCommand = resolved ?? command.value;
     const expectedOutputs = normalized.value.expectedOutputs;
     if (resultCommand.output) {
       const expectedValidation = validateExpectedOutputResult(
@@ -550,47 +540,50 @@ export class WorkspaceCommandService {
     };
   }
 
-  private async checkConcurrency(context: ToolExecutionContext): Promise<ValidationResult<void>> {
-    const conversationId = context.toolRequest?.conversationId;
-    if (!conversationId) {
-      return failedValidationResult("Workspace tools require an active tool request");
+  private async enqueueCommand(
+    context: ToolExecutionContext,
+    workspaceId: ExecutionWorkspaceId,
+    command: {
+      command: string;
+      cwd?: string;
+      limits: WorkspaceCommandLimits;
+      expectedOutputs: WorkspaceExpectedOutput[];
     }
-    const ownerUserId = getRuntimeSubjectUserId(context);
-    const [conversation, user, global] = await Promise.all([
-      this.store.countActiveWorkspaceCommands({
-        clientInstanceId: context.clientInstanceId,
-        conversationId
-      }),
-      this.store.countActiveWorkspaceCommands({
-        clientInstanceId: context.clientInstanceId,
-        ownerUserId
-      }),
-      this.store.countActiveWorkspaceCommands({
-        clientInstanceId: context.clientInstanceId
-      })
-    ]);
-    if (conversation.total >= this.limits.perConversationActiveCommands) {
-      return failedValidationResult("Workspace conversation command limit is already active", {
-        scope: "conversation",
-        activeCommands: conversation.total,
-        limit: this.limits.perConversationActiveCommands
-      });
+  ): Promise<ValidationResult<WorkspaceCommand>> {
+    try {
+      return {
+        status: "success",
+        value: await this.store.enqueueWorkspaceCommand({
+          clientInstanceId: context.clientInstanceId,
+          workspaceId,
+          ownerUserId: getRuntimeSubjectUserId(context),
+          agentRunId: context.toolRequest?.agentRunId,
+          toolCallId: context.toolRequest?.toolCallId,
+          command: command.command,
+          cwd: command.cwd,
+          limits: command.limits,
+          expectedOutputs: command.expectedOutputs,
+          capacity: this.commandCapacityLimits(),
+          queuedAt: this.now()
+        })
+      };
+    } catch (error) {
+      if (isAppError(error) && error.code === "CONFLICT") {
+        return {
+          status: "failed",
+          result: failed("handler_failed", error.message, error.details as JsonObject | undefined)
+        };
+      }
+      throw error;
     }
-    if (user.total >= this.limits.perUserActiveCommands) {
-      return failedValidationResult("Workspace user command limit is already active", {
-        scope: "user",
-        activeCommands: user.total,
-        limit: this.limits.perUserActiveCommands
-      });
-    }
-    if (global.total >= this.limits.globalActiveCommands) {
-      return failedValidationResult("Workspace global command limit is already active", {
-        scope: "global",
-        activeCommands: global.total,
-        limit: this.limits.globalActiveCommands
-      });
-    }
-    return { status: "success", value: undefined };
+  }
+
+  private commandCapacityLimits(): WorkspaceCommandCapacityLimits {
+    return {
+      perConversationActiveCommands: this.limits.perConversationActiveCommands,
+      perUserActiveCommands: this.limits.perUserActiveCommands,
+      globalActiveCommands: this.limits.globalActiveCommands
+    };
   }
 
   private async findWorkspaceFile(

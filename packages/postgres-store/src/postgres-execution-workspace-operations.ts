@@ -17,6 +17,7 @@ import {
   type RequestWorkspaceCommandCancellationInput,
   type UpsertWorkspaceFileInput,
   type WorkspaceCommand,
+  type WorkspaceCommandCapacityLimits,
   type WorkspaceCommandId,
   type WorkspaceFile,
   createPlatformId
@@ -190,6 +191,14 @@ export async function enqueueWorkspaceCommand(
       workspaceId: input.workspaceId,
       ownerUserId: input.ownerUserId
     });
+    if (input.capacity) {
+      await assertWorkspaceCommandCapacity(tx, {
+        clientInstanceId: input.clientInstanceId,
+        conversationId: workspace.conversationId,
+        ownerUserId: input.ownerUserId,
+        capacity: input.capacity
+      });
+    }
     const queuedAt = input.queuedAt ? new Date(input.queuedAt) : new Date();
     const [row] = await tx
       .insert(workspaceCommands)
@@ -240,7 +249,7 @@ export async function getWorkspaceCommand(
 }
 
 export async function countActiveWorkspaceCommands(
-  db: PostgresDatabase,
+  db: PostgresDatabase | PostgresTransaction,
   input: CountActiveWorkspaceCommandsInput
 ): Promise<ActiveWorkspaceCommandCounts> {
   const filters = [
@@ -277,6 +286,79 @@ export async function countActiveWorkspaceCommands(
     }
   }
   return counts;
+}
+
+async function assertWorkspaceCommandCapacity(
+  tx: PostgresTransaction,
+  input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    ownerUserId: string;
+    capacity: WorkspaceCommandCapacityLimits;
+  }
+): Promise<void> {
+  await acquireWorkspaceCommandCapacityLocks(tx, input);
+  assertWorkspaceCommandScopeCapacity(
+    "conversation",
+    (
+      await countActiveWorkspaceCommands(tx, {
+        clientInstanceId: input.clientInstanceId,
+        conversationId: input.conversationId
+      })
+    ).total,
+    input.capacity.perConversationActiveCommands
+  );
+  assertWorkspaceCommandScopeCapacity(
+    "user",
+    (
+      await countActiveWorkspaceCommands(tx, {
+        clientInstanceId: input.clientInstanceId,
+        ownerUserId: input.ownerUserId
+      })
+    ).total,
+    input.capacity.perUserActiveCommands
+  );
+  assertWorkspaceCommandScopeCapacity(
+    "global",
+    (
+      await countActiveWorkspaceCommands(tx, {
+        clientInstanceId: input.clientInstanceId
+      })
+    ).total,
+    input.capacity.globalActiveCommands
+  );
+}
+
+async function acquireWorkspaceCommandCapacityLocks(
+  tx: PostgresTransaction,
+  input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    ownerUserId: string;
+  }
+): Promise<void> {
+  const prefix = `workspace-command-capacity:${input.clientInstanceId}`;
+  for (const key of [
+    `${prefix}:global`,
+    `${prefix}:user:${input.ownerUserId}`,
+    `${prefix}:conversation:${input.conversationId}`
+  ]) {
+    await tx.execute(drizzleSql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
+  }
+}
+
+function assertWorkspaceCommandScopeCapacity(
+  scope: "conversation" | "user" | "global",
+  activeCommands: number,
+  limit: number
+): void {
+  if (activeCommands >= limit) {
+    throw new AppError("CONFLICT", `Workspace ${scope} command capacity exceeded`, {
+      scope,
+      activeCommands,
+      limit
+    });
+  }
 }
 
 export async function claimNextWorkspaceCommand(

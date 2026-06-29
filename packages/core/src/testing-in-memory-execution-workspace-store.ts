@@ -16,6 +16,7 @@ import {
   type RecoverStaleWorkspaceCommandsInput,
   type RequestWorkspaceCommandCancellationInput,
   type WorkspaceCommand,
+  type WorkspaceCommandCapacityLimits,
   type WorkspaceCommandId,
   type WorkspaceCommandStore,
   type WorkspaceFile,
@@ -158,6 +159,47 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
   async countActiveWorkspaceCommands(
     input: CountActiveWorkspaceCommandsInput
   ): Promise<ActiveWorkspaceCommandCounts> {
+    return this.countActiveWorkspaceCommandsSync(input);
+  }
+
+  async enqueueWorkspaceCommand(input: EnqueueWorkspaceCommandInput): Promise<WorkspaceCommand> {
+    const workspace = await this.requireActiveWorkspace(
+      input.clientInstanceId,
+      input.workspaceId,
+      input.ownerUserId
+    );
+    if (input.capacity) {
+      this.assertWorkspaceCommandCapacity(input, workspace.conversationId, input.capacity);
+    }
+    const queuedAt = input.queuedAt ?? new Date().toISOString();
+    const command: WorkspaceCommand = {
+      id: createPlatformId("wcmd"),
+      workspaceId: input.workspaceId,
+      clientInstanceId: input.clientInstanceId,
+      conversationId: workspace.conversationId,
+      ownerUserId: input.ownerUserId,
+      agentRunId: input.agentRunId,
+      toolCallId: input.toolCallId,
+      command: input.command,
+      cwd: input.cwd,
+      status: "queued",
+      limits: input.limits,
+      expectedOutputs: input.expectedOutputs ?? [],
+      attempts: 0,
+      queuedAt,
+      updatedAt: queuedAt
+    };
+    this.workspaceCommands.set(command.id, command);
+    this.executionWorkspaces.set(workspace.id, {
+      ...workspace,
+      updatedAt: queuedAt
+    });
+    return command;
+  }
+
+  private countActiveWorkspaceCommandsSync(
+    input: CountActiveWorkspaceCommandsInput
+  ): ActiveWorkspaceCommandCounts {
     const counts: ActiveWorkspaceCommandCounts = {
       queued: 0,
       running: 0,
@@ -183,36 +225,34 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
     return counts;
   }
 
-  async enqueueWorkspaceCommand(input: EnqueueWorkspaceCommandInput): Promise<WorkspaceCommand> {
-    const workspace = await this.requireActiveWorkspace(
-      input.clientInstanceId,
-      input.workspaceId,
-      input.ownerUserId
+  private assertWorkspaceCommandCapacity(
+    input: EnqueueWorkspaceCommandInput,
+    conversationId: ConversationId,
+    capacity: WorkspaceCommandCapacityLimits
+  ): void {
+    assertWorkspaceCommandScopeCapacity(
+      "conversation",
+      this.countActiveWorkspaceCommandsSync({
+        clientInstanceId: input.clientInstanceId,
+        conversationId
+      }).total,
+      capacity.perConversationActiveCommands
     );
-    const queuedAt = input.queuedAt ?? new Date().toISOString();
-    const command: WorkspaceCommand = {
-      id: createPlatformId("wcmd"),
-      workspaceId: input.workspaceId,
-      clientInstanceId: input.clientInstanceId,
-      conversationId: workspace.conversationId,
-      ownerUserId: input.ownerUserId,
-      agentRunId: input.agentRunId,
-      toolCallId: input.toolCallId,
-      command: input.command,
-      cwd: input.cwd,
-      status: "queued",
-      limits: input.limits,
-      expectedOutputs: input.expectedOutputs ?? [],
-      attempts: 0,
-      queuedAt,
-      updatedAt: queuedAt
-    };
-    this.workspaceCommands.set(command.id, command);
-    this.executionWorkspaces.set(workspace.id, {
-      ...workspace,
-      updatedAt: queuedAt
-    });
-    return command;
+    assertWorkspaceCommandScopeCapacity(
+      "user",
+      this.countActiveWorkspaceCommandsSync({
+        clientInstanceId: input.clientInstanceId,
+        ownerUserId: input.ownerUserId
+      }).total,
+      capacity.perUserActiveCommands
+    );
+    assertWorkspaceCommandScopeCapacity(
+      "global",
+      this.countActiveWorkspaceCommandsSync({
+        clientInstanceId: input.clientInstanceId
+      }).total,
+      capacity.globalActiveCommands
+    );
   }
 
   async getWorkspaceCommand(input: {
@@ -438,4 +478,18 @@ function isActiveWorkspaceCommand(
   command: WorkspaceCommand
 ): command is WorkspaceCommand & { status: "queued" | "running" | "cancelling" } {
   return command.status === "queued" || command.status === "running" || command.status === "cancelling";
+}
+
+function assertWorkspaceCommandScopeCapacity(
+  scope: "conversation" | "user" | "global",
+  activeCommands: number,
+  limit: number
+): void {
+  if (activeCommands >= limit) {
+    throw new AppError("CONFLICT", `Workspace ${scope} command capacity exceeded`, {
+      scope,
+      activeCommands,
+      limit
+    });
+  }
 }

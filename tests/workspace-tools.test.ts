@@ -140,6 +140,33 @@ describe("workspace tools", () => {
     }
   });
 
+  it("does not let concurrent workspace.exec calls both pass when conversation capacity is one", async () => {
+    const harness = await createWorkspaceHarness({
+      limits: {
+        perConversationActiveCommands: 1,
+        perUserActiveCommands: 10,
+        globalActiveCommands: 10
+      }
+    });
+
+    const results = await Promise.all([
+      harness.runTool("workspace.exec", { command: "sleep 1" }),
+      harness.runTool("workspace.exec", { command: "sleep 2" })
+    ]);
+
+    expect(results.filter((result) => result.status === "success")).toHaveLength(1);
+    const failed = results.find((result) => result.status === "failed");
+    expect(failed?.status).toBe("failed");
+    if (failed?.status === "failed") {
+      expect(failed.error.message).toMatch(/conversation/u);
+      expect(failed.error.details).toMatchObject({
+        scope: "conversation",
+        activeCommands: 1,
+        limit: 1
+      });
+    }
+  });
+
   it("lists internal workspace files without exposing them as tool artifacts", async () => {
     const harness = await createWorkspaceHarness();
     await harness.putWorkspaceFile({
