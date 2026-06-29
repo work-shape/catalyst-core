@@ -345,7 +345,12 @@ class ExecutionWorkspaceSourceAttachmentService {
       conversationId: input.conversationId
     });
     const sourceFileObjectKeys = deletion.fileObjectKeys.filter(isSourceObjectKey);
-    await Promise.all(sourceFileObjectKeys.map((objectKey) => this.objectStore.deleteObject(objectKey)));
+    const workspaceArtifactObjectKeys = deletion.artifactObjectKeys.filter(isWorkspaceArtifactObjectKey);
+    await Promise.all(
+      [...sourceFileObjectKeys, ...workspaceArtifactObjectKeys].map((objectKey) =>
+        this.objectStore.deleteObject(objectKey)
+      )
+    );
     if (this.markDeletedOnDelete) {
       return this.files.markConversationManagedObjectsDeleted({
         clientInstanceId: this.clientInstanceId,
@@ -356,7 +361,7 @@ class ExecutionWorkspaceSourceAttachmentService {
     return {
       attachmentCount: 0,
       fileObjectKeys: sourceFileObjectKeys,
-      artifactObjectKeys: []
+      artifactObjectKeys: workspaceArtifactObjectKeys
     };
   }
 
@@ -462,6 +467,10 @@ function createSourceObjectKey(input: {
 
 function isSourceObjectKey(value: string): boolean {
   return value.startsWith("execution-workspace-source-files/");
+}
+
+function isWorkspaceArtifactObjectKey(value: string): boolean {
+  return value.startsWith("execution-workspaces/");
 }
 
 function checksumBytes(bytes: Uint8Array): string {

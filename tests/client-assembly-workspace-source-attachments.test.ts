@@ -1,6 +1,6 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   AppError,
@@ -134,6 +134,55 @@ describe("execution workspace source attachments", () => {
     }
   });
 
+  it("deletes promoted workspace artifact bytes during conversation cleanup", async () => {
+    const fixture = await createSourceAttachmentFixture();
+    try {
+      const artifactObjectKey = [
+        "execution-workspaces",
+        fixture.clientInstanceId,
+        fixture.conversation.id,
+        "ews_cleanup",
+        "wcmd_cleanup",
+        "final.csv"
+      ].join("/");
+      const artifactPathParts = artifactObjectKey.split("/");
+      const artifactPath = join(fixture.root, ...artifactPathParts);
+      await mkdir(join(fixture.root, ...artifactPathParts.slice(0, -1)), { recursive: true });
+      await writeFile(artifactPath, "final,total\nAda,42\n", "utf8");
+
+      const artifact = await fixture.store.createManagedArtifact({
+        clientInstanceId: fixture.clientInstanceId,
+        conversationId: fixture.conversation.id,
+        kind: "text/csv",
+        objectKey: artifactObjectKey,
+        filename: "final.csv",
+        mimeType: "text/csv",
+        byteSize: 19,
+        checksum: "sha256:final",
+        metadata: {
+          source: "execution_workspace",
+          workspacePath: "scratch/final.csv"
+        }
+      });
+
+      const deletion = await fixture.handler.deleteConversationAttachments({
+        conversationId: fixture.conversation.id,
+        deletedAt: "2026-07-01T00:00:00.000Z"
+      });
+
+      expect(deletion.artifactObjectKeys).toContain(artifactObjectKey);
+      await expect(access(artifactPath)).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(
+        fixture.store.getManagedArtifact({
+          clientInstanceId: fixture.clientInstanceId,
+          artifactId: artifact.id
+        })
+      ).resolves.toBeUndefined();
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("advertises and uploads workspace source, PDF, and image formats through the chat attachment API", async () => {
     const root = await mkdtemp(join(tmpdir(), "vivd-workspace-source-app-"));
     const app = await createClientInstanceApp({
@@ -214,6 +263,52 @@ describe("execution workspace source attachments", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it("serves promoted workspace artifacts before broad managed-object readers", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vivd-workspace-source-app-"));
+    const app = await createClientInstanceApp({
+      config: createWorkspaceAttachmentConfig(),
+      env: {
+        EXECUTION_WORKSPACE_OBJECT_ROOT: root
+      },
+      storeMode: "memory",
+      capabilities: [
+        createWorkspaceArtifactSeedingCapability(root),
+        createBroadManagedObjectReaderCapability()
+      ],
+      tools: []
+    });
+    try {
+      const created = await app.server.inject({
+        method: "POST",
+        url: "/api/conversations",
+        payload: { title: "Workspace artifact dispatch test" }
+      });
+      expect(created.statusCode).toBe(200);
+      const conversation = created.json() as { id: string };
+
+      const uploaded = await uploadFile(app.server, conversation.id, {
+        filename: "source.seed",
+        contentType: "text/x-workspace-artifact-test",
+        content: "name,total\nAda,42\n"
+      });
+      expect(uploaded.statusCode).toBe(200);
+      const artifactId = (uploaded.json() as { attachment: { artifactRefs: { final?: string } } })
+        .attachment.artifactRefs.final;
+      expect(artifactId).toEqual(expect.any(String));
+
+      const downloaded = await app.server.inject({
+        method: "GET",
+        url: `/api/conversations/${conversation.id}/artifacts/${artifactId}/content`
+      });
+      expect(downloaded.statusCode).toBe(200);
+      expect(downloaded.payload).toBe("name,total\nAda,42\n");
+      expect(downloaded.headers["content-type"]).toContain("text/csv");
+    } finally {
+      await app.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
 
 async function createSourceAttachmentFixture(input: { maxFileBytes?: number } = {}) {
@@ -228,8 +323,10 @@ async function createSourceAttachmentFixture(input: { maxFileBytes?: number } = 
     retainedUntil: "2026-07-29T00:00:00.000Z"
   });
   return {
+    root,
     clientInstanceId,
     conversation: conversation as Conversation,
+    store,
     handler: createExecutionWorkspaceSourceAttachmentHandler({
       clientInstanceId,
       files: store,
@@ -243,7 +340,7 @@ async function createSourceAttachmentFixture(input: { maxFileBytes?: number } = 
   };
 }
 
-function createWorkspaceAttachmentConfig() {
+function createWorkspaceAttachmentConfig(input: { toolNames?: string[] } = {}) {
   return parseClientInstanceConfig({
     version: 1,
     clientInstance: {
@@ -262,15 +359,187 @@ function createWorkspaceAttachmentConfig() {
         name: "test_agent",
         displayName: "Test Agent",
         instructions: "Use configured tools only.",
-        modelProviderId: "local"
+        modelProviderId: "local",
+        toolNames: input.toolNames ?? []
       }
     ],
     modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
     executionWorkspaces: {
       enabled: true
     },
-    tools: []
+    tools: (input.toolNames ?? []).map((name) => ({ name, enabled: true }))
   });
+}
+
+function createBroadManagedObjectReaderCapability(): ClientInstanceCapability {
+  return {
+    name: "broad-managed-object-reader",
+    create() {
+      return {
+        managedObjects: [
+          {
+            name: "broad-managed-object-reader",
+            async readArtifact() {
+              throw new AppError(
+                "INTERNAL",
+                "Broad managed-object reader must not handle workspace artifacts"
+              );
+            },
+            async readFile() {
+              throw new AppError("NOT_FOUND", "No files are owned by this test reader");
+            }
+          }
+        ]
+      };
+    }
+  };
+}
+
+function createWorkspaceArtifactSeedingCapability(root: string): ClientInstanceCapability {
+  return {
+    name: "workspace-artifact-seeding",
+    create(context) {
+      const managedObjects = context.managedObjectAccess.createAccess({
+        byteStore: createWorkspaceArtifactSeedByteStore(root),
+        keyFactory: createWorkspaceArtifactSeedKeyFactory()
+      });
+      return {
+        attachments: [
+          {
+            name: "workspace-artifact-seeding",
+            maxFileBytes: 1024,
+            acceptedFileTypes: ["text/x-workspace-artifact-test"],
+            acceptsFile(file) {
+              return file.mimeType === "text/x-workspace-artifact-test";
+            },
+            async listDraftAttachments(conversationId) {
+              return context.files.listDraftAttachments({
+                clientInstanceId: context.clientInstanceId,
+                conversationId
+              });
+            },
+            async uploadDraftAttachment(input) {
+              const file = await managedObjects.createFile({
+                ownerUserId: input.ownerUserId,
+                conversationId: input.conversationId,
+                filename: input.filename,
+                mimeType: "text/x-workspace-artifact-test",
+                bytes: input.bytes
+              });
+              const artifact = await managedObjects.createArtifact({
+                conversationId: input.conversationId,
+                sourceFileId: file.id,
+                kind: "text/csv",
+                filename: "final.csv",
+                mimeType: "text/csv",
+                bytes: input.bytes,
+                metadata: {
+                  source: "execution_workspace",
+                  workspacePath: "scratch/final.csv"
+                }
+              });
+              return context.files.createConversationAttachment({
+                clientInstanceId: context.clientInstanceId,
+                conversationId: input.conversationId,
+                fileId: file.id,
+                filename: input.filename,
+                mimeType: "text/x-workspace-artifact-test",
+                byteSize: input.bytes.byteLength,
+                checksum: file.checksum,
+                status: "ready",
+                artifactRefs: {
+                  final: artifact.id
+                },
+                processingMetadata: {
+                  source: "workspace_artifact_seeding"
+                },
+                warnings: []
+              }) as Promise<DraftAttachment>;
+            },
+            async retryDraftAttachment() {
+              throw new AppError("NOT_FOUND", "Attachment is not available");
+            },
+            async deleteDraftAttachment() {
+              throw new AppError("NOT_FOUND", "Attachment is not available");
+            },
+            async deleteConversationAttachments() {
+              return {
+                attachmentCount: 0,
+                fileObjectKeys: [],
+                artifactObjectKeys: []
+              };
+            },
+            async readConversationFile() {
+              throw new AppError("NOT_FOUND", "Attachment is not available");
+            },
+            blockingDraftAttachmentMessage() {
+              return undefined;
+            },
+            createAttachmentManifest() {
+              return {
+                version: 1,
+                attachments: []
+              };
+            },
+            isInlineDisplayMimeType() {
+              return false;
+            }
+          }
+        ]
+      };
+    }
+  };
+}
+
+function createWorkspaceArtifactSeedByteStore(root: string) {
+  return {
+    async putObject(input: { key: string; body: Uint8Array }) {
+      const path = join(root, ...input.key.split("/"));
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, input.body);
+    },
+    async getObject(key: string) {
+      return readFile(join(root, ...key.split("/")));
+    },
+    async deleteObject(key: string) {
+      await rm(join(root, ...key.split("/")), { force: true });
+    }
+  };
+}
+
+function createWorkspaceArtifactSeedKeyFactory() {
+  return {
+    createFileObjectKey(input: {
+      clientInstanceId: string;
+      conversationId?: string;
+      checksum: string;
+      filename: string;
+    }) {
+      return [
+        "workspace-artifact-seeding-source",
+        encodeURIComponent(input.clientInstanceId),
+        encodeURIComponent(input.conversationId ?? "conversationless"),
+        encodeURIComponent(input.checksum),
+        encodeURIComponent(input.filename)
+      ].join("/");
+    },
+    createArtifactObjectKey(input: {
+      clientInstanceId: string;
+      conversationId: string;
+      checksum: string;
+      filename?: string;
+    }) {
+      return [
+        "execution-workspaces",
+        encodeURIComponent(input.clientInstanceId),
+        encodeURIComponent(input.conversationId),
+        "ews_seed",
+        "wcmd_seed",
+        encodeURIComponent(input.checksum),
+        encodeURIComponent(input.filename ?? "final.csv")
+      ].join("/");
+    }
+  };
 }
 
 function createStrictUploadCapability(): ClientInstanceCapability {

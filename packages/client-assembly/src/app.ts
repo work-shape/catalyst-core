@@ -115,17 +115,16 @@ export async function createClientInstanceApp(
     ...(workspaceSourceAttachment ? [workspaceSourceAttachment] : []),
     ...capabilityAttachmentHandlers
   ]);
+  const workspaceManagedObjectReader = workspaceFileByteStore
+    ? createExecutionWorkspaceManagedObjectReader({
+        clientInstanceId,
+        files: store,
+        byteStore: workspaceFileByteStore
+      })
+    : undefined;
   const managedObjects = resolveManagedObjectReaders([
+    ...(workspaceManagedObjectReader ? [workspaceManagedObjectReader] : []),
     ...capabilityContributions.flatMap((contribution) => contribution.managedObjects ?? []),
-    ...(workspaceFileByteStore
-      ? [
-          createExecutionWorkspaceManagedObjectReader({
-            clientInstanceId,
-            files: store,
-            byteStore: workspaceFileByteStore
-          })
-        ]
-      : [])
   ]);
   const skillCatalog = new SkillCatalog({
     skills: config.skills

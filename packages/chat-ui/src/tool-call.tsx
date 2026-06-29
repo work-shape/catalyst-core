@@ -92,6 +92,7 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
   const detailSections = toolDetailSections({
     args,
     argsText,
+    toolName,
     result,
     labels: { input: t("toolInput"), output: t("toolOutput") }
   });
@@ -424,13 +425,18 @@ function toolDetailSections({
   args,
   argsText,
   labels,
+  toolName,
   result
 }: {
   args: unknown;
   argsText?: string;
   labels: { input: string; output: string };
+  toolName: string;
   result: unknown;
 }): Array<{ label: string; value: string }> {
+  if (isWorkspaceToolName(toolName)) {
+    return [];
+  }
   const input = formatDetails(argsText && argsText.trim().length > 0 ? argsText : args);
   const output = formatDetails(result);
   const sections: Array<{ label: string; value: string }> = [];
@@ -441,6 +447,20 @@ function toolDetailSections({
     sections.push({ label: labels.output, value: output });
   }
   return sections;
+}
+
+export function readToolDetailSections(input: {
+  args: unknown;
+  argsText?: string;
+  labels: { input: string; output: string };
+  result: unknown;
+  toolName: string;
+}): Array<{ label: string; value: string }> {
+  return toolDetailSections(input);
+}
+
+function isWorkspaceToolName(toolName: string): boolean {
+  return toolName.startsWith("workspace.");
 }
 
 function formatDetails(value: unknown): string | undefined {

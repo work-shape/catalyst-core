@@ -6,7 +6,10 @@ import {
   createToolResultMetadata
 } from "@vivd-catalyst/core";
 import { toUiMessages } from "../packages/chat-ui/src/assistant-ui-adapter";
-import { readToolArtifactRefs } from "../packages/chat-ui/src/tool-call";
+import {
+  readToolArtifactRefs,
+  readToolDetailSections
+} from "../packages/chat-ui/src/tool-call";
 
 describe("chat UI message history projection", () => {
   it("replays persisted user document manifests as file attachments", () => {
@@ -291,7 +294,7 @@ describe("chat UI message history projection", () => {
     });
   });
 
-  it("replays promoted workspace artifact refs while keeping internal workspace files hidden", () => {
+  it("replays promoted workspace artifact refs while suppressing internal workspace details", () => {
     const messages: Message[] = [
       {
         id: "msg_tool_call",
@@ -307,7 +310,7 @@ describe("chat UI message history projection", () => {
               toolCallId: "call_workspace",
               toolName: "workspace.exec",
               input: {
-                command: "build final report"
+                command: "cat scratch/final-report.pdf && echo shell"
               }
             }
           ]
@@ -326,7 +329,7 @@ describe("chat UI message history projection", () => {
             toolCallId: "call_workspace",
             toolName: "workspace.exec",
             input: {
-              command: "build final report"
+              command: "cat scratch/final-report.pdf && echo shell"
             }
           },
           result: {
@@ -335,6 +338,8 @@ describe("chat UI message history projection", () => {
               commandId: "wcmd_test",
               workspaceId: "ews_test",
               status: "completed",
+              stdoutPreview: "shell stdout preview",
+              stderrPreview: "shell stderr preview",
               changedFiles: [
                 {
                   path: "scratch/final-report.pdf",
@@ -398,8 +403,33 @@ describe("chat UI message history projection", () => {
         mimeType: "application/pdf"
       }
     ]);
-    expect(JSON.stringify(toolPart?.output)).not.toContain("objectKey");
-    expect(JSON.stringify(toolPart?.output)).not.toContain("execution-workspaces/");
+    const detailSections = readToolDetailSections({
+      args: {
+        command: "cat scratch/final-report.pdf && echo shell"
+      },
+      labels: { input: "Input", output: "Output" },
+      result: toolPart?.output,
+      toolName: "workspace.exec"
+    });
+    expect(detailSections).toEqual([]);
+    expect(JSON.stringify(detailSections)).not.toContain("scratch/final-report.pdf");
+    expect(JSON.stringify(detailSections)).not.toContain("shell stdout preview");
+    expect(JSON.stringify(detailSections)).not.toContain("shell stderr preview");
+    expect(JSON.stringify(detailSections)).not.toContain("workspacePath");
+  });
+
+  it("keeps non-workspace tool details available", () => {
+    const detailSections = readToolDetailSections({
+      args: { text: "hello" },
+      labels: { input: "Input", output: "Output" },
+      result: { status: "success", output: "hello back" },
+      toolName: "demo.echo"
+    });
+
+    expect(detailSections).toEqual([
+      { label: "Input", value: JSON.stringify({ text: "hello" }, null, 2) },
+      { label: "Output", value: JSON.stringify({ status: "success", output: "hello back" }, null, 2) }
+    ]);
   });
 
   it("replays persisted tool failures as dynamic tool errors", () => {
