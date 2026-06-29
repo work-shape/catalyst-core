@@ -1,10 +1,12 @@
 import { and, asc, eq, inArray, ne, sql as drizzleSql } from "drizzle-orm";
 import {
   AppError,
+  type ActiveWorkspaceCommandCounts,
   type CancelClaimedWorkspaceCommandInput,
   type ClaimWorkspaceCommandInput,
   type ClientInstanceId,
   type CompleteWorkspaceCommandInput,
+  type CountActiveWorkspaceCommandsInput,
   type ConversationId,
   type EnqueueWorkspaceCommandInput,
   type EnsureExecutionWorkspaceInput,
@@ -15,6 +17,7 @@ import {
   type RequestWorkspaceCommandCancellationInput,
   type UpsertWorkspaceFileInput,
   type WorkspaceCommand,
+  type WorkspaceCommandCapacityLimits,
   type WorkspaceCommandId,
   type WorkspaceFile,
   createPlatformId
@@ -188,6 +191,14 @@ export async function enqueueWorkspaceCommand(
       workspaceId: input.workspaceId,
       ownerUserId: input.ownerUserId
     });
+    if (input.capacity) {
+      await assertWorkspaceCommandCapacity(tx, {
+        clientInstanceId: input.clientInstanceId,
+        conversationId: workspace.conversationId,
+        ownerUserId: input.ownerUserId,
+        capacity: input.capacity
+      });
+    }
     const queuedAt = input.queuedAt ? new Date(input.queuedAt) : new Date();
     const [row] = await tx
       .insert(workspaceCommands)
@@ -235,6 +246,119 @@ export async function getWorkspaceCommand(
     )
     .limit(1);
   return row ? mapWorkspaceCommand(row) : undefined;
+}
+
+export async function countActiveWorkspaceCommands(
+  db: PostgresDatabase | PostgresTransaction,
+  input: CountActiveWorkspaceCommandsInput
+): Promise<ActiveWorkspaceCommandCounts> {
+  const filters = [
+    drizzleSql`wc.client_instance_id = ${input.clientInstanceId}`,
+    drizzleSql`wc.status in ('queued', 'running', 'cancelling')`,
+    drizzleSql`ew.status = 'active'`
+  ];
+  if (input.conversationId !== undefined) {
+    filters.push(drizzleSql`wc.conversation_id = ${input.conversationId}`);
+  }
+  if (input.ownerUserId !== undefined) {
+    filters.push(drizzleSql`wc.owner_user_id = ${input.ownerUserId}`);
+  }
+
+  const rows = (await db.execute(drizzleSql<{ status: string; count: number }>`
+    select wc.status, count(*)::int as count
+    from workspace_commands wc
+    join execution_workspaces ew on ew.id = wc.workspace_id
+    where ${drizzleSql.join(filters, drizzleSql` and `)}
+    group by wc.status
+  `)) as unknown as Array<{ status: string; count: number | string }>;
+
+  const counts: ActiveWorkspaceCommandCounts = {
+    queued: 0,
+    running: 0,
+    cancelling: 0,
+    total: 0
+  };
+  for (const row of rows) {
+    const count = Number(row.count);
+    if (row.status === "queued" || row.status === "running" || row.status === "cancelling") {
+      counts[row.status] = count;
+      counts.total += count;
+    }
+  }
+  return counts;
+}
+
+async function assertWorkspaceCommandCapacity(
+  tx: PostgresTransaction,
+  input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    ownerUserId: string;
+    capacity: WorkspaceCommandCapacityLimits;
+  }
+): Promise<void> {
+  await acquireWorkspaceCommandCapacityLocks(tx, input);
+  assertWorkspaceCommandScopeCapacity(
+    "conversation",
+    (
+      await countActiveWorkspaceCommands(tx, {
+        clientInstanceId: input.clientInstanceId,
+        conversationId: input.conversationId
+      })
+    ).total,
+    input.capacity.perConversationActiveCommands
+  );
+  assertWorkspaceCommandScopeCapacity(
+    "user",
+    (
+      await countActiveWorkspaceCommands(tx, {
+        clientInstanceId: input.clientInstanceId,
+        ownerUserId: input.ownerUserId
+      })
+    ).total,
+    input.capacity.perUserActiveCommands
+  );
+  assertWorkspaceCommandScopeCapacity(
+    "global",
+    (
+      await countActiveWorkspaceCommands(tx, {
+        clientInstanceId: input.clientInstanceId
+      })
+    ).total,
+    input.capacity.globalActiveCommands
+  );
+}
+
+async function acquireWorkspaceCommandCapacityLocks(
+  tx: PostgresTransaction,
+  input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    ownerUserId: string;
+  }
+): Promise<void> {
+  const prefix = `workspace-command-capacity:${input.clientInstanceId}`;
+  for (const key of [
+    `${prefix}:global`,
+    `${prefix}:user:${input.ownerUserId}`,
+    `${prefix}:conversation:${input.conversationId}`
+  ]) {
+    await tx.execute(drizzleSql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
+  }
+}
+
+function assertWorkspaceCommandScopeCapacity(
+  scope: "conversation" | "user" | "global",
+  activeCommands: number,
+  limit: number
+): void {
+  if (activeCommands >= limit) {
+    throw new AppError("CONFLICT", `Workspace ${scope} command capacity exceeded`, {
+      scope,
+      activeCommands,
+      limit
+    });
+  }
 }
 
 export async function claimNextWorkspaceCommand(

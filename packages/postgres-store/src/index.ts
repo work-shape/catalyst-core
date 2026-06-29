@@ -87,6 +87,7 @@ import {
   cancelClaimedWorkspaceCommand as cancelClaimedPostgresWorkspaceCommand,
   claimNextWorkspaceCommand as claimNextPostgresWorkspaceCommand,
   completeWorkspaceCommand as completePostgresWorkspaceCommand,
+  countActiveWorkspaceCommands as countActivePostgresWorkspaceCommands,
   enqueueWorkspaceCommand as enqueuePostgresWorkspaceCommand,
   ensureExecutionWorkspace as ensurePostgresExecutionWorkspace,
   failWorkspaceCommand as failPostgresWorkspaceCommand,
@@ -349,6 +350,12 @@ export class PostgresPlatformStore
     input: Parameters<ExecutionWorkspaceFileStore["listWorkspaceFiles"]>[0]
   ): Promise<WorkspaceFile[]> {
     return listPostgresWorkspaceFiles(this.db, input);
+  }
+
+  async countActiveWorkspaceCommands(
+    input: Parameters<WorkspaceCommandStore["countActiveWorkspaceCommands"]>[0]
+  ) {
+    return countActivePostgresWorkspaceCommands(this.db, input);
   }
 
   async enqueueWorkspaceCommand(

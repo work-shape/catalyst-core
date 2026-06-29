@@ -623,6 +623,12 @@ export class InMemoryPlatformStore
     return this.executionWorkspaceStore.listWorkspaceFiles(input);
   }
 
+  async countActiveWorkspaceCommands(
+    input: Parameters<WorkspaceCommandStore["countActiveWorkspaceCommands"]>[0]
+  ) {
+    return this.executionWorkspaceStore.countActiveWorkspaceCommands(input);
+  }
+
   async enqueueWorkspaceCommand(
     input: Parameters<WorkspaceCommandStore["enqueueWorkspaceCommand"]>[0]
   ) {

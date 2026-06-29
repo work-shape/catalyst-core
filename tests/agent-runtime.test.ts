@@ -5,10 +5,12 @@ import {
   asAgentRunId,
   asClientInstanceId,
   asConversationId,
+  asManagedArtifactId,
   asMessageId,
   type ChatMessage,
   type JsonObject,
   type ModelProviderConfig,
+  readToolResultMetadata,
   type RunObservationStore,
   type RuntimeCallContext,
   type ToolExecution,
@@ -1028,6 +1030,169 @@ describe("local agent runtime", () => {
         text: "I need to inspect the referenced page."
       }
     ]);
+  });
+
+  it("persists tool result artifacts in durable observations and tool message metadata", async () => {
+    const clientInstanceId = asClientInstanceId("tool-artifact-observation-client");
+    const context: RuntimeCallContext = {
+      clientInstanceId,
+      correlationId: "corr-tool-artifact-observation",
+      user: {
+        id: "user-1",
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const store = new InMemoryPlatformStore();
+    const conversation = await store.createConversation({
+      clientInstanceId,
+      ownerUserId: "user-1",
+      ownerExternalUserId: "user-1",
+      title: "Tool artifact observation",
+      retainedUntil: "2026-07-29T00:00:00.000Z"
+    });
+    const userMessage = await store.appendMessage({
+      clientInstanceId,
+      conversationId: conversation.id,
+      role: "user",
+      text: "Create the artifact"
+    });
+    const providerConfig: ModelProviderConfig = {
+      id: "test-provider",
+      type: "deterministic",
+      model: "test-model"
+    };
+    let modelStep = 0;
+    const artifact = {
+      artifactId: asManagedArtifactId("art_runtime_persisted"),
+      kind: "document.pdf",
+      filename: "result.pdf",
+      mimeType: "application/pdf",
+      metadata: {
+        source: "test"
+      }
+    };
+    const modelProvider: ModelProvider = {
+      id: "test-provider",
+      async complete() {
+        modelStep += 1;
+        if (modelStep === 1) {
+          return {
+            text: "I will create the artifact.",
+            toolCalls: [
+              {
+                toolCallId: "call_artifact",
+                toolName: "test.promote_artifact",
+                input: { path: "result.pdf" }
+              }
+            ],
+            usage: noReportedUsage()
+          };
+        }
+        return {
+          text: "Artifact ready.",
+          toolCalls: [],
+          usage: noReportedUsage()
+        };
+      }
+    };
+    const runtime = new LocalAgentRuntime({
+      agents: [
+        {
+          name: "artifact_agent",
+          displayName: "Artifact Agent",
+          instructions: "Use tools when useful.",
+          modelProviderId: "test-provider",
+          toolNames: ["test.promote_artifact"],
+          initialPrompts: []
+        }
+      ],
+      modelProviders: [providerConfig],
+      defaultModelProvider: providerConfig,
+      conversationHistory: store,
+      agentRunStore: store,
+      runObservationStore: store,
+      modelProvider,
+      toolRegistry: new ToolRegistry({
+        tools: [
+          defineTool({
+            name: "test.promote_artifact",
+            description: "Promote an artifact.",
+            inputSchema: z.object({ path: z.string() }),
+            async execute() {
+              throw new Error("Tool registry execution should not be used by this test");
+            }
+          })
+        ]
+      }),
+      toolExecution: {
+        async authorize() {
+          return { status: "allowed" };
+        },
+        async execute() {
+          return {
+            status: "success",
+            output: {
+              artifactId: artifact.artifactId,
+              path: "result.pdf"
+            },
+            artifacts: [artifact]
+          };
+        }
+      },
+      usageGovernance: new ModelUsageGovernance({
+        store,
+        budget: {
+          costSafetyMultiplier: 1
+        },
+        safeguards: {}
+      })
+    });
+
+    const run = await runtime.start(
+      {
+        agentName: "artifact_agent",
+        conversationId: conversation.id,
+        inputMessageId: userMessage.id,
+        message: {
+          text: "Create the artifact"
+        }
+      },
+      context
+    );
+
+    for await (const _event of runtime.observe(run.runId, context)) {
+      // Drain the run so event persistence has completed.
+    }
+
+    const observations = await store.listRunObservations({
+      clientInstanceId,
+      runId: run.runId,
+      ownerUserId: "user-1"
+    });
+    const toolObservation = observations.find(
+      (observation) => observation.type === "tool_call_completed"
+    );
+    expect(toolObservation?.payload).toMatchObject({
+      type: "tool_call_completed",
+      result: {
+        status: "success",
+        artifacts: [artifact]
+      }
+    });
+
+    const toolMessage = (await store.listMessages({
+      clientInstanceId,
+      conversationId: conversation.id
+    })).find((message) => message.role === "tool");
+    expect(readToolResultMetadata(toolMessage?.metadata)?.result).toMatchObject({
+      status: "success",
+      artifacts: [artifact]
+    });
   });
 
   it("feeds invalid tool argument JSON back to the model as a failed tool result", async () => {

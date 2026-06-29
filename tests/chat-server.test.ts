@@ -2625,6 +2625,26 @@ describe("client instance app vertical slice", () => {
     });
   });
 
+  it("registers workspace tools through the client assembly path", async () => {
+    const workspaceToolNames = [
+      "workspace.exec",
+      "workspace.list_files",
+      "workspace.read_file",
+      "workspace.promote_artifact"
+    ];
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        tools: workspaceToolNames.map((name) => ({ name, enabled: true })),
+        toolNames: workspaceToolNames
+      }),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+
+    await app.close();
+  });
+
   it("rejects startup without DATABASE_URL unless memory mode is explicit", async () => {
     await expect(
       createClientInstanceApp({

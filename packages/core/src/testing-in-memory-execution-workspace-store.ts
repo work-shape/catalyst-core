@@ -1,7 +1,9 @@
 import {
   AppError,
+  type ActiveWorkspaceCommandCounts,
   type CancelClaimedWorkspaceCommandInput,
   type ClaimWorkspaceCommandInput,
+  type CountActiveWorkspaceCommandsInput,
   type ClientInstanceId,
   type CompleteWorkspaceCommandInput,
   type ConversationId,
@@ -14,6 +16,7 @@ import {
   type RecoverStaleWorkspaceCommandsInput,
   type RequestWorkspaceCommandCancellationInput,
   type WorkspaceCommand,
+  type WorkspaceCommandCapacityLimits,
   type WorkspaceCommandId,
   type WorkspaceCommandStore,
   type WorkspaceFile,
@@ -153,12 +156,21 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
       .sort((left, right) => left.path.localeCompare(right.path));
   }
 
+  async countActiveWorkspaceCommands(
+    input: CountActiveWorkspaceCommandsInput
+  ): Promise<ActiveWorkspaceCommandCounts> {
+    return this.countActiveWorkspaceCommandsSync(input);
+  }
+
   async enqueueWorkspaceCommand(input: EnqueueWorkspaceCommandInput): Promise<WorkspaceCommand> {
     const workspace = await this.requireActiveWorkspace(
       input.clientInstanceId,
       input.workspaceId,
       input.ownerUserId
     );
+    if (input.capacity) {
+      this.assertWorkspaceCommandCapacity(input, workspace.conversationId, input.capacity);
+    }
     const queuedAt = input.queuedAt ?? new Date().toISOString();
     const command: WorkspaceCommand = {
       id: createPlatformId("wcmd"),
@@ -183,6 +195,64 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
       updatedAt: queuedAt
     });
     return command;
+  }
+
+  private countActiveWorkspaceCommandsSync(
+    input: CountActiveWorkspaceCommandsInput
+  ): ActiveWorkspaceCommandCounts {
+    const counts: ActiveWorkspaceCommandCounts = {
+      queued: 0,
+      running: 0,
+      cancelling: 0,
+      total: 0
+    };
+    for (const command of this.workspaceCommands.values()) {
+      if (
+        command.clientInstanceId !== input.clientInstanceId ||
+        (input.conversationId !== undefined && command.conversationId !== input.conversationId) ||
+        (input.ownerUserId !== undefined && command.ownerUserId !== input.ownerUserId) ||
+        !isActiveWorkspaceCommand(command)
+      ) {
+        continue;
+      }
+      const workspace = this.executionWorkspaces.get(command.workspaceId);
+      if (workspace?.status !== "active") {
+        continue;
+      }
+      counts[command.status] += 1;
+      counts.total += 1;
+    }
+    return counts;
+  }
+
+  private assertWorkspaceCommandCapacity(
+    input: EnqueueWorkspaceCommandInput,
+    conversationId: ConversationId,
+    capacity: WorkspaceCommandCapacityLimits
+  ): void {
+    assertWorkspaceCommandScopeCapacity(
+      "conversation",
+      this.countActiveWorkspaceCommandsSync({
+        clientInstanceId: input.clientInstanceId,
+        conversationId
+      }).total,
+      capacity.perConversationActiveCommands
+    );
+    assertWorkspaceCommandScopeCapacity(
+      "user",
+      this.countActiveWorkspaceCommandsSync({
+        clientInstanceId: input.clientInstanceId,
+        ownerUserId: input.ownerUserId
+      }).total,
+      capacity.perUserActiveCommands
+    );
+    assertWorkspaceCommandScopeCapacity(
+      "global",
+      this.countActiveWorkspaceCommandsSync({
+        clientInstanceId: input.clientInstanceId
+      }).total,
+      capacity.globalActiveCommands
+    );
   }
 
   async getWorkspaceCommand(input: {
@@ -402,4 +472,24 @@ function isTerminalWorkspaceCommand(command: WorkspaceCommand): boolean {
     command.status === "failed" ||
     command.status === "cancelled"
   );
+}
+
+function isActiveWorkspaceCommand(
+  command: WorkspaceCommand
+): command is WorkspaceCommand & { status: "queued" | "running" | "cancelling" } {
+  return command.status === "queued" || command.status === "running" || command.status === "cancelling";
+}
+
+function assertWorkspaceCommandScopeCapacity(
+  scope: "conversation" | "user" | "global",
+  activeCommands: number,
+  limit: number
+): void {
+  if (activeCommands >= limit) {
+    throw new AppError("CONFLICT", `Workspace ${scope} command capacity exceeded`, {
+      scope,
+      activeCommands,
+      limit
+    });
+  }
 }

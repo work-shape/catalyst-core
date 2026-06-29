@@ -168,6 +168,7 @@ export interface EnqueueWorkspaceCommandInput {
   cwd?: string;
   limits: WorkspaceCommandLimits;
   expectedOutputs?: WorkspaceExpectedOutput[];
+  capacity?: WorkspaceCommandCapacityLimits;
   queuedAt?: ISODateString;
 }
 
@@ -219,6 +220,25 @@ export interface RecoverStaleWorkspaceCommandsInput {
   limit: number;
 }
 
+export interface CountActiveWorkspaceCommandsInput {
+  clientInstanceId: ClientInstanceId;
+  conversationId?: ConversationId;
+  ownerUserId?: string;
+}
+
+export interface ActiveWorkspaceCommandCounts {
+  queued: number;
+  running: number;
+  cancelling: number;
+  total: number;
+}
+
+export interface WorkspaceCommandCapacityLimits {
+  perConversationActiveCommands: number;
+  perUserActiveCommands: number;
+  globalActiveCommands: number;
+}
+
 export interface ExecutionWorkspaceMetadataStore {
   ensureExecutionWorkspace(input: EnsureExecutionWorkspaceInput): Promise<ExecutionWorkspace>;
   getExecutionWorkspace(input: {
@@ -240,6 +260,9 @@ export interface ExecutionWorkspaceFileStore {
 }
 
 export interface WorkspaceCommandStore {
+  countActiveWorkspaceCommands(
+    input: CountActiveWorkspaceCommandsInput
+  ): Promise<ActiveWorkspaceCommandCounts>;
   enqueueWorkspaceCommand(input: EnqueueWorkspaceCommandInput): Promise<WorkspaceCommand>;
   getWorkspaceCommand(input: {
     clientInstanceId: ClientInstanceId;
