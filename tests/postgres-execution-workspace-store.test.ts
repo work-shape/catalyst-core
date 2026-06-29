@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import postgres, { type Sql } from "postgres";
 import {
   asClientInstanceId,
   createPlatformId,
@@ -14,6 +15,7 @@ const describePostgres = databaseUrl ? describe : describe.skip;
 describePostgres("Postgres execution workspace store", () => {
   let store: PostgresPlatformStore;
   let secondStore: PostgresPlatformStore;
+  let rawSql: Sql;
 
   beforeAll(async () => {
     store = await PostgresPlatformStore.connect({
@@ -24,9 +26,11 @@ describePostgres("Postgres execution workspace store", () => {
       databaseUrl: databaseUrl!,
       runMigrations: false
     });
+    rawSql = postgres(databaseUrl!, { max: 5 });
   });
 
   afterAll(async () => {
+    await rawSql?.end();
     await secondStore?.close();
     await store?.close();
   });
@@ -319,6 +323,129 @@ describePostgres("Postgres execution workspace store", () => {
     });
   });
 
+  it("does not clear a lease when cancellation races with command claim", async () => {
+    const fixture = await createWorkspaceFixture(store);
+    const command = await store.enqueueWorkspaceCommand({
+      clientInstanceId: fixture.clientInstanceId,
+      workspaceId: fixture.workspace.id,
+      ownerUserId: fixture.ownerUserId,
+      command: "sleep 10",
+      limits: { timeoutSeconds: 60 },
+      queuedAt: "2026-06-29T10:44:00.000Z"
+    });
+
+    let cancellation:
+      | ReturnType<PostgresPlatformStore["requestWorkspaceCommandCancellation"]>
+      | undefined;
+    await rawSql.begin(async (tx) => {
+      await tx`select id from workspace_commands where id = ${command.id} for update`;
+      cancellation = store.requestWorkspaceCommandCancellation({
+        clientInstanceId: fixture.clientInstanceId,
+        commandId: command.id,
+        reason: "user stopped it",
+        requestedAt: "2026-06-29T10:44:05.000Z"
+      });
+      await waitForBlockedWorkspaceCommandUpdate(rawSql);
+
+      await tx`
+        update workspace_commands
+        set status = 'running',
+            lease_owner = 'worker-race',
+            lease_token = 'lease-race',
+            lease_expires_at = ${"2026-06-29T10:45:00.000Z"}::timestamptz,
+            heartbeat_at = ${"2026-06-29T10:44:01.000Z"}::timestamptz,
+            started_at = ${"2026-06-29T10:44:01.000Z"}::timestamptz,
+            attempts = attempts + 1,
+            updated_at = ${"2026-06-29T10:44:01.000Z"}::timestamptz
+        where id = ${command.id}
+      `;
+    });
+    await expect(cancellation!).resolves.toMatchObject({
+      status: "cancelling",
+      leaseOwner: "worker-race",
+      leaseToken: "lease-race",
+      cancellationReason: "user stopped it",
+      completedAt: undefined
+    });
+
+    await expect(
+      store.getWorkspaceCommand({
+        clientInstanceId: fixture.clientInstanceId,
+        commandId: command.id
+      })
+    ).resolves.toMatchObject({
+      status: "cancelling",
+      leaseToken: "lease-race"
+    });
+  });
+
+  it("does not resurrect a terminal command when cancellation races with completion", async () => {
+    const fixture = await createWorkspaceFixture(store);
+    const command = await enqueueAndClaim(store, fixture, {
+      leaseToken: "lease-complete-race",
+      now: "2026-06-29T10:46:00.000Z",
+      leaseExpiresAt: "2026-06-29T10:47:00.000Z"
+    });
+
+    let cancellation:
+      | Promise<
+          | {
+              status: "resolved";
+              value: Awaited<
+                ReturnType<PostgresPlatformStore["requestWorkspaceCommandCancellation"]>
+              >;
+            }
+          | {
+              status: "rejected";
+              error: unknown;
+            }
+        >
+      | undefined;
+    await rawSql.begin(async (tx) => {
+      await tx`select id from workspace_commands where id = ${command.id} for update`;
+      cancellation = store
+        .requestWorkspaceCommandCancellation({
+          clientInstanceId: fixture.clientInstanceId,
+          commandId: command.id,
+          reason: "user stopped it late",
+          requestedAt: "2026-06-29T10:46:05.000Z"
+        })
+        .then(
+          (value) => ({ status: "resolved" as const, value }),
+          (error: unknown) => ({ status: "rejected" as const, error })
+        );
+      await waitForBlockedWorkspaceCommandUpdate(rawSql);
+
+      await tx`
+        update workspace_commands
+        set status = 'completed',
+            lease_owner = null,
+            lease_token = null,
+            lease_expires_at = null,
+            heartbeat_at = null,
+            completed_at = ${"2026-06-29T10:46:04.000Z"}::timestamptz,
+            updated_at = ${"2026-06-29T10:46:04.000Z"}::timestamptz
+        where id = ${command.id}
+      `;
+    });
+    const result = await cancellation!;
+    expect(result.status).toBe("rejected");
+    if (result.status === "rejected") {
+      expect(result.error).toMatchObject({ code: "CONFLICT" });
+    }
+
+    await expect(
+      store.getWorkspaceCommand({
+        clientInstanceId: fixture.clientInstanceId,
+        commandId: command.id
+      })
+    ).resolves.toMatchObject({
+      status: "completed",
+      leaseToken: undefined,
+      completedAt: "2026-06-29T10:46:04.000Z"
+    });
+  });
+
   it("recovers stale claimed commands as failed", async () => {
     const fixture = await createWorkspaceFixture(store);
     const stale = await enqueueAndClaim(store, fixture, {
@@ -429,6 +556,23 @@ async function enqueueAndClaim(
     throw new Error("Expected workspace command to be claimed");
   }
   return claimed;
+}
+
+async function waitForBlockedWorkspaceCommandUpdate(sql: Sql): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const blocked = await sql`
+      select 1
+      from pg_stat_activity
+      where wait_event_type = 'Lock'
+        and query ilike '%workspace_commands%'
+      limit 1
+    `;
+    if (blocked.length > 0) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("Timed out waiting for blocked workspace command update");
 }
 
 function commandOutput(input: Partial<WorkspaceCommandOutput>): WorkspaceCommandOutput {

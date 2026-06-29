@@ -343,7 +343,42 @@ export async function requestWorkspaceCommandCancellation(
   db: PostgresDatabase,
   input: RequestWorkspaceCommandCancellationInput
 ): Promise<WorkspaceCommand> {
+  const requestedAt = input.requestedAt;
   return db.transaction(async (tx) => {
+    const updated = (await tx.execute(drizzleSql<{ id: string }>`
+      update workspace_commands
+      set status = case
+            when status = 'queued' then 'cancelled'
+            else 'cancelling'
+          end,
+          cancellation_reason = ${input.reason ?? null},
+          cancellation_requested_at = ${requestedAt}::timestamptz,
+          lease_owner = case when status = 'queued' then null else lease_owner end,
+          lease_token = case when status = 'queued' then null else lease_token end,
+          lease_expires_at = case when status = 'queued' then null else lease_expires_at end,
+          heartbeat_at = case when status = 'queued' then null else heartbeat_at end,
+          completed_at = case when status = 'queued' then ${requestedAt}::timestamptz else completed_at end,
+          updated_at = ${requestedAt}::timestamptz
+      where client_instance_id = ${input.clientInstanceId}
+        and id = ${input.commandId}
+        and status in ('queued', 'running', 'cancelling')
+      returning id
+    `)) as unknown as Array<{ id: string }>;
+    const updatedId = updated[0]?.id;
+    if (updatedId) {
+      const [row] = await tx
+        .select()
+        .from(workspaceCommands)
+        .where(
+          and(
+            eq(workspaceCommands.clientInstanceId, input.clientInstanceId),
+            eq(workspaceCommands.id, updatedId)
+          )
+        )
+        .limit(1);
+      return mapWorkspaceCommand(row);
+    }
+
     const [existing] = await tx
       .select()
       .from(workspaceCommands)
@@ -357,37 +392,7 @@ export async function requestWorkspaceCommandCancellation(
     if (!existing) {
       throw new AppError("NOT_FOUND", "Workspace command is not available");
     }
-    if (
-      existing.status === "completed" ||
-      existing.status === "failed" ||
-      existing.status === "cancelled"
-    ) {
-      throw new AppError("CONFLICT", "Workspace command is already terminal");
-    }
-
-    const requestedAt = new Date(input.requestedAt);
-    const queuedCancellation = existing.status === "queued";
-    const [row] = await tx
-      .update(workspaceCommands)
-      .set({
-        status: queuedCancellation ? "cancelled" : "cancelling",
-        cancellationReason: input.reason ?? null,
-        cancellationRequestedAt: requestedAt,
-        leaseOwner: queuedCancellation ? null : existing.leaseOwner,
-        leaseToken: queuedCancellation ? null : existing.leaseToken,
-        leaseExpiresAt: queuedCancellation ? null : existing.leaseExpiresAt,
-        heartbeatAt: queuedCancellation ? null : existing.heartbeatAt,
-        completedAt: queuedCancellation ? requestedAt : existing.completedAt,
-        updatedAt: requestedAt
-      })
-      .where(
-        and(
-          eq(workspaceCommands.clientInstanceId, input.clientInstanceId),
-          eq(workspaceCommands.id, input.commandId)
-        )
-      )
-      .returning();
-    return mapWorkspaceCommand(row);
+    throw new AppError("CONFLICT", "Workspace command is already terminal");
   });
 }
 
