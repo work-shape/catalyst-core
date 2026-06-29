@@ -667,6 +667,12 @@ export class InMemoryPlatformStore
     return this.executionWorkspaceStore.cancelClaimedWorkspaceCommand(input);
   }
 
+  async heartbeatWorkspaceCommand(
+    input: Parameters<WorkspaceCommandStore["heartbeatWorkspaceCommand"]>[0]
+  ) {
+    return this.executionWorkspaceStore.heartbeatWorkspaceCommand(input);
+  }
+
   async recoverStaleWorkspaceCommands(
     input: Parameters<WorkspaceCommandStore["recoverStaleWorkspaceCommands"]>[0]
   ) {

@@ -26,3 +26,9 @@ export {
 } from "./seed-auth";
 export { createPlatformStore, type PlatformStoreMode } from "./store";
 export { createToolDefinitions } from "./tools";
+export {
+  createClientInstanceWorkspaceCommandWorker,
+  runClientInstanceWorkspaceCommandWorker,
+  type ClientInstanceWorkspaceCommandWorker,
+  type CreateClientInstanceWorkspaceCommandWorkerInput
+} from "./workspace-command-worker";

@@ -13,6 +13,7 @@ import {
   type ExecutionWorkspaceId,
   type ExecutionWorkspaceMetadataStore,
   type FailWorkspaceCommandInput,
+  type HeartbeatWorkspaceCommandInput,
   type RecoverStaleWorkspaceCommandsInput,
   type RequestWorkspaceCommandCancellationInput,
   type WorkspaceCommand,
@@ -387,6 +388,7 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
     const cancelled: WorkspaceCommand = {
       ...command,
       status: "cancelled",
+      output: input.output ?? command.output,
       cancellationReason: input.reason,
       leaseOwner: undefined,
       leaseToken: undefined,
@@ -397,6 +399,24 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
     };
     this.workspaceCommands.set(cancelled.id, cancelled);
     return cancelled;
+  }
+
+  async heartbeatWorkspaceCommand(input: HeartbeatWorkspaceCommandInput): Promise<WorkspaceCommand> {
+    const command = this.requireClaimedWorkspaceCommand(input.commandId, input.leaseToken, [
+      "running",
+      "cancelling"
+    ]);
+    if (command.clientInstanceId !== input.clientInstanceId) {
+      throw new AppError("CONFLICT", "Workspace command lease is no longer active");
+    }
+    const heartbeat: WorkspaceCommand = {
+      ...command,
+      heartbeatAt: input.heartbeatAt,
+      leaseExpiresAt: input.leaseExpiresAt,
+      updatedAt: input.heartbeatAt
+    };
+    this.workspaceCommands.set(heartbeat.id, heartbeat);
+    return heartbeat;
   }
 
   async recoverStaleWorkspaceCommands(

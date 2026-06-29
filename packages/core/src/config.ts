@@ -106,6 +106,48 @@ export interface ModelContextConfig {
   toolOutput: ModelContextToolOutputBoundsConfig;
 }
 
+export type ExecutionWorkspaceRunnerModeConfig = "local" | "docker";
+export type ExecutionWorkspaceNetworkModeConfig = "none";
+
+export interface ExecutionWorkspaceRunnerConfig {
+  mode: ExecutionWorkspaceRunnerModeConfig;
+  image: string;
+  networkMode: ExecutionWorkspaceNetworkModeConfig;
+  readOnlyRootFilesystem: boolean;
+  cpuCount: number;
+  memoryBytes: number;
+  pidsLimit: number;
+}
+
+export interface ExecutionWorkspaceCommandConfig {
+  defaultTimeoutSeconds: number;
+  maxTimeoutSeconds: number;
+  idleTimeoutSeconds: number;
+  maxStdoutBytes: number;
+  maxStderrBytes: number;
+  maxWorkspaceBytes: number;
+  perConversationActiveCommands: number;
+  perUserActiveCommands: number;
+  globalActiveCommands: number;
+}
+
+export interface ExecutionWorkspaceWorkerConfig {
+  concurrency: number;
+  pollIntervalMs: number;
+  leaseDurationMs: number;
+  heartbeatIntervalMs: number;
+  cancellationPollIntervalMs: number;
+  staleRecoveryIntervalMs: number;
+  staleRecoveryLimit: number;
+}
+
+export interface ExecutionWorkspacesConfig {
+  enabled: boolean;
+  runner: ExecutionWorkspaceRunnerConfig;
+  command: ExecutionWorkspaceCommandConfig;
+  worker: ExecutionWorkspaceWorkerConfig;
+}
+
 export interface PostgresDataSourceConfig {
   kind: "postgres";
   connectionRef: string;

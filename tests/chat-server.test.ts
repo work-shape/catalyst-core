@@ -2635,9 +2635,14 @@ describe("client instance app vertical slice", () => {
     const app = await createClientInstanceApp({
       config: createTestConfig({
         tools: workspaceToolNames.map((name) => ({ name, enabled: true })),
-        toolNames: workspaceToolNames
+        toolNames: workspaceToolNames,
+        executionWorkspaces: {
+          enabled: true
+        }
       }),
-      env: {},
+      env: {
+        EXECUTION_WORKSPACE_OBJECT_ROOT: "/tmp/vivd-catalyst-test-workspace-objects"
+      },
       storeMode: "memory",
       tools: []
     });
@@ -2942,6 +2947,7 @@ function createTestConfig(input: {
     costSafetyMultiplier?: number;
   };
   usageSafeguards?: UsageSafeguardsConfig;
+  executionWorkspaces?: unknown;
   usagePricing?: {
     currency: string;
     models: Array<{
@@ -2992,6 +2998,7 @@ function createTestConfig(input: {
       safeguards: input.usageSafeguards ?? {},
       pricing: input.usagePricing
     },
+    ...(input.executionWorkspaces ? { executionWorkspaces: input.executionWorkspaces } : {}),
     tools: input.tools ?? []
   });
 }

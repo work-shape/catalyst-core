@@ -13,6 +13,7 @@ import {
   type ExecutionWorkspace,
   type ExecutionWorkspaceId,
   type FailWorkspaceCommandInput,
+  type HeartbeatWorkspaceCommandInput,
   type RecoverStaleWorkspaceCommandsInput,
   type RequestWorkspaceCommandCancellationInput,
   type UpsertWorkspaceFileInput,
@@ -529,6 +530,7 @@ export async function cancelClaimedWorkspaceCommand(
     .update(workspaceCommands)
     .set({
       status: "cancelled",
+      output: input.output ?? null,
       cancellationReason: input.reason ?? null,
       leaseOwner: null,
       leaseToken: null,
@@ -536,6 +538,27 @@ export async function cancelClaimedWorkspaceCommand(
       heartbeatAt: null,
       completedAt: cancelledAt,
       updatedAt: cancelledAt
+    })
+    .where(claimedCommandWhere(input, "running", "cancelling"))
+    .returning();
+  if (!row) {
+    throw new AppError("CONFLICT", "Workspace command lease is no longer active");
+  }
+  return mapWorkspaceCommand(row);
+}
+
+export async function heartbeatWorkspaceCommand(
+  db: PostgresDatabase,
+  input: HeartbeatWorkspaceCommandInput
+): Promise<WorkspaceCommand> {
+  const heartbeatAt = new Date(input.heartbeatAt);
+  const leaseExpiresAt = new Date(input.leaseExpiresAt);
+  const [row] = await db
+    .update(workspaceCommands)
+    .set({
+      heartbeatAt,
+      leaseExpiresAt,
+      updatedAt: heartbeatAt
     })
     .where(claimedCommandWhere(input, "running", "cancelling"))
     .returning();
