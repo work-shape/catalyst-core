@@ -22,6 +22,11 @@ import {
   isJsonObject
 } from "@vivd-catalyst/core";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
+import type { WorkspaceObjectStore } from "./workspace-file-bytes";
+import {
+  normalizeWorkspaceDirectory as normalizeWorkspaceDirectoryPath,
+  normalizeWorkspaceFilePath as normalizeWorkspaceFilePathValue
+} from "./workspace-paths";
 
 const DEFAULT_LIMITS: WorkspaceCommandServiceLimits = {
   defaultTimeoutSeconds: 60,
@@ -178,10 +183,6 @@ export type WorkspaceToolStore = Pick<
   | "ensureExecutionWorkspace" | "listWorkspaceFiles" | "upsertWorkspaceFile"
   | "enqueueWorkspaceCommand" | "createManagedArtifact"
 >;
-
-export interface WorkspaceObjectStore {
-  getObject(key: string): Promise<Uint8Array>;
-}
 
 export interface WorkspaceCommandResultSource {
   resolveWorkspaceCommand(input: { command: WorkspaceCommand; context: ToolExecutionContext }): Promise<WorkspaceCommand | undefined>;
@@ -811,53 +812,29 @@ function normalizeWorkspaceFilePath(
   value: string,
   limits: WorkspaceCommandServiceLimits
 ): ValidationResult<string> {
-  const normalized = normalizeWorkspacePath(value, limits);
-  if (normalized.status === "failed") {
-    return normalized;
-  }
-  if (normalized.value === ".") {
-    return validationFailed("Workspace file path must name a file");
-  }
-  if (value.endsWith("/")) {
-    return validationFailed("Workspace file path must not end with a slash", { path: value });
-  }
-  return normalized;
+  return workspacePathValidationToToolValidation(
+    normalizeWorkspaceFilePathValue(value, limits)
+  );
 }
 
 function normalizeWorkspaceDirectory(
   value: string,
   limits: WorkspaceCommandServiceLimits
 ): ValidationResult<string> {
-  return normalizeWorkspacePath(value, limits);
+  return workspacePathValidationToToolValidation(
+    normalizeWorkspaceDirectoryPath(value, limits)
+  );
 }
 
-function normalizeWorkspacePath(
-  value: string,
-  limits: WorkspaceCommandServiceLimits
+function workspacePathValidationToToolValidation(
+  result: ReturnType<typeof normalizeWorkspaceFilePathValue>
 ): ValidationResult<string> {
-  const trimmed = value.trim();
-  if (trimmed.length === 0) {
-    return validationFailed("Workspace path cannot be blank");
-  }
-  if (trimmed.length > limits.maxPathLength) {
-    return validationFailed("Workspace path is too long", { maxPathLength: limits.maxPathLength });
-  }
-  if (trimmed.includes("\0")) {
-    return validationFailed("Workspace path cannot contain NUL bytes");
-  }
-  if (trimmed.startsWith("/") || trimmed.startsWith("\\") || /^[A-Za-z]:/u.test(trimmed)) {
-    return validationFailed("Workspace path must be relative", { path: value });
-  }
-  if (trimmed.includes("\\")) {
-    return validationFailed("Workspace path must use forward slashes", { path: value });
-  }
-  const normalized = path.normalize(trimmed);
-  if (normalized === ".." || normalized.startsWith("../")) {
-    return validationFailed("Workspace path cannot traverse outside the workspace", { path: value });
+  if (result.status === "failed") {
+    return validationFailed(result.message, result.details);
   }
   return {
     status: "success",
-    value: normalized
+    value: result.value
   };
 }
 
