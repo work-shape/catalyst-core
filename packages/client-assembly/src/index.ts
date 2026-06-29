@@ -27,6 +27,7 @@ export {
 export { createPlatformStore, type PlatformStoreMode } from "./store";
 export { createToolDefinitions } from "./tools";
 export {
+  applyWorkspaceRunnerImageEnvOverride,
   createClientInstanceWorkspaceCommandWorker,
   runClientInstanceWorkspaceCommandWorker,
   type ClientInstanceWorkspaceCommandWorker,

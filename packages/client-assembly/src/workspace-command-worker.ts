@@ -34,7 +34,10 @@ export async function createClientInstanceWorkspaceCommandWorker(
   input: CreateClientInstanceWorkspaceCommandWorkerInput = {}
 ): Promise<ClientInstanceWorkspaceCommandWorker> {
   const env = input.env ?? process.env;
-  const config = input.config ?? (await loadWorkspaceWorkerConfig(input.configPath, env));
+  const config = applyWorkspaceRunnerImageEnvOverride(
+    input.config ?? (await loadWorkspaceWorkerConfig(input.configPath, env)),
+    env
+  );
   if (!config.executionWorkspaces.enabled) {
     throw new AppError("VALIDATION_FAILED", "Execution workspaces are disabled in release config");
   }
@@ -74,6 +77,26 @@ export async function createClientInstanceWorkspaceCommandWorker(
     },
     async close() {
       await store.close?.();
+    }
+  };
+}
+
+export function applyWorkspaceRunnerImageEnvOverride(
+  config: ClientInstanceConfig,
+  env: ClientInstanceEnv
+): ClientInstanceConfig {
+  const image = env.EXECUTION_WORKSPACE_RUNNER_IMAGE?.trim();
+  if (!image) {
+    return config;
+  }
+  return {
+    ...config,
+    executionWorkspaces: {
+      ...config.executionWorkspaces,
+      runner: {
+        ...config.executionWorkspaces.runner,
+        image
+      }
     }
   };
 }
