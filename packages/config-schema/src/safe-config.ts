@@ -40,6 +40,11 @@ export function createSafeConfigView(config: ClientInstanceConfig, localeInput: 
         locale,
         config.localization.defaultLocale
       ),
+      welcomeSubtitle: resolveLocalizedString(
+        agent.welcomeSubtitle,
+        locale,
+        config.localization.defaultLocale
+      ),
       initialPrompts: agent.initialPrompts.map((initialPrompt) => ({
         title: resolveLocalizedString(initialPrompt.title, locale, config.localization.defaultLocale),
         prompt: resolveLocalizedString(initialPrompt.prompt, locale, config.localization.defaultLocale)

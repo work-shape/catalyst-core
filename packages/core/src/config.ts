@@ -51,6 +51,7 @@ export interface AgentConfig {
   name: string;
   displayName: LocalizedStringConfig;
   welcomeMessage?: LocalizedStringConfig;
+  welcomeSubtitle?: LocalizedStringConfig;
   instructions: string;
   modelProviderId?: string;
   modelBindingId?: string;

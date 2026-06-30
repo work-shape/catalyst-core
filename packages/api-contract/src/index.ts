@@ -267,6 +267,7 @@ export const safeConfigSchema = z.object({
       name: z.string(),
       displayName: z.string(),
       welcomeMessage: z.string().optional(),
+      welcomeSubtitle: z.string().optional(),
       initialPrompts: z.array(
         z.object({
           title: z.string(),

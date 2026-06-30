@@ -213,6 +213,7 @@ export type GetConfigResponses = {
             name: string;
             displayName: string;
             welcomeMessage?: string;
+            welcomeSubtitle?: string;
             initialPrompts: Array<{
                 title: string;
                 prompt: string;

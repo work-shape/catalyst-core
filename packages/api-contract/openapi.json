@@ -730,6 +730,9 @@
                           "welcomeMessage": {
                             "type": "string"
                           },
+                          "welcomeSubtitle": {
+                            "type": "string"
+                          },
                           "initialPrompts": {
                             "type": "array",
                             "items": {

@@ -156,10 +156,24 @@ export const modelBindingConfigSchema = z.object({
   reasoningEffort: z.enum(["none", "low", "medium", "high", "xhigh"]).optional()
 });
 
+const welcomeSubtitleSchema = z.union([
+  z.string(),
+  z
+    .object({
+      en: z.string().optional(),
+      de: z.string().optional()
+    })
+    .strict()
+    .refine((value) => value.en !== undefined || value.de !== undefined, {
+      message: "At least one localized value is required"
+    })
+]);
+
 export const agentConfigSchema = z.object({
   name: z.string().min(1),
   displayName: localizedStringSchema,
   welcomeMessage: localizedStringSchema.optional(),
+  welcomeSubtitle: welcomeSubtitleSchema.optional(),
   instructions: z.string().min(1),
   modelProviderId: z.string().min(1).optional(),
   modelBindingId: z.string().min(1).optional(),
