@@ -95,7 +95,7 @@ describe("docker workspace command runner", () => {
         "--security-opt",
         "no-new-privileges",
         "--mount",
-        "type=bind,source=/host/workspace,target=/workspace,rw",
+        "type=bind,source=/host/workspace,target=/workspace",
         "--workdir",
         "/workspace/reports",
         "runner:test",
@@ -105,6 +105,7 @@ describe("docker workspace command runner", () => {
       ])
     );
     const serializedArgs = invocation.args.join("\n");
+    expect(serializedArgs).not.toContain("target=/workspace,rw");
     expect(serializedArgs).not.toMatch(/DATABASE_URL|OPENAI_API_KEY|AWS_SECRET_ACCESS_KEY|DOCKER_HOST/u);
     expect(serializedArgs).not.toContain("/var/run/docker.sock");
   });

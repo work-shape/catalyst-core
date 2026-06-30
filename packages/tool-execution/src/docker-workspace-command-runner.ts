@@ -149,7 +149,7 @@ export function createDockerRunInvocation(
     "--tmpfs",
     "/var/tmp:rw,nosuid,nodev,size=64m",
     "--mount",
-    `type=bind,source=${input.workspaceDirectory},target=/workspace,rw`,
+    `type=bind,source=${input.workspaceDirectory},target=/workspace`,
     "--workdir",
     containerWorkspaceCwd(input.workspaceCwd)
   ];

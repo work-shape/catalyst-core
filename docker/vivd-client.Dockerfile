@@ -40,6 +40,13 @@ COPY --from=build /app ./
 EXPOSE 4100
 CMD ["sh", "-c", "node ${SERVER_ENTRY}"]
 
+FROM docker:29-cli AS docker-cli
+
+FROM api AS workspace-command-worker
+
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
+RUN docker --version
+
 FROM nginx:1.27-alpine AS ui
 
 ARG UI_DIST_DIR
