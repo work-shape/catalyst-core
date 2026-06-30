@@ -389,6 +389,11 @@ export function createApiClient(options: ApiClientOptions) {
         generatedSdk.listAuditEvents({ client: generatedClient }),
         apiOperations.listAuditEvents.responseSchema
       ),
+    auditActivities: () =>
+      requestJson(
+        apiOperations.listAuditActivities.path,
+        apiOperations.listAuditActivities.responseSchema
+      ),
     usageSummary: () =>
       unwrapJson(
         generatedSdk.getUsageSummary({ client: generatedClient }),

@@ -2,16 +2,22 @@ import {
   Activity,
   AlertCircle,
   BarChart3,
+  Bot,
+  ChevronRight,
   Database,
   DollarSign,
   ScrollText,
   ShieldCheck,
+  User as UserIcon,
   Users
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type {
   AdministeredUser,
   AdministeredUserIdentity,
+  AuditActivity,
+  AuditActivityActor,
+  AuditActivityTarget,
   AuditEvent,
   CreateAdministeredUserRequest,
   UpdateAdministeredUserRequest,
@@ -27,7 +33,7 @@ import type { SuperadminRouteTab } from "./workspace-route";
 
 export function SuperadminPanel({
   usage,
-  auditEvents,
+  auditActivities,
   users,
   loading,
   usersLoading,
@@ -44,7 +50,7 @@ export function SuperadminPanel({
   onSelectTab
 }: {
   usage: UsageSummary | undefined;
-  auditEvents: AuditEvent[];
+  auditActivities: AuditActivity[];
   users: AdministeredUser[];
   loading: boolean;
   usersLoading: boolean;
@@ -119,7 +125,7 @@ export function SuperadminPanel({
             onResetPassword={onResetUserPassword}
           />
         ) : null}
-        {selectedTab === "audit" ? <AuditView auditEvents={auditEvents} /> : null}
+        {selectedTab === "audit" ? <AuditView auditActivities={auditActivities} /> : null}
       </div>
     </section>
   );
@@ -333,55 +339,204 @@ function UsageView({ usage }: { usage: UsageSummary | undefined }) {
   );
 }
 
-function AuditView({ auditEvents }: { auditEvents: AuditEvent[] }) {
+function AuditView({ auditActivities }: { auditActivities: AuditActivity[] }) {
   return (
     <Card>
       <CardHeader className="p-4 pb-2">
-        <CardTitle className="text-base">Recent audit events</CardTitle>
+        <CardTitle className="text-base">Recent activity</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Governance and workflow events, plus anything that failed or was denied. Expand a row for
+          the underlying evidence.
+        </p>
       </CardHeader>
       <CardContent className="p-4 pt-1">
-        {auditEvents.length ? (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Time</TableHead>
-                <TableHead>Event</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actor</TableHead>
-                <TableHead>Subject</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {auditEvents.map((event) => (
-                <TableRow key={event.id}>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {formatDateTime(event.createdAt)}
-                  </TableCell>
-                  <TableCell className="font-medium break-words">{event.type}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={event.status === "success" ? "success" : "outline"}
-                      className="capitalize"
-                    >
-                      {event.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {event.actor?.displayLabel ?? "-"}
-                  </TableCell>
-                  <TableCell className="break-all text-muted-foreground">
-                    {event.subject ?? "-"}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        {auditActivities.length ? (
+          <ul className="divide-y">
+            {auditActivities.map((activity) => (
+              <AuditActivityRow key={activity.correlationId} activity={activity} />
+            ))}
+          </ul>
         ) : (
-          <p className="pt-1 text-sm text-muted-foreground">No audit events visible yet.</p>
+          <p className="pt-1 text-sm text-muted-foreground">No activity visible yet.</p>
         )}
       </CardContent>
     </Card>
   );
+}
+
+function AuditActivityRow({ activity }: { activity: AuditActivity }) {
+  const [open, setOpen] = useState(false);
+  const showReason = Boolean(activity.reason) && activity.outcome !== "success";
+
+  return (
+    <li className="py-2 first:pt-0 last:pb-0">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        className="flex w-full items-start gap-2.5 rounded-md px-1 py-1 text-left hover:bg-muted/40"
+      >
+        <ChevronRight
+          size={16}
+          aria-hidden="true"
+          className={cn(
+            "mt-0.5 shrink-0 text-muted-foreground transition-transform",
+            open && "rotate-90"
+          )}
+        />
+        <div className="grid min-w-0 flex-1 gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">{activity.label}</span>
+            <OutcomeBadge outcome={activity.outcome} />
+            {activity.repeatCount > 1 ? (
+              <span className="text-xs text-muted-foreground">×{activity.repeatCount}</span>
+            ) : null}
+            {activity.tier === "governance" ? (
+              <Badge variant="secondary" className="gap-1">
+                <ShieldCheck size={12} aria-hidden="true" />
+                Governance
+              </Badge>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+            <span className="whitespace-nowrap">{formatDateTime(activity.at)}</span>
+            <ActorChip actor={activity.actor} />
+            {activity.target ? (
+              <span className="break-all">{targetText(activity.target)}</span>
+            ) : null}
+            <span className="whitespace-nowrap">{formatEventCount(activity.eventCount)}</span>
+          </div>
+          {showReason ? (
+            <p className="text-xs break-words text-destructive">{activity.reason}</p>
+          ) : null}
+        </div>
+      </button>
+      {open ? <AuditEvidence evidence={activity.evidence} /> : null}
+    </li>
+  );
+}
+
+function AuditEvidence({ evidence }: { evidence: AuditEvent[] }) {
+  return (
+    <div className="mt-2 ml-6 overflow-hidden rounded-md border bg-muted/30">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Time</TableHead>
+            <TableHead>Event</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Actor</TableHead>
+            <TableHead>Subject</TableHead>
+            <TableHead>Reason</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {evidence.map((event) => (
+            <TableRow key={event.id}>
+              <TableCell className="whitespace-nowrap text-muted-foreground">
+                {formatDateTime(event.createdAt)}
+              </TableCell>
+              <TableCell className="font-mono text-xs break-words">{event.type}</TableCell>
+              <TableCell>
+                <Badge
+                  variant={event.status === "success" ? "success" : "outline"}
+                  className={cn(
+                    "capitalize",
+                    event.status !== "success" && "border-destructive/40 text-destructive"
+                  )}
+                >
+                  {event.status}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-muted-foreground">{evidenceActorText(event)}</TableCell>
+              <TableCell className="break-all text-muted-foreground">
+                {event.subject ?? "—"}
+              </TableCell>
+              <TableCell className="break-words text-muted-foreground">
+                {evidenceReasonText(event) ?? "—"}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      {evidence[0] ? (
+        <p className="px-3 py-1.5 font-mono text-[11px] text-muted-foreground">
+          correlation: {evidence[0].correlationId}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function OutcomeBadge({ outcome }: { outcome: AuditActivity["outcome"] }) {
+  if (outcome === "success") {
+    return <Badge variant="success">Success</Badge>;
+  }
+  if (outcome === "warning") {
+    return (
+      <Badge variant="outline" className="border-amber-500 text-amber-600">
+        Warning
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="border-destructive/50 text-destructive capitalize">
+      {outcome}
+    </Badge>
+  );
+}
+
+function ActorChip({ actor }: { actor: AuditActivityActor }) {
+  const Icon = actor.kind === "assistant" ? Bot : actor.kind === "user" ? UserIcon : ShieldCheck;
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap">
+      <Icon size={12} aria-hidden="true" />
+      {actorText(actor)}
+    </span>
+  );
+}
+
+function actorText(actor: AuditActivityActor): string {
+  if (actor.kind === "assistant") {
+    return actor.onBehalfOf ? `Assistant · for ${actor.onBehalfOf}` : "Assistant";
+  }
+  if (actor.kind === "service") {
+    return `${actor.label} · service`;
+  }
+  return actor.label;
+}
+
+function targetText(target: AuditActivityTarget): string {
+  return `${target.kind}: ${target.label ?? target.id}`;
+}
+
+function formatEventCount(count: number): string {
+  return `${count} event${count === 1 ? "" : "s"}`;
+}
+
+function evidenceActorText(event: AuditEvent): string {
+  const actor = event.actor;
+  if (!actor) {
+    return "System";
+  }
+  if (actor.delegatedActor) {
+    return `${actor.delegatedActor.displayLabel ?? "Assistant"} (for ${actor.displayLabel})`;
+  }
+  return actor.displayLabel;
+}
+
+function evidenceReasonText(event: AuditEvent): string | undefined {
+  if (event.reason) {
+    return event.reason;
+  }
+  const metadata = event.metadata as Record<string, unknown> | undefined;
+  for (const key of ["reason", "code"]) {
+    const value = metadata?.[key];
+    if (typeof value === "string") {
+      return value;
+    }
+  }
+  return undefined;
 }
 
 function UsageMetric({

@@ -75,14 +75,16 @@ export function useWorkspaceUsageQuery(
   });
 }
 
-export function useWorkspaceAuditEventsQuery(
+export function useWorkspaceAuditActivitiesQuery(
   input: WorkspaceQueryInput & {
     enabled: boolean;
   }
 ) {
   return useQuery({
+    // `auditEvents` is the historical cache namespace; it now holds the
+    // projected activity timeline served from /api/audit-activities.
     queryKey: workspaceQueryKeys.auditEvents(input.apiBaseUrl, input.authScope),
-    queryFn: input.client.auditEvents,
+    queryFn: input.client.auditActivities,
     enabled: input.enabled
   });
 }

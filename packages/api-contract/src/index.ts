@@ -708,6 +708,33 @@ export const auditEventSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional()
 });
 
+export const auditActivityActorSchema = z.object({
+  kind: z.enum(["user", "assistant", "service", "system"]),
+  label: z.string(),
+  onBehalfOf: z.string().optional(),
+  roles: z.array(z.string()).optional()
+});
+
+export const auditActivityTargetSchema = z.object({
+  kind: z.string(),
+  id: z.string(),
+  label: z.string().optional()
+});
+
+export const auditActivitySchema = z.object({
+  correlationId: z.string(),
+  at: z.string(),
+  label: z.string(),
+  tier: z.enum(["governance", "workflow", "runtime", "telemetry"]),
+  outcome: z.enum(["success", "failed", "denied", "warning"]),
+  actor: auditActivityActorSchema,
+  target: auditActivityTargetSchema.optional(),
+  reason: z.string().optional(),
+  eventCount: z.number().int().nonnegative(),
+  repeatCount: z.number().int().nonnegative(),
+  evidence: z.array(auditEventSchema)
+});
+
 export const modelUsageCostSchema = z.object({
   currency: z.string(),
   inputCostMicros: z.number().int().nonnegative(),
@@ -921,6 +948,12 @@ export const apiOperations = {
     path: "/api/audit-events",
     responseSchema: z.array(auditEventSchema)
   }),
+  listAuditActivities: defineJsonApiOperation({
+    operationId: "listAuditActivities",
+    method: "GET",
+    path: "/api/audit-activities",
+    responseSchema: z.array(auditActivitySchema)
+  }),
   getUsageSummary: defineJsonApiOperation({
     operationId: "getUsageSummary",
     method: "GET",
@@ -1030,6 +1063,9 @@ export type CancelRunRequest = z.infer<typeof cancelRunRequestSchema>;
 export type CancelRunResponse = z.infer<typeof cancelRunResponseSchema>;
 export type AuditActor = z.infer<typeof auditActorSchema>;
 export type AuditEvent = z.infer<typeof auditEventSchema>;
+export type AuditActivity = z.infer<typeof auditActivitySchema>;
+export type AuditActivityActor = z.infer<typeof auditActivityActorSchema>;
+export type AuditActivityTarget = z.infer<typeof auditActivityTargetSchema>;
 export type ModelUsageEvent = z.infer<typeof modelUsageEventSchema>;
 export type ModelUsageCost = z.infer<typeof modelUsageCostSchema>;
 export type UsageSummary = z.infer<typeof usageSummarySchema>;

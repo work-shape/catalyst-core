@@ -4,7 +4,7 @@ import type {
   AdministeredUser,
   AdministeredUserIdentity,
   ApiUser,
-  AuditEvent,
+  AuditActivity,
   CreateAdministeredUserRequest,
   UpdateAdministeredUserRequest,
   UpsertAdministeredUserIdentityRequest,
@@ -26,7 +26,7 @@ export interface ChatShellAdminPanel {
   canView(user: ApiUser | undefined): boolean;
   renderPanel(input: {
     usage: UsageSummary | undefined;
-    auditEvents: AuditEvent[];
+    auditActivities: AuditActivity[];
     users: AdministeredUser[];
     loading: boolean;
     usersLoading: boolean;

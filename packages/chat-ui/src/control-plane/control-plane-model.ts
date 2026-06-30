@@ -12,7 +12,7 @@ import {
   useUpdateCurrentUserMutation
 } from "../api/workspace-mutations";
 import {
-  useWorkspaceAuditEventsQuery,
+  useWorkspaceAuditActivitiesQuery,
   useWorkspaceUsageQuery,
   useWorkspaceUsersQuery
 } from "../api/workspace-queries";
@@ -101,7 +101,7 @@ export function useControlPlaneModel({
     client,
     enabled: administrationEnabled && canViewUsage
   });
-  const auditQuery = useWorkspaceAuditEventsQuery({
+  const auditQuery = useWorkspaceAuditActivitiesQuery({
     apiBaseUrl,
     authScope,
     client,
@@ -157,7 +157,7 @@ export function useControlPlaneModel({
       shouldRender: administrationEnabled,
       panelInput: {
         usage: usageQuery.data,
-        auditEvents: auditQuery.data ?? [],
+        auditActivities: auditQuery.data ?? [],
         users: usersQuery.data ?? [],
         canViewUsageGovernance: canViewUsage,
         loading: usageQuery.isLoading || auditQuery.isLoading,

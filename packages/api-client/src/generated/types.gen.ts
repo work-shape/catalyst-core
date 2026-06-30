@@ -1569,6 +1569,25 @@ export type GetConversationFileContentResponses = {
 
 export type GetConversationFileContentResponse = GetConversationFileContentResponses[keyof GetConversationFileContentResponses];
 
+export type GetConversationArtifactContentData = {
+    body?: never;
+    path: {
+        conversationId: string;
+        artifactId: string;
+    };
+    query?: never;
+    url: '/api/conversations/{conversationId}/artifacts/{artifactId}/content';
+};
+
+export type GetConversationArtifactContentResponses = {
+    /**
+     * Binary response
+     */
+    200: Blob | File;
+};
+
+export type GetConversationArtifactContentResponse = GetConversationArtifactContentResponses[keyof GetConversationArtifactContentResponses];
+
 export type ListAuditEventsData = {
     body?: never;
     path?: never;
@@ -1612,6 +1631,71 @@ export type ListAuditEventsResponses = {
 };
 
 export type ListAuditEventsResponse = ListAuditEventsResponses[keyof ListAuditEventsResponses];
+
+export type ListAuditActivitiesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/audit-activities';
+};
+
+export type ListAuditActivitiesResponses = {
+    /**
+     * Successful response
+     */
+    200: Array<{
+        correlationId: string;
+        at: string;
+        label: string;
+        tier: 'governance' | 'workflow' | 'runtime' | 'telemetry';
+        outcome: 'success' | 'failed' | 'denied' | 'warning';
+        actor: {
+            kind: 'user' | 'assistant' | 'service' | 'system';
+            label: string;
+            onBehalfOf?: string;
+            roles?: Array<string>;
+        };
+        target?: {
+            kind: string;
+            id: string;
+            label?: string;
+        };
+        reason?: string;
+        eventCount: number;
+        repeatCount: number;
+        evidence: Array<{
+            id: string;
+            clientInstanceId: string;
+            type: string;
+            status: string;
+            actor?: {
+                userId: string;
+                externalUserId: string;
+                displayLabel: string;
+                roles: Array<string>;
+                principalKind?: 'user' | 'service';
+                principalId?: string;
+                principalDisplayLabel?: string;
+                subjectUserId?: string;
+                delegatedActor?: {
+                    kind: 'service_principal';
+                    id: string;
+                    displayLabel?: string;
+                    authSource: string;
+                };
+            };
+            subject?: string;
+            reason?: string;
+            correlationId: string;
+            createdAt: string;
+            metadata?: {
+                [key: string]: unknown;
+            };
+        }>;
+    }>;
+};
+
+export type ListAuditActivitiesResponse = ListAuditActivitiesResponses[keyof ListAuditActivitiesResponses];
 
 export type GetUsageSummaryData = {
     body?: never;

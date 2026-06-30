@@ -702,7 +702,7 @@ test("standalone settings and superadmin tabs are route-backed", async ({ page }
 
   await page.getByRole("button", { name: "Audit log" }).click();
   await expect(page).toHaveURL(/\/admin\/audit$/u);
-  await expect(page.getByText("Recent audit events")).toBeVisible();
+  await expect(page.getByText("Recent activity")).toBeVisible();
 
   await page.goBack();
   await expect(page).toHaveURL(/\/admin\/users$/u);
@@ -850,7 +850,14 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
   await expect(page.getByText("deterministic-local").first()).toBeVisible();
   await expect(page.getByText("not_reported").first()).toBeVisible();
   await page.getByRole("button", { name: "Audit log" }).click();
-  await expect(page.getByText("Recent audit events")).toBeVisible();
+  await expect(page.getByText("Recent activity")).toBeVisible();
+  // Tool runs are folded into their activity as evidence; expand the rows to reveal them.
+  const adminRegion = page.getByRole("region", { name: "Administration panel" });
+  const activityRows = adminRegion.locator("button[aria-expanded]");
+  const rowCount = await activityRows.count();
+  for (let index = 0; index < rowCount; index += 1) {
+    await activityRows.nth(index).click();
+  }
   await expect(page.getByText("tool.completed").first()).toBeVisible();
   expect(consoleErrors).toEqual([]);
 });

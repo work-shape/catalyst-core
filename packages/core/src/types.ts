@@ -7,6 +7,7 @@ export * from "./message-metadata";
 export * from "./tool-execution";
 export * from "./agent-runtime";
 export * from "./audit";
+export * from "./audit-projection";
 export * from "./usage";
 export * from "./platform-store";
 export * from "./config";
