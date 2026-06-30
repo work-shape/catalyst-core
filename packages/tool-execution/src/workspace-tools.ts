@@ -1,10 +1,13 @@
+import { createHash } from "node:crypto";
 import { posix as path } from "node:path";
 import { z } from "zod";
 import {
+  type ClientInstanceId,
   type ExecutionWorkspaceId,
   type ConversationId,
   type JsonObject,
   type ManagedArtifactRef,
+  type ManagedFileId,
   type PlatformStore,
   type ToolExecutionContext,
   type ToolExecutionErrorCode,
@@ -17,12 +20,13 @@ import {
   type WorkspaceCommandPromotedArtifact,
   type WorkspaceExpectedOutput,
   type WorkspaceFile,
+  createPlatformId,
   getRuntimeSubjectUserId,
   isAppError,
   isJsonObject
 } from "@vivd-catalyst/core";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
-import type { WorkspaceObjectStore } from "./workspace-file-bytes";
+import type { WorkspaceFileByteStore, WorkspaceObjectStore } from "./workspace-file-bytes";
 import {
   normalizeWorkspaceDirectory as normalizeWorkspaceDirectoryPath,
   normalizeWorkspaceFilePath as normalizeWorkspaceFilePathValue
@@ -64,6 +68,22 @@ const workspaceExecInputSchema = z
   .strict();
 
 const workspaceListFilesInputSchema = z.object({}).strict();
+
+const workspaceImportFilesInputSchema = z
+  .object({
+    files: z
+      .array(
+        z
+          .object({
+            fileId: z.string().min(1).max(255),
+            path: workspacePathSchema.optional()
+          })
+          .strict()
+      )
+      .min(1)
+      .max(16)
+  })
+  .strict();
 
 const workspaceReadFileInputSchema = z
   .object({
@@ -127,6 +147,20 @@ const workspaceListFilesOutputSchema = z.object({
   )
 });
 
+const workspaceImportFilesOutputSchema = z.object({
+  workspaceId: z.string(),
+  importedFiles: z.array(
+    z.object({
+      fileId: z.string(),
+      path: z.string(),
+      filename: z.string(),
+      byteSize: z.number(),
+      checksum: z.string(),
+      mimeType: z.string().optional()
+    })
+  )
+});
+
 const workspaceReadFileOutputSchema = z.object({
   workspaceId: z.string(), path: z.string(), byteSize: z.number(), mimeType: z.string().optional(),
   encoding: z.literal("utf-8"), contentPreview: z.string(), truncated: z.boolean()
@@ -163,6 +197,28 @@ const emptyObjectInputJsonSchema: JsonObject = {
   type: "object", additionalProperties: false, properties: {}
 };
 
+const workspaceImportFilesInputJsonSchema: JsonObject = {
+  type: "object",
+  additionalProperties: false,
+  required: ["files"],
+  properties: {
+    files: {
+      type: "array",
+      minItems: 1,
+      maxItems: 16,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["fileId"],
+        properties: {
+          fileId: { type: "string", minLength: 1, maxLength: 255 },
+          path: { type: "string", maxLength: DEFAULT_LIMITS.maxPathLength }
+        }
+      }
+    }
+  }
+};
+
 const workspacePathInputJsonSchema: JsonObject = {
   type: "object", additionalProperties: false, required: ["path"],
   properties: { path: { type: "string", maxLength: DEFAULT_LIMITS.maxPathLength } }
@@ -183,6 +239,20 @@ export type WorkspaceToolStore = Pick<
   | "ensureExecutionWorkspace" | "listWorkspaceFiles" | "upsertWorkspaceFile"
   | "enqueueWorkspaceCommand" | "createManagedArtifact"
 >;
+
+export interface WorkspaceSourceFileReader {
+  readSourceFile(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    fileId: string;
+  }): Promise<{
+    fileId: ManagedFileId;
+    filename: string;
+    mimeType?: string;
+    byteSize: number;
+    bytes: Uint8Array;
+  }>;
+}
 
 export interface WorkspaceCommandResultSource {
   resolveWorkspaceCommand(input: { command: WorkspaceCommand; context: ToolExecutionContext }): Promise<WorkspaceCommand | undefined>;
@@ -208,6 +278,8 @@ export interface WorkspaceCommandServiceLimits {
 export interface WorkspaceCommandServiceOptions {
   store: WorkspaceToolStore;
   objectStore?: WorkspaceObjectStore;
+  fileStore?: WorkspaceFileByteStore;
+  sourceFileReader?: WorkspaceSourceFileReader;
   commandResults?: WorkspaceCommandResultSource;
   limits?: Partial<WorkspaceCommandServiceLimits>;
   now?: () => string;
@@ -222,13 +294,17 @@ export interface WorkspaceRawCommandOutput {
 export class WorkspaceCommandService {
   private readonly store: WorkspaceToolStore;
   private readonly objectStore?: WorkspaceObjectStore;
+  private readonly fileStore?: WorkspaceFileByteStore;
+  private readonly sourceFileReader?: WorkspaceSourceFileReader;
   private readonly commandResults?: WorkspaceCommandResultSource;
   private readonly limits: WorkspaceCommandServiceLimits;
   private readonly now: () => string;
 
   constructor(options: WorkspaceCommandServiceOptions) {
     this.store = options.store;
-    this.objectStore = options.objectStore;
+    this.fileStore = options.fileStore;
+    this.objectStore = options.objectStore ?? options.fileStore;
+    this.sourceFileReader = options.sourceFileReader;
     this.commandResults = options.commandResults;
     this.limits = {
       ...DEFAULT_LIMITS,
@@ -316,6 +392,81 @@ export class WorkspaceCommandService {
           subject: workspace.value.id,
           metadata: {
             count: files.length
+          }
+        }
+      }
+    );
+  }
+
+  async importFiles(
+    input: z.infer<typeof workspaceImportFilesInputSchema>,
+    context: ToolExecutionContext
+  ): Promise<ToolHandlerResult<z.infer<typeof workspaceImportFilesOutputSchema>>> {
+    if (!this.fileStore || !this.sourceFileReader) {
+      return failed("handler_failed", "Workspace source file import is not configured");
+    }
+    const workspace = await this.ensureWorkspace(context);
+    if (workspace.status === "failed") {
+      return workspace.result;
+    }
+
+    const files = await this.loadImportSourceFiles(input, context, workspace.value.conversationId);
+    if (files.status === "failed") {
+      return files.result;
+    }
+    const capacity = await this.validateImportCapacity(workspace.value.id, context, files.value);
+    if (capacity.status === "failed") {
+      return capacity.result;
+    }
+
+    const importedFiles = [];
+    for (const file of files.value) {
+      const stored = await this.fileStore.putWorkspaceFile({
+        clientInstanceId: context.clientInstanceId,
+        conversationId: workspace.value.conversationId,
+        workspaceId: workspace.value.id,
+        commandId: createPlatformId<"WorkspaceCommandId">("wcmd_import"),
+        path: file.path,
+        bytes: file.bytes,
+        checksum: file.checksum,
+        mimeType: file.mimeType
+      });
+      await this.store.upsertWorkspaceFile({
+        clientInstanceId: context.clientInstanceId,
+        workspaceId: workspace.value.id,
+        path: file.path,
+        objectKey: stored.objectKey,
+        byteSize: file.byteSize,
+        checksum: file.checksum,
+        mimeType: file.mimeType,
+        metadata: {
+          source: "managed_file_upload",
+          sourceFileId: file.fileId,
+          filename: file.filename
+        },
+        updatedAt: this.now()
+      });
+      importedFiles.push({
+        fileId: file.fileId,
+        path: file.path,
+        filename: file.filename,
+        byteSize: file.byteSize,
+        checksum: file.checksum,
+        mimeType: file.mimeType
+      });
+    }
+
+    return toolSuccess(
+      {
+        workspaceId: workspace.value.id,
+        importedFiles
+      },
+      {
+        auditSummary: {
+          action: "workspace.import_files",
+          subject: workspace.value.id,
+          metadata: {
+            count: importedFiles.length
           }
         }
       }
@@ -622,6 +773,103 @@ export class WorkspaceCommandService {
     };
   }
 
+  private async loadImportSourceFiles(
+    input: z.infer<typeof workspaceImportFilesInputSchema>,
+    context: ToolExecutionContext,
+    conversationId: ConversationId
+  ): Promise<
+    ValidationResult<
+      Array<{
+        fileId: ManagedFileId;
+        path: string;
+        filename: string;
+        mimeType?: string;
+        byteSize: number;
+        checksum: string;
+        bytes: Uint8Array;
+      }>
+    >
+  > {
+    if (!this.sourceFileReader) {
+      return failedValidationResult("Workspace source file import is not configured");
+    }
+
+    const seenPaths = new Set<string>();
+    const files = [];
+    for (const fileInput of input.files) {
+      let source;
+      try {
+        source = await this.sourceFileReader.readSourceFile({
+          clientInstanceId: context.clientInstanceId,
+          conversationId,
+          fileId: fileInput.fileId
+        });
+      } catch (error) {
+        return {
+          status: "failed",
+          result: failed(
+            "handler_failed",
+            isAppError(error) ? error.message : "Managed source file is not available",
+            { fileId: fileInput.fileId }
+          )
+        };
+      }
+      const normalizedPath = normalizeWorkspaceFilePath(
+        fileInput.path ?? workspacePathFromFilename(source.filename, source.fileId),
+        this.limits
+      );
+      if (normalizedPath.status === "failed") {
+        return normalizedPath;
+      }
+      if (seenPaths.has(normalizedPath.value)) {
+        return validationFailed("Imported workspace file paths must be unique", {
+          path: normalizedPath.value
+        });
+      }
+      seenPaths.add(normalizedPath.value);
+      const checksum = createWorkspaceChecksum(source.bytes);
+      files.push({
+        fileId: source.fileId,
+        path: normalizedPath.value,
+        filename: source.filename,
+        mimeType: source.mimeType,
+        byteSize: source.bytes.byteLength,
+        checksum,
+        bytes: source.bytes
+      });
+    }
+    return {
+      status: "success",
+      value: files
+    };
+  }
+
+  private async validateImportCapacity(
+    workspaceId: ExecutionWorkspaceId,
+    context: ToolExecutionContext,
+    files: ReadonlyArray<{ path: string; byteSize: number }>
+  ): Promise<ValidationResult<void>> {
+    const existingFiles = await this.store.listWorkspaceFiles({
+      clientInstanceId: context.clientInstanceId,
+      workspaceId
+    });
+    const importsByPath = new Map(files.map((file) => [file.path, file.byteSize]));
+    const existingBytes = existingFiles
+      .filter((file) => !importsByPath.has(file.path))
+      .reduce((total, file) => total + file.byteSize, 0);
+    const totalBytes = existingBytes + files.reduce((total, file) => total + file.byteSize, 0);
+    if (totalBytes > this.limits.maxWorkspaceBytes) {
+      return validationFailed("Imported files would exceed the workspace size limit", {
+        totalBytes,
+        maxWorkspaceBytes: this.limits.maxWorkspaceBytes
+      });
+    }
+    return {
+      status: "success",
+      value: undefined
+    };
+  }
+
   private async ensureWorkspace(
     context: ToolExecutionContext
   ): Promise<ValidationResult<Awaited<ReturnType<WorkspaceToolStore["ensureExecutionWorkspace"]>>>> {
@@ -696,6 +944,17 @@ export function createWorkspaceToolDefinitions(
       }
     }),
     defineTool({
+      name: "workspace.import_files",
+      description:
+        "Copy uploaded managed conversation files into the execution workspace by fileId. This uses managed file access and never exposes object-storage credentials.",
+      inputSchema: workspaceImportFilesInputSchema,
+      outputSchema: workspaceImportFilesOutputSchema,
+      inputJsonSchema: workspaceImportFilesInputJsonSchema,
+      execute(input, context) {
+        return service.importFiles(input, context);
+      }
+    }),
+    defineTool({
       name: "workspace.read_file",
       description:
         "Read a bounded UTF-8 preview of a text file from the conversation execution workspace.",
@@ -761,12 +1020,22 @@ function commandToExecOutput(command: WorkspaceCommand, workspaceId: ExecutionWo
     stdoutPreview: output?.stdoutPreview ?? "",
     stderrPreview: output?.stderrPreview ?? "",
     durationMs: output?.durationMs ?? null,
-    changedFiles: output?.changedFiles ?? [],
+    changedFiles: (output?.changedFiles ?? []).map(publicChangedFile),
     promotedArtifacts: output?.promotedArtifacts ?? [],
     truncated: output?.truncated ?? {
       stdout: false,
       stderr: false
     }
+  };
+}
+
+function publicChangedFile(file: WorkspaceCommandChangedFile): Omit<WorkspaceCommandChangedFile, "objectKey"> {
+  return {
+    path: file.path,
+    byteSize: file.byteSize,
+    checksum: file.checksum,
+    ...(file.mimeType ? { mimeType: file.mimeType } : {}),
+    ...(file.artifactId ? { artifactId: file.artifactId } : {})
   };
 }
 
@@ -776,7 +1045,7 @@ function commandArtifacts(command: WorkspaceCommand): ManagedArtifactRef[] {
     artifactId: artifact.artifactId,
     kind: artifact.kind,
     filename: path.basename(artifact.path),
-    mimeType: artifact.mimeType,
+    ...(artifact.mimeType ? { mimeType: artifact.mimeType } : {}),
     metadata: {
       source: "execution_workspace",
       commandId: command.id,
@@ -937,6 +1206,16 @@ function boundTextByBytes(text: string, maxBytes: number): { text: string; trunc
     text: new TextDecoder("utf-8").decode(bytes.slice(0, maxBytes)),
     truncated: true
   };
+}
+
+function createWorkspaceChecksum(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+function workspacePathFromFilename(filename: string, fileId: string): string {
+  const normalizedFilename = filename.replaceAll("\\", "/");
+  const basename = path.basename(normalizedFilename).trim();
+  return basename.length > 0 && basename !== "." && basename !== ".." ? basename : `${fileId}.bin`;
 }
 
 function validationFailed(message: string, details?: JsonObject): ValidationResult<never> {

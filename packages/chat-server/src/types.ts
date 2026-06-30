@@ -6,6 +6,7 @@ import type {
   ClientInstanceId,
   ConversationRetentionStore,
   ConversationStore,
+  ManagedArtifactId,
   PlatformFileStore,
   RunObservationStore,
   UserStore
@@ -34,6 +35,15 @@ export interface ChatServerOptions {
   auditRecorder: AuditRecorder;
   agentRuntime: AgentRuntime;
   attachments?: ChatAttachmentService;
+  managedObjects?: {
+    readArtifact(input: {
+      clientInstanceId: ClientInstanceId;
+      artifactId: ManagedArtifactId;
+    }): Promise<{
+      bytes: Uint8Array;
+      mimeType: string;
+    }>;
+  };
   retentionExpiration?: ConversationRetentionJobOptions;
   runRecovery?: RunRecoveryOptions;
   modelProvider: ModelProvider;

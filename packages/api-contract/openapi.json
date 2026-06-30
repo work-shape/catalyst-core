@@ -6014,6 +6014,42 @@
         }
       }
     },
+    "/api/conversations/{conversationId}/artifacts/{artifactId}/content": {
+      "get": {
+        "operationId": "getConversationArtifactContent",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Binary response",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/audit-events": {
       "get": {
         "operationId": "listAuditEvents",

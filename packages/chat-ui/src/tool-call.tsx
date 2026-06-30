@@ -2,6 +2,8 @@ import {
   CheckCircle2,
   ChevronRight,
   CircleAlert,
+  Download,
+  FileText,
   Wrench
 } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -13,6 +15,7 @@ import {
 } from "./domain-ui-widgets";
 import { useTranslation } from "./i18n";
 import { useToolDisplayPanel } from "./tool-display-panel";
+import { useAttachmentContentContext } from "./attachment-content";
 import { cn } from "./ui/cn";
 import { Spinner } from "./ui/spinner";
 
@@ -59,6 +62,13 @@ interface DataPartProps {
   data: unknown;
 }
 
+export interface ToolArtifactDownloadRef {
+  artifactId: string;
+  kind?: string;
+  filename?: string;
+  mimeType?: string;
+}
+
 export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isError, status }: ToolCallMessagePartProps) {
   const { locale, t } = useTranslation();
   const displayPanel = useToolDisplayPanel();
@@ -82,10 +92,12 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
   const detailSections = toolDetailSections({
     args,
     argsText,
+    toolName,
     result,
     labels: { input: t("toolInput"), output: t("toolOutput") }
   });
-  const summary = getToolSummary(result);
+  const artifacts = readToolArtifactRefs(result);
+  const summary = getToolSummary(result, t);
   const statusLabel = toolStatusLabel(state, t);
 
   if (hasDisplay) {
@@ -97,6 +109,7 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
           displayNode={renderedDisplay ?? builtInDisplay}
           state={state}
           statusLabel={statusLabel}
+          artifacts={artifacts}
           toolCallId={toolCallId}
           toolName={toolName}
         />
@@ -109,13 +122,14 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
         displayNode={renderedDisplay ?? builtInDisplay}
         state={state}
         statusLabel={statusLabel}
+        artifacts={artifacts}
         toolCallId={toolCallId}
         toolName={toolName}
       />
     );
   }
 
-  const hasDisclosureContent = Boolean(summary) || detailSections.length > 0;
+  const hasDisclosureContent = Boolean(summary) || artifacts.length > 0 || detailSections.length > 0;
 
   if (!hasDisclosureContent) {
     return (
@@ -140,6 +154,7 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
       state={state}
       statusLabel={statusLabel}
       summary={summary}
+      artifacts={artifacts}
       toolCallId={toolCallId}
       toolName={toolName}
     />
@@ -193,6 +208,7 @@ function SidePanelToolCall({
   displayNode,
   state,
   statusLabel,
+  artifacts,
   toolCallId,
   toolName
 }: {
@@ -201,6 +217,7 @@ function SidePanelToolCall({
   displayNode: ReactNode;
   state: "running" | "completed" | "failed";
   statusLabel: string;
+  artifacts: ToolArtifactDownloadRef[];
   toolCallId: string;
   toolName: string;
 }) {
@@ -242,6 +259,7 @@ function SidePanelToolCall({
         defaultOpen={state === "failed"}
         className="border-t px-2.5 py-1"
       />
+      <ToolArtifactList artifacts={artifacts} className="border-t px-2.5 py-2" />
       <span className="sr-only">{toolCallId}</span>
     </div>
   );
@@ -291,6 +309,7 @@ function DisplayToolCall({
   displayNode,
   state,
   statusLabel,
+  artifacts,
   toolCallId,
   toolName
 }: {
@@ -298,6 +317,7 @@ function DisplayToolCall({
   displayNode: ReactNode;
   state: "running" | "completed" | "failed";
   statusLabel: string;
+  artifacts: ToolArtifactDownloadRef[];
   toolCallId: string;
   toolName: string;
 }) {
@@ -333,6 +353,7 @@ function DisplayToolCall({
         </button>
         {open ? <div>{displayNode}</div> : null}
       </div>
+      <ToolArtifactList artifacts={artifacts} className="mt-2" />
       <ToolDetailDisclosure
         sections={detailSections}
         defaultOpen={state === "failed"}
@@ -404,13 +425,18 @@ function toolDetailSections({
   args,
   argsText,
   labels,
+  toolName,
   result
 }: {
   args: unknown;
   argsText?: string;
   labels: { input: string; output: string };
+  toolName: string;
   result: unknown;
 }): Array<{ label: string; value: string }> {
+  if (isWorkspaceToolName(toolName)) {
+    return [];
+  }
   const input = formatDetails(argsText && argsText.trim().length > 0 ? argsText : args);
   const output = formatDetails(result);
   const sections: Array<{ label: string; value: string }> = [];
@@ -421,6 +447,20 @@ function toolDetailSections({
     sections.push({ label: labels.output, value: output });
   }
   return sections;
+}
+
+export function readToolDetailSections(input: {
+  args: unknown;
+  argsText?: string;
+  labels: { input: string; output: string };
+  result: unknown;
+  toolName: string;
+}): Array<{ label: string; value: string }> {
+  return toolDetailSections(input);
+}
+
+function isWorkspaceToolName(toolName: string): boolean {
+  return toolName.startsWith("workspace.");
 }
 
 function formatDetails(value: unknown): string | undefined {
@@ -458,6 +498,7 @@ function CompactToolCall({
   state,
   statusLabel,
   summary,
+  artifacts,
   toolCallId,
   toolName
 }: {
@@ -465,6 +506,7 @@ function CompactToolCall({
   state: "running" | "completed" | "failed";
   statusLabel: string;
   summary: string | undefined;
+  artifacts: ToolArtifactDownloadRef[];
   toolCallId: string;
   toolName: string;
 }) {
@@ -498,12 +540,112 @@ function CompactToolCall({
           {summary ? (
             <p className="text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]">{summary}</p>
           ) : null}
+          <ToolArtifactList artifacts={artifacts} />
           <ToolDetails sections={detailSections} />
         </div>
       ) : null}
       <span className="sr-only">{toolCallId}</span>
     </div>
   );
+}
+
+function ToolArtifactList({
+  artifacts,
+  className
+}: {
+  artifacts: ToolArtifactDownloadRef[];
+  className?: string;
+}) {
+  const { t } = useTranslation();
+  const attachmentContent = useAttachmentContentContext();
+  const [downloadingArtifactId, setDownloadingArtifactId] = useState<string | undefined>();
+
+  if (artifacts.length === 0) {
+    return null;
+  }
+
+  const downloadAvailable = Boolean(attachmentContent?.client && attachmentContent.selectedConversationId);
+
+  async function downloadArtifact(artifact: ToolArtifactDownloadRef) {
+    if (!attachmentContent?.client || !attachmentContent.selectedConversationId) {
+      return;
+    }
+    setDownloadingArtifactId(artifact.artifactId);
+    try {
+      const blob = await attachmentContent.client.conversationArtifactContent(
+        attachmentContent.selectedConversationId,
+        artifact.artifactId
+      );
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = artifact.filename ?? artifact.artifactId;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } finally {
+      setDownloadingArtifactId(undefined);
+    }
+  }
+
+  return (
+    <div className={cn("grid gap-1.5", className)}>
+      {artifacts.map((artifact) => {
+        const filename = artifact.filename ?? artifact.artifactId;
+        const downloading = downloadingArtifactId === artifact.artifactId;
+        return (
+          <button
+            key={artifact.artifactId}
+            type="button"
+            disabled={!downloadAvailable || downloading}
+            title={downloadAvailable ? t("downloadArtifact", { filename }) : t("downloadUnavailable")}
+            aria-label={downloadAvailable ? t("downloadArtifact", { filename }) : t("downloadUnavailable")}
+            onClick={() => void downloadArtifact(artifact)}
+            className="flex min-h-10 w-full min-w-0 items-center gap-2 rounded-md border bg-background px-3 py-2 text-left text-sm text-foreground shadow-xs transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <FileText size={16} className="shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate">
+              <span className="block truncate font-medium">{filename}</span>
+              {artifact.mimeType || artifact.kind ? (
+                <span className="block truncate text-xs text-muted-foreground">
+                  {artifact.mimeType ?? artifact.kind}
+                </span>
+              ) : null}
+            </span>
+            {downloading ? (
+              <Spinner size="sm" className="shrink-0 text-muted-foreground" />
+            ) : (
+              <Download size={16} className="shrink-0 text-muted-foreground" aria-hidden="true" />
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function readToolArtifactRefs(result: unknown): ToolArtifactDownloadRef[] {
+  const container = isRecord(result) ? result : undefined;
+  const rawArtifacts = Array.isArray(container?.artifacts) ? container.artifacts : [];
+  return rawArtifacts.flatMap((artifact): ToolArtifactDownloadRef[] => {
+    if (!isRecord(artifact) || typeof artifact.artifactId !== "string") {
+      return [];
+    }
+    const ref: ToolArtifactDownloadRef = {
+      artifactId: artifact.artifactId
+    };
+    if (typeof artifact.kind === "string") {
+      ref.kind = artifact.kind;
+    }
+    if (typeof artifact.filename === "string") {
+      ref.filename = artifact.filename;
+    }
+    if (typeof artifact.mimeType === "string") {
+      ref.mimeType = artifact.mimeType;
+    }
+    return [ref];
+  });
 }
 
 function ToolDetailDisclosure({
@@ -565,9 +707,16 @@ function ToolDetails({ sections }: { sections: Array<{ label: string; value: str
   );
 }
 
-function getToolSummary(result: unknown): string | undefined {
+function getToolSummary(
+  result: unknown,
+  t: ReturnType<typeof useTranslation>["t"]
+): string | undefined {
   if (!isRecord(result)) {
     return undefined;
+  }
+  const workspaceSummary = getWorkspaceCommandSummary(result, t);
+  if (workspaceSummary) {
+    return workspaceSummary;
   }
   const notice = isRecord(result.projectionNotice) ? result.projectionNotice : undefined;
   if (notice?.type === "tool_output_bounded") {
@@ -575,6 +724,27 @@ function getToolSummary(result: unknown): string | undefined {
   }
   if (typeof result.output === "string") {
     return result.output;
+  }
+  return undefined;
+}
+
+function getWorkspaceCommandSummary(
+  result: Record<string, unknown>,
+  t: ReturnType<typeof useTranslation>["t"]
+): string | undefined {
+  const output = isRecord(result.output) ? result.output : undefined;
+  if (
+    typeof output?.commandId !== "string" ||
+    typeof output.workspaceId !== "string" ||
+    !Array.isArray(output.changedFiles)
+  ) {
+    return undefined;
+  }
+  if (output.status === "failed") {
+    return output.exitCode === 124 ? t("workspaceCommandTimedOut") : t("workspaceCommandFailed");
+  }
+  if (output.status === "cancelled") {
+    return t("workspaceCommandCancelled");
   }
   return undefined;
 }

@@ -33,3 +33,9 @@ export {
   type ClientInstanceWorkspaceCommandWorker,
   type CreateClientInstanceWorkspaceCommandWorkerInput
 } from "./workspace-command-worker";
+export {
+  createExecutionWorkspaceManagedObjectReader,
+  createExecutionWorkspaceSourceAttachmentHandler,
+  detectWorkspaceSourceFileFormat,
+  WORKSPACE_SOURCE_ACCEPTED_FILE_TYPES
+} from "./workspace-source-attachments";
