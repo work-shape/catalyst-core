@@ -141,11 +141,19 @@ export interface ExecutionWorkspaceWorkerConfig {
   staleRecoveryLimit: number;
 }
 
+export interface ExecutionWorkspaceCleanupConfig {
+  deletedWorkspaceCleanupIntervalMs: number;
+  deletedWorkspaceCleanupBatchSize: number;
+  tempStateCleanupIntervalMs: number;
+  orphanedTempStateMaxAgeMs: number;
+}
+
 export interface ExecutionWorkspacesConfig {
   enabled: boolean;
   runner: ExecutionWorkspaceRunnerConfig;
   command: ExecutionWorkspaceCommandConfig;
   worker: ExecutionWorkspaceWorkerConfig;
+  cleanup: ExecutionWorkspaceCleanupConfig;
 }
 
 export interface PostgresDataSourceConfig {

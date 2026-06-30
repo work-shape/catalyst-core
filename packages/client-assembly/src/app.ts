@@ -20,6 +20,7 @@ import {
 } from "@vivd-catalyst/data-source";
 import {
   createBuiltInToolDefinitions,
+  createConsoleWorkspaceCommandTelemetry,
   createLocalWorkspaceFileByteStore,
   createReadSkillTool,
   createWorkspaceToolDefinitions,
@@ -122,6 +123,10 @@ export async function createClientInstanceApp(
         byteStore: workspaceFileByteStore
       })
     : undefined;
+  const auditRecorder = new StoreBackedAuditRecorder({
+    clientInstanceId,
+    store
+  });
   const managedObjects = resolveManagedObjectReaders([
     ...(workspaceManagedObjectReader ? [workspaceManagedObjectReader] : []),
     ...capabilityContributions.flatMap((contribution) => contribution.managedObjects ?? []),
@@ -133,6 +138,8 @@ export async function createClientInstanceApp(
     ? createWorkspaceToolDefinitions({
         store,
         fileStore: workspaceFileByteStore,
+        auditRecorder,
+        telemetry: createConsoleWorkspaceCommandTelemetry(console),
         limits: config.executionWorkspaces.command,
         sourceFileReader: attachments
           ? {
@@ -165,10 +172,6 @@ export async function createClientInstanceApp(
   assertClientAssemblyValid({
     config,
     tools
-  });
-  const auditRecorder = new StoreBackedAuditRecorder({
-    clientInstanceId,
-    store
   });
   const usageGovernance = new ModelUsageGovernance({
     store,
@@ -246,6 +249,20 @@ export async function createClientInstanceApp(
     agentRuntime,
     attachments,
     managedObjects,
+    executionWorkspaceCleanup: workspaceFileByteStore?.deleteObject
+      ? {
+          store,
+          objects: {
+            deleteObject(key) {
+              return workspaceFileByteStore.deleteObject!(key);
+            }
+          },
+          jobOptions: {
+            checkIntervalMs: config.executionWorkspaces.cleanup.deletedWorkspaceCleanupIntervalMs,
+            batchSize: config.executionWorkspaces.cleanup.deletedWorkspaceCleanupBatchSize
+          }
+        }
+      : undefined,
     modelProvider,
     corsOrigin: input.corsOrigin,
     standaloneAuth,

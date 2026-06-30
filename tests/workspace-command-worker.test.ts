@@ -1,8 +1,9 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  StoreBackedAuditRecorder,
   asClientInstanceId,
   type ClientInstanceId,
   type Conversation,
@@ -177,12 +178,88 @@ describe("workspace command worker", () => {
       }
     });
   });
+
+  it("removes orphaned temporary workspace state before claiming work", async () => {
+    const harness = await createWorkerHarness();
+    const orphan = join(harness.commandRootDirectory, "catalyst-workspace-orphaned");
+    await mkdir(orphan, { recursive: true });
+    const staleTime = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    await utimes(orphan, staleTime, staleTime);
+
+    await expect(harness.worker.runOnce({ recoverStale: false })).resolves.toMatchObject({
+      status: "idle"
+    });
+
+    await expect(readdir(harness.commandRootDirectory)).resolves.not.toContain(
+      "catalyst-workspace-orphaned"
+    );
+  });
+
+  it("preserves a running command row when workspace cleanup races with execution", async () => {
+    const harness = await createWorkerHarness({ withAuditRecorder: true });
+    const queued = await harness.enqueue("python3 calculate.py");
+
+    const run = harness.worker.runOnce({ recoverStale: false });
+    await harness.executor.started;
+
+    await harness.store.markExecutionWorkspaceDeleted({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      deletedAt: "2026-06-29T10:00:30.000Z"
+    });
+    await expect(
+      harness.store.getWorkspaceCommand({
+        clientInstanceId: harness.clientInstanceId,
+        commandId: queued.id
+      })
+    ).resolves.toMatchObject({
+      status: "running",
+      leaseOwner: "worker-test"
+    });
+
+    harness.executor.complete(successProcessResult({ stdoutPreview: "finished after cleanup" }));
+    await expect(run).resolves.toMatchObject({
+      status: "claimed",
+      command: {
+        id: queued.id,
+        status: "completed",
+        output: {
+          stdoutPreview: "finished after cleanup"
+        }
+      }
+    });
+    await expect(
+      harness.store.getWorkspaceCommand({
+        clientInstanceId: harness.clientInstanceId,
+        commandId: queued.id
+      })
+    ).resolves.toMatchObject({
+      status: "completed"
+    });
+
+    const events = await harness.store.listAuditEvents({
+      clientInstanceId: harness.clientInstanceId,
+      limit: 20
+    });
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "workspace_command.completed",
+          status: "success",
+          subject: queued.id
+        })
+      ])
+    );
+  });
 });
 
-async function createWorkerHarness(input: { pollIntervalMs?: number } = {}) {
+async function createWorkerHarness(input: { pollIntervalMs?: number; withAuditRecorder?: boolean } = {}) {
   const clientInstanceId = asClientInstanceId(`worker_${globalThis.crypto.randomUUID()}`);
   const ownerUserId = "user-1";
   const store = new InMemoryPlatformStore();
+  const auditRecorder = input.withAuditRecorder
+    ? new StoreBackedAuditRecorder({ clientInstanceId, store })
+    : undefined;
   const conversation = await store.createConversation({
     clientInstanceId,
     ownerUserId,
@@ -200,7 +277,8 @@ async function createWorkerHarness(input: { pollIntervalMs?: number } = {}) {
     store,
     byteStore,
     tempRootDirectory: join(rootDirectory, "commands"),
-    processExecutor: executor
+    processExecutor: executor,
+    auditRecorder
   });
   let clock = 0;
   const worker = new WorkspaceCommandWorker({
@@ -213,6 +291,7 @@ async function createWorkerHarness(input: { pollIntervalMs?: number } = {}) {
     cancellationPollIntervalMs: 5,
     staleRecoveryIntervalMs: 1000,
     leaseDurationMs: 1000,
+    auditRecorder,
     now: () => new Date(Date.UTC(2026, 5, 29, 10, 0, clock++)).toISOString()
   });
   const workspace = await store.ensureExecutionWorkspace({
@@ -226,6 +305,7 @@ async function createWorkerHarness(input: { pollIntervalMs?: number } = {}) {
     ownerUserId,
     store,
     conversation,
+    commandRootDirectory: join(rootDirectory, "commands"),
     workspace,
     executor,
     worker,

@@ -10,6 +10,7 @@ import {
   asExecutionWorkspaceId,
   asToolCallId,
   asWorkspaceCommandId,
+  StoreBackedAuditRecorder,
   type ClientInstanceId,
   type Conversation,
   type ToolExecutionContext,
@@ -23,6 +24,7 @@ import {
   LocalWorkspaceCommandRunner,
   normalizeWorkspaceFilePath,
   WorkspaceCommandService,
+  type WorkspaceCommandTelemetry,
   type WorkspaceObjectStorage
 } from "@vivd-catalyst/tool-execution";
 
@@ -247,6 +249,53 @@ describe("local workspace command runner", () => {
     });
   });
 
+  it("records terminal timeout audit and telemetry without stdout payloads", async () => {
+    const telemetryEvents: Parameters<WorkspaceCommandTelemetry["record"]>[0][] = [];
+    const harness = await createRunnerHarness({
+      withAuditRecorder: true,
+      telemetry: {
+        record(event) {
+          telemetryEvents.push(event);
+        }
+      },
+      limits: {
+        idleTimeoutSeconds: 10
+      }
+    });
+
+    const result = await harness.exec({
+      command: "printf 'secret-output-not-for-audit'; sleep 2",
+      timeoutSeconds: 1
+    });
+
+    expect(result.status).toBe("success");
+    const auditEvents = await harness.store.listAuditEvents({
+      clientInstanceId: harness.clientInstanceId,
+      limit: 20
+    });
+    expect(auditEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "workspace_command.timed_out",
+          status: "failed",
+          metadata: expect.objectContaining({
+            errorCode: "WORKSPACE_COMMAND_TIMEOUT",
+            errorCategory: "timeout",
+            changedFileCount: 0
+          })
+        })
+      ])
+    );
+    expect(JSON.stringify(auditEvents)).not.toContain("secret-output-not-for-audit");
+    expect(telemetryEvents).toContainEqual(
+      expect.objectContaining({
+        type: "timed_out",
+        errorCode: "WORKSPACE_COMMAND_TIMEOUT",
+        errorCategory: "timeout"
+      })
+    );
+  });
+
   it("enforces the workspace byte-size limit before syncing oversized files", async () => {
     const harness = await createRunnerHarness({
       limits: {
@@ -317,6 +366,88 @@ describe("local workspace command runner", () => {
     });
   });
 
+  it("proves the PR9 workspace readiness flow with Python persistence and promoted-only artifacts", async () => {
+    const harness = await createRunnerHarness();
+
+    const calculated = await harness.exec({
+      command: [
+        "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'",
+        "from pathlib import Path",
+        "value = sum([13, 21, 8])",
+        "Path('analysis.txt').write_text(f'value={value}\\n', encoding='utf-8')",
+        "PY"
+      ].join("\n")
+    });
+    expect(calculated.status).toBe("success");
+    if (calculated.status !== "success") {
+      throw new Error("Expected Python calculation command to succeed");
+    }
+    expect(calculated.output).toMatchObject({
+      status: "completed",
+      changedFiles: [expect.objectContaining({ path: "analysis.txt" })]
+    });
+
+    const modified = await harness.exec({
+      command: [
+        "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'",
+        "from pathlib import Path",
+        "analysis = Path('analysis.txt').read_text(encoding='utf-8')",
+        "Path('analysis.txt').write_text(analysis + 'adjusted=43\\n', encoding='utf-8')",
+        "Path('internal/runner.log').parent.mkdir(parents=True, exist_ok=True)",
+        "Path('internal/runner.log').write_text('internal command log\\n', encoding='utf-8')",
+        "Path('final-report.txt').write_text('Final answer: 43\\n', encoding='utf-8')",
+        "PY"
+      ].join("\n"),
+      expectedOutputs: [{ path: "final-report.txt", kind: "text/plain", promote: true }]
+    });
+    expect(modified.status).toBe("success");
+    if (modified.status !== "success") {
+      throw new Error("Expected modification command to succeed");
+    }
+    expect(modified.artifacts).toEqual([
+      expect.objectContaining({
+        kind: "text/plain",
+        filename: "final-report.txt"
+      })
+    ]);
+    expect(JSON.stringify(modified.artifacts)).not.toContain("internal/runner.log");
+    expect(modified.output).toMatchObject({
+      status: "completed",
+      changedFiles: expect.arrayContaining([
+        expect.objectContaining({ path: "analysis.txt" }),
+        expect.objectContaining({ path: "internal/runner.log" }),
+        expect.objectContaining({ path: "final-report.txt", artifactId: expect.any(String) })
+      ]),
+      promotedArtifacts: [expect.objectContaining({ path: "final-report.txt", kind: "text/plain" })]
+    });
+
+    const analysis = await harness.service.readFile({ path: "analysis.txt" }, harness.context);
+    expect(analysis.status).toBe("success");
+    if (analysis.status !== "success") {
+      throw new Error("Expected analysis file to be readable");
+    }
+    expect(analysis.output?.contentPreview).toContain("value=42");
+    expect(analysis.output?.contentPreview).toContain("adjusted=43");
+
+    const listed = await harness.service.listFiles({}, harness.context);
+    expect(listed.status).toBe("success");
+    if (listed.status !== "success") {
+      throw new Error("Expected list_files to succeed");
+    }
+    expect(listed.artifacts).toBeUndefined();
+    expect(listed.output?.files.map((file) => file.path)).toEqual(
+      expect.arrayContaining(["analysis.txt", "internal/runner.log", "final-report.txt"])
+    );
+    const finalFile = listed.output?.files.find((file) => file.path === "final-report.txt");
+    expect(finalFile?.promotedArtifacts).toEqual([
+      expect.objectContaining({
+        kind: "text/plain"
+      })
+    ]);
+    const internalFile = listed.output?.files.find((file) => file.path === "internal/runner.log");
+    expect(internalFile?.promotedArtifacts).toBeUndefined();
+  });
+
   it("validates workspace paths through the shared safe relative path helper", () => {
     expect(normalizeWorkspaceFilePath("reports/../notes.txt", { maxPathLength: 512 })).toEqual({
       status: "success",
@@ -365,7 +496,9 @@ describe("local workspace command runner", () => {
 
 async function createRunnerHarness(input: {
   limits?: ConstructorParameters<typeof WorkspaceCommandService>[0]["limits"];
+  telemetry?: WorkspaceCommandTelemetry;
   useResultSource?: boolean;
+  withAuditRecorder?: boolean;
 } = {}) {
   const clientInstanceId = asClientInstanceId(`workspace_runner_${globalThis.crypto.randomUUID()}`);
   const ownerUserId = "user-1";
@@ -383,10 +516,15 @@ async function createRunnerHarness(input: {
   const byteStore = createLocalWorkspaceFileByteStore({
     rootDirectory: join(rootDirectory, "objects")
   });
+  const auditRecorder = input.withAuditRecorder
+    ? new StoreBackedAuditRecorder({ clientInstanceId, store })
+    : undefined;
   const runner = new LocalWorkspaceCommandRunner({
     store,
     byteStore,
     tempRootDirectory: commandRootDirectory,
+    ...(auditRecorder ? { auditRecorder } : {}),
+    ...(input.telemetry ? { telemetry: input.telemetry } : {}),
     now: () => new Date().toISOString()
   });
   const service = new WorkspaceCommandService({
@@ -395,6 +533,8 @@ async function createRunnerHarness(input: {
     commandResults: input.useResultSource === false
       ? undefined
       : new LocalWorkspaceCommandResultSource(runner),
+    ...(auditRecorder ? { auditRecorder } : {}),
+    ...(input.telemetry ? { telemetry: input.telemetry } : {}),
     limits: input.limits
   });
   const context = createToolContext(clientInstanceId, conversation);

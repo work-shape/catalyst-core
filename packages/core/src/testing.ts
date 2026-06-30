@@ -19,6 +19,7 @@ import {
   type CreateAgentRunInput,
   type CreateConversationInput,
   type CreateMessageInput,
+  type ExecutionWorkspaceCleanupStore,
   type ExecutionWorkspaceFileStore,
   type ExecutionWorkspaceMetadataStore,
   type PlatformFileStore,
@@ -67,6 +68,7 @@ export class InMemoryPlatformStore
     ExecutionWorkspaceMetadataStore,
     ExecutionWorkspaceFileStore,
     WorkspaceCommandStore,
+    ExecutionWorkspaceCleanupStore,
     AuditEventStore,
     ModelUsageEventStore,
     UserStore
@@ -86,7 +88,11 @@ export class InMemoryPlatformStore
   private readonly executionWorkspaceStore: InMemoryExecutionWorkspaceStore =
     createInMemoryExecutionWorkspaceStore({
       requireOwnedActiveConversation: (clientInstanceId, conversationId, ownerUserId) =>
-        this.requireOwnedActiveConversation(clientInstanceId, conversationId, ownerUserId)
+        this.requireOwnedActiveConversation(clientInstanceId, conversationId, ownerUserId),
+      isConversationActive: async (clientInstanceId, conversationId) => {
+        const conversation = await this.getConversation(clientInstanceId, conversationId);
+        return conversation?.status === "active";
+      }
     });
   private readonly modelUsageEvents: ModelUsageEvent[] = [];
   private readonly users = new Map<string, UserRecord>();
@@ -677,6 +683,24 @@ export class InMemoryPlatformStore
     input: Parameters<WorkspaceCommandStore["recoverStaleWorkspaceCommands"]>[0]
   ) {
     return this.executionWorkspaceStore.recoverStaleWorkspaceCommands(input);
+  }
+
+  async listExecutionWorkspaceCleanupTargets(
+    input: Parameters<ExecutionWorkspaceCleanupStore["listExecutionWorkspaceCleanupTargets"]>[0]
+  ) {
+    return this.executionWorkspaceStore.listExecutionWorkspaceCleanupTargets(input);
+  }
+
+  async listExecutionWorkspaceObjectsForDeletion(
+    input: Parameters<ExecutionWorkspaceCleanupStore["listExecutionWorkspaceObjectsForDeletion"]>[0]
+  ) {
+    return this.executionWorkspaceStore.listExecutionWorkspaceObjectsForDeletion(input);
+  }
+
+  async markExecutionWorkspaceDeleted(
+    input: Parameters<ExecutionWorkspaceCleanupStore["markExecutionWorkspaceDeleted"]>[0]
+  ) {
+    return this.executionWorkspaceStore.markExecutionWorkspaceDeleted(input);
   }
 
   async createManagedFile(input: Parameters<PlatformFileStore["createManagedFile"]>[0]) {

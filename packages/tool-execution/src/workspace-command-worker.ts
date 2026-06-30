@@ -1,11 +1,19 @@
 import { randomUUID } from "node:crypto";
 import type {
+  AuditRecorder,
   ClientInstanceId,
   PlatformStore,
   WorkspaceCommand,
   WorkspaceCommandError
 } from "@vivd-catalyst/core";
 import { LocalWorkspaceCommandRunner } from "./workspace-command-runner";
+import {
+  emitWorkspaceCommandTelemetry,
+  recordWorkspaceCommandLifecycleAudit,
+  workspaceCommandCountsMetadata,
+  workspaceCommandTelemetryEvent,
+  type WorkspaceCommandTelemetry
+} from "./workspace-command-telemetry";
 
 const DEFAULT_POLL_INTERVAL_MS = 1000;
 const DEFAULT_LEASE_DURATION_MS = 10 * 60 * 1000;
@@ -13,10 +21,13 @@ const DEFAULT_HEARTBEAT_INTERVAL_MS = 5000;
 const DEFAULT_CANCELLATION_POLL_INTERVAL_MS = 1000;
 const DEFAULT_STALE_RECOVERY_INTERVAL_MS = 30000;
 const DEFAULT_STALE_RECOVERY_LIMIT = 50;
+const DEFAULT_TEMP_STATE_CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
+const DEFAULT_ORPHANED_TEMP_STATE_MAX_AGE_MS = 60 * 60 * 1000;
 
 export type WorkspaceCommandWorkerStore = Pick<
   PlatformStore,
   | "claimNextWorkspaceCommand"
+  | "countActiveWorkspaceCommands"
   | "getWorkspaceCommand"
   | "heartbeatWorkspaceCommand"
   | "recoverStaleWorkspaceCommands"
@@ -34,6 +45,10 @@ export interface WorkspaceCommandWorkerOptions {
   cancellationPollIntervalMs?: number;
   staleRecoveryIntervalMs?: number;
   staleRecoveryLimit?: number;
+  tempStateCleanupIntervalMs?: number;
+  orphanedTempStateMaxAgeMs?: number;
+  auditRecorder?: AuditRecorder;
+  telemetry?: WorkspaceCommandTelemetry;
   now?: () => string;
 }
 
@@ -54,11 +69,16 @@ export class WorkspaceCommandWorker {
   private readonly cancellationPollIntervalMs: number;
   private readonly staleRecoveryIntervalMs: number;
   private readonly staleRecoveryLimit: number;
+  private readonly tempStateCleanupIntervalMs: number;
+  private readonly orphanedTempStateMaxAgeMs: number;
+  private readonly auditRecorder?: AuditRecorder;
+  private readonly telemetry?: WorkspaceCommandTelemetry;
   private readonly now: () => string;
   private readonly activeControllers = new Set<AbortController>();
   private stopping = false;
   private loopPromise?: Promise<void>;
   private lastStaleRecoveryMs = 0;
+  private lastTempStateCleanupMs = 0;
 
   constructor(options: WorkspaceCommandWorkerOptions) {
     this.clientInstanceId = options.clientInstanceId;
@@ -74,6 +94,12 @@ export class WorkspaceCommandWorker {
     this.staleRecoveryIntervalMs =
       options.staleRecoveryIntervalMs ?? DEFAULT_STALE_RECOVERY_INTERVAL_MS;
     this.staleRecoveryLimit = options.staleRecoveryLimit ?? DEFAULT_STALE_RECOVERY_LIMIT;
+    this.tempStateCleanupIntervalMs =
+      options.tempStateCleanupIntervalMs ?? DEFAULT_TEMP_STATE_CLEANUP_INTERVAL_MS;
+    this.orphanedTempStateMaxAgeMs =
+      options.orphanedTempStateMaxAgeMs ?? DEFAULT_ORPHANED_TEMP_STATE_MAX_AGE_MS;
+    this.auditRecorder = options.auditRecorder;
+    this.telemetry = options.telemetry;
     this.now = options.now ?? (() => new Date().toISOString());
   }
 
@@ -81,6 +107,7 @@ export class WorkspaceCommandWorker {
     if (input.recoverStale ?? true) {
       await this.recoverStaleCommands();
     }
+    await this.maybeCleanupOrphanedTempState();
     const now = this.now();
     const claimed = await this.store.claimNextWorkspaceCommand({
       clientInstanceId: this.clientInstanceId,
@@ -92,6 +119,7 @@ export class WorkspaceCommandWorker {
     if (!claimed) {
       return { status: "idle" };
     }
+    await this.recordRunningCommand(claimed);
     const command = await this.runClaimedCommand(claimed);
     return {
       status: "claimed",
@@ -102,13 +130,34 @@ export class WorkspaceCommandWorker {
   async recoverStaleCommands(): Promise<WorkspaceCommand[]> {
     const now = this.now();
     this.lastStaleRecoveryMs = Date.now();
-    return this.store.recoverStaleWorkspaceCommands({
+    const recovered = await this.store.recoverStaleWorkspaceCommands({
       clientInstanceId: this.clientInstanceId,
       staleLeaseExpiredBefore: now,
       recoveredAt: now,
       error: staleCommandError(),
       limit: this.staleRecoveryLimit
     });
+    for (const command of recovered) {
+      await recordWorkspaceCommandLifecycleAudit({
+        auditRecorder: this.auditRecorder,
+        type: "workspace_command.recovered_stale",
+        status: "failed",
+        command,
+        metadata: {
+          workerId: this.workerId,
+          ...(command.error?.code ? { errorCode: command.error.code } : {}),
+          ...(command.error?.category ? { errorCategory: command.error.category } : {})
+        }
+      });
+      await emitWorkspaceCommandTelemetry(
+        this.telemetry,
+        workspaceCommandTelemetryEvent("stale_recovered", command, {
+          workerId: this.workerId,
+          activeCounts: await this.readActiveCounts()
+        })
+      );
+    }
+    return recovered;
   }
 
   start(): Promise<void> {
@@ -139,6 +188,7 @@ export class WorkspaceCommandWorker {
   private async runLoop(index: number): Promise<void> {
     while (!this.stopping) {
       await this.maybeRecoverStaleCommands();
+      await this.maybeCleanupOrphanedTempState();
       const result = await this.runOnce({ recoverStale: false });
       if (result.status === "idle") {
         await sleep(this.pollIntervalMs);
@@ -152,6 +202,58 @@ export class WorkspaceCommandWorker {
       return;
     }
     await this.recoverStaleCommands();
+  }
+
+  private async maybeCleanupOrphanedTempState(): Promise<void> {
+    if (Date.now() - this.lastTempStateCleanupMs < this.tempStateCleanupIntervalMs) {
+      return;
+    }
+    this.lastTempStateCleanupMs = Date.now();
+    const result = await this.runner.cleanupOrphanedTempState({
+      olderThanMs: this.orphanedTempStateMaxAgeMs
+    });
+    if (result.removedCount > 0 || result.failedCount > 0) {
+      await emitWorkspaceCommandTelemetry(this.telemetry, {
+        type: "temp_state_cleaned",
+        clientInstanceId: this.clientInstanceId,
+        workerId: this.workerId,
+        removedCount: result.removedCount,
+        failedCount: result.failedCount,
+        activeCounts: await this.readActiveCounts()
+      });
+    }
+  }
+
+  private async recordRunningCommand(command: WorkspaceCommand): Promise<void> {
+    const activeCounts = await this.readActiveCounts();
+    await recordWorkspaceCommandLifecycleAudit({
+      auditRecorder: this.auditRecorder,
+      type: "workspace_command.running",
+      status: "success",
+      command,
+      metadata: {
+        workerId: this.workerId,
+        leaseExpiresAt: command.leaseExpiresAt ?? null,
+        ...(activeCounts ? { activeCounts: workspaceCommandCountsMetadata(activeCounts) } : {})
+      }
+    });
+    await emitWorkspaceCommandTelemetry(
+      this.telemetry,
+      workspaceCommandTelemetryEvent("running", command, {
+        workerId: this.workerId,
+        activeCounts
+      })
+    );
+  }
+
+  private async readActiveCounts() {
+    try {
+      return await this.store.countActiveWorkspaceCommands({
+        clientInstanceId: this.clientInstanceId
+      });
+    } catch {
+      return undefined;
+    }
   }
 
   private async runClaimedCommand(command: WorkspaceCommand): Promise<WorkspaceCommand> {

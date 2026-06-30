@@ -6,6 +6,7 @@ import {
   readdir,
   readFile,
   rm,
+  stat,
   writeFile
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -13,6 +14,7 @@ import { basename, dirname, join, relative } from "node:path";
 import {
   type ClientInstanceId,
   type ExecutionWorkspace,
+  type AuditRecorder,
   type JsonObject,
   type PlatformStore,
   type WorkspaceCommand,
@@ -36,6 +38,13 @@ import {
   type ProcessResult,
   type WorkspaceCommandProcessExecutor
 } from "./workspace-command-executor";
+import {
+  emitWorkspaceCommandTelemetry,
+  recordWorkspaceCommandLifecycleAudit,
+  terminalWorkspaceCommandAuditType,
+  workspaceCommandTelemetryEvent,
+  type WorkspaceCommandTelemetry
+} from "./workspace-command-telemetry";
 
 const DEFAULT_MAX_PATH_LENGTH = 512;
 const DEFAULT_LEASE_DURATION_MS = 10 * 60 * 1000;
@@ -62,6 +71,8 @@ export interface LocalWorkspaceCommandRunnerOptions {
   maxPathLength?: number;
   shellPath?: string;
   processExecutor?: WorkspaceCommandProcessExecutor;
+  auditRecorder?: AuditRecorder;
+  telemetry?: WorkspaceCommandTelemetry;
   now?: () => string;
 }
 
@@ -101,6 +112,8 @@ export class LocalWorkspaceCommandRunner {
   private readonly leaseDurationMs: number;
   private readonly maxPathLength: number;
   private readonly processExecutor: WorkspaceCommandProcessExecutor;
+  private readonly auditRecorder?: AuditRecorder;
+  private readonly telemetry?: WorkspaceCommandTelemetry;
   private readonly now: () => string;
 
   constructor(options: LocalWorkspaceCommandRunnerOptions) {
@@ -112,6 +125,8 @@ export class LocalWorkspaceCommandRunner {
     this.maxPathLength = options.maxPathLength ?? DEFAULT_MAX_PATH_LENGTH;
     this.processExecutor =
       options.processExecutor ?? new LocalWorkspaceCommandProcessExecutor({ shellPath: options.shellPath });
+    this.auditRecorder = options.auditRecorder;
+    this.telemetry = options.telemetry;
     this.now = options.now ?? (() => new Date().toISOString());
   }
 
@@ -127,6 +142,7 @@ export class LocalWorkspaceCommandRunner {
     if (!claimed) {
       return undefined;
     }
+    await this.recordRunningCommand(claimed);
     return this.runClaimedCommand(claimed);
   }
 
@@ -141,8 +157,9 @@ export class LocalWorkspaceCommandRunner {
 
     const result = await this.executeCommand(command, options);
     const completedAt = this.now();
+    let terminal: WorkspaceCommand;
     if (result.cancelled) {
-      return this.store.cancelClaimedWorkspaceCommand({
+      terminal = await this.store.cancelClaimedWorkspaceCommand({
         clientInstanceId: command.clientInstanceId,
         commandId: command.id,
         leaseToken,
@@ -150,9 +167,11 @@ export class LocalWorkspaceCommandRunner {
         output: result.output,
         cancelledAt: completedAt
       });
+      await this.recordTerminalCommand(terminal);
+      return terminal;
     }
     if (result.error) {
-      return this.store.failWorkspaceCommand({
+      terminal = await this.store.failWorkspaceCommand({
         clientInstanceId: command.clientInstanceId,
         commandId: command.id,
         leaseToken,
@@ -160,9 +179,11 @@ export class LocalWorkspaceCommandRunner {
         output: result.output,
         failedAt: completedAt
       });
+      await this.recordTerminalCommand(terminal);
+      return terminal;
     }
     if (!result.output) {
-      return this.store.failWorkspaceCommand({
+      terminal = await this.store.failWorkspaceCommand({
         clientInstanceId: command.clientInstanceId,
         commandId: command.id,
         leaseToken,
@@ -173,14 +194,87 @@ export class LocalWorkspaceCommandRunner {
         ),
         failedAt: completedAt
       });
+      await this.recordTerminalCommand(terminal);
+      return terminal;
     }
-    return this.store.completeWorkspaceCommand({
+    terminal = await this.store.completeWorkspaceCommand({
       clientInstanceId: command.clientInstanceId,
       commandId: command.id,
       leaseToken,
       output: result.output,
       completedAt
     });
+    await this.recordTerminalCommand(terminal);
+    return terminal;
+  }
+
+  async cleanupOrphanedTempState(input: {
+    olderThanMs: number;
+    now?: Date;
+  }): Promise<{ removedCount: number; failedCount: number }> {
+    let entries;
+    try {
+      entries = await readdir(this.tempRootDirectory, { withFileTypes: true });
+    } catch {
+      return { removedCount: 0, failedCount: 0 };
+    }
+
+    const cutoffMs = (input.now ?? new Date()).getTime() - input.olderThanMs;
+    let removedCount = 0;
+    let failedCount = 0;
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !entry.name.startsWith("catalyst-workspace-")) {
+        continue;
+      }
+      const directory = join(this.tempRootDirectory, entry.name);
+      try {
+        const info = await stat(directory);
+        if (info.mtimeMs > cutoffMs) {
+          continue;
+        }
+        await rm(directory, { recursive: true, force: true });
+        removedCount += 1;
+      } catch {
+        failedCount += 1;
+      }
+    }
+    return { removedCount, failedCount };
+  }
+
+  private async recordRunningCommand(command: WorkspaceCommand): Promise<void> {
+    await recordWorkspaceCommandLifecycleAudit({
+      auditRecorder: this.auditRecorder,
+      type: "workspace_command.running",
+      status: "success",
+      command,
+      metadata: {
+        workerId: this.workerId,
+        leaseExpiresAt: command.leaseExpiresAt ?? null
+      }
+    });
+    await emitWorkspaceCommandTelemetry(
+      this.telemetry,
+      workspaceCommandTelemetryEvent("running", command, {
+        workerId: this.workerId
+      })
+    );
+  }
+
+  private async recordTerminalCommand(command: WorkspaceCommand): Promise<void> {
+    const auditType = terminalWorkspaceCommandAuditType(command);
+    await recordWorkspaceCommandLifecycleAudit({
+      auditRecorder: this.auditRecorder,
+      type: auditType.type,
+      status: auditType.status,
+      command,
+      metadata: terminalCommandAuditMetadata(command)
+    });
+    await emitWorkspaceCommandTelemetry(
+      this.telemetry,
+      workspaceCommandTelemetryEvent(auditType.telemetryType, command, {
+        workerId: this.workerId
+      })
+    );
   }
 
   private async executeCommand(
@@ -642,6 +736,23 @@ function commandOutputFromProcess(
     changedFiles,
     promotedArtifacts,
     truncated: processResult.truncated
+  };
+}
+
+function terminalCommandAuditMetadata(command: WorkspaceCommand): JsonObject {
+  return {
+    exitCode: command.output?.exitCode ?? null,
+    durationMs: command.output?.durationMs ?? null,
+    changedFileCount: command.output?.changedFiles.length ?? 0,
+    promotedArtifactCount: command.output?.promotedArtifacts.length ?? 0,
+    stdoutTruncated: command.output?.truncated.stdout ?? false,
+    stderrTruncated: command.output?.truncated.stderr ?? false,
+    ...(command.error
+      ? {
+          errorCode: command.error.code,
+          errorCategory: command.error.category
+        }
+      : {})
   };
 }
 

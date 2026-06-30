@@ -8,12 +8,18 @@ import {
   type CompleteWorkspaceCommandInput,
   type ConversationId,
   type EnqueueWorkspaceCommandInput,
+  type ExecutionWorkspaceCleanupStore,
+  type ExecutionWorkspaceCleanupTarget,
+  type ExecutionWorkspaceDeletionSummary,
   type ExecutionWorkspace,
   type ExecutionWorkspaceFileStore,
   type ExecutionWorkspaceId,
   type ExecutionWorkspaceMetadataStore,
   type FailWorkspaceCommandInput,
   type HeartbeatWorkspaceCommandInput,
+  type ListExecutionWorkspaceCleanupTargetsInput,
+  type ListExecutionWorkspaceObjectsForDeletionInput,
+  type MarkExecutionWorkspaceDeletedInput,
   type RecoverStaleWorkspaceCommandsInput,
   type RequestWorkspaceCommandCancellationInput,
   type WorkspaceCommand,
@@ -26,7 +32,8 @@ import {
 
 export type InMemoryExecutionWorkspaceStore = ExecutionWorkspaceMetadataStore &
   ExecutionWorkspaceFileStore &
-  WorkspaceCommandStore;
+  WorkspaceCommandStore &
+  ExecutionWorkspaceCleanupStore;
 
 export interface InMemoryExecutionWorkspaceStoreCallbacks {
   requireOwnedActiveConversation(
@@ -34,6 +41,7 @@ export interface InMemoryExecutionWorkspaceStoreCallbacks {
     conversationId: ConversationId,
     ownerUserId: string
   ): Promise<void>;
+  isConversationActive(clientInstanceId: ClientInstanceId, conversationId: ConversationId): Promise<boolean>;
 }
 
 export function createInMemoryExecutionWorkspaceStore(
@@ -453,6 +461,111 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
     return recovered;
   }
 
+  async listExecutionWorkspaceCleanupTargets(
+    input: ListExecutionWorkspaceCleanupTargetsInput
+  ): Promise<ExecutionWorkspaceCleanupTarget[]> {
+    const targets: ExecutionWorkspaceCleanupTarget[] = [];
+    for (const workspace of [...this.executionWorkspaces.values()].sort((left, right) =>
+      `${left.updatedAt}:${left.id}`.localeCompare(`${right.updatedAt}:${right.id}`)
+    )) {
+      if (workspace.clientInstanceId !== input.clientInstanceId) {
+        continue;
+      }
+      const hasWorkspaceFiles = [...this.workspaceFiles.values()].some(
+        (file) => file.clientInstanceId === input.clientInstanceId && file.workspaceId === workspace.id
+      );
+      const hasWorkspaceCommands = [...this.workspaceCommands.values()].some(
+        (command) =>
+          command.clientInstanceId === input.clientInstanceId && command.workspaceId === workspace.id
+      );
+      const conversationActive = await this.callbacks.isConversationActive(
+        input.clientInstanceId,
+        workspace.conversationId
+      );
+      if (
+        !conversationActive &&
+        (workspace.status !== "deleted" || hasWorkspaceFiles || hasWorkspaceCommands)
+      ) {
+        targets.push({
+          workspaceId: workspace.id,
+          conversationId: workspace.conversationId
+        });
+      }
+      if (targets.length >= input.limit) {
+        break;
+      }
+    }
+    return targets;
+  }
+
+  async listExecutionWorkspaceObjectsForDeletion(
+    input: ListExecutionWorkspaceObjectsForDeletionInput
+  ): Promise<ExecutionWorkspaceDeletionSummary> {
+    return this.collectExecutionWorkspaceDeletionSummary(input);
+  }
+
+  async markExecutionWorkspaceDeleted(
+    input: MarkExecutionWorkspaceDeletedInput
+  ): Promise<ExecutionWorkspaceDeletionSummary> {
+    const summary = this.collectExecutionWorkspaceDeletionSummary(input);
+    const workspaceIds = new Set(
+      [...this.executionWorkspaces.values()]
+        .filter(
+          (workspace) =>
+            workspace.clientInstanceId === input.clientInstanceId &&
+            workspace.conversationId === input.conversationId
+        )
+        .map((workspace) => workspace.id)
+    );
+    for (const workspaceId of workspaceIds) {
+      const workspace = this.executionWorkspaces.get(workspaceId);
+      if (!workspace) {
+        continue;
+      }
+      this.executionWorkspaces.set(workspaceId, {
+        ...workspace,
+        status: "deleted",
+        deletedAt: input.deletedAt,
+        updatedAt: input.deletedAt
+      });
+    }
+    for (const [key, file] of this.workspaceFiles.entries()) {
+      if (file.clientInstanceId === input.clientInstanceId && workspaceIds.has(file.workspaceId)) {
+        this.workspaceFiles.delete(key);
+      }
+    }
+    for (const [commandId, command] of this.workspaceCommands.entries()) {
+      if (
+        command.clientInstanceId === input.clientInstanceId &&
+        command.conversationId === input.conversationId
+      ) {
+        if (command.status === "queued") {
+          this.workspaceCommands.set(commandId, {
+            ...command,
+            status: "cancelled",
+            cancellationReason:
+              command.cancellationReason ?? "Conversation workspace was cleaned up",
+            cancellationRequestedAt: command.cancellationRequestedAt ?? input.deletedAt,
+            leaseOwner: undefined,
+            leaseToken: undefined,
+            leaseExpiresAt: undefined,
+            heartbeatAt: undefined,
+            completedAt: input.deletedAt,
+            updatedAt: input.deletedAt
+          });
+          continue;
+        }
+        if (
+          isTerminalWorkspaceCommand(command) &&
+          (command.completedAt === undefined || command.completedAt < input.deletedAt)
+        ) {
+          this.workspaceCommands.delete(commandId);
+        }
+      }
+    }
+    return summary;
+  }
+
   private async requireActiveWorkspace(
     clientInstanceId: ClientInstanceId,
     workspaceId: ExecutionWorkspaceId,
@@ -479,6 +592,35 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
       throw new AppError("CONFLICT", "Workspace command lease is no longer active");
     }
     return command;
+  }
+
+  private collectExecutionWorkspaceDeletionSummary(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+  }): ExecutionWorkspaceDeletionSummary {
+    const workspaceIds = new Set(
+      [...this.executionWorkspaces.values()]
+        .filter(
+          (workspace) =>
+            workspace.clientInstanceId === input.clientInstanceId &&
+            workspace.conversationId === input.conversationId
+        )
+        .map((workspace) => workspace.id)
+    );
+    const files = [...this.workspaceFiles.values()].filter(
+      (file) => file.clientInstanceId === input.clientInstanceId && workspaceIds.has(file.workspaceId)
+    );
+    const commands = [...this.workspaceCommands.values()].filter(
+      (command) =>
+        command.clientInstanceId === input.clientInstanceId &&
+        command.conversationId === input.conversationId
+    );
+    return {
+      workspaceCount: workspaceIds.size,
+      fileCount: files.length,
+      commandCount: commands.length,
+      fileObjectKeys: uniqueStrings(files.map((file) => file.objectKey))
+    };
   }
 }
 
@@ -512,4 +654,8 @@ function assertWorkspaceCommandScopeCapacity(
       limit
     });
   }
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
 }

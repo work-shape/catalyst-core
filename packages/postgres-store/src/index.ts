@@ -23,6 +23,7 @@ import {
   type CreateUserInput,
   type DeleteUserIdentityInput,
   type ExecutionWorkspace,
+  type ExecutionWorkspaceCleanupStore,
   type ExecutionWorkspaceFileStore,
   type ExecutionWorkspaceMetadataStore,
   type ExecutionWorkspaceId,
@@ -95,7 +96,10 @@ import {
   getExecutionWorkspaceForConversation as getPostgresExecutionWorkspaceForConversation,
   getWorkspaceCommand as getPostgresWorkspaceCommand,
   heartbeatWorkspaceCommand as heartbeatPostgresWorkspaceCommand,
+  listExecutionWorkspaceCleanupTargets as listPostgresExecutionWorkspaceCleanupTargets,
+  listExecutionWorkspaceObjectsForDeletion as listPostgresExecutionWorkspaceObjectsForDeletion,
   listWorkspaceFiles as listPostgresWorkspaceFiles,
+  markExecutionWorkspaceDeleted as markPostgresExecutionWorkspaceDeleted,
   recoverStaleWorkspaceCommands as recoverStalePostgresWorkspaceCommands,
   requestWorkspaceCommandCancellation as requestPostgresWorkspaceCommandCancellation,
   upsertWorkspaceFile as upsertPostgresWorkspaceFile
@@ -141,6 +145,7 @@ export class PostgresPlatformStore
     ExecutionWorkspaceMetadataStore,
     ExecutionWorkspaceFileStore,
     WorkspaceCommandStore,
+    ExecutionWorkspaceCleanupStore,
     AuditEventStore,
     ModelUsageEventStore,
     UserStore
@@ -412,6 +417,24 @@ export class PostgresPlatformStore
     input: Parameters<WorkspaceCommandStore["recoverStaleWorkspaceCommands"]>[0]
   ): Promise<WorkspaceCommand[]> {
     return recoverStalePostgresWorkspaceCommands(this.db, input);
+  }
+
+  async listExecutionWorkspaceCleanupTargets(
+    input: Parameters<ExecutionWorkspaceCleanupStore["listExecutionWorkspaceCleanupTargets"]>[0]
+  ) {
+    return listPostgresExecutionWorkspaceCleanupTargets(this.db, input);
+  }
+
+  async listExecutionWorkspaceObjectsForDeletion(
+    input: Parameters<ExecutionWorkspaceCleanupStore["listExecutionWorkspaceObjectsForDeletion"]>[0]
+  ) {
+    return listPostgresExecutionWorkspaceObjectsForDeletion(this.db, input);
+  }
+
+  async markExecutionWorkspaceDeleted(
+    input: Parameters<ExecutionWorkspaceCleanupStore["markExecutionWorkspaceDeleted"]>[0]
+  ) {
+    return markPostgresExecutionWorkspaceDeleted(this.db, input);
   }
 
   async createManagedFile(input: Parameters<PlatformFileStore["createManagedFile"]>[0]) {

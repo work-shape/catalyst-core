@@ -5,6 +5,7 @@ import {
   asExecutionWorkspaceId,
   asManagedFileId,
   asToolCallId,
+  StoreBackedAuditRecorder,
   type ClientInstanceId,
   type Conversation,
   type ToolExecutionContext,
@@ -15,6 +16,7 @@ import {
   createWorkspaceToolDefinitions,
   shapeWorkspaceCommandOutput,
   WorkspaceCommandService,
+  type WorkspaceCommandTelemetry,
   type WorkspaceFileByteStore,
   type WorkspaceObjectStore
 } from "@vivd-catalyst/tool-execution";
@@ -98,6 +100,59 @@ describe("workspace tools", () => {
       status: "denied",
       reason: "Agent 'workspace_agent' is not allowed to use 'workspace.exec'"
     });
+  });
+
+  it("records minimized workspace command queue audit and telemetry without command payloads", async () => {
+    const telemetryEvents: Parameters<WorkspaceCommandTelemetry["record"]>[0][] = [];
+    const harness = await createWorkspaceHarness({
+      withAuditRecorder: true,
+      telemetry: {
+        record(event) {
+          telemetryEvents.push(event);
+        }
+      }
+    });
+
+    const result = await harness.runTool("workspace.exec", {
+      command: "printf 'do-not-audit-this-payload'",
+      timeoutSeconds: 45
+    });
+
+    expect(result.status).toBe("success");
+    const auditEvents = await harness.store.listAuditEvents({
+      clientInstanceId: harness.clientInstanceId,
+      limit: 20
+    });
+    expect(auditEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "workspace_command.queued",
+          status: "success",
+          metadata: expect.objectContaining({
+            timeoutSeconds: 45,
+            expectedOutputCount: 0,
+            cwdProvided: false
+          })
+        }),
+        expect.objectContaining({
+          type: "tool.completed",
+          metadata: expect.objectContaining({
+            auditAction: "workspace.exec",
+            resultStatus: "success"
+          })
+        })
+      ])
+    );
+    expect(JSON.stringify(auditEvents)).not.toContain("do-not-audit-this-payload");
+    expect(telemetryEvents).toContainEqual(
+      expect.objectContaining({
+        type: "queued",
+        status: "queued",
+        activeCounts: expect.objectContaining({
+          queued: 1
+        })
+      })
+    );
   });
 
   it("checks per-conversation, per-user, and global workspace command concurrency", async () => {
@@ -466,6 +521,8 @@ async function createWorkspaceHarness(input: {
   agentToolNames?: string[];
   commandResults?: ConstructorParameters<typeof WorkspaceCommandService>[0]["commandResults"];
   limits?: ConstructorParameters<typeof WorkspaceCommandService>[0]["limits"];
+  telemetry?: WorkspaceCommandTelemetry;
+  withAuditRecorder?: boolean;
   sourceFiles?: Record<
     string,
     {
@@ -486,6 +543,9 @@ async function createWorkspaceHarness(input: {
     retainedUntil: "2026-07-29T00:00:00.000Z"
   });
   const objectStore = new TestWorkspaceObjectStore();
+  const auditRecorder = input.withAuditRecorder
+    ? new StoreBackedAuditRecorder({ clientInstanceId, store })
+    : undefined;
   const service = new WorkspaceCommandService({
     store,
     objectStore,
@@ -510,6 +570,8 @@ async function createWorkspaceHarness(input: {
         }
       : {}),
     ...(input.commandResults ? { commandResults: input.commandResults } : {}),
+    ...(auditRecorder ? { auditRecorder } : {}),
+    ...(input.telemetry ? { telemetry: input.telemetry } : {}),
     limits: input.limits,
     now: () => "2026-06-29T12:00:00.000Z"
   });
@@ -517,7 +579,8 @@ async function createWorkspaceHarness(input: {
   const agentToolNames = input.agentToolNames ?? tools.map((tool) => tool.name);
   const execution = new InProcessToolExecution({
     registry: new ToolRegistry({ tools }),
-    getAgentToolNames: () => agentToolNames
+    getAgentToolNames: () => agentToolNames,
+    ...(auditRecorder ? { auditRecorder } : {})
   });
   const context = createToolContext(clientInstanceId);
   return {

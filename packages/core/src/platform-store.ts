@@ -2,6 +2,7 @@ import type { AgentRunStore, RunObservationStore } from "./agent-runtime";
 import type { AuditEventStore } from "./audit";
 import type { ConversationRetentionStore, ConversationStore } from "./conversation";
 import type {
+  ExecutionWorkspaceCleanupStore,
   ExecutionWorkspaceFileStore,
   ExecutionWorkspaceMetadataStore,
   WorkspaceCommandStore
@@ -19,6 +20,7 @@ export interface PlatformStore
     ExecutionWorkspaceMetadataStore,
     ExecutionWorkspaceFileStore,
     WorkspaceCommandStore,
+    ExecutionWorkspaceCleanupStore,
     AuditEventStore,
     ModelUsageEventStore,
     UserStore {

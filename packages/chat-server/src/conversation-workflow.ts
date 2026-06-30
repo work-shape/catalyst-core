@@ -42,6 +42,10 @@ import {
   recoveryEventFromObservation
 } from "./run-recovery";
 import type { ChatServerOptions } from "./types";
+import {
+  cleanupExecutionWorkspaceForConversation,
+  executionWorkspaceCleanupAuditMetadata
+} from "./workspace-cleanup";
 
 export interface CreateConversationCommand {
   title?: string;
@@ -722,6 +726,10 @@ export class ConversationWorkflow {
           deletedAt
         })
       : undefined;
+    const workspaceDeletion = await cleanupExecutionWorkspaceForConversation(this.options, {
+      conversationId,
+      deletedAt
+    });
     const deleted = await this.options.conversationStore.deleteConversation({
       clientInstanceId: this.options.clientInstanceId,
       conversationId,
@@ -733,13 +741,12 @@ export class ConversationWorkflow {
       actor: auditActorFromUser(user),
       subject: deleted.id,
       correlationId: context.correlationId,
-      metadata: attachmentDeletion
-        ? {
-            attachmentCount: attachmentDeletion.attachmentCount,
-            fileCount: attachmentDeletion.fileObjectKeys.length,
-            artifactCount: attachmentDeletion.artifactObjectKeys.length
-          }
-        : undefined
+      metadata: {
+        attachmentCount: attachmentDeletion?.attachmentCount ?? 0,
+        fileCount: attachmentDeletion?.fileObjectKeys.length ?? 0,
+        artifactCount: attachmentDeletion?.artifactObjectKeys.length ?? 0,
+        ...executionWorkspaceCleanupAuditMetadata(workspaceDeletion)
+      }
     });
     return deleted;
   }

@@ -120,7 +120,8 @@ export class InProcessToolExecution implements ToolExecution {
           : result;
 
       await this.audit("tool.completed", validated.status === "success" ? "success" : "failed", request, context, {
-        resultStatus: validated.status
+        resultStatus: validated.status,
+        ...toolAuditSummaryMetadata(validated.auditSummary)
       });
       return validated;
     } catch (error) {
@@ -181,4 +182,17 @@ export class InProcessToolExecution implements ToolExecution {
     );
     return decision;
   }
+}
+
+function toolAuditSummaryMetadata(
+  summary: ToolExecutionResult["auditSummary"] | undefined
+): JsonObject {
+  if (!summary) {
+    return {};
+  }
+  return {
+    auditAction: summary.action,
+    ...(summary.subject ? { auditSubject: summary.subject } : {}),
+    ...(summary.metadata ? { auditMetadata: summary.metadata } : {})
+  };
 }
