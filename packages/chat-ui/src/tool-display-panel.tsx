@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type KeyboardEvent,
@@ -18,6 +19,10 @@ const MIN_PANEL_WIDTH = 380;
 const MAX_PANEL_WIDTH = 840;
 const MIN_CHAT_WIDTH = 480;
 
+export interface ToolDisplayPanelAutoShowTracker {
+  shouldAutoShow(key: string): boolean;
+}
+
 export interface ToolDisplayPanelEntry {
   key: string;
   title: string;
@@ -30,19 +35,47 @@ interface ToolDisplayPanelContextValue {
   entry?: ToolDisplayPanelEntry;
   open: boolean;
   show(entry: ToolDisplayPanelEntry): void;
+  showOnce(entry: ToolDisplayPanelEntry): void;
   close(): void;
 }
 
 const ToolDisplayPanelContext = createContext<ToolDisplayPanelContextValue | undefined>(undefined);
 
+export function createToolDisplayPanelAutoShowTracker(): ToolDisplayPanelAutoShowTracker {
+  const shownEntryKeys = new Set<string>();
+
+  return {
+    shouldAutoShow(key) {
+      if (shownEntryKeys.has(key)) {
+        return false;
+      }
+      shownEntryKeys.add(key);
+      return true;
+    }
+  };
+}
+
 export function ToolDisplayPanelProvider({ children }: { children: ReactNode }) {
   const [entry, setEntry] = useState<ToolDisplayPanelEntry | undefined>();
   const [open, setOpen] = useState(false);
+  const autoShowTrackerRef = useRef<ToolDisplayPanelAutoShowTracker | undefined>(undefined);
+  if (!autoShowTrackerRef.current) {
+    autoShowTrackerRef.current = createToolDisplayPanelAutoShowTracker();
+  }
+  const autoShowTracker = autoShowTrackerRef.current;
 
   const show = useCallback((nextEntry: ToolDisplayPanelEntry) => {
     setEntry(nextEntry);
     setOpen(true);
   }, []);
+
+  const showOnce = useCallback((nextEntry: ToolDisplayPanelEntry) => {
+    if (!autoShowTracker.shouldAutoShow(nextEntry.key)) {
+      return;
+    }
+    setEntry(nextEntry);
+    setOpen(true);
+  }, [autoShowTracker]);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -55,9 +88,10 @@ export function ToolDisplayPanelProvider({ children }: { children: ReactNode }) 
       entry,
       open,
       show,
+      showOnce,
       close
     }),
-    [close, entry, open, show]
+    [close, entry, open, show, showOnce]
   );
 
   return <ToolDisplayPanelContext.Provider value={value}>{children}</ToolDisplayPanelContext.Provider>;

@@ -236,6 +236,15 @@ function SidePanelToolCall({
   const title = displayPanelTitle(display, toolName);
   const panelActive = panel.open && panel.entry?.key === panelKey;
 
+  useEffect(() => {
+    panel.showOnce({
+      key: panelKey,
+      title,
+      subtitle: toolName,
+      node: displayNode
+    });
+  }, [displayNode, panel, panelKey, title, toolName]);
+
   return (
     <div
       className={cn(
@@ -289,6 +298,16 @@ function SidePanelDataPart({
   const panelKey = displayPanelKey(display, `data:${name}`);
   const title = displayPanelTitle(display, t("structuredOutput", { name }));
   const panelActive = panel.open && panel.entry?.key === panelKey;
+  const subtitle = t("structuredOutput", { name });
+
+  useEffect(() => {
+    panel.showOnce({
+      key: panelKey,
+      title,
+      subtitle,
+      node: displayNode
+    });
+  }, [displayNode, panel, panelKey, subtitle, title]);
 
   return (
     <div className="chat-tool-part my-2 max-w-3xl rounded-md border border-border/60 bg-card/40 text-xs">
@@ -298,7 +317,7 @@ function SidePanelDataPart({
           panel.show({
             key: panelKey,
             title,
-            subtitle: t("structuredOutput", { name }),
+            subtitle,
             node: displayNode
           })
         }
