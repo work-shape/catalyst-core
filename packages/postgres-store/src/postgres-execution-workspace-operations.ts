@@ -673,6 +673,21 @@ export async function markExecutionWorkspaceDeleted(
   const deletedAt = new Date(input.deletedAt);
   return db.transaction(async (tx) => {
     const summary = await collectExecutionWorkspaceDeletionSummary(tx, input);
+    await tx.execute(drizzleSql`
+      update workspace_commands
+      set status = 'cancelled',
+          cancellation_reason = coalesce(cancellation_reason, 'Conversation workspace was cleaned up'),
+          cancellation_requested_at = coalesce(cancellation_requested_at, ${input.deletedAt}::timestamptz),
+          lease_owner = null,
+          lease_token = null,
+          lease_expires_at = null,
+          heartbeat_at = null,
+          completed_at = ${input.deletedAt}::timestamptz,
+          updated_at = ${input.deletedAt}::timestamptz
+      where client_instance_id = ${input.clientInstanceId}
+        and conversation_id = ${input.conversationId}
+        and status = 'queued'
+    `);
     await tx
       .delete(executionWorkspaceFiles)
       .where(
@@ -681,14 +696,13 @@ export async function markExecutionWorkspaceDeleted(
           eq(executionWorkspaceFiles.conversationId, input.conversationId)
         )
       );
-    await tx
-      .delete(workspaceCommands)
-      .where(
-        and(
-          eq(workspaceCommands.clientInstanceId, input.clientInstanceId),
-          eq(workspaceCommands.conversationId, input.conversationId)
-        )
-      );
+    await tx.execute(drizzleSql`
+      delete from workspace_commands
+      where client_instance_id = ${input.clientInstanceId}
+        and conversation_id = ${input.conversationId}
+        and status in ('completed', 'failed', 'cancelled')
+        and (completed_at is null or completed_at < ${input.deletedAt}::timestamptz)
+    `);
     await tx
       .update(executionWorkspaces)
       .set({

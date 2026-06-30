@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ConversationRetentionJob,
   ConversationRetentionWorkflow,
+  ExecutionWorkspaceCleanupWorkflow,
   type ChatAttachmentService,
   type ChatServerOptions
 } from "@vivd-catalyst/chat-server";
@@ -205,18 +206,104 @@ describe("conversation retention expiration", () => {
     await expectDeletedManagedObjects(store, byteStore, clientInstanceId, objects);
 
     const events = await store.listAuditEvents({ clientInstanceId, limit: 10 });
-    expect(events.find((event) => event.type === "conversation.retention_expiration_failed")).toMatchObject({
+    const failureAudit = events.find((event) => event.type === "conversation.retention_expiration_failed");
+    expect(failureAudit).toMatchObject({
       status: "failed",
       subject: conversation.id,
       metadata: expect.objectContaining({
         retainedUntil: conversation.retainedUntil,
-        errorCode: "INTERNAL"
+        errorCode: "INTERNAL",
+        errorCategory: "retention_expiration",
+        errorMessage: "Conversation retention expiration failed"
       })
     });
+    expect(JSON.stringify(failureAudit)).not.toContain(objects.artifact.objectKey);
     expect(events.find((event) => event.type === "conversation.retention_expired")).toMatchObject({
       status: "success",
       subject: conversation.id
     });
+  });
+
+  it("sanitizes workspace object keys in direct retention cleanup failure audit", async () => {
+    const clientInstanceId = asClientInstanceId("retention-workspace-failure-test");
+    const store = new InMemoryPlatformStore();
+    const byteStore = new RecordingByteStore();
+    const options = createRetentionOptions({
+      clientInstanceId,
+      store,
+      workspaceObjects: byteStore
+    });
+    const workflow = new ConversationRetentionWorkflow(options);
+    const conversation = await createExpiredConversation(store, clientInstanceId, "workspace-failure");
+    const workspaceObjects = await createWorkspaceObjects({
+      store,
+      byteStore,
+      clientInstanceId,
+      conversation
+    });
+    byteStore.failNextDeleteFor(workspaceObjects.objectKey);
+
+    await expect(workflow.expireDueConversations()).resolves.toEqual({
+      expiredCount: 0,
+      failedCount: 1
+    });
+    await expectConversationStatus(store, clientInstanceId, conversation.id, "active");
+
+    const events = await store.listAuditEvents({ clientInstanceId, limit: 10 });
+    const failureAudit = events.find((event) => event.type === "conversation.retention_expiration_failed");
+    expect(failureAudit).toMatchObject({
+      status: "failed",
+      subject: conversation.id,
+      metadata: expect.objectContaining({
+        errorCode: "INTERNAL",
+        errorCategory: "retention_expiration",
+        errorMessage: "Conversation retention expiration failed"
+      })
+    });
+    expect(JSON.stringify(failureAudit)).not.toContain(workspaceObjects.objectKey);
+  });
+
+  it("sanitizes workspace object keys in periodic workspace cleanup failure audit", async () => {
+    const clientInstanceId = asClientInstanceId("workspace-cleanup-failure-test");
+    const store = new InMemoryPlatformStore();
+    const byteStore = new RecordingByteStore();
+    const options = createRetentionOptions({
+      clientInstanceId,
+      store,
+      workspaceObjects: byteStore
+    });
+    const conversation = await createExpiredConversation(store, clientInstanceId, "cleanup-failure");
+    const workspaceObjects = await createWorkspaceObjects({
+      store,
+      byteStore,
+      clientInstanceId,
+      conversation
+    });
+    await store.deleteConversation({
+      clientInstanceId,
+      conversationId: conversation.id,
+      deletedAt: "2024-01-02T00:00:00.000Z"
+    });
+    byteStore.failNextDeleteFor(workspaceObjects.objectKey);
+
+    const workflow = new ExecutionWorkspaceCleanupWorkflow(options);
+    await expect(workflow.cleanupDeletedConversationWorkspaces()).resolves.toEqual({
+      cleanedCount: 0,
+      failedCount: 1
+    });
+
+    const events = await store.listAuditEvents({ clientInstanceId, limit: 10 });
+    const cleanupAudit = events.find((event) => event.type === "execution_workspace.cleanup_failed");
+    expect(cleanupAudit).toMatchObject({
+      status: "failed",
+      subject: conversation.id,
+      metadata: expect.objectContaining({
+        errorCode: "INTERNAL",
+        errorCategory: "workspace_cleanup",
+        errorMessage: "Execution workspace cleanup failed"
+      })
+    });
+    expect(JSON.stringify(cleanupAudit)).not.toContain(workspaceObjects.objectKey);
   });
 });
 

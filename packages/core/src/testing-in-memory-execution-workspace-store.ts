@@ -539,7 +539,28 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
         command.clientInstanceId === input.clientInstanceId &&
         command.conversationId === input.conversationId
       ) {
-        this.workspaceCommands.delete(commandId);
+        if (command.status === "queued") {
+          this.workspaceCommands.set(commandId, {
+            ...command,
+            status: "cancelled",
+            cancellationReason:
+              command.cancellationReason ?? "Conversation workspace was cleaned up",
+            cancellationRequestedAt: command.cancellationRequestedAt ?? input.deletedAt,
+            leaseOwner: undefined,
+            leaseToken: undefined,
+            leaseExpiresAt: undefined,
+            heartbeatAt: undefined,
+            completedAt: input.deletedAt,
+            updatedAt: input.deletedAt
+          });
+          continue;
+        }
+        if (
+          isTerminalWorkspaceCommand(command) &&
+          (command.completedAt === undefined || command.completedAt < input.deletedAt)
+        ) {
+          this.workspaceCommands.delete(commandId);
+        }
       }
     }
     return summary;

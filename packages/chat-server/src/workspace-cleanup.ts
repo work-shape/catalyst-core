@@ -1,5 +1,6 @@
 import {
   createPlatformId,
+  isAppError,
   type ConversationId,
   type ExecutionWorkspaceCleanupStore,
   type ExecutionWorkspaceDeletionSummary,
@@ -199,21 +200,14 @@ async function recordWorkspaceCleanupFailure(
     status: "failed",
     subject: conversationId,
     correlationId: createPlatformId("corr"),
-    metadata: {
-      ...toAuditErrorMetadata(error)
-    }
+    metadata: workspaceCleanupFailureAuditMetadata(error)
   });
 }
 
-function toAuditErrorMetadata(error: unknown): JsonObject {
-  if (error instanceof Error) {
-    return {
-      errorCode: "INTERNAL",
-      errorMessage: error.message
-    };
-  }
+export function workspaceCleanupFailureAuditMetadata(error: unknown): JsonObject {
   return {
-    errorCode: "INTERNAL",
+    errorCode: isAppError(error) ? error.code : "INTERNAL",
+    errorCategory: "workspace_cleanup",
     errorMessage: "Execution workspace cleanup failed"
   };
 }

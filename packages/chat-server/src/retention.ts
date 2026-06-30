@@ -215,20 +215,9 @@ function createRetentionAuditMetadata(
 }
 
 function toAuditErrorMetadata(error: unknown): JsonObject {
-  if (isAppError(error)) {
-    return {
-      errorCode: error.code,
-      errorMessage: error.message
-    };
-  }
-  if (error instanceof Error) {
-    return {
-      errorCode: "INTERNAL",
-      errorMessage: error.message
-    };
-  }
   return {
-    errorCode: "INTERNAL",
+    errorCode: isAppError(error) ? error.code : "INTERNAL",
+    errorCategory: "retention_expiration",
     errorMessage: "Conversation retention expiration failed"
   };
 }
