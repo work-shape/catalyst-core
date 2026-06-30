@@ -4,6 +4,8 @@ export * from "./built-in-tools";
 export * from "./skill-catalog";
 export * from "./read-skill-tool";
 export * from "./workspace-tools";
+export * from "./workspace-tool-schemas";
+export { shapeWorkspaceCommandOutput, type WorkspaceRawCommandOutput } from "./workspace-tool-results";
 export * from "./workspace-paths";
 export * from "./workspace-file-bytes";
 export * from "./workspace-command-executor";
