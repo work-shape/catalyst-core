@@ -306,6 +306,74 @@ describe("workspace tools", () => {
     expect(command?.status).toBe("cancelled");
   });
 
+  it("returns terminal output when command completion races wait-expiry cancellation", async () => {
+    const leaseToken = "race-lease";
+    const harness = await createWorkspaceHarness({
+      execResultWaitMs: 1,
+      execResultPollIntervalMs: 1,
+      serviceStore(store) {
+        return new Proxy(store, {
+          get(target, property, receiver) {
+            if (property === "requestWorkspaceCommandCancellation") {
+              return async (input: Parameters<typeof store.requestWorkspaceCommandCancellation>[0]) => {
+                const claimed = await store.claimNextWorkspaceCommand({
+                  clientInstanceId: input.clientInstanceId,
+                  workerId: "race-worker",
+                  leaseToken,
+                  now: "2026-06-29T12:00:01.000Z",
+                  leaseExpiresAt: "2026-06-29T12:05:01.000Z"
+                });
+                expect(claimed?.id).toBe(input.commandId);
+                if (!claimed) {
+                  throw new Error("Expected queued command to be claimable");
+                }
+                await store.completeWorkspaceCommand({
+                  clientInstanceId: input.clientInstanceId,
+                  commandId: input.commandId,
+                  leaseToken,
+                  output: shapeWorkspaceCommandOutput(
+                    {
+                      exitCode: 0,
+                      stdout: "finished before cancellation",
+                      stderr: "",
+                      durationMs: 17
+                    },
+                    claimed.limits
+                  ),
+                  completedAt: "2026-06-29T12:00:02.000Z"
+                });
+                return store.requestWorkspaceCommandCancellation(input);
+              };
+            }
+            const value = Reflect.get(target, property, receiver);
+            return typeof value === "function" ? value.bind(target) : value;
+          }
+        });
+      }
+    });
+
+    const result = await harness.runTool("workspace.exec", {
+      command: "printf 'finished before cancellation'"
+    });
+
+    expect(result.status).toBe("success");
+    if (result.status !== "success") {
+      throw new Error("Expected exec to return the raced terminal command");
+    }
+    expect(result.output).toMatchObject({
+      status: "completed",
+      exitCode: 0,
+      stdoutPreview: "finished before cancellation",
+      stderrPreview: "",
+      durationMs: 17
+    });
+    const command = await harness.store.getWorkspaceCommand({
+      clientInstanceId: harness.clientInstanceId,
+      commandId: asWorkspaceCommandId(result.output.commandId)
+    });
+    expect(command?.status).toBe("completed");
+  });
+
   it("lists internal workspace files without exposing them as tool artifacts", async () => {
     const harness = await createWorkspaceHarness();
     await harness.putWorkspaceFile({
@@ -603,6 +671,9 @@ async function createWorkspaceHarness(input: {
   execResultWaitMs?: ConstructorParameters<typeof WorkspaceCommandService>[0]["execResultWaitMs"];
   execResultPollIntervalMs?: ConstructorParameters<typeof WorkspaceCommandService>[0]["execResultPollIntervalMs"];
   limits?: ConstructorParameters<typeof WorkspaceCommandService>[0]["limits"];
+  serviceStore?: (
+    store: InMemoryPlatformStore
+  ) => ConstructorParameters<typeof WorkspaceCommandService>[0]["store"];
   telemetry?: WorkspaceCommandTelemetry;
   withAuditRecorder?: boolean;
   sourceFiles?: Record<
@@ -629,7 +700,7 @@ async function createWorkspaceHarness(input: {
     ? new StoreBackedAuditRecorder({ clientInstanceId, store })
     : undefined;
   const service = new WorkspaceCommandService({
-    store,
+    store: input.serviceStore?.(store) ?? store,
     objectStore,
     ...(input.sourceFiles
       ? {
