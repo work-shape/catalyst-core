@@ -11,31 +11,35 @@ export function validateWorkspaceShellCommand(command: string): ValidationResult
     .filter((line) => line.length > 0 && !line.startsWith("#"));
   const firstLine = significantLines[0];
   if (firstLine && /^set(?:\s|$)/u.test(firstLine)) {
-    const shellSetup = validateShellSetupLine(firstLine, significantLines.length);
+    const firstCommand = splitShellCommandSegments(firstLine)?.[0];
+    const shellSetup = validateShellSetupLine(
+      firstCommand?.segment ?? firstLine,
+      significantLines.length > 1 || Boolean(firstCommand?.hasFollowingSegment)
+    );
     if (shellSetup.status === "failed") {
       return shellSetup;
     }
   }
   for (const line of significantLines) {
-    const fileCommand = validateFileDisplayCommandLine(line);
-    if (fileCommand.status === "failed") {
-      return fileCommand;
+    const segments = splitShellCommandSegments(line) ?? [{ segment: line, hasFollowingSegment: false }];
+    for (const segment of segments) {
+      const fileCommand = validateFileDisplayCommandLine(segment.segment);
+      if (fileCommand.status === "failed") {
+        return fileCommand;
+      }
     }
   }
   return { status: "success", value: undefined };
 }
 
-function validateShellSetupLine(firstLine: string, significantLineCount: number): ValidationResult<void> {
-  if (/[;&|]/u.test(firstLine)) {
-    return { status: "success", value: undefined };
-  }
-  const tokens = splitShellWords(firstLine);
+function validateShellSetupLine(firstSegment: string, hasFollowingCommand: boolean): ValidationResult<void> {
+  const tokens = splitShellWords(firstSegment);
   if (!tokens || tokens[0] !== "set") {
     return { status: "success", value: undefined };
   }
   const setArguments = tokens.slice(1);
   const hasCommandLikeSetArgument = setArguments.some((argument) => !argument.startsWith("-") && !argument.startsWith("+"));
-  if (tokens.length === 1 || significantLineCount === 1 || hasCommandLikeSetArgument) {
+  if (tokens.length === 1 || !hasFollowingCommand || hasCommandLikeSetArgument) {
     return validationFailed(
       "workspace.exec received shell setup without a command. Run helpers directly, or put set -e on its own line before the command.",
       {
@@ -45,6 +49,55 @@ function validateShellSetupLine(firstLine: string, significantLineCount: number)
     );
   }
   return { status: "success", value: undefined };
+}
+
+function splitShellCommandSegments(line: string): Array<{ segment: string; hasFollowingSegment: boolean }> | undefined {
+  const rawSegments: string[] = [];
+  let current = "";
+  let quote: "'" | "\"" | undefined;
+  let escaped = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index] ?? "";
+    if (escaped) {
+      current += character;
+      escaped = false;
+      continue;
+    }
+    if (character === "\\" && quote !== "'") {
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) {
+        quote = undefined;
+      } else {
+        current += character;
+      }
+      continue;
+    }
+    if (character === "'" || character === "\"") {
+      quote = character;
+      continue;
+    }
+    if (character === ";" || character === "|" || (character === "&" && line[index - 1] !== ">")) {
+      rawSegments.push(current.trim());
+      current = "";
+      if ((character === "&" || character === "|") && line[index + 1] === character) {
+        index += 1;
+      }
+      continue;
+    }
+    current += character;
+  }
+  if (quote || escaped) {
+    return undefined;
+  }
+  rawSegments.push(current.trim());
+  const segments = rawSegments.filter((segment) => segment.length > 0);
+  return segments.map((segment, index) => ({
+    segment,
+    hasFollowingSegment: index < segments.length - 1
+  }));
 }
 
 function validateFileDisplayCommandLine(line: string): ValidationResult<void> {

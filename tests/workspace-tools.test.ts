@@ -99,6 +99,18 @@ describe("workspace tools", () => {
     );
     await expectToolFailure(
       "workspace.exec",
+      { command: "set -e pptx_render deck.pptx --out previews/slides && ls -lh deck.pptx" },
+      "validation_failed",
+      /set -e on its own line/u
+    );
+    await expectToolFailure(
+      "workspace.exec",
+      { command: "set -e pptx_inspect deck.pptx --view summary; ls -lh deck.pptx" },
+      "validation_failed",
+      /set -e on its own line/u
+    );
+    await expectToolFailure(
+      "workspace.exec",
       { command: "cat -lh file.pptx" },
       "validation_failed",
       /Run the artifact helper directly/u
@@ -163,6 +175,18 @@ describe("workspace tools", () => {
       command: "pptx_render deck.pptx --out previews/slides"
     });
     expect(directHelper.status).toBe("success");
+
+    const simpleCatHarness = await createWorkspaceHarness();
+    const simpleCat = await simpleCatHarness.runTool("workspace.exec", {
+      command: "cat notes.txt"
+    });
+    expect(simpleCat.status).toBe("success");
+
+    const simpleLsHarness = await createWorkspaceHarness();
+    const simpleLs = await simpleLsHarness.runTool("workspace.exec", {
+      command: "ls -lh deck.pptx"
+    });
+    expect(simpleLs.status).toBe("success");
   });
 
   it("enforces agent allowlists through in-process tool execution", async () => {
