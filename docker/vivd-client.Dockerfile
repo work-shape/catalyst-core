@@ -66,5 +66,8 @@ ENV UI_PACKAGE=${UI_PACKAGE}
 ENV UI_DEV_PORT=${UI_DEV_PORT}
 ENV NODE_ENV=development
 
+RUN pnpm --filter @vivd-catalyst/core build \
+  && pnpm --filter @vivd-catalyst/config-schema build
+
 EXPOSE 5173
 CMD ["sh", "-c", "pnpm --filter \"${UI_PACKAGE}\" exec vite --host 0.0.0.0 --port ${UI_DEV_PORT}"]
