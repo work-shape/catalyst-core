@@ -624,12 +624,26 @@ export class WorkspaceCommandService {
       }
     }
 
-    const cancelled = await this.store.requestWorkspaceCommandCancellation({
-      clientInstanceId: command.clientInstanceId,
-      commandId: command.id,
-      reason: "Workspace command did not complete before the tool wait limit",
-      requestedAt: this.now()
-    });
+    let cancelled: WorkspaceCommand;
+    try {
+      cancelled = await this.store.requestWorkspaceCommandCancellation({
+        clientInstanceId: command.clientInstanceId,
+        commandId: command.id,
+        reason: "Workspace command did not complete before the tool wait limit",
+        requestedAt: this.now()
+      });
+    } catch (error) {
+      if (isAppError(error) && error.code === "CONFLICT") {
+        const latest = await this.store.getWorkspaceCommand({
+          clientInstanceId: command.clientInstanceId,
+          commandId: command.id
+        });
+        if (latest && isTerminalWorkspaceCommand(latest)) {
+          return { status: "success", value: latest };
+        }
+      }
+      throw error;
+    }
     return failedValidationResult("Workspace command did not complete before the tool wait limit", {
       commandId: command.id,
       status: cancelled.status,
