@@ -8,7 +8,8 @@ import {
 import { toUiMessages } from "../packages/chat-ui/src/assistant-ui-adapter";
 import {
   readToolActionLabel,
-  readToolDetailSections
+  readToolDetailSections,
+  readToolDisplayProjection
 } from "../packages/chat-ui/src/tool-call";
 import {
   WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE,
@@ -975,6 +976,50 @@ describe("chat UI message history projection", () => {
       { label: "Input", value: JSON.stringify({ text: "hello" }, null, 2) },
       { label: "Output", value: JSON.stringify({ status: "success", output: "hello back" }, null, 2) }
     ]);
+  });
+
+  it("projects user-facing tool titles and call subjects", () => {
+    expect(readToolDisplayProjection({
+      args: { name: "pdf" },
+      locale: "en",
+      result: {
+        status: "success",
+        output: {
+          name: "pdf",
+          title: "PDF",
+          description: "Render and inspect PDF artifacts.",
+          content: "# PDF",
+          sourceVersion: "sha256:test"
+        }
+      },
+      toolName: "read_skill"
+    })).toEqual({
+      actionLabel: "PDF",
+      technicalName: "read_skill",
+      title: "Read instructions"
+    });
+
+    expect(readToolDisplayProjection({
+      args: { name: "pdf" },
+      locale: "de",
+      result: undefined,
+      toolName: "read_skill"
+    })).toMatchObject({
+      actionLabel: "PDF",
+      technicalName: "read_skill",
+      title: "Anleitung lesen"
+    });
+
+    expect(readToolDisplayProjection({
+      args: {},
+      locale: "en",
+      result: undefined,
+      toolName: "demo.workflow_summary"
+    })).toEqual({
+      actionLabel: undefined,
+      technicalName: "demo.workflow_summary",
+      title: "Workflow Summary"
+    });
   });
 
   it("replays persisted tool failures as dynamic tool errors", () => {

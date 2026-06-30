@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
+import type { LocaleCode } from "@vivd-catalyst/api-client";
 import {
   isToolDisplayPayload,
   readToolDisplayPayloadFromToolResult,
@@ -88,6 +89,7 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
   const hasDisplay = hasRenderedNode(renderedDisplay) || hasRenderedNode(builtInDisplay);
   const displayMode = readDisplayMode(display);
   const workspaceProjection = projectWorkspaceToolDisplay({ args, result, toolName });
+  const toolDisplay = readToolDisplayProjection({ args, result, toolName, locale });
   const detailSections = workspaceProjection?.sections ?? toolDetailSections({
     args,
     argsText,
@@ -99,7 +101,7 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
   const surfacedArtifacts = readSurfacedToolArtifactRefs(result, toolName);
   const summary = workspaceProjection?.summary ?? getToolSummary(result, t);
   const statusLabel = toolStatusLabel(state, t);
-  const actionLabel = workspaceProjection?.actionLabel;
+  const actionLabel = workspaceProjection?.actionLabel ?? toolDisplay.actionLabel;
 
   if (hasDisplay) {
     if (displayMode === "side_panel" && displayPanel.available) {
@@ -113,7 +115,7 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
           statusLabel={statusLabel}
           artifacts={surfacedArtifacts}
           toolCallId={toolCallId}
-          toolName={toolName}
+          toolTitle={toolDisplay.title}
         />
       );
     }
@@ -128,7 +130,7 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
         artifacts={artifacts}
         surfacedArtifacts={surfacedArtifacts}
         toolCallId={toolCallId}
-        toolName={toolName}
+        toolTitle={toolDisplay.title}
       />
     );
   }
@@ -145,7 +147,7 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
         data-testid="tool-call-card"
       >
         <ToolStatusIcon state={state} />
-        <span className="truncate font-medium text-foreground">{toolName}</span>
+        <span className="truncate font-medium text-foreground">{toolDisplay.title}</span>
         {actionLabel ? <span className="min-w-0 truncate">{actionLabel}</span> : null}
         <span className="shrink-0">{statusLabel}</span>
         <span className="sr-only">{toolCallId}</span>
@@ -154,16 +156,16 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
   }
 
   return (
-      <CompactToolCall
+    <CompactToolCall
       actionLabel={actionLabel}
       detailSections={detailSections}
       state={state}
       statusLabel={statusLabel}
-        summary={summary}
-        artifacts={artifacts}
-        surfacedArtifacts={surfacedArtifacts}
+      summary={summary}
+      artifacts={artifacts}
+      surfacedArtifacts={surfacedArtifacts}
       toolCallId={toolCallId}
-      toolName={toolName}
+      toolTitle={toolDisplay.title}
     />
   );
 }
@@ -226,7 +228,7 @@ function SidePanelToolCall({
   statusLabel,
   artifacts,
   toolCallId,
-  toolName
+  toolTitle
 }: {
   actionLabel?: string;
   detailSections: ToolDetailSection[];
@@ -236,22 +238,23 @@ function SidePanelToolCall({
   statusLabel: string;
   artifacts: ToolArtifactDownloadRef[];
   toolCallId: string;
-  toolName: string;
+  toolTitle: string;
 }) {
   const { t } = useTranslation();
   const panel = useToolDisplayPanel();
   const panelKey = displayPanelKey(display, toolCallId);
-  const title = displayPanelTitle(display, toolName);
+  const title = displayPanelTitle(display, toolTitle);
   const panelActive = panel.open && panel.entry?.key === panelKey;
+  const subtitle = actionLabel ? `${toolTitle}: ${actionLabel}` : toolTitle;
 
   useEffect(() => {
     panel.showOnce({
       key: panelKey,
       title,
-      subtitle: toolName,
+      subtitle,
       node: displayNode
     });
-  }, [displayNode, panel, panelKey, title, toolName]);
+  }, [displayNode, panel, panelKey, subtitle, title]);
 
   return (
     <div
@@ -267,14 +270,14 @@ function SidePanelToolCall({
           panel.show({
             key: panelKey,
             title,
-            subtitle: toolName,
+            subtitle,
             node: displayNode
           })
         }
         className="flex w-full min-w-0 items-center gap-2 px-2.5 py-2 text-left text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
       >
         <ToolStatusIcon state={state} />
-        <span className="truncate font-medium text-foreground">{toolName}</span>
+        <span className="truncate font-medium text-foreground">{toolTitle}</span>
         {actionLabel ? <span className="min-w-0 truncate">{actionLabel}</span> : null}
         <span className="shrink-0">{statusLabel}</span>
         <span className="ml-auto shrink-0 rounded-md bg-muted px-2 py-1">
@@ -350,7 +353,7 @@ function DisplayToolCall({
   artifacts,
   surfacedArtifacts,
   toolCallId,
-  toolName
+  toolTitle
 }: {
   actionLabel?: string;
   detailSections: ToolDetailSection[];
@@ -360,7 +363,7 @@ function DisplayToolCall({
   artifacts: ToolArtifactDownloadRef[];
   surfacedArtifacts: ToolArtifactDownloadRef[];
   toolCallId: string;
-  toolName: string;
+  toolTitle: string;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(true);
@@ -384,7 +387,7 @@ function DisplayToolCall({
           className="flex w-full min-w-0 items-center gap-2 border-b px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
         >
           <ToolStatusIcon state={state} />
-          <span className="truncate font-medium text-foreground">{toolName}</span>
+          <span className="truncate font-medium text-foreground">{toolTitle}</span>
           {actionLabel ? <span className="min-w-0 truncate">{actionLabel}</span> : null}
           <span className="shrink-0">{statusLabel}</span>
           <ChevronRight
@@ -506,7 +509,127 @@ export function readToolActionLabel(input: {
   result: unknown;
   toolName: string;
 }): string | undefined {
-  return projectWorkspaceToolDisplay(input)?.actionLabel;
+  return projectWorkspaceToolDisplay(input)?.actionLabel ?? readToolSubjectLabel(input);
+}
+
+export function readToolDisplayProjection(input: {
+  args: unknown;
+  result: unknown;
+  toolName: string;
+  locale: LocaleCode;
+}): {
+  actionLabel?: string;
+  technicalName: string;
+  title: string;
+} {
+  return {
+    actionLabel: readToolActionLabel(input),
+    technicalName: input.toolName,
+    title: readTranslatedToolTitle(input.toolName, input.locale) ?? humanizeToolName(input.toolName)
+  };
+}
+
+const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
+  en: {
+    read_skill: "Read instructions",
+    show_view: "Show view",
+    "workspace.exec": "Run command",
+    "workspace.list_files": "List files",
+    "workspace.import_files": "Import files",
+    "workspace.read_file": "Read file",
+    "workspace.promote_artifact": "Prepare download"
+  },
+  de: {
+    read_skill: "Anleitung lesen",
+    show_view: "Ansicht anzeigen",
+    "workspace.exec": "Befehl starten",
+    "workspace.list_files": "Dateien auflisten",
+    "workspace.import_files": "Dateien importieren",
+    "workspace.read_file": "Datei lesen",
+    "workspace.promote_artifact": "Download vorbereiten"
+  }
+};
+
+const TOOL_NAME_ACRONYMS = new Set([
+  "api",
+  "csv",
+  "docx",
+  "html",
+  "id",
+  "json",
+  "ocr",
+  "pdf",
+  "pptx",
+  "sql",
+  "ui",
+  "url",
+  "xlsx"
+]);
+
+function readTranslatedToolTitle(toolName: string, locale: LocaleCode): string | undefined {
+  return TOOL_TITLES_BY_LOCALE[locale][toolName] ?? TOOL_TITLES_BY_LOCALE.en[toolName];
+}
+
+function readToolSubjectLabel(input: {
+  args: unknown;
+  result: unknown;
+  toolName: string;
+}): string | undefined {
+  if (input.toolName === "read_skill") {
+    return readSkillSubjectLabel(input.args, input.result);
+  }
+  if (input.toolName === "show_view") {
+    const displayTitle = readDisplayProvidedTitle(readToolDisplayPayloadFromToolResult(input.result));
+    return displayTitle ?? readRecordString(input.args, "title");
+  }
+  return undefined;
+}
+
+function readSkillSubjectLabel(args: unknown, result: unknown): string | undefined {
+  const output = isRecord(result) && isRecord(result.output) ? result.output : undefined;
+  const skillName = readRecordString(args, "name");
+  return readRecordString(output, "title") ?? (skillName ? humanizeToolName(skillName) : undefined);
+}
+
+function readDisplayProvidedTitle(
+  display: { title?: unknown; data?: unknown } | undefined
+): string | undefined {
+  const title = readTrimmedString(display?.title);
+  if (title) {
+    return title;
+  }
+  return isRecord(display?.data) ? readRecordString(display.data, "title") : undefined;
+}
+
+function readRecordString(value: unknown, key: string): string | undefined {
+  return isRecord(value) ? readTrimmedString(value[key]) : undefined;
+}
+
+function readTrimmedString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function humanizeToolName(toolName: string): string {
+  const source = toolName.trim();
+  if (!source) {
+    return "Tool";
+  }
+  const lastSegment = source.split(".").filter(Boolean).at(-1) ?? source;
+  const normalized = lastSegment
+    .replace(/([a-z0-9])([A-Z])/gu, "$1 $2")
+    .replace(/[_-]+/gu, " ")
+    .trim();
+  if (!normalized) {
+    return source;
+  }
+  return normalized
+    .split(/\s+/u)
+    .map((word) =>
+      TOOL_NAME_ACRONYMS.has(word.toLowerCase())
+        ? word.toUpperCase()
+        : `${word.slice(0, 1).toUpperCase()}${word.slice(1)}`
+    )
+    .join(" ");
 }
 
 function isWorkspaceToolName(toolName: string): boolean {
@@ -552,7 +675,7 @@ function CompactToolCall({
   artifacts,
   surfacedArtifacts,
   toolCallId,
-  toolName
+  toolTitle
 }: {
   actionLabel?: string;
   detailSections: ToolDetailSection[];
@@ -562,7 +685,7 @@ function CompactToolCall({
   artifacts: ToolArtifactDownloadRef[];
   surfacedArtifacts: ToolArtifactDownloadRef[];
   toolCallId: string;
-  toolName: string;
+  toolTitle: string;
 }) {
   const [open, setOpen] = useState(state === "failed");
 
@@ -581,7 +704,7 @@ function CompactToolCall({
         className="flex w-full min-w-0 items-center gap-2 px-2.5 py-2 text-left text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
       >
         <ToolStatusIcon state={state} />
-        <span className="truncate font-medium text-foreground">{toolName}</span>
+        <span className="truncate font-medium text-foreground">{toolTitle}</span>
         {actionLabel ? <span className="min-w-0 truncate">{actionLabel}</span> : null}
         <span className="shrink-0">{statusLabel}</span>
         <ChevronRight
