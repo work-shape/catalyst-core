@@ -64,6 +64,18 @@ describe("workspace tools", () => {
     );
     await expectToolFailure(
       "workspace.exec",
+      { command: "set -e -f" },
+      "validation_failed",
+      /shell setup without a command/u
+    );
+    await expectToolFailure(
+      "workspace.exec",
+      { command: "set -e pptx_inspect deck.pptx --view summary" },
+      "validation_failed",
+      /set -e on its own line/u
+    );
+    await expectToolFailure(
+      "workspace.exec",
       { command: "pwd", cwd: "../outside" },
       "validation_failed",
       /traverse/u
@@ -92,6 +104,12 @@ describe("workspace tools", () => {
       "validation_failed",
       /traverse/u
     );
+
+    const strictScript = await createWorkspaceHarness();
+    const strictQueued = await strictScript.runTool("workspace.exec", {
+      command: "set -e\npptx_inspect deck.pptx --view summary"
+    });
+    expect(strictQueued.status).toBe("success");
   });
 
   it("enforces agent allowlists through in-process tool execution", async () => {

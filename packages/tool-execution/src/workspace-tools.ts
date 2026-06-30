@@ -445,6 +445,10 @@ export class WorkspaceCommandService {
         maxCommandLength: this.limits.maxCommandLength
       });
     }
+    const commandUsage = validateWorkspaceShellCommand(command);
+    if (commandUsage.status === "failed") {
+      return commandUsage;
+    }
     const cwd = input.cwd ? normalizeWorkspaceDirectory(input.cwd, this.limits) : undefined;
     if (cwd?.status === "failed") {
       return cwd;
@@ -845,6 +849,33 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function validateWorkspaceShellCommand(command: string): ValidationResult<void> {
+  const significantLines = command
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("#"));
+  const firstLine = significantLines[0];
+  if (!firstLine || !/^set(?:\s|$)/u.test(firstLine)) {
+    return { status: "success", value: undefined };
+  }
+  if (/[;&|]/u.test(firstLine)) {
+    return { status: "success", value: undefined };
+  }
+  const tokens = firstLine.split(/\s+/u).filter(Boolean);
+  const setArguments = tokens.slice(1);
+  const hasCommandLikeSetArgument = setArguments.some((argument) => !argument.startsWith("-") && !argument.startsWith("+"));
+  if (tokens.length === 1 || significantLines.length === 1 || hasCommandLikeSetArgument) {
+    return validationFailed(
+      "workspace.exec received shell setup without a command. Run helpers directly, or put set -e on its own line before the command.",
+      {
+        example: "pptx_render deck.pptx --out previews/slides",
+        multilineExample: "set -e\npptx_render deck.pptx --out previews/slides"
+      }
+    );
+  }
+  return { status: "success", value: undefined };
+}
+
 export function createWorkspaceToolDefinitions(
   options: WorkspaceCommandServiceOptions | { service: WorkspaceCommandService }
 ): AnyToolDefinition[] {
@@ -855,7 +886,7 @@ export function createWorkspaceToolDefinitions(
     defineTool({
       name: "workspace.exec",
       description:
-        "Queue a bounded shell command for the conversation execution workspace. Files created by future runners stay internal until promoted.",
+        "Queue a bounded /bin/sh command for the conversation execution workspace. Pass a complete shell command or multiline script. Do not prefix a helper command with `set -e`; either run the helper directly or put `set -e` on its own line before later commands. Files created by future runners stay internal until promoted.",
       inputSchema: workspaceExecInputSchema,
       outputSchema: workspaceExecOutputSchema,
       inputJsonSchema: workspaceExecInputJsonSchema,

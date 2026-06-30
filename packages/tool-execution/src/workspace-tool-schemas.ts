@@ -180,7 +180,13 @@ export const workspaceExecInputJsonSchema: JsonObject = {
   additionalProperties: false,
   required: ["command"],
   properties: {
-    command: { type: "string", minLength: 1, maxLength: DEFAULT_LIMITS.maxCommandLength },
+    command: {
+      type: "string",
+      minLength: 1,
+      maxLength: DEFAULT_LIMITS.maxCommandLength,
+      description:
+        "Complete /bin/sh command or multiline script. Run helpers directly, e.g. `pptx_inspect deck.pptx --view summary`; do not write `set -e pptx_inspect ...`. If strict mode is needed, put `set -e` on its own line before the command."
+    },
     cwd: { type: "string", maxLength: DEFAULT_LIMITS.maxPathLength },
     timeoutSeconds: { type: "integer", minimum: 1, maximum: 300 },
     expectedOutputs: {
