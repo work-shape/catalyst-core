@@ -135,22 +135,15 @@ function ThreadWelcome({
   fallbackWelcomeMessage: string | undefined;
   initialPrompts: Array<{ title: string; prompt: string }>;
 }) {
-  const { t } = useTranslation();
-
   return (
     <div className="my-auto grid min-h-[20rem] content-center gap-5 py-8">
       <div className="grid gap-3">
         <span className="grid size-10 place-items-center rounded-lg border bg-card text-primary shadow-xs">
           <Bot size={20} aria-hidden="true" />
         </span>
-        <div className="grid gap-1">
-          <h2 className="text-xl font-semibold tracking-normal">
-            {agent?.welcomeMessage ?? fallbackWelcomeMessage ?? "How can I help?"}
-          </h2>
-          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-            {t("agentReady", { agent: agent?.displayName ?? t("agentFallback") })}
-          </p>
-        </div>
+        <h2 className="text-xl font-semibold tracking-normal">
+          {agent?.welcomeMessage ?? fallbackWelcomeMessage ?? "How can I help?"}
+        </h2>
       </div>
       {initialPrompts.length > 0 ? (
         <div className="grid gap-2 sm:grid-cols-3">
