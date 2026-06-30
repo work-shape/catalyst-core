@@ -118,6 +118,50 @@ describe("local workspace command runner", () => {
     expect(file.output?.contentPreview).toBe("partial");
   });
 
+  it("runs a multiline strict-mode helper script when set -e is on its own line", async () => {
+    const harness = await createRunnerHarness();
+
+    const result = await harness.exec({
+      command: [
+        "set -e",
+        "cat > pptx_render <<'SH'",
+        "#!/bin/sh",
+        "out=",
+        "while [ \"$#\" -gt 0 ]; do",
+        "  if [ \"$1\" = \"--out\" ]; then",
+        "    shift",
+        "    out=\"$1\"",
+        "  fi",
+        "  shift",
+        "done",
+        "mkdir -p \"$out\"",
+        "printf 'rendered\\n' > \"$out/slide-1.txt\"",
+        "SH",
+        "chmod +x pptx_render",
+        "PATH=\"$PWD:$PATH\" pptx_render deck.pptx --out previews/slides"
+      ].join("\n"),
+      expectedOutputs: [{ path: "previews/slides/slide-1.txt" }]
+    });
+
+    expect(result.status).toBe("success");
+    if (result.status !== "success") {
+      throw new Error("Expected helper script result");
+    }
+    expect(result.output).toMatchObject({
+      status: "completed",
+      exitCode: 0,
+      changedFiles: expect.arrayContaining([
+        expect.objectContaining({ path: "previews/slides/slide-1.txt" })
+      ])
+    });
+    const rendered = await harness.service.readFile({ path: "previews/slides/slide-1.txt" }, harness.context);
+    expect(rendered.status).toBe("success");
+    if (rendered.status !== "success") {
+      throw new Error("Expected rendered helper output to be readable");
+    }
+    expect(rendered.output?.contentPreview).toBe("rendered\n");
+  });
+
   it("rejects manifest path traversal and symlink escape attempts", async () => {
     const traversal = await createRunnerHarness({ useResultSource: false });
     const unsafeWorkspace = await traversal.workspace();

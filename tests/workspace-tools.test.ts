@@ -20,6 +20,7 @@ import {
   createWorkspaceToolDefinitions,
   LocalWorkspaceCommandRunner,
   shapeWorkspaceCommandOutput,
+  workspaceExecInputJsonSchema,
   WorkspaceCommandService,
   WorkspaceCommandWorker,
   type WorkspaceCommandTelemetry,
@@ -29,6 +30,22 @@ import {
 import { InProcessToolExecution, ToolRegistry } from "@vivd-catalyst/tool-execution";
 
 describe("workspace tools", () => {
+  it("describes safe shell command shape to the model", async () => {
+    const harness = await createWorkspaceHarness();
+    const execTool = harness.tools.find((tool) => tool.name === "workspace.exec");
+
+    expect(execTool?.description).toContain("put `set -e` on its own line");
+    expect(execTool?.description).toContain("`--view`, `--out`, or `--range`");
+    expect(execTool?.description).toContain("`cat` or `ls`");
+    expect(workspaceExecInputJsonSchema).toMatchObject({
+      properties: {
+        command: {
+          description: expect.stringContaining("Do not pass helper flags")
+        }
+      }
+    });
+  });
+
   it("validates command, cwd, timeout, expected outputs, and path traversal", async () => {
     const valid = await createWorkspaceHarness();
     const queued = await valid.runTool("workspace.exec", {
@@ -76,6 +93,36 @@ describe("workspace tools", () => {
     );
     await expectToolFailure(
       "workspace.exec",
+      { command: "set -e pptx_render deck.pptx --out previews/slides" },
+      "validation_failed",
+      /set -e on its own line/u
+    );
+    await expectToolFailure(
+      "workspace.exec",
+      { command: "cat -lh file.pptx" },
+      "validation_failed",
+      /Run the artifact helper directly/u
+    );
+    await expectToolFailure(
+      "workspace.exec",
+      { command: "cat --view summary deck.pptx" },
+      "validation_failed",
+      /Run the artifact helper directly/u
+    );
+    await expectToolFailure(
+      "workspace.exec",
+      { command: "ls --out previews/slides" },
+      "validation_failed",
+      /Run the artifact helper directly/u
+    );
+    await expectToolFailure(
+      "workspace.exec",
+      { command: "ls --range \"Summary!A1:H30\" source.xlsx" },
+      "validation_failed",
+      /Run the artifact helper directly/u
+    );
+    await expectToolFailure(
+      "workspace.exec",
       { command: "pwd", cwd: "../outside" },
       "validation_failed",
       /traverse/u
@@ -110,6 +157,12 @@ describe("workspace tools", () => {
       command: "set -e\npptx_inspect deck.pptx --view summary"
     });
     expect(strictQueued.status).toBe("success");
+
+    const directHelperHarness = await createWorkspaceHarness();
+    const directHelper = await directHelperHarness.runTool("workspace.exec", {
+      command: "pptx_render deck.pptx --out previews/slides"
+    });
+    expect(directHelper.status).toBe("success");
   });
 
   it("enforces agent allowlists through in-process tool execution", async () => {
@@ -762,6 +815,7 @@ async function createWorkspaceHarness(input: {
     store,
     conversation,
     objectStore,
+    tools,
     execution,
     context,
     createRequest(toolName: string, requestInput: unknown) {
