@@ -8,10 +8,13 @@ import {
 import { toUiMessages } from "../packages/chat-ui/src/assistant-ui-adapter";
 import {
   readToolActionLabel,
-  readToolArtifactRefs,
-  readToolDetailSections,
-  readSurfacedToolArtifactRefs
+  readToolDetailSections
 } from "../packages/chat-ui/src/tool-call";
+import {
+  WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE,
+  readSurfacedToolArtifactRefs,
+  readToolArtifactRefs
+} from "../packages/chat-ui/src/tool-artifacts";
 
 describe("chat UI message history projection", () => {
   it("replays persisted user document manifests as file attachments", () => {
@@ -437,6 +440,110 @@ describe("chat UI message history projection", () => {
     expect(serializedDetails).not.toContain("workspacePath");
   });
 
+  it("surfaces promoted workspace artifacts on the final assistant message", () => {
+    const messages: Message[] = [
+      {
+        id: "msg_tool_call",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "assistant",
+        text: "",
+        createdAt: "2026-06-15T00:00:01.000Z",
+        metadata: createAssistantToolCallsMetadata({
+          runId: "run_test",
+          toolCalls: [
+            {
+              toolCallId: "call_promote",
+              toolName: "workspace.promote_artifact",
+              input: {
+                path: "scratch/ducks.pptx",
+                filename: "ducks.pptx"
+              }
+            }
+          ]
+        })
+      },
+      {
+        id: "msg_tool_result",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "tool",
+        text: "{\"artifactId\":\"art_ducks\"}",
+        createdAt: "2026-06-15T00:00:02.000Z",
+        metadata: createToolResultMetadata({
+          runId: "run_test",
+          toolCall: {
+            toolCallId: "call_promote",
+            toolName: "workspace.promote_artifact",
+            input: {
+              path: "scratch/ducks.pptx",
+              filename: "ducks.pptx"
+            }
+          },
+          result: {
+            status: "success",
+            output: {
+              artifactId: "art_ducks",
+              filename: "ducks.pptx",
+              mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            },
+            artifacts: [
+              {
+                artifactId: "art_ducks",
+                kind: "presentation.pptx",
+                filename: "ducks.pptx",
+                mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                metadata: {
+                  source: "execution_workspace",
+                  workspacePath: "scratch/ducks.pptx"
+                }
+              }
+            ]
+          },
+          modelOutput: {
+            text: "{\"artifactId\":\"art_ducks\"}"
+          }
+        })
+      },
+      {
+        id: "msg_final",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "assistant",
+        text: "Done, I created ducks.pptx.",
+        createdAt: "2026-06-15T00:00:03.000Z",
+        metadata: createAssistantFinalMetadata({
+          runId: "run_test"
+        })
+      }
+    ];
+
+    const projected = toUiMessages(messages);
+
+    expect(projected[1]?.parts).toEqual([
+      {
+        type: "text",
+        text: "Done, I created ducks.pptx.",
+        state: "done"
+      },
+      {
+        type: WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE,
+        data: {
+          kind: "workspace.promoted_artifacts",
+          artifacts: [
+            {
+              artifactId: "art_ducks",
+              kind: "presentation.pptx",
+              filename: "ducks.pptx",
+              mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            }
+          ]
+        }
+      }
+    ]);
+    expect(JSON.stringify(projected[1]?.parts)).not.toContain("scratch/ducks.pptx");
+  });
+
   it("does not surface transient document render artifacts as top-level downloads", () => {
     const result = {
       status: "success",
@@ -470,6 +577,91 @@ describe("chat UI message history projection", () => {
       }
     ]);
     expect(readSurfacedToolArtifactRefs(result, "view_document_page")).toEqual([]);
+  });
+
+  it("does not surface transient document render artifacts on final assistant messages", () => {
+    const messages: Message[] = [
+      {
+        id: "msg_tool_call",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "assistant",
+        text: "",
+        createdAt: "2026-06-15T00:00:01.000Z",
+        metadata: createAssistantToolCallsMetadata({
+          runId: "run_test",
+          toolCalls: [
+            {
+              toolCallId: "call_page",
+              toolName: "view_document_page",
+              input: {
+                pageNumber: 1
+              }
+            }
+          ]
+        })
+      },
+      {
+        id: "msg_tool_result",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "tool",
+        text: "{\"pageNumber\":1}",
+        createdAt: "2026-06-15T00:00:02.000Z",
+        metadata: createToolResultMetadata({
+          runId: "run_test",
+          toolCall: {
+            toolCallId: "call_page",
+            toolName: "view_document_page",
+            input: {
+              pageNumber: 1
+            }
+          },
+          result: {
+            status: "success",
+            output: {
+              pageNumber: 1,
+              image: {
+                artifactId: "art_page",
+                mimeType: "image/png"
+              }
+            },
+            artifacts: [
+              {
+                artifactId: "art_page",
+                kind: "document.page_image",
+                filename: "document-page-1.png",
+                mimeType: "image/png"
+              }
+            ]
+          },
+          modelOutput: {
+            text: "{\"pageNumber\":1}"
+          }
+        })
+      },
+      {
+        id: "msg_final",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "assistant",
+        text: "The page looks correct.",
+        createdAt: "2026-06-15T00:00:03.000Z",
+        metadata: createAssistantFinalMetadata({
+          runId: "run_test"
+        })
+      }
+    ];
+
+    const projected = toUiMessages(messages);
+
+    expect(projected[1]?.parts).toEqual([
+      {
+        type: "text",
+        text: "The page looks correct.",
+        state: "done"
+      }
+    ]);
   });
 
   it("projects safe workspace exec helper details without raw command output", () => {

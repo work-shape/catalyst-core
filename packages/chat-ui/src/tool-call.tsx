@@ -18,6 +18,12 @@ import { useToolDisplayPanel } from "./tool-display-panel";
 import { useAttachmentContentContext } from "./attachment-content";
 import { cn } from "./ui/cn";
 import { Spinner } from "./ui/spinner";
+import {
+  isWorkspacePromotedArtifactsData,
+  readSurfacedToolArtifactRefs,
+  readToolArtifactRefs,
+  type ToolArtifactDownloadRef
+} from "./tool-artifacts";
 import { projectWorkspaceToolDisplay, type ToolDetailSection } from "./workspace-tool-display";
 
 const DISPLAY_HEIGHT_MESSAGE_TYPE = "vivd-catalyst:display-height";
@@ -61,13 +67,6 @@ const FRAME_HEIGHT_LIMITS = {
 interface DataPartProps {
   name: string;
   data: unknown;
-}
-
-export interface ToolArtifactDownloadRef {
-  artifactId: string;
-  kind?: string;
-  filename?: string;
-  mimeType?: string;
 }
 
 export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isError, status }: ToolCallMessagePartProps) {
@@ -175,6 +174,13 @@ export function DataPart({ name, data }: DataPartProps) {
   const { locale, t } = useTranslation();
   const displayPanel = useToolDisplayPanel();
   const displayWidget = useToolDisplayWidget();
+  if (isWorkspacePromotedArtifactsData(data)) {
+    return (
+      <div className="chat-tool-part my-3 max-w-3xl">
+        <ToolArtifactList artifacts={data.artifacts} variant="deliverable" />
+      </div>
+    );
+  }
   const renderedDisplay =
     isToolDisplayPayload(data) && displayWidget
       ? displayWidget({
@@ -606,10 +612,12 @@ function CompactToolCall({
 
 function ToolArtifactList({
   artifacts,
-  className
+  className,
+  variant = "compact"
 }: {
   artifacts: ToolArtifactDownloadRef[];
   className?: string;
+  variant?: "compact" | "deliverable";
 }) {
   const { t } = useTranslation();
   const attachmentContent = useAttachmentContentContext();
@@ -649,6 +657,7 @@ function ToolArtifactList({
       {artifacts.map((artifact) => {
         const filename = artifact.filename ?? artifact.artifactId;
         const downloading = downloadingArtifactId === artifact.artifactId;
+        const fileType = getArtifactFileType(artifact);
         return (
           <button
             key={artifact.artifactId}
@@ -657,14 +666,17 @@ function ToolArtifactList({
             title={downloadAvailable ? t("downloadArtifact", { filename }) : t("downloadUnavailable")}
             aria-label={downloadAvailable ? t("downloadArtifact", { filename }) : t("downloadUnavailable")}
             onClick={() => void downloadArtifact(artifact)}
-            className="flex min-h-10 w-full min-w-0 items-center gap-2 rounded-md border bg-background px-3 py-2 text-left text-sm text-foreground shadow-xs transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60"
+            className={cn(
+              "flex w-full min-w-0 items-center gap-3 rounded-md border bg-background text-left text-sm text-foreground shadow-xs transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60",
+              variant === "deliverable" ? "min-h-20 px-4 py-3" : "min-h-10 px-3 py-2"
+            )}
           >
-            <FileText size={16} className="shrink-0 text-muted-foreground" aria-hidden="true" />
+            <ArtifactFileIcon fileType={fileType} large={variant === "deliverable"} />
             <span className="min-w-0 flex-1 truncate">
-              <span className="block truncate font-medium">{filename}</span>
+              <span className={cn("block truncate font-medium", variant === "deliverable" && "text-base")}>{filename}</span>
               {artifact.mimeType || artifact.kind ? (
                 <span className="block truncate text-xs text-muted-foreground">
-                  {artifact.mimeType ?? artifact.kind}
+                  {fileType.label} · {artifact.kind ?? artifact.mimeType}
                 </span>
               ) : null}
             </span>
@@ -680,34 +692,60 @@ function ToolArtifactList({
   );
 }
 
-export function readToolArtifactRefs(result: unknown): ToolArtifactDownloadRef[] {
-  const container = isRecord(result) ? result : undefined;
-  const rawArtifacts = Array.isArray(container?.artifacts) ? container.artifacts : [];
-  return rawArtifacts.flatMap((artifact): ToolArtifactDownloadRef[] => {
-    if (!isRecord(artifact) || typeof artifact.artifactId !== "string") {
-      return [];
-    }
-    const ref: ToolArtifactDownloadRef = {
-      artifactId: artifact.artifactId
-    };
-    if (typeof artifact.kind === "string") {
-      ref.kind = artifact.kind;
-    }
-    if (typeof artifact.filename === "string") {
-      ref.filename = artifact.filename;
-    }
-    if (typeof artifact.mimeType === "string") {
-      ref.mimeType = artifact.mimeType;
-    }
-    return [ref];
-  });
+function ArtifactFileIcon({
+  fileType,
+  large
+}: {
+  fileType: ArtifactFileType;
+  large?: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "relative grid shrink-0 place-items-center rounded-md text-[10px] font-bold tracking-wide text-white shadow-xs",
+        large ? "h-12 w-12" : "h-8 w-8",
+        fileType.className
+      )}
+      aria-hidden="true"
+    >
+      <FileText size={large ? 24 : 18} className="absolute opacity-20" />
+      <span className="relative">{fileType.badge}</span>
+    </span>
+  );
 }
 
-export function readSurfacedToolArtifactRefs(result: unknown, toolName: string): ToolArtifactDownloadRef[] {
-  if (toolName === "workspace.promote_artifact" || toolName === "workspace.exec") {
-    return readToolArtifactRefs(result);
+interface ArtifactFileType {
+  badge: string;
+  label: string;
+  className: string;
+}
+
+function getArtifactFileType(artifact: ToolArtifactDownloadRef): ArtifactFileType {
+  const value = `${artifact.mimeType ?? ""} ${artifact.kind ?? ""} ${artifact.filename ?? ""}`.toLowerCase();
+  if (value.includes("presentation") || value.endsWith(".pptx") || value.endsWith(".ppt")) {
+    return { badge: "P", label: "PowerPoint", className: "bg-[#d24726]" };
   }
-  return [];
+  if (value.includes("spreadsheet") || value.includes("excel") || value.endsWith(".xlsx") || value.endsWith(".xls")) {
+    return { badge: "X", label: "Excel", className: "bg-[#217346]" };
+  }
+  if (value.includes("pdf") || value.endsWith(".pdf")) {
+    return { badge: "PDF", label: "PDF", className: "bg-[#b30b00]" };
+  }
+  if (
+    value.includes("word") ||
+    value.includes("wordprocessingml") ||
+    value.endsWith(".docx") ||
+    value.endsWith(".doc")
+  ) {
+    return { badge: "W", label: "Word", className: "bg-[#2b579a]" };
+  }
+  if (value.includes("image") || /\.(png|jpe?g|webp|gif)$/u.test(value)) {
+    return { badge: "IMG", label: "Image", className: "bg-[#7c3aed]" };
+  }
+  if (value.includes("csv") || value.endsWith(".csv")) {
+    return { badge: "CSV", label: "CSV", className: "bg-[#0f766e]" };
+  }
+  return { badge: "FILE", label: "File", className: "bg-muted-foreground" };
 }
 
 function ToolDetailDisclosure({

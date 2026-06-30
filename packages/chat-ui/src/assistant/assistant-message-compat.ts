@@ -22,11 +22,13 @@ export type PersistedToolResult =
   | {
       status: "success";
       toolCallId: string;
+      toolName: string;
       output: unknown;
     }
   | {
       status: "failed";
       toolCallId: string;
+      toolName: string;
       errorText: string;
       output?: unknown;
     };
@@ -36,6 +38,16 @@ export function readCompatibleMessageRunId(
 ): string | undefined {
   const runtime = readAgentRuntimeMessageMetadata(message.metadata);
   return runtime && "runId" in runtime ? runtime.runId : undefined;
+}
+
+export function readCompatibleAssistantFinalRunId(
+  message: Pick<Message, "metadata" | "role">
+): string | undefined {
+  if (message.role !== "assistant") {
+    return undefined;
+  }
+  const runtime = readAgentRuntimeMessageMetadata(message.metadata);
+  return runtime?.kind === "assistant_final" ? runtime.runId : undefined;
 }
 
 export function readCompatibleUserAttachmentRefs(
@@ -77,6 +89,7 @@ export function readCompatiblePersistedToolResult(
     return {
       status: "success",
       toolCallId: runtime.toolCallId,
+      toolName: runtime.toolName,
       output: {
         status: "success",
         output: result.output,
@@ -93,6 +106,7 @@ export function readCompatiblePersistedToolResult(
     return {
       status: "failed",
       toolCallId: runtime.toolCallId,
+      toolName: runtime.toolName,
       errorText: typeof result.error.message === "string" ? result.error.message : "Tool call failed",
       output: {
         status: result.status,

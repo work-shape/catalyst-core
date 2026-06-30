@@ -5,12 +5,20 @@ import type {
   Message
 } from "@vivd-catalyst/api-client";
 import {
+  readCompatibleAssistantFinalRunId,
   readCompatibleAssistantToolCalls,
   readCompatibleMessageRunId,
   readCompatiblePersistedToolResult,
   readCompatibleUserAttachmentRefs,
   type PersistedToolResult
 } from "./assistant/assistant-message-compat";
+import {
+  WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE,
+  createWorkspacePromotedArtifactsData,
+  dedupeToolArtifactRefs,
+  readSurfacedToolArtifactRefs,
+  type ToolArtifactDownloadRef
+} from "./tool-artifacts";
 
 export interface AssistantUiActiveRun {
   run: {
@@ -88,10 +96,19 @@ export function toAttachmentFilePart(
 
 function toPersistedUiMessages(messages: Message[]): UIMessage[] {
   const toolResultsByToolCallId = new Map<string, PersistedToolResult>();
+  const surfacedArtifactsByRunId = new Map<string, ToolArtifactDownloadRef[]>();
   for (const message of messages) {
     const toolResult = readCompatiblePersistedToolResult(message);
     if (toolResult) {
       toolResultsByToolCallId.set(toolResult.toolCallId, toolResult);
+      const runId = readCompatibleMessageRunId(message);
+      const artifacts = readSurfacedToolArtifactRefs(toolResult.output, toolResult.toolName);
+      if (runId && artifacts.length > 0) {
+        surfacedArtifactsByRunId.set(
+          runId,
+          dedupeToolArtifactRefs([...(surfacedArtifactsByRunId.get(runId) ?? []), ...artifacts])
+        );
+      }
     }
   }
 
@@ -100,7 +117,7 @@ function toPersistedUiMessages(messages: Message[]): UIMessage[] {
     .map((message) => ({
       id: message.id,
       role: message.role as UIMessage["role"],
-      parts: toUiMessageParts(message, toolResultsByToolCallId)
+      parts: toUiMessageParts(message, toolResultsByToolCallId, surfacedArtifactsByRunId)
     }));
 }
 
@@ -140,6 +157,12 @@ function toActiveRunUiMessage(activeRun: AssistantUiActiveRun): UIMessage {
     }
     return [toToolCallUiPart(part)];
   });
+  appendWorkspacePromotedArtifactsPart(
+    parts,
+    orderedParts.flatMap((part): ToolArtifactDownloadRef[] =>
+      part.type === "tool_call" ? readSurfacedToolArtifactRefs(part.output, part.toolName) : []
+    )
+  );
 
   if (parts.length === 0) {
     parts.push({
@@ -215,7 +238,8 @@ function toAssistantToolState(
 
 function toUiMessageParts(
   message: Message,
-  toolResultsByToolCallId: Map<string, PersistedToolResult>
+  toolResultsByToolCallId: Map<string, PersistedToolResult>,
+  surfacedArtifactsByRunId: Map<string, ToolArtifactDownloadRef[]>
 ): UIMessage["parts"] {
   const parts: UIMessage["parts"] = [];
   if (message.text || message.role !== "assistant") {
@@ -257,6 +281,11 @@ function toUiMessageParts(
       data: display
     } as UIMessage["parts"][number]);
   }
+  const finalRunId = readCompatibleAssistantFinalRunId(message);
+  appendWorkspacePromotedArtifactsPart(
+    parts,
+    finalRunId ? surfacedArtifactsByRunId.get(finalRunId) ?? [] : []
+  );
   return parts.length > 0
     ? parts
     : [
@@ -266,6 +295,20 @@ function toUiMessageParts(
           state: "done"
         }
       ];
+}
+
+function appendWorkspacePromotedArtifactsPart(
+  parts: UIMessage["parts"],
+  artifacts: ToolArtifactDownloadRef[]
+): void {
+  const uniqueArtifacts = dedupeToolArtifactRefs(artifacts);
+  if (uniqueArtifacts.length === 0) {
+    return;
+  }
+  parts.push({
+    type: WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE,
+    data: createWorkspacePromotedArtifactsData(uniqueArtifacts)
+  } as UIMessage["parts"][number]);
 }
 
 function withoutRunResponseMessages(messages: Message[], runId: string): Message[] {
