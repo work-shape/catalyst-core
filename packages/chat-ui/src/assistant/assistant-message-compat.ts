@@ -28,6 +28,7 @@ export type PersistedToolResult =
       status: "failed";
       toolCallId: string;
       errorText: string;
+      output?: unknown;
     };
 
 export function readCompatibleMessageRunId(
@@ -92,7 +93,14 @@ export function readCompatiblePersistedToolResult(
     return {
       status: "failed",
       toolCallId: runtime.toolCallId,
-      errorText: typeof result.error.message === "string" ? result.error.message : "Tool call failed"
+      errorText: typeof result.error.message === "string" ? result.error.message : "Tool call failed",
+      output: {
+        status: result.status,
+        error: {
+          code: typeof result.error.code === "string" ? result.error.code : "handler_failed"
+        },
+        projectionNotice: runtime.projectionNotice
+      }
     };
   }
   return undefined;

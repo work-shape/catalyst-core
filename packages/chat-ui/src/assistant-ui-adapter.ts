@@ -191,7 +191,10 @@ function toToolCallUiPart(
     state: toAssistantToolState(toolCall.state),
     input: toolCall.input,
     ...(toolCall.state === "output_error"
-      ? { errorText: toolCall.errorText ?? "Tool call failed" }
+      ? {
+          errorText: toolCall.errorText ?? "Tool call failed",
+          ...(toolCall.output !== undefined ? { output: toolCall.output } : {})
+        }
       : toolCall.state === "output_available"
         ? { output: toolCall.output }
         : {})
@@ -237,7 +240,10 @@ function toUiMessageParts(
       state: toolResult?.status === "failed" ? "output-error" : toolResult ? "output-available" : "input-available",
       input: toolCall.input,
       ...(toolResult?.status === "failed"
-        ? { errorText: toolResult.errorText }
+        ? {
+            errorText: toolResult.errorText,
+            ...(toolResult.output !== undefined ? { output: toolResult.output } : {})
+          }
         : toolResult
           ? { output: toolResult.output }
           : {})
