@@ -242,6 +242,34 @@ export interface ActiveWorkspaceCommandCounts {
   total: number;
 }
 
+export interface ExecutionWorkspaceDeletionSummary {
+  workspaceCount: number;
+  fileCount: number;
+  commandCount: number;
+  fileObjectKeys: string[];
+}
+
+export interface ExecutionWorkspaceCleanupTarget {
+  workspaceId: ExecutionWorkspaceId;
+  conversationId: ConversationId;
+}
+
+export interface ListExecutionWorkspaceCleanupTargetsInput {
+  clientInstanceId: ClientInstanceId;
+  limit: number;
+}
+
+export interface ListExecutionWorkspaceObjectsForDeletionInput {
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+}
+
+export interface MarkExecutionWorkspaceDeletedInput {
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  deletedAt: ISODateString;
+}
+
 export interface WorkspaceCommandCapacityLimits {
   perConversationActiveCommands: number;
   perUserActiveCommands: number;
@@ -288,4 +316,16 @@ export interface WorkspaceCommandStore {
   recoverStaleWorkspaceCommands(
     input: RecoverStaleWorkspaceCommandsInput
   ): Promise<WorkspaceCommand[]>;
+}
+
+export interface ExecutionWorkspaceCleanupStore {
+  listExecutionWorkspaceCleanupTargets(
+    input: ListExecutionWorkspaceCleanupTargetsInput
+  ): Promise<ExecutionWorkspaceCleanupTarget[]>;
+  listExecutionWorkspaceObjectsForDeletion(
+    input: ListExecutionWorkspaceObjectsForDeletionInput
+  ): Promise<ExecutionWorkspaceDeletionSummary>;
+  markExecutionWorkspaceDeleted(
+    input: MarkExecutionWorkspaceDeletedInput
+  ): Promise<ExecutionWorkspaceDeletionSummary>;
 }

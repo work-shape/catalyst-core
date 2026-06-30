@@ -29,6 +29,12 @@ describe("execution workspaces config", () => {
         concurrency: 1,
         heartbeatIntervalMs: 5000,
         leaseDurationMs: 600000
+      },
+      cleanup: {
+        deletedWorkspaceCleanupIntervalMs: 3600000,
+        deletedWorkspaceCleanupBatchSize: 100,
+        tempStateCleanupIntervalMs: 600000,
+        orphanedTempStateMaxAgeMs: 3600000
       }
     });
   });
@@ -55,6 +61,12 @@ describe("execution workspaces config", () => {
             concurrency: 4,
             heartbeatIntervalMs: 2000,
             leaseDurationMs: 30000
+          },
+          cleanup: {
+            deletedWorkspaceCleanupIntervalMs: 300000,
+            deletedWorkspaceCleanupBatchSize: 25,
+            tempStateCleanupIntervalMs: 60000,
+            orphanedTempStateMaxAgeMs: 120000
           }
         }
       })
@@ -78,6 +90,12 @@ describe("execution workspaces config", () => {
         concurrency: 4,
         heartbeatIntervalMs: 2000,
         leaseDurationMs: 30000
+      },
+      cleanup: {
+        deletedWorkspaceCleanupIntervalMs: 300000,
+        deletedWorkspaceCleanupBatchSize: 25,
+        tempStateCleanupIntervalMs: 60000,
+        orphanedTempStateMaxAgeMs: 120000
       }
     });
   });

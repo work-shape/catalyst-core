@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
 import { posix as posixPath } from "node:path";
 import type {
@@ -16,6 +16,7 @@ export interface WorkspaceFileByteStore extends WorkspaceObjectStore {
   putWorkspaceFile(input: PutWorkspaceFileBytesInput): Promise<{
     objectKey: string;
   }>;
+  deleteObject?(key: string): Promise<void>;
 }
 
 export interface PutWorkspaceFileBytesInput {
@@ -36,6 +37,7 @@ export interface WorkspaceObjectStorage {
     contentType?: string;
   }): Promise<void>;
   getObject(key: string): Promise<Uint8Array>;
+  deleteObject?(key: string): Promise<void>;
 }
 
 export interface WorkspaceFileObjectKeyFactory {
@@ -102,6 +104,13 @@ class ObjectStoreWorkspaceFileByteStore implements WorkspaceFileByteStore {
     });
     return { objectKey };
   }
+
+  async deleteObject(key: string): Promise<void> {
+    if (!this.objectStore.deleteObject) {
+      throw new Error("Workspace object storage does not support object deletion");
+    }
+    await this.objectStore.deleteObject(key);
+  }
 }
 
 class LocalWorkspaceFileByteStore implements WorkspaceFileByteStore {
@@ -123,6 +132,10 @@ class LocalWorkspaceFileByteStore implements WorkspaceFileByteStore {
     await mkdir(dirname(objectPath), { recursive: true });
     await writeFile(objectPath, input.bytes);
     return { objectKey };
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    await rm(this.resolveObjectPath(key), { force: true });
   }
 
   private resolveObjectPath(key: string): string {

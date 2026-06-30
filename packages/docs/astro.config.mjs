@@ -14,6 +14,7 @@ export default defineConfig({
             "getting-started/overview",
             "getting-started/operating-models",
             "getting-started/local-demo",
+            "getting-started/execution-workspaces-local",
           ],
         },
         {
@@ -32,6 +33,8 @@ export default defineConfig({
           label: "Run And Govern",
           items: [
             "operate/deployment",
+            "operate/execution-workspaces",
+            "operate/runner-security",
             "operate/auth-and-embedding",
             "operate/governance",
             "operate/instance-brief",

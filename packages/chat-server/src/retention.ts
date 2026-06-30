@@ -7,6 +7,10 @@ import {
   isAppError
 } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "./types";
+import {
+  cleanupExecutionWorkspaceForConversation,
+  executionWorkspaceCleanupAuditMetadata
+} from "./workspace-cleanup";
 
 export interface ConversationRetentionRunSummary {
   expiredCount: number;
@@ -69,6 +73,10 @@ export class ConversationRetentionWorkflow {
   ): Promise<"expired" | "skipped" | "failed"> {
     try {
       const objectDeletion = await this.deleteConversationObjects(conversation.id, expiredAt);
+      const workspaceDeletion = await cleanupExecutionWorkspaceForConversation(this.options, {
+        conversationId: conversation.id,
+        deletedAt: expiredAt
+      });
       const expired = await this.options.conversationStore.expireConversation({
         clientInstanceId: this.options.clientInstanceId,
         conversationId: conversation.id,
@@ -79,7 +87,7 @@ export class ConversationRetentionWorkflow {
         status: "success",
         subject: expired.id,
         correlationId: createPlatformId("corr"),
-        metadata: createRetentionAuditMetadata(conversation, expiredAt, objectDeletion)
+        metadata: createRetentionAuditMetadata(conversation, expiredAt, objectDeletion, workspaceDeletion)
       });
       return "expired";
     } catch (error) {
@@ -193,14 +201,16 @@ export function createConversationRetentionJob(
 function createRetentionAuditMetadata(
   conversation: Conversation,
   expiredAt: string,
-  deletion: ManagedObjectDeletionResult | undefined
+  deletion: ManagedObjectDeletionResult | undefined,
+  workspaceDeletion: Awaited<ReturnType<typeof cleanupExecutionWorkspaceForConversation>>
 ): JsonObject {
   return {
     retainedUntil: conversation.retainedUntil,
     expiredAt,
     attachmentCount: deletion?.attachmentCount ?? 0,
     fileCount: deletion?.fileObjectKeys.length ?? 0,
-    artifactCount: deletion?.artifactObjectKeys.length ?? 0
+    artifactCount: deletion?.artifactObjectKeys.length ?? 0,
+    ...executionWorkspaceCleanupAuditMetadata(workspaceDeletion)
   };
 }
 

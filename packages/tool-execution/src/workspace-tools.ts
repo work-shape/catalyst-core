@@ -5,6 +5,7 @@ import {
   type ClientInstanceId,
   type ExecutionWorkspaceId,
   type ConversationId,
+  type AuditRecorder,
   type JsonObject,
   type ManagedArtifactRef,
   type ManagedFileId,
@@ -31,6 +32,13 @@ import {
   normalizeWorkspaceDirectory as normalizeWorkspaceDirectoryPath,
   normalizeWorkspaceFilePath as normalizeWorkspaceFilePathValue
 } from "./workspace-paths";
+import {
+  emitWorkspaceCommandTelemetry,
+  recordWorkspaceCommandLifecycleAudit,
+  workspaceCommandCountsMetadata,
+  workspaceCommandTelemetryEvent,
+  type WorkspaceCommandTelemetry
+} from "./workspace-command-telemetry";
 
 const DEFAULT_LIMITS: WorkspaceCommandServiceLimits = {
   defaultTimeoutSeconds: 60,
@@ -237,7 +245,7 @@ const workspacePromoteArtifactInputJsonSchema: JsonObject = {
 export type WorkspaceToolStore = Pick<
   PlatformStore,
   | "ensureExecutionWorkspace" | "listWorkspaceFiles" | "upsertWorkspaceFile"
-  | "enqueueWorkspaceCommand" | "createManagedArtifact"
+  | "enqueueWorkspaceCommand" | "countActiveWorkspaceCommands" | "createManagedArtifact"
 >;
 
 export interface WorkspaceSourceFileReader {
@@ -281,6 +289,8 @@ export interface WorkspaceCommandServiceOptions {
   fileStore?: WorkspaceFileByteStore;
   sourceFileReader?: WorkspaceSourceFileReader;
   commandResults?: WorkspaceCommandResultSource;
+  auditRecorder?: AuditRecorder;
+  telemetry?: WorkspaceCommandTelemetry;
   limits?: Partial<WorkspaceCommandServiceLimits>;
   now?: () => string;
 }
@@ -297,6 +307,8 @@ export class WorkspaceCommandService {
   private readonly fileStore?: WorkspaceFileByteStore;
   private readonly sourceFileReader?: WorkspaceSourceFileReader;
   private readonly commandResults?: WorkspaceCommandResultSource;
+  private readonly auditRecorder?: AuditRecorder;
+  private readonly telemetry?: WorkspaceCommandTelemetry;
   private readonly limits: WorkspaceCommandServiceLimits;
   private readonly now: () => string;
 
@@ -306,6 +318,8 @@ export class WorkspaceCommandService {
     this.objectStore = options.objectStore ?? options.fileStore;
     this.sourceFileReader = options.sourceFileReader;
     this.commandResults = options.commandResults;
+    this.auditRecorder = options.auditRecorder;
+    this.telemetry = options.telemetry;
     this.limits = {
       ...DEFAULT_LIMITS,
       ...options.limits
@@ -330,6 +344,7 @@ export class WorkspaceCommandService {
     if (command.status === "failed") {
       return command.result;
     }
+    await this.recordQueuedCommand(context, command.value);
     const resolved = await this.commandResults?.resolveWorkspaceCommand({ command: command.value, context });
     if (resolved && resolved.id !== command.value.id) {
       return failed("handler_failed", "Workspace command result source returned the wrong command");
@@ -736,6 +751,44 @@ export class WorkspaceCommandService {
       perUserActiveCommands: this.limits.perUserActiveCommands,
       globalActiveCommands: this.limits.globalActiveCommands
     };
+  }
+
+  private async recordQueuedCommand(
+    context: ToolExecutionContext,
+    command: WorkspaceCommand
+  ): Promise<void> {
+    const activeCounts = await this.readActiveCommandCounts(context.clientInstanceId);
+    await recordWorkspaceCommandLifecycleAudit({
+      auditRecorder: this.auditRecorder,
+      type: "workspace_command.queued",
+      status: "success",
+      command,
+      user: context.user,
+      correlationId: context.correlationId,
+      metadata: {
+        timeoutSeconds: command.limits.timeoutSeconds,
+        expectedOutputCount: command.expectedOutputs.length,
+        promotedExpectedOutputCount: command.expectedOutputs.filter((output) => output.promote).length,
+        cwdProvided: command.cwd !== undefined,
+        ...(activeCounts ? { activeCounts: workspaceCommandCountsMetadata(activeCounts) } : {})
+      }
+    });
+    await emitWorkspaceCommandTelemetry(
+      this.telemetry,
+      workspaceCommandTelemetryEvent("queued", command, {
+        activeCounts
+      })
+    );
+  }
+
+  private async readActiveCommandCounts(
+    clientInstanceId: ClientInstanceId
+  ): Promise<Awaited<ReturnType<WorkspaceToolStore["countActiveWorkspaceCommands"]>> | undefined> {
+    try {
+      return await this.store.countActiveWorkspaceCommands({ clientInstanceId });
+    } catch {
+      return undefined;
+    }
   }
 
   private async findWorkspaceFile(

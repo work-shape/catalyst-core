@@ -6,6 +6,7 @@ import type {
   ClientInstanceId,
   ConversationRetentionStore,
   ConversationStore,
+  ExecutionWorkspaceCleanupStore,
   ManagedArtifactId,
   PlatformFileStore,
   RunObservationStore,
@@ -19,6 +20,7 @@ import type { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import type { ChatAttachmentService } from "./attachments";
 import type { ConversationRetentionJobOptions } from "./retention";
 import type { RunRecoveryOptions } from "./run-recovery";
+import type { ExecutionWorkspaceCleanupJobOptions } from "./workspace-cleanup";
 
 export interface ChatServerOptions {
   config: ClientInstanceConfig;
@@ -43,6 +45,13 @@ export interface ChatServerOptions {
       bytes: Uint8Array;
       mimeType: string;
     }>;
+  };
+  executionWorkspaceCleanup?: {
+    store: ExecutionWorkspaceCleanupStore;
+    objects?: {
+      deleteObject(key: string): Promise<void>;
+    };
+    jobOptions?: ExecutionWorkspaceCleanupJobOptions;
   };
   retentionExpiration?: ConversationRetentionJobOptions;
   runRecovery?: RunRecoveryOptions;

@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -177,6 +177,22 @@ describe("workspace command worker", () => {
       }
     });
   });
+
+  it("removes orphaned temporary workspace state before claiming work", async () => {
+    const harness = await createWorkerHarness();
+    const orphan = join(harness.commandRootDirectory, "catalyst-workspace-orphaned");
+    await mkdir(orphan, { recursive: true });
+    const staleTime = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    await utimes(orphan, staleTime, staleTime);
+
+    await expect(harness.worker.runOnce({ recoverStale: false })).resolves.toMatchObject({
+      status: "idle"
+    });
+
+    await expect(readdir(harness.commandRootDirectory)).resolves.not.toContain(
+      "catalyst-workspace-orphaned"
+    );
+  });
 });
 
 async function createWorkerHarness(input: { pollIntervalMs?: number } = {}) {
@@ -226,6 +242,7 @@ async function createWorkerHarness(input: { pollIntervalMs?: number } = {}) {
     ownerUserId,
     store,
     conversation,
+    commandRootDirectory: join(rootDirectory, "commands"),
     workspace,
     executor,
     worker,

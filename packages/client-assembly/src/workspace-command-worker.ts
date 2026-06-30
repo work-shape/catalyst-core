@@ -1,5 +1,5 @@
 import { tmpdir } from "node:os";
-import { AppError } from "@vivd-catalyst/core";
+import { AppError, StoreBackedAuditRecorder } from "@vivd-catalyst/core";
 import {
   getClientInstanceId,
   loadClientInstanceConfigFromFile,
@@ -7,6 +7,7 @@ import {
 } from "@vivd-catalyst/config-schema";
 import {
   createDockerProcessExecutorFromConfig,
+  createConsoleWorkspaceCommandTelemetry,
   createLocalWorkspaceFileByteStore,
   LocalWorkspaceCommandProcessExecutor,
   LocalWorkspaceCommandRunner,
@@ -47,6 +48,11 @@ export async function createClientInstanceWorkspaceCommandWorker(
   const byteStore = createLocalWorkspaceFileByteStore({
     rootDirectory: requiredEnv(env, "EXECUTION_WORKSPACE_OBJECT_ROOT")
   });
+  const auditRecorder = new StoreBackedAuditRecorder({
+    clientInstanceId,
+    store
+  });
+  const telemetry = createConsoleWorkspaceCommandTelemetry(console);
   const processExecutor =
     config.executionWorkspaces.runner.mode === "docker"
       ? createDockerProcessExecutorFromConfig(config.executionWorkspaces.runner)
@@ -56,14 +62,20 @@ export async function createClientInstanceWorkspaceCommandWorker(
     byteStore,
     tempRootDirectory: env.WORKSPACE_COMMAND_TEMP_ROOT ?? tmpdir(),
     leaseDurationMs: config.executionWorkspaces.worker.leaseDurationMs,
-    processExecutor
+    processExecutor,
+    auditRecorder,
+    telemetry
   });
   const worker = new WorkspaceCommandWorker({
     clientInstanceId,
     store,
     runner,
     workerId: env.WORKSPACE_COMMAND_WORKER_ID,
-    ...config.executionWorkspaces.worker
+    ...config.executionWorkspaces.worker,
+    tempStateCleanupIntervalMs: config.executionWorkspaces.cleanup.tempStateCleanupIntervalMs,
+    orphanedTempStateMaxAgeMs: config.executionWorkspaces.cleanup.orphanedTempStateMaxAgeMs,
+    auditRecorder,
+    telemetry
   });
 
   return {

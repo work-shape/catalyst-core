@@ -316,6 +316,19 @@ export const executionWorkspacesConfigSchema = z
         cancellationPollIntervalMs: 1000,
         staleRecoveryIntervalMs: 30000,
         staleRecoveryLimit: 50
+      }),
+    cleanup: z
+      .object({
+        deletedWorkspaceCleanupIntervalMs: z.number().int().positive().default(60 * 60 * 1000),
+        deletedWorkspaceCleanupBatchSize: z.number().int().positive().default(100),
+        tempStateCleanupIntervalMs: z.number().int().positive().default(10 * 60 * 1000),
+        orphanedTempStateMaxAgeMs: z.number().int().positive().default(60 * 60 * 1000)
+      })
+      .default({
+        deletedWorkspaceCleanupIntervalMs: 60 * 60 * 1000,
+        deletedWorkspaceCleanupBatchSize: 100,
+        tempStateCleanupIntervalMs: 10 * 60 * 1000,
+        orphanedTempStateMaxAgeMs: 60 * 60 * 1000
       })
   })
   .superRefine((config, context) => {
@@ -364,6 +377,12 @@ export const executionWorkspacesConfigSchema = z
       cancellationPollIntervalMs: 1000,
       staleRecoveryIntervalMs: 30000,
       staleRecoveryLimit: 50
+    },
+    cleanup: {
+      deletedWorkspaceCleanupIntervalMs: 60 * 60 * 1000,
+      deletedWorkspaceCleanupBatchSize: 100,
+      tempStateCleanupIntervalMs: 10 * 60 * 1000,
+      orphanedTempStateMaxAgeMs: 60 * 60 * 1000
     }
   });
 

@@ -14,6 +14,11 @@ import {
   type ExecutionWorkspaceId,
   type FailWorkspaceCommandInput,
   type HeartbeatWorkspaceCommandInput,
+  type ExecutionWorkspaceCleanupTarget,
+  type ExecutionWorkspaceDeletionSummary,
+  type ListExecutionWorkspaceCleanupTargetsInput,
+  type ListExecutionWorkspaceObjectsForDeletionInput,
+  type MarkExecutionWorkspaceDeletedInput,
   type RecoverStaleWorkspaceCommandsInput,
   type RequestWorkspaceCommandCancellationInput,
   type UpsertWorkspaceFileInput,
@@ -615,6 +620,92 @@ export async function recoverStaleWorkspaceCommands(
   });
 }
 
+export async function listExecutionWorkspaceCleanupTargets(
+  db: PostgresDatabase,
+  input: ListExecutionWorkspaceCleanupTargetsInput
+): Promise<ExecutionWorkspaceCleanupTarget[]> {
+  if (input.limit <= 0) {
+    return [];
+  }
+  const rows = (await db.execute(drizzleSql<{ workspace_id: string; conversation_id: string }>`
+    select ew.id as workspace_id, ew.conversation_id
+    from execution_workspaces ew
+    join conversations c
+      on c.id = ew.conversation_id
+     and c.client_instance_id = ew.client_instance_id
+    where ew.client_instance_id = ${input.clientInstanceId}
+      and c.status <> 'active'
+      and (
+        ew.status <> 'deleted'
+        or exists (
+          select 1
+          from execution_workspace_files ewf
+          where ewf.workspace_id = ew.id
+            and ewf.client_instance_id = ew.client_instance_id
+        )
+        or exists (
+          select 1
+          from workspace_commands wc
+          where wc.workspace_id = ew.id
+            and wc.client_instance_id = ew.client_instance_id
+        )
+      )
+    order by ew.updated_at asc, ew.id asc
+    limit ${input.limit}
+  `)) as unknown as Array<{ workspace_id: string; conversation_id: string }>;
+  return rows.map((row) => ({
+    workspaceId: row.workspace_id as ExecutionWorkspaceCleanupTarget["workspaceId"],
+    conversationId: row.conversation_id as ExecutionWorkspaceCleanupTarget["conversationId"]
+  }));
+}
+
+export async function listExecutionWorkspaceObjectsForDeletion(
+  db: PostgresDatabase,
+  input: ListExecutionWorkspaceObjectsForDeletionInput
+): Promise<ExecutionWorkspaceDeletionSummary> {
+  return collectExecutionWorkspaceDeletionSummary(db, input);
+}
+
+export async function markExecutionWorkspaceDeleted(
+  db: PostgresDatabase,
+  input: MarkExecutionWorkspaceDeletedInput
+): Promise<ExecutionWorkspaceDeletionSummary> {
+  const deletedAt = new Date(input.deletedAt);
+  return db.transaction(async (tx) => {
+    const summary = await collectExecutionWorkspaceDeletionSummary(tx, input);
+    await tx
+      .delete(executionWorkspaceFiles)
+      .where(
+        and(
+          eq(executionWorkspaceFiles.clientInstanceId, input.clientInstanceId),
+          eq(executionWorkspaceFiles.conversationId, input.conversationId)
+        )
+      );
+    await tx
+      .delete(workspaceCommands)
+      .where(
+        and(
+          eq(workspaceCommands.clientInstanceId, input.clientInstanceId),
+          eq(workspaceCommands.conversationId, input.conversationId)
+        )
+      );
+    await tx
+      .update(executionWorkspaces)
+      .set({
+        status: "deleted",
+        deletedAt,
+        updatedAt: deletedAt
+      })
+      .where(
+        and(
+          eq(executionWorkspaces.clientInstanceId, input.clientInstanceId),
+          eq(executionWorkspaces.conversationId, input.conversationId)
+        )
+      );
+    return summary;
+  });
+}
+
 async function requireOwnedActiveConversation(
   db: PostgresDatabase,
   input: {
@@ -682,4 +773,48 @@ function claimedCommandWhere(
           drizzleSql`, `
         )})`
   );
+}
+
+async function collectExecutionWorkspaceDeletionSummary(
+  db: PostgresDatabase | PostgresTransaction,
+  input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+  }
+): Promise<ExecutionWorkspaceDeletionSummary> {
+  const workspaceRows = await db
+    .select({ id: executionWorkspaces.id })
+    .from(executionWorkspaces)
+    .where(
+      and(
+        eq(executionWorkspaces.clientInstanceId, input.clientInstanceId),
+        eq(executionWorkspaces.conversationId, input.conversationId)
+      )
+    );
+  const fileRows = await db
+    .select({ objectKey: executionWorkspaceFiles.objectKey })
+    .from(executionWorkspaceFiles)
+    .where(
+      and(
+        eq(executionWorkspaceFiles.clientInstanceId, input.clientInstanceId),
+        eq(executionWorkspaceFiles.conversationId, input.conversationId)
+      )
+    );
+  const commandRows = (await db.execute(drizzleSql<{ count: number }>`
+    select count(*)::int as count
+    from workspace_commands
+    where client_instance_id = ${input.clientInstanceId}
+      and conversation_id = ${input.conversationId}
+  `)) as unknown as Array<{ count: number | string }>;
+
+  return {
+    workspaceCount: workspaceRows.length,
+    fileCount: fileRows.length,
+    commandCount: Number(commandRows[0]?.count ?? 0),
+    fileObjectKeys: uniqueStrings(fileRows.map((file) => file.objectKey))
+  };
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
 }
