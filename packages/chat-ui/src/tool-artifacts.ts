@@ -12,6 +12,13 @@ export interface WorkspacePromotedArtifactsData {
   artifacts: ToolArtifactDownloadRef[];
 }
 
+export interface ArtifactFileType {
+  badge: string;
+  label: string;
+  className: string;
+  extension: string;
+}
+
 export function createWorkspacePromotedArtifactsData(
   artifacts: ToolArtifactDownloadRef[]
 ): WorkspacePromotedArtifactsData {
@@ -25,7 +32,23 @@ export function isWorkspacePromotedArtifactsData(
   value: unknown
 ): value is WorkspacePromotedArtifactsData {
   const data = isRecord(value) ? value : undefined;
-  return data?.kind === "workspace.promoted_artifacts" && readArtifactArray(data.artifacts).length > 0;
+  return readWorkspacePromotedArtifactsData(data) !== undefined;
+}
+
+export function readWorkspacePromotedArtifactsData(
+  value: unknown
+): WorkspacePromotedArtifactsData | undefined {
+  const data = isRecord(value) ? value : undefined;
+  if (data?.kind !== "workspace.promoted_artifacts") {
+    return undefined;
+  }
+  const artifacts = readArtifactArray(data.artifacts);
+  return artifacts.length > 0
+    ? {
+        kind: "workspace.promoted_artifacts",
+        artifacts
+      }
+    : undefined;
 }
 
 export function readToolArtifactRefs(result: unknown): ToolArtifactDownloadRef[] {
@@ -49,35 +72,155 @@ export function dedupeToolArtifactRefs(
   const seen = new Set<string>();
   const unique: ToolArtifactDownloadRef[] = [];
   for (const artifact of artifacts) {
-    if (seen.has(artifact.artifactId)) {
+    const sanitized = sanitizeToolArtifactRef(artifact);
+    if (!sanitized || seen.has(sanitized.artifactId)) {
       continue;
     }
-    seen.add(artifact.artifactId);
-    unique.push(artifact);
+    seen.add(sanitized.artifactId);
+    unique.push(sanitized);
   }
   return unique;
 }
 
+export function getArtifactFileType(artifact: ToolArtifactDownloadRef): ArtifactFileType {
+  const value = `${artifact.mimeType ?? ""} ${artifact.kind ?? ""} ${artifact.filename ?? ""}`.toLowerCase();
+  if (value.includes("pdf") || hasExtension(value, ["pdf"])) {
+    return { badge: "PDF", label: "PDF", className: "bg-red-700", extension: "pdf" };
+  }
+  if (value.includes("presentation") || hasExtension(value, ["pptx", "ppt"])) {
+    return { badge: "PPT", label: "Presentation", className: "bg-orange-700", extension: "pptx" };
+  }
+  if (
+    value.includes("wordprocessingml") ||
+    value.includes("msword") ||
+    value.includes("word") ||
+    hasExtension(value, ["docx", "doc"])
+  ) {
+    return { badge: "DOC", label: "Word document", className: "bg-blue-700", extension: "docx" };
+  }
+  if (value.includes("csv") || hasExtension(value, ["csv"])) {
+    return { badge: "CSV", label: "CSV", className: "bg-teal-700", extension: "csv" };
+  }
+  if (
+    value.includes("spreadsheet") ||
+    value.includes("excel") ||
+    hasExtension(value, ["xlsx", "xls"])
+  ) {
+    return { badge: "XLS", label: "Spreadsheet", className: "bg-emerald-700", extension: "xlsx" };
+  }
+  if (value.includes("image") || hasExtension(value, ["png", "jpg", "jpeg", "webp", "gif", "svg"])) {
+    return { badge: "IMG", label: "Image", className: "bg-violet-700", extension: "png" };
+  }
+  if (
+    value.includes("zip") ||
+    value.includes("compressed") ||
+    value.includes("archive") ||
+    hasExtension(value, ["zip", "tar", "gz", "tgz", "rar", "7z"])
+  ) {
+    return { badge: "ZIP", label: "Archive", className: "bg-stone-700", extension: "zip" };
+  }
+  if (
+    value.includes("text/") ||
+    value.includes("markdown") ||
+    value.includes("json") ||
+    hasExtension(value, ["txt", "md", "rtf", "html", "json"])
+  ) {
+    return { badge: "DOC", label: "Document", className: "bg-slate-700", extension: "txt" };
+  }
+  return { badge: "FILE", label: "File", className: "bg-neutral-700", extension: "bin" };
+}
+
+export function artifactDisplayFilename(artifact: ToolArtifactDownloadRef): string {
+  return artifact.filename ?? `${getArtifactFileType(artifact).label} artifact`;
+}
+
+export function artifactDownloadFilename(artifact: ToolArtifactDownloadRef): string {
+  return artifact.filename ?? `artifact.${getArtifactFileType(artifact).extension}`;
+}
+
 function readArtifactArray(value: unknown): ToolArtifactDownloadRef[] {
   const rawArtifacts = Array.isArray(value) ? value : [];
-  return rawArtifacts.flatMap((artifact): ToolArtifactDownloadRef[] => {
-    if (!isRecord(artifact) || typeof artifact.artifactId !== "string") {
-      return [];
-    }
-    const ref: ToolArtifactDownloadRef = {
-      artifactId: artifact.artifactId
-    };
-    if (typeof artifact.kind === "string") {
-      ref.kind = artifact.kind;
-    }
-    if (typeof artifact.filename === "string") {
-      ref.filename = artifact.filename;
-    }
-    if (typeof artifact.mimeType === "string") {
-      ref.mimeType = artifact.mimeType;
-    }
-    return [ref];
-  });
+  return rawArtifacts.flatMap((artifact): ToolArtifactDownloadRef[] =>
+    isRecord(artifact) ? maybeOne(sanitizeToolArtifactRef(artifact)) : []
+  );
+}
+
+function sanitizeToolArtifactRef(artifact: {
+  artifactId?: unknown;
+  kind?: unknown;
+  filename?: unknown;
+  mimeType?: unknown;
+}): ToolArtifactDownloadRef | undefined {
+  const artifactId = typeof artifact.artifactId === "string" ? artifact.artifactId : undefined;
+  if (!artifactId || artifactId.length > 200) {
+    return undefined;
+  }
+
+  const ref: ToolArtifactDownloadRef = {
+    artifactId
+  };
+  const kind = readSafeArtifactKind(artifact.kind);
+  if (kind) {
+    ref.kind = kind;
+  }
+  const filename = readDisplayFilename(artifact.filename);
+  if (filename) {
+    ref.filename = filename;
+  }
+  const mimeType = readSafeMimeType(artifact.mimeType);
+  if (mimeType) {
+    ref.mimeType = mimeType;
+  }
+  return ref;
+}
+
+function maybeOne<T>(value: T | undefined): T[] {
+  return value === undefined ? [] : [value];
+}
+
+function readDisplayFilename(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const normalized = value.replaceAll("\\", "/").replace(/\/+$/u, "");
+  const basename = normalized.split("/").at(-1)?.trim();
+  if (!basename || basename === "." || basename === ".." || isInternalIdentifier(basename)) {
+    return undefined;
+  }
+  return basename.length > 120 ? `${basename.slice(0, 117)}...` : basename;
+}
+
+function readSafeArtifactKind(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.length > 100) {
+    return undefined;
+  }
+  if (isSafeMimeType(value)) {
+    return value;
+  }
+  return /^[a-z0-9][a-z0-9_.:-]*$/iu.test(value) && !isInternalIdentifier(value) ? value : undefined;
+}
+
+function readSafeMimeType(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.length > 120) {
+    return undefined;
+  }
+  return isSafeMimeType(value) ? value : undefined;
+}
+
+function isSafeMimeType(value: string): boolean {
+  return /^(?:application|audio|font|image|message|model|multipart|text|video)\/[a-z0-9][a-z0-9!#$&^_.+-]*$/iu.test(value);
+}
+
+function hasExtension(value: string, extensions: string[]): boolean {
+  return extensions.some((extension) => new RegExp(`\\.${escapeRegExp(extension)}(?:\\s|$)`, "iu").test(value));
+}
+
+function escapeRegExp(value: string): string {
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function isInternalIdentifier(value: string): boolean {
+  return /^(?:file|art|ews|wcmd)_[a-z0-9_-]+$/iu.test(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

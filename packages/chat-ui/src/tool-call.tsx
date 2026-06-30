@@ -2,8 +2,6 @@ import {
   CheckCircle2,
   ChevronRight,
   CircleAlert,
-  Download,
-  FileText,
   Wrench
 } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -13,13 +11,13 @@ import {
   readToolDisplayPayloadFromToolResult,
   useToolDisplayWidget
 } from "./domain-ui-widgets";
+import { ToolArtifactList } from "./artifact-download-card";
 import { useTranslation } from "./i18n";
 import { useToolDisplayPanel } from "./tool-display-panel";
-import { useAttachmentContentContext } from "./attachment-content";
 import { cn } from "./ui/cn";
 import { Spinner } from "./ui/spinner";
 import {
-  isWorkspacePromotedArtifactsData,
+  readWorkspacePromotedArtifactsData,
   readSurfacedToolArtifactRefs,
   readToolArtifactRefs,
   type ToolArtifactDownloadRef
@@ -174,10 +172,11 @@ export function DataPart({ name, data }: DataPartProps) {
   const { locale, t } = useTranslation();
   const displayPanel = useToolDisplayPanel();
   const displayWidget = useToolDisplayWidget();
-  if (isWorkspacePromotedArtifactsData(data)) {
+  const promotedArtifacts = readWorkspacePromotedArtifactsData(data);
+  if (promotedArtifacts) {
     return (
       <div className="chat-tool-part my-3 max-w-3xl">
-        <ToolArtifactList artifacts={data.artifacts} variant="deliverable" />
+        <ToolArtifactList artifacts={promotedArtifacts.artifacts} variant="deliverable" />
       </div>
     );
   }
@@ -608,144 +607,6 @@ function CompactToolCall({
       <span className="sr-only">{toolCallId}</span>
     </div>
   );
-}
-
-function ToolArtifactList({
-  artifacts,
-  className,
-  variant = "compact"
-}: {
-  artifacts: ToolArtifactDownloadRef[];
-  className?: string;
-  variant?: "compact" | "deliverable";
-}) {
-  const { t } = useTranslation();
-  const attachmentContent = useAttachmentContentContext();
-  const [downloadingArtifactId, setDownloadingArtifactId] = useState<string | undefined>();
-
-  if (artifacts.length === 0) {
-    return null;
-  }
-
-  const downloadAvailable = Boolean(attachmentContent?.client && attachmentContent.selectedConversationId);
-
-  async function downloadArtifact(artifact: ToolArtifactDownloadRef) {
-    if (!attachmentContent?.client || !attachmentContent.selectedConversationId) {
-      return;
-    }
-    setDownloadingArtifactId(artifact.artifactId);
-    try {
-      const blob = await attachmentContent.client.conversationArtifactContent(
-        attachmentContent.selectedConversationId,
-        artifact.artifactId
-      );
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = artifact.filename ?? artifact.artifactId;
-      document.body.append(anchor);
-      anchor.click();
-      anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } finally {
-      setDownloadingArtifactId(undefined);
-    }
-  }
-
-  return (
-    <div className={cn("grid gap-1.5", className)}>
-      {artifacts.map((artifact) => {
-        const filename = artifact.filename ?? artifact.artifactId;
-        const downloading = downloadingArtifactId === artifact.artifactId;
-        const fileType = getArtifactFileType(artifact);
-        return (
-          <button
-            key={artifact.artifactId}
-            type="button"
-            disabled={!downloadAvailable || downloading}
-            title={downloadAvailable ? t("downloadArtifact", { filename }) : t("downloadUnavailable")}
-            aria-label={downloadAvailable ? t("downloadArtifact", { filename }) : t("downloadUnavailable")}
-            onClick={() => void downloadArtifact(artifact)}
-            className={cn(
-              "flex w-full min-w-0 items-center gap-3 rounded-md border bg-background text-left text-sm text-foreground shadow-xs transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60",
-              variant === "deliverable" ? "min-h-20 px-4 py-3" : "min-h-10 px-3 py-2"
-            )}
-          >
-            <ArtifactFileIcon fileType={fileType} large={variant === "deliverable"} />
-            <span className="min-w-0 flex-1 truncate">
-              <span className={cn("block truncate font-medium", variant === "deliverable" && "text-base")}>{filename}</span>
-              {artifact.mimeType || artifact.kind ? (
-                <span className="block truncate text-xs text-muted-foreground">
-                  {fileType.label} · {artifact.kind ?? artifact.mimeType}
-                </span>
-              ) : null}
-            </span>
-            {downloading ? (
-              <Spinner size="sm" className="shrink-0 text-muted-foreground" />
-            ) : (
-              <Download size={16} className="shrink-0 text-muted-foreground" aria-hidden="true" />
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function ArtifactFileIcon({
-  fileType,
-  large
-}: {
-  fileType: ArtifactFileType;
-  large?: boolean;
-}) {
-  return (
-    <span
-      className={cn(
-        "relative grid shrink-0 place-items-center rounded-md text-[10px] font-bold tracking-wide text-white shadow-xs",
-        large ? "h-12 w-12" : "h-8 w-8",
-        fileType.className
-      )}
-      aria-hidden="true"
-    >
-      <FileText size={large ? 24 : 18} className="absolute opacity-20" />
-      <span className="relative">{fileType.badge}</span>
-    </span>
-  );
-}
-
-interface ArtifactFileType {
-  badge: string;
-  label: string;
-  className: string;
-}
-
-function getArtifactFileType(artifact: ToolArtifactDownloadRef): ArtifactFileType {
-  const value = `${artifact.mimeType ?? ""} ${artifact.kind ?? ""} ${artifact.filename ?? ""}`.toLowerCase();
-  if (value.includes("presentation") || value.endsWith(".pptx") || value.endsWith(".ppt")) {
-    return { badge: "P", label: "PowerPoint", className: "bg-[#d24726]" };
-  }
-  if (value.includes("spreadsheet") || value.includes("excel") || value.endsWith(".xlsx") || value.endsWith(".xls")) {
-    return { badge: "X", label: "Excel", className: "bg-[#217346]" };
-  }
-  if (value.includes("pdf") || value.endsWith(".pdf")) {
-    return { badge: "PDF", label: "PDF", className: "bg-[#b30b00]" };
-  }
-  if (
-    value.includes("word") ||
-    value.includes("wordprocessingml") ||
-    value.endsWith(".docx") ||
-    value.endsWith(".doc")
-  ) {
-    return { badge: "W", label: "Word", className: "bg-[#2b579a]" };
-  }
-  if (value.includes("image") || /\.(png|jpe?g|webp|gif)$/u.test(value)) {
-    return { badge: "IMG", label: "Image", className: "bg-[#7c3aed]" };
-  }
-  if (value.includes("csv") || value.endsWith(".csv")) {
-    return { badge: "CSV", label: "CSV", className: "bg-[#0f766e]" };
-  }
-  return { badge: "FILE", label: "File", className: "bg-muted-foreground" };
 }
 
 function ToolDetailDisclosure({
