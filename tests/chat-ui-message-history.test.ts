@@ -9,7 +9,8 @@ import { toUiMessages } from "../packages/chat-ui/src/assistant-ui-adapter";
 import {
   readToolActionLabel,
   readToolArtifactRefs,
-  readToolDetailSections
+  readToolDetailSections,
+  readSurfacedToolArtifactRefs
 } from "../packages/chat-ui/src/tool-call";
 
 describe("chat UI message history projection", () => {
@@ -404,6 +405,14 @@ describe("chat UI message history projection", () => {
         mimeType: "application/pdf"
       }
     ]);
+    expect(readSurfacedToolArtifactRefs(toolPart?.output, "workspace.exec")).toEqual([
+      {
+        artifactId: "art_final",
+        kind: "application/pdf",
+        filename: "final-report.pdf",
+        mimeType: "application/pdf"
+      }
+    ]);
     const detailSections = readToolDetailSections({
       args: {
         command: "cat scratch/final-report.pdf && echo shell"
@@ -426,6 +435,41 @@ describe("chat UI message history projection", () => {
     expect(serializedDetails).not.toContain("shell stdout preview");
     expect(serializedDetails).not.toContain("shell stderr preview");
     expect(serializedDetails).not.toContain("workspacePath");
+  });
+
+  it("does not surface transient document render artifacts as top-level downloads", () => {
+    const result = {
+      status: "success",
+      output: {
+        pageNumber: 1,
+        image: {
+          artifactId: "art_page",
+          mimeType: "image/png"
+        }
+      },
+      artifacts: [
+        {
+          artifactId: "art_page",
+          kind: "document.page_image",
+          filename: "document-page-1.png",
+          mimeType: "image/png",
+          modelVisibility: {
+            type: "image",
+            mimeType: "image/png"
+          }
+        }
+      ]
+    };
+
+    expect(readToolArtifactRefs(result)).toEqual([
+      {
+        artifactId: "art_page",
+        kind: "document.page_image",
+        filename: "document-page-1.png",
+        mimeType: "image/png"
+      }
+    ]);
+    expect(readSurfacedToolArtifactRefs(result, "view_document_page")).toEqual([]);
   });
 
   it("projects safe workspace exec helper details without raw command output", () => {

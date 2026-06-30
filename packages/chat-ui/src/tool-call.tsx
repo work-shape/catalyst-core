@@ -99,6 +99,7 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
     labels: { input: t("toolInput"), output: t("toolOutput") }
   });
   const artifacts = readToolArtifactRefs(result);
+  const surfacedArtifacts = readSurfacedToolArtifactRefs(result, toolName);
   const summary = workspaceProjection?.summary ?? getToolSummary(result, t);
   const statusLabel = toolStatusLabel(state, t);
   const actionLabel = workspaceProjection?.actionLabel;
@@ -113,7 +114,7 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
           displayNode={renderedDisplay ?? builtInDisplay}
           state={state}
           statusLabel={statusLabel}
-          artifacts={artifacts}
+          artifacts={surfacedArtifacts}
           toolCallId={toolCallId}
           toolName={toolName}
         />
@@ -128,6 +129,7 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
         state={state}
         statusLabel={statusLabel}
         artifacts={artifacts}
+        surfacedArtifacts={surfacedArtifacts}
         toolCallId={toolCallId}
         toolName={toolName}
       />
@@ -155,13 +157,14 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
   }
 
   return (
-    <CompactToolCall
+      <CompactToolCall
       actionLabel={actionLabel}
       detailSections={detailSections}
       state={state}
       statusLabel={statusLabel}
-      summary={summary}
-      artifacts={artifacts}
+        summary={summary}
+        artifacts={artifacts}
+        surfacedArtifacts={surfacedArtifacts}
       toolCallId={toolCallId}
       toolName={toolName}
     />
@@ -340,6 +343,7 @@ function DisplayToolCall({
   state,
   statusLabel,
   artifacts,
+  surfacedArtifacts,
   toolCallId,
   toolName
 }: {
@@ -349,6 +353,7 @@ function DisplayToolCall({
   state: "running" | "completed" | "failed";
   statusLabel: string;
   artifacts: ToolArtifactDownloadRef[];
+  surfacedArtifacts: ToolArtifactDownloadRef[];
   toolCallId: string;
   toolName: string;
 }) {
@@ -385,7 +390,7 @@ function DisplayToolCall({
         </button>
         {open ? <div>{displayNode}</div> : null}
       </div>
-      <ToolArtifactList artifacts={artifacts} className="mt-2" />
+      <ToolArtifactList artifacts={surfacedArtifacts} className="mt-2" />
       <ToolDetailDisclosure
         sections={detailSections}
         defaultOpen={state === "failed"}
@@ -540,6 +545,7 @@ function CompactToolCall({
   statusLabel,
   summary,
   artifacts,
+  surfacedArtifacts,
   toolCallId,
   toolName
 }: {
@@ -549,6 +555,7 @@ function CompactToolCall({
   statusLabel: string;
   summary: string | undefined;
   artifacts: ToolArtifactDownloadRef[];
+  surfacedArtifacts: ToolArtifactDownloadRef[];
   toolCallId: string;
   toolName: string;
 }) {
@@ -578,12 +585,17 @@ function CompactToolCall({
           aria-hidden="true"
         />
       </button>
+      {surfacedArtifacts.length > 0 ? (
+        <div className="border-t bg-muted/20 px-2.5 py-2">
+          <ToolArtifactList artifacts={surfacedArtifacts} />
+        </div>
+      ) : null}
       {open ? (
         <div className="grid gap-2 border-t bg-muted/40 px-2.5 py-2">
           {summary ? (
             <p className="text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]">{summary}</p>
           ) : null}
-          <ToolArtifactList artifacts={artifacts} />
+          {surfacedArtifacts.length === 0 ? <ToolArtifactList artifacts={artifacts} /> : null}
           <ToolDetails sections={detailSections} />
         </div>
       ) : null}
@@ -689,6 +701,13 @@ export function readToolArtifactRefs(result: unknown): ToolArtifactDownloadRef[]
     }
     return [ref];
   });
+}
+
+export function readSurfacedToolArtifactRefs(result: unknown, toolName: string): ToolArtifactDownloadRef[] {
+  if (toolName === "workspace.promote_artifact" || toolName === "workspace.exec") {
+    return readToolArtifactRefs(result);
+  }
+  return [];
 }
 
 function ToolDetailDisclosure({
