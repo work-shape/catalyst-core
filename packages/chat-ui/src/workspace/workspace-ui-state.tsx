@@ -13,6 +13,7 @@ import {
 import type { LocaleCode, SafeConfig } from "@vivd-catalyst/api-client";
 import { readBrowserLocale } from "../i18n";
 import {
+  applyDocumentThemeMode,
   createThemeStyle,
   readSystemThemeMode,
   resolveThemeModePreference,
@@ -383,6 +384,11 @@ export function useWorkspaceTheme(ui: SafeConfig["ui"] | undefined): {
     }),
     [resolvedThemeMode, ui]
   );
+
+  useEffect(() => {
+    applyDocumentThemeMode(resolvedThemeMode);
+  }, [resolvedThemeMode]);
+
   const toggleTheme = useCallback(() => {
     selectThemeMode(resolvedThemeMode === "dark" ? "light" : "dark");
   }, [resolvedThemeMode, selectThemeMode]);

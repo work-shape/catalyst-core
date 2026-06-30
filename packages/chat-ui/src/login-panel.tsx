@@ -6,7 +6,12 @@ import { workspaceQueryKeys } from "./api/workspace-query-keys";
 import { signInWithEmail } from "./auth-client";
 import { useTranslation } from "./i18n";
 import { LocaleSelector } from "./locale-selector";
-import { createThemeStyle, readSystemThemeMode, resolveThemeModePreference } from "./theme";
+import {
+  applyDocumentThemeMode,
+  createThemeStyle,
+  readSystemThemeMode,
+  resolveThemeModePreference
+} from "./theme";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { cn } from "./ui/cn";
@@ -66,6 +71,10 @@ export function LoginPanel({
       media.removeEventListener("change", onChange);
     };
   }, []);
+
+  useEffect(() => {
+    applyDocumentThemeMode(resolvedThemeMode);
+  }, [resolvedThemeMode]);
 
   useEffect(() => {
     if (!manageDocumentTitle || !branding?.title) {

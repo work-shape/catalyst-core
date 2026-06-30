@@ -18,6 +18,10 @@ export function readSystemThemeMode(): ResolvedThemeMode {
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
+export function applyDocumentThemeMode(mode: ResolvedThemeMode): void {
+  document.documentElement.dataset.vivdTheme = mode;
+}
+
 export function createThemeStyle(
   ui: SafeConfig["ui"] | undefined,
   mode: ResolvedThemeMode

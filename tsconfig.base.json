@@ -28,6 +28,7 @@
       "@vivd-catalyst/chat-server": ["packages/chat-server/src/index.ts"],
       "@vivd-catalyst/chat-ui/shell": ["packages/chat-ui/src/shell.tsx"],
       "@vivd-catalyst/chat-ui/admin": ["packages/chat-ui/src/admin.tsx"],
+      "@vivd-catalyst/chat-ui/vite": ["packages/chat-ui/src/vite.d.ts"],
       "@vivd-catalyst/chat-ui": ["packages/chat-ui/src/index.tsx"],
       "@vivd-catalyst/capability-sdk": ["packages/capability-sdk/src/index.ts"],
       "@vivd-catalyst/client-assembly": ["packages/client-assembly/src/index.ts"],

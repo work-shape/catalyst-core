@@ -325,6 +325,9 @@ importers:
       '@vivd-catalyst/api-client':
         specifier: workspace:*
         version: link:../api-client
+      '@vivd-catalyst/config-schema':
+        specifier: workspace:*
+        version: link:../config-schema
       '@vivd-catalyst/core':
         specifier: workspace:*
         version: link:../core
