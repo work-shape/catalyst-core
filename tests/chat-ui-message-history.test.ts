@@ -7,6 +7,7 @@ import {
 } from "@vivd-catalyst/core";
 import { toUiMessages } from "../packages/chat-ui/src/assistant-ui-adapter";
 import {
+  readToolActionLabel,
   readToolArtifactRefs,
   readToolDetailSections
 } from "../packages/chat-ui/src/tool-call";
@@ -411,11 +412,319 @@ describe("chat UI message history projection", () => {
       result: toolPart?.output,
       toolName: "workspace.exec"
     });
-    expect(detailSections).toEqual([]);
-    expect(JSON.stringify(detailSections)).not.toContain("scratch/final-report.pdf");
-    expect(JSON.stringify(detailSections)).not.toContain("shell stdout preview");
-    expect(JSON.stringify(detailSections)).not.toContain("shell stderr preview");
-    expect(JSON.stringify(detailSections)).not.toContain("workspacePath");
+    expect(readToolActionLabel({
+      args: {
+        command: "cat scratch/final-report.pdf && echo shell"
+      },
+      result: toolPart?.output,
+      toolName: "workspace.exec"
+    })).toBe("cat");
+    const serializedDetails = JSON.stringify(detailSections);
+    expect(serializedDetails).toContain("status completed");
+    expect(serializedDetails).toContain("final-report.pdf");
+    expect(serializedDetails).not.toContain("scratch/final-report.pdf");
+    expect(serializedDetails).not.toContain("shell stdout preview");
+    expect(serializedDetails).not.toContain("shell stderr preview");
+    expect(serializedDetails).not.toContain("workspacePath");
+  });
+
+  it("projects safe workspace exec helper details without raw command output", () => {
+    const toolPart = projectPersistedToolPart({
+      toolName: "workspace.exec",
+      input: {
+        command:
+          "pptx_inspect --view summary scratch/musterbau-status.pptx && cat scratch/private-output.json"
+      },
+      result: {
+        status: "success",
+        output: {
+          commandId: "wcmd_private",
+          workspaceId: "ews_private",
+          status: "completed",
+          exitCode: 0,
+          stdoutPreview: "{\"slides\":[{\"secret\":\"raw stdout json should stay hidden\"}]}",
+          stderrPreview: "raw stderr preview should stay hidden",
+          durationMs: 1234,
+          changedFiles: [
+            {
+              path: "scratch/summary.json",
+              objectKey: "execution-workspaces/private/summary.json",
+              byteSize: 4096,
+              checksum: "sha256:summary",
+              mimeType: "application/json"
+            }
+          ],
+          promotedArtifacts: [],
+          truncated: {
+            stdout: true,
+            stderr: false
+          }
+        }
+      }
+    });
+
+    expect(readToolActionLabel({
+      args: toolPart.input,
+      result: toolPart.output,
+      toolName: "workspace.exec"
+    })).toBe("pptx_inspect --view summary");
+    const detailSections = readToolDetailSections({
+      args: toolPart.input,
+      labels: { input: "Input", output: "Output" },
+      result: toolPart.output,
+      toolName: "workspace.exec"
+    });
+    const serializedDetails = JSON.stringify(detailSections);
+
+    expect(serializedDetails).toContain("pptx_inspect --view summary");
+    expect(serializedDetails).toContain("status completed");
+    expect(serializedDetails).toContain("exit 0");
+    expect(serializedDetails).toContain("1.2 s");
+    expect(serializedDetails).toContain("stdout preview");
+    expect(serializedDetails).toContain("(truncated)");
+    expect(serializedDetails).toContain("summary.json");
+    expect(serializedDetails).not.toContain("scratch/");
+    expect(serializedDetails).not.toContain("execution-workspaces/private");
+    expect(serializedDetails).not.toContain("objectKey");
+    expect(serializedDetails).not.toContain("raw stdout json");
+    expect(serializedDetails).not.toContain("raw stderr preview");
+    expect(serializedDetails).not.toContain("wcmd_private");
+    expect(serializedDetails).not.toContain("ews_private");
+  });
+
+  it("projects safe import, read, and promote workspace details", () => {
+    const imported = projectPersistedToolPart({
+      toolName: "workspace.import_files",
+      input: {
+        files: [{ fileId: "file_private_csv", path: "scratch/uploads/source.csv" }]
+      },
+      result: {
+        status: "success",
+        output: {
+          workspaceId: "ews_private",
+          importedFiles: [
+            {
+              fileId: "file_private_csv",
+              path: "scratch/uploads/source.csv",
+              filename: "source.csv",
+              byteSize: 18,
+              checksum: "sha256:source",
+              mimeType: "text/csv",
+              objectKey: "managed-files/private/source.csv"
+            }
+          ]
+        }
+      }
+    });
+    const read = projectPersistedToolPart({
+      toolName: "workspace.read_file",
+      input: {
+        path: "scratch/large-result.json"
+      },
+      result: {
+        status: "success",
+        output: {
+          workspaceId: "ews_private",
+          path: "scratch/large-result.json",
+          byteSize: 20000,
+          mimeType: "application/json",
+          encoding: "utf-8",
+          contentPreview: JSON.stringify({
+            raw: "x".repeat(20000),
+            objectKey: "execution-workspaces/private/large-result.json"
+          }),
+          truncated: true
+        }
+      }
+    });
+    const promoted = projectPersistedToolPart({
+      toolName: "workspace.promote_artifact",
+      input: {
+        path: "scratch/final-report.pdf",
+        kind: "document.pdf",
+        filename: "final-report.pdf",
+        mimeType: "application/pdf"
+      },
+      result: {
+        status: "success",
+        output: {
+          artifactId: "art_final",
+          path: "scratch/final-report.pdf",
+          kind: "document.pdf",
+          filename: "final-report.pdf",
+          mimeType: "application/pdf",
+          byteSize: 1024,
+          checksum: "sha256:final"
+        },
+        artifacts: [
+          {
+            artifactId: "art_final",
+            kind: "document.pdf",
+            filename: "final-report.pdf",
+            mimeType: "application/pdf",
+            metadata: {
+              source: "execution_workspace",
+              workspacePath: "scratch/final-report.pdf",
+              objectKey: "execution-workspaces/private/final-report.pdf"
+            }
+          }
+        ]
+      }
+    });
+
+    expect(readToolActionLabel({
+      args: imported.input,
+      result: imported.output,
+      toolName: "workspace.import_files"
+    })).toBe("Imported 1 file");
+    expect(readToolActionLabel({
+      args: read.input,
+      result: read.output,
+      toolName: "workspace.read_file"
+    })).toBe("Read large-result.json");
+    expect(readToolActionLabel({
+      args: promoted.input,
+      result: promoted.output,
+      toolName: "workspace.promote_artifact"
+    })).toBe("Promoted final-report.pdf");
+    expect(readToolArtifactRefs(promoted.output)).toEqual([
+      {
+        artifactId: "art_final",
+        kind: "document.pdf",
+        filename: "final-report.pdf",
+        mimeType: "application/pdf"
+      }
+    ]);
+
+    const serializedDetails = JSON.stringify([
+      readToolDetailSections({
+        args: imported.input,
+        labels: { input: "Input", output: "Output" },
+        result: imported.output,
+        toolName: "workspace.import_files"
+      }),
+      readToolDetailSections({
+        args: read.input,
+        labels: { input: "Input", output: "Output" },
+        result: read.output,
+        toolName: "workspace.read_file"
+      }),
+      readToolDetailSections({
+        args: promoted.input,
+        labels: { input: "Input", output: "Output" },
+        result: promoted.output,
+        toolName: "workspace.promote_artifact"
+      })
+    ]);
+
+    expect(serializedDetails).toContain("source.csv");
+    expect(serializedDetails).toContain("18 B");
+    expect(serializedDetails).toContain("large-result.json");
+    expect(serializedDetails).toContain("file 20 KB");
+    expect(serializedDetails).toContain("preview 20 KB (truncated)");
+    expect(serializedDetails).toContain("final-report.pdf");
+    expect(serializedDetails).toContain("document.pdf");
+    expect(serializedDetails).not.toContain("file_private_csv");
+    expect(serializedDetails).not.toContain("ews_private");
+    expect(serializedDetails).not.toContain("scratch/");
+    expect(serializedDetails).not.toContain("workspacePath");
+    expect(serializedDetails).not.toContain("objectKey");
+    expect(serializedDetails).not.toContain("execution-workspaces/private");
+    expect(serializedDetails).not.toContain("xxxxx");
+  });
+
+  it("projects workspace failure reason codes without raw error details", () => {
+    const toolPart = projectPersistedToolPart({
+      toolName: "workspace.exec",
+      input: {
+        command: "xlsx_inspect --range Sheet1!A1:C10 scratch/workbook.xlsx"
+      },
+      result: {
+        status: "failed",
+        error: {
+          code: "handler_failed",
+          message:
+            "Command failed while reading /Users/felixpahlke/code/vivd-catalyst/.worktrees/platform/scratch/workbook.xlsx"
+        }
+      }
+    });
+
+    const detailSections = readToolDetailSections({
+      args: toolPart.input,
+      labels: { input: "Input", output: "Output" },
+      result: toolPart.output,
+      toolName: "workspace.exec"
+    });
+    const serializedDetails = JSON.stringify(detailSections);
+
+    expect(toolPart).toMatchObject({
+      state: "output-error",
+      output: {
+        status: "failed",
+        error: {
+          code: "handler_failed"
+        }
+      }
+    });
+    expect(readToolActionLabel({
+      args: toolPart.input,
+      result: toolPart.output,
+      toolName: "workspace.exec"
+    })).toBe("xlsx_inspect --range Sheet1!A1:C10");
+    expect(serializedDetails).toContain("reason handler_failed");
+    expect(serializedDetails).not.toContain("/Users/felixpahlke");
+    expect(serializedDetails).not.toContain("scratch/workbook.xlsx");
+    expect(serializedDetails).not.toContain("Command failed while reading");
+
+    const timeoutDetails = JSON.stringify(readToolDetailSections({
+      args: {
+        command: "pptx_inspect --view summary scratch/deck.pptx"
+      },
+      labels: { input: "Input", output: "Output" },
+      result: {
+        status: "success",
+        output: {
+          status: "failed",
+          exitCode: 124,
+          stdoutPreview: "",
+          stderrPreview: "",
+          durationMs: 60000,
+          changedFiles: [],
+          promotedArtifacts: [],
+          truncated: {
+            stdout: false,
+            stderr: false
+          }
+        }
+      },
+      toolName: "workspace.exec"
+    }));
+    const cancelledDetails = JSON.stringify(readToolDetailSections({
+      args: {
+        command: "pptx_inspect --view summary scratch/deck.pptx"
+      },
+      labels: { input: "Input", output: "Output" },
+      result: {
+        status: "success",
+        output: {
+          status: "cancelled",
+          exitCode: null,
+          stdoutPreview: "",
+          stderrPreview: "",
+          durationMs: 50,
+          changedFiles: [],
+          promotedArtifacts: [],
+          truncated: {
+            stdout: false,
+            stderr: false
+          }
+        }
+      },
+      toolName: "workspace.exec"
+    }));
+
+    expect(timeoutDetails).toContain("reason timeout");
+    expect(cancelledDetails).toContain("reason cancelled");
   });
 
   it("keeps non-workspace tool details available", () => {
@@ -538,3 +847,62 @@ describe("chat UI message history projection", () => {
     ]);
   });
 });
+
+function projectPersistedToolPart(input: {
+  toolName: string;
+  input: unknown;
+  result: Parameters<typeof createToolResultMetadata>[0]["result"];
+}): {
+  type: string;
+  state?: string;
+  input?: unknown;
+  output?: unknown;
+} {
+  const messages: Message[] = [
+    {
+      id: "msg_tool_call",
+      conversationId: "conv_test",
+      clientInstanceId: "client_test",
+      role: "assistant",
+      text: "",
+      createdAt: "2026-06-15T00:00:01.000Z",
+      metadata: createAssistantToolCallsMetadata({
+        runId: "run_test",
+        toolCalls: [
+          {
+            toolCallId: "call_workspace",
+            toolName: input.toolName,
+            input: input.input
+          }
+        ]
+      })
+    },
+    {
+      id: "msg_tool_result",
+      conversationId: "conv_test",
+      clientInstanceId: "client_test",
+      role: "tool",
+      text: JSON.stringify(input.result),
+      createdAt: "2026-06-15T00:00:02.000Z",
+      metadata: createToolResultMetadata({
+        runId: "run_test",
+        toolCall: {
+          toolCallId: "call_workspace",
+          toolName: input.toolName,
+          input: input.input
+        },
+        result: input.result,
+        modelOutput: {
+          text: JSON.stringify(input.result)
+        }
+      })
+    }
+  ];
+  const projected = toUiMessages(messages);
+  return projected[0]?.parts[0] as {
+    type: string;
+    state?: string;
+    input?: unknown;
+    output?: unknown;
+  };
+}

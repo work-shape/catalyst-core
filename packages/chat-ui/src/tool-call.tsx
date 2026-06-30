@@ -18,6 +18,7 @@ import { useToolDisplayPanel } from "./tool-display-panel";
 import { useAttachmentContentContext } from "./attachment-content";
 import { cn } from "./ui/cn";
 import { Spinner } from "./ui/spinner";
+import { projectWorkspaceToolDisplay, type ToolDetailSection } from "./workspace-tool-display";
 
 const DISPLAY_HEIGHT_MESSAGE_TYPE = "vivd-catalyst:display-height";
 const RUNTIME_THEME_STYLE_ID = "vivd-catalyst-runtime-theme";
@@ -89,7 +90,8 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
   const builtInDisplay = display && !hasRenderedNode(renderedDisplay) ? renderBuiltInDisplay(display) : undefined;
   const hasDisplay = hasRenderedNode(renderedDisplay) || hasRenderedNode(builtInDisplay);
   const displayMode = readDisplayMode(display);
-  const detailSections = toolDetailSections({
+  const workspaceProjection = projectWorkspaceToolDisplay({ args, result, toolName });
+  const detailSections = workspaceProjection?.sections ?? toolDetailSections({
     args,
     argsText,
     toolName,
@@ -97,13 +99,15 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
     labels: { input: t("toolInput"), output: t("toolOutput") }
   });
   const artifacts = readToolArtifactRefs(result);
-  const summary = getToolSummary(result, t);
+  const summary = workspaceProjection?.summary ?? getToolSummary(result, t);
   const statusLabel = toolStatusLabel(state, t);
+  const actionLabel = workspaceProjection?.actionLabel;
 
   if (hasDisplay) {
     if (displayMode === "side_panel" && displayPanel.available) {
       return (
         <SidePanelToolCall
+          actionLabel={actionLabel}
           detailSections={detailSections}
           display={display}
           displayNode={renderedDisplay ?? builtInDisplay}
@@ -118,6 +122,7 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
 
     return (
       <DisplayToolCall
+        actionLabel={actionLabel}
         detailSections={detailSections}
         displayNode={renderedDisplay ?? builtInDisplay}
         state={state}
@@ -142,6 +147,7 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
       >
         <ToolStatusIcon state={state} />
         <span className="truncate font-medium text-foreground">{toolName}</span>
+        {actionLabel ? <span className="min-w-0 truncate">{actionLabel}</span> : null}
         <span className="shrink-0">{statusLabel}</span>
         <span className="sr-only">{toolCallId}</span>
       </div>
@@ -150,6 +156,7 @@ export function ToolCallPart({ toolName, toolCallId, args, argsText, result, isE
 
   return (
     <CompactToolCall
+      actionLabel={actionLabel}
       detailSections={detailSections}
       state={state}
       statusLabel={statusLabel}
@@ -203,6 +210,7 @@ export function DataPart({ name, data }: DataPartProps) {
 }
 
 function SidePanelToolCall({
+  actionLabel,
   detailSections,
   display,
   displayNode,
@@ -212,7 +220,8 @@ function SidePanelToolCall({
   toolCallId,
   toolName
 }: {
-  detailSections: Array<{ label: string; value: string }>;
+  actionLabel?: string;
+  detailSections: ToolDetailSection[];
   display: ReturnType<typeof readToolDisplayPayloadFromToolResult>;
   displayNode: ReactNode;
   state: "running" | "completed" | "failed";
@@ -249,6 +258,7 @@ function SidePanelToolCall({
       >
         <ToolStatusIcon state={state} />
         <span className="truncate font-medium text-foreground">{toolName}</span>
+        {actionLabel ? <span className="min-w-0 truncate">{actionLabel}</span> : null}
         <span className="shrink-0">{statusLabel}</span>
         <span className="ml-auto shrink-0 rounded-md bg-muted px-2 py-1">
           {t(panelActive ? "shownInSidePanel" : "openDisplayPanel")}
@@ -305,6 +315,7 @@ function SidePanelDataPart({
 }
 
 function DisplayToolCall({
+  actionLabel,
   detailSections,
   displayNode,
   state,
@@ -313,7 +324,8 @@ function DisplayToolCall({
   toolCallId,
   toolName
 }: {
-  detailSections: Array<{ label: string; value: string }>;
+  actionLabel?: string;
+  detailSections: ToolDetailSection[];
   displayNode: ReactNode;
   state: "running" | "completed" | "failed";
   statusLabel: string;
@@ -344,6 +356,7 @@ function DisplayToolCall({
         >
           <ToolStatusIcon state={state} />
           <span className="truncate font-medium text-foreground">{toolName}</span>
+          {actionLabel ? <span className="min-w-0 truncate">{actionLabel}</span> : null}
           <span className="shrink-0">{statusLabel}</span>
           <ChevronRight
             size={14}
@@ -433,13 +446,13 @@ function toolDetailSections({
   labels: { input: string; output: string };
   toolName: string;
   result: unknown;
-}): Array<{ label: string; value: string }> {
+}): ToolDetailSection[] {
   if (isWorkspaceToolName(toolName)) {
-    return [];
+    return projectWorkspaceToolDisplay({ args, result, toolName })?.sections ?? [];
   }
   const input = formatDetails(argsText && argsText.trim().length > 0 ? argsText : args);
   const output = formatDetails(result);
-  const sections: Array<{ label: string; value: string }> = [];
+  const sections: ToolDetailSection[] = [];
   if (input) {
     sections.push({ label: labels.input, value: input });
   }
@@ -455,8 +468,16 @@ export function readToolDetailSections(input: {
   labels: { input: string; output: string };
   result: unknown;
   toolName: string;
-}): Array<{ label: string; value: string }> {
+}): ToolDetailSection[] {
   return toolDetailSections(input);
+}
+
+export function readToolActionLabel(input: {
+  args: unknown;
+  result: unknown;
+  toolName: string;
+}): string | undefined {
+  return projectWorkspaceToolDisplay(input)?.actionLabel;
 }
 
 function isWorkspaceToolName(toolName: string): boolean {
@@ -494,6 +515,7 @@ function ToolStatusIcon({ state }: { state: "running" | "completed" | "failed" }
 }
 
 function CompactToolCall({
+  actionLabel,
   detailSections,
   state,
   statusLabel,
@@ -502,7 +524,8 @@ function CompactToolCall({
   toolCallId,
   toolName
 }: {
-  detailSections: Array<{ label: string; value: string }>;
+  actionLabel?: string;
+  detailSections: ToolDetailSection[];
   state: "running" | "completed" | "failed";
   statusLabel: string;
   summary: string | undefined;
@@ -524,10 +547,11 @@ function CompactToolCall({
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center gap-2 px-2.5 py-2 text-left text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
+        className="flex w-full min-w-0 items-center gap-2 px-2.5 py-2 text-left text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
       >
         <ToolStatusIcon state={state} />
         <span className="truncate font-medium text-foreground">{toolName}</span>
+        {actionLabel ? <span className="min-w-0 truncate">{actionLabel}</span> : null}
         <span className="shrink-0">{statusLabel}</span>
         <ChevronRight
           size={14}
@@ -655,7 +679,7 @@ function ToolDetailDisclosure({
 }: {
   className?: string;
   defaultOpen?: boolean;
-  sections: Array<{ label: string; value: string }>;
+  sections: ToolDetailSection[];
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(Boolean(defaultOpen));
@@ -688,7 +712,7 @@ function ToolDetailDisclosure({
   );
 }
 
-function ToolDetails({ sections }: { sections: Array<{ label: string; value: string }> }) {
+function ToolDetails({ sections }: { sections: ToolDetailSection[] }) {
   if (sections.length === 0) {
     return null;
   }
