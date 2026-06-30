@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   asAgentRunId,
@@ -5,6 +8,7 @@ import {
   asExecutionWorkspaceId,
   asManagedFileId,
   asToolCallId,
+  asWorkspaceCommandId,
   StoreBackedAuditRecorder,
   type ClientInstanceId,
   type Conversation,
@@ -14,8 +18,10 @@ import {
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 import {
   createWorkspaceToolDefinitions,
+  LocalWorkspaceCommandRunner,
   shapeWorkspaceCommandOutput,
   WorkspaceCommandService,
+  WorkspaceCommandWorker,
   type WorkspaceCommandTelemetry,
   type WorkspaceFileByteStore,
   type WorkspaceObjectStore
@@ -224,6 +230,80 @@ describe("workspace tools", () => {
         limit: 1
       });
     }
+  });
+
+  it("waits for a worker-backed workspace.exec result before returning to the model", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "workspace-tools-worker-"));
+    const harness = await createWorkspaceHarness({
+      execResultWaitMs: 5000,
+      execResultPollIntervalMs: 10
+    });
+    const runner = new LocalWorkspaceCommandRunner({
+      store: harness.store,
+      byteStore: harness.objectStore,
+      tempRootDirectory: tempRoot
+    });
+    const worker = new WorkspaceCommandWorker({
+      clientInstanceId: harness.clientInstanceId,
+      store: harness.store,
+      runner,
+      pollIntervalMs: 10,
+      tempStateCleanupIntervalMs: 60_000
+    });
+    const workerLoop = worker.start();
+
+    try {
+      const result = await harness.runTool("workspace.exec", {
+        command: "printf 'ready' > result.txt",
+        expectedOutputs: [{ path: "result.txt" }]
+      });
+
+      expect(result.status).toBe("success");
+      if (result.status !== "success") {
+        throw new Error("Expected exec to succeed");
+      }
+      expect(result.output).toMatchObject({
+        status: "completed",
+        exitCode: 0,
+        changedFiles: [expect.objectContaining({ path: "result.txt" })]
+      });
+
+      const read = await harness.runTool("workspace.read_file", { path: "result.txt" });
+      expect(read.status).toBe("success");
+      if (read.status !== "success") {
+        throw new Error("Expected read_file to succeed");
+      }
+      expect(read.output.contentPreview).toBe("ready");
+    } finally {
+      await worker.stop({ cancelActive: true, reason: "test complete" });
+      await workerLoop;
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("fails and cancels workspace.exec when no worker completes the command before the wait limit", async () => {
+    const harness = await createWorkspaceHarness({
+      execResultWaitMs: 20,
+      execResultPollIntervalMs: 5
+    });
+
+    const result = await harness.runTool("workspace.exec", { command: "sleep 60" });
+
+    expect(result.status).toBe("failed");
+    if (result.status !== "failed") {
+      throw new Error("Expected exec to fail without a worker");
+    }
+    expect(result.error.message).toMatch(/did not complete/u);
+    expect(result.error.details).toMatchObject({
+      status: "cancelled"
+    });
+    const commandId = result.error.details?.commandId;
+    expect(typeof commandId).toBe("string");
+    const command = await harness.store.getWorkspaceCommand({
+      clientInstanceId: harness.clientInstanceId,
+      commandId: asWorkspaceCommandId(commandId as string)
+    });
+    expect(command?.status).toBe("cancelled");
   });
 
   it("lists internal workspace files without exposing them as tool artifacts", async () => {
@@ -520,6 +600,8 @@ async function expectToolFailure(
 async function createWorkspaceHarness(input: {
   agentToolNames?: string[];
   commandResults?: ConstructorParameters<typeof WorkspaceCommandService>[0]["commandResults"];
+  execResultWaitMs?: ConstructorParameters<typeof WorkspaceCommandService>[0]["execResultWaitMs"];
+  execResultPollIntervalMs?: ConstructorParameters<typeof WorkspaceCommandService>[0]["execResultPollIntervalMs"];
   limits?: ConstructorParameters<typeof WorkspaceCommandService>[0]["limits"];
   telemetry?: WorkspaceCommandTelemetry;
   withAuditRecorder?: boolean;
@@ -573,6 +655,8 @@ async function createWorkspaceHarness(input: {
     ...(auditRecorder ? { auditRecorder } : {}),
     ...(input.telemetry ? { telemetry: input.telemetry } : {}),
     limits: input.limits,
+    execResultWaitMs: input.execResultWaitMs ?? 0,
+    execResultPollIntervalMs: input.execResultPollIntervalMs,
     now: () => "2026-06-29T12:00:00.000Z"
   });
   const tools = createWorkspaceToolDefinitions({ service });

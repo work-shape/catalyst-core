@@ -72,7 +72,8 @@ export type { WorkspaceCommandServiceLimits } from "./workspace-tool-schemas";
 export type WorkspaceToolStore = Pick<
   PlatformStore,
   | "ensureExecutionWorkspace" | "listWorkspaceFiles" | "upsertWorkspaceFile"
-  | "enqueueWorkspaceCommand" | "countActiveWorkspaceCommands" | "createManagedArtifact"
+  | "enqueueWorkspaceCommand" | "getWorkspaceCommand" | "requestWorkspaceCommandCancellation"
+  | "countActiveWorkspaceCommands" | "createManagedArtifact"
 >;
 
 export interface WorkspaceSourceFileReader {
@@ -102,6 +103,8 @@ export interface WorkspaceCommandServiceOptions {
   auditRecorder?: AuditRecorder;
   telemetry?: WorkspaceCommandTelemetry;
   limits?: Partial<WorkspaceCommandServiceLimits>;
+  execResultWaitMs?: number;
+  execResultPollIntervalMs?: number;
   now?: () => string;
 }
 
@@ -114,6 +117,8 @@ export class WorkspaceCommandService {
   private readonly auditRecorder?: AuditRecorder;
   private readonly telemetry?: WorkspaceCommandTelemetry;
   private readonly limits: WorkspaceCommandServiceLimits;
+  private readonly execResultWaitMs?: number;
+  private readonly execResultPollIntervalMs: number;
   private readonly now: () => string;
 
   constructor(options: WorkspaceCommandServiceOptions) {
@@ -128,6 +133,8 @@ export class WorkspaceCommandService {
       ...DEFAULT_LIMITS,
       ...options.limits
     };
+    this.execResultWaitMs = options.execResultWaitMs;
+    this.execResultPollIntervalMs = options.execResultPollIntervalMs ?? 500;
     this.now = options.now ?? (() => new Date().toISOString());
   }
 
@@ -149,32 +156,35 @@ export class WorkspaceCommandService {
       return command.result;
     }
     await this.recordQueuedCommand(context, command.value);
-    const resolved = await this.commandResults?.resolveWorkspaceCommand({ command: command.value, context });
-    if (resolved && resolved.id !== command.value.id) {
+    const resolvedBySource = await this.commandResults?.resolveWorkspaceCommand({ command: command.value, context });
+    if (resolvedBySource && resolvedBySource.id !== command.value.id) {
       return failed("handler_failed", "Workspace command result source returned the wrong command");
     }
-    const resultCommand = resolved ?? command.value;
+    const resultCommand = await this.resolveCommandResult(resolvedBySource ?? command.value);
+    if (resultCommand.status === "failed") {
+      return resultCommand.result;
+    }
     const expectedOutputs = normalized.value.expectedOutputs;
-    if (resultCommand.output) {
+    if (resultCommand.value.output) {
       const expectedValidation = validateExpectedOutputResult(
         expectedOutputs,
-        resultCommand.output
+        resultCommand.value.output
       );
       if (expectedValidation) {
         return expectedValidation;
       }
     }
 
-    const output = commandToExecOutput(resultCommand, workspace.value.id);
-    const artifacts = commandArtifacts(resultCommand);
+    const output = commandToExecOutput(resultCommand.value, workspace.value.id);
+    const artifacts = commandArtifacts(resultCommand.value);
     return toolSuccess(output, {
       artifacts: artifacts.length > 0 ? artifacts : undefined,
       auditSummary: {
         action: "workspace.exec",
-        subject: resultCommand.id,
+        subject: resultCommand.value.id,
         metadata: {
-          status: resultCommand.status,
-          timeoutSeconds: resultCommand.limits.timeoutSeconds
+          status: resultCommand.value.status,
+          timeoutSeconds: resultCommand.value.limits.timeoutSeconds
         }
       }
     });
@@ -585,6 +595,48 @@ export class WorkspaceCommandService {
     );
   }
 
+  private async resolveCommandResult(command: WorkspaceCommand): Promise<ValidationResult<WorkspaceCommand>> {
+    if (isTerminalWorkspaceCommand(command)) {
+      return { status: "success", value: command };
+    }
+
+    const waitMs = this.execResultWaitMs ?? ((command.limits.timeoutSeconds * 1000) + 5000);
+    if (waitMs <= 0) {
+      return { status: "success", value: command };
+    }
+
+    const deadlineMs = Date.now() + waitMs;
+    let current = command;
+    while (Date.now() < deadlineMs) {
+      await sleep(Math.min(this.execResultPollIntervalMs, Math.max(1, deadlineMs - Date.now())));
+      const latest = await this.store.getWorkspaceCommand({
+        clientInstanceId: command.clientInstanceId,
+        commandId: command.id
+      });
+      if (!latest) {
+        return failedValidationResult("Workspace command is no longer available", {
+          commandId: command.id
+        });
+      }
+      current = latest;
+      if (isTerminalWorkspaceCommand(current)) {
+        return { status: "success", value: current };
+      }
+    }
+
+    const cancelled = await this.store.requestWorkspaceCommandCancellation({
+      clientInstanceId: command.clientInstanceId,
+      commandId: command.id,
+      reason: "Workspace command did not complete before the tool wait limit",
+      requestedAt: this.now()
+    });
+    return failedValidationResult("Workspace command did not complete before the tool wait limit", {
+      commandId: command.id,
+      status: cancelled.status,
+      waitMs
+    });
+  }
+
   private async readActiveCommandCounts(
     clientInstanceId: ClientInstanceId
   ): Promise<Awaited<ReturnType<WorkspaceToolStore["countActiveWorkspaceCommands"]>> | undefined> {
@@ -769,6 +821,14 @@ export class WorkspaceCommandService {
       updatedAt: this.now()
     });
   }
+}
+
+function isTerminalWorkspaceCommand(command: WorkspaceCommand): boolean {
+  return command.status === "completed" || command.status === "failed" || command.status === "cancelled";
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export function createWorkspaceToolDefinitions(
