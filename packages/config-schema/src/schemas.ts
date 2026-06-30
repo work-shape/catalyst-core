@@ -426,8 +426,8 @@ const darkUiThemeSchema = createUiThemeSchema(defaultDarkUiTheme);
 export const uiConfigSchema = z
   .object({
     clientName: localizedStringSchema.optional(),
-    logoUrl: z.string().url().optional(),
-    logoUrlDark: z.string().url().optional(),
+    logoUrl: z.string().url().or(z.string().startsWith("/")).optional(),
+    logoUrlDark: z.string().url().or(z.string().startsWith("/")).optional(),
     logoInvertOnDark: z.boolean().default(false),
     faviconUrl: z.string().url().or(z.string().startsWith("/")).optional(),
     title: localizedStringSchema.default("Vivd Catalyst"),
