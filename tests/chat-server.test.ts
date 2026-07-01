@@ -345,6 +345,139 @@ describe("client instance app vertical slice", () => {
       })
     });
 
+    const finalOnlyUserMessage = await store.appendMessage({
+      clientInstanceId,
+      conversationId: conversation.id,
+      role: "user",
+      text: "split this PDF into three files"
+    });
+    const finalOnlyRun = await store.createAgentRun({
+      id: createPlatformId<"AgentRunId">("run_final_only"),
+      clientInstanceId,
+      conversationId: conversation.id,
+      ownerUserId: owner.id,
+      inputMessageId: finalOnlyUserMessage.id,
+      agentName: "test_agent",
+      correlationId: "completed-projection-final-only",
+      startedAt: "2026-07-01T12:01:00.000Z"
+    });
+    const finalOnlyToolCallId = asToolCallId("call_workspace");
+    const finalOnlyProgressText = "I will create the files now.";
+    const finalOnlyText = "Done. I split the PDF into 3 files.";
+    const finalOnlyMessageId = createPlatformId<"MessageId">("msg_final_only");
+
+    await store.appendRunObservation({
+      clientInstanceId,
+      runId: finalOnlyRun.id,
+      conversationId: conversation.id,
+      ownerUserId: owner.id,
+      event: {
+        type: "message_delta",
+        runId: finalOnlyRun.id,
+        sequence: 1,
+        createdAt: "2026-07-01T12:01:01.000Z",
+        delta: finalOnlyProgressText
+      }
+    });
+    await store.appendRunObservation({
+      clientInstanceId,
+      runId: finalOnlyRun.id,
+      conversationId: conversation.id,
+      ownerUserId: owner.id,
+      event: {
+        type: "tool_call_started",
+        runId: finalOnlyRun.id,
+        sequence: 2,
+        createdAt: "2026-07-01T12:01:02.000Z",
+        toolCallId: finalOnlyToolCallId,
+        toolName: "workspace.exec",
+        input: {
+          command: "split-pdf"
+        }
+      }
+    });
+    await store.appendRunObservation({
+      clientInstanceId,
+      runId: finalOnlyRun.id,
+      conversationId: conversation.id,
+      ownerUserId: owner.id,
+      event: {
+        type: "tool_call_completed",
+        runId: finalOnlyRun.id,
+        sequence: 3,
+        createdAt: "2026-07-01T12:01:03.000Z",
+        toolCallId: finalOnlyToolCallId,
+        toolName: "workspace.exec",
+        result: toolSuccess({
+          ok: true
+        }),
+        modelOutput: "{\"ok\":true}"
+      }
+    });
+    await store.appendRunObservation({
+      clientInstanceId,
+      runId: finalOnlyRun.id,
+      conversationId: conversation.id,
+      ownerUserId: owner.id,
+      event: {
+        type: "message_delta",
+        runId: finalOnlyRun.id,
+        sequence: 4,
+        createdAt: "2026-07-01T12:01:04.000Z",
+        delta: finalOnlyText
+      }
+    });
+    await store.appendRunObservation({
+      clientInstanceId,
+      runId: finalOnlyRun.id,
+      conversationId: conversation.id,
+      ownerUserId: owner.id,
+      event: {
+        type: "message_completed",
+        runId: finalOnlyRun.id,
+        sequence: 5,
+        createdAt: "2026-07-01T12:01:05.000Z",
+        message: {
+          id: finalOnlyMessageId,
+          role: "assistant",
+          text: finalOnlyText,
+          metadata: createAssistantFinalMetadata({
+            runId: finalOnlyRun.id
+          })
+        }
+      }
+    });
+    await store.appendRunObservation({
+      clientInstanceId,
+      runId: finalOnlyRun.id,
+      conversationId: conversation.id,
+      ownerUserId: owner.id,
+      event: {
+        type: "run_completed",
+        runId: finalOnlyRun.id,
+        sequence: 6,
+        createdAt: "2026-07-01T12:01:06.000Z"
+      }
+    });
+    await store.updateAgentRunStatus({
+      clientInstanceId,
+      runId: finalOnlyRun.id,
+      status: "completed",
+      updatedAt: "2026-07-01T12:01:06.000Z",
+      completedAt: "2026-07-01T12:01:06.000Z",
+      lastSequence: 6
+    });
+    await store.appendMessage({
+      id: finalOnlyMessageId,
+      clientInstanceId,
+      conversationId: conversation.id,
+      role: "assistant",
+      text: finalOnlyText,
+      metadata: createAssistantFinalMetadata({
+        runId: finalOnlyRun.id
+      })
+    });
+
     const server = await createChatServer({
       config,
       clientInstanceId,
@@ -392,6 +525,21 @@ describe("client instance app vertical slice", () => {
       {
         type: "text",
         text: finalText
+      }
+    ]);
+    expect(body.completedRunProjections?.[finalOnlyRun.id]?.parts).toEqual([
+      {
+        type: "text",
+        text: finalOnlyProgressText
+      },
+      expect.objectContaining({
+        type: "tool_call",
+        toolCallId: finalOnlyToolCallId,
+        toolName: "workspace.exec"
+      }),
+      {
+        type: "text",
+        text: finalOnlyText
       }
     ]);
 

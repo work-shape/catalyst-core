@@ -441,6 +441,9 @@ function reconcileCompletedProjectionText(
   if (completedText === observedText) {
     return;
   }
+  if (completedText.length > 0 && observedText.endsWith(completedText)) {
+    return;
+  }
   if (completedText.startsWith(observedText)) {
     appendProjectionTextPart(parts, completedText.slice(observedText.length));
     return;

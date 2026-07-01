@@ -182,6 +182,85 @@ describe("chat UI conversation controller", () => {
     ]);
   });
 
+  it("does not duplicate a final completed message after earlier run text", () => {
+    let state = createControllerStateFromSnapshot(createSnapshot({ lastSequence: 0, text: "" }));
+    for (const observation of [
+      createObservation({
+        sequence: 1,
+        type: "message_delta",
+        payload: {
+          delta: "I will create the files now."
+        }
+      }),
+      createObservation({
+        sequence: 2,
+        type: "tool_call_started",
+        payload: {
+          toolCallId: "tool_workspace",
+          toolName: "workspace.exec",
+          input: { command: "split-pdf" }
+        }
+      }),
+      createObservation({
+        sequence: 3,
+        type: "tool_call_completed",
+        payload: {
+          toolCallId: "tool_workspace",
+          toolName: "workspace.exec",
+          result: {
+            status: "success",
+            output: { ok: true }
+          },
+          modelOutput: "{\"ok\":true}"
+        }
+      }),
+      createObservation({
+        sequence: 4,
+        type: "message_delta",
+        payload: {
+          delta: "Done. I split the PDF into 3 files."
+        }
+      }),
+      createObservation({
+        sequence: 5,
+        type: "message_completed",
+        payload: {
+          message: {
+            id: "msg_assistant",
+            role: "assistant",
+            text: "Done. I split the PDF into 3 files.",
+            metadata: {
+              agentRuntime: {
+                version: 1,
+                kind: "assistant_final",
+                runId: "run_1"
+              }
+            }
+          }
+        }
+      })
+    ]) {
+      state = applyRunObservationToControllerState(state, observation).state;
+    }
+
+    expect(state.activeRun?.projection.text).toBe("Done. I split the PDF into 3 files.");
+    expect(state.activeRun?.projection.parts).toEqual([
+      {
+        type: "text",
+        text: "I will create the files now."
+      },
+      expect.objectContaining({
+        type: "tool_call",
+        toolCallId: "tool_workspace",
+        state: "output_available"
+      }),
+      {
+        type: "text",
+        text: "Done. I split the PDF into 3 files."
+      }
+    ]);
+  });
+
   it("preserves live text and tool call chronology for active-run rendering", () => {
     let state = createControllerStateFromSnapshot(createSnapshot({ lastSequence: 0, text: "" }));
     for (const observation of [
