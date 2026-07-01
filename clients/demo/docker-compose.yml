@@ -1,6 +1,7 @@
 x-client-build-args: &client-build-args
   APP_PACKAGE: "@vivd-catalyst/demo"
   SERVER_ENTRY: clients/demo/dist/server.js
+  ARTIFACT_PREVIEW_WORKER_ENTRY: clients/demo/dist/artifact-preview-worker.js
   UI_PACKAGE: "@vivd-catalyst/demo"
   UI_DIST_DIR: clients/demo/dist/client
   NGINX_CONFIG_PATH: docker/nginx-spa.conf
@@ -55,6 +56,15 @@ x-migrate-command: &migrate-command
 x-app-environment: &app-environment
   CLIENT_CONFIG_PATH: /app/clients/demo/config/app.yaml
   DATABASE_URL: postgres://agent_chat:agent_chat@postgres:5432/agent_chat
+  EXECUTION_WORKSPACE_OBJECT_ROOT: /var/lib/vivd-catalyst/demo/execution-workspaces/objects
+
+x-artifact-preview-worker-environment: &artifact-preview-worker-environment
+  CLIENT_CONFIG_PATH: /app/clients/demo/config/app.yaml
+  DATABASE_URL: postgres://agent_chat:agent_chat@postgres:5432/agent_chat
+  EXECUTION_WORKSPACE_OBJECT_ROOT: /var/lib/vivd-catalyst/demo/execution-workspaces/objects
+  ARTIFACT_PREVIEW_TEMP_ROOT: /var/lib/vivd-catalyst/demo/artifact-preview-tmp
+  ARTIFACT_PREVIEW_WORKER_ID: demo-artifact-preview-worker
+  ARTIFACT_PREVIEW_CONCURRENCY: ${ARTIFACT_PREVIEW_CONCURRENCY:-1}
 
 services:
   postgres:
@@ -111,6 +121,8 @@ services:
       CHAT_SERVER_CREDENTIAL: ${CHAT_SERVER_CREDENTIAL:-replace-with-a-server-to-server-secret}
     ports:
       - "${API_HOST_PORT:-4100}:4100"
+    volumes:
+      - execution-workspace-objects:/var/lib/vivd-catalyst/demo/execution-workspaces
     develop:
       watch:
         - action: rebuild
@@ -139,6 +151,38 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+
+  artifact-preview-worker:
+    build:
+      <<: *client-build
+      target: artifact-preview-worker
+    stop_grace_period: 30s
+    depends_on:
+      api:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *artifact-preview-worker-environment
+    volumes:
+      - execution-workspace-objects:/var/lib/vivd-catalyst/demo/execution-workspaces
+      - artifact-preview-tmp:/var/lib/vivd-catalyst/demo/artifact-preview-tmp
+    develop:
+      watch:
+        - action: rebuild
+          path: ../../clients/demo
+          ignore: *demo-api-watch-ignore
+        - action: rebuild
+          path: ../../packages
+          ignore: *backend-package-watch-ignore
+        - action: rebuild
+          path: ../../docker
+        - action: rebuild
+          path: ../../package.json
+        - action: rebuild
+          path: ../../pnpm-lock.yaml
+        - action: rebuild
+          path: ../../pnpm-workspace.yaml
 
   ui:
     build:
@@ -191,3 +235,5 @@ services:
 
 volumes:
   postgres-data:
+  execution-workspace-objects:
+  artifact-preview-tmp:

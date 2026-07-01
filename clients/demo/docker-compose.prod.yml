@@ -1,6 +1,7 @@
 x-client-build-args: &client-build-args
   APP_PACKAGE: "@vivd-catalyst/demo"
   SERVER_ENTRY: clients/demo/dist/server.js
+  ARTIFACT_PREVIEW_WORKER_ENTRY: clients/demo/dist/artifact-preview-worker.js
   UI_PACKAGE: "@vivd-catalyst/demo"
   UI_DIST_DIR: clients/demo/dist/client
   NGINX_CONFIG_PATH: docker/nginx-spa.conf
@@ -23,6 +24,15 @@ x-migrate-command: &migrate-command
 x-app-environment: &app-environment
   CLIENT_CONFIG_PATH: /app/clients/demo/config/app.yaml
   DATABASE_URL: ${DATABASE_URL:-postgres://agent_chat:agent_chat@postgres:5432/agent_chat}
+  EXECUTION_WORKSPACE_OBJECT_ROOT: /var/lib/vivd-catalyst/demo/execution-workspaces/objects
+
+x-artifact-preview-worker-environment: &artifact-preview-worker-environment
+  CLIENT_CONFIG_PATH: /app/clients/demo/config/app.yaml
+  DATABASE_URL: ${DATABASE_URL:-postgres://agent_chat:agent_chat@postgres:5432/agent_chat}
+  EXECUTION_WORKSPACE_OBJECT_ROOT: /var/lib/vivd-catalyst/demo/execution-workspaces/objects
+  ARTIFACT_PREVIEW_TEMP_ROOT: /var/lib/vivd-catalyst/demo/artifact-preview-tmp
+  ARTIFACT_PREVIEW_WORKER_ID: demo-artifact-preview-worker
+  ARTIFACT_PREVIEW_CONCURRENCY: ${ARTIFACT_PREVIEW_CONCURRENCY:-1}
 
 services:
   postgres:
@@ -89,6 +99,24 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+    volumes:
+      - execution-workspace-objects:/var/lib/vivd-catalyst/demo/execution-workspaces
+
+  artifact-preview-worker:
+    build:
+      <<: *client-build
+      target: artifact-preview-worker
+    stop_grace_period: 30s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *artifact-preview-worker-environment
+    volumes:
+      - execution-workspace-objects:/var/lib/vivd-catalyst/demo/execution-workspaces
+      - artifact-preview-tmp:/var/lib/vivd-catalyst/demo/artifact-preview-tmp
 
   ui:
     build:
@@ -112,3 +140,5 @@ services:
 
 volumes:
   postgres-data:
+  execution-workspace-objects:
+  artifact-preview-tmp:

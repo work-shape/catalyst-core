@@ -47,6 +47,27 @@ FROM api AS workspace-command-worker
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 RUN docker --version
 
+FROM api AS artifact-preview-worker
+
+ARG ARTIFACT_PREVIEW_WORKER_ENTRY
+ENV ARTIFACT_PREVIEW_WORKER_ENTRY=${ARTIFACT_PREVIEW_WORKER_ENTRY}
+
+RUN --mount=type=cache,id=vivd-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+  --mount=type=cache,id=vivd-apt-cache,target=/var/cache/apt,sharing=locked \
+  apt-get update \
+  && apt-get install -y --no-install-recommends \
+    fonts-dejavu \
+    fonts-liberation \
+    libreoffice-impress-nogui \
+    libreoffice-writer-nogui \
+    poppler-utils \
+  && soffice --headless --version \
+  && pdfinfo -v \
+  && pdftoppm -v \
+  && rm -rf /var/lib/apt/lists/*
+
+CMD ["sh", "-c", "node ${ARTIFACT_PREVIEW_WORKER_ENTRY}"]
+
 FROM nginx:1.27-alpine AS ui
 
 ARG UI_DIST_DIR

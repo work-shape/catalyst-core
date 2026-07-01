@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsup src/server.ts src/seed-auth.ts --format esm --out-dir dist && vite build",
-    "build:server": "tsup src/server.ts src/seed-auth.ts --format esm --out-dir dist",
+    "build": "tsup src/server.ts src/seed-auth.ts src/artifact-preview-worker.ts --format esm --out-dir dist && vite build",
+    "build:server": "tsup src/server.ts src/seed-auth.ts src/artifact-preview-worker.ts --format esm --out-dir dist",
     "build:ui": "vite build",
-    "dev": "docker compose watch api ui",
+    "dev": "docker compose watch api ui artifact-preview-worker",
     "dev:down": "docker compose down",
     "dev:db": "docker compose up -d postgres",
     "dev:prod": "docker compose --env-file .env.prod -f docker-compose.prod.yml up --build",
@@ -16,6 +16,7 @@
     "preview:ui": "vite preview --host 127.0.0.1 --port 5173 --outDir dist/client",
     "seed:auth": "docker compose run --rm api node clients/demo/dist/seed-auth.js",
     "start": "node dist/server.js",
+    "start:artifact-preview-worker": "node dist/artifact-preview-worker.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
