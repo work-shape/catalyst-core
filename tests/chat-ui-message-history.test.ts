@@ -356,6 +356,38 @@ describe("chat UI message history projection", () => {
     expect(markup).not.toContain("button");
   });
 
+  it("renders final surface cards as whole-card side panel openers", () => {
+    const markup = renderToStaticMarkup(
+      createElement(
+        ToolDisplayPanelProvider,
+        null,
+        createElement(ToolSurfaceList, {
+          surfaces: [
+            {
+              surfaceId: "surface_dashboard",
+              title: "Dashboard",
+              toolName: "show_view",
+              display: {
+                kind: "html.rendered",
+                version: 1,
+                mode: "side_panel",
+                data: {
+                  html: "<section>Dashboard</section>",
+                  title: "Dashboard"
+                }
+              }
+            }
+          ]
+        })
+      )
+    );
+
+    expect(markup).toContain('role="button"');
+    expect(markup).toContain('tabindex="0"');
+    expect(markup).toContain('aria-label="Open in side panel"');
+    expect(markup).toContain("Dashboard");
+  });
+
   it("projects persisted assistant web sources as assistant-ui source parts", () => {
     const messages: Message[] = [
       {

@@ -92,9 +92,26 @@ function ToolSurfaceCard({
   }
 
   const panelActive = panel.open && panel.entry?.key === panelEntry.key;
+  const openPanel = () => panel.show(panelEntry);
 
   return (
-    <div className="flex w-full min-w-0 items-center gap-3 rounded-md border bg-background px-3 py-2.5 text-sm text-foreground shadow-xs">
+    <div
+      className={cn(
+        "flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-md border bg-background px-3 py-2.5 text-left text-sm text-foreground shadow-xs transition-colors",
+        "hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
+      )}
+      role="button"
+      tabIndex={0}
+      title={t("openDisplayPanel")}
+      aria-label={t("openDisplayPanel")}
+      onClick={openPanel}
+      onKeyDown={(event) => {
+        if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          openPanel();
+        }
+      }}
+    >
       <span
         className="grid size-10 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"
         aria-hidden="true"
@@ -113,7 +130,10 @@ function ToolSurfaceCard({
           "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md border bg-background px-3 text-xs font-medium text-foreground transition-colors",
           "hover:bg-muted focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
         )}
-        onClick={() => panel.show(panelEntry)}
+        onClick={(event) => {
+          event.stopPropagation();
+          openPanel();
+        }}
       >
         <PanelRightOpen size={14} aria-hidden="true" />
         <span>{t(panelActive ? "shownInSidePanel" : "openDisplayPanel")}</span>
