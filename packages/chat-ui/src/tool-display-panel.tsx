@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -18,6 +19,9 @@ const DEFAULT_PANEL_WIDTH = 560;
 const MIN_PANEL_WIDTH = 380;
 const MAX_PANEL_WIDTH = 840;
 const MIN_CHAT_WIDTH = 480;
+const DESKTOP_PANEL_MEDIA_QUERY = "(min-width: 1024px)";
+
+type ToolDisplayPanelLayout = "desktop" | "mobile";
 
 export interface ToolDisplayPanelAutoShowTracker {
   shouldAutoShow(key: string): boolean;
@@ -30,7 +34,7 @@ export interface ToolDisplayPanelEntry {
   node: ReactNode;
 }
 
-interface ToolDisplayPanelContextValue {
+export interface ToolDisplayPanelContextValue {
   available: boolean;
   entry?: ToolDisplayPanelEntry;
   open: boolean;
@@ -105,18 +109,25 @@ export function useToolDisplayPanel(): ToolDisplayPanelContextValue {
   return value;
 }
 
+export function useOptionalToolDisplayPanel(): ToolDisplayPanelContextValue | undefined {
+  return useContext(ToolDisplayPanelContext);
+}
+
 export function ToolDisplayPanel({ className }: { className?: string }) {
   const { close, entry, open } = useToolDisplayPanel();
   const { t } = useTranslation();
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
   const [resizing, setResizing] = useState(false);
+  const panelLayout = useToolDisplayPanelLayout();
   const visible = Boolean(entry && open);
+  const desktopVisible = visible && panelLayout === "desktop";
+  const mobileVisible = visible && panelLayout === "mobile";
   const clampedPanelWidth = clampPanelWidth(panelWidth);
   const panelWidthStyle = useMemo<CSSProperties>(
     () => ({
-      width: visible ? `${clampedPanelWidth}px` : "0rem"
+      width: desktopVisible ? `${clampedPanelWidth}px` : "0rem"
     }),
-    [clampedPanelWidth, visible]
+    [clampedPanelWidth, desktopVisible]
   );
   const innerWidthStyle = useMemo<CSSProperties>(
     () => ({
@@ -169,19 +180,19 @@ export function ToolDisplayPanel({ className }: { className?: string }) {
   return (
     <>
       <aside
-        aria-hidden={!visible}
-        inert={!visible ? true : undefined}
+        aria-hidden={!desktopVisible}
+        inert={!desktopVisible ? true : undefined}
         className={cn(
           "relative hidden h-full min-h-0 shrink-0 overflow-hidden border-l bg-card opacity-0 lg:block",
           resizing
             ? "transition-[opacity,border-color] duration-150"
             : "transition-[width,opacity,border-color] duration-300 ease-out",
-          visible ? "border-border opacity-100" : "pointer-events-none border-transparent",
+          desktopVisible ? "border-border opacity-100" : "pointer-events-none border-transparent",
           className
         )}
         style={panelWidthStyle}
       >
-        {visible ? (
+        {desktopVisible ? (
           <div
             role="separator"
             aria-orientation="vertical"
@@ -199,32 +210,60 @@ export function ToolDisplayPanel({ className }: { className?: string }) {
             onKeyDown={onResizeKeyDown}
           />
         ) : null}
-        <ToolDisplayPanelFrame entry={entry} onClose={close} style={innerWidthStyle} />
+        {desktopVisible ? <ToolDisplayPanelFrame entry={entry} onClose={close} style={innerWidthStyle} /> : null}
       </aside>
 
       <button
         type="button"
         aria-label={t("closeDisplayPanel")}
-        aria-hidden={!visible}
-        tabIndex={visible ? 0 : -1}
+        aria-hidden={!mobileVisible}
+        tabIndex={mobileVisible ? 0 : -1}
         className={cn(
           "fixed inset-0 z-[55] bg-black/30 opacity-0 backdrop-blur-[1px] transition-opacity duration-300 lg:hidden",
-          visible ? "pointer-events-auto opacity-100" : "pointer-events-none"
+          mobileVisible ? "pointer-events-auto opacity-100" : "pointer-events-none"
         )}
         onClick={close}
       />
       <aside
-        aria-hidden={!visible}
-        inert={!visible ? true : undefined}
+        aria-hidden={!mobileVisible}
+        inert={!mobileVisible ? true : undefined}
         className={cn(
           "fixed inset-y-0 right-0 z-[60] w-[min(32rem,calc(100vw-1rem))] overflow-hidden border-l bg-card shadow-xl transition-transform duration-300 ease-out lg:hidden",
-          visible ? "translate-x-0" : "pointer-events-none translate-x-full"
+          mobileVisible ? "translate-x-0" : "pointer-events-none translate-x-full"
         )}
       >
-        <ToolDisplayPanelFrame entry={entry} onClose={close} />
+        {mobileVisible ? <ToolDisplayPanelFrame entry={entry} onClose={close} /> : null}
       </aside>
     </>
   );
+}
+
+function useToolDisplayPanelLayout(): ToolDisplayPanelLayout {
+  const [layout, setLayout] = useState<ToolDisplayPanelLayout>(() => readToolDisplayPanelLayout());
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return undefined;
+    }
+    const mediaQuery = window.matchMedia(DESKTOP_PANEL_MEDIA_QUERY);
+    const updateLayout = () => {
+      setLayout(mediaQuery.matches ? "desktop" : "mobile");
+    };
+    updateLayout();
+    mediaQuery.addEventListener("change", updateLayout);
+    return () => {
+      mediaQuery.removeEventListener("change", updateLayout);
+    };
+  }, []);
+
+  return layout;
+}
+
+function readToolDisplayPanelLayout(): ToolDisplayPanelLayout {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return "desktop";
+  }
+  return window.matchMedia(DESKTOP_PANEL_MEDIA_QUERY).matches ? "desktop" : "mobile";
 }
 
 function ToolDisplayPanelFrame({

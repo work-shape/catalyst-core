@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Message } from "@vivd-catalyst/api-client";
 import {
+  asManagedArtifactId,
   createAssistantFinalMetadata,
   createAssistantToolCallsMetadata,
   createToolResultMetadata
@@ -184,6 +185,78 @@ describe("chat UI artifact download cards", () => {
     expect(JSON.stringify(refs)).not.toContain("wcmd_secret");
   });
 
+  it("keeps only safe embedded preview snapshot fields for optimistic artifact previews", () => {
+    const refs = readToolArtifactRefs({
+      status: "success",
+      artifacts: [
+        {
+          artifactId: "art_docx",
+          kind: "document.docx",
+          filename: "outputs/final-report.docx",
+          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          metadata: {
+            preview: {
+              type: "image_pages",
+              format: "png",
+              renderer: "libreoffice",
+              rendererVersion: "internal-renderer-version",
+              pages: [
+                {
+                  artifactId: "art_page_1",
+                  kind: "document.preview_page_image",
+                  filename: "scratch/previews/page-1.png",
+                  mimeType: "image/png",
+                  pageNumber: 1,
+                  width: 900,
+                  height: 1200,
+                  objectKey: "artifact-previews/private/page-1.png",
+                  workspacePath: "scratch/previews/page-1.png"
+                },
+                {
+                  artifactId: "artifact-previews/private/page-2.png",
+                  filename: "page-2.png",
+                  mimeType: "image/png",
+                  pageNumber: 2
+                }
+              ]
+            }
+          }
+        }
+      ]
+    });
+
+    expect(refs).toEqual([
+      {
+        artifactId: "art_docx",
+        kind: "document.docx",
+        filename: "final-report.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        preview: {
+          status: "ready",
+          artifactId: "art_docx",
+          type: "image_pages",
+          format: "png",
+          pages: [
+            {
+              artifactId: "art_page_1",
+              filename: "page-1.png",
+              mimeType: "image/png",
+              pageNumber: 1,
+              width: 900,
+              height: 1200
+            }
+          ]
+        }
+      }
+    ]);
+    expect(artifactDownloadFilename(refs[0]!)).toBe("final-report.docx");
+    expect(JSON.stringify(refs)).not.toContain("objectKey");
+    expect(JSON.stringify(refs)).not.toContain("workspacePath");
+    expect(JSON.stringify(refs)).not.toContain("renderer");
+    expect(JSON.stringify(refs)).not.toContain("scratch/");
+    expect(JSON.stringify(refs)).not.toContain("artifact-previews/private/page-2.png");
+  });
+
   it("only treats workspace promotion outputs as surfaced download artifacts", () => {
     const internalPreviewResult = {
       status: "success",
@@ -280,7 +353,7 @@ function createPromotedArtifactMessages(
           durationMs: 500,
           changedFiles: [],
           promotedArtifacts: artifacts.map((artifact) => ({
-            artifactId: artifact.artifactId,
+            artifactId: asManagedArtifactId(artifact.artifactId),
             path: `scratch/final/${artifact.filename}`,
             kind: artifact.kind,
             mimeType: artifact.mimeType
@@ -292,6 +365,7 @@ function createPromotedArtifactMessages(
         },
         artifacts: artifacts.map((artifact) => ({
           ...artifact,
+          artifactId: asManagedArtifactId(artifact.artifactId),
           metadata: {
             source: "execution_workspace",
             workspacePath: `scratch/final/${artifact.filename}`,

@@ -1,10 +1,15 @@
+import type { ArtifactPreviewResponse } from "@vivd-catalyst/api-client";
+
 export const WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE = "data-workspace-promoted-artifacts";
+
+export type ToolArtifactPreviewSnapshot = Extract<ArtifactPreviewResponse, { status: "ready" }>;
 
 export interface ToolArtifactDownloadRef {
   artifactId: string;
   kind?: string;
   filename?: string;
   mimeType?: string;
+  preview?: ToolArtifactPreviewSnapshot;
 }
 
 export interface WorkspacePromotedArtifactsData {
@@ -150,6 +155,7 @@ function sanitizeToolArtifactRef(artifact: {
   kind?: unknown;
   filename?: unknown;
   mimeType?: unknown;
+  metadata?: unknown;
 }): ToolArtifactDownloadRef | undefined {
   const artifactId = typeof artifact.artifactId === "string" ? artifact.artifactId : undefined;
   if (!artifactId || artifactId.length > 200) {
@@ -170,6 +176,10 @@ function sanitizeToolArtifactRef(artifact: {
   const mimeType = readSafeMimeType(artifact.mimeType);
   if (mimeType) {
     ref.mimeType = mimeType;
+  }
+  const preview = readSafePreviewSnapshot(artifact.metadata, artifactId);
+  if (preview) {
+    ref.preview = preview;
   }
   return ref;
 }
@@ -205,6 +215,87 @@ function readSafeMimeType(value: unknown): string | undefined {
     return undefined;
   }
   return isSafeMimeType(value) ? value : undefined;
+}
+
+function readSafePreviewSnapshot(
+  metadataValue: unknown,
+  sourceArtifactId: string
+): ToolArtifactPreviewSnapshot | undefined {
+  const metadata = isRecord(metadataValue) ? metadataValue : undefined;
+  const preview = isRecord(metadata?.preview) ? metadata.preview : undefined;
+  if (!preview || preview.type !== "image_pages") {
+    return undefined;
+  }
+  if (preview.status !== undefined && preview.status !== "ready") {
+    return undefined;
+  }
+  const format = readPreviewImageFormat(preview.format);
+  if (!format) {
+    return undefined;
+  }
+  const pages = Array.isArray(preview.pages)
+    ? preview.pages.slice(0, 200).flatMap((page): ToolArtifactPreviewSnapshot["pages"] => {
+        const safePage = readSafePreviewPage(page);
+        return safePage ? [safePage] : [];
+      })
+    : [];
+  if (pages.length === 0) {
+    return undefined;
+  }
+  return {
+    status: "ready",
+    artifactId: sourceArtifactId,
+    type: "image_pages",
+    format,
+    pages
+  };
+}
+
+function readSafePreviewPage(value: unknown): ToolArtifactPreviewSnapshot["pages"][number] | undefined {
+  const page = isRecord(value) ? value : undefined;
+  if (!page) {
+    return undefined;
+  }
+  const artifactId = readSafeManagedArtifactId(page.artifactId);
+  const mimeType = readPreviewImageMimeType(page.mimeType);
+  if (!artifactId || !mimeType) {
+    return undefined;
+  }
+  const filename = readDisplayFilename(page.filename);
+  const pageNumber = readPositiveInteger(page.pageNumber);
+  const slideNumber = readPositiveInteger(page.slideNumber);
+  const width = readPositiveInteger(page.width);
+  const height = readPositiveInteger(page.height);
+  return {
+    artifactId,
+    mimeType,
+    ...(filename ? { filename } : {}),
+    ...(pageNumber ? { pageNumber } : {}),
+    ...(slideNumber ? { slideNumber } : {}),
+    ...(width ? { width } : {}),
+    ...(height ? { height } : {})
+  };
+}
+
+function readPreviewImageFormat(value: unknown): ToolArtifactPreviewSnapshot["format"] | undefined {
+  return value === "png" || value === "webp" || value === "jpeg" ? value : undefined;
+}
+
+function readPreviewImageMimeType(
+  value: unknown
+): ToolArtifactPreviewSnapshot["pages"][number]["mimeType"] | undefined {
+  return value === "image/png" || value === "image/jpeg" || value === "image/webp" ? value : undefined;
+}
+
+function readPositiveInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
+function readSafeManagedArtifactId(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.length > 200 || value.trim() !== value) {
+    return undefined;
+  }
+  return /^art_[a-z0-9][a-z0-9_-]*$/iu.test(value) ? value : undefined;
 }
 
 function isSafeMimeType(value: string): boolean {
