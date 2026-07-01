@@ -83,11 +83,17 @@ export interface DeleteUserIdentityInput {
   externalUserId: string;
 }
 
+export interface DeleteUserInput {
+  clientInstanceId: ClientInstanceId;
+  userId: UserId;
+}
+
 export interface UserStore {
   resolveUserIdentity(input: ResolveUserIdentityInput): Promise<AuthenticatedUser>;
   listUsers(input: { clientInstanceId: ClientInstanceId }): Promise<UserRecord[]>;
   createUser(input: CreateUserInput): Promise<UserRecord>;
   updateUser(input: UpdateUserInput): Promise<UserRecord>;
+  deleteUser(input: DeleteUserInput): Promise<UserRecord>;
   upsertUserIdentity(input: UpsertUserIdentityInput): Promise<UserRecord>;
   deleteUserIdentity(input: DeleteUserIdentityInput): Promise<UserRecord>;
 }

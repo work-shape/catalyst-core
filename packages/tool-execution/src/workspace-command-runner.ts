@@ -46,6 +46,10 @@ import {
   workspaceCommandTelemetryEvent,
   type WorkspaceCommandTelemetry
 } from "./workspace-command-telemetry";
+import {
+  createWorkspaceArtifactPreviewMetadata,
+  type WorkspaceArtifactPreviewGenerator
+} from "./workspace-artifact-previews";
 
 const DEFAULT_MAX_PATH_LENGTH = 512;
 const DEFAULT_LEASE_DURATION_MS = 10 * 60 * 1000;
@@ -73,6 +77,7 @@ export interface LocalWorkspaceCommandRunnerOptions {
   maxPathLength?: number;
   shellPath?: string;
   processExecutor?: WorkspaceCommandProcessExecutor;
+  artifactPreviewGenerator?: WorkspaceArtifactPreviewGenerator;
   auditRecorder?: AuditRecorder;
   telemetry?: WorkspaceCommandTelemetry;
   now?: () => string;
@@ -114,6 +119,7 @@ export class LocalWorkspaceCommandRunner {
   private readonly leaseDurationMs: number;
   private readonly maxPathLength: number;
   private readonly processExecutor: WorkspaceCommandProcessExecutor;
+  private readonly artifactPreviewGenerator?: WorkspaceArtifactPreviewGenerator;
   private readonly auditRecorder?: AuditRecorder;
   private readonly telemetry?: WorkspaceCommandTelemetry;
   private readonly now: () => string;
@@ -127,6 +133,7 @@ export class LocalWorkspaceCommandRunner {
     this.maxPathLength = options.maxPathLength ?? DEFAULT_MAX_PATH_LENGTH;
     this.processExecutor =
       options.processExecutor ?? new LocalWorkspaceCommandProcessExecutor({ shellPath: options.shellPath });
+    this.artifactPreviewGenerator = options.artifactPreviewGenerator;
     this.auditRecorder = options.auditRecorder;
     this.telemetry = options.telemetry;
     this.now = options.now ?? (() => new Date().toISOString());
@@ -303,7 +310,12 @@ export class LocalWorkspaceCommandRunner {
         hydrated.baselineFiles,
         scannedFiles
       );
-      promotedArtifacts = await this.promoteExpectedOutputs(workspace, command, changedFiles);
+      promotedArtifacts = await this.promoteExpectedOutputs(
+        workspace,
+        command,
+        changedFiles,
+        hydrated.workspaceDirectory
+      );
       const output = commandOutputFromProcess(processResult, changedFiles, promotedArtifacts);
       const processError = this.processError(command, processResult);
       return {
@@ -563,7 +575,8 @@ export class LocalWorkspaceCommandRunner {
   private async promoteExpectedOutputs(
     workspace: ExecutionWorkspace,
     command: WorkspaceCommand,
-    changedFiles: WorkspaceCommandChangedFile[]
+    changedFiles: WorkspaceCommandChangedFile[],
+    workspaceDirectory: string
   ): Promise<WorkspaceCommandPromotedArtifact[]> {
     const promotedArtifacts: WorkspaceCommandPromotedArtifact[] = [];
     for (const expected of command.expectedOutputs) {
@@ -575,6 +588,26 @@ export class LocalWorkspaceCommandRunner {
         continue;
       }
       const kind = expected.kind ?? "workspace.file";
+      const sourcePath = resolveWorkspaceFilesystemPath(workspaceDirectory, changed.path, {
+        maxPathLength: this.maxPathLength
+      });
+      if (sourcePath.status === "failed") {
+        continue;
+      }
+      const previewMetadata = await createWorkspaceArtifactPreviewMetadata({
+        artifactKind: kind,
+        byteStore: this.byteStore,
+        clientInstanceId: command.clientInstanceId,
+        commandId: command.id,
+        conversationId: workspace.conversationId,
+        filename: basename(changed.path),
+        sourcePath: sourcePath.value,
+        store: this.store,
+        workspaceId: workspace.id,
+        workspacePath: changed.path,
+        ...(changed.mimeType ? { artifactMimeType: changed.mimeType } : {}),
+        ...(this.artifactPreviewGenerator ? { generator: this.artifactPreviewGenerator } : {})
+      });
       const artifact = await this.store.createManagedArtifact({
         clientInstanceId: command.clientInstanceId,
         conversationId: workspace.conversationId,
@@ -588,7 +621,8 @@ export class LocalWorkspaceCommandRunner {
           source: "execution_workspace",
           workspaceId: workspace.id,
           workspacePath: changed.path,
-          commandId: command.id
+          commandId: command.id,
+          ...(previewMetadata ? (previewMetadata as unknown as JsonObject) : {})
         }
       });
       await enqueueArtifactPreviewJobForPromotedArtifact(this.store, artifact);
@@ -618,7 +652,8 @@ export class LocalWorkspaceCommandRunner {
         artifactId: artifact.id,
         path: changed.path,
         kind: artifact.kind,
-        mimeType: artifact.mimeType
+        mimeType: artifact.mimeType,
+        ...(previewMetadata ? { metadata: previewMetadata } : {})
       });
     }
     return promotedArtifacts;

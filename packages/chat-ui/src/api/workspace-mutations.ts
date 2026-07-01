@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
+  AdministeredUser,
   AdministeredUserIdentity,
   ApiClient,
   ChangeCurrentUserPasswordRequest,
@@ -149,6 +150,23 @@ export function useChangeCurrentUserPasswordMutation(input: WorkspaceMutationInp
   });
 }
 
+export function useDeleteCurrentUserMutation(
+  input: WorkspaceMutationInput & {
+    onDeleted(): void;
+  }
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => input.client.deleteMe(),
+    onSuccess: () => {
+      input.onDeleted();
+      queryClient.clear();
+      void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.me(input.apiBaseUrl) });
+    }
+  });
+}
+
 export function useSuperadminUserMutations(input: WorkspaceMutationInput) {
   const queryClient = useQueryClient();
 
@@ -174,6 +192,17 @@ export function useSuperadminUserMutations(input: WorkspaceMutationInput) {
     mutationFn: (mutationInput: { userId: string; update: UpdateAdministeredUserRequest }) =>
       input.client.updateUser(mutationInput.userId, mutationInput.update),
     onSuccess: () => {
+      invalidateSuperadminUsers();
+      invalidateAuditEvents();
+    }
+  });
+  const deleteUser = useMutation({
+    mutationFn: (userId: string) => input.client.deleteUser(userId),
+    onSuccess: (deletedUser) => {
+      queryClient.setQueryData<AdministeredUser[]>(
+        workspaceQueryKeys.superadminUsers(input.apiBaseUrl, input.authScope),
+        (currentUsers = []) => currentUsers.filter((user) => user.id !== deletedUser.id)
+      );
       invalidateSuperadminUsers();
       invalidateAuditEvents();
     }
@@ -211,12 +240,14 @@ export function useSuperadminUserMutations(input: WorkspaceMutationInput) {
   return {
     createUser,
     updateUser,
+    deleteUser,
     upsertUserIdentity,
     deleteUserIdentity,
     resetUserPassword,
     isPending:
       createUser.isPending ||
       updateUser.isPending ||
+      deleteUser.isPending ||
       upsertUserIdentity.isPending ||
       deleteUserIdentity.isPending ||
       resetUserPassword.isPending

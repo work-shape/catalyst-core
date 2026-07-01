@@ -12,7 +12,8 @@ import type {
   SkillConfig,
   UsageBudgetConfig,
   UsagePricingConfig,
-  UsageSafeguardsConfig
+  UsageSafeguardsConfig,
+  WebAccessConfig
 } from "@vivd-catalyst/core";
 import { localizationConfigSchema, localizedStringSchema } from "./localization";
 
@@ -219,11 +220,21 @@ export const usagePricingConfigSchema = z
           outputPricePerMillionTokens: z.number().nonnegative()
         })
       )
+      .default([]),
+    webSearch: z
+      .array(
+        z.object({
+          providerId: z.string().min(1),
+          model: z.string().min(1).optional(),
+          pricePerCall: z.number().nonnegative()
+        })
+      )
       .default([])
   })
   .default({
     currency: "USD",
-    models: []
+    models: [],
+    webSearch: []
   });
 
 export const conversationTitleConfigSchema = z
@@ -261,6 +272,55 @@ export const modelContextConfigSchema = z
   .default({
     toolOutput: {
       maxTokens: 60000
+    }
+  });
+
+export const webAccessConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    search: z
+      .object({
+        enabled: z.boolean().default(false),
+        mode: z.enum(["native_or_managed", "native_only", "managed_only"]).default("native_or_managed"),
+        managedProvider: z.string().min(1).optional()
+      })
+      .default({
+        enabled: false,
+        mode: "native_or_managed"
+      }),
+    fetch: z
+      .object({
+        enabled: z.boolean().default(false),
+        timeoutMs: z.number().int().positive().max(30000).default(10000),
+        maxResponseBytes: z
+          .number()
+          .int()
+          .positive()
+          .max(5 * 1024 * 1024)
+          .default(1024 * 1024),
+        maxTextCharacters: z.number().int().positive().max(200000).default(20000),
+        maxRedirects: z.number().int().nonnegative().max(10).default(5)
+      })
+      .default({
+        enabled: false,
+        timeoutMs: 10000,
+        maxResponseBytes: 1024 * 1024,
+        maxTextCharacters: 20000,
+        maxRedirects: 5
+      })
+  })
+  .default({
+    enabled: false,
+    search: {
+      enabled: false,
+      mode: "native_or_managed"
+    },
+    fetch: {
+      enabled: false,
+      timeoutMs: 10000,
+      maxResponseBytes: 1024 * 1024,
+      maxTextCharacters: 20000,
+      maxRedirects: 5
     }
   });
 
@@ -511,6 +571,7 @@ export const clientInstanceConfigSchema = z.object({
   conversationTitles: conversationTitleConfigSchema,
   runtime: agentRuntimeConfigSchema,
   modelContext: modelContextConfigSchema,
+  webAccess: webAccessConfigSchema,
   executionWorkspaces: executionWorkspacesConfigSchema,
   capabilities: z.record(z.string(), z.unknown()).default({}),
   usage: z
@@ -526,7 +587,8 @@ export const clientInstanceConfigSchema = z.object({
       safeguards: {},
       pricing: {
         currency: "USD",
-        models: []
+        models: [],
+        webSearch: []
       }
     }),
   defaultAgentName: z.string().min(1),
@@ -569,6 +631,7 @@ export type {
   AgentRuntimeConfig,
   ModelContextConfig,
   UsagePricingConfig,
-  UsageSafeguardsConfig
+  UsageSafeguardsConfig,
+  WebAccessConfig
 };
 export type ClientInstanceConfig = z.infer<typeof clientInstanceConfigSchema>;

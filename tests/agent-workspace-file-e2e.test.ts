@@ -237,6 +237,7 @@ function noReportedUsage() {
     inputTokens: 0,
     outputTokens: 0,
     totalTokens: 0,
-    source: "not_reported" as const
+    source: "not_reported" as const,
+    webSearchCallCount: 0
   };
 }

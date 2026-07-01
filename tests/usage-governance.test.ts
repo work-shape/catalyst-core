@@ -183,6 +183,127 @@ describe("model usage governance", () => {
     });
   });
 
+  it("adds configured provider-native web search cost to model usage summaries", async () => {
+    const clientInstanceId = asClientInstanceId("client-web-search-cost-test");
+    const store = new InMemoryPlatformStore();
+    const governance = new ModelUsageGovernance({
+      store,
+      budget: {
+        costSafetyMultiplier: 1
+      },
+      safeguards: {},
+      pricing: {
+        currency: "USD",
+        models: [
+          {
+            providerId: "openai",
+            model: "gpt-4.1",
+            inputPricePerMillionTokens: 2,
+            outputPricePerMillionTokens: 8
+          }
+        ],
+        webSearch: [
+          {
+            providerId: "openai",
+            model: "gpt-4.1",
+            pricePerCall: 0.01
+          }
+        ]
+      }
+    });
+
+    await governance.appendModelUsageEvent({
+      clientInstanceId,
+      conversationId: asConversationId("conv_web_search_cost"),
+      agentRunId: asAgentRunId("run_web_search_cost"),
+      agentName: "agent",
+      providerId: "openai",
+      model: "gpt-4.1",
+      inputTokens: 1000,
+      outputTokens: 500,
+      totalTokens: 1500,
+      webSearchCallCount: 2,
+      source: "provider_reported",
+      correlationId: "corr_web_search_cost"
+    });
+
+    const summary = await governance.createSummary({ clientInstanceId });
+
+    expect(summary.today).toMatchObject({
+      webSearchCallCount: 2,
+      cost: {
+        inputCostMicros: 2000,
+        outputCostMicros: 4000,
+        webSearchCostMicros: 20000,
+        totalCostMicros: 26000,
+        pricedWebSearchCallCount: 2,
+        unpricedWebSearchCallCount: 0,
+        webSearchPricingConfigured: true
+      }
+    });
+    expect(summary.recentEvents[0]).toMatchObject({
+      webSearchCallCount: 2,
+      cost: {
+        webSearchCostMicros: 20000,
+        totalCostMicros: 26000,
+        pricingConfigured: true,
+        modelPricingConfigured: true,
+        webSearchPricingConfigured: true
+      }
+    });
+  });
+
+  it("reports unpriced web search calls without hiding configured token cost", async () => {
+    const clientInstanceId = asClientInstanceId("client-unpriced-web-search-test");
+    const store = new InMemoryPlatformStore();
+    const governance = new ModelUsageGovernance({
+      store,
+      budget: {
+        costSafetyMultiplier: 1
+      },
+      safeguards: {},
+      pricing: {
+        currency: "USD",
+        models: [
+          {
+            providerId: "openai",
+            model: "gpt-4.1",
+            inputPricePerMillionTokens: 2,
+            outputPricePerMillionTokens: 8
+          }
+        ]
+      }
+    });
+
+    await governance.appendModelUsageEvent({
+      clientInstanceId,
+      conversationId: asConversationId("conv_unpriced_web_search"),
+      agentRunId: asAgentRunId("run_unpriced_web_search"),
+      agentName: "agent",
+      providerId: "openai",
+      model: "gpt-4.1",
+      inputTokens: 1000,
+      outputTokens: 500,
+      totalTokens: 1500,
+      webSearchCallCount: 3,
+      source: "provider_reported",
+      correlationId: "corr_unpriced_web_search"
+    });
+
+    const summary = await governance.createSummary({ clientInstanceId });
+
+    expect(summary.today.cost).toMatchObject({
+      inputCostMicros: 2000,
+      outputCostMicros: 4000,
+      webSearchCostMicros: 0,
+      totalCostMicros: 6000,
+      pricingConfigured: true,
+      webSearchPricingConfigured: false,
+      pricedWebSearchCallCount: 0,
+      unpricedWebSearchCallCount: 3
+    });
+  });
+
   it("applies the configured safety multiplier to budgeted cost", async () => {
     const clientInstanceId = asClientInstanceId("client-budgeted-cost-test");
     const store = new InMemoryPlatformStore();

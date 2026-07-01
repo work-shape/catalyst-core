@@ -8,6 +8,7 @@ export const AUTH_SCOPE_WILDCARD = "*" as const;
 
 export const CHAT_SESSION_AUTH_SCOPES = [
   "me:read",
+  "me:delete",
   "config:read",
   "conversation:read",
   "conversation:write",

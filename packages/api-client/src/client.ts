@@ -9,6 +9,7 @@ export interface ApiClientOptions {
   baseUrl: string;
   getToken?: () => string | undefined | Promise<string | undefined>;
   fetchImpl?: typeof fetch;
+  browserManagedDownloads?: boolean;
 }
 
 export interface ObserveRunEventsOptions {
@@ -39,6 +40,7 @@ type GeneratedResult<T> =
 
 export function createApiClient(options: ApiClientOptions) {
   const baseUrl = options.baseUrl.replace(/\/$/u, "");
+  const browserManagedArtifactDownloads = options.browserManagedDownloads ?? !options.getToken;
   const generatedClient = createGeneratedClient({
     baseUrl,
     credentials: "include",
@@ -110,6 +112,16 @@ export function createApiClient(options: ApiClientOptions) {
       ...init,
       credentials: "include",
       headers
+    });
+  }
+
+  function buildUrl(path: string): string {
+    return `${baseUrl}${path}`;
+  }
+
+  function conversationArtifactContentPath(conversationId: string, artifactId: string): string {
+    return apiOperations.getConversationArtifactContent.buildPath({
+      params: { conversationId, artifactId }
     });
   }
 
@@ -273,6 +285,7 @@ export function createApiClient(options: ApiClientOptions) {
   };
 
   return {
+    browserManagedArtifactDownloads,
     me: () =>
       unwrapJson(
         generatedSdk.getCurrentUser({ client: generatedClient }),
@@ -295,6 +308,13 @@ export function createApiClient(options: ApiClientOptions) {
           body: apiOperations.changeCurrentUserPassword.requestSchema.parse(input)
         }),
         apiOperations.changeCurrentUserPassword.responseSchema
+      ),
+    deleteMe: () =>
+      unwrapJson(
+        generatedSdk.deleteCurrentUser({
+          client: generatedClient
+        }),
+        apiOperations.deleteCurrentUser.responseSchema
       ),
     branding: (locale?: LocaleCode) =>
       unwrapJson(
@@ -370,12 +390,10 @@ export function createApiClient(options: ApiClientOptions) {
           path: { conversationId, fileId }
         })
       ),
+    conversationArtifactContentUrl: (conversationId: string, artifactId: string) =>
+      buildUrl(conversationArtifactContentPath(conversationId, artifactId)),
     conversationArtifactContent: (conversationId: string, artifactId: string) =>
-      requestBlob(
-        apiOperations.getConversationArtifactContent.buildPath({
-          params: { conversationId, artifactId }
-        })
-      ),
+      requestBlob(conversationArtifactContentPath(conversationId, artifactId)),
     conversationArtifactPreview: (conversationId: string, artifactId: string) =>
       requestJson(
         apiOperations.getConversationArtifactPreview.buildPath({
@@ -430,6 +448,14 @@ export function createApiClient(options: ApiClientOptions) {
           body: apiOperations.updateAdministeredUser.requestSchema.parse(input)
         }),
         apiOperations.updateAdministeredUser.responseSchema
+      ),
+    deleteUser: (userId: string) =>
+      unwrapJson(
+        generatedSdk.deleteAdministeredUser({
+          client: generatedClient,
+          path: { userId }
+        }),
+        apiOperations.deleteAdministeredUser.responseSchema
       ),
     upsertUserIdentity: (
       userId: string,

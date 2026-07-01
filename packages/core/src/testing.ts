@@ -36,6 +36,7 @@ import {
   type ModelUsageEventStore,
   type ModelUsageWindowSummary,
   type CreateUserInput,
+  type DeleteUserInput,
   type DeleteUserIdentityInput,
   type ResolveUserIdentityInput,
   type UpdateUserInput,
@@ -933,6 +934,7 @@ export class InMemoryPlatformStore
   async appendModelUsageEvent(input: ModelUsageEventInput): Promise<ModelUsageEvent> {
     const event: ModelUsageEvent = {
       ...input,
+      webSearchCallCount: input.webSearchCallCount ?? 0,
       id: createPlatformId("usage"),
       createdAt: new Date().toISOString()
     };
@@ -1087,6 +1089,20 @@ export class InMemoryPlatformStore
     };
     this.users.set(updated.id, updated);
     return this.attachIdentities(updated);
+  }
+
+  async deleteUser(input: DeleteUserInput): Promise<UserRecord> {
+    const user = this.users.get(input.userId);
+    if (!user || user.clientInstanceId !== input.clientInstanceId) {
+      throw new AppError("NOT_FOUND", "User is not available");
+    }
+
+    const deleted = this.attachIdentities(user);
+    for (const identity of deleted.identities) {
+      this.identities.delete(createIdentityKey(identity));
+    }
+    this.users.delete(user.id);
+    return deleted;
   }
 
   async upsertUserIdentity(input: UpsertUserIdentityInput): Promise<UserRecord> {
@@ -1357,7 +1373,8 @@ function summarizeEvents(
       modelCallCount: summary.modelCallCount + 1,
       inputTokens: summary.inputTokens + event.inputTokens,
       outputTokens: summary.outputTokens + event.outputTokens,
-      totalTokens: summary.totalTokens + event.totalTokens
+      totalTokens: summary.totalTokens + event.totalTokens,
+      webSearchCallCount: summary.webSearchCallCount + event.webSearchCallCount
     }),
     {
       start,
@@ -1365,7 +1382,8 @@ function summarizeEvents(
       modelCallCount: 0,
       inputTokens: 0,
       outputTokens: 0,
-      totalTokens: 0
+      totalTokens: 0,
+      webSearchCallCount: 0
     }
   );
 }

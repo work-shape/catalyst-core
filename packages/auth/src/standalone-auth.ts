@@ -66,6 +66,10 @@ export interface ChangeStandalonePasswordInput {
   newPassword: string;
 }
 
+export interface DeleteStandalonePasswordSignInInput {
+  externalUserId: string;
+}
+
 export interface StandaloneAuthRuntime {
   handleRequest(request: Request): Promise<Response>;
   authAdapter: AuthAdapter;
@@ -76,6 +80,7 @@ export interface StandaloneAuthRuntime {
     input: SetOrCreateStandalonePasswordSignInInput
   ): Promise<StandalonePasswordSignIn>;
   changePassword(input: ChangeStandalonePasswordInput): Promise<void>;
+  deletePasswordSignIn(input: DeleteStandalonePasswordSignInInput): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -136,6 +141,7 @@ export async function createStandaloneAuthRuntime(
     setPassword: (input) => profileStore.setPassword(input),
     setOrCreatePasswordSignIn: (input) => profileStore.setOrCreatePasswordSignIn(input),
     changePassword: (input) => profileStore.changePassword(input),
+    deletePasswordSignIn: (input) => profileStore.deletePasswordSignIn(input),
     async close() {
       await sql.end();
     }
@@ -265,6 +271,34 @@ class StandaloneAuthProfileStore {
       throw new AppError("FORBIDDEN", "Current password is incorrect");
     }
     await this.upsertCredentialAccount(profile.authUserId, input.newPassword);
+  }
+
+  async deletePasswordSignIn(input: DeleteStandalonePasswordSignInInput): Promise<void> {
+    const profile = await this.getProfileByExternalUserId(input.externalUserId);
+    if (!profile) {
+      return;
+    }
+
+    await this.db.transaction(async (tx) => {
+      await tx
+        .delete(standaloneAuthProfiles)
+        .where(
+          and(
+            eq(standaloneAuthProfiles.clientInstanceId, this.clientInstanceId),
+            eq(standaloneAuthProfiles.externalUserId, input.externalUserId)
+          )
+        );
+      await tx.delete(authSessions).where(eq(authSessions.userId, profile.authUserId));
+
+      const remainingProfiles = await tx
+        .select({ authUserId: standaloneAuthProfiles.authUserId })
+        .from(standaloneAuthProfiles)
+        .where(eq(standaloneAuthProfiles.authUserId, profile.authUserId))
+        .limit(1);
+      if (remainingProfiles.length === 0) {
+        await tx.delete(authUsers).where(eq(authUsers.id, profile.authUserId));
+      }
+    });
   }
 
   async seedUser(seedUser: StandaloneAuthSeedUser): Promise<void> {

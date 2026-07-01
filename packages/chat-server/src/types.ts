@@ -59,7 +59,12 @@ export interface ChatServerOptions {
   corsOrigin?: string | string[];
   standaloneAuth?: Pick<
     StandaloneAuthRuntime,
-    "handleRequest" | "baseUrl" | "setPassword" | "setOrCreatePasswordSignIn" | "changePassword"
+    | "handleRequest"
+    | "baseUrl"
+    | "setPassword"
+    | "setOrCreatePasswordSignIn"
+    | "changePassword"
+    | "deletePasswordSignIn"
   >;
   sessionToken?: {
     issuer: HmacSessionTokenIssuer;

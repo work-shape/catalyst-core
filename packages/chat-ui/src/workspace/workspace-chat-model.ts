@@ -128,6 +128,7 @@ export interface SelectedChatModel {
   config: SafeConfig | undefined;
   selectedConversationId: string | undefined;
   messages: Message[] | undefined;
+  completedRunProjections: ConversationControllerState["completedRunProjections"];
   messagesLoaded: boolean;
   notice: string | undefined;
   draft: string;
@@ -311,6 +312,15 @@ export function useWorkspaceChatModel({
   const { resolvedThemeMode, workspaceStyle, toggleTheme } = useWorkspaceTheme(config?.ui);
   const activeAgentName = selectedAgentName ?? config?.defaultAgentName ?? config?.agents[0]?.name;
   const displayPanelOpen = Boolean(displayPanel.entry && displayPanel.open);
+
+  function resetAuthenticatedWorkspaceState() {
+    draftController.clearDrafts();
+    conversationActivity.resetConversationActivity();
+    clearRunCursors();
+    routeState.resetRouteMemory();
+    routeState.goToDefaultChat({ replace: true });
+  }
+
   const controlPlane = useControlPlaneModel({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
@@ -324,6 +334,7 @@ export function useWorkspaceChatModel({
     activeLocale,
     selectLocale: preferences.selectLocale,
     goToDefaultChat: routeState.goToDefaultChat,
+    onAccountDeleted: resetAuthenticatedWorkspaceState,
     showSuperadmin: routeState.showSuperadmin
   });
   const canViewAdministration = controlPlane.canViewAdministration;
@@ -384,11 +395,7 @@ export function useWorkspaceChatModel({
   const signOutMutation = useWorkspaceSignOutMutation({
     apiBaseUrl,
     onSignedOut: () => {
-      draftController.clearDrafts();
-      conversationActivity.resetConversationActivity();
-      clearRunCursors();
-      routeState.resetRouteMemory();
-      routeState.goToDefaultChat({ replace: true });
+      resetAuthenticatedWorkspaceState();
     }
   });
   const cancelRunMutation = useCancelRunMutation({
@@ -505,6 +512,7 @@ export function useWorkspaceChatModel({
       config,
       selectedConversationId,
       messages,
+      completedRunProjections: controller.completedRunProjections,
       messagesLoaded,
       notice: visibleNotice,
       draft: activeDraft.draft,

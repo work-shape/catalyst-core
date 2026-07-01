@@ -74,6 +74,7 @@ export async function appendModelUsageEvent(
       inputTokens: input.inputTokens,
       outputTokens: input.outputTokens,
       totalTokens: input.totalTokens,
+      webSearchCallCount: input.webSearchCallCount ?? 0,
       source: input.source,
       correlationId: input.correlationId,
       createdAt: new Date()
@@ -95,7 +96,8 @@ export async function summarizeModelUsageEvents(
       modelCallCount: drizzleSql<number>`count(*)::int`,
       inputTokens: drizzleSql<number>`coalesce(sum(${modelUsageEvents.inputTokens}), 0)::int`,
       outputTokens: drizzleSql<number>`coalesce(sum(${modelUsageEvents.outputTokens}), 0)::int`,
-      totalTokens: drizzleSql<number>`coalesce(sum(${modelUsageEvents.totalTokens}), 0)::int`
+      totalTokens: drizzleSql<number>`coalesce(sum(${modelUsageEvents.totalTokens}), 0)::int`,
+      webSearchCallCount: drizzleSql<number>`coalesce(sum(${modelUsageEvents.webSearchCallCount}), 0)::int`
     })
     .from(modelUsageEvents)
     .where(and(...modelUsageFilters(input)));
@@ -106,7 +108,8 @@ export async function summarizeModelUsageEvents(
     modelCallCount: row?.modelCallCount ?? 0,
     inputTokens: row?.inputTokens ?? 0,
     outputTokens: row?.outputTokens ?? 0,
-    totalTokens: row?.totalTokens ?? 0
+    totalTokens: row?.totalTokens ?? 0,
+    webSearchCallCount: row?.webSearchCallCount ?? 0
   };
 }
 

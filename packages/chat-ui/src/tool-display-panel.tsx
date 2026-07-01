@@ -17,11 +17,7 @@ import { cn } from "./ui/cn";
 
 const DEFAULT_PANEL_WIDTH = 560;
 const MIN_PANEL_WIDTH = 380;
-const MAX_PANEL_WIDTH = 840;
 const MIN_CHAT_WIDTH = 480;
-const DESKTOP_PANEL_MEDIA_QUERY = "(min-width: 1024px)";
-
-type ToolDisplayPanelLayout = "desktop" | "mobile";
 
 export interface ToolDisplayPanelAutoShowTracker {
   shouldAutoShow(key: string): boolean;
@@ -34,7 +30,7 @@ export interface ToolDisplayPanelEntry {
   node: ReactNode;
 }
 
-export interface ToolDisplayPanelContextValue {
+interface ToolDisplayPanelContextValue {
   available: boolean;
   entry?: ToolDisplayPanelEntry;
   open: boolean;
@@ -109,25 +105,21 @@ export function useToolDisplayPanel(): ToolDisplayPanelContextValue {
   return value;
 }
 
-export function useOptionalToolDisplayPanel(): ToolDisplayPanelContextValue | undefined {
-  return useContext(ToolDisplayPanelContext);
-}
-
 export function ToolDisplayPanel({ className }: { className?: string }) {
   const { close, entry, open } = useToolDisplayPanel();
   const { t } = useTranslation();
+  const panelRef = useRef<HTMLElement | null>(null);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
+  const [availableWidth, setAvailableWidth] = useState<number | undefined>();
   const [resizing, setResizing] = useState(false);
-  const panelLayout = useToolDisplayPanelLayout();
   const visible = Boolean(entry && open);
-  const desktopVisible = visible && panelLayout === "desktop";
-  const mobileVisible = visible && panelLayout === "mobile";
-  const clampedPanelWidth = clampPanelWidth(panelWidth);
+  const clampedPanelWidth = clampPanelWidth(panelWidth, availableWidth);
+  const maximumPanelWidth = maxPanelWidth(availableWidth);
   const panelWidthStyle = useMemo<CSSProperties>(
     () => ({
-      width: desktopVisible ? `${clampedPanelWidth}px` : "0rem"
+      width: visible ? `${clampedPanelWidth}px` : "0rem"
     }),
-    [clampedPanelWidth, desktopVisible]
+    [clampedPanelWidth, visible]
   );
   const innerWidthStyle = useMemo<CSSProperties>(
     () => ({
@@ -147,7 +139,7 @@ export function ToolDisplayPanel({ className }: { className?: string }) {
 
       function onPointerMove(moveEvent: globalThis.PointerEvent) {
         const nextWidth = startWidth + startX - moveEvent.clientX;
-        setPanelWidth(clampPanelWidth(nextWidth));
+        setPanelWidth(clampPanelWidth(nextWidth, availableWidth));
       }
 
       function onPointerUp(upEvent: globalThis.PointerEvent) {
@@ -164,7 +156,7 @@ export function ToolDisplayPanel({ className }: { className?: string }) {
       window.addEventListener("pointerup", onPointerUp);
       window.addEventListener("pointercancel", onPointerUp);
     },
-    [clampedPanelWidth]
+    [availableWidth, clampedPanelWidth]
   );
 
   const onResizeKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
@@ -173,32 +165,52 @@ export function ToolDisplayPanel({ className }: { className?: string }) {
     }
     event.preventDefault();
     setPanelWidth((currentWidth) =>
-      clampPanelWidth(currentWidth + (event.key === "ArrowLeft" ? 24 : -24))
+      clampPanelWidth(currentWidth + (event.key === "ArrowLeft" ? 24 : -24), availableWidth)
     );
+  }, [availableWidth]);
+
+  useEffect(() => {
+    const parent = panelRef.current?.parentElement;
+    if (!parent) {
+      return;
+    }
+
+    const updateAvailableWidth = () => setAvailableWidth(parent.getBoundingClientRect().width);
+    updateAvailableWidth();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateAvailableWidth);
+      return () => window.removeEventListener("resize", updateAvailableWidth);
+    }
+
+    const observer = new ResizeObserver(updateAvailableWidth);
+    observer.observe(parent);
+    return () => observer.disconnect();
   }, []);
 
   return (
     <>
       <aside
-        aria-hidden={!desktopVisible}
-        inert={!desktopVisible ? true : undefined}
+        ref={panelRef}
+        aria-hidden={!visible}
+        inert={!visible ? true : undefined}
         className={cn(
           "relative hidden h-full min-h-0 shrink-0 overflow-hidden border-l bg-card opacity-0 lg:block",
           resizing
             ? "transition-[opacity,border-color] duration-150"
             : "transition-[width,opacity,border-color] duration-300 ease-out",
-          desktopVisible ? "border-border opacity-100" : "pointer-events-none border-transparent",
+          visible ? "border-border opacity-100" : "pointer-events-none border-transparent",
           className
         )}
         style={panelWidthStyle}
       >
-        {desktopVisible ? (
+        {visible ? (
           <div
             role="separator"
             aria-orientation="vertical"
             aria-label={t("resizeDisplayPanel")}
             aria-valuemin={MIN_PANEL_WIDTH}
-            aria-valuemax={maxPanelWidth()}
+            aria-valuemax={maximumPanelWidth}
             aria-valuenow={clampedPanelWidth}
             tabIndex={0}
             className={cn(
@@ -210,60 +222,32 @@ export function ToolDisplayPanel({ className }: { className?: string }) {
             onKeyDown={onResizeKeyDown}
           />
         ) : null}
-        {desktopVisible ? <ToolDisplayPanelFrame entry={entry} onClose={close} style={innerWidthStyle} /> : null}
+        <ToolDisplayPanelFrame entry={entry} onClose={close} style={innerWidthStyle} />
       </aside>
 
       <button
         type="button"
         aria-label={t("closeDisplayPanel")}
-        aria-hidden={!mobileVisible}
-        tabIndex={mobileVisible ? 0 : -1}
+        aria-hidden={!visible}
+        tabIndex={visible ? 0 : -1}
         className={cn(
           "fixed inset-0 z-[55] bg-black/30 opacity-0 backdrop-blur-[1px] transition-opacity duration-300 lg:hidden",
-          mobileVisible ? "pointer-events-auto opacity-100" : "pointer-events-none"
+          visible ? "pointer-events-auto opacity-100" : "pointer-events-none"
         )}
         onClick={close}
       />
       <aside
-        aria-hidden={!mobileVisible}
-        inert={!mobileVisible ? true : undefined}
+        aria-hidden={!visible}
+        inert={!visible ? true : undefined}
         className={cn(
           "fixed inset-y-0 right-0 z-[60] w-[min(32rem,calc(100vw-1rem))] overflow-hidden border-l bg-card shadow-xl transition-transform duration-300 ease-out lg:hidden",
-          mobileVisible ? "translate-x-0" : "pointer-events-none translate-x-full"
+          visible ? "translate-x-0" : "pointer-events-none translate-x-full"
         )}
       >
-        {mobileVisible ? <ToolDisplayPanelFrame entry={entry} onClose={close} /> : null}
+        <ToolDisplayPanelFrame entry={entry} onClose={close} />
       </aside>
     </>
   );
-}
-
-function useToolDisplayPanelLayout(): ToolDisplayPanelLayout {
-  const [layout, setLayout] = useState<ToolDisplayPanelLayout>(() => readToolDisplayPanelLayout());
-
-  useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-      return undefined;
-    }
-    const mediaQuery = window.matchMedia(DESKTOP_PANEL_MEDIA_QUERY);
-    const updateLayout = () => {
-      setLayout(mediaQuery.matches ? "desktop" : "mobile");
-    };
-    updateLayout();
-    mediaQuery.addEventListener("change", updateLayout);
-    return () => {
-      mediaQuery.removeEventListener("change", updateLayout);
-    };
-  }, []);
-
-  return layout;
-}
-
-function readToolDisplayPanelLayout(): ToolDisplayPanelLayout {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-    return "desktop";
-  }
-  return window.matchMedia(DESKTOP_PANEL_MEDIA_QUERY).matches ? "desktop" : "mobile";
 }
 
 function ToolDisplayPanelFrame({
@@ -306,13 +290,18 @@ function ToolDisplayPanelFrame({
   );
 }
 
-function clampPanelWidth(width: number): number {
-  return Math.round(Math.min(Math.max(width, MIN_PANEL_WIDTH), maxPanelWidth()));
+function clampPanelWidth(width: number, availableWidth?: number): number {
+  return Math.round(Math.min(Math.max(width, MIN_PANEL_WIDTH), maxPanelWidth(availableWidth)));
 }
 
-function maxPanelWidth(): number {
-  if (typeof window === "undefined") {
-    return MAX_PANEL_WIDTH;
+function maxPanelWidth(availableWidth?: number): number {
+  if (typeof availableWidth === "number") {
+    return Math.max(MIN_PANEL_WIDTH, availableWidth - MIN_CHAT_WIDTH);
   }
-  return Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, window.innerWidth - MIN_CHAT_WIDTH));
+
+  if (typeof window === "undefined") {
+    return DEFAULT_PANEL_WIDTH;
+  }
+
+  return Math.max(MIN_PANEL_WIDTH, window.innerWidth - MIN_CHAT_WIDTH);
 }

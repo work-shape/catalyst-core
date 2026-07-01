@@ -118,6 +118,25 @@ export interface ManagedArtifactRef {
   metadata?: JsonObject;
 }
 
+export interface ManagedArtifactPreviewImagePageRef {
+  artifactId: string;
+  kind?: string;
+  filename?: string;
+  mimeType: SupportedImageMimeType;
+  pageNumber?: number;
+  slideNumber?: number;
+}
+
+export interface ManagedArtifactImagePagesPreview {
+  type: "image_pages";
+  format: ImageFileFormat;
+  pages: ManagedArtifactPreviewImagePageRef[];
+}
+
+export interface ManagedArtifactPreviewMetadata {
+  preview: ManagedArtifactImagePagesPreview;
+}
+
 export interface ManagedObjectDeletionResult {
   attachmentCount: number;
   fileObjectKeys: string[];

@@ -20,11 +20,13 @@ export function WorkspaceApiClientProvider({
   children: ReactNode;
 }) {
   const client = useMemo(
-    () =>
-      createApiClient({
+    () => {
+      const resolvedGetToken = getToken ?? (token ? () => token : undefined);
+      return createApiClient({
         baseUrl: apiBaseUrl,
-        getToken: getToken ?? (() => token)
-      }),
+        ...(resolvedGetToken ? { getToken: resolvedGetToken } : {})
+      });
+    },
     [apiBaseUrl, getToken, token]
   );
   const value = useMemo<WorkspaceApiClientContextValue>(

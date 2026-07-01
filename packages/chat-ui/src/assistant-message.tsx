@@ -5,14 +5,27 @@ import {
   ErrorPrimitive,
   MessagePartPrimitive,
   MessagePrimitive,
-  groupPartByType,
-  useAuiState
+  useAuiState,
+  type PartState
 } from "@assistant-ui/react";
 import { Check, Copy, FileText, ImageIcon, Pencil, RefreshCw, User } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { AssistantCursor } from "./assistant-cursor";
 import { AttachmentPreview } from "./attachment-preview";
 import { managedFileIdFromUrl, useAttachmentContentContext } from "./attachment-content";
-import { AssistantCursor } from "./assistant-cursor";
+import {
+  ASSISTANT_WORK_GROUP,
+  countAssistantWorkTimelineSteps,
+  createCompletedAssistantWorkIndices,
+  createAssistantMessageGroupBy,
+  createRenderableAssistantToolGroupIndices,
+  createAssistantWorkTimelineItems,
+  createVisibleFinalAssistantPartIndices,
+  findFinalAssistantTextPartIndex,
+  type AssistantWorkTimelineItem
+} from "./assistant-work-grouping";
+import type { AssistantUiMessageMetadata } from "./assistant-ui-adapter";
+import { AssistantSourcePart } from "./assistant-source-part";
 import { useTranslation } from "./i18n";
 import { MarkdownText } from "./markdown-text";
 import { DataPart, ToolCallPart } from "./tool-call";
@@ -21,10 +34,8 @@ import { TooltipIconButton, tooltipIconButtonClassName } from "./tooltip-icon-bu
 import { Button } from "./ui/button";
 import { cn } from "./ui/cn";
 
-const assistantMessageGroupBy = groupPartByType({
-  "tool-call": ["group-work"],
-  "standalone-tool-call": []
-});
+const chronologicalAssistantMessageGroupBy = createAssistantMessageGroupBy();
+const recentlyActiveAssistantRunIds = new Set<string>();
 
 export function ThreadMessage({
   conversationRunning,
@@ -60,6 +71,13 @@ function AssistantMessage({
 }) {
   const { t } = useTranslation();
   const messageId = useAuiState((state) => state.message.id);
+  const messageParts = useAuiState((state) => state.message.parts);
+  const activeRunProjectionMessage = useAuiState(
+    (state) => (state.message.metadata as AssistantUiMessageMetadata | undefined)?.source === "active-run"
+  );
+  const completedRunId = useAuiState(
+    (state) => (state.message.metadata as AssistantUiMessageMetadata | undefined)?.completedRunId
+  );
   const lastPartIndex = useAuiState((state) => state.message.parts.length - 1);
   const activeRunMessage = Boolean(conversationRunning && activeRunId && messageId === activeRunId);
   const messageRunning = useAuiState(
@@ -67,6 +85,44 @@ function AssistantMessage({
       state.message.role === "assistant" &&
       (state.message.status?.type === "running" || activeRunMessage)
   );
+  const finalTextIndex = findFinalAssistantTextPartIndex(messageParts);
+  const toolUIs = useAuiState((state) => state.tools.toolUIs);
+  const completedWorkIndices = useMemo(
+    () => createCompletedAssistantWorkIndices(messageParts, finalTextIndex),
+    [finalTextIndex, messageParts]
+  );
+  const visibleFinalPartIndices = useMemo(
+    () => createVisibleFinalAssistantPartIndices(messageParts, finalTextIndex),
+    [finalTextIndex, messageParts]
+  );
+  const completedWorkTimelineItems = useMemo(
+    () => createAssistantWorkTimelineItems(messageParts, completedWorkIndices, { toolUIs }),
+    [completedWorkIndices, messageParts, toolUIs]
+  );
+  const completedWorkStepCount = useMemo(
+    () => countAssistantWorkTimelineSteps(completedWorkTimelineItems),
+    [completedWorkTimelineItems]
+  );
+  const completedWorkSummary =
+    !messageRunning &&
+    !activeRunProjectionMessage &&
+    completedWorkStepCount > 0 &&
+    finalTextIndex >= 0;
+  const [autoCollapseCompletedWorkSummary] = useState(() => {
+    if (!completedRunId || !recentlyActiveAssistantRunIds.has(completedRunId)) {
+      return false;
+    }
+    recentlyActiveAssistantRunIds.delete(completedRunId);
+    return true;
+  });
+  const assistantPartComponents = useAssistantPartComponents(activeRunMessage, {
+    autoPreviewSurfaces: autoCollapseCompletedWorkSummary,
+    displayPresentation: "full"
+  });
+  const completedWorkPartComponents = useAssistantPartComponents(activeRunMessage, {
+    autoPreviewSurfaces: false,
+    displayPresentation: "summary"
+  });
   const showFallbackCursor = useAuiState((state) => {
     if (
       state.message.role !== "assistant" ||
@@ -79,6 +135,11 @@ function AssistantMessage({
       !state.message.parts.some(partHasVisibleAssistantContent)
     );
   });
+  useEffect(() => {
+    if (activeRunProjectionMessage) {
+      rememberRecentlyActiveAssistantRunId(messageId);
+    }
+  }, [activeRunProjectionMessage, messageId]);
 
   return (
     <MessagePrimitive.Root
@@ -86,37 +147,42 @@ function AssistantMessage({
       data-role="assistant"
     >
       <div className="min-w-0 rounded-md px-1 py-1 text-sm leading-6">
-        <MessagePrimitive.GroupedParts groupBy={assistantMessageGroupBy}>
-          {({ part, children }) => {
-            switch (part.type) {
-              case "group-work":
-                return (
-                  <AssistantWorkGroup
-                    count={part.indices.length}
-                    active={part.status.type === "running" || (activeRunMessage && part.indices.includes(lastPartIndex))}
-                    indices={part.indices}
-                  >
-                    {children}
-                  </AssistantWorkGroup>
-                );
-              case "text":
-                return <AssistantTextPart active={activeRunMessage} />;
-              case "tool-call":
-                return part.toolUI ?? <ToolCallPart {...part} />;
-              case "data":
-                return part.dataRendererUI ?? <DataPart {...part} />;
-              case "reasoning":
-                return <AssistantReasoningPart activeRunMessage={activeRunMessage} />;
-              case "image":
-                return <ImagePart />;
-              case "file":
-                return <FilePart />;
-              default:
-                return null;
-            }
-          }}
-        </MessagePrimitive.GroupedParts>
         {showFallbackCursor ? <AssistantFallbackCursor /> : null}
+        {completedWorkSummary ? (
+          <>
+            <AssistantWorkGroup
+              count={completedWorkStepCount}
+              active={false}
+              summary
+              autoCollapse={autoCollapseCompletedWorkSummary}
+            >
+              <AssistantWorkTimeline
+                activeRunMessage={activeRunMessage}
+                items={completedWorkTimelineItems}
+                partComponents={completedWorkPartComponents}
+              />
+            </AssistantWorkGroup>
+            {visibleFinalPartIndices.map((index) => (
+              <MessagePrimitive.PartByIndex
+                key={`part-${index}`}
+                index={index}
+                components={assistantPartComponents}
+              />
+            ))}
+          </>
+        ) : (
+          <MessagePrimitive.GroupedParts groupBy={chronologicalAssistantMessageGroupBy}>
+            {({ part, children }) =>
+              renderAssistantGroupedPart({
+                part,
+                children,
+                activeRunMessage,
+                assistantPartComponents,
+                lastPartIndex,
+                messageParts
+              })}
+          </MessagePrimitive.GroupedParts>
+        )}
         <MessageError />
       </div>
       {!messageRunning ? (
@@ -133,40 +199,230 @@ function AssistantMessage({
   );
 }
 
+function useAssistantPartComponents(
+  activeRunMessage: boolean,
+  options: {
+    autoPreviewSurfaces: boolean;
+    displayPresentation: "full" | "summary";
+  }
+) {
+  return useMemo(
+    () => createAssistantPartComponents(activeRunMessage, options),
+    [activeRunMessage, options.autoPreviewSurfaces, options.displayPresentation]
+  );
+}
+
+function createAssistantPartComponents(
+  activeRunMessage: boolean,
+  options: {
+    autoPreviewSurfaces: boolean;
+    displayPresentation: "full" | "summary";
+  }
+): Parameters<typeof MessagePrimitive.PartByIndex>[0]["components"] {
+  return {
+    Text: () => <AssistantTextPart active={activeRunMessage} />,
+    Reasoning: () => <AssistantReasoningPart activeRunMessage={activeRunMessage} />,
+    Source: AssistantSourcePart,
+    Image: ImagePart,
+    File: FilePart,
+    tools: {
+      Override: (part) => (
+        <ToolCallPart
+          {...part}
+          displayPresentation={options.displayPresentation}
+        />
+      )
+    },
+    data: {
+      Fallback: (part) => (
+        <DataPart
+          {...part}
+          autoPreviewSurfaces={options.autoPreviewSurfaces}
+          displayPresentation={options.displayPresentation}
+        />
+      )
+    }
+  };
+}
+
+type AssistantGroupedRenderInfo = Parameters<
+  Parameters<typeof MessagePrimitive.GroupedParts>[0]["children"]
+>[0];
+
+function renderAssistantGroupedPart({
+  part,
+  children,
+  activeRunMessage,
+  assistantPartComponents,
+  lastPartIndex,
+  messageParts
+}: AssistantGroupedRenderInfo & {
+  activeRunMessage: boolean;
+  assistantPartComponents: Parameters<typeof MessagePrimitive.PartByIndex>[0]["components"];
+  lastPartIndex: number;
+  messageParts: readonly PartState[];
+}) {
+  switch (part.type) {
+    case ASSISTANT_WORK_GROUP:
+      const renderableIndices = createRenderableAssistantToolGroupIndices(messageParts, part.indices);
+      return (
+        <AssistantWorkGroup
+          count={renderableIndices.length}
+          active={part.status.type === "running" || (activeRunMessage && renderableIndices.includes(lastPartIndex))}
+          indices={renderableIndices}
+          summary={false}
+        >
+          {renderableIndices.map((index) => (
+            <MessagePrimitive.PartByIndex
+              key={`part-${index}`}
+              index={index}
+              components={assistantPartComponents}
+            />
+          ))}
+        </AssistantWorkGroup>
+      );
+    case "text":
+      return <AssistantTextPart active={activeRunMessage} />;
+    case "tool-call":
+      return part.toolUI ?? <ToolCallPart {...part} displayPresentation="full" />;
+    case "data":
+      return part.dataRendererUI ?? <DataPart {...part} displayPresentation="full" />;
+    case "reasoning":
+      return <AssistantReasoningPart activeRunMessage={activeRunMessage} />;
+    case "source":
+      return <AssistantSourcePart {...part} />;
+    case "image":
+      return <ImagePart />;
+    case "file":
+      return <FilePart />;
+    default:
+      return null;
+  }
+}
+
+function AssistantWorkTimeline({
+  activeRunMessage,
+  items,
+  partComponents
+}: {
+  activeRunMessage: boolean;
+  items: readonly AssistantWorkTimelineItem[];
+  partComponents: Parameters<typeof MessagePrimitive.PartByIndex>[0]["components"];
+}) {
+  const messageParts = useAuiState((state) => state.message.parts);
+
+  return (
+    <div className="chat-work-timeline">
+      {items.map((item) => {
+        if (item.type === "tool-group") {
+          const renderableIndices = createRenderableAssistantToolGroupIndices(messageParts, item.indices);
+          return (
+            <AssistantWorkGroup
+              key={`tool-group-${item.indices[0]}`}
+              count={renderableIndices.length}
+              active={activeRunMessage && renderableIndices.some((index) => messageParts[index]?.status?.type === "running")}
+              indices={renderableIndices}
+              nested
+              summary={false}
+            >
+              {renderableIndices.map((index) => (
+                <MessagePrimitive.PartByIndex key={`part-${index}`} index={index} components={partComponents} />
+              ))}
+            </AssistantWorkGroup>
+          );
+        }
+        if (item.type === "source-group") {
+          return (
+            <div key={`source-group-${item.indices[0]}`} className="chat-source-chip-group">
+              {item.indices.map((index) => (
+                <MessagePrimitive.PartByIndex key={`part-${index}`} index={index} components={partComponents} />
+              ))}
+            </div>
+          );
+        }
+        return (
+          <MessagePrimitive.PartByIndex
+            key={`part-${item.index}`}
+            index={item.index}
+            components={partComponents}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 function AssistantWorkGroup({
   count,
   active,
   children,
-  indices
+  indices = [],
+  nested = false,
+  summary,
+  autoCollapse = false
 }: {
   count: number;
   active: boolean;
   children: ReactNode;
-  indices: readonly number[];
+  indices?: readonly number[];
+  nested?: boolean;
+  summary: boolean;
+  autoCollapse?: boolean;
 }) {
   const { t } = useTranslation();
   const hasDisplay = useAuiState((state) =>
-    indices.some((index) => partHasDisplay(state.message.parts[index]))
+    !summary && indices.some((index) => partHasDisplay(state.message.parts[index]))
   );
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoCollapse);
+  const [suppressOpenAnimation, setSuppressOpenAnimation] = useState(autoCollapse);
   const openedForDisplayRef = useRef(false);
+  const autoCollapseStartedRef = useRef(false);
 
   useEffect(() => {
-    if (!hasDisplay || openedForDisplayRef.current) {
+    if (summary || !hasDisplay || openedForDisplayRef.current) {
       return;
     }
     openedForDisplayRef.current = true;
     setOpen(true);
-  }, [hasDisplay, openedForDisplayRef]);
+  }, [hasDisplay, summary]);
+
+  useEffect(() => {
+    if (!summary || !autoCollapse || autoCollapseStartedRef.current) {
+      return;
+    }
+    autoCollapseStartedRef.current = true;
+    const timeout = globalThis.setTimeout(() => {
+      setSuppressOpenAnimation(false);
+      setOpen(false);
+    }, 80);
+    return () => globalThis.clearTimeout(timeout);
+  }, [autoCollapse, summary]);
+
+  const countLabel = summary
+    ? t(count === 1 ? "workStepCountSingular" : "workStepCount", { count })
+    : t(count === 1 ? "toolCallCountSingular" : "toolCallCount", { count });
 
   return (
-    <ToolGroupRoot className="chat-tool-work my-4 max-w-5xl" open={open} onOpenChange={setOpen} variant="ghost">
+    <ToolGroupRoot
+      className={cn("chat-tool-work max-w-5xl", nested ? "chat-tool-work-nested my-0" : "my-4")}
+      open={open}
+      onOpenChange={setOpen}
+      variant="ghost"
+    >
       <ToolGroupTrigger
+        data-testid="assistant-work-group-trigger"
         active={active}
         count={count}
-        label={t(count === 1 ? "toolCallCountSingular" : "toolCallCount", { count })}
+        label={countLabel}
       />
-      <ToolGroupContent>{children}</ToolGroupContent>
+      <ToolGroupContent
+        className={cn(
+          summary && "chat-work-summary-content",
+          suppressOpenAnimation && "chat-tool-group-suppress-open-animation"
+        )}
+      >
+        {children}
+      </ToolGroupContent>
     </ToolGroupRoot>
   );
 }
@@ -208,6 +464,18 @@ function partHasVisibleAssistantContent(part: unknown): boolean {
     return typeof part.text === "string" && part.text.trim().length > 0;
   }
   return true;
+}
+
+function rememberRecentlyActiveAssistantRunId(runId: string): void {
+  recentlyActiveAssistantRunIds.delete(runId);
+  recentlyActiveAssistantRunIds.add(runId);
+  if (recentlyActiveAssistantRunIds.size <= 20) {
+    return;
+  }
+  const oldestRunId = recentlyActiveAssistantRunIds.values().next().value;
+  if (typeof oldestRunId === "string") {
+    recentlyActiveAssistantRunIds.delete(oldestRunId);
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

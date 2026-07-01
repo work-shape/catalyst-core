@@ -24,11 +24,14 @@ import {
 } from "./product-run-transport";
 
 export function AssistantRuntimePanel({ chat }: { chat: SelectedChatModel }) {
-  const { activeRun, messages, selectedConversationId } = chat;
-  const initialMessages = useMemo(() => toUiMessages(messages ?? [], activeRun), [activeRun, messages]);
+  const { activeRun, completedRunProjections, messages, selectedConversationId } = chat;
+  const initialMessages = useMemo(
+    () => toUiMessages(messages ?? [], activeRun, completedRunProjections),
+    [activeRun, completedRunProjections, messages]
+  );
   const messageSnapshotKey = useMemo(
-    () => createMessageSnapshotKey(messages ?? [], activeRun),
-    [activeRun, messages]
+    () => createMessageSnapshotKey(messages ?? [], activeRun, completedRunProjections),
+    [activeRun, completedRunProjections, messages]
   );
   const runtimeKey = selectedConversationId ?? "new";
 

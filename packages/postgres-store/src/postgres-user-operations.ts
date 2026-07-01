@@ -5,6 +5,7 @@ import {
   type AuditEventInput,
   type ClientInstanceId,
   type CreateUserInput,
+  type DeleteUserInput,
   type DeleteUserIdentityInput,
   type ResolveUserIdentityInput,
   type UpdateUserInput,
@@ -322,6 +323,27 @@ export async function updateUser(
     throw new AppError("NOT_FOUND", "User is not available");
   }
   return requireUserRecord(db, input.clientInstanceId, row.id);
+}
+
+export async function deleteUser(
+  db: PostgresDatabase,
+  input: DeleteUserInput
+): Promise<UserRecord> {
+  const user = await getUserRecord(db, input.clientInstanceId, input.userId);
+  if (!user) {
+    throw new AppError("NOT_FOUND", "User is not available");
+  }
+
+  const rows = await db
+    .delete(productUsers)
+    .where(
+      and(eq(productUsers.clientInstanceId, input.clientInstanceId), eq(productUsers.id, input.userId))
+    )
+    .returning();
+  if (rows.length === 0) {
+    throw new AppError("NOT_FOUND", "User is not available");
+  }
+  return user;
 }
 
 export async function upsertUserIdentity(

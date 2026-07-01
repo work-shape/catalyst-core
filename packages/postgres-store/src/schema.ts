@@ -576,6 +576,7 @@ export const modelUsageEvents = pgTable(
     inputTokens: integer("input_tokens").notNull(),
     outputTokens: integer("output_tokens").notNull(),
     totalTokens: integer("total_tokens").notNull(),
+    webSearchCallCount: integer("web_search_call_count").notNull().default(0),
     source: text("source").$type<ModelUsageEvent["source"]>().notNull(),
     correlationId: text("correlation_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull()

@@ -76,6 +76,9 @@ usage:
         model: gpt-5-nano
         inputPricePerMillionTokens: 0.05
         outputPricePerMillionTokens: 0.4
+    webSearch:
+      - providerId: openai
+        pricePerCall: 0.01
 runtime:
   maxSteps: 64
   repeatedToolCallLimit: 3

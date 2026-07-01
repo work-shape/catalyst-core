@@ -10,11 +10,14 @@ import {
   createChatServer,
   type ChatServerOptions
 } from "@vivd-catalyst/chat-server";
+import { STANDALONE_AUTH_SOURCE } from "@vivd-catalyst/auth";
 import {
   AppError,
   NoopAuditRecorder,
   StoreBackedAuditRecorder,
+  asToolCallId,
   asClientInstanceId,
+  createAssistantFinalMetadata,
   createPlatformId,
   type AgentRun,
   type AgentRuntime,
@@ -167,7 +170,353 @@ describe("client instance app vertical slice", () => {
     });
 
     await fetchRunEvents(baseUrl, conversation.id, runId);
+
+    const completedSnapshot = await fetch(`${baseUrl}/api/conversations/${conversation.id}/thread`);
+    expect(completedSnapshot.status).toBe(200);
+    const completedBody = await completedSnapshot.json() as {
+      activeRun?: unknown;
+      completedRunProjections?: Record<string, {
+        runId: string;
+        status: string;
+        parts: Array<{ type: string; text?: string }>;
+      }>;
+    };
+    expect(completedBody.activeRun).toBeUndefined();
+    expect(completedBody.completedRunProjections?.[runId]).toMatchObject({
+      runId,
+      status: "completed",
+      parts: expect.arrayContaining([
+        expect.objectContaining({
+          type: "text"
+        })
+      ])
+    });
     await app.close();
+  });
+
+  it("exposes completed run projections in recorded observation order", async () => {
+    const clientInstanceId = asClientInstanceId("demo-local");
+    const owner = createTestUser("user-1", clientInstanceId);
+    const store = new InMemoryPlatformStore();
+    const config = createTestConfig();
+    const usageGovernance = new ModelUsageGovernance({
+      store,
+      budget: config.usage.budget,
+      safeguards: config.usage.safeguards,
+      pricing: config.usage.pricing
+    });
+    const conversation = await store.createConversation({
+      clientInstanceId,
+      ownerUserId: owner.id,
+      ownerExternalUserId: owner.externalUserId,
+      title: "Completed projection test",
+      retainedUntil: "2030-01-01T00:00:00.000Z"
+    });
+    const userMessage = await store.appendMessage({
+      clientInstanceId,
+      conversationId: conversation.id,
+      role: "user",
+      text: "müssen supermärkte jegliches Pfand annehmen?"
+    });
+    const run = await store.createAgentRun({
+      id: createPlatformId<"AgentRunId">("run"),
+      clientInstanceId,
+      conversationId: conversation.id,
+      ownerUserId: owner.id,
+      inputMessageId: userMessage.id,
+      agentName: "test_agent",
+      correlationId: "completed-projection-order",
+      startedAt: "2026-07-01T12:00:00.000Z"
+    });
+    const toolCallId = asToolCallId("call_web");
+    const progressText = "Ich prüfe kurz die aktuellen offiziellen Regeln, damit die Antwort rechtlich sauber ist.";
+    const finalText = "Kurz: Nein. Supermärkte müssen nicht jegliches Pfand annehmen.";
+    const finalMessageId = createPlatformId<"MessageId">("msg");
+
+    await store.appendRunObservation({
+      clientInstanceId,
+      runId: run.id,
+      conversationId: conversation.id,
+      ownerUserId: owner.id,
+      event: {
+        type: "message_delta",
+        runId: run.id,
+        sequence: 1,
+        createdAt: "2026-07-01T12:00:01.000Z",
+        delta: progressText
+      }
+    });
+    await store.appendRunObservation({
+      clientInstanceId,
+      runId: run.id,
+      conversationId: conversation.id,
+      ownerUserId: owner.id,
+      event: {
+        type: "tool_call_started",
+        runId: run.id,
+        sequence: 2,
+        createdAt: "2026-07-01T12:00:02.000Z",
+        toolCallId,
+        toolName: "web_search",
+        input: {
+          query: "Pfand Annahmepflicht Supermarkt Deutschland"
+        }
+      }
+    });
+    await store.appendRunObservation({
+      clientInstanceId,
+      runId: run.id,
+      conversationId: conversation.id,
+      ownerUserId: owner.id,
+      event: {
+        type: "tool_call_completed",
+        runId: run.id,
+        sequence: 3,
+        createdAt: "2026-07-01T12:00:03.000Z",
+        toolCallId,
+        toolName: "web_search",
+        result: toolSuccess({
+          sourceCount: 1
+        }),
+        modelOutput: "{\"sourceCount\":1}"
+      }
+    });
+    await store.appendRunObservation({
+      clientInstanceId,
+      runId: run.id,
+      conversationId: conversation.id,
+      ownerUserId: owner.id,
+      event: {
+        type: "message_delta",
+        runId: run.id,
+        sequence: 4,
+        createdAt: "2026-07-01T12:00:04.000Z",
+        delta: finalText
+      }
+    });
+    await store.appendRunObservation({
+      clientInstanceId,
+      runId: run.id,
+      conversationId: conversation.id,
+      ownerUserId: owner.id,
+      event: {
+        type: "message_completed",
+        runId: run.id,
+        sequence: 5,
+        createdAt: "2026-07-01T12:00:05.000Z",
+        message: {
+          id: finalMessageId,
+          role: "assistant",
+          text: `${progressText}${finalText}`,
+          metadata: createAssistantFinalMetadata({
+            runId: run.id
+          })
+        }
+      }
+    });
+    await store.appendRunObservation({
+      clientInstanceId,
+      runId: run.id,
+      conversationId: conversation.id,
+      ownerUserId: owner.id,
+      event: {
+        type: "run_completed",
+        runId: run.id,
+        sequence: 6,
+        createdAt: "2026-07-01T12:00:06.000Z"
+      }
+    });
+    await store.updateAgentRunStatus({
+      clientInstanceId,
+      runId: run.id,
+      status: "completed",
+      updatedAt: "2026-07-01T12:00:06.000Z",
+      completedAt: "2026-07-01T12:00:06.000Z",
+      lastSequence: 6
+    });
+    await store.appendMessage({
+      id: finalMessageId,
+      clientInstanceId,
+      conversationId: conversation.id,
+      role: "assistant",
+      text: `${progressText}${finalText}`,
+      metadata: createAssistantFinalMetadata({
+        runId: run.id
+      })
+    });
+
+    const server = await createChatServer({
+      config,
+      clientInstanceId,
+      authAdapter: {
+        id: "test-auth",
+        async authenticate() {
+          return owner;
+        }
+      },
+      conversationStore: store,
+      auditEventStore: store,
+      userStore: store,
+      usageGovernance,
+      auditRecorder: new NoopAuditRecorder(),
+      agentRuntime: createMissingRuntime(),
+      modelProvider: createUnusedModelProvider(),
+      runRecovery: {
+        staleActiveRunMs: 60_000,
+        runOnStartup: false,
+        watchdogIntervalMs: 60_000
+      }
+    });
+
+    const snapshot = await server.inject({
+      method: "GET",
+      url: `/api/conversations/${conversation.id}/thread`
+    });
+
+    expect(snapshot.statusCode).toBe(200);
+    const body = snapshot.json() as {
+      completedRunProjections?: Record<string, {
+        parts: Array<{ type: string; text?: string; toolCallId?: string; toolName?: string }>;
+      }>;
+    };
+    expect(body.completedRunProjections?.[run.id]?.parts).toEqual([
+      {
+        type: "text",
+        text: progressText
+      },
+      expect.objectContaining({
+        type: "tool_call",
+        toolCallId,
+        toolName: "web_search"
+      }),
+      {
+        type: "text",
+        text: finalText
+      }
+    ]);
+
+    await server.close();
+  });
+
+  it("skips completed run projections when observations lack final completion text", async () => {
+    const clientInstanceId = asClientInstanceId("demo-local");
+    const owner = createTestUser("user-1", clientInstanceId);
+    const store = new InMemoryPlatformStore();
+    const config = createTestConfig();
+    const usageGovernance = new ModelUsageGovernance({
+      store,
+      budget: config.usage.budget,
+      safeguards: config.usage.safeguards,
+      pricing: config.usage.pricing
+    });
+    const conversation = await store.createConversation({
+      clientInstanceId,
+      ownerUserId: owner.id,
+      ownerExternalUserId: owner.externalUserId,
+      title: "Incomplete completed projection test",
+      retainedUntil: "2030-01-01T00:00:00.000Z"
+    });
+    const userMessage = await store.appendMessage({
+      clientInstanceId,
+      conversationId: conversation.id,
+      role: "user",
+      text: "müssen supermärkte jegliches Pfand annehmen?"
+    });
+    const run = await store.createAgentRun({
+      id: createPlatformId<"AgentRunId">("run-incomplete"),
+      clientInstanceId,
+      conversationId: conversation.id,
+      ownerUserId: owner.id,
+      inputMessageId: userMessage.id,
+      agentName: "test_agent",
+      correlationId: "incomplete-completed-projection",
+      startedAt: "2026-07-01T12:00:00.000Z"
+    });
+    await store.appendRunObservation({
+      clientInstanceId,
+      runId: run.id,
+      conversationId: conversation.id,
+      ownerUserId: owner.id,
+      event: {
+        type: "message_delta",
+        runId: run.id,
+        sequence: 1,
+        createdAt: "2026-07-01T12:00:01.000Z",
+        delta: "Ich prüfe kurz die aktuellen offiziellen Regeln."
+      }
+    });
+    await store.appendRunObservation({
+      clientInstanceId,
+      runId: run.id,
+      conversationId: conversation.id,
+      ownerUserId: owner.id,
+      event: {
+        type: "run_completed",
+        runId: run.id,
+        sequence: 2,
+        createdAt: "2026-07-01T12:00:02.000Z"
+      }
+    });
+    await store.updateAgentRunStatus({
+      clientInstanceId,
+      runId: run.id,
+      status: "completed",
+      updatedAt: "2026-07-01T12:00:02.000Z",
+      completedAt: "2026-07-01T12:00:02.000Z",
+      lastSequence: 2
+    });
+    await store.appendMessage({
+      clientInstanceId,
+      conversationId: conversation.id,
+      role: "assistant",
+      text: "Kurz: Nein. Supermärkte müssen nicht jegliches Pfand annehmen.",
+      metadata: createAssistantFinalMetadata({
+        runId: run.id
+      })
+    });
+
+    const server = await createChatServer({
+      config,
+      clientInstanceId,
+      authAdapter: {
+        id: "test-auth",
+        async authenticate() {
+          return owner;
+        }
+      },
+      conversationStore: store,
+      auditEventStore: store,
+      userStore: store,
+      usageGovernance,
+      auditRecorder: new NoopAuditRecorder(),
+      agentRuntime: createMissingRuntime(),
+      modelProvider: createUnusedModelProvider(),
+      runRecovery: {
+        staleActiveRunMs: 60_000,
+        runOnStartup: false,
+        watchdogIntervalMs: 60_000
+      }
+    });
+
+    const snapshot = await server.inject({
+      method: "GET",
+      url: `/api/conversations/${conversation.id}/thread`
+    });
+
+    expect(snapshot.statusCode).toBe(200);
+    const body = snapshot.json() as {
+      completedRunProjections?: Record<string, unknown>;
+      messages: Array<{ role: string; text: string }>;
+    };
+    expect(body.completedRunProjections?.[run.id]).toBeUndefined();
+    expect(body.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        role: "assistant",
+        text: "Kurz: Nein. Supermärkte müssen nicht jegliches Pfand annehmen."
+      })
+    ]));
+
+    await server.close();
   });
 
   it("streams product run observations from a sequence cursor", async () => {
@@ -263,6 +612,36 @@ describe("client instance app vertical slice", () => {
     await server.close();
   });
 
+  it("recovers stale durable active runs while listing conversations", async () => {
+    const fixture = await createStaleRunRecoveryFixture();
+    const { server, store, conversation, run } = fixture;
+
+    const listed = await server.inject({
+      method: "GET",
+      url: "/api/conversations"
+    });
+    expect(listed.statusCode).toBe(200);
+    const listedConversation = (listed.json() as Array<{ id: string; activeRun?: unknown }>)
+      .find((item) => item.id === conversation.id);
+    expect(listedConversation).toBeDefined();
+    expect(listedConversation).not.toHaveProperty("activeRun");
+
+    const recoveredRun = await store.getAgentRun({
+      clientInstanceId: fixture.clientInstanceId,
+      runId: run.id
+    });
+    expect(recoveredRun).toMatchObject({
+      status: "failed",
+      lastSequence: 2,
+      error: {
+        code: "AGENT_RUN_RUNTIME_INTERRUPTED",
+        category: "runtime_interrupted"
+      }
+    });
+
+    await server.close();
+  });
+
   it("recovers a stale durable active run for observation cursors after the last pre-crash sequence", async () => {
     const fixture = await createStaleRunRecoveryFixture();
     const { server, store, conversation, run } = fixture;
@@ -307,6 +686,86 @@ describe("client instance app vertical slice", () => {
       })
     ]);
 
+    await server.close();
+  });
+
+  it("recovers a fresh durable active run when local runtime observation state is missing", async () => {
+    const fixture = await createStaleRunRecoveryFixture({
+      staleActiveRunMs: 60 * 60 * 1000
+    });
+    const { server, store, conversation, run } = fixture;
+    await store.updateAgentRunStatus({
+      clientInstanceId: fixture.clientInstanceId,
+      runId: run.id,
+      status: "running",
+      updatedAt: new Date().toISOString(),
+      lastSequence: 1
+    });
+
+    const events = await server.inject({
+      method: "GET",
+      url: `/api/conversations/${conversation.id}/runs/${run.id}/events?after=1`
+    });
+    expect(events.statusCode).toBe(200);
+    expect(parseSseChunks(events.payload)).toEqual([
+      expect.objectContaining({
+        type: "run_failed",
+        sequence: 2,
+        runId: run.id,
+        conversationId: conversation.id,
+        payload: expect.objectContaining({
+          error: expect.objectContaining({
+            code: "AGENT_RUN_RUNTIME_INTERRUPTED",
+            category: "runtime_interrupted"
+          })
+        })
+      })
+    ]);
+
+    await expectRunStatus(store, fixture.clientInstanceId, run.id, "failed");
+    await server.close();
+  });
+
+  it("recovers a fresh durable active run when cancellation finds missing local runtime state", async () => {
+    const fixture = await createStaleRunRecoveryFixture({
+      staleActiveRunMs: 60 * 60 * 1000
+    });
+    const { server, store, conversation, run } = fixture;
+    await store.updateAgentRunStatus({
+      clientInstanceId: fixture.clientInstanceId,
+      runId: run.id,
+      status: "running",
+      updatedAt: new Date().toISOString(),
+      lastSequence: 1
+    });
+
+    const cancelled = await server.inject({
+      method: "POST",
+      url: `/api/conversations/${conversation.id}/runs/${run.id}/cancel`,
+      payload: { reason: "User stopped a missing local run" }
+    });
+    expect(cancelled.statusCode).toBe(200);
+    expect(cancelled.json()).toMatchObject({
+      run: {
+        id: run.id,
+        status: "failed",
+        lastSequence: 2,
+        error: {
+          code: "AGENT_RUN_RUNTIME_INTERRUPTED",
+          category: "runtime_interrupted"
+        }
+      }
+    });
+
+    const replay = await store.listRunObservations({
+      clientInstanceId: fixture.clientInstanceId,
+      runId: run.id,
+      ownerUserId: fixture.owner.id
+    });
+    expect(replay.map((observation) => observation.type)).toEqual([
+      "message_delta",
+      "run_failed"
+    ]);
     await server.close();
   });
 
@@ -1500,7 +1959,7 @@ describe("client instance app vertical slice", () => {
         conversationId: conversation.id,
         kind: "document.csv",
         objectKey: "execution-workspaces/private/final.csv",
-        filename: "final.csv",
+        filename: "final \u00e4.csv",
         mimeType: "text/csv",
         byteSize: 13,
         checksum: "sha256:final",
@@ -1516,7 +1975,9 @@ describe("client instance app vertical slice", () => {
 
       expect(content.statusCode).toBe(200);
       expect(content.headers["content-type"]).toContain("text/csv");
-      expect(content.headers["content-disposition"]).toBe('attachment; filename="final.csv"');
+      expect(content.headers["content-disposition"]).toBe(
+        'attachment; filename="final _.csv"; filename*=UTF-8\'\'final%20%C3%A4.csv'
+      );
       expect(content.payload).toBe("final,report\n");
       expect(JSON.stringify(content.headers)).not.toContain("execution-workspaces/private");
       expect(readArtifacts).toEqual([
@@ -1828,6 +2289,164 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
+  it("lets a signed-in user delete their own account and owned conversations", async () => {
+    const clientInstanceId = asClientInstanceId("demo-local");
+    const store = new InMemoryPlatformStore();
+    const config = createTestConfig();
+    const usageGovernance = new ModelUsageGovernance({
+      store,
+      budget: config.usage.budget,
+      safeguards: config.usage.safeguards,
+      pricing: config.usage.pricing
+    });
+    const user = await store.resolveUserIdentity({
+      clientInstanceId,
+      authSource: STANDALONE_AUTH_SOURCE,
+      externalUserId: "auth-delete-me",
+      displayLabel: "Delete Me",
+      email: "delete-me@example.test",
+      emailVerified: true,
+      roles: ["user"],
+      permissionRefs: ["demo-tools"],
+      correlationId: "corr_delete_me"
+    });
+    const otherUser = await store.resolveUserIdentity({
+      clientInstanceId,
+      authSource: "development",
+      externalUserId: "other-user",
+      displayLabel: "Other User",
+      roles: ["user"],
+      permissionRefs: ["demo-tools"],
+      correlationId: "corr_other"
+    });
+    const conversation = await store.createConversation({
+      clientInstanceId,
+      ownerUserId: user.id,
+      ownerExternalUserId: user.externalUserId,
+      title: "Delete this conversation",
+      retainedUntil: "2030-01-01T00:00:00.000Z"
+    });
+    await store.appendMessage({
+      clientInstanceId,
+      conversationId: conversation.id,
+      role: "user",
+      text: "remove this message"
+    });
+    const otherConversation = await store.createConversation({
+      clientInstanceId,
+      ownerUserId: otherUser.id,
+      ownerExternalUserId: otherUser.externalUserId,
+      title: "Keep this conversation",
+      retainedUntil: "2030-01-01T00:00:00.000Z"
+    });
+    const deletedPasswordSignIns: Array<{ externalUserId: string }> = [];
+    const server = await createChatServer({
+      config,
+      clientInstanceId,
+      authAdapter: {
+        id: "test-auth",
+        async authenticate(request) {
+          if (request.headers["x-service-principal"]) {
+            return {
+              ...user,
+              scopes: ["*"],
+              principal: {
+                kind: "service",
+                id: "svc-customer-api",
+                displayLabel: "Customer API",
+                clientInstanceId,
+                authSource: "customer-api"
+              },
+              delegatedActor: {
+                kind: "service_principal",
+                id: "svc-customer-api",
+                authSource: "customer-api"
+              }
+            };
+          }
+          return { ...user, scopes: ["*"] };
+        }
+      },
+      conversationStore: store,
+      auditEventStore: store,
+      userStore: store,
+      usageGovernance,
+      auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store }),
+      agentRuntime: createMissingRuntime(),
+      modelProvider: createUnusedModelProvider(),
+      standaloneAuth: {
+        baseUrl: "http://127.0.0.1:4100/api/auth",
+        async handleRequest() {
+          return new Response(null, { status: 404 });
+        },
+        async setPassword() {},
+        async setOrCreatePasswordSignIn() {
+          throw new AppError("INTERNAL", "Password sign-in should not be created");
+        },
+        async changePassword() {},
+        async deletePasswordSignIn(input) {
+          deletedPasswordSignIns.push(input);
+        }
+      }
+    });
+
+    const delegatedDelete = await server.inject({
+      method: "DELETE",
+      url: "/api/me",
+      headers: {
+        "x-service-principal": "1"
+      }
+    });
+    expect(delegatedDelete.statusCode).toBe(403);
+
+    const deleted = await server.inject({
+      method: "DELETE",
+      url: "/api/me"
+    });
+    expect(deleted.statusCode).toBe(200);
+    expect(deleted.json()).toEqual({ ok: true });
+    expect(deletedPasswordSignIns).toEqual([{ externalUserId: "auth-delete-me" }]);
+
+    await expect(store.listUsers({ clientInstanceId })).resolves.not.toContainEqual(
+      expect.objectContaining({ id: user.id })
+    );
+    await expect(store.getConversation(clientInstanceId, conversation.id)).resolves.toMatchObject({
+      status: "deleted"
+    });
+    await expect(store.getConversation(clientInstanceId, otherConversation.id)).resolves.toMatchObject({
+      status: "active"
+    });
+    await expect(
+      store.listMessages({
+        clientInstanceId,
+        conversationId: conversation.id
+      })
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND"
+    });
+
+    const audit = await store.listAuditEvents({ clientInstanceId });
+    expect(audit).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "conversation.deleted",
+          metadata: expect.objectContaining({
+            requestedBy: "account_deletion"
+          })
+        }),
+        expect.objectContaining({
+          type: "user.deleted",
+          metadata: expect.objectContaining({
+            requestedBy: "self",
+            conversationCount: 1
+          })
+        })
+      ])
+    );
+
+    await server.close();
+  });
+
   it("lets admins administer non-superadmin users without escalating superadmin access", async () => {
     const app = await createClientInstanceApp({
       config: createTestConfig({
@@ -1935,6 +2554,30 @@ describe("client instance app vertical slice", () => {
     expect(superadminUpdate.statusCode).toBe(403);
     expect((superadminUpdate.json() as { error: { message: string } }).error.message).toContain(
       "Only superadmins can manage superadmin users"
+    );
+
+    const adminDelete = await app.server.inject({
+      method: "DELETE",
+      url: `/api/superadmin/users/${createdUser.id}`,
+      headers: {
+        "x-dev-user-id": "admin-1"
+      }
+    });
+    expect(adminDelete.statusCode).toBe(403);
+    expect((adminDelete.json() as { error: { message: string } }).error.message).toContain(
+      "superadmin role"
+    );
+
+    const selfDelete = await app.server.inject({
+      method: "DELETE",
+      url: `/api/superadmin/users/${superadminUser?.id}`,
+      headers: {
+        "x-dev-user-id": "superadmin-1"
+      }
+    });
+    expect(selfDelete.statusCode).toBe(422);
+    expect((selfDelete.json() as { error: { message: string } }).error.message).toContain(
+      "cannot delete their own user account"
     );
 
     await app.close();
@@ -2523,6 +3166,7 @@ describe("client instance app vertical slice", () => {
       password: string;
     }> = [];
     const resetPasswords: Array<{ externalUserId: string; password: string }> = [];
+    const deletedPasswordSignIns: Array<{ externalUserId: string }> = [];
     const server = await createChatServer({
       config,
       clientInstanceId,
@@ -2560,7 +3204,10 @@ describe("client instance app vertical slice", () => {
         async setPassword(input) {
           resetPasswords.push(input);
         },
-        async changePassword() {}
+        async changePassword() {},
+        async deletePasswordSignIn(input) {
+          deletedPasswordSignIns.push(input);
+        }
       }
     });
 
@@ -2664,6 +3311,33 @@ describe("client instance app vertical slice", () => {
     expect(audit.statusCode).toBe(200);
     expect((audit.json() as Array<{ type: string }>).map((event) => event.type)).toEqual(
       expect.arrayContaining(["user.password_sign_in_created", "user.password_reset"])
+    );
+
+    const deleted = await server.inject({
+      method: "DELETE",
+      url: `/api/superadmin/users/${createdUser.id}`
+    });
+    expect(deleted.statusCode).toBe(200);
+    expect(deletedPasswordSignIns).toEqual([{ externalUserId: "auth-Jane@Example.Test" }]);
+
+    const listedAfterDelete = await server.inject({
+      method: "GET",
+      url: "/api/superadmin/users"
+    });
+    expect(listedAfterDelete.statusCode).toBe(200);
+    expect(listedAfterDelete.json()).not.toContainEqual(
+      expect.objectContaining({
+        id: createdUser.id
+      })
+    );
+
+    const auditAfterDelete = await server.inject({
+      method: "GET",
+      url: "/api/audit-events"
+    });
+    expect(auditAfterDelete.statusCode).toBe(200);
+    expect((auditAfterDelete.json() as Array<{ type: string }>).map((event) => event.type)).toEqual(
+      expect.arrayContaining(["governance.user_delete_authorized", "user.deleted"])
     );
 
     await server.close();
@@ -2822,7 +3496,11 @@ type LocalizedTestString =
       de?: string;
     };
 
-async function createStaleRunRecoveryFixture() {
+async function createStaleRunRecoveryFixture(
+  input: {
+    staleActiveRunMs?: number;
+  } = {}
+) {
   const clientInstanceId = asClientInstanceId("demo-local");
   const owner = createTestUser("user-1", clientInstanceId);
   const store = new InMemoryPlatformStore();
@@ -2852,7 +3530,7 @@ async function createStaleRunRecoveryFixture() {
     agentRuntime: createMissingRuntime(),
     modelProvider: createUnusedModelProvider(),
     runRecovery: {
-      staleActiveRunMs: 1,
+      staleActiveRunMs: input.staleActiveRunMs ?? 1,
       runOnStartup: false,
       watchdogIntervalMs: 60_000
     }

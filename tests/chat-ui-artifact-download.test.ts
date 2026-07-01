@@ -12,6 +12,8 @@ import {
   artifactDisplayFilename,
   artifactDownloadFilename,
   getArtifactFileType,
+  getArtifactPreviewKind,
+  readArtifactImagePagesPreview,
   readSurfacedToolArtifactRefs,
   readToolArtifactRefs
 } from "../packages/chat-ui/src/tool-artifacts";
@@ -64,10 +66,11 @@ describe("chat UI artifact download cards", () => {
     ];
 
     const projected = toUiMessages(createPromotedArtifactMessages(artifacts));
-    const finalParts = projected[1]?.parts ?? [];
+    const finalParts = projected.at(-1)?.parts ?? [];
+    const finalTextPart = finalParts.find((part) => part.type === "text");
     const artifactPart = finalParts.find((part) => part.type === WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE);
 
-    expect(finalParts[0]).toMatchObject({
+    expect(finalTextPart).toMatchObject({
       type: "text",
       text: "The files are ready."
     });
@@ -131,13 +134,13 @@ describe("chat UI artifact download cards", () => {
       createFinalMessage("The rendered preview looks correct.")
     ]);
 
-    expect(projected[1]?.parts).toEqual([
-      {
-        type: "text",
-        text: "The rendered preview looks correct.",
-        state: "done"
-      }
-    ]);
+    const finalParts = projected.at(-1)?.parts ?? [];
+    expect(finalParts).toContainEqual({
+      type: "text",
+      text: "The rendered preview looks correct.",
+      state: "done"
+    });
+    expect(finalParts.some((part) => part.type === WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE)).toBe(false);
   });
 
   it("sanitizes artifact card refs and never falls back to showing internal ids as filenames", () => {
@@ -195,6 +198,9 @@ describe("chat UI artifact download cards", () => {
           filename: "outputs/final-report.docx",
           mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           metadata: {
+            source: "execution_workspace",
+            workspacePath: "scratch/private/final-report.docx",
+            objectKey: "execution-workspaces/private/final-report.docx",
             preview: {
               type: "image_pages",
               format: "png",
@@ -231,6 +237,23 @@ describe("chat UI artifact download cards", () => {
         kind: "document.docx",
         filename: "final-report.docx",
         mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        metadata: {
+          preview: {
+            type: "image_pages",
+            format: "png",
+            pages: [
+              {
+                artifactId: "art_page_1",
+                kind: "document.preview_page_image",
+                filename: "page-1.png",
+                mimeType: "image/png",
+                pageNumber: 1,
+                width: 900,
+                height: 1200
+              }
+            ]
+          }
+        },
         preview: {
           status: "ready",
           artifactId: "art_docx",
@@ -250,11 +273,52 @@ describe("chat UI artifact download cards", () => {
       }
     ]);
     expect(artifactDownloadFilename(refs[0]!)).toBe("final-report.docx");
+    expect(getArtifactPreviewKind(refs[0]!)).toBe("image-pages");
+    expect(readArtifactImagePagesPreview(refs[0]!)?.pages[0]?.artifactId).toBe("art_page_1");
     expect(JSON.stringify(refs)).not.toContain("objectKey");
     expect(JSON.stringify(refs)).not.toContain("workspacePath");
     expect(JSON.stringify(refs)).not.toContain("renderer");
     expect(JSON.stringify(refs)).not.toContain("scratch/");
     expect(JSON.stringify(refs)).not.toContain("artifact-previews/private/page-2.png");
+  });
+
+  it("preserves image-page preview refs on final assistant artifact cards", () => {
+    const artifacts = [
+      {
+        artifactId: "art_docx",
+        kind: "document.word",
+        filename: "invoice.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        metadata: {
+          preview: {
+            type: "image_pages" as const,
+            format: "png" as const,
+            pages: [
+              {
+                artifactId: "art_docx_page_1",
+                kind: "document.preview_page_image",
+                filename: "invoice-page-1.png",
+                mimeType: "image/png" as const,
+                pageNumber: 1
+              }
+            ]
+          }
+        }
+      }
+    ];
+
+    const projected = toUiMessages(createPromotedArtifactMessages(artifacts));
+    const artifactPart = projected
+      .at(-1)
+      ?.parts.find((part) => part.type === WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE);
+    const data = artifactPart && "data" in artifactPart ? artifactPart.data : undefined;
+    const projectedArtifact = data?.kind === "workspace.promoted_artifacts"
+      ? data.artifacts[0]
+      : undefined;
+
+    expect(projectedArtifact).toMatchObject(artifacts[0]!);
+    expect(getArtifactPreviewKind(projectedArtifact!)).toBe("image-pages");
+    expect(readArtifactImagePagesPreview(projectedArtifact!)?.pages[0]?.artifactId).toBe("art_docx_page_1");
   });
 
   it("only treats workspace promotion outputs as surfaced download artifacts", () => {
@@ -306,6 +370,50 @@ describe("chat UI artifact download cards", () => {
     expectBadge("notes.txt", "text/plain", "DOC");
     expectBadge("unknown.bin", "application/octet-stream", "FILE");
   });
+
+  it("marks first-pass previewable artifact types", () => {
+    expectPreviewKind("report.pdf", "application/pdf", "pdf");
+    expectPreviewKind("chart.png", "image/png", "image");
+    expectPreviewKind("notes.txt", "text/plain", "text");
+    expectPreviewKind("table.csv", "text/csv", "text");
+    expectPreviewKind(
+      "workbook.xlsx",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "spreadsheet"
+    );
+    expectPreviewKind(
+      "letter.docx",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "document"
+    );
+    expectPreviewKind(
+      "deck.pptx",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "presentation"
+    );
+    expect(getArtifactPreviewKind({
+      artifactId: "art_docx_previewable",
+      filename: "letter.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      metadata: {
+        preview: {
+          type: "image_pages",
+          format: "png",
+          pages: [{ artifactId: "art_page_1", mimeType: "image/png" }]
+        }
+      }
+    })).toBe("image-pages");
+    expectPreviewKind(
+      "legacy.doc",
+      "application/msword",
+      undefined
+    );
+    expectPreviewKind(
+      "legacy.ppt",
+      "application/vnd.ms-powerpoint",
+      undefined
+    );
+  });
 });
 
 function expectBadge(filename: string, mimeType: string, badge: string): void {
@@ -316,12 +424,21 @@ function expectBadge(filename: string, mimeType: string, badge: string): void {
   }).badge).toBe(badge);
 }
 
+function expectPreviewKind(filename: string, mimeType: string, kind: ReturnType<typeof getArtifactPreviewKind>): void {
+  expect(getArtifactPreviewKind({
+    artifactId: `art_${filename.replaceAll(/[^a-z0-9]/giu, "_")}`,
+    filename,
+    mimeType
+  })).toBe(kind);
+}
+
 function createPromotedArtifactMessages(
   artifacts: Array<{
     artifactId: string;
     kind: string;
     filename: string;
     mimeType: string;
+    metadata?: Record<string, unknown>;
   }>
 ): Message[] {
   return [
@@ -370,7 +487,8 @@ function createPromotedArtifactMessages(
             source: "execution_workspace",
             workspacePath: `scratch/final/${artifact.filename}`,
             objectKey: `execution-workspaces/private/${artifact.filename}`,
-            commandId: "wcmd_private"
+            commandId: "wcmd_private",
+            ...artifact.metadata
           }
         }))
       }

@@ -21,6 +21,7 @@ import {
   type CreateConversationInput,
   type CreateMessageInput,
   type CreateUserInput,
+  type DeleteUserInput,
   type DeleteUserIdentityInput,
   type ExecutionWorkspace,
   type ExecutionWorkspaceCleanupStore,
@@ -107,6 +108,7 @@ import {
 import { runPostgresMigrations } from "./migrations";
 import {
   createUser as createPostgresUser,
+  deleteUser as deletePostgresUser,
   deleteUserIdentity as deletePostgresUserIdentity,
   listUsers as listPostgresUsers,
   resolveUserIdentity as resolvePostgresUserIdentity,
@@ -200,6 +202,10 @@ export class PostgresPlatformStore
 
   async updateUser(input: UpdateUserInput): Promise<UserRecord> {
     return updatePostgresUser(this.db, input);
+  }
+
+  async deleteUser(input: DeleteUserInput): Promise<UserRecord> {
+    return deletePostgresUser(this.db, input);
   }
 
   async upsertUserIdentity(input: UpsertUserIdentityInput): Promise<UserRecord> {

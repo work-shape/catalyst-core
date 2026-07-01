@@ -7,6 +7,7 @@ import type {
   ToolCallId,
   WorkspaceCommandId
 } from "./ids";
+import type { ManagedArtifactImagePagesPreview } from "./files";
 import type { JsonObject, JsonValue } from "./json";
 import type { ISODateString } from "./time";
 
@@ -74,6 +75,9 @@ export interface WorkspaceCommandPromotedArtifact {
   path: string;
   kind: string;
   mimeType?: string;
+  metadata?: {
+    preview?: ManagedArtifactImagePagesPreview;
+  };
 }
 
 export interface WorkspaceCommandOutput {

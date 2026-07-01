@@ -61,6 +61,15 @@ export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServ
     });
   });
 
+  app.delete(apiOperations.deleteAdministeredUser.path, async (request) => {
+    const { user, context } = await authenticateRequest(options, request);
+    requireAuthScope(user, "user_admin:write");
+    const userId = getUserIdParam(request.params);
+    return userAdministration.deleteUser(user, context, {
+      userId
+    });
+  });
+
   app.put(apiOperations.upsertAdministeredUserIdentity.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
     requireAuthScope(user, "user_admin:write");

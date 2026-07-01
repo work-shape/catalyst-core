@@ -21,12 +21,19 @@ import {
   type StartAgentRunInput,
   type ToolExecution,
   type ToolExecutionResult,
+  type WebAccessConfig,
   asAgentRunId,
+  asToolCallId,
   createPlatformId,
   getRuntimeSubjectUserId,
   systemClock
 } from "@vivd-catalyst/core";
-import type { ModelCompletion, ModelMessage, ModelProvider, ModelToolCall } from "@vivd-catalyst/model-provider";
+import {
+  type ModelCompletion,
+  type ModelMessage,
+  type ModelProvider,
+  type ModelToolCall
+} from "@vivd-catalyst/model-provider";
 import type { ToolRegistry } from "@vivd-catalyst/tool-execution";
 import type { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { RunState, toRunFailureError, type RunFailureError } from "./run-state";
@@ -48,6 +55,7 @@ import {
   type ModelContextProjectionOptions,
   type StoredReasoningSummary
 } from "./model-context-projection";
+import { materializeModelTools } from "./model-tool-materialization";
 
 export interface LocalAgentRuntimeOptions {
   agents: AgentConfig[];
@@ -61,6 +69,7 @@ export interface LocalAgentRuntimeOptions {
   toolRegistry: ToolRegistry;
   toolExecution: ToolExecution;
   usageGovernance: ModelUsageGovernance;
+  webAccess?: WebAccessConfig;
   skills?: readonly SkillConfig[];
   historyMessageLimit?: number;
   maxSteps?: number;
@@ -229,6 +238,8 @@ export class LocalAgentRuntime implements AgentRuntime {
         metadata: createAssistantFinalMetadata({
           runId,
           reasoning: state.getReasoningSummaries(),
+          sources: [],
+          citations: [],
           finishStatus: "cancelled",
           cancellationReason: reason
         })
@@ -246,7 +257,12 @@ export class LocalAgentRuntime implements AgentRuntime {
     const state = this.getRun(runId);
     const agent = this.getAgentConfig(input.agentName);
     const modelSelection = this.getModelSelectionForAgent(agent);
-    const tools = this.options.toolRegistry.listDescriptorsForAgent(agent.toolNames);
+    const tools = materializeModelTools({
+      agent,
+      modelProvider: modelSelection.provider,
+      toolRegistry: this.options.toolRegistry,
+      webAccess: this.options.webAccess
+    });
     const historyMessages = await this.loadModelHistory(input, context);
     const userContent = await createSubmittedUserMessageContent(
       input.message.text,
@@ -307,7 +323,12 @@ export class LocalAgentRuntime implements AgentRuntime {
           conversationId: input.conversationId,
           role: "assistant",
           text: assistantText,
-          metadata: createAssistantFinalMetadata({ runId, reasoning })
+          metadata: createAssistantFinalMetadata({
+            runId,
+            reasoning,
+            sources: completion.sources,
+            citations: completion.citations
+          })
         });
         if (emittedDeltas) {
           state.completeMessage(persisted);
@@ -626,6 +647,30 @@ export class LocalAgentRuntime implements AgentRuntime {
             delta: event.delta
           });
         }
+        continue;
+      }
+      if (event.type === "provider_tool_started") {
+        state.emit({
+          type: "tool_call_started",
+          runId: state.runId,
+          toolCallId: asToolCallId(event.toolCallId),
+          toolName: event.toolName,
+          input: event.input ?? {}
+        });
+        continue;
+      }
+      if (event.type === "provider_tool_completed") {
+        state.emit({
+          type: "tool_call_completed",
+          runId: state.runId,
+          toolCallId: asToolCallId(event.toolCallId),
+          toolName: event.toolName,
+          result: {
+            status: "success",
+            output: event.output ?? {}
+          },
+          modelOutput: ""
+        });
         continue;
       }
       completion = event.completion;

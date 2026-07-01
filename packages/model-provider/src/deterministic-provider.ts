@@ -1,5 +1,6 @@
 import { AppError, createPlatformId } from "@vivd-catalyst/core";
 import {
+  isModelFunctionTool,
   modelContentText,
   type ModelCompletion,
   type ModelCompletionRequest,
@@ -23,6 +24,8 @@ export class DeterministicModelProvider implements ModelProvider {
       return {
         text: `Tool work completed:\n\n${toolMessages.map((message) => modelContentText(message.content)).join("\n\n")}`,
         toolCalls: [],
+        sources: [],
+        citations: [],
         usage: noReportedUsage()
       };
     }
@@ -33,6 +36,8 @@ export class DeterministicModelProvider implements ModelProvider {
       return {
         text: createDeterministicConversationTitle(content),
         toolCalls: [],
+        sources: [],
+        citations: [],
         usage: noReportedUsage()
       };
     }
@@ -43,6 +48,8 @@ export class DeterministicModelProvider implements ModelProvider {
       return {
         text: `I will run ${toolCall.toolName} with the provided input.`,
         toolCalls: [toolCall],
+        sources: [],
+        citations: [],
         usage: noReportedUsage()
       };
     }
@@ -53,6 +60,8 @@ export class DeterministicModelProvider implements ModelProvider {
           ? `Local agent response: I received "${content}". Use /tool <tool.name> <json> to exercise a registered tool.`
           : "Local agent response: send a message or invoke a tool with /tool <tool.name> <json>.",
       toolCalls: [],
+      sources: [],
+      citations: [],
       usage: noReportedUsage()
     };
   }
@@ -108,7 +117,8 @@ function noReportedUsage() {
     inputTokens: 0,
     outputTokens: 0,
     totalTokens: 0,
-    source: "not_reported" as const
+    source: "not_reported" as const,
+    webSearchCallCount: 0
   };
 }
 
@@ -121,7 +131,7 @@ function parseToolCommand(content: string, tools: ModelTool[]): ModelToolCall | 
   if (!toolName) {
     return undefined;
   }
-  if (!tools.some((tool) => tool.name === toolName)) {
+  if (!tools.some((tool) => isModelFunctionTool(tool) && tool.name === toolName)) {
     throw new AppError("BAD_REQUEST", `Tool '${toolName}' is not available to this agent`);
   }
 

@@ -9,7 +9,29 @@ export interface ToolArtifactDownloadRef {
   kind?: string;
   filename?: string;
   mimeType?: string;
+  metadata?: ToolArtifactMetadata;
   preview?: ToolArtifactPreviewSnapshot;
+}
+
+export interface ToolArtifactMetadata {
+  preview?: ToolArtifactImagePagesPreview;
+}
+
+export interface ToolArtifactImagePagesPreview {
+  type: "image_pages";
+  format: "png" | "jpeg" | "webp" | "gif";
+  pages: ToolArtifactPreviewImagePageRef[];
+}
+
+export interface ToolArtifactPreviewImagePageRef {
+  artifactId: string;
+  kind?: string;
+  filename?: string;
+  mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/gif";
+  pageNumber?: number;
+  slideNumber?: number;
+  width?: number;
+  height?: number;
 }
 
 export interface WorkspacePromotedArtifactsData {
@@ -23,6 +45,15 @@ export interface ArtifactFileType {
   className: string;
   extension: string;
 }
+
+export type ArtifactPreviewKind =
+  | "pdf"
+  | "image"
+  | "text"
+  | "spreadsheet"
+  | "image-pages"
+  | "document"
+  | "presentation";
 
 export function createWorkspacePromotedArtifactsData(
   artifacts: ToolArtifactDownloadRef[]
@@ -88,7 +119,7 @@ export function dedupeToolArtifactRefs(
 }
 
 export function getArtifactFileType(artifact: ToolArtifactDownloadRef): ArtifactFileType {
-  const value = `${artifact.mimeType ?? ""} ${artifact.kind ?? ""} ${artifact.filename ?? ""}`.toLowerCase();
+  const value = artifactDescriptorValue(artifact);
   if (value.includes("pdf") || hasExtension(value, ["pdf"])) {
     return { badge: "PDF", label: "PDF", className: "bg-red-700", extension: "pdf" };
   }
@@ -135,6 +166,57 @@ export function getArtifactFileType(artifact: ToolArtifactDownloadRef): Artifact
   return { badge: "FILE", label: "File", className: "bg-neutral-700", extension: "bin" };
 }
 
+export function getArtifactPreviewKind(artifact: ToolArtifactDownloadRef): ArtifactPreviewKind | undefined {
+  if (readArtifactImagePagesPreview(artifact)) {
+    return "image-pages";
+  }
+  const value = artifactDescriptorValue(artifact);
+  const fileType = getArtifactFileType(artifact);
+  if (fileType.extension === "pdf") {
+    return "pdf";
+  }
+  if (isOfficeDocumentPreviewCandidate(value)) {
+    return "document";
+  }
+  if (isOfficePresentationPreviewCandidate(value)) {
+    return "presentation";
+  }
+  if (fileType.label === "Image") {
+    return "image";
+  }
+  if (fileType.extension === "txt" || fileType.extension === "csv") {
+    return "text";
+  }
+  if (fileType.extension === "xlsx") {
+    return "spreadsheet";
+  }
+  return undefined;
+}
+
+export function readArtifactImagePagesPreview(
+  artifact: ToolArtifactDownloadRef
+): ToolArtifactImagePagesPreview | undefined {
+  return artifact.metadata?.preview ?? previewSnapshotToImagePagesPreview(artifact.preview);
+}
+
+function artifactDescriptorValue(artifact: ToolArtifactDownloadRef): string {
+  return `${artifact.mimeType ?? ""} ${artifact.kind ?? ""} ${artifact.filename ?? ""}`.toLowerCase();
+}
+
+function isOfficeDocumentPreviewCandidate(value: string): boolean {
+  return (
+    value.includes("wordprocessingml") ||
+    hasExtension(value, ["docx"])
+  );
+}
+
+function isOfficePresentationPreviewCandidate(value: string): boolean {
+  return (
+    value.includes("presentationml") ||
+    hasExtension(value, ["pptx"])
+  );
+}
+
 export function artifactDisplayFilename(artifact: ToolArtifactDownloadRef): string {
   return artifact.filename ?? `${getArtifactFileType(artifact).label} artifact`;
 }
@@ -177,11 +259,138 @@ function sanitizeToolArtifactRef(artifact: {
   if (mimeType) {
     ref.mimeType = mimeType;
   }
+  const metadata = sanitizeToolArtifactMetadata(artifact.metadata);
+  if (metadata) {
+    ref.metadata = metadata;
+  }
   const preview = readSafePreviewSnapshot(artifact.metadata, artifactId);
   if (preview) {
     ref.preview = preview;
   }
   return ref;
+}
+
+function sanitizeToolArtifactMetadata(value: unknown): ToolArtifactMetadata | undefined {
+  const record = isRecord(value) ? value : undefined;
+  const preview = sanitizeImagePagesPreview(record?.preview);
+  return preview ? { preview } : undefined;
+}
+
+function sanitizeImagePagesPreview(value: unknown): ToolArtifactImagePagesPreview | undefined {
+  const record = isRecord(value) ? value : undefined;
+  if (record?.type !== "image_pages") {
+    return undefined;
+  }
+  const format = readSafeImageFormat(record.format);
+  if (!format) {
+    return undefined;
+  }
+  const pages = Array.isArray(record.pages)
+    ? record.pages.slice(0, 200).flatMap((page): ToolArtifactPreviewImagePageRef[] => {
+        const sanitized = sanitizePreviewImagePage(page);
+        return sanitized ? [sanitized] : [];
+      })
+    : [];
+  return pages.length > 0 ? { type: "image_pages", format, pages } : undefined;
+}
+
+function sanitizePreviewImagePage(value: unknown): ToolArtifactPreviewImagePageRef | undefined {
+  const record = isRecord(value) ? value : undefined;
+  const artifactId = readSafeManagedArtifactId(record?.artifactId);
+  const mimeType = readSafeImageMimeType(record?.mimeType);
+  if (!artifactId || !mimeType) {
+    return undefined;
+  }
+  const ref: ToolArtifactPreviewImagePageRef = {
+    artifactId,
+    mimeType
+  };
+  const kind = readSafeArtifactKind(record?.kind);
+  if (kind) {
+    ref.kind = kind;
+  }
+  const filename = readDisplayFilename(record?.filename);
+  if (filename) {
+    ref.filename = filename;
+  }
+  const pageNumber = readSafeOrdinal(record?.pageNumber);
+  if (pageNumber !== undefined) {
+    ref.pageNumber = pageNumber;
+  }
+  const slideNumber = readSafeOrdinal(record?.slideNumber);
+  if (slideNumber !== undefined) {
+    ref.slideNumber = slideNumber;
+  }
+  const width = readSafeOrdinal(record?.width);
+  if (width !== undefined) {
+    ref.width = width;
+  }
+  const height = readSafeOrdinal(record?.height);
+  if (height !== undefined) {
+    ref.height = height;
+  }
+  return ref;
+}
+
+function previewSnapshotToImagePagesPreview(
+  preview: ToolArtifactPreviewSnapshot | undefined
+): ToolArtifactImagePagesPreview | undefined {
+  if (!preview || preview.type !== "image_pages") {
+    return undefined;
+  }
+  return {
+    type: "image_pages",
+    format: preview.format,
+    pages: preview.pages.map((page) => ({
+      artifactId: page.artifactId,
+      ...(page.filename ? { filename: page.filename } : {}),
+      mimeType: page.mimeType,
+      ...(page.pageNumber ? { pageNumber: page.pageNumber } : {}),
+      ...(page.slideNumber ? { slideNumber: page.slideNumber } : {}),
+      ...(page.width ? { width: page.width } : {}),
+      ...(page.height ? { height: page.height } : {})
+    }))
+  };
+}
+
+function readSafePreviewSnapshot(
+  metadataValue: unknown,
+  sourceArtifactId: string
+): ToolArtifactPreviewSnapshot | undefined {
+  const metadata = isRecord(metadataValue) ? metadataValue : undefined;
+  const preview = isRecord(metadata?.preview) ? metadata.preview : undefined;
+  if (preview?.status !== undefined && preview.status !== "ready") {
+    return undefined;
+  }
+  const sanitized = sanitizeImagePagesPreview(preview);
+  if (!sanitized || sanitized.format === "gif") {
+    return undefined;
+  }
+  const pages = sanitized.pages.flatMap((page): ToolArtifactPreviewSnapshot["pages"] => {
+    if (page.mimeType === "image/gif") {
+      return [];
+    }
+    return [
+      {
+        artifactId: page.artifactId,
+        mimeType: page.mimeType,
+        ...(page.filename ? { filename: page.filename } : {}),
+        ...(page.pageNumber ? { pageNumber: page.pageNumber } : {}),
+        ...(page.slideNumber ? { slideNumber: page.slideNumber } : {}),
+        ...(page.width ? { width: page.width } : {}),
+        ...(page.height ? { height: page.height } : {})
+      }
+    ];
+  });
+  return pages.length > 0
+    ? {
+        status: "ready",
+        artifactId: sourceArtifactId,
+        type: "image_pages",
+        format: sanitized.format,
+        pages
+      }
+    : undefined;
 }
 
 function maybeOne<T>(value: T | undefined): T[] {
@@ -217,78 +426,26 @@ function readSafeMimeType(value: unknown): string | undefined {
   return isSafeMimeType(value) ? value : undefined;
 }
 
-function readSafePreviewSnapshot(
-  metadataValue: unknown,
-  sourceArtifactId: string
-): ToolArtifactPreviewSnapshot | undefined {
-  const metadata = isRecord(metadataValue) ? metadataValue : undefined;
-  const preview = isRecord(metadata?.preview) ? metadata.preview : undefined;
-  if (!preview || preview.type !== "image_pages") {
-    return undefined;
-  }
-  if (preview.status !== undefined && preview.status !== "ready") {
-    return undefined;
-  }
-  const format = readPreviewImageFormat(preview.format);
-  if (!format) {
-    return undefined;
-  }
-  const pages = Array.isArray(preview.pages)
-    ? preview.pages.slice(0, 200).flatMap((page): ToolArtifactPreviewSnapshot["pages"] => {
-        const safePage = readSafePreviewPage(page);
-        return safePage ? [safePage] : [];
-      })
-    : [];
-  if (pages.length === 0) {
-    return undefined;
-  }
-  return {
-    status: "ready",
-    artifactId: sourceArtifactId,
-    type: "image_pages",
-    format,
-    pages
-  };
+function readSafeImageMimeType(value: unknown): ToolArtifactPreviewImagePageRef["mimeType"] | undefined {
+  const mimeType = readSafeMimeType(value);
+  return mimeType === "image/png" ||
+    mimeType === "image/jpeg" ||
+    mimeType === "image/webp" ||
+    mimeType === "image/gif"
+    ? mimeType
+    : undefined;
 }
 
-function readSafePreviewPage(value: unknown): ToolArtifactPreviewSnapshot["pages"][number] | undefined {
-  const page = isRecord(value) ? value : undefined;
-  if (!page) {
-    return undefined;
-  }
-  const artifactId = readSafeManagedArtifactId(page.artifactId);
-  const mimeType = readPreviewImageMimeType(page.mimeType);
-  if (!artifactId || !mimeType) {
-    return undefined;
-  }
-  const filename = readDisplayFilename(page.filename);
-  const pageNumber = readPositiveInteger(page.pageNumber);
-  const slideNumber = readPositiveInteger(page.slideNumber);
-  const width = readPositiveInteger(page.width);
-  const height = readPositiveInteger(page.height);
-  return {
-    artifactId,
-    mimeType,
-    ...(filename ? { filename } : {}),
-    ...(pageNumber ? { pageNumber } : {}),
-    ...(slideNumber ? { slideNumber } : {}),
-    ...(width ? { width } : {}),
-    ...(height ? { height } : {})
-  };
+function readSafeImageFormat(value: unknown): ToolArtifactImagePagesPreview["format"] | undefined {
+  return value === "png" || value === "jpeg" || value === "webp" || value === "gif"
+    ? value
+    : undefined;
 }
 
-function readPreviewImageFormat(value: unknown): ToolArtifactPreviewSnapshot["format"] | undefined {
-  return value === "png" || value === "webp" || value === "jpeg" ? value : undefined;
-}
-
-function readPreviewImageMimeType(
-  value: unknown
-): ToolArtifactPreviewSnapshot["pages"][number]["mimeType"] | undefined {
-  return value === "image/png" || value === "image/jpeg" || value === "image/webp" ? value : undefined;
-}
-
-function readPositiveInteger(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
+function readSafeOrdinal(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 && value <= 10_000
+    ? value
+    : undefined;
 }
 
 function readSafeManagedArtifactId(value: unknown): string | undefined {

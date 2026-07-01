@@ -370,7 +370,8 @@ describe("local agent runtime", () => {
             inputTokens: 0,
             outputTokens: 0,
             totalTokens: 0,
-            source: "not_reported"
+            source: "not_reported",
+            webSearchCallCount: 0
           }
         };
       }
@@ -798,7 +799,8 @@ describe("local agent runtime", () => {
             inputTokens: 0,
             outputTokens: 0,
             totalTokens: 0,
-            source: "not_reported"
+            source: "not_reported",
+            webSearchCallCount: 0
           }
         };
       }
@@ -1030,6 +1032,138 @@ describe("local agent runtime", () => {
         text: "I need to inspect the referenced page."
       }
     ]);
+  });
+
+  it("projects provider-native tool stream events as runtime tool observations", async () => {
+    const clientInstanceId = asClientInstanceId("provider-tool-stream-client");
+    const context: RuntimeCallContext = {
+      clientInstanceId,
+      correlationId: "corr-provider-tool-stream",
+      user: {
+        id: "user-1",
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const store = new InMemoryPlatformStore();
+    const conversationId = await createConversationWithMessages(store, {
+      clientInstanceId,
+      messages: []
+    });
+    const providerConfig: ModelProviderConfig = {
+      id: "test-provider",
+      type: "deterministic",
+      model: "test-model"
+    };
+    const modelProvider: ModelProvider = {
+      id: "test-provider",
+      async complete() {
+        throw new Error("Expected the streaming provider path to be used");
+      },
+      async *stream(): AsyncIterable<ModelCompletionStreamEvent> {
+        yield {
+          type: "provider_tool_started",
+          toolCallId: "ws_1",
+          toolName: "web_search",
+          input: { query: "dishwasher reviews" }
+        };
+        yield {
+          type: "text_delta",
+          delta: "I found current dishwasher recommendations."
+        };
+        yield {
+          type: "provider_tool_completed",
+          toolCallId: "ws_1",
+          toolName: "web_search",
+          output: {
+            status: "completed",
+            sourceCount: 2
+          }
+        };
+        yield {
+          type: "completed",
+          completion: {
+            text: "I found current dishwasher recommendations.",
+            toolCalls: [],
+            usage: noReportedUsage()
+          }
+        };
+      }
+    };
+    const runtime = new LocalAgentRuntime({
+      agents: [
+        {
+          name: "provider_tool_stream_agent",
+          displayName: "Provider Tool Stream Agent",
+          instructions: "Use provider tools when useful.",
+          modelProviderId: "test-provider",
+          toolNames: [],
+          initialPrompts: []
+        }
+      ],
+      modelProviders: [providerConfig],
+      defaultModelProvider: providerConfig,
+      conversationHistory: store,
+      modelProvider,
+      toolRegistry: new ToolRegistry({ tools: [] }),
+      toolExecution: createUnusedToolExecution(),
+      usageGovernance: new ModelUsageGovernance({
+        store,
+        budget: {
+          costSafetyMultiplier: 1
+        },
+        safeguards: {}
+      })
+    });
+
+    const run = await runtime.start(
+      {
+        agentName: "provider_tool_stream_agent",
+        conversationId,
+        message: {
+          text: "Search the web"
+        }
+      },
+      context
+    );
+
+    const events = [];
+    for await (const event of runtime.observe(run.runId, context)) {
+      events.push(event);
+    }
+
+    expect(events.map((event) => event.type)).toEqual([
+      "tool_call_started",
+      "message_delta",
+      "tool_call_completed",
+      "message_completed",
+      "run_completed"
+    ]);
+    expect(events[0]).toMatchObject({
+      type: "tool_call_started",
+      toolCallId: "ws_1",
+      toolName: "web_search",
+      input: {
+        query: "dishwasher reviews"
+      }
+    });
+    expect(events[2]).toMatchObject({
+      type: "tool_call_completed",
+      toolCallId: "ws_1",
+      toolName: "web_search",
+      result: {
+        status: "success",
+        output: {
+          status: "completed",
+          sourceCount: 2
+        }
+      },
+      modelOutput: ""
+    });
   });
 
   it("persists tool result artifacts in durable observations and tool message metadata", async () => {
@@ -1583,7 +1717,8 @@ function noReportedUsage() {
     inputTokens: 0,
     outputTokens: 0,
     totalTokens: 0,
-    source: "not_reported" as const
+    source: "not_reported" as const,
+    webSearchCallCount: 0
   };
 }
 

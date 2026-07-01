@@ -1,49 +1,111 @@
-import { Download, Eye, FileText } from "lucide-react";
-import { useState } from "react";
+import { Download, FileText } from "lucide-react";
+import {
+  Component,
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useState,
+  type MouseEvent,
+  type ReactNode
+} from "react";
 import { useAttachmentContentContext } from "./attachment-content";
-import { ArtifactPreviewPanel } from "./artifact-preview";
 import { useTranslation } from "./i18n";
-import { useOptionalToolDisplayPanel } from "./tool-display-panel";
+import { useToolDisplayPanel, type ToolDisplayPanelEntry } from "./tool-display-panel";
 import { Spinner } from "./ui/spinner";
 import { cn } from "./ui/cn";
 import {
   artifactDisplayFilename,
   artifactDownloadFilename,
   getArtifactFileType,
+  getArtifactPreviewKind,
   type ArtifactFileType,
   type ToolArtifactDownloadRef
 } from "./tool-artifacts";
 
+const ArtifactPreview = lazy(() =>
+  import("./artifact-preview").then((module) => ({ default: module.ArtifactPreview }))
+);
+
 export function ToolArtifactList({
+  autoPreview = false,
   artifacts,
   className,
   variant = "compact"
 }: {
+  autoPreview?: boolean;
   artifacts: ToolArtifactDownloadRef[];
   className?: string;
   variant?: "compact" | "deliverable";
 }) {
   const { t } = useTranslation();
   const attachmentContent = useAttachmentContentContext();
-  const displayPanel = useOptionalToolDisplayPanel();
+  const { show, showOnce } = useToolDisplayPanel();
   const [downloadingArtifactId, setDownloadingArtifactId] = useState<string | undefined>();
+  const client = attachmentContent?.client;
+  const conversationId = attachmentContent?.selectedConversationId;
+  const downloadAvailable = Boolean(client && conversationId);
+
+  const previewPanelEntry = useCallback(
+    (artifact: ToolArtifactDownloadRef): ToolDisplayPanelEntry | undefined => {
+      if (!client || !conversationId || !getArtifactPreviewKind(artifact)) {
+        return undefined;
+      }
+      const filename = artifactDisplayFilename(artifact);
+      const fileType = getArtifactFileType(artifact);
+      return {
+        key: artifactPreviewPanelKey(artifact),
+        title: filename,
+        subtitle: artifactDetail(fileType, artifact),
+        node: (
+          <ArtifactPreviewErrorBoundary
+            key={artifact.artifactId}
+            fallback={
+              <ArtifactPreviewPanelMessage
+                title={t("artifactPreviewFailed")}
+                detail={t("artifactPreviewUnsupported")}
+              />
+            }
+          >
+            <Suspense
+              fallback={
+                <div className="flex min-h-64 items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <Spinner size="sm" />
+                  <span>{t("artifactPreviewLoading")}</span>
+                </div>
+              }
+            >
+              <ArtifactPreview artifact={artifact} client={client} conversationId={conversationId} />
+            </Suspense>
+          </ArtifactPreviewErrorBoundary>
+        )
+      };
+    },
+    [client, conversationId, t]
+  );
+
+  useEffect(() => {
+    if (!autoPreview) {
+      return;
+    }
+    const artifact = artifacts.find((candidate) => getArtifactPreviewKind(candidate));
+    const entry = artifact ? previewPanelEntry(artifact) : undefined;
+    if (entry) {
+      showOnce(entry);
+    }
+  }, [artifacts, autoPreview, previewPanelEntry, showOnce]);
 
   if (artifacts.length === 0) {
     return null;
   }
 
-  const artifactContentAvailable = Boolean(attachmentContent?.client && attachmentContent.selectedConversationId);
-
   async function downloadArtifact(artifact: ToolArtifactDownloadRef) {
-    if (!attachmentContent?.client || !attachmentContent.selectedConversationId) {
+    if (!client || !conversationId) {
       return;
     }
     setDownloadingArtifactId(artifact.artifactId);
     try {
-      const blob = await attachmentContent.client.conversationArtifactContent(
-        attachmentContent.selectedConversationId,
-        artifact.artifactId
-      );
+      const blob = await client.conversationArtifactContent(conversationId, artifact.artifactId);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -57,87 +119,102 @@ export function ToolArtifactList({
     }
   }
 
+  function previewArtifact(artifact: ToolArtifactDownloadRef) {
+    const entry = previewPanelEntry(artifact);
+    if (entry) {
+      show(entry);
+    }
+  }
+
   return (
     <div className={cn("grid gap-1.5", className)}>
       {artifacts.map((artifact) => {
         const filename = artifactDisplayFilename(artifact);
+        const downloadFilename = artifactDownloadFilename(artifact);
         const downloading = downloadingArtifactId === artifact.artifactId;
         const fileType = getArtifactFileType(artifact);
-        const panelKey = attachmentContent?.selectedConversationId
-          ? `artifact-preview:${attachmentContent.selectedConversationId}:${artifact.artifactId}`
-          : `artifact-preview:${artifact.artifactId}`;
-        const panelActive = displayPanel?.open === true && displayPanel.entry?.key === panelKey;
-        const previewAvailable = Boolean(displayPanel?.available && attachmentContent?.client && attachmentContent.selectedConversationId);
-        const detail = artifactDetail(fileType, artifact);
-
-        function openPreview() {
-          if (!displayPanel || !attachmentContent?.client || !attachmentContent.selectedConversationId) {
-            return;
-          }
-          displayPanel.show({
-            key: panelKey,
-            title: filename,
-            subtitle: detail,
-            node: (
-              <ArtifactPreviewPanel
-                artifact={artifact}
-                client={attachmentContent.client}
-                conversationId={attachmentContent.selectedConversationId}
-                onDownload={downloadArtifact}
-              />
-            )
-          });
-        }
+        const previewAvailable = downloadAvailable && Boolean(getArtifactPreviewKind(artifact));
+        const nativeDownloadUrl =
+          downloadAvailable &&
+          client?.browserManagedArtifactDownloads &&
+          conversationId
+            ? client.conversationArtifactContentUrl(conversationId, artifact.artifactId)
+            : undefined;
+        const cardClassName = cn(
+          "flex w-full min-w-0 items-center gap-3 rounded-md border bg-background text-left text-sm text-foreground shadow-xs transition-colors",
+          variant === "deliverable" ? "min-h-20 px-4 py-3" : "min-h-10 px-3 py-2",
+          previewAvailable &&
+            "cursor-pointer hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
+        );
+        const downloadButtonClassName = cn(
+          "inline-flex shrink-0 items-center justify-center gap-2 rounded-md border bg-background font-medium text-foreground no-underline transition-colors",
+          "hover:bg-muted focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40",
+          variant === "deliverable" ? "h-10 px-4 text-sm" : "h-8 px-3 text-xs",
+          (!downloadAvailable || downloading) && "pointer-events-none opacity-60"
+        );
+        const downloadAction = nativeDownloadUrl ? (
+          <a
+            href={nativeDownloadUrl}
+            download={downloadFilename}
+            title={t("downloadArtifact", { filename })}
+            aria-label={t("downloadArtifact", { filename })}
+            className={downloadButtonClassName}
+            onClick={stopCardPreview}
+          >
+            <Download size={variant === "deliverable" ? 16 : 14} aria-hidden="true" />
+            <span>{t("downloadArtifactButton")}</span>
+          </a>
+        ) : (
+          <button
+            type="button"
+            disabled={!downloadAvailable || downloading}
+            title={downloadAvailable ? t("downloadArtifact", { filename }) : t("downloadUnavailable")}
+            aria-label={downloadAvailable ? t("downloadArtifact", { filename }) : t("downloadUnavailable")}
+            onClick={(event) => {
+              stopCardPreview(event);
+              void downloadArtifact(artifact);
+            }}
+            className={downloadButtonClassName}
+          >
+            {downloading ? (
+              <Spinner size="sm" className="text-muted-foreground" />
+            ) : (
+              <Download size={variant === "deliverable" ? 16 : 14} aria-hidden="true" />
+            )}
+            <span>{t("downloadArtifactButton")}</span>
+          </button>
+        );
 
         return (
           <div
             key={artifact.artifactId}
-            className={cn(
-              "flex w-full min-w-0 items-stretch overflow-hidden rounded-md border bg-background text-left text-sm text-foreground shadow-xs",
-              variant === "deliverable" ? "min-h-20 px-4 py-3" : "min-h-10 px-3 py-2"
-            )}
+            className={cardClassName}
+            role={previewAvailable ? "button" : undefined}
+            tabIndex={previewAvailable ? 0 : undefined}
+            title={previewAvailable ? t("openArtifactPreview", { filename }) : undefined}
+            aria-label={previewAvailable ? t("openArtifactPreview", { filename }) : undefined}
+            onClick={previewAvailable ? () => previewArtifact(artifact) : undefined}
+            onKeyDown={
+              previewAvailable
+                ? (event) => {
+                    if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+                      event.preventDefault();
+                      previewArtifact(artifact);
+                    }
+                  }
+                : undefined
+            }
           >
-            <button
-              type="button"
-              disabled={!previewAvailable}
-              title={previewAvailable ? t("openArtifactPreview", { filename }) : t("previewUnavailable")}
-              aria-label={previewAvailable ? t("openArtifactPreview", { filename }) : t("previewUnavailable")}
-              onClick={openPreview}
-              className={cn(
-                "flex min-w-0 flex-1 items-center gap-3 rounded-md text-left transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60",
-                variant === "deliverable" ? "-m-2 px-2 py-2" : "-m-1 px-1 py-1"
-              )}
-            >
-              <ArtifactFileIcon fileType={fileType} large={variant === "deliverable"} />
-              <span className="min-w-0 flex-1 truncate">
-                <span className={cn("block truncate font-medium", variant === "deliverable" && "text-base")}>
-                  {filename}
-                </span>
-                <span className="block truncate text-xs text-muted-foreground">{detail}</span>
+            <ArtifactFileIcon fileType={fileType} large={variant === "deliverable"} />
+            <span className="min-w-0 flex-1 truncate">
+              <span className={cn("block truncate font-medium", variant === "deliverable" && "text-base")}>
+                {filename}
               </span>
-              <Eye
-                size={16}
-                className={cn("shrink-0 text-muted-foreground", panelActive && "text-foreground")}
-                aria-hidden="true"
-              />
-            </button>
-            <button
-              type="button"
-              disabled={!artifactContentAvailable || downloading}
-              title={artifactContentAvailable ? t("downloadArtifact", { filename }) : t("downloadUnavailable")}
-              aria-label={artifactContentAvailable ? t("downloadArtifact", { filename }) : t("downloadUnavailable")}
-              onClick={() => void downloadArtifact(artifact)}
-              className={cn(
-                "ml-2 grid shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60",
-                variant === "deliverable" ? "size-10" : "size-8"
-              )}
-            >
-              {downloading ? (
-                <Spinner size="sm" aria-hidden="true" />
-              ) : (
-                <Download size={16} aria-hidden="true" />
-              )}
-            </button>
+              <span className="block truncate text-xs text-muted-foreground">
+                {artifactDetail(fileType, artifact)}
+              </span>
+            </span>
+            {downloadAction}
           </div>
         );
       })}
@@ -170,4 +247,38 @@ function ArtifactFileIcon({
 function artifactDetail(fileType: ArtifactFileType, artifact: ToolArtifactDownloadRef): string {
   const detail = artifact.kind ?? artifact.mimeType;
   return detail ? `${fileType.label} · ${detail}` : fileType.label;
+}
+
+function artifactPreviewPanelKey(artifact: ToolArtifactDownloadRef): string {
+  return `artifact-preview:${artifact.artifactId}`;
+}
+
+function stopCardPreview(event: MouseEvent<HTMLElement>) {
+  event.stopPropagation();
+}
+
+class ArtifactPreviewErrorBoundary extends Component<
+  { children: ReactNode; fallback: ReactNode },
+  { failed: boolean }
+> {
+  override state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  override render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+function ArtifactPreviewPanelMessage({ detail, title }: { detail?: string; title: string }) {
+  return (
+    <div className="flex min-h-64 items-center justify-center">
+      <div className="max-w-sm rounded-md border bg-card px-4 py-3 text-sm shadow-xs">
+        <p className="font-medium">{title}</p>
+        {detail ? <p className="mt-1 text-xs text-muted-foreground">{detail}</p> : null}
+      </div>
+    </div>
+  );
 }

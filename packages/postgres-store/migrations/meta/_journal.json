@@ -71,6 +71,13 @@
       "when": 1782905396665,
       "tag": "0009_wealthy_firebrand",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1782921779038,
+      "tag": "0010_needy_arachne",
+      "breakpoints": true
     }
   ]
 }

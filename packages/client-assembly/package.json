@@ -29,6 +29,7 @@
     "@vivd-catalyst/tool-execution": "workspace:*",
     "@vivd-catalyst/tool-sdk": "workspace:*",
     "@vivd-catalyst/usage-governance": "workspace:*",
+    "@vivd-catalyst/web-access": "workspace:*",
     "dotenv": "^17.4.2",
     "fastify": "^5.8.5"
   },
