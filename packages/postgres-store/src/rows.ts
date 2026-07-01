@@ -311,6 +311,7 @@ export function mapModelUsageEvent(row: ModelUsageEventRow | undefined): ModelUs
     inputTokens: row.inputTokens,
     outputTokens: row.outputTokens,
     totalTokens: row.totalTokens,
+    webSearchCallCount: row.webSearchCallCount,
     source: row.source,
     correlationId: row.correlationId,
     createdAt: row.createdAt.toISOString()

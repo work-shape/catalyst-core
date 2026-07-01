@@ -1,9 +1,12 @@
 import type { Message } from "@vivd-catalyst/api-client";
 import {
   readAgentRuntimeMessageMetadata,
+  readAssistantWebSourceMetadata,
   readAssistantToolCallsMetadata,
   readToolResultMetadata,
-  readUserMessageMetadata
+  readUserMessageMetadata,
+  type MessageCitation,
+  type WebSource
 } from "@vivd-catalyst/core";
 
 export interface PersistedAttachmentRef {
@@ -32,6 +35,11 @@ export type PersistedToolResult =
       errorText: string;
       output?: unknown;
     };
+
+export interface PersistedAssistantWebSourceMetadata {
+  sources: WebSource[];
+  citations: MessageCitation[];
+}
 
 export function readCompatibleMessageRunId(
   message: Pick<Message, "metadata">
@@ -72,6 +80,15 @@ export function readCompatibleAssistantToolCalls(
     toolName: toolCall.toolName,
     input: toolCall.input
   }));
+}
+
+export function readCompatibleAssistantWebSourceMetadata(
+  message: Pick<Message, "metadata" | "role">
+): PersistedAssistantWebSourceMetadata {
+  if (message.role !== "assistant") {
+    return { sources: [], citations: [] };
+  }
+  return readAssistantWebSourceMetadata(message.metadata);
 }
 
 export function readCompatiblePersistedToolResult(

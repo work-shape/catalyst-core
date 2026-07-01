@@ -13,6 +13,8 @@ import type {
 } from "./types";
 import {
   createProviderToolMetadata,
+  readOpenAiResponsesWebMetadata,
+  readOpenAiResponsesWebSearchCallCount,
   readOpenAiResponsesText,
   toModelUsage,
   toOpenAiChatMessages,
@@ -79,7 +81,8 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     request: ModelCompletionRequest,
     context: RuntimeCallContext
   ): Promise<ModelCompletion> {
-    const { providerTools, toolNameMap } = createProviderToolMetadata(request.tools);
+    const { providerTools, providerNativeTools, toolNameMap } = createProviderToolMetadata(request.tools);
+    assertNoProviderNativeToolsForChatCompletions(providerNativeTools);
     const response = await this.postChatCompletion({
       body: this.createChatCompletionsRequestBody(request, providerTools),
       signal: context.signal
@@ -103,6 +106,8 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
           toolName: toolNameMap.get(toolCall.function.name) ?? toolCall.function.name,
           ...parseToolInput(toolCall.function.arguments)
         })) ?? [],
+      sources: [],
+      citations: [],
       usage: toModelUsage(payload.usage)
     };
   }
@@ -111,7 +116,8 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     request: ModelCompletionRequest,
     context: RuntimeCallContext
   ): AsyncIterable<ModelCompletionStreamEvent> {
-    const { providerTools, toolNameMap } = createProviderToolMetadata(request.tools);
+    const { providerTools, providerNativeTools, toolNameMap } = createProviderToolMetadata(request.tools);
+    assertNoProviderNativeToolsForChatCompletions(providerNativeTools);
     const response = await this.postChatCompletion({
       body: {
         ...this.createChatCompletionsRequestBody(request, providerTools),
@@ -139,9 +145,9 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     request: ModelCompletionRequest,
     context: RuntimeCallContext
   ): Promise<ModelCompletion> {
-    const { providerTools, toolNameMap } = createProviderToolMetadata(request.tools);
+    const { providerTools, providerNativeTools, toolNameMap } = createProviderToolMetadata(request.tools);
     const response = await this.postResponse({
-      body: this.createResponsesRequestBody(request, providerTools),
+      body: this.createResponsesRequestBody(request, providerTools, providerNativeTools),
       signal: context.signal
     });
 
@@ -150,10 +156,13 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     }
 
     const payload = (await response.json()) as OpenAiResponsesResponse;
+    const webMetadata = readOpenAiResponsesWebMetadata(payload);
     return {
       text: readOpenAiResponsesText(payload),
       toolCalls: readOpenAiResponsesToolCalls(payload, toolNameMap),
-      usage: toResponsesModelUsage(payload.usage)
+      sources: webMetadata.sources,
+      citations: webMetadata.citations,
+      usage: toResponsesModelUsage(payload.usage, readOpenAiResponsesWebSearchCallCount(payload))
     };
   }
 
@@ -161,10 +170,10 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     request: ModelCompletionRequest,
     context: RuntimeCallContext
   ): AsyncIterable<ModelCompletionStreamEvent> {
-    const { providerTools, toolNameMap } = createProviderToolMetadata(request.tools);
+    const { providerTools, providerNativeTools, toolNameMap } = createProviderToolMetadata(request.tools);
     const response = await this.postResponse({
       body: {
-        ...this.createResponsesRequestBody(request, providerTools),
+        ...this.createResponsesRequestBody(request, providerTools, providerNativeTools),
         stream: true
       },
       signal: context.signal
@@ -256,7 +265,8 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
 
   private createResponsesRequestBody(
     request: ModelCompletionRequest,
-    providerTools: OpenAiCompatibleProviderTool[]
+    providerTools: OpenAiCompatibleProviderTool[],
+    providerNativeTools: ReturnType<typeof createProviderToolMetadata>["providerNativeTools"]
   ): OpenAiResponsesRequestBody {
     const model = request.model || this.options.model;
     const reasoningEffort = this.resolveReasoningEffort(request);
@@ -271,7 +281,8 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
             }
           }
         : {}),
-      tools: toOpenAiResponsesTools(providerTools),
+      tools: toOpenAiResponsesTools(providerTools, providerNativeTools),
+      ...(providerNativeTools.length > 0 ? { include: ["web_search_call.action.sources"] } : {}),
       tool_choice: request.tools.length > 0 ? "auto" : undefined,
       store: false
     };
@@ -292,6 +303,18 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
       }
     );
   }
+}
+
+function assertNoProviderNativeToolsForChatCompletions(
+  providerNativeTools: ReturnType<typeof createProviderToolMetadata>["providerNativeTools"]
+): void {
+  if (providerNativeTools.length === 0) {
+    return;
+  }
+  throw new AppError(
+    "VALIDATION_FAILED",
+    "Provider-native model tools are only supported for OpenAI-compatible providers configured with api: responses"
+  );
 }
 
 function shouldRequestReasoningSummary(model: string): boolean {

@@ -22,15 +22,20 @@ export interface ModelUsageCost {
   currency: string;
   inputCostMicros: number;
   outputCostMicros: number;
+  webSearchCostMicros: number;
   totalCostMicros: number;
   budgetedCostMicros: number;
   costSafetyMultiplier: number;
   pricingConfigured: boolean;
+  modelPricingConfigured: boolean;
+  webSearchPricingConfigured: boolean;
 }
 
 export interface ModelUsageCostSummary extends ModelUsageCost {
   pricedModelCallCount: number;
   unpricedModelCallCount: number;
+  pricedWebSearchCallCount: number;
+  unpricedWebSearchCallCount: number;
 }
 
 export interface CostedModelUsageWindowSummary extends ModelUsageWindowSummary {
@@ -64,10 +69,7 @@ export class ModelUsageGovernance implements ModelUsageEventStore {
     this.store = options.store;
     this.budget = options.budget;
     this.safeguards = options.safeguards;
-    this.pricing = options.pricing ?? {
-      currency: "USD",
-      models: []
-    };
+    this.pricing = normalizeUsagePricing(options.pricing);
   }
 
   async runModelCall<T>(
@@ -230,6 +232,14 @@ export class ModelUsageGovernance implements ModelUsageEventStore {
   }
 }
 
+function normalizeUsagePricing(pricing: UsagePricingConfig | undefined): UsagePricingConfig {
+  return {
+    currency: pricing?.currency ?? "USD",
+    models: pricing?.models ?? [],
+    webSearch: pricing?.webSearch ?? []
+  };
+}
+
 function assertDailySafeguards(
   summary: ModelUsageWindowSummary,
   safeguards: UsageSafeguardsConfig,
@@ -289,17 +299,27 @@ function summarizeCostedEvents(
         inputTokens: summary.inputTokens + event.inputTokens,
         outputTokens: summary.outputTokens + event.outputTokens,
         totalTokens: summary.totalTokens + event.totalTokens,
+        webSearchCallCount: summary.webSearchCallCount + event.webSearchCallCount,
         cost: {
           ...summary.cost,
           inputCostMicros: summary.cost.inputCostMicros + cost.inputCostMicros,
           outputCostMicros: summary.cost.outputCostMicros + cost.outputCostMicros,
+          webSearchCostMicros: summary.cost.webSearchCostMicros + cost.webSearchCostMicros,
           totalCostMicros: summary.cost.totalCostMicros + cost.totalCostMicros,
           budgetedCostMicros: summary.cost.budgetedCostMicros + cost.budgetedCostMicros,
           pricingConfigured: summary.cost.pricingConfigured || cost.pricingConfigured,
+          webSearchPricingConfigured:
+            summary.cost.webSearchPricingConfigured && cost.webSearchPricingConfigured,
           pricedModelCallCount:
-            summary.cost.pricedModelCallCount + (cost.pricingConfigured ? 1 : 0),
+            summary.cost.pricedModelCallCount + (cost.modelPricingConfigured ? 1 : 0),
           unpricedModelCallCount:
-            summary.cost.unpricedModelCallCount + (cost.pricingConfigured ? 0 : 1)
+            summary.cost.unpricedModelCallCount + (cost.modelPricingConfigured ? 0 : 1),
+          pricedWebSearchCallCount:
+            summary.cost.pricedWebSearchCallCount +
+            (cost.webSearchPricingConfigured ? event.webSearchCallCount : 0),
+          unpricedWebSearchCallCount:
+            summary.cost.unpricedWebSearchCallCount +
+            (cost.webSearchPricingConfigured ? 0 : event.webSearchCallCount)
         }
       };
     },
@@ -310,60 +330,92 @@ function summarizeCostedEvents(
       inputTokens: 0,
       outputTokens: 0,
       totalTokens: 0,
+      webSearchCallCount: 0,
       cost: pricingCatalog.createEmptySummary()
     }
   );
 }
 
 class UsagePricingCatalog {
-  private readonly prices: UsagePricingConfig["models"];
+  private readonly modelPrices: UsagePricingConfig["models"];
+  private readonly webSearchPrices: NonNullable<UsagePricingConfig["webSearch"]>;
 
   constructor(
     private readonly pricing: UsagePricingConfig,
     private readonly budget: UsageBudgetConfig
   ) {
-    this.prices = pricing.models;
+    this.modelPrices = pricing.models;
+    this.webSearchPrices = pricing.webSearch ?? [];
   }
 
   createEmptySummary(): ModelUsageCostSummary {
     return {
-      ...this.createEmptyCost(this.prices.length > 0),
+      ...this.createEmptyCost(
+        this.modelPrices.length > 0 || this.webSearchPrices.length > 0,
+        this.modelPrices.length > 0
+      ),
       pricedModelCallCount: 0,
-      unpricedModelCallCount: 0
+      unpricedModelCallCount: 0,
+      pricedWebSearchCallCount: 0,
+      unpricedWebSearchCallCount: 0
     };
   }
 
   calculateEventCost(event: ModelUsageEvent): ModelUsageCost {
-    const price = this.prices.find(
+    const modelPrice = this.modelPrices.find(
       (candidate) => candidate.providerId === event.providerId && candidate.model === event.model
     );
-    if (!price) {
-      return this.createEmptyCost(false);
-    }
+    const webSearchPrice = this.findWebSearchPrice(event);
 
-    const inputCostMicros = Math.ceil(event.inputTokens * price.inputPricePerMillionTokens);
-    const outputCostMicros = Math.ceil(event.outputTokens * price.outputPricePerMillionTokens);
-    const totalCostMicros = inputCostMicros + outputCostMicros;
+    const inputCostMicros = modelPrice
+      ? Math.ceil(event.inputTokens * modelPrice.inputPricePerMillionTokens)
+      : 0;
+    const outputCostMicros = modelPrice
+      ? Math.ceil(event.outputTokens * modelPrice.outputPricePerMillionTokens)
+      : 0;
+    const webSearchCostMicros = webSearchPrice
+      ? Math.ceil(event.webSearchCallCount * webSearchPrice.pricePerCall * 1_000_000)
+      : 0;
+    const totalCostMicros = inputCostMicros + outputCostMicros + webSearchCostMicros;
+    const webSearchPricingConfigured = event.webSearchCallCount === 0 || Boolean(webSearchPrice);
     return {
       currency: this.pricing.currency,
       inputCostMicros,
       outputCostMicros,
+      webSearchCostMicros,
       totalCostMicros,
       budgetedCostMicros: Math.ceil(totalCostMicros * this.budget.costSafetyMultiplier),
       costSafetyMultiplier: this.budget.costSafetyMultiplier,
-      pricingConfigured: true
+      pricingConfigured:
+        Boolean(modelPrice) || (event.webSearchCallCount > 0 && Boolean(webSearchPrice)),
+      modelPricingConfigured: Boolean(modelPrice),
+      webSearchPricingConfigured
     };
   }
 
-  private createEmptyCost(pricingConfigured: boolean): ModelUsageCost {
+  private findWebSearchPrice(event: ModelUsageEvent): NonNullable<UsagePricingConfig["webSearch"]>[number] | undefined {
+    return (
+      this.webSearchPrices.find(
+        (candidate) => candidate.providerId === event.providerId && candidate.model === event.model
+      ) ??
+      this.webSearchPrices.find(
+        (candidate) => candidate.providerId === event.providerId && candidate.model === undefined
+      )
+    );
+  }
+
+  private createEmptyCost(pricingConfigured: boolean, modelPricingConfigured = pricingConfigured): ModelUsageCost {
     return {
       currency: this.pricing.currency,
       inputCostMicros: 0,
       outputCostMicros: 0,
+      webSearchCostMicros: 0,
       totalCostMicros: 0,
       budgetedCostMicros: 0,
       costSafetyMultiplier: this.budget.costSafetyMultiplier,
-      pricingConfigured
+      pricingConfigured,
+      modelPricingConfigured,
+      webSearchPricingConfigured: true
     };
   }
 }

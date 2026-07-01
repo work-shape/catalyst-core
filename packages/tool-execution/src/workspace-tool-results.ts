@@ -90,8 +90,9 @@ export function commandArtifacts(command: WorkspaceCommand): ManagedArtifactRef[
     metadata: {
       source: "execution_workspace",
       commandId: command.id,
-      workspacePath: artifact.path
-    }
+      workspacePath: artifact.path,
+      ...(artifact.metadata?.preview ? { preview: artifact.metadata.preview } : {})
+    } as unknown as JsonObject
   }));
 }
 

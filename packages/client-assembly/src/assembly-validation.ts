@@ -1,5 +1,11 @@
 import { AppError } from "@vivd-catalyst/core";
-import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { findModelToolMaterializationIssues } from "@vivd-catalyst/agent-runtime";
+import { WEB_SEARCH_MODEL_TOOL_NAME } from "@vivd-catalyst/model-provider";
+import type {
+  AgentConfig,
+  ClientInstanceConfig,
+  ModelProviderConfig
+} from "@vivd-catalyst/config-schema";
 import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
 
 const READ_SKILL_TOOL_NAME = "read_skill";
@@ -103,6 +109,9 @@ function findToolReferenceIssues(
   const configuredTools = new Map(config.tools.map((tool) => [tool.name, tool.enabled]));
 
   for (const tool of config.tools) {
+    if (tool.name === WEB_SEARCH_MODEL_TOOL_NAME) {
+      continue;
+    }
     if (tool.enabled && !providedToolNames.has(tool.name)) {
       issues.push(`Enabled tool '${tool.name}' has no implementation registered by the client assembly app`);
     }
@@ -128,6 +137,19 @@ function findToolReferenceIssues(
       if (!configuredTools.get(toolName)) {
         issues.push(`Agent '${agent.name}' references disabled tool '${toolName}'`);
       }
+      if (toolName === WEB_SEARCH_MODEL_TOOL_NAME) {
+        const modelProvider = getModelProviderForAgentValidation(config, agent);
+        if (modelProvider) {
+          issues.push(
+            ...findModelToolMaterializationIssues({
+              agent,
+              modelProvider,
+              webAccess: config.webAccess
+            })
+          );
+        }
+        continue;
+      }
       if (!providedToolNames.has(toolName)) {
         issues.push(`Agent '${agent.name}' references tool '${toolName}' with no registered implementation`);
       }
@@ -135,4 +157,22 @@ function findToolReferenceIssues(
   }
 
   return issues;
+}
+
+function getModelProviderForAgentValidation(
+  config: ClientInstanceConfig,
+  agent: AgentConfig
+): ModelProviderConfig | undefined {
+  if (agent.modelProviderId && agent.modelBindingId) {
+    return undefined;
+  }
+  if (agent.modelBindingId) {
+    const binding = config.modelBindings.find((candidate) => candidate.id === agent.modelBindingId);
+    if (!binding) {
+      return undefined;
+    }
+    return config.modelProviders.find((provider) => provider.id === binding.providerId);
+  }
+  const providerId = agent.modelProviderId ?? config.modelProviders[0]?.id;
+  return config.modelProviders.find((provider) => provider.id === providerId);
 }

@@ -1,10 +1,21 @@
-import { AppError, type ModelTokenUsage } from "@vivd-catalyst/core";
+import { createHash } from "node:crypto";
 import {
+  AppError,
+  type MessageCitation,
+  type ModelTokenUsage,
+  type WebSource
+} from "@vivd-catalyst/core";
+import {
+  OPENAI_WEB_SEARCH_PROVIDER_TOOL_ID,
+  isModelFunctionTool,
+  isModelProviderNativeTool,
   modelContentImages,
   modelContentText,
   type ModelContent,
   type ModelContentPart,
+  type ModelFunctionTool,
   type ModelMessage,
+  type ModelProviderNativeTool,
   type ModelTool
 } from "./types";
 import { serializeToolInput } from "./tool-input";
@@ -20,7 +31,7 @@ import type {
 } from "./openai-compatible-types";
 
 export interface OpenAiCompatibleProviderTool {
-  tool: ModelTool;
+  tool: ModelFunctionTool;
   providerName: string;
 }
 
@@ -41,19 +52,23 @@ type OpenAiChatTextImageContent =
 
 export function createProviderToolMetadata(tools: ModelTool[]): {
   providerTools: OpenAiCompatibleProviderTool[];
+  providerNativeTools: ModelProviderNativeTool[];
   toolNameMap: Map<string, string>;
 } {
-  const providerTools = tools.map((tool) => ({
+  const providerTools = tools.filter(isModelFunctionTool).map((tool) => ({
     tool,
     providerName: toProviderToolName(tool.name)
   }));
   return {
     providerTools,
+    providerNativeTools: tools.filter(isModelProviderNativeTool),
     toolNameMap: new Map(providerTools.map(({ tool, providerName }) => [providerName, tool.name]))
   };
 }
 
-export function toModelUsage(usage: OpenAiCompatibleResponse["usage"]): ModelTokenUsage {
+export function toModelUsage(usage: OpenAiCompatibleResponse["usage"]): ModelTokenUsage & {
+  webSearchCallCount: number;
+} {
   if (!usage) {
     return noReportedUsage();
   }
@@ -62,29 +77,42 @@ export function toModelUsage(usage: OpenAiCompatibleResponse["usage"]): ModelTok
     inputTokens: usage.prompt_tokens,
     outputTokens: usage.completion_tokens,
     totalTokens: usage.total_tokens,
-    source: "provider_reported"
+    source: "provider_reported",
+    webSearchCallCount: 0
   };
 }
 
-export function toResponsesModelUsage(usage: OpenAiResponsesUsage | undefined): ModelTokenUsage {
+export function toResponsesModelUsage(
+  usage: OpenAiResponsesUsage | undefined,
+  webSearchCallCount = 0
+): ModelTokenUsage & {
+  webSearchCallCount: number;
+} {
   if (!usage) {
-    return noReportedUsage();
+    return {
+      ...noReportedUsage(),
+      webSearchCallCount
+    };
   }
 
   return {
     inputTokens: usage.input_tokens,
     outputTokens: usage.output_tokens,
     totalTokens: usage.total_tokens,
-    source: "provider_reported"
+    source: "provider_reported",
+    webSearchCallCount
   };
 }
 
-export function noReportedUsage(): ModelTokenUsage {
+export function noReportedUsage(): ModelTokenUsage & {
+  webSearchCallCount: number;
+} {
   return {
     inputTokens: 0,
     outputTokens: 0,
     totalTokens: 0,
-    source: "not_reported"
+    source: "not_reported",
+    webSearchCallCount: 0
   };
 }
 
@@ -239,18 +267,22 @@ export function toOpenAiResponsesInput(messages: ModelMessage[]): OpenAiResponse
 }
 
 export function toOpenAiResponsesTools(
-  providerTools: OpenAiCompatibleProviderTool[]
+  providerTools: OpenAiCompatibleProviderTool[],
+  providerNativeTools: ModelProviderNativeTool[] = []
 ): OpenAiResponsesTool[] {
-  return providerTools.map(({ tool, providerName }) => ({
-    type: "function",
-    name: providerName,
-    description: tool.description,
-    parameters: tool.inputJsonSchema ?? {
-      type: "object",
-      additionalProperties: true
-    },
-    strict: false
-  }));
+  return [
+    ...providerTools.map(({ tool, providerName }) => ({
+      type: "function" as const,
+      name: providerName,
+      description: tool.description,
+      parameters: tool.inputJsonSchema ?? {
+        type: "object",
+        additionalProperties: true
+      },
+      strict: false as const
+    })),
+    ...providerNativeTools.map(toOpenAiResponsesProviderNativeTool)
+  ];
 }
 
 export function readOpenAiResponsesText(payload: OpenAiResponsesResponse): string {
@@ -267,6 +299,73 @@ export function readOpenAiResponsesText(payload: OpenAiResponsesResponse): strin
   );
 }
 
+export function readOpenAiResponsesWebMetadata(payload: OpenAiResponsesResponse): {
+  sources: WebSource[];
+  citations: MessageCitation[];
+} {
+  const sourcesById = new Map<string, WebSource>();
+  const citations: MessageCitation[] = [];
+
+  for (const item of payload.output ?? []) {
+    if (item.type !== "web_search_call" || !isUnknownRecord(item.action)) {
+      continue;
+    }
+    const query = typeof item.action.query === "string" ? item.action.query : undefined;
+    const rawSources = Array.isArray(item.action.sources) ? item.action.sources : [];
+    rawSources.forEach((candidate, index) => {
+      const source = readOpenAiWebSource(candidate, {
+        query,
+        resultPosition: index + 1
+      });
+      if (source) {
+        sourcesById.set(source.id, {
+          ...sourcesById.get(source.id),
+          ...source
+        });
+      }
+    });
+  }
+
+  for (const item of payload.output ?? []) {
+    if (item.type !== "message" || !Array.isArray(item.content)) {
+      continue;
+    }
+    for (const part of item.content) {
+      if (!Array.isArray(part.annotations)) {
+        continue;
+      }
+      for (const annotation of part.annotations) {
+        const citationPayload = readUrlCitationPayload(annotation);
+        if (!citationPayload) {
+          continue;
+        }
+        const source = readOpenAiWebSource(citationPayload);
+        if (!source) {
+          continue;
+        }
+        sourcesById.set(source.id, {
+          ...sourcesById.get(source.id),
+          ...source
+        });
+        citations.push({
+          sourceId: source.id,
+          ...(source.title ? { label: source.title } : {}),
+          ...readCitationRange(citationPayload)
+        });
+      }
+    }
+  }
+
+  return {
+    sources: [...sourcesById.values()],
+    citations
+  };
+}
+
+export function readOpenAiResponsesWebSearchCallCount(payload: OpenAiResponsesResponse): number {
+  return payload.output?.filter((item) => item.type === "web_search_call").length ?? 0;
+}
+
 export function toProviderToolName(toolName: string): string {
   const providerName = `tool_${Buffer.from(toolName, "utf8").toString("base64url")}`;
   if (providerName.length > 64) {
@@ -276,6 +375,70 @@ export function toProviderToolName(toolName: string): string {
     );
   }
   return providerName;
+}
+
+function toOpenAiResponsesProviderNativeTool(tool: ModelProviderNativeTool): OpenAiResponsesTool {
+  if (tool.id === OPENAI_WEB_SEARCH_PROVIDER_TOOL_ID) {
+    return {
+      type: "web_search"
+    };
+  }
+  throw new AppError("VALIDATION_FAILED", `Unsupported provider-native model tool '${tool.id}'`);
+}
+
+function readUrlCitationPayload(value: unknown): Record<string, unknown> | undefined {
+  if (!isUnknownRecord(value) || value.type !== "url_citation") {
+    return undefined;
+  }
+  if (isUnknownRecord(value.url_citation)) {
+    return value.url_citation;
+  }
+  return value;
+}
+
+function readOpenAiWebSource(
+  value: unknown,
+  defaults: { query?: string; resultPosition?: number } = {}
+): WebSource | undefined {
+  if (!isUnknownRecord(value) || typeof value.url !== "string" || value.url.length === 0) {
+    return undefined;
+  }
+  const title = typeof value.title === "string" && value.title.length > 0 ? value.title : undefined;
+  const snippet = typeof value.snippet === "string" && value.snippet.length > 0 ? value.snippet : undefined;
+  const query = typeof value.query === "string" && value.query.length > 0 ? value.query : defaults.query;
+  const resultPosition =
+    typeof value.resultPosition === "number" && Number.isInteger(value.resultPosition)
+      ? value.resultPosition
+      : defaults.resultPosition;
+  return {
+    id: createWebSourceId(value.url),
+    url: value.url,
+    provider: "openai-native",
+    ...(title ? { title } : {}),
+    ...(query ? { query } : {}),
+    ...(snippet ? { snippet } : {}),
+    ...(resultPosition ? { resultPosition } : {})
+  };
+}
+
+function readCitationRange(value: Record<string, unknown>): Pick<MessageCitation, "characterRange"> {
+  const start =
+    typeof value.start_index === "number" && Number.isInteger(value.start_index)
+      ? value.start_index
+      : undefined;
+  const end =
+    typeof value.end_index === "number" && Number.isInteger(value.end_index)
+      ? value.end_index
+      : undefined;
+  return start !== undefined && end !== undefined ? { characterRange: { start, end } } : {};
+}
+
+function createWebSourceId(url: string): string {
+  return `web_${createHash("sha256").update(url).digest("hex").slice(0, 16)}`;
+}
+
+function isUnknownRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function toOpenAiChatContent(content: ModelContent): OpenAiChatTextImageContent {

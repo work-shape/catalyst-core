@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
-import type { Message } from "@vivd-catalyst/api-client";
+import { createElement } from "../packages/chat-ui/node_modules/react";
+import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
+import type { AgentRunProjection, Message } from "@vivd-catalyst/api-client";
 import {
   createAssistantFinalMetadata,
   createAssistantToolCallsMetadata,
   createToolResultMetadata
 } from "@vivd-catalyst/core";
 import { toUiMessages } from "../packages/chat-ui/src/assistant-ui-adapter";
+import { AssistantSourcePart } from "../packages/chat-ui/src/assistant-source-part";
+import { ToolDisplayPanelProvider } from "../packages/chat-ui/src/tool-display-panel";
+import { ToolSurfaceList } from "../packages/chat-ui/src/tool-surface-card";
 import {
   readToolActionLabel,
   readToolDetailSections,
@@ -271,29 +276,562 @@ describe("chat UI message history projection", () => {
     ];
 
     const projected = toUiMessages(messages);
+    const assistantParts = projected[1]?.parts ?? [];
 
-    expect(projected).toHaveLength(3);
-    expect(projected[1]).toMatchObject({
-      role: "assistant",
-      parts: [
-        {
-          type: "dynamic-tool",
-          toolName: "show_view",
-          toolCallId: "call_render",
-          state: "output-available",
-          output: {
-            status: "success",
+    expect(projected).toHaveLength(2);
+    expect(projected[1]?.role).toBe("assistant");
+    expect(projected[1]?.metadata).toEqual({ completedRunId: "run_test" });
+    expect(assistantParts[0]).toMatchObject({
+      type: "dynamic-tool",
+      toolName: "show_view",
+      toolCallId: "call_render",
+      state: "output-available",
+      output: {
+        status: "success",
+        display: {
+          kind: "html.rendered",
+          mode: "inline",
+          data: {
+            title: "Dashboard"
+          }
+        }
+      }
+    });
+    expect(assistantParts).toContainEqual({
+      type: "text",
+      text: "Here is the dashboard.",
+      state: "done"
+    });
+    expect(assistantParts).toContainEqual({
+      type: "data-workspace-promoted-surfaces",
+      data: {
+        kind: "workspace.promoted_surfaces",
+        surfaces: [
+          {
+            surfaceId: "tool:call_render",
+            toolCallId: "call_render",
+            toolName: "show_view",
+            title: "Dashboard",
             display: {
               kind: "html.rendered",
+              version: 1,
               mode: "inline",
               data: {
+                html: "<section>Dashboard</section>",
                 title: "Dashboard"
               }
             }
           }
+        ]
+      }
+    });
+  });
+
+  it("does not render inert final surface cards for unsupported display payloads", () => {
+    const markup = renderToStaticMarkup(
+      createElement(
+        ToolDisplayPanelProvider,
+        null,
+        createElement(ToolSurfaceList, {
+          surfaces: [
+            {
+              surfaceId: "surface_unsupported",
+              title: "Unsupported Dashboard",
+              toolName: "show_view",
+              display: {
+                kind: "custom.unsupported",
+                version: 1,
+                mode: "side_panel",
+                data: {
+                  title: "Unsupported Dashboard"
+                }
+              }
+            }
+          ]
+        })
+      )
+    );
+
+    expect(markup).not.toContain("Unsupported Dashboard");
+    expect(markup).not.toContain("button");
+  });
+
+  it("projects persisted assistant web sources as assistant-ui source parts", () => {
+    const messages: Message[] = [
+      {
+        id: "msg_web_answer",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "assistant",
+        text: "The current result is cited.",
+        createdAt: "2026-07-01T00:00:00.000Z",
+        metadata: createAssistantFinalMetadata({
+          runId: "run_web",
+          sources: [
+            {
+              id: "web_source_1",
+              url: "https://example.com/report",
+              title: "Example Report",
+              provider: "openai-native",
+              query: "example report",
+              snippet: "A short source snippet.",
+              resultPosition: 1
+            }
+          ],
+          citations: [
+            {
+              sourceId: "web_source_1",
+              label: "Example Report",
+              characterRange: {
+                start: 4,
+                end: 18
+              }
+            }
+          ]
+        })
+      }
+    ];
+
+    const projected = toUiMessages(messages);
+
+    expect(projected[0]?.parts).toEqual([
+      {
+        type: "text",
+        text: "The current result is cited.",
+        state: "done"
+      },
+      {
+        type: "dynamic-tool",
+        toolName: "web_search",
+        toolCallId: "web_search:msg_web_answer",
+        title: "web_search",
+        state: "output-available",
+        input: {
+          query: "example report"
+        },
+        output: {
+          sourceCount: 1,
+          sources: [
+            {
+              url: "https://example.com/report",
+              title: "Example Report",
+              provider: "openai-native",
+              query: "example report",
+              snippet: "A short source snippet.",
+              resultPosition: 1
+            }
+          ]
+        }
+      },
+      {
+        type: "source-url",
+        sourceId: "web_source_1",
+        url: "https://example.com/report",
+        title: "Example Report",
+        providerMetadata: {
+          vivdCatalyst: {
+            provider: "openai-native",
+            query: "example report",
+            snippet: "A short source snippet.",
+            resultPosition: 1,
+            citations: [
+              {
+                sourceId: "web_source_1",
+                label: "Example Report",
+                characterRange: {
+                  start: 4,
+                  end: 18
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]);
+  });
+
+  it("does not duplicate synthetic web search work when a completed run already has a web_search tool call", () => {
+    const messages: Message[] = [
+      {
+        id: "msg_web_tool",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "assistant",
+        text: "",
+        createdAt: "2026-07-01T00:00:00.000Z",
+        metadata: createAssistantToolCallsMetadata({
+          runId: "run_web",
+          toolCalls: [
+            {
+              toolCallId: "call_web",
+              toolName: "web_search",
+              input: {
+                query: "example report"
+              }
+            }
+          ]
+        })
+      },
+      {
+        id: "msg_web_answer",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "assistant",
+        text: "The current result is cited.",
+        createdAt: "2026-07-01T00:00:01.000Z",
+        metadata: createAssistantFinalMetadata({
+          runId: "run_web",
+          sources: [
+            {
+              id: "web_source_1",
+              url: "https://example.com/report",
+              title: "Example Report",
+              provider: "openai-native",
+              query: "example report"
+            }
+          ]
+        })
+      }
+    ];
+
+    const projected = toUiMessages(messages);
+    const assistantParts = projected[0]?.parts ?? [];
+    const webToolParts = assistantParts.filter(
+      (part) => part.type === "dynamic-tool" && "toolName" in part && part.toolName === "web_search"
+    );
+
+    expect(projected).toHaveLength(1);
+    expect(webToolParts).toHaveLength(1);
+    expect(webToolParts[0]).toMatchObject({
+      toolCallId: "call_web",
+      toolName: "web_search"
+    });
+    expect(assistantParts).toContainEqual({
+      type: "source-url",
+      sourceId: "web_source_1",
+      url: "https://example.com/report",
+      title: "Example Report",
+      providerMetadata: {
+        vivdCatalyst: {
+          provider: "openai-native",
+          query: "example report",
+          citations: []
+        }
+      }
+    });
+  });
+
+  it("uses completed run projections to preserve work and final-answer chronology", () => {
+    const progressText = "Ich prüfe kurz die aktuellen offiziellen Regeln, damit die Antwort rechtlich sauber ist.";
+    const finalText = "Kurz: Nein. Supermärkte müssen nicht jegliches Pfand annehmen.";
+    const messages: Message[] = [
+      {
+        id: "msg_web_answer",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "assistant",
+        text: `${progressText}${finalText}`,
+        createdAt: "2026-07-01T00:00:01.000Z",
+        metadata: createAssistantFinalMetadata({
+          runId: "run_web",
+          sources: [
+            {
+              id: "web_source_1",
+              url: "https://www.gesetze-im-internet.de/verpackg/__31.html",
+              title: "VerpackG § 31",
+              provider: "openai-native",
+              query: "Pfand Annahmepflicht Supermarkt Deutschland"
+            }
+          ]
+        })
+      }
+    ];
+    const completedRunProjections: Record<string, AgentRunProjection> = {
+      run_web: {
+        runId: "run_web",
+        lastSequence: 6,
+        status: "completed",
+        text: `${progressText}${finalText}`,
+        reasoning: [],
+        activeToolCalls: [
+          {
+            toolCallId: "call_web",
+            toolName: "web_search",
+            input: {
+              query: "Pfand Annahmepflicht Supermarkt Deutschland"
+            },
+            state: "output_available",
+            output: {
+              status: "success",
+              output: {
+                query: "Pfand Annahmepflicht Supermarkt Deutschland"
+              }
+            }
+          }
+        ],
+        parts: [
+          {
+            type: "text",
+            text: progressText
+          },
+          {
+            type: "tool_call",
+            toolCallId: "call_web",
+            toolName: "web_search",
+            input: {
+              query: "Pfand Annahmepflicht Supermarkt Deutschland"
+            },
+            state: "output_available",
+            output: {
+              status: "success",
+              output: {
+                query: "Pfand Annahmepflicht Supermarkt Deutschland"
+              }
+            }
+          },
+          {
+            type: "text",
+            text: finalText
+          }
+        ]
+      }
+    };
+
+    const projected = toUiMessages(messages, undefined, completedRunProjections);
+    const textParts = (projected[0]?.parts ?? []).filter((part) => part.type === "text");
+    const webToolParts = (projected[0]?.parts ?? []).filter(
+      (part) => part.type === "dynamic-tool" && "toolName" in part && part.toolName === "web_search"
+    );
+
+    expect(projected).toHaveLength(1);
+    expect(textParts).toEqual([
+      {
+        type: "text",
+        text: progressText,
+        state: "done"
+      },
+      {
+        type: "text",
+        text: finalText,
+        state: "done"
+      }
+    ]);
+    expect(webToolParts).toHaveLength(1);
+    expect(webToolParts[0]).toMatchObject({
+      toolCallId: "call_web",
+      toolName: "web_search"
+    });
+    expect(projected[0]?.parts).toContainEqual(expect.objectContaining({
+      type: "source-url",
+      sourceId: "web_source_1"
+    }));
+  });
+
+  it("falls back to persisted final text when a completed run projection is unavailable", () => {
+    const answerText = "Die Antwort hängt vom Pfandsystem ab. Kurz: Nein, nicht jedes Pfand muss angenommen werden.";
+    const messages: Message[] = [
+      {
+        id: "msg_web_answer",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "assistant",
+        text: answerText,
+        createdAt: "2026-07-01T00:00:00.000Z",
+        metadata: createAssistantFinalMetadata({
+          runId: "run_web",
+          sources: [
+            {
+              id: "web_source_1",
+              url: "https://www.gesetze-im-internet.de/verpackg/__31.html",
+              title: "VerpackG § 31",
+              provider: "openai-native"
+            }
+          ]
+        })
+      }
+    ];
+
+    const projected = toUiMessages(messages);
+    const textParts = (projected[0]?.parts ?? []).filter((part) => part.type === "text");
+
+    expect(textParts).toEqual([
+      {
+        type: "text",
+        text: answerText,
+        state: "done"
+      }
+    ]);
+  });
+
+  it("preserves persisted final text when a completed run projection is incomplete", () => {
+    const progressText = "Ich prüfe kurz die aktuellen offiziellen Regeln.";
+    const finalText = "Kurz: Nein. Supermärkte müssen nicht jegliches Pfand annehmen.";
+    const messages: Message[] = [
+      {
+        id: "msg_web_answer",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "assistant",
+        text: `${progressText}${finalText}`,
+        createdAt: "2026-07-01T00:00:00.000Z",
+        metadata: createAssistantFinalMetadata({
+          runId: "run_web"
+        })
+      }
+    ];
+    const incompleteProjection: AgentRunProjection = {
+      runId: "run_web",
+      status: "completed",
+      lastSequence: 3,
+      text: progressText,
+      reasoning: [],
+      activeToolCalls: [],
+      parts: [
+        {
+          type: "text",
+          text: progressText
+        },
+        {
+          type: "tool_call",
+          toolCallId: "call_web",
+          toolName: "web_search",
+          input: {
+            query: "Pfand Annahmepflicht Supermarkt Deutschland"
+          },
+          state: "output_available",
+          output: {
+            status: "success"
+          }
         }
       ]
+    };
+
+    const projected = toUiMessages(messages, undefined, {
+      run_web: incompleteProjection
     });
+    const parts = projected[0]?.parts ?? [];
+
+    expect(parts.filter((part) => part.type === "text")).toEqual([
+      {
+        type: "text",
+        text: progressText,
+        state: "done"
+      },
+      {
+        type: "text",
+        text: finalText,
+        state: "done"
+      }
+    ]);
+    expect(parts.filter((part) => part.type === "dynamic-tool")).toHaveLength(1);
+  });
+
+  it("strips repeated progress text from legacy final run messages without completed projections", () => {
+    const progressText = "Ich prüfe kurz die aktuellen offiziellen Regeln, damit die Antwort rechtlich sauber ist.";
+    const finalText = "Kurz: Nein. Supermärkte müssen nicht jegliches Pfand annehmen.";
+    const messages: Message[] = [
+      {
+        id: "msg_progress",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "assistant",
+        text: progressText,
+        createdAt: "2026-07-01T00:00:01.000Z",
+        metadata: createAssistantToolCallsMetadata({
+          runId: "run_web",
+          toolCalls: [
+            {
+              toolCallId: "call_web",
+              toolName: "web_search",
+              input: {
+                query: "Pfand Annahmepflicht Supermarkt Deutschland"
+              }
+            }
+          ]
+        })
+      },
+      {
+        id: "msg_tool_result",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "tool",
+        text: "{\"ok\":true}",
+        createdAt: "2026-07-01T00:00:02.000Z",
+        metadata: createToolResultMetadata({
+          runId: "run_web",
+          toolCall: {
+            toolCallId: "call_web",
+            toolName: "web_search",
+            input: {
+              query: "Pfand Annahmepflicht Supermarkt Deutschland"
+            }
+          },
+          result: {
+            status: "success",
+            output: {
+              ok: true
+            }
+          },
+          modelOutput: {
+            status: "success",
+            output: {
+              ok: true
+            }
+          }
+        })
+      },
+      {
+        id: "msg_final",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "assistant",
+        text: `${progressText}${finalText}`,
+        createdAt: "2026-07-01T00:00:03.000Z",
+        metadata: createAssistantFinalMetadata({
+          runId: "run_web"
+        })
+      }
+    ];
+
+    const projected = toUiMessages(messages);
+    const parts = projected[0]?.parts ?? [];
+    const textParts = parts.filter((part) => part.type === "text");
+    const toolParts = parts.filter((part) => part.type === "dynamic-tool");
+
+    expect(projected).toHaveLength(1);
+    expect(textParts).toEqual([
+      {
+        type: "text",
+        text: progressText,
+        state: "done"
+      },
+      {
+        type: "text",
+        text: finalText,
+        state: "done"
+      }
+    ]);
+    expect(toolParts).toHaveLength(1);
+    expect(toolParts[0]).toMatchObject({
+      toolCallId: "call_web",
+      toolName: "web_search",
+      state: "output-available"
+    });
+  });
+
+  it("renders assistant web source parts", () => {
+    const sourcePart = {
+      type: "source",
+      sourceType: "url",
+      id: "web_source_1",
+      url: "https://example.com/report",
+      title: "Example Report",
+      status: { type: "complete" }
+    } as const;
+
+    const indexedMarkup = renderToStaticMarkup(createElement(AssistantSourcePart, sourcePart));
+    expect(indexedMarkup).toContain('href="https://example.com/report"');
+    expect(indexedMarkup).toContain("Example Report");
   });
 
   it("projects safe workspace exec helper details without raw command output", () => {

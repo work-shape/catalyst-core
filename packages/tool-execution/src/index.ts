@@ -8,6 +8,7 @@ export * from "./workspace-tool-schemas";
 export { shapeWorkspaceCommandOutput, type WorkspaceRawCommandOutput } from "./workspace-tool-results";
 export * from "./workspace-paths";
 export * from "./workspace-file-bytes";
+export * from "./workspace-artifact-previews";
 export * from "./workspace-command-executor";
 export * from "./workspace-command-runner";
 export * from "./workspace-command-telemetry";

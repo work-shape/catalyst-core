@@ -237,29 +237,29 @@ describe("chat UI artifact history projection", () => {
     ];
 
     const projected = toUiMessages(messages);
+    const finalParts = projected.at(-1)?.parts ?? [];
 
-    expect(projected[1]?.parts).toEqual([
-      {
-        type: "text",
-        text: "Done, I created ducks.pptx.",
-        state: "done"
-      },
-      {
-        type: WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE,
-        data: {
-          kind: "workspace.promoted_artifacts",
-          artifacts: [
-            {
-              artifactId: "art_ducks",
-              kind: "presentation.pptx",
-              filename: "ducks.pptx",
-              mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-            }
-          ]
-        }
+    expect(finalParts).toContainEqual({
+      type: "text",
+      text: "Done, I created ducks.pptx.",
+      state: "done"
+    });
+    expect(finalParts).toContainEqual({
+      type: WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE,
+      data: {
+        kind: "workspace.promoted_artifacts",
+        artifacts: [
+          {
+            artifactId: "art_ducks",
+            kind: "presentation.pptx",
+            filename: "ducks.pptx",
+            mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+          }
+        ]
       }
-    ]);
-    expect(JSON.stringify(projected[1]?.parts)).not.toContain("scratch/ducks.pptx");
+    });
+    const artifactPart = finalParts.find((part) => part.type === WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE);
+    expect(JSON.stringify(artifactPart)).not.toContain("scratch/ducks.pptx");
   });
 
   it("does not surface transient document render artifacts as top-level downloads", () => {
@@ -372,13 +372,13 @@ describe("chat UI artifact history projection", () => {
     ];
 
     const projected = toUiMessages(messages);
+    const finalParts = projected.at(-1)?.parts ?? [];
 
-    expect(projected[1]?.parts).toEqual([
-      {
-        type: "text",
-        text: "The page looks correct.",
-        state: "done"
-      }
-    ]);
+    expect(finalParts).toContainEqual({
+      type: "text",
+      text: "The page looks correct.",
+      state: "done"
+    });
+    expect(finalParts.some((part) => part.type === WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE)).toBe(false);
   });
 });

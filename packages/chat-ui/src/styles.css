@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "@univerjs/preset-sheets-core/lib/index.css";
 
 @source "./**/*.{ts,tsx}";
 @source "../../chat-standalone/src/**/*.{ts,tsx}";
@@ -184,10 +185,88 @@
     display: none;
   }
 
+  .aui-tool-group-content[data-state="open"] {
+    animation: chat-collapsible-down 220ms ease-out;
+  }
+
+  .aui-tool-group-content[data-state="closed"] {
+    animation: chat-collapsible-up 180ms ease-in;
+  }
+
+  .aui-tool-group-content.chat-tool-group-suppress-open-animation[data-state="open"] {
+    animation: none;
+  }
+
   .chat-assistant-text + .chat-tool-work,
   .chat-tool-part + .chat-assistant-text,
   .chat-tool-work + .chat-assistant-text {
     margin-top: 1.5rem;
+  }
+
+  .chat-assistant-text + .chat-tool-work-nested,
+  .chat-tool-work-nested + .chat-assistant-text,
+  .chat-tool-work-nested + .chat-tool-work-nested {
+    margin-top: 0.375rem;
+  }
+
+  .chat-work-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-left: 0.25rem;
+    padding-left: 1rem;
+    border-left: 1px solid color-mix(in srgb, var(--muted-foreground) 24%, transparent);
+  }
+
+  .chat-work-summary-content > div {
+    gap: 0.75rem;
+  }
+
+  .chat-work-timeline > .chat-assistant-text,
+  .chat-work-timeline > .chat-tool-work,
+  .chat-work-timeline > .chat-tool-work-nested {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  .chat-work-timeline > .chat-assistant-text + .chat-tool-work,
+  .chat-work-timeline > .chat-tool-work + .chat-assistant-text,
+  .chat-work-timeline > .chat-tool-work + .chat-tool-work {
+    margin-top: 0 !important;
+  }
+
+  .chat-work-timeline .chat-markdown > :first-child {
+    margin-top: 0;
+  }
+
+  .chat-work-timeline .chat-markdown > :last-child {
+    margin-bottom: 0;
+  }
+
+  .chat-work-timeline .chat-markdown p,
+  .chat-work-timeline .chat-markdown ul,
+  .chat-work-timeline .chat-markdown ol,
+  .chat-work-timeline .chat-markdown pre,
+  .chat-work-timeline .chat-markdown table,
+  .chat-work-timeline .chat-markdown blockquote {
+    margin-top: 0.125rem;
+    margin-bottom: 0.125rem;
+  }
+
+  .chat-source-chip-group {
+    display: flex;
+    max-width: min(100%, 52rem);
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.625rem;
+  }
+
+  .chat-source-chip-group > :not(.chat-source-chip) {
+    display: contents;
+  }
+
+  .chat-source-chip-group .chat-source-chip {
+    margin: 0 !important;
   }
 
   .chat-assistant-text-running .chat-markdown > :last-child::after {
@@ -291,9 +370,35 @@
   }
 }
 
+@keyframes chat-collapsible-down {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+
+  to {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+}
+
+@keyframes chat-collapsible-up {
+  from {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chat-assistant-cursor-dot,
-  .chat-assistant-text-running .chat-markdown > :last-child::after {
+  .chat-assistant-text-running .chat-markdown > :last-child::after,
+  .aui-tool-group-content[data-state="open"],
+  .aui-tool-group-content[data-state="closed"] {
     opacity: 1;
     transform: none;
     animation: none;

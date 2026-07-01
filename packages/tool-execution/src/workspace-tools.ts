@@ -1,4 +1,6 @@
-import { posix as path } from "node:path";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join as joinFsPath, posix as path } from "node:path";
 import type { z } from "zod";
 import {
   type ClientInstanceId,
@@ -66,6 +68,10 @@ import {
   workspacePathFromFilename,
   type ValidationResult
 } from "./workspace-tool-results";
+import {
+  createWorkspaceArtifactPreviewMetadata,
+  type WorkspaceArtifactPreviewGenerator
+} from "./workspace-artifact-previews";
 
 export { shapeWorkspaceCommandOutput, type WorkspaceRawCommandOutput } from "./workspace-tool-results";
 export type { WorkspaceCommandServiceLimits } from "./workspace-tool-schemas";
@@ -101,6 +107,7 @@ export interface WorkspaceCommandServiceOptions {
   fileStore?: WorkspaceFileByteStore;
   sourceFileReader?: WorkspaceSourceFileReader;
   commandResults?: WorkspaceCommandResultSource;
+  artifactPreviewGenerator?: WorkspaceArtifactPreviewGenerator;
   auditRecorder?: AuditRecorder;
   telemetry?: WorkspaceCommandTelemetry;
   limits?: Partial<WorkspaceCommandServiceLimits>;
@@ -115,6 +122,7 @@ export class WorkspaceCommandService {
   private readonly fileStore?: WorkspaceFileByteStore;
   private readonly sourceFileReader?: WorkspaceSourceFileReader;
   private readonly commandResults?: WorkspaceCommandResultSource;
+  private readonly artifactPreviewGenerator?: WorkspaceArtifactPreviewGenerator;
   private readonly auditRecorder?: AuditRecorder;
   private readonly telemetry?: WorkspaceCommandTelemetry;
   private readonly limits: WorkspaceCommandServiceLimits;
@@ -128,6 +136,7 @@ export class WorkspaceCommandService {
     this.objectStore = options.objectStore ?? options.fileStore;
     this.sourceFileReader = options.sourceFileReader;
     this.commandResults = options.commandResults;
+    this.artifactPreviewGenerator = options.artifactPreviewGenerator;
     this.auditRecorder = options.auditRecorder;
     this.telemetry = options.telemetry;
     this.limits = {
@@ -369,6 +378,14 @@ export class WorkspaceCommandService {
     }
     const filename = input.filename ?? path.basename(file.value.file.path);
     const mimeType = input.mimeType ?? file.value.file.mimeType ?? "application/octet-stream";
+    const previewMetadata = await this.createPreviewMetadataForPromotedWorkspaceFile({
+      conversationId: file.value.conversationId,
+      file: file.value.file,
+      filename,
+      kind: input.kind,
+      mimeType,
+      workspaceId: file.value.workspaceId
+    });
     const artifact = await this.store.createManagedArtifact({
       clientInstanceId: context.clientInstanceId,
       conversationId: file.value.conversationId,
@@ -381,7 +398,8 @@ export class WorkspaceCommandService {
       metadata: {
         source: "execution_workspace",
         workspaceId: file.value.workspaceId,
-        workspacePath: file.value.file.path
+        workspacePath: file.value.file.path,
+        ...(previewMetadata ? (previewMetadata as unknown as JsonObject) : {})
       }
     });
     await this.markFilePromoted(file.value.file, {
@@ -397,7 +415,8 @@ export class WorkspaceCommandService {
       filename,
       mimeType,
       byteSize: file.value.file.byteSize,
-      checksum: file.value.file.checksum
+      checksum: file.value.file.checksum,
+      ...(previewMetadata ? { metadata: previewMetadata as unknown as Record<string, unknown> } : {})
     };
     return toolSuccess(output, {
       artifacts: [
@@ -411,7 +430,8 @@ export class WorkspaceCommandService {
             workspaceId: file.value.workspaceId,
             workspacePath: file.value.file.path,
             byteSize: file.value.file.byteSize,
-            checksum: file.value.file.checksum
+            checksum: file.value.file.checksum,
+            ...(previewMetadata ? (previewMetadata as unknown as JsonObject) : {})
           }
         }
       ],
@@ -840,6 +860,43 @@ export class WorkspaceCommandService {
       updatedAt: this.now()
     });
   }
+
+  private async createPreviewMetadataForPromotedWorkspaceFile(input: {
+    conversationId: ConversationId;
+    file: WorkspaceFile;
+    filename: string;
+    kind: string;
+    mimeType: string;
+    workspaceId: ExecutionWorkspaceId;
+  }) {
+    if (!this.objectStore || !this.fileStore || !this.artifactPreviewGenerator) {
+      return undefined;
+    }
+
+    const tempDirectory = await mkdtemp(joinFsPath(tmpdir(), "catalyst-promoted-preview-"));
+    try {
+      const sourceDirectory = joinFsPath(tempDirectory, "source");
+      await mkdir(sourceDirectory, { recursive: true });
+      const sourcePath = joinFsPath(sourceDirectory, safeLocalFilename(input.filename));
+      await writeFile(sourcePath, await this.objectStore.getObject(input.file.objectKey));
+      return await createWorkspaceArtifactPreviewMetadata({
+        artifactKind: input.kind,
+        artifactMimeType: input.mimeType,
+        byteStore: this.fileStore,
+        clientInstanceId: input.file.clientInstanceId,
+        commandId: input.file.lastCommandId ?? createPlatformId<"WorkspaceCommandId">("wcmd_preview"),
+        conversationId: input.conversationId,
+        filename: input.filename,
+        generator: this.artifactPreviewGenerator,
+        sourcePath,
+        store: this.store,
+        workspaceId: input.workspaceId,
+        workspacePath: input.file.path
+      });
+    } finally {
+      await rm(tempDirectory, { recursive: true, force: true });
+    }
+  }
 }
 
 function isTerminalWorkspaceCommand(command: WorkspaceCommand): boolean {
@@ -848,6 +905,11 @@ function isTerminalWorkspaceCommand(command: WorkspaceCommand): boolean {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function safeLocalFilename(filename: string): string {
+  const basename = path.basename(filename.replaceAll("\\", "/")).trim();
+  return basename && basename !== "." && basename !== ".." ? basename : "artifact";
 }
 
 export function createWorkspaceToolDefinitions(

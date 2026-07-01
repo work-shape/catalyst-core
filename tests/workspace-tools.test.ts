@@ -6,6 +6,7 @@ import {
   asAgentRunId,
   asClientInstanceId,
   asExecutionWorkspaceId,
+  asManagedArtifactId,
   asManagedFileId,
   asToolCallId,
   asWorkspaceCommandId,
@@ -23,6 +24,7 @@ import {
   workspaceExecInputJsonSchema,
   WorkspaceCommandService,
   WorkspaceCommandWorker,
+  type WorkspaceArtifactPreviewGenerator,
   type WorkspaceCommandTelemetry,
   type WorkspaceFileByteStore,
   type WorkspaceObjectStore
@@ -716,6 +718,75 @@ describe("workspace tools", () => {
     ]);
   });
 
+  it("attaches derived image-page previews when explicitly promoting office artifacts", async () => {
+    const previewGenerator = new TestArtifactPreviewGenerator([
+      {
+        bytes: encode("slide-1"),
+        filename: "deck-slide-1.png",
+        mimeType: "image/png",
+        slideNumber: 1
+      }
+    ]);
+    const harness = await createWorkspaceHarness({ artifactPreviewGenerator: previewGenerator });
+    await harness.putWorkspaceFile({
+      path: "deck.pptx",
+      objectKey: "workspace/deck.pptx",
+      bytes: "pptx-bytes",
+      mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    });
+
+    const promoted = await harness.runTool("workspace.promote_artifact", {
+      path: "deck.pptx",
+      kind: "presentation.pptx",
+      filename: "deck.pptx",
+      mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    });
+
+    expect(promoted.status).toBe("success");
+    if (promoted.status !== "success") {
+      throw new Error("Expected promote_artifact to succeed");
+    }
+    expect(previewGenerator.calls).toEqual([
+      expect.objectContaining({
+        filename: "deck.pptx",
+        kind: "presentation.pptx",
+        previewKind: "presentation"
+      })
+    ]);
+    expect(promoted.artifacts?.[0]?.metadata).toMatchObject({
+      preview: {
+        type: "image_pages",
+        format: "png",
+        pages: [
+          expect.objectContaining({
+            filename: "deck-slide-1.png",
+            kind: "presentation.preview_slide_image",
+            mimeType: "image/png",
+            slideNumber: 1
+          })
+        ]
+      }
+    });
+    expect(promoted.output?.metadata).toEqual({
+      preview: promoted.artifacts?.[0]?.metadata?.preview
+    });
+    const previewPage = promoted.artifacts?.[0]?.metadata?.preview?.pages[0];
+    const previewArtifact = await harness.store.getManagedArtifact({
+      clientInstanceId: harness.clientInstanceId,
+      artifactId: asManagedArtifactId(previewPage!.artifactId)
+    });
+    expect(previewArtifact).toMatchObject({
+      kind: "presentation.preview_slide_image",
+      objectKey: expect.stringContaining("deck-slide-1.png"),
+      metadata: expect.objectContaining({
+        source: "execution_workspace",
+        workspacePath: "deck.pptx",
+        previewRole: "slide_image"
+      })
+    });
+    await expect(harness.objectStore.getObject(previewArtifact!.objectKey)).resolves.toEqual(encode("slide-1"));
+  });
+
   it("shapes command stdout and stderr to configured bounds", () => {
     const output = shapeWorkspaceCommandOutput(
       {
@@ -762,6 +833,7 @@ async function expectToolFailure(
 
 async function createWorkspaceHarness(input: {
   agentToolNames?: string[];
+  artifactPreviewGenerator?: WorkspaceArtifactPreviewGenerator;
   commandResults?: ConstructorParameters<typeof WorkspaceCommandService>[0]["commandResults"];
   execResultWaitMs?: ConstructorParameters<typeof WorkspaceCommandService>[0]["execResultWaitMs"];
   execResultPollIntervalMs?: ConstructorParameters<typeof WorkspaceCommandService>[0]["execResultPollIntervalMs"];
@@ -797,9 +869,11 @@ async function createWorkspaceHarness(input: {
   const service = new WorkspaceCommandService({
     store: input.serviceStore?.(store) ?? store,
     objectStore,
-    ...(input.sourceFiles
+    ...(input.sourceFiles || input.artifactPreviewGenerator
       ? {
           fileStore: objectStore,
+          ...(input.artifactPreviewGenerator ? { artifactPreviewGenerator: input.artifactPreviewGenerator } : {}),
+          ...(input.sourceFiles ? {
           sourceFileReader: {
             async readSourceFile(readInput) {
               const source = input.sourceFiles?.[readInput.fileId];
@@ -815,6 +889,7 @@ async function createWorkspaceHarness(input: {
               };
             }
           }
+          } : {})
         }
       : {}),
     ...(input.commandResults ? { commandResults: input.commandResults } : {}),
@@ -935,6 +1010,27 @@ function createToolRequest(conversation: Conversation, toolName: string, input: 
     agentName: "workspace_agent",
     input
   };
+}
+
+function encode(value: string): Uint8Array {
+  return new TextEncoder().encode(value);
+}
+
+class TestArtifactPreviewGenerator implements WorkspaceArtifactPreviewGenerator {
+  readonly calls: Parameters<WorkspaceArtifactPreviewGenerator["generatePreviewImages"]>[0][] = [];
+
+  constructor(
+    private readonly images: Awaited<
+      ReturnType<WorkspaceArtifactPreviewGenerator["generatePreviewImages"]>
+    >
+  ) {}
+
+  async generatePreviewImages(
+    input: Parameters<WorkspaceArtifactPreviewGenerator["generatePreviewImages"]>[0]
+  ) {
+    this.calls.push(input);
+    return this.images;
+  }
 }
 
 class TestWorkspaceObjectStore implements WorkspaceFileByteStore, WorkspaceObjectStore {

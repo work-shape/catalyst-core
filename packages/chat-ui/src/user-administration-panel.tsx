@@ -63,6 +63,7 @@ interface UserAdministrationPanelProps {
   mutating: boolean;
   onCreateUser(input: CreateAdministeredUserRequest): Promise<AdministeredUser>;
   onUpdateUser(userId: string, input: UpdateAdministeredUserRequest): Promise<AdministeredUser>;
+  onDeleteUser(userId: string): Promise<AdministeredUser>;
   onUpsertIdentity(
     userId: string,
     input: UpsertAdministeredUserIdentityRequest
@@ -79,6 +80,7 @@ export function UserAdministrationPanel({
   mutating,
   onCreateUser,
   onUpdateUser,
+  onDeleteUser,
   onUpsertIdentity,
   onDeleteIdentity,
   onResetPassword
@@ -107,12 +109,15 @@ export function UserAdministrationPanel({
 
   if (selectedUser) {
     return (
-        <UserDetail
-          user={selectedUser}
-          canManageSuperadminAccess={canManageSuperadminAccess}
-          mutating={mutating}
+      <UserDetail
+        user={selectedUser}
+        canManageSuperadminAccess={canManageSuperadminAccess}
+        canDeleteUser={canManageSuperadminAccess}
+        mutating={mutating}
         onBack={() => setSelectedUserId(undefined)}
         onUpdateUser={onUpdateUser}
+        onDeleteUser={onDeleteUser}
+        onDeleted={() => setSelectedUserId(undefined)}
         onUpsertIdentity={onUpsertIdentity}
         onDeleteIdentity={onDeleteIdentity}
         onResetPassword={onResetPassword}
@@ -533,18 +538,24 @@ function CreateUserDialog({
 function UserDetail({
   user,
   canManageSuperadminAccess,
+  canDeleteUser,
   mutating,
   onBack,
   onUpdateUser,
+  onDeleteUser,
+  onDeleted,
   onUpsertIdentity,
   onDeleteIdentity,
   onResetPassword
 }: {
   user: AdministeredUser;
   canManageSuperadminAccess: boolean;
+  canDeleteUser: boolean;
   mutating: boolean;
   onBack(): void;
   onUpdateUser(userId: string, input: UpdateAdministeredUserRequest): Promise<AdministeredUser>;
+  onDeleteUser(userId: string): Promise<AdministeredUser>;
+  onDeleted(): void;
   onUpsertIdentity(
     userId: string,
     input: UpsertAdministeredUserIdentityRequest
@@ -598,6 +609,13 @@ function UserDetail({
             disabledReason={managementDisabledReason}
             mutating={mutating}
             onResetPassword={onResetPassword}
+          />
+          <DeleteUserCard
+            user={user}
+            canDeleteUser={canDeleteUser}
+            mutating={mutating}
+            onDeleteUser={onDeleteUser}
+            onDeleted={onDeleted}
           />
           <AccountMetaCard user={user} />
         </div>
@@ -968,6 +986,83 @@ function PasswordCard({
           </Button>
           <FormNotice notice={notice} />
         </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DeleteUserCard({
+  user,
+  canDeleteUser,
+  mutating,
+  onDeleteUser,
+  onDeleted
+}: {
+  user: AdministeredUser;
+  canDeleteUser: boolean;
+  mutating: boolean;
+  onDeleteUser(userId: string): Promise<AdministeredUser>;
+  onDeleted(): void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [notice, setNotice] = useState<FormNoticeState>();
+
+  useEffect(() => {
+    setConfirming(false);
+    setNotice(undefined);
+  }, [user.id]);
+
+  if (!canDeleteUser) {
+    return null;
+  }
+
+  async function deleteUser() {
+    setNotice(undefined);
+    try {
+      await onDeleteUser(user.id);
+      onDeleted();
+    } catch (error) {
+      setNotice({ kind: "error", text: errorMessage(error) });
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="p-4 pb-2">
+        <CardTitle className="text-base">Delete account</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3 p-4 pt-2">
+        <p className="text-sm text-muted-foreground">
+          Removes the user profile, sign-in identities, and standalone password access.
+        </p>
+        {confirming ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="danger"
+              disabled={mutating}
+              onClick={() => void deleteUser()}
+            >
+              <Trash2 size={16} aria-hidden="true" />
+              Delete user
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setConfirming(false)}>
+              Cancel
+            </Button>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-fit text-destructive hover:text-destructive"
+            disabled={mutating}
+            onClick={() => setConfirming(true)}
+          >
+            <Trash2 size={16} aria-hidden="true" />
+            Delete user
+          </Button>
+        )}
+        <FormNotice notice={notice} />
       </CardContent>
     </Card>
   );

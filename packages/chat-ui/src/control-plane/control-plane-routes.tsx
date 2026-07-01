@@ -25,10 +25,12 @@ export function ControlPlaneRoutes({
         canChangePassword={settings.canChangePassword}
         updatingProfile={settings.updatingProfile}
         changingPassword={settings.changingPassword}
+        deletingAccount={settings.deletingAccount}
         locales={settings.locales}
         locale={settings.locale}
         onUpdateProfile={settings.updateProfile}
         onChangePassword={settings.changePassword}
+        onDeleteAccount={settings.deleteAccount}
         onSelectLocale={settings.selectLocale}
       />
     );

@@ -26,6 +26,7 @@ import {
   getRuntimeSubjectUserId,
   getSubjectUserId,
   isAppError,
+  readAssistantFinalMetadata,
   readUserMessageMetadata
 } from "@vivd-catalyst/core";
 import { getModelSelectionForConversationTitles } from "@vivd-catalyst/config-schema";
@@ -37,7 +38,9 @@ import {
   normalizeGeneratedConversationTitle
 } from "./conversation-title";
 import {
+  isActiveRun,
   isMissingLocalRuntimeState,
+  recoverInterruptedRun,
   recoverStaleRun,
   recoveryEventFromObservation
 } from "./run-recovery";
@@ -89,9 +92,11 @@ export class ConversationWorkflow {
           conversationId: conversation.id,
           ownerUserId: subjectUserId
         });
+        const recovered = activeRun ? await recoverStaleRun(this.options, activeRun) : undefined;
+        const runForList = recovered?.run ?? activeRun;
         return {
           ...conversation,
-          ...(activeRun ? { activeRun: toActiveRunSummary(activeRun) } : {})
+          ...(runForList && isActiveRun(runForList) ? { activeRun: toActiveRunSummary(runForList) } : {})
         };
       })
     );
@@ -152,10 +157,17 @@ export class ConversationWorkflow {
     const recovered = activeRun ? await recoverStaleRun(this.options, activeRun) : undefined;
     const runForSnapshot = recovered?.run ?? activeRun;
     const serverTime = new Date().toISOString();
+    const completedRunProjections = await this.createCompletedRunProjections(
+      conversationId,
+      messages,
+      user,
+      runForSnapshot?.id
+    );
 
     return {
       conversation,
       messages,
+      ...(Object.keys(completedRunProjections).length > 0 ? { completedRunProjections } : {}),
       ...(runForSnapshot
         ? {
             activeRun: {
@@ -173,6 +185,45 @@ export class ConversationWorkflow {
       },
       serverTime
     };
+  }
+
+  private async createCompletedRunProjections(
+    conversationId: ConversationId,
+    messages: ChatMessage[],
+    user: AuthenticatedUser,
+    activeRunId: AgentRunId | undefined
+  ): Promise<Record<string, AgentRunProjection>> {
+    const runIds = Array.from(new Set(messages.flatMap((message): AgentRunId[] => {
+      if (message.role !== "assistant") {
+        return [];
+      }
+      const runId = readAssistantFinalMetadata(message.metadata)?.runId;
+      return runId && runId !== activeRunId ? [runId as AgentRunId] : [];
+    })));
+    const projections: Record<string, AgentRunProjection> = {};
+    for (const runId of runIds) {
+      const run = await this.options.conversationStore.getConversationAgentRun({
+        clientInstanceId: this.options.clientInstanceId,
+        conversationId,
+        runId
+      });
+      if (!run || run.ownerUserId !== getSubjectUserId(user) || isActiveRun(run)) {
+        continue;
+      }
+      const observations = await this.options.conversationStore.listRunObservations({
+        clientInstanceId: this.options.clientInstanceId,
+        runId,
+        ownerUserId: getSubjectUserId(user)
+      });
+      if (observations.length === 0) {
+        continue;
+      }
+      if (!observations.some((observation) => observation.payload.type === "message_completed")) {
+        continue;
+      }
+      projections[runId] = buildAgentRunProjection(run, observations);
+    }
+    return projections;
   }
 
   async startMessageRun(
@@ -407,7 +458,7 @@ export class ConversationWorkflow {
             runId
           })) ?? latestRun;
         if (staleRun.ownerUserId === getRuntimeSubjectUserId(context)) {
-          const recovered = await recoverStaleRun(this.options, staleRun);
+          const recovered = await recoverInterruptedRun(this.options, staleRun);
           const recoveryEvent = recoveryEventFromObservation(recovered?.observation);
           if (recoveryEvent && recoveryEvent.sequence > lastSequence) {
             yield recoveryEvent;
@@ -499,7 +550,17 @@ export class ConversationWorkflow {
       return run;
     }
 
-    await this.options.agentRuntime.cancel(runId, reason, context);
+    try {
+      await this.options.agentRuntime.cancel(runId, reason, context);
+    } catch (error) {
+      if (isMissingLocalRuntimeState(error)) {
+        const recovered = await recoverInterruptedRun(this.options, run);
+        if (recovered) {
+          return recovered.run;
+        }
+      }
+      throw error;
+    }
     return (
       (await this.options.conversationStore.getConversationAgentRun({
         clientInstanceId: this.options.clientInstanceId,
@@ -969,7 +1030,7 @@ function buildAgentRunProjection(
 
     if (event.type === "message_completed") {
       text = event.message.text;
-      replaceLatestProjectionTextPart(parts, event.message.text);
+      reconcileCompletedProjectionText(parts, event.message.text);
     }
 
     if (event.type === "tool_call_started") {
@@ -1077,20 +1138,32 @@ function appendProjectionTextPart(
   });
 }
 
-function replaceLatestProjectionTextPart(
+function reconcileCompletedProjectionText(
   parts: AgentRunProjection["parts"],
-  text: string
+  completedText: string
 ): void {
-  const latestTextPart = parts.findLast((part) => part.type === "text");
-  if (latestTextPart) {
-    latestTextPart.text = text;
+  const observedText = parts
+    .filter((part): part is Extract<AgentRunProjection["parts"][number], { type: "text" }> => part.type === "text")
+    .map((part) => part.text)
+    .join("");
+  if (observedText.length === 0) {
+    if (completedText.length > 0 || parts.length === 0) {
+      parts.push({
+        type: "text",
+        text: completedText
+      });
+    }
     return;
   }
-  if (text.length > 0 || parts.length === 0) {
-    parts.push({
-      type: "text",
-      text
-    });
+  if (completedText === observedText) {
+    return;
+  }
+  if (completedText.startsWith(observedText)) {
+    appendProjectionTextPart(parts, completedText.slice(observedText.length));
+    return;
+  }
+  if (completedText.length > 0) {
+    appendProjectionTextPart(parts, completedText);
   }
 }
 

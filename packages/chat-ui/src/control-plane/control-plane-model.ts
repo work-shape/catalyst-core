@@ -8,6 +8,7 @@ import type {
 } from "@vivd-catalyst/api-client";
 import {
   useChangeCurrentUserPasswordMutation,
+  useDeleteCurrentUserMutation,
   useSuperadminUserMutations,
   useUpdateCurrentUserMutation
 } from "../api/workspace-mutations";
@@ -39,6 +40,7 @@ export interface ControlPlaneModelInput {
   activeLocale: LocaleCode;
   selectLocale(locale: LocaleCode): void;
   goToDefaultChat(options?: WorkspaceRouteChangeOptions): void;
+  onAccountDeleted(): void;
   showSuperadmin(tab: SuperadminRouteTab, options?: WorkspaceRouteChangeOptions): void;
 }
 
@@ -54,10 +56,12 @@ export interface ControlPlaneSettingsModel {
   canChangePassword: boolean;
   updatingProfile: boolean;
   changingPassword: boolean;
+  deletingAccount: boolean;
   locales: LocaleCode[];
   locale: LocaleCode;
   updateProfile(input: UpdateCurrentUserRequest): Promise<ApiUser>;
   changePassword(input: ChangeCurrentUserPasswordRequest): Promise<unknown>;
+  deleteAccount(): Promise<unknown>;
   selectLocale(locale: LocaleCode): void;
 }
 
@@ -81,6 +85,7 @@ export function useControlPlaneModel({
   activeLocale,
   selectLocale,
   goToDefaultChat,
+  onAccountDeleted,
   showSuperadmin
 }: ControlPlaneModelInput): ControlPlaneModel {
   const canViewAdministration = adminPanel?.canView(user) ?? false;
@@ -123,6 +128,12 @@ export function useControlPlaneModel({
     authScope,
     client
   });
+  const deleteCurrentUser = useDeleteCurrentUserMutation({
+    apiBaseUrl,
+    authScope,
+    client,
+    onDeleted: onAccountDeleted
+  });
   const superadminUserMutations = useSuperadminUserMutations({
     apiBaseUrl,
     authScope,
@@ -147,10 +158,12 @@ export function useControlPlaneModel({
       canChangePassword: user?.authSource === STANDALONE_AUTH_SOURCE,
       updatingProfile: updateCurrentUser.isPending,
       changingPassword: changeCurrentUserPassword.isPending,
+      deletingAccount: deleteCurrentUser.isPending,
       locales: supportedLocales,
       locale: activeLocale,
       updateProfile: (input) => updateCurrentUser.mutateAsync(input),
       changePassword: (input) => changeCurrentUserPassword.mutateAsync(input),
+      deleteAccount: () => deleteCurrentUser.mutateAsync(),
       selectLocale
     },
     superadmin: {
@@ -172,6 +185,7 @@ export function useControlPlaneModel({
         onCreateUser: (input) => superadminUserMutations.createUser.mutateAsync(input),
         onUpdateUser: (userId, update) =>
           superadminUserMutations.updateUser.mutateAsync({ userId, update }),
+        onDeleteUser: (userId) => superadminUserMutations.deleteUser.mutateAsync(userId),
         onUpsertUserIdentity: (userId, identity) =>
           superadminUserMutations.upsertUserIdentity.mutateAsync({ userId, identity }),
         onDeleteUserIdentity: (userId, identity) =>

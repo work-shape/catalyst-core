@@ -52,18 +52,23 @@ export interface OpenAiResponsesRequestBody {
     summary?: "auto" | "concise" | "detailed";
   };
   tools: OpenAiResponsesTool[];
+  include?: string[];
   tool_choice?: "auto";
   stream?: boolean;
   store?: boolean;
 }
 
-export type OpenAiResponsesTool = {
-  type: "function";
-  name: string;
-  description: string;
-  parameters: JsonObject;
-  strict: false;
-};
+export type OpenAiResponsesTool =
+  | {
+      type: "function";
+      name: string;
+      description: string;
+      parameters: JsonObject;
+      strict: false;
+    }
+  | {
+      type: "web_search";
+    };
 
 export type OpenAiResponseInput = OpenAiResponseInputItem[];
 
@@ -113,7 +118,18 @@ export type OpenAiResponsesOutputItem =
       content?: Array<{
         type?: string;
         text?: string;
+        annotations?: unknown[];
       }>;
+    }
+  | {
+      type: "web_search_call";
+      action?: {
+        type?: string;
+        query?: string;
+        sources?: unknown[];
+        [key: string]: unknown;
+      };
+      [key: string]: unknown;
     }
   | {
       type: "function_call";

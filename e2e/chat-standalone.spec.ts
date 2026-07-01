@@ -614,6 +614,9 @@ test("completed background turns are marked unread until viewed", { tag: "@chat-
   await expect(sourceConversation.getByTestId("conversation-unread-indicator")).toHaveCount(0);
   await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
   await expect(page.getByTestId("assistant-cursor")).toHaveCount(0);
+  const workGroupTrigger = chatRegion.getByTestId("assistant-work-group-trigger").last();
+  await expect(workGroupTrigger).toBeVisible();
+  await workGroupTrigger.click();
   const toolCallCard = chatRegion.getByTestId("tool-call-card").last();
   await expect(toolCallCard).toBeVisible();
   await expect(toolCallCard).toContainText("Completed");
@@ -794,7 +797,7 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
   await signInViaUi(page, superadminUser);
   const forecastLocation = `Oslo ${Date.now()}`;
   const consoleErrors: string[] = [];
-  let messageHistoryResponses = 0;
+  let historyResponses = 0;
   page.on("console", (message) => {
     if (message.type() === "error") {
       consoleErrors.push(message.text());
@@ -807,9 +810,9 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
     const url = new URL(response.url());
     if (
       response.request().method() === "GET" &&
-      /^\/api\/conversations\/[^/]+\/messages$/u.test(url.pathname)
+      /^\/api\/conversations\/[^/]+\/(?:messages|thread)$/u.test(url.pathname)
     ) {
-      messageHistoryResponses += 1;
+      historyResponses += 1;
     }
   });
 
@@ -823,15 +826,18 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
   await page.getByRole("button", { name: "Send message" }).click();
 
   const toolCallCard = page.getByTestId("tool-call-card").last();
+  const workGroupTrigger = page.getByTestId("assistant-work-group-trigger").last();
+  await expect(workGroupTrigger).toBeVisible();
+  await workGroupTrigger.click();
   await expect(toolCallCard).toBeVisible();
-  await expect(toolCallCard).toContainText("demo.weather_forecast");
+  await expect(toolCallCard).toContainText("Weather Forecast");
   await expect(toolCallCard).toContainText("Completed");
   await expect(toolCallCard).toContainText("Weather forecast");
   await expect(toolCallCard).toContainText(forecastLocation);
   await expect(toolCallCard).toContainText("3-day forecast");
   await expect(page.getByText("Tool work completed").last()).toBeVisible();
   await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
-  await expect.poll(() => messageHistoryResponses).toBeGreaterThan(0);
+  await expect.poll(() => historyResponses).toBeGreaterThan(0);
   await expect(toolCallCard).toBeVisible();
   await expect(toolCallCard).toContainText("Completed");
 
@@ -959,6 +965,40 @@ test("superadmin creates a user with a password from the users panel", async ({ 
   );
   await expect(page.getByRole("button", { name: `${createdUser.displayLabel} account` })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open administration panel" })).toHaveCount(0);
+});
+
+test("superadmin deletes a user from the users panel", async ({ page }) => {
+  await signInViaUi(page, superadminUser);
+  await page.getByRole("button", { name: "Open administration panel" }).click();
+  await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
+
+  await page.getByRole("button", { name: /^Users/ }).click();
+  await page.getByRole("button", { name: "New user" }).click();
+
+  const timestamp = Date.now();
+  const createdUser = {
+    displayLabel: `E2E Deleted ${timestamp}`,
+    email: `e2e-deleted-${timestamp}@example.test`,
+    password: `e2e-deleted-${timestamp}`
+  };
+  const dialog = page.getByRole("dialog", { name: "New user" });
+  await dialog.getByLabel("Display label").fill(createdUser.displayLabel);
+  await dialog.getByLabel("Email").fill(createdUser.email);
+  await dialog.getByLabel("Initial password").fill(createdUser.password);
+  await dialog.getByRole("button", { name: "Create user" }).click();
+  await page.getByRole("button", { name: "Open user" }).click();
+  await expect(page.getByText(createdUser.displayLabel, { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Delete user" }).click();
+  await expect(page.getByRole("button", { name: "Cancel" })).toBeVisible();
+  await page.getByRole("button", { name: "Delete user" }).click();
+  await expect(page.getByRole("heading", { name: "Users" })).toBeVisible();
+  await expect(page.getByText(createdUser.displayLabel, { exact: true })).toHaveCount(0);
+
+  const usersResponse = await page.request.get(`${apiBaseUrl}/api/superadmin/users`);
+  expect(usersResponse.ok()).toBe(true);
+  const users = (await usersResponse.json()) as Array<{ email?: string }>;
+  expect(users.some((user) => user.email === createdUser.email)).toBe(false);
 });
 
 function conversationPath(conversationId: string): string {

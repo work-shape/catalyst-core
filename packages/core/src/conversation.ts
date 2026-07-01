@@ -51,6 +51,7 @@ export interface ConversationUserState {
 export interface ConversationThreadSnapshot {
   conversation: Conversation;
   messages: ChatMessage[];
+  completedRunProjections?: Record<string, AgentRunProjection>;
   activeRun?: {
     run: ActiveRunSummary;
     projection: AgentRunProjection;

@@ -1,12 +1,19 @@
 import { AppError } from "@vivd-catalyst/core";
 import type { ModelCompletionStreamEvent } from "./types";
+import { WEB_SEARCH_MODEL_TOOL_NAME } from "./types";
 import {
   noReportedUsage,
+  readOpenAiResponsesText,
+  readOpenAiResponsesWebMetadata,
+  readOpenAiResponsesWebSearchCallCount,
   toModelUsage,
   toResponsesModelUsage
 } from "./openai-compatible-mapping";
 import { parseToolInput } from "./tool-input";
-import type { OpenAiCompatibleResponse } from "./openai-compatible-types";
+import type {
+  OpenAiCompatibleResponse,
+  OpenAiResponsesResponse
+} from "./openai-compatible-types";
 
 interface OpenAiCompatibleStreamChunk {
   usage?: OpenAiCompatibleResponse["usage"];
@@ -39,6 +46,8 @@ interface OpenAiResponsesStreamEvent {
   summary_index?: number;
   item_id?: string;
   response?: {
+    output?: OpenAiResponsesResponse["output"];
+    output_text?: OpenAiResponsesResponse["output_text"];
     usage?: {
       input_tokens: number;
       output_tokens: number;
@@ -54,6 +63,9 @@ interface OpenAiResponsesStreamEvent {
     call_id?: string;
     name?: string;
     arguments?: string;
+    status?: string;
+    action?: unknown;
+    [key: string]: unknown;
   };
   error?: {
     message?: string;
@@ -116,6 +128,8 @@ export async function* streamOpenAiCompatibleCompletion(
           toolName: toolNameMap.get(toolCall.name) ?? toolCall.name,
           ...parseToolInput(toolCall.arguments)
         })),
+      sources: [],
+      citations: [],
       usage
     }
   };
@@ -130,12 +144,23 @@ export async function* streamOpenAiResponsesCompletion(
   const toolCalls: OpenAiCompatibleStreamingToolCall[] = [];
   const reasoningItemsByOutputIndex = new Map<number, string>();
   let latestReasoningItemId: string | undefined;
+  let finalResponse: OpenAiResponsesResponse | undefined;
 
   for await (const data of readServerSentEventData(body)) {
     if (data === "[DONE]") {
       break;
     }
     const payload = parseResponsesStreamEvent(data);
+
+    if (payload.type === "response.output_item.added" && payload.item?.type === "web_search_call") {
+      yield {
+        type: "provider_tool_started",
+        toolCallId: createResponsesProviderToolCallId(payload, WEB_SEARCH_MODEL_TOOL_NAME),
+        toolName: WEB_SEARCH_MODEL_TOOL_NAME,
+        input: readResponsesWebSearchToolInput(payload.item)
+      };
+      continue;
+    }
 
     if (
       payload.type === "response.output_item.added" &&
@@ -177,6 +202,19 @@ export async function* streamOpenAiResponsesCompletion(
 
     if (
       payload.type === "response.output_item.done" &&
+      payload.item?.type === "web_search_call"
+    ) {
+      yield {
+        type: "provider_tool_completed",
+        toolCallId: createResponsesProviderToolCallId(payload, WEB_SEARCH_MODEL_TOOL_NAME),
+        toolName: WEB_SEARCH_MODEL_TOOL_NAME,
+        output: readResponsesWebSearchToolOutput(payload.item)
+      };
+      continue;
+    }
+
+    if (
+      payload.type === "response.output_item.done" &&
       payload.item?.type === "function_call" &&
       payload.item.call_id &&
       payload.item.name
@@ -191,6 +229,7 @@ export async function* streamOpenAiResponsesCompletion(
 
     if (payload.type === "response.completed") {
       usage = toResponsesModelUsage(payload.response?.usage);
+      finalResponse = payload.response;
       continue;
     }
 
@@ -201,17 +240,59 @@ export async function* streamOpenAiResponsesCompletion(
     }
   }
 
+  const finalText = finalResponse ? readOpenAiResponsesText(finalResponse) : "";
+  const webMetadata = finalResponse
+    ? readOpenAiResponsesWebMetadata(finalResponse)
+    : { sources: [], citations: [] };
+  const webSearchCallCount = finalResponse
+    ? readOpenAiResponsesWebSearchCallCount(finalResponse)
+    : usage.webSearchCallCount;
   yield {
     type: "completed",
     completion: {
-      text,
+      text: text || finalText,
       toolCalls: toolCalls.map((toolCall) => ({
         toolCallId: toolCall.id,
         toolName: toolNameMap.get(toolCall.name) ?? toolCall.name,
         ...parseToolInput(toolCall.arguments)
       })),
-      usage
+      sources: webMetadata.sources,
+      citations: webMetadata.citations,
+      usage: {
+        ...usage,
+        webSearchCallCount
+      }
     }
+  };
+}
+
+function createResponsesProviderToolCallId(
+  payload: OpenAiResponsesStreamEvent,
+  toolName: string
+): string {
+  return (
+    payload.item?.id ??
+    payload.item_id ??
+    (payload.output_index !== undefined ? `${toolName}:${payload.output_index}` : undefined) ??
+    toolName
+  );
+}
+
+function readResponsesWebSearchToolInput(item: NonNullable<OpenAiResponsesStreamEvent["item"]>): unknown {
+  if (isRecord(item.action) && typeof item.action.query === "string") {
+    return { query: item.action.query };
+  }
+  return {};
+}
+
+function readResponsesWebSearchToolOutput(item: NonNullable<OpenAiResponsesStreamEvent["item"]>): unknown {
+  const action = isRecord(item.action) ? item.action : undefined;
+  const sources = Array.isArray(action?.sources) ? action.sources : [];
+  return {
+    ...(item.status ? { status: item.status } : {}),
+    ...(typeof action?.type === "string" ? { actionType: action.type } : {}),
+    ...(typeof action?.query === "string" ? { query: action.query } : {}),
+    ...(sources.length > 0 ? { sourceCount: sources.length } : {})
   };
 }
 
@@ -247,6 +328,10 @@ function parseResponsesStreamEvent(data: string): OpenAiResponsesStreamEvent {
   } catch {
     throw new AppError("INTERNAL", "Model provider returned invalid Responses stream JSON");
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 async function* readServerSentEventData(

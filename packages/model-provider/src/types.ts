@@ -1,15 +1,39 @@
 import type {
   JsonObject,
+  MessageCitation,
   ModelTokenUsage,
   ReasoningEffortConfig,
   RuntimeCallContext,
-  SupportedImageMimeType
+  SupportedImageMimeType,
+  WebSource
 } from "@vivd-catalyst/core";
 
-export interface ModelTool {
+export const OPENAI_WEB_SEARCH_PROVIDER_TOOL_ID = "openai.web_search";
+export const WEB_SEARCH_MODEL_TOOL_NAME = "web_search";
+
+export type ModelProviderNativeToolId = typeof OPENAI_WEB_SEARCH_PROVIDER_TOOL_ID;
+
+export interface ModelFunctionTool {
+  kind?: "function";
   name: string;
   description: string;
   inputJsonSchema?: JsonObject;
+}
+
+export interface ModelProviderNativeTool {
+  kind: "provider";
+  id: ModelProviderNativeToolId;
+  name: typeof WEB_SEARCH_MODEL_TOOL_NAME;
+}
+
+export type ModelTool = ModelFunctionTool | ModelProviderNativeTool;
+
+export function isModelFunctionTool(tool: ModelTool): tool is ModelFunctionTool {
+  return tool.kind !== "provider";
+}
+
+export function isModelProviderNativeTool(tool: ModelTool): tool is ModelProviderNativeTool {
+  return tool.kind === "provider";
 }
 
 export interface ModelToolCall {
@@ -63,7 +87,11 @@ export interface ModelCompletionRequest {
 export interface ModelCompletion {
   text: string;
   toolCalls: ModelToolCall[];
-  usage: ModelTokenUsage;
+  sources?: WebSource[];
+  citations?: MessageCitation[];
+  usage: ModelTokenUsage & {
+    webSearchCallCount: number;
+  };
 }
 
 export type ModelCompletionStreamEvent =
@@ -75,6 +103,18 @@ export type ModelCompletionStreamEvent =
       type: "reasoning_delta";
       id: string;
       delta: string;
+    }
+  | {
+      type: "provider_tool_started";
+      toolCallId: string;
+      toolName: string;
+      input?: unknown;
+    }
+  | {
+      type: "provider_tool_completed";
+      toolCallId: string;
+      toolName: string;
+      output?: unknown;
     }
   | {
       type: "completed";

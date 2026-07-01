@@ -26,4 +26,10 @@ export function registerUserAccountRoutes(app: FastifyInstance, options: ChatSer
       newPassword: body.newPassword
     });
   });
+
+  app.delete(apiOperations.deleteCurrentUser.path, async (request) => {
+    const { user, context } = await authenticateRequest(options, request);
+    requireAuthScope(user, "me:delete");
+    return userAccount.deleteCurrentUser(user, context);
+  });
 }

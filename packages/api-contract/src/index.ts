@@ -16,6 +16,7 @@ export const localizationSchema = z.object({
 export const authScopeSchema = z.enum([
   "*",
   "me:read",
+  "me:delete",
   "config:read",
   "conversation:read",
   "conversation:write",
@@ -32,6 +33,7 @@ export const authScopeSchema = z.enum([
 
 export const chatSessionAuthScopeSchema = z.enum([
   "me:read",
+  "me:delete",
   "config:read",
   "conversation:read",
   "conversation:write",
@@ -99,6 +101,30 @@ export const storedToolCallSchema = z.object({
   input: z.unknown()
 });
 
+export const webSourceSchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  title: z.string().optional(),
+  provider: z.enum(["openai-native", "serper", "tavily", "firecrawl", "browserbase", "direct"]),
+  query: z.string().optional(),
+  retrievedAt: z.string().optional(),
+  snippet: z.string().optional(),
+  contentHash: z.string().optional(),
+  resultPosition: z.number().optional()
+});
+
+export const messageCitationSchema = z.object({
+  sourceId: z.string(),
+  label: z.string().optional(),
+  quote: z.string().optional(),
+  characterRange: z
+    .object({
+      start: z.number(),
+      end: z.number()
+    })
+    .optional()
+});
+
 export const userMessageMetadataSchema = z.object({
   version: messageMetadataVersionSchema,
   kind: z.literal("user_message"),
@@ -119,7 +145,9 @@ export const assistantFinalMessageMetadataSchema = z.object({
   runId: z.string(),
   finishStatus: z.enum(["completed", "cancelled"]),
   cancellationReason: z.string().optional(),
-  reasoning: z.array(storedReasoningSummarySchema).optional()
+  reasoning: z.array(storedReasoningSummarySchema).optional(),
+  sources: z.array(webSourceSchema).optional(),
+  citations: z.array(messageCitationSchema).optional()
 });
 
 export const toolResultMessageMetadataSchema = z.object({
@@ -567,6 +595,7 @@ export const conversationUserStateSchema = z.object({
 export const conversationThreadSnapshotSchema = z.object({
   conversation: conversationSchema,
   messages: z.array(messageSchema),
+  completedRunProjections: z.record(z.string(), agentRunProjectionSchema).optional(),
   activeRun: z
     .object({
       run: activeRunSummarySchema,
@@ -668,6 +697,10 @@ export const changeCurrentUserPasswordResponseSchema = z.object({
   ok: z.literal(true)
 });
 
+export const deleteCurrentUserResponseSchema = z.object({
+  ok: z.literal(true)
+});
+
 export const upsertAdministeredUserIdentityRequestSchema = z.object({
   authSource: z.string().min(1),
   externalUserId: z.string().min(1),
@@ -740,15 +773,20 @@ export const modelUsageCostSchema = z.object({
   currency: z.string(),
   inputCostMicros: z.number().int().nonnegative(),
   outputCostMicros: z.number().int().nonnegative(),
+  webSearchCostMicros: z.number().int().nonnegative(),
   totalCostMicros: z.number().int().nonnegative(),
   budgetedCostMicros: z.number().int().nonnegative(),
   costSafetyMultiplier: z.number(),
-  pricingConfigured: z.boolean()
+  pricingConfigured: z.boolean(),
+  modelPricingConfigured: z.boolean(),
+  webSearchPricingConfigured: z.boolean()
 });
 
 export const modelUsageCostSummarySchema = modelUsageCostSchema.extend({
   pricedModelCallCount: z.number().int().nonnegative(),
-  unpricedModelCallCount: z.number().int().nonnegative()
+  unpricedModelCallCount: z.number().int().nonnegative(),
+  pricedWebSearchCallCount: z.number().int().nonnegative(),
+  unpricedWebSearchCallCount: z.number().int().nonnegative()
 });
 
 export const modelUsageEventSchema = z.object({
@@ -762,6 +800,7 @@ export const modelUsageEventSchema = z.object({
   inputTokens: z.number(),
   outputTokens: z.number(),
   totalTokens: z.number(),
+  webSearchCallCount: z.number().int().nonnegative(),
   source: z.enum(["provider_reported", "not_reported", "estimated"]),
   cost: modelUsageCostSchema,
   correlationId: z.string(),
@@ -775,6 +814,7 @@ export const modelUsageWindowSummarySchema = z.object({
   inputTokens: z.number(),
   outputTokens: z.number(),
   totalTokens: z.number(),
+  webSearchCallCount: z.number().int().nonnegative(),
   cost: modelUsageCostSummarySchema
 });
 
@@ -786,6 +826,13 @@ export const usagePricingSchema = z.object({
       model: z.string(),
       inputPricePerMillionTokens: z.number(),
       outputPricePerMillionTokens: z.number()
+    })
+  ),
+  webSearch: z.array(
+    z.object({
+      providerId: z.string(),
+      model: z.string().optional(),
+      pricePerCall: z.number()
     })
   )
 });
@@ -821,6 +868,12 @@ export const apiOperations = {
     path: "/api/me/password",
     requestSchema: changeCurrentUserPasswordRequestSchema,
     responseSchema: changeCurrentUserPasswordResponseSchema
+  }),
+  deleteCurrentUser: defineJsonApiOperation({
+    operationId: "deleteCurrentUser",
+    method: "DELETE",
+    path: "/api/me",
+    responseSchema: deleteCurrentUserResponseSchema
   }),
   getBranding: defineJsonApiOperation({
     operationId: "getBranding",
@@ -979,6 +1032,12 @@ export const apiOperations = {
     method: "PATCH",
     path: "/api/superadmin/users/:userId",
     requestSchema: updateAdministeredUserRequestSchema,
+    responseSchema: administeredUserSchema
+  }),
+  deleteAdministeredUser: defineJsonApiOperation({
+    operationId: "deleteAdministeredUser",
+    method: "DELETE",
+    path: "/api/superadmin/users/:userId",
     responseSchema: administeredUserSchema
   }),
   upsertAdministeredUserIdentity: defineJsonApiOperation({

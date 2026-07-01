@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -16,7 +17,6 @@ import { cn } from "./ui/cn";
 
 const DEFAULT_PANEL_WIDTH = 560;
 const MIN_PANEL_WIDTH = 380;
-const MAX_PANEL_WIDTH = 840;
 const MIN_CHAT_WIDTH = 480;
 
 export interface ToolDisplayPanelAutoShowTracker {
@@ -108,10 +108,13 @@ export function useToolDisplayPanel(): ToolDisplayPanelContextValue {
 export function ToolDisplayPanel({ className }: { className?: string }) {
   const { close, entry, open } = useToolDisplayPanel();
   const { t } = useTranslation();
+  const panelRef = useRef<HTMLElement | null>(null);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
+  const [availableWidth, setAvailableWidth] = useState<number | undefined>();
   const [resizing, setResizing] = useState(false);
   const visible = Boolean(entry && open);
-  const clampedPanelWidth = clampPanelWidth(panelWidth);
+  const clampedPanelWidth = clampPanelWidth(panelWidth, availableWidth);
+  const maximumPanelWidth = maxPanelWidth(availableWidth);
   const panelWidthStyle = useMemo<CSSProperties>(
     () => ({
       width: visible ? `${clampedPanelWidth}px` : "0rem"
@@ -136,7 +139,7 @@ export function ToolDisplayPanel({ className }: { className?: string }) {
 
       function onPointerMove(moveEvent: globalThis.PointerEvent) {
         const nextWidth = startWidth + startX - moveEvent.clientX;
-        setPanelWidth(clampPanelWidth(nextWidth));
+        setPanelWidth(clampPanelWidth(nextWidth, availableWidth));
       }
 
       function onPointerUp(upEvent: globalThis.PointerEvent) {
@@ -153,7 +156,7 @@ export function ToolDisplayPanel({ className }: { className?: string }) {
       window.addEventListener("pointerup", onPointerUp);
       window.addEventListener("pointercancel", onPointerUp);
     },
-    [clampedPanelWidth]
+    [availableWidth, clampedPanelWidth]
   );
 
   const onResizeKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
@@ -162,13 +165,33 @@ export function ToolDisplayPanel({ className }: { className?: string }) {
     }
     event.preventDefault();
     setPanelWidth((currentWidth) =>
-      clampPanelWidth(currentWidth + (event.key === "ArrowLeft" ? 24 : -24))
+      clampPanelWidth(currentWidth + (event.key === "ArrowLeft" ? 24 : -24), availableWidth)
     );
+  }, [availableWidth]);
+
+  useEffect(() => {
+    const parent = panelRef.current?.parentElement;
+    if (!parent) {
+      return;
+    }
+
+    const updateAvailableWidth = () => setAvailableWidth(parent.getBoundingClientRect().width);
+    updateAvailableWidth();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateAvailableWidth);
+      return () => window.removeEventListener("resize", updateAvailableWidth);
+    }
+
+    const observer = new ResizeObserver(updateAvailableWidth);
+    observer.observe(parent);
+    return () => observer.disconnect();
   }, []);
 
   return (
     <>
       <aside
+        ref={panelRef}
         aria-hidden={!visible}
         inert={!visible ? true : undefined}
         className={cn(
@@ -187,7 +210,7 @@ export function ToolDisplayPanel({ className }: { className?: string }) {
             aria-orientation="vertical"
             aria-label={t("resizeDisplayPanel")}
             aria-valuemin={MIN_PANEL_WIDTH}
-            aria-valuemax={maxPanelWidth()}
+            aria-valuemax={maximumPanelWidth}
             aria-valuenow={clampedPanelWidth}
             tabIndex={0}
             className={cn(
@@ -267,13 +290,18 @@ function ToolDisplayPanelFrame({
   );
 }
 
-function clampPanelWidth(width: number): number {
-  return Math.round(Math.min(Math.max(width, MIN_PANEL_WIDTH), maxPanelWidth()));
+function clampPanelWidth(width: number, availableWidth?: number): number {
+  return Math.round(Math.min(Math.max(width, MIN_PANEL_WIDTH), maxPanelWidth(availableWidth)));
 }
 
-function maxPanelWidth(): number {
-  if (typeof window === "undefined") {
-    return MAX_PANEL_WIDTH;
+function maxPanelWidth(availableWidth?: number): number {
+  if (typeof availableWidth === "number") {
+    return Math.max(MIN_PANEL_WIDTH, availableWidth - MIN_CHAT_WIDTH);
   }
-  return Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, window.innerWidth - MIN_CHAT_WIDTH));
+
+  if (typeof window === "undefined") {
+    return DEFAULT_PANEL_WIDTH;
+  }
+
+  return Math.max(MIN_PANEL_WIDTH, window.innerWidth - MIN_CHAT_WIDTH);
 }

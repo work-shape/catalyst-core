@@ -25,7 +25,7 @@ export function registerConversationFileRoutes(app: FastifyInstance, options: Ch
       .header("content-type", file.mimeType)
       .header("content-length", String(file.bytes.byteLength))
       .header("cache-control", "private, max-age=60")
-      .header("content-disposition", `inline; filename="${escapeHeaderValue(file.filename)}"`)
+      .header("content-disposition", contentDisposition("inline", file.filename))
       .send(Buffer.from(file.bytes));
   });
 
@@ -54,7 +54,7 @@ export function registerConversationFileRoutes(app: FastifyInstance, options: Ch
       .header("content-type", artifact.mimeType)
       .header("content-length", String(artifact.bytes.byteLength))
       .header("cache-control", "private, max-age=60")
-      .header("content-disposition", `attachment; filename="${escapeHeaderValue(filename)}"`)
+      .header("content-disposition", contentDisposition("attachment", filename))
       .send(Buffer.from(artifact.bytes));
   });
 }
@@ -82,6 +82,25 @@ function getArtifactId(request: { params: unknown }): string {
   return params.artifactId;
 }
 
-function escapeHeaderValue(value: string): string {
-  return value.replaceAll(/["\r\n]/gu, "_");
+function contentDisposition(disposition: "attachment" | "inline", filename: string): string {
+  const safeFilename = sanitizeHeaderFilename(filename);
+  return [
+    `${disposition}; filename="${asciiFilenameFallback(safeFilename)}"`,
+    `filename*=UTF-8''${encodeRfc5987Value(safeFilename)}`
+  ].join("; ");
+}
+
+function sanitizeHeaderFilename(value: string): string {
+  const sanitized = value.replaceAll(/["\r\n\\/]/gu, "_").trim();
+  return sanitized || "download";
+}
+
+function asciiFilenameFallback(value: string): string {
+  return value.replaceAll(/[^\x20-\x7E]/gu, "_");
+}
+
+function encodeRfc5987Value(value: string): string {
+  return encodeURIComponent(value).replaceAll(/['()*]/gu, (character) =>
+    `%${character.charCodeAt(0).toString(16).toUpperCase()}`
+  );
 }

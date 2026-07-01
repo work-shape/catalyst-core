@@ -2,12 +2,45 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import {
   apiOperations,
+  assistantFinalMessageMetadataSchema,
   buildApiPath,
   openApiDocument
 } from "@vivd-catalyst/api-contract";
 import { createApiClient } from "@vivd-catalyst/api-client";
 
 describe("api operation catalog and client", () => {
+  it("accepts assistant final metadata with normalized web sources and citations", () => {
+    const parsed = assistantFinalMessageMetadataSchema.safeParse({
+      version: 1,
+      kind: "assistant_final",
+      runId: "run_web",
+      finishStatus: "completed",
+      sources: [
+        {
+          id: "web_source_1",
+          url: "https://example.com/report",
+          title: "Example Report",
+          provider: "openai-native",
+          query: "example report",
+          snippet: "A short source snippet.",
+          resultPosition: 1
+        }
+      ],
+      citations: [
+        {
+          sourceId: "web_source_1",
+          label: "Example Report",
+          characterRange: {
+            start: 4,
+            end: 18
+          }
+        }
+      ]
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
   it("keeps the OpenAPI artifact generated from the operation catalog", async () => {
     const artifact = JSON.parse(
       await readFile("packages/api-contract/openapi.json", "utf8")
@@ -94,6 +127,12 @@ describe("api operation catalog and client", () => {
 
     expect(await blob.text()).toBe("artifact-bytes");
     expect(blob.type).toBe("application/pdf");
+    expect(client.browserManagedArtifactDownloads).toBe(false);
+    expect(client.conversationArtifactContentUrl("conv 1", "art/final")).toBe(
+      `https://chat.example${apiOperations.getConversationArtifactContent.buildPath({
+        params: { conversationId: "conv 1", artifactId: "art/final" }
+      })}`
+    );
     expect(calls).toHaveLength(1);
     const request = calls[0];
     expect(request?.url).toBe(
@@ -104,6 +143,17 @@ describe("api operation catalog and client", () => {
     expect(request?.method).toBe("GET");
     expect(request?.credentials).toBe("include");
     expect(request?.headers.get("authorization")).toBe("Bearer test-token");
+  });
+
+  it("marks artifact downloads as browser-managed when no token provider is configured", () => {
+    const client = createApiClient({
+      baseUrl: "https://chat.example/"
+    });
+
+    expect(client.browserManagedArtifactDownloads).toBe(true);
+    expect(client.conversationArtifactContentUrl("conversation/with space", "art/final")).toBe(
+      "https://chat.example/api/conversations/conversation%2Fwith%20space/artifacts/art%2Ffinal/content"
+    );
   });
 
   it("validates request bodies through operation schemas before fetch", async () => {

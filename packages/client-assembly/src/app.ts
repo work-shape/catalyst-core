@@ -18,6 +18,7 @@ import {
   createDataSourceRegistry,
   createEnvSecretResolver
 } from "@vivd-catalyst/data-source";
+import { createWebFetchToolDefinitions } from "@vivd-catalyst/web-access";
 import {
   createBuiltInToolDefinitions,
   createConsoleWorkspaceCommandTelemetry,
@@ -25,6 +26,7 @@ import {
   createReadSkillTool,
   createWorkspaceToolDefinitions,
   InProcessToolExecution,
+  LibreOfficeArtifactPreviewGenerator,
   SkillCatalog,
   ToolRegistry
 } from "@vivd-catalyst/tool-execution";
@@ -137,7 +139,9 @@ export async function createClientInstanceApp(
   const workspaceTools = config.executionWorkspaces.enabled
     ? createWorkspaceToolDefinitions({
         store,
+        objectStore: workspaceFileByteStore,
         fileStore: workspaceFileByteStore,
+        artifactPreviewGenerator: new LibreOfficeArtifactPreviewGenerator(),
         auditRecorder,
         telemetry: createConsoleWorkspaceCommandTelemetry(console),
         limits: config.executionWorkspaces.command,
@@ -153,11 +157,16 @@ export async function createClientInstanceApp(
           : undefined
       })
     : [];
+  const webAccessTools =
+    config.webAccess.enabled && config.webAccess.fetch.enabled
+      ? createWebFetchToolDefinitions({ config: config.webAccess.fetch })
+      : [];
   const tools = createToolDefinitions({
     config,
     tools: [
       ...createBuiltInToolDefinitions(),
       ...workspaceTools,
+      ...webAccessTools,
       ...createDataSourceQueryTools({ dataSources }),
       createReadSkillTool({
         catalog: skillCatalog,
@@ -210,6 +219,7 @@ export async function createClientInstanceApp(
     toolRegistry,
     toolExecution,
     usageGovernance,
+    webAccess: config.webAccess,
     maxSteps: config.runtime.maxSteps,
     repeatedToolCallLimit: config.runtime.repeatedToolCallLimit,
     modelContext: config.modelContext,

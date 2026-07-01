@@ -4,6 +4,24 @@ export type ClientOptions = {
     baseUrl: `${string}://${string}` | (string & {});
 };
 
+export type DeleteCurrentUserData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/me';
+};
+
+export type DeleteCurrentUserResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        ok: true;
+    };
+};
+
+export type DeleteCurrentUserResponse = DeleteCurrentUserResponses[keyof DeleteCurrentUserResponses];
+
 export type GetCurrentUserData = {
     body?: never;
     path?: never;
@@ -40,7 +58,7 @@ export type GetCurrentUserResponses = {
             displayLabel?: string;
             authSource: string;
         };
-        scopes?: Array<'*' | 'me:read' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write'>;
+        scopes?: Array<'*' | 'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write'>;
     };
 };
 
@@ -84,7 +102,7 @@ export type UpdateCurrentUserResponses = {
             displayLabel?: string;
             authSource: string;
         };
-        scopes?: Array<'*' | 'me:read' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write'>;
+        scopes?: Array<'*' | 'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write'>;
     };
 };
 
@@ -417,6 +435,26 @@ export type GetConversationThreadResponses = {
                         id: string;
                         text: string;
                     }>;
+                    sources?: Array<{
+                        id: string;
+                        url: string;
+                        title?: string;
+                        provider: 'openai-native' | 'serper' | 'tavily' | 'firecrawl' | 'browserbase' | 'direct';
+                        query?: string;
+                        retrievedAt?: string;
+                        snippet?: string;
+                        contentHash?: string;
+                        resultPosition?: number;
+                    }>;
+                    citations?: Array<{
+                        sourceId: string;
+                        label?: string;
+                        quote?: string;
+                        characterRange?: {
+                            start: number;
+                            end: number;
+                        };
+                    }>;
                 } | {
                     version: 1;
                     kind: 'tool_result';
@@ -436,6 +474,49 @@ export type GetConversationThreadResponses = {
                 [key: string]: unknown;
             };
         }>;
+        completedRunProjections?: {
+            [key: string]: {
+                runId: string;
+                lastSequence: number;
+                status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
+                parts: Array<{
+                    type: 'text';
+                    text: string;
+                } | {
+                    type: 'reasoning';
+                    id: string;
+                    text: string;
+                    open: boolean;
+                } | {
+                    type: 'tool_call';
+                    toolCallId: string;
+                    toolName: string;
+                    input?: unknown;
+                    state: 'input_available' | 'waiting_for_permission' | 'output_available' | 'output_error';
+                    output?: unknown;
+                    errorText?: string;
+                }>;
+                text: string;
+                reasoning: Array<{
+                    id: string;
+                    text: string;
+                    open: boolean;
+                }>;
+                activeToolCalls: Array<{
+                    toolCallId: string;
+                    toolName: string;
+                    input?: unknown;
+                    state: 'input_available' | 'waiting_for_permission' | 'output_available' | 'output_error';
+                    output?: unknown;
+                    errorText?: string;
+                }>;
+                error?: {
+                    code: string;
+                    message: string;
+                    category: 'app_error' | 'internal_error' | 'runtime_interrupted' | 'abort_error' | 'unknown_error';
+                };
+            };
+        };
         activeRun?: {
             run: {
                 id: string;
@@ -551,6 +632,26 @@ export type ListConversationMessagesResponses = {
                 reasoning?: Array<{
                     id: string;
                     text: string;
+                }>;
+                sources?: Array<{
+                    id: string;
+                    url: string;
+                    title?: string;
+                    provider: 'openai-native' | 'serper' | 'tavily' | 'firecrawl' | 'browserbase' | 'direct';
+                    query?: string;
+                    retrievedAt?: string;
+                    snippet?: string;
+                    contentHash?: string;
+                    resultPosition?: number;
+                }>;
+                citations?: Array<{
+                    sourceId: string;
+                    label?: string;
+                    quote?: string;
+                    characterRange?: {
+                        start: number;
+                        end: number;
+                    };
                 }>;
             } | {
                 version: 1;
@@ -690,6 +791,26 @@ export type StartConversationRunResponses = {
                         id: string;
                         text: string;
                     }>;
+                    sources?: Array<{
+                        id: string;
+                        url: string;
+                        title?: string;
+                        provider: 'openai-native' | 'serper' | 'tavily' | 'firecrawl' | 'browserbase' | 'direct';
+                        query?: string;
+                        retrievedAt?: string;
+                        snippet?: string;
+                        contentHash?: string;
+                        resultPosition?: number;
+                    }>;
+                    citations?: Array<{
+                        sourceId: string;
+                        label?: string;
+                        quote?: string;
+                        characterRange?: {
+                            start: number;
+                            end: number;
+                        };
+                    }>;
                 } | {
                     version: 1;
                     kind: 'tool_result';
@@ -782,6 +903,26 @@ export type StartConversationRunResponses = {
                             id: string;
                             text: string;
                         }>;
+                        sources?: Array<{
+                            id: string;
+                            url: string;
+                            title?: string;
+                            provider: 'openai-native' | 'serper' | 'tavily' | 'firecrawl' | 'browserbase' | 'direct';
+                            query?: string;
+                            retrievedAt?: string;
+                            snippet?: string;
+                            contentHash?: string;
+                            resultPosition?: number;
+                        }>;
+                        citations?: Array<{
+                            sourceId: string;
+                            label?: string;
+                            quote?: string;
+                            characterRange?: {
+                                start: number;
+                                end: number;
+                            };
+                        }>;
                     } | {
                         version: 1;
                         kind: 'tool_result';
@@ -801,6 +942,49 @@ export type StartConversationRunResponses = {
                     [key: string]: unknown;
                 };
             }>;
+            completedRunProjections?: {
+                [key: string]: {
+                    runId: string;
+                    lastSequence: number;
+                    status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
+                    parts: Array<{
+                        type: 'text';
+                        text: string;
+                    } | {
+                        type: 'reasoning';
+                        id: string;
+                        text: string;
+                        open: boolean;
+                    } | {
+                        type: 'tool_call';
+                        toolCallId: string;
+                        toolName: string;
+                        input?: unknown;
+                        state: 'input_available' | 'waiting_for_permission' | 'output_available' | 'output_error';
+                        output?: unknown;
+                        errorText?: string;
+                    }>;
+                    text: string;
+                    reasoning: Array<{
+                        id: string;
+                        text: string;
+                        open: boolean;
+                    }>;
+                    activeToolCalls: Array<{
+                        toolCallId: string;
+                        toolName: string;
+                        input?: unknown;
+                        state: 'input_available' | 'waiting_for_permission' | 'output_available' | 'output_error';
+                        output?: unknown;
+                        errorText?: string;
+                    }>;
+                    error?: {
+                        code: string;
+                        message: string;
+                        category: 'app_error' | 'internal_error' | 'runtime_interrupted' | 'abort_error' | 'unknown_error';
+                    };
+                };
+            };
             activeRun?: {
                 run: {
                     id: string;
@@ -941,6 +1125,26 @@ export type CreateConversationRunResponses = {
                         id: string;
                         text: string;
                     }>;
+                    sources?: Array<{
+                        id: string;
+                        url: string;
+                        title?: string;
+                        provider: 'openai-native' | 'serper' | 'tavily' | 'firecrawl' | 'browserbase' | 'direct';
+                        query?: string;
+                        retrievedAt?: string;
+                        snippet?: string;
+                        contentHash?: string;
+                        resultPosition?: number;
+                    }>;
+                    citations?: Array<{
+                        sourceId: string;
+                        label?: string;
+                        quote?: string;
+                        characterRange?: {
+                            start: number;
+                            end: number;
+                        };
+                    }>;
                 } | {
                     version: 1;
                     kind: 'tool_result';
@@ -1033,6 +1237,26 @@ export type CreateConversationRunResponses = {
                             id: string;
                             text: string;
                         }>;
+                        sources?: Array<{
+                            id: string;
+                            url: string;
+                            title?: string;
+                            provider: 'openai-native' | 'serper' | 'tavily' | 'firecrawl' | 'browserbase' | 'direct';
+                            query?: string;
+                            retrievedAt?: string;
+                            snippet?: string;
+                            contentHash?: string;
+                            resultPosition?: number;
+                        }>;
+                        citations?: Array<{
+                            sourceId: string;
+                            label?: string;
+                            quote?: string;
+                            characterRange?: {
+                                start: number;
+                                end: number;
+                            };
+                        }>;
                     } | {
                         version: 1;
                         kind: 'tool_result';
@@ -1052,6 +1276,49 @@ export type CreateConversationRunResponses = {
                     [key: string]: unknown;
                 };
             }>;
+            completedRunProjections?: {
+                [key: string]: {
+                    runId: string;
+                    lastSequence: number;
+                    status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
+                    parts: Array<{
+                        type: 'text';
+                        text: string;
+                    } | {
+                        type: 'reasoning';
+                        id: string;
+                        text: string;
+                        open: boolean;
+                    } | {
+                        type: 'tool_call';
+                        toolCallId: string;
+                        toolName: string;
+                        input?: unknown;
+                        state: 'input_available' | 'waiting_for_permission' | 'output_available' | 'output_error';
+                        output?: unknown;
+                        errorText?: string;
+                    }>;
+                    text: string;
+                    reasoning: Array<{
+                        id: string;
+                        text: string;
+                        open: boolean;
+                    }>;
+                    activeToolCalls: Array<{
+                        toolCallId: string;
+                        toolName: string;
+                        input?: unknown;
+                        state: 'input_available' | 'waiting_for_permission' | 'output_available' | 'output_error';
+                        output?: unknown;
+                        errorText?: string;
+                    }>;
+                    error?: {
+                        code: string;
+                        message: string;
+                        category: 'app_error' | 'internal_error' | 'runtime_interrupted' | 'abort_error' | 'unknown_error';
+                    };
+                };
+            };
             activeRun?: {
                 run: {
                     id: string;
@@ -1728,6 +1995,11 @@ export type GetUsageSummaryResponses = {
                 inputPricePerMillionTokens: number;
                 outputPricePerMillionTokens: number;
             }>;
+            webSearch: Array<{
+                providerId: string;
+                model?: string;
+                pricePerCall: number;
+            }>;
         };
         today: {
             start?: string;
@@ -1736,16 +2008,22 @@ export type GetUsageSummaryResponses = {
             inputTokens: number;
             outputTokens: number;
             totalTokens: number;
+            webSearchCallCount: number;
             cost: {
                 currency: string;
                 inputCostMicros: number;
                 outputCostMicros: number;
+                webSearchCostMicros: number;
                 totalCostMicros: number;
                 budgetedCostMicros: number;
                 costSafetyMultiplier: number;
                 pricingConfigured: boolean;
+                modelPricingConfigured: boolean;
+                webSearchPricingConfigured: boolean;
                 pricedModelCallCount: number;
                 unpricedModelCallCount: number;
+                pricedWebSearchCallCount: number;
+                unpricedWebSearchCallCount: number;
             };
         };
         currentMonth: {
@@ -1755,16 +2033,22 @@ export type GetUsageSummaryResponses = {
             inputTokens: number;
             outputTokens: number;
             totalTokens: number;
+            webSearchCallCount: number;
             cost: {
                 currency: string;
                 inputCostMicros: number;
                 outputCostMicros: number;
+                webSearchCostMicros: number;
                 totalCostMicros: number;
                 budgetedCostMicros: number;
                 costSafetyMultiplier: number;
                 pricingConfigured: boolean;
+                modelPricingConfigured: boolean;
+                webSearchPricingConfigured: boolean;
                 pricedModelCallCount: number;
                 unpricedModelCallCount: number;
+                pricedWebSearchCallCount: number;
+                unpricedWebSearchCallCount: number;
             };
         };
         allTime: {
@@ -1774,16 +2058,22 @@ export type GetUsageSummaryResponses = {
             inputTokens: number;
             outputTokens: number;
             totalTokens: number;
+            webSearchCallCount: number;
             cost: {
                 currency: string;
                 inputCostMicros: number;
                 outputCostMicros: number;
+                webSearchCostMicros: number;
                 totalCostMicros: number;
                 budgetedCostMicros: number;
                 costSafetyMultiplier: number;
                 pricingConfigured: boolean;
+                modelPricingConfigured: boolean;
+                webSearchPricingConfigured: boolean;
                 pricedModelCallCount: number;
                 unpricedModelCallCount: number;
+                pricedWebSearchCallCount: number;
+                unpricedWebSearchCallCount: number;
             };
         };
         recentEvents: Array<{
@@ -1797,15 +2087,19 @@ export type GetUsageSummaryResponses = {
             inputTokens: number;
             outputTokens: number;
             totalTokens: number;
+            webSearchCallCount: number;
             source: 'provider_reported' | 'not_reported' | 'estimated';
             cost: {
                 currency: string;
                 inputCostMicros: number;
                 outputCostMicros: number;
+                webSearchCostMicros: number;
                 totalCostMicros: number;
                 budgetedCostMicros: number;
                 costSafetyMultiplier: number;
                 pricingConfigured: boolean;
+                modelPricingConfigured: boolean;
+                webSearchPricingConfigured: boolean;
             };
             correlationId: string;
             createdAt: string;
@@ -1901,6 +2195,47 @@ export type CreateAdministeredUserResponses = {
 };
 
 export type CreateAdministeredUserResponse = CreateAdministeredUserResponses[keyof CreateAdministeredUserResponses];
+
+export type DeleteAdministeredUserData = {
+    body?: never;
+    path: {
+        userId: string;
+    };
+    query?: never;
+    url: '/api/superadmin/users/{userId}';
+};
+
+export type DeleteAdministeredUserResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        id: string;
+        clientInstanceId: string;
+        displayLabel: string;
+        email?: string;
+        roles: Array<string>;
+        permissionRefs: Array<string>;
+        status: 'active' | 'disabled';
+        createdAt: string;
+        updatedAt: string;
+        lastAuthenticatedAt?: string;
+        identities: Array<{
+            clientInstanceId: string;
+            userId: string;
+            authSource: string;
+            externalUserId: string;
+            displayLabel?: string;
+            email?: string;
+            emailVerified: boolean;
+            createdAt: string;
+            updatedAt: string;
+            lastAuthenticatedAt?: string;
+        }>;
+    };
+};
+
+export type DeleteAdministeredUserResponse = DeleteAdministeredUserResponses[keyof DeleteAdministeredUserResponses];
 
 export type UpdateAdministeredUserData = {
     body: {
@@ -2070,7 +2405,7 @@ export type IssueSessionTokenData = {
         roles?: Array<string>;
         permissionRefs?: Array<string>;
         correlationId?: string;
-        scopes?: Array<'me:read' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command'>;
+        scopes?: Array<'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command'>;
         delegatedActor?: {
             kind: 'service_principal';
             id: string;

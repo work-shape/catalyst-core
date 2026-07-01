@@ -36,6 +36,7 @@ export interface ChatShellAdminPanel {
     usersMutating: boolean;
     onCreateUser(input: CreateAdministeredUserRequest): Promise<AdministeredUser>;
     onUpdateUser(userId: string, input: UpdateAdministeredUserRequest): Promise<AdministeredUser>;
+    onDeleteUser(userId: string): Promise<AdministeredUser>;
     onUpsertUserIdentity(
       userId: string,
       input: UpsertAdministeredUserIdentityRequest

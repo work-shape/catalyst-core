@@ -88,9 +88,16 @@ export interface UsagePricingModelConfig {
   outputPricePerMillionTokens: number;
 }
 
+export interface UsagePricingWebSearchConfig {
+  providerId: string;
+  model?: string;
+  pricePerCall: number;
+}
+
 export interface UsagePricingConfig {
   currency: string;
   models: UsagePricingModelConfig[];
+  webSearch?: UsagePricingWebSearchConfig[];
 }
 
 export interface ModelContextToolOutputBoundsConfig {
@@ -105,6 +112,28 @@ export interface AgentRuntimeConfig {
 
 export interface ModelContextConfig {
   toolOutput: ModelContextToolOutputBoundsConfig;
+}
+
+export interface WebAccessFetchConfig {
+  enabled: boolean;
+  timeoutMs: number;
+  maxResponseBytes: number;
+  maxTextCharacters: number;
+  maxRedirects: number;
+}
+
+export type WebAccessSearchModeConfig = "native_or_managed" | "native_only" | "managed_only";
+
+export interface WebAccessSearchConfig {
+  enabled: boolean;
+  mode: WebAccessSearchModeConfig;
+  managedProvider?: string;
+}
+
+export interface WebAccessConfig {
+  enabled: boolean;
+  search: WebAccessSearchConfig;
+  fetch: WebAccessFetchConfig;
 }
 
 export type ExecutionWorkspaceRunnerModeConfig = "local" | "docker";

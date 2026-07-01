@@ -33,6 +33,7 @@ export interface ConversationControllerState {
   connectionStatus: ConversationConnectionStatus;
   conversation?: Conversation;
   messages: Message[];
+  completedRunProjections?: Record<string, AgentRunProjection>;
   activeRun?: {
     run: ConversationControllerRunSummary;
     projection: AgentRunProjection;
@@ -78,6 +79,7 @@ export function createControllerStateFromSnapshot(
       : "idle",
     conversation: snapshot.conversation,
     messages: snapshot.messages,
+    completedRunProjections: snapshot.completedRunProjections,
     ...(snapshotRun
       ? {
           activeRun: {
@@ -209,7 +211,7 @@ function applyObservationToProjection(
   }
   if (event.type === "message_completed") {
     text = event.message.text;
-    replaceLatestProjectionTextPart(parts, event.message.text);
+    reconcileCompletedProjectionText(parts, event.message.text);
   }
   if (event.type === "reasoning_delta") {
     const existing = reasoning.find((entry) => entry.id === event.id);
@@ -419,20 +421,32 @@ function appendProjectionTextPart(
   });
 }
 
-function replaceLatestProjectionTextPart(
+function reconcileCompletedProjectionText(
   parts: AgentRunProjection["parts"],
-  text: string
+  completedText: string
 ): void {
-  const latestTextPart = parts.findLast((part) => part.type === "text");
-  if (latestTextPart) {
-    latestTextPart.text = text;
+  const observedText = parts
+    .filter((part): part is Extract<AgentRunProjection["parts"][number], { type: "text" }> => part.type === "text")
+    .map((part) => part.text)
+    .join("");
+  if (observedText.length === 0) {
+    if (completedText.length > 0 || parts.length === 0) {
+      parts.push({
+        type: "text",
+        text: completedText
+      });
+    }
     return;
   }
-  if (text.length > 0 || parts.length === 0) {
-    parts.push({
-      type: "text",
-      text
-    });
+  if (completedText === observedText) {
+    return;
+  }
+  if (completedText.startsWith(observedText)) {
+    appendProjectionTextPart(parts, completedText.slice(observedText.length));
+    return;
+  }
+  if (completedText.length > 0) {
+    appendProjectionTextPart(parts, completedText);
   }
 }
 

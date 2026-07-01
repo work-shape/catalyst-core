@@ -35,6 +35,15 @@ ENV NODE_ENV=production
 ARG SERVER_ENTRY
 ENV SERVER_ENTRY=${SERVER_ENTRY}
 
+RUN --mount=type=cache,id=vivd-client-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+  --mount=type=cache,id=vivd-client-apt-cache,target=/var/cache/apt,sharing=locked \
+  apt-get update \
+  && apt-get install -y --no-install-recommends \
+    libreoffice-impress-nogui \
+    libreoffice-writer-nogui \
+    poppler-utils \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY --from=build /app ./
 
 EXPOSE 4100

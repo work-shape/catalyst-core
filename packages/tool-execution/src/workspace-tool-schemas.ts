@@ -99,7 +99,8 @@ const promotedArtifactOutputSchema = z.object({
   artifactId: z.string(),
   path: z.string(),
   kind: z.string(),
-  mimeType: z.string().optional()
+  mimeType: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional()
 });
 
 export const workspaceExecOutputSchema = z.object({
@@ -172,7 +173,8 @@ export const workspacePromoteArtifactOutputSchema = z.object({
   filename: z.string(),
   mimeType: z.string(),
   byteSize: z.number(),
-  checksum: z.string()
+  checksum: z.string(),
+  metadata: z.record(z.string(), z.unknown()).optional()
 });
 
 export const workspaceExecInputJsonSchema: JsonObject = {

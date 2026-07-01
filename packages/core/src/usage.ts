@@ -18,6 +18,7 @@ export interface ModelUsageEvent extends ModelTokenUsage {
   agentName: string;
   providerId: string;
   model: string;
+  webSearchCallCount: number;
   correlationId: string;
   createdAt: ISODateString;
 }
@@ -29,6 +30,7 @@ export interface ModelUsageEventInput extends ModelTokenUsage {
   agentName: string;
   providerId: string;
   model: string;
+  webSearchCallCount?: number;
   correlationId: string;
 }
 
@@ -39,6 +41,7 @@ export interface ModelUsageWindowSummary {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  webSearchCallCount: number;
 }
 
 export interface ModelUsageWindowBounds {

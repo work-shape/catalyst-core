@@ -7,6 +7,7 @@ import {
   asManagedArtifactId,
   asManagedFileId,
   asMessageId,
+  readAssistantWebSourceMetadata,
   type AttachmentManifest,
   type ChatMessage,
   type JsonObject,
@@ -23,6 +24,49 @@ import {
 import { modelContentImages, modelContentText } from "@vivd-catalyst/model-provider";
 
 describe("model context projection", () => {
+  it("round-trips assistant web sources and citations through message metadata", () => {
+    const metadata = createAssistantFinalMetadata({
+      runId: asAgentRunId("run_sources"),
+      sources: [
+        {
+          id: "web_source_1",
+          url: "https://example.com/source",
+          title: "Example",
+          provider: "openai-native"
+        }
+      ],
+      citations: [
+        {
+          sourceId: "web_source_1",
+          characterRange: {
+            start: 4,
+            end: 11
+          }
+        }
+      ]
+    });
+
+    expect(readAssistantWebSourceMetadata(metadata)).toEqual({
+      sources: [
+        {
+          id: "web_source_1",
+          url: "https://example.com/source",
+          title: "Example",
+          provider: "openai-native"
+        }
+      ],
+      citations: [
+        {
+          sourceId: "web_source_1",
+          characterRange: {
+            start: 4,
+            end: 11
+          }
+        }
+      ]
+    });
+  });
+
   it("replays tool calls and model-visible output without exposing private result fields", async () => {
     const runId = asAgentRunId("run_projection");
     const toolCall = {

@@ -131,18 +131,47 @@ export async function recoverStaleRun(
   if (!isActiveRun(run) || run.updatedAt >= staleCutoff(now, staleActiveRunMs)) {
     return undefined;
   }
+  return recoverActiveRun(options, run, {
+    recoveredAt: now.toISOString(),
+    staleUpdatedBefore: staleCutoff(now, staleActiveRunMs)
+  });
+}
+
+export async function recoverInterruptedRun(
+  options: ChatServerOptions,
+  run: AgentRun,
+  input: { now?: Date } = {}
+): Promise<RunRecoveryResult | undefined> {
+  const now = input.now ?? new Date();
+  if (!isActiveRun(run)) {
+    return undefined;
+  }
+  return recoverActiveRun(options, run, {
+    recoveredAt: now.toISOString(),
+    staleUpdatedBefore: new Date(now.getTime() + 1).toISOString()
+  });
+}
+
+async function recoverActiveRun(
+  options: ChatServerOptions,
+  run: AgentRun,
+  input: {
+    recoveredAt: string;
+    staleUpdatedBefore: string;
+  }
+): Promise<RunRecoveryResult | undefined> {
   const recovered = await options.conversationStore.recoverStaleAgentRun({
     clientInstanceId: options.clientInstanceId,
     runId: run.id,
     ownerUserId: run.ownerUserId,
-    staleUpdatedBefore: staleCutoff(now, staleActiveRunMs),
-    recoveredAt: now.toISOString(),
+    staleUpdatedBefore: input.staleUpdatedBefore,
+    recoveredAt: input.recoveredAt,
     error: RUN_RECOVERY_ERROR
   });
   if (recovered.status !== "recovered") {
     return undefined;
   }
-  await recordRecoveryAudit(options, recovered.run, now).catch(() => undefined);
+  await recordRecoveryAudit(options, recovered.run, new Date(input.recoveredAt)).catch(() => undefined);
   return {
     run: recovered.run,
     observation: recovered.observation

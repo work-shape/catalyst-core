@@ -7,6 +7,7 @@ import {
   Database,
   DollarSign,
   ScrollText,
+  Search,
   ShieldCheck,
   User as UserIcon,
   Users
@@ -43,6 +44,7 @@ export function SuperadminPanel({
   usersMutating,
   onCreateUser,
   onUpdateUser,
+  onDeleteUser,
   onUpsertUserIdentity,
   onDeleteUserIdentity,
   onResetUserPassword,
@@ -60,6 +62,7 @@ export function SuperadminPanel({
   usersMutating: boolean;
   onCreateUser(input: CreateAdministeredUserRequest): Promise<AdministeredUser>;
   onUpdateUser(userId: string, input: UpdateAdministeredUserRequest): Promise<AdministeredUser>;
+  onDeleteUser(userId: string): Promise<AdministeredUser>;
   onUpsertUserIdentity(
     userId: string,
     input: UpsertAdministeredUserIdentityRequest
@@ -120,6 +123,7 @@ export function SuperadminPanel({
             mutating={usersMutating}
             onCreateUser={onCreateUser}
             onUpdateUser={onUpdateUser}
+            onDeleteUser={onDeleteUser}
             onUpsertIdentity={onUpsertUserIdentity}
             onDeleteIdentity={onDeleteUserIdentity}
             onResetPassword={onResetUserPassword}
@@ -175,6 +179,7 @@ function ErrorBanner({ message }: { message: string }) {
 }
 
 function UsageView({ usage }: { usage: UsageSummary | undefined }) {
+  const pricing = normalizeUsagePricing(usage);
   return (
     <>
       <div className="grid gap-3 lg:grid-cols-4">
@@ -204,7 +209,7 @@ function UsageView({ usage }: { usage: UsageSummary | undefined }) {
           <CardTitle className="text-base">Usage volume</CardTitle>
         </CardHeader>
         <CardContent className="p-4 pt-2">
-          <dl className="grid gap-3 md:grid-cols-3">
+          <dl className="grid gap-3 md:grid-cols-4">
             <UsageStat
               icon={<Activity size={15} />}
               label="Calls today"
@@ -219,6 +224,11 @@ function UsageView({ usage }: { usage: UsageSummary | undefined }) {
               icon={<Database size={15} />}
               label="Tokens this month"
               value={usage?.currentMonth.totalTokens ?? 0}
+            />
+            <UsageStat
+              icon={<Search size={15} />}
+              label="Web searches today"
+              value={usage?.today.webSearchCallCount ?? 0}
             />
           </dl>
         </CardContent>
@@ -237,7 +247,7 @@ function UsageView({ usage }: { usage: UsageSummary | undefined }) {
                 value={
                   usage?.budget.monthlySpendLimit === undefined
                     ? undefined
-                    : formatCurrencyAmount(usage.budget.monthlySpendLimit, usage.pricing.currency)
+                    : formatCurrencyAmount(usage.budget.monthlySpendLimit, pricing.currency)
                 }
               />
               <UsageStat
@@ -254,20 +264,32 @@ function UsageView({ usage }: { usage: UsageSummary | undefined }) {
             <CardTitle className="text-base">Configured pricing</CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-2">
-            {usage?.pricing.models.length ? (
+            {pricing.models.length + pricing.webSearch.length > 0 ? (
               <dl className="grid gap-3">
-                {usage.pricing.models.map((price) => (
+                {pricing.models.map((price) => (
                   <UsagePricing
                     key={`${price.providerId}:${price.model}`}
-                    currency={usage.pricing.currency}
                     label={`${price.providerId} / ${price.model}`}
-                    inputPrice={price.inputPricePerMillionTokens}
-                    outputPrice={price.outputPricePerMillionTokens}
+                    detail={`${formatCurrencyAmount(
+                      price.inputPricePerMillionTokens,
+                      pricing.currency
+                    )} in / 1M, ${formatCurrencyAmount(
+                      price.outputPricePerMillionTokens,
+                      pricing.currency
+                    )} out / 1M`}
+                  />
+                ))}
+                {pricing.webSearch.map((price) => (
+                  <UsagePricing
+                    key={`${price.providerId}:${price.model ?? "*"}:web_search`}
+                    icon={<Search size={15} aria-hidden="true" />}
+                    label={`${price.providerId}${price.model ? ` / ${price.model}` : ""} / web_search`}
+                    detail={`${formatCurrencyAmount(price.pricePerCall, pricing.currency)} / search`}
                   />
                 ))}
               </dl>
             ) : (
-              <p className="text-sm text-muted-foreground">No model pricing configured.</p>
+              <p className="text-sm text-muted-foreground">No usage pricing configured.</p>
             )}
           </CardContent>
         </Card>
@@ -311,6 +333,7 @@ function UsageView({ usage }: { usage: UsageSummary | undefined }) {
                   <TableHead>Model</TableHead>
                   <TableHead>Budgeted cost</TableHead>
                   <TableHead>Tokens</TableHead>
+                  <TableHead>Web search</TableHead>
                   <TableHead>Source</TableHead>
                 </TableRow>
               </TableHeader>
@@ -325,6 +348,9 @@ function UsageView({ usage }: { usage: UsageSummary | undefined }) {
                     <TableCell className="whitespace-nowrap text-muted-foreground">
                       {event.totalTokens.toLocaleString()}
                     </TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {event.webSearchCallCount.toLocaleString()}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{event.source}</TableCell>
                   </TableRow>
                 ))}
@@ -337,6 +363,14 @@ function UsageView({ usage }: { usage: UsageSummary | undefined }) {
       </Card>
     </>
   );
+}
+
+function normalizeUsagePricing(usage: UsageSummary | undefined): UsageSummary["pricing"] {
+  return {
+    currency: usage?.pricing.currency ?? "USD",
+    models: usage?.pricing.models ?? [],
+    webSearch: usage?.pricing.webSearch ?? []
+  };
 }
 
 function AuditView({ auditActivities }: { auditActivities: AuditActivity[] }) {
@@ -587,26 +621,21 @@ function UsageStat({
 }
 
 function UsagePricing({
-  currency,
+  icon = <DollarSign size={15} aria-hidden="true" />,
   label,
-  inputPrice,
-  outputPrice
+  detail
 }: {
-  currency: string;
+  icon?: ReactNode;
   label: string;
-  inputPrice: number;
-  outputPrice: number;
+  detail: string;
 }) {
   return (
     <div className="rounded-md border bg-card p-3">
       <dt className="inline-flex items-center gap-2 break-words text-xs text-muted-foreground">
-        <DollarSign size={15} aria-hidden="true" />
+        {icon}
         {label}
       </dt>
-      <dd className="mt-1 text-sm font-medium">
-        {formatCurrencyAmount(inputPrice, currency)} in / 1M,{" "}
-        {formatCurrencyAmount(outputPrice, currency)} out / 1M
-      </dd>
+      <dd className="mt-1 text-sm font-medium">{detail}</dd>
     </div>
   );
 }
@@ -625,7 +654,8 @@ function formatCost(cost: UsageCost | undefined): string {
   if (
     "pricedModelCallCount" in cost &&
     cost.pricedModelCallCount === 0 &&
-    cost.unpricedModelCallCount > 0
+    cost.pricedWebSearchCallCount === 0 &&
+    cost.unpricedModelCallCount + cost.unpricedWebSearchCallCount > 0
   ) {
     return "No price";
   }
@@ -650,6 +680,13 @@ function formatCostDetail(cost: UsageSummary["today"]["cost"] | undefined): stri
     details.push(
       `${cost.unpricedModelCallCount.toLocaleString()} unpriced ${
         cost.unpricedModelCallCount === 1 ? "call" : "calls"
+      }`
+    );
+  }
+  if (cost.unpricedWebSearchCallCount) {
+    details.push(
+      `${cost.unpricedWebSearchCallCount.toLocaleString()} unpriced ${
+        cost.unpricedWebSearchCallCount === 1 ? "web search" : "web searches"
       }`
     );
   }

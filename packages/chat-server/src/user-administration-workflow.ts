@@ -47,6 +47,10 @@ interface DeleteUserIdentityCommand {
   externalUserId: string;
 }
 
+interface DeleteUserCommand {
+  userId: UserId;
+}
+
 interface ResetUserPasswordCommand {
   userId: UserId;
   password: string;
@@ -111,6 +115,34 @@ export class UserAdministrationWorkflow {
     });
     await this.recordUserMutation(actor, context, "user.updated", updated);
     return updated;
+  }
+
+  async deleteUser(
+    actor: AuthenticatedUser,
+    context: RuntimeCallContext,
+    command: DeleteUserCommand
+  ): Promise<UserRecord> {
+    await authorizeGovernanceAction({
+      options: this.options,
+      user: actor,
+      context,
+      requiredRole: "superadmin",
+      auditType: "governance.user_delete_authorized",
+      deniedMessage: "User deletion requires a superadmin role"
+    });
+    if (command.userId === actor.id) {
+      throw new AppError("VALIDATION_FAILED", "Superadmins cannot delete their own user account");
+    }
+
+    const existing = await this.getUserOrThrow(command.userId);
+    await this.requireAtLeastOneRemainingSuperadmin(existing);
+    await this.deleteStandalonePasswordSignIns(existing);
+    const deleted = await this.options.userStore.deleteUser({
+      clientInstanceId: this.options.clientInstanceId,
+      userId: command.userId
+    });
+    await this.recordUserMutation(actor, context, "user.deleted", deleted);
+    return deleted;
   }
 
   async upsertIdentity(
@@ -341,6 +373,39 @@ export class UserAdministrationWorkflow {
 
   private isSuperadmin(user: AuthenticatedUser): boolean {
     return user.roles.includes("superadmin");
+  }
+
+  private async deleteStandalonePasswordSignIns(user: UserRecord): Promise<void> {
+    const deletePasswordSignIn = this.options.standaloneAuth?.deletePasswordSignIn;
+    if (!deletePasswordSignIn) {
+      return;
+    }
+    const passwordIdentities = user.identities.filter(
+      (identity) => identity.authSource === STANDALONE_AUTH_SOURCE
+    );
+    for (const identity of passwordIdentities) {
+      await deletePasswordSignIn({
+        externalUserId: identity.externalUserId
+      });
+    }
+  }
+
+  private async requireAtLeastOneRemainingSuperadmin(deletedUser: UserRecord): Promise<void> {
+    if (!deletedUser.roles.includes("superadmin")) {
+      return;
+    }
+    const users = await this.options.userStore.listUsers({
+      clientInstanceId: this.options.clientInstanceId
+    });
+    const remainingActiveSuperadmin = users.some(
+      (user) =>
+        user.id !== deletedUser.id &&
+        user.status === "active" &&
+        user.roles.includes("superadmin")
+    );
+    if (!remainingActiveSuperadmin) {
+      throw new AppError("VALIDATION_FAILED", "At least one active superadmin must remain");
+    }
   }
 
   private async authorize(

@@ -108,6 +108,80 @@ describe("chat UI conversation controller", () => {
     expect(result.state.activeRun?.lastAppliedSequence).toBe(3);
   });
 
+  it("adds missing completion text without overwriting observed chronology", () => {
+    let state = createControllerStateFromSnapshot(createSnapshot({ lastSequence: 0, text: "" }));
+    for (const observation of [
+      createObservation({
+        sequence: 1,
+        type: "message_delta",
+        payload: {
+          delta: "Ich prüfe kurz die aktuellen offiziellen Regeln."
+        }
+      }),
+      createObservation({
+        sequence: 2,
+        type: "tool_call_started",
+        payload: {
+          toolCallId: "tool_web",
+          toolName: "web_search",
+          input: { query: "Pfand Annahmepflicht" }
+        }
+      }),
+      createObservation({
+        sequence: 3,
+        type: "tool_call_completed",
+        payload: {
+          toolCallId: "tool_web",
+          toolName: "web_search",
+          result: {
+            status: "success",
+            output: { ok: true }
+          },
+          modelOutput: "{\"ok\":true}"
+        }
+      }),
+      createObservation({
+        sequence: 4,
+        type: "message_completed",
+        payload: {
+          message: {
+            id: "msg_assistant",
+            role: "assistant",
+            text: "Ich prüfe kurz die aktuellen offiziellen Regeln.Kurz: Nein.",
+            metadata: {
+              agentRuntime: {
+                version: 1,
+                kind: "assistant_final",
+                runId: "run_1"
+              }
+            }
+          }
+        }
+      })
+    ]) {
+      state = applyRunObservationToControllerState(state, observation).state;
+    }
+
+    expect(state.activeRun?.projection.text).toBe(
+      "Ich prüfe kurz die aktuellen offiziellen Regeln.Kurz: Nein."
+    );
+    expect(state.activeRun?.projection.parts).toEqual([
+      {
+        type: "text",
+        text: "Ich prüfe kurz die aktuellen offiziellen Regeln."
+      },
+      expect.objectContaining({
+        type: "tool_call",
+        toolCallId: "tool_web",
+        state: "output_available"
+      }),
+      {
+        type: "text",
+        text: "Kurz: Nein."
+      }
+    ]);
+  });
+
   it("preserves live text and tool call chronology for active-run rendering", () => {
     let state = createControllerStateFromSnapshot(createSnapshot({ lastSequence: 0, text: "" }));
     for (const observation of [
@@ -168,11 +242,41 @@ describe("chat UI conversation controller", () => {
     ]);
 
     const [message] = toUiMessages([], state.activeRun);
+    expect(message?.metadata).toEqual({ source: "active-run" });
     expect(message?.parts.map((part) => part.type)).toEqual([
       "text",
       "dynamic-tool",
       "text"
     ]);
+  });
+
+  it("renders active-run text when projection parts only contain tools", () => {
+    const snapshot = createSnapshot({ lastSequence: 2, text: "I am checking the uploaded files." });
+    if (!snapshot.activeRun) {
+      throw new Error("Expected active run in test snapshot");
+    }
+    snapshot.activeRun.projection.parts = [
+      {
+        type: "tool_call",
+        toolCallId: "tool_1",
+        toolName: "demo.lookup",
+        input: { query: "files" },
+        state: "input_available"
+      }
+    ];
+    const state = createControllerStateFromSnapshot(snapshot);
+
+    const [message] = toUiMessages([], state.activeRun);
+
+    expect(message?.metadata).toEqual({ source: "active-run" });
+    expect(message?.parts.map((part) => part.type)).toEqual([
+      "dynamic-tool",
+      "text"
+    ]);
+    expect(message?.parts.at(-1)).toMatchObject({
+      type: "text",
+      text: "I am checking the uploaded files."
+    });
   });
 
   it("keeps a newer local active-run projection when a stale same-run snapshot arrives", () => {
@@ -201,7 +305,18 @@ describe("chat UI conversation controller", () => {
   });
 
   it("keeps failed terminal run state visible across snapshot refresh", () => {
-    const state = createControllerStateFromSnapshot(createSnapshot({ lastSequence: 2, text: "Partial answer" }));
+    const state = applyRunObservationToControllerState(
+      createControllerStateFromSnapshot(createSnapshot({ lastSequence: 1, text: "Partial answer" })),
+      createObservation({
+        sequence: 2,
+        type: "tool_call_started",
+        payload: {
+          toolCallId: "tool_stuck",
+          toolName: "demo.lookup",
+          input: { query: "stuck" }
+        }
+      })
+    ).state;
     const failed = applyRunObservationToControllerState(
       state,
       createObservation({
@@ -228,6 +343,14 @@ describe("chat UI conversation controller", () => {
       class: "run_failed",
       message: "Model provider failed"
     });
+
+    const [message] = toUiMessages([], refreshed.activeRun);
+    expect(message?.parts).toContainEqual(expect.objectContaining({
+      type: "dynamic-tool",
+      toolCallId: "tool_stuck",
+      state: "output-error",
+      errorText: "Model provider failed"
+    }));
   });
 
   it("keeps cancelled terminal run state visible across snapshot refresh", () => {
