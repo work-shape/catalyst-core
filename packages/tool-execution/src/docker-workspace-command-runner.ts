@@ -9,6 +9,7 @@ import {
 } from "./workspace-command-executor";
 
 const SANDBOX_ENV_KEYS = new Set(["HOME", "PATH", "TMPDIR", "WORKSPACE_DIR"]);
+const DEFAULT_DOCKER_WORKSPACE_COMMAND_MEMORY_BYTES = 2 * 1024 * 1024 * 1024;
 
 export interface DockerWorkspaceCommandProcessExecutorOptions {
   image: string;
@@ -66,7 +67,7 @@ export class DockerWorkspaceCommandProcessExecutor implements WorkspaceCommandPr
       networkMode: options.networkMode ?? "none",
       readOnlyRootFilesystem: options.readOnlyRootFilesystem ?? true,
       cpuCount: options.cpuCount ?? 1,
-      memoryBytes: options.memoryBytes ?? 512 * 1024 * 1024,
+      memoryBytes: options.memoryBytes ?? DEFAULT_DOCKER_WORKSPACE_COMMAND_MEMORY_BYTES,
       pidsLimit: options.pidsLimit ?? 128,
       containerNamePrefix: options.containerNamePrefix ?? "catalyst-workspace-command",
       commandClient:
@@ -135,7 +136,7 @@ export function createDockerRunInvocation(
     "--cpus",
     String(options.cpuCount ?? 1),
     "--memory",
-    String(options.memoryBytes ?? 512 * 1024 * 1024),
+    String(options.memoryBytes ?? DEFAULT_DOCKER_WORKSPACE_COMMAND_MEMORY_BYTES),
     "--pids-limit",
     String(options.pidsLimit ?? 128),
     "--cap-drop",

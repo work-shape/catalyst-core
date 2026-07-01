@@ -17,6 +17,8 @@ import type {
 } from "@vivd-catalyst/core";
 import { localizationConfigSchema, localizedStringSchema } from "./localization";
 
+const DEFAULT_EXECUTION_WORKSPACE_MEMORY_BYTES = 2 * 1024 * 1024 * 1024;
+
 export const userIdentitySchema = z.object({
   id: z.string().min(1).default("dev-user"),
   externalUserId: z.string().min(1).default("dev-user"),
@@ -337,7 +339,7 @@ export const executionWorkspacesConfigSchema = z
         networkMode: z.literal("none").default("none"),
         readOnlyRootFilesystem: z.boolean().default(true),
         cpuCount: z.number().positive().default(1),
-        memoryBytes: z.number().int().positive().default(512 * 1024 * 1024),
+        memoryBytes: z.number().int().positive().default(DEFAULT_EXECUTION_WORKSPACE_MEMORY_BYTES),
         pidsLimit: z.number().int().positive().default(128)
       })
       .default({
@@ -346,7 +348,7 @@ export const executionWorkspacesConfigSchema = z
         networkMode: "none",
         readOnlyRootFilesystem: true,
         cpuCount: 1,
-        memoryBytes: 512 * 1024 * 1024,
+        memoryBytes: DEFAULT_EXECUTION_WORKSPACE_MEMORY_BYTES,
         pidsLimit: 128
       }),
     command: z
@@ -429,7 +431,7 @@ export const executionWorkspacesConfigSchema = z
       networkMode: "none",
       readOnlyRootFilesystem: true,
       cpuCount: 1,
-      memoryBytes: 512 * 1024 * 1024,
+      memoryBytes: DEFAULT_EXECUTION_WORKSPACE_MEMORY_BYTES,
       pidsLimit: 128
     },
     command: {

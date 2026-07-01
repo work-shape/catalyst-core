@@ -12,6 +12,8 @@ describe("execution workspaces config", () => {
         mode: "docker",
         networkMode: "none",
         readOnlyRootFilesystem: true,
+        cpuCount: 1,
+        memoryBytes: 2 * 1024 * 1024 * 1024,
         pidsLimit: 128
       },
       command: {
