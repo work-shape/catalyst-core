@@ -33,6 +33,17 @@ export type ArtifactPreviewJobStatus =
   | "failed"
   | "unsupported";
 export type ArtifactPreviewSourceKind = "document" | "presentation";
+export type ArtifactPreviewFailureCode =
+  | "unsupported_type"
+  | "source_missing"
+  | "source_too_large"
+  | "page_limit_exceeded"
+  | "conversion_timeout"
+  | "conversion_failed"
+  | "rasterization_failed"
+  | "storage_failed"
+  | "internal_error"
+  | "stale_lease";
 
 export const DEFAULT_ARTIFACT_PREVIEW_RENDERER = "artifact-preview-worker";
 export const DEFAULT_ARTIFACT_PREVIEW_RENDERER_VERSION = "preview-contract-v1";
@@ -294,6 +305,21 @@ export interface CreateManagedArtifactInput {
   metadata?: JsonObject;
 }
 
+export interface ArtifactPreviewImageArtifactInput {
+  sourceFileId?: ManagedFileId;
+  kind: ManagedArtifactKind;
+  objectKey: string;
+  filename?: string;
+  mimeType: "image/png" | "image/jpeg" | "image/webp";
+  byteSize: number;
+  checksum: string;
+  metadata?: JsonObject;
+  pageNumber?: number;
+  slideNumber?: number;
+  width?: number;
+  height?: number;
+}
+
 export interface EnqueueArtifactPreviewJobInput {
   clientInstanceId: ClientInstanceId;
   conversationId: ConversationId;
@@ -326,6 +352,54 @@ export type WriteArtifactPreviewManifestInput =
       writtenAt?: ISODateString;
     };
 
+export interface ClaimNextArtifactPreviewJobInput {
+  clientInstanceId: ClientInstanceId;
+  workerId: string;
+  leaseToken: string;
+  now: ISODateString;
+  leaseExpiresAt: ISODateString;
+}
+
+export interface CompleteClaimedArtifactPreviewJobInput {
+  clientInstanceId: ClientInstanceId;
+  jobId: string;
+  leaseToken: string;
+  format: ArtifactPreviewImageFormat;
+  pages?: ArtifactPreviewImagePageRef[];
+  previewArtifacts?: ArtifactPreviewImageArtifactInput[];
+  completedAt: ISODateString;
+}
+
+export interface FailClaimedArtifactPreviewJobInput {
+  clientInstanceId: ClientInstanceId;
+  jobId: string;
+  leaseToken: string;
+  errorCode: ArtifactPreviewFailureCode;
+  errorMessage?: string;
+  failedAt: ISODateString;
+  retryAt?: ISODateString;
+}
+
+export interface MarkClaimedArtifactPreviewJobUnsupportedInput {
+  clientInstanceId: ClientInstanceId;
+  jobId: string;
+  leaseToken: string;
+  errorCode?: ArtifactPreviewFailureCode;
+  errorMessage?: string;
+  unsupportedAt: ISODateString;
+}
+
+export interface RecoverStaleArtifactPreviewJobsInput {
+  clientInstanceId: ClientInstanceId;
+  staleLeaseExpiredBefore: ISODateString;
+  recoveredAt: ISODateString;
+  maxAttempts: number;
+  limit: number;
+  errorCode?: ArtifactPreviewFailureCode;
+  errorMessage?: string;
+  retryAt?: ISODateString;
+}
+
 export interface ManagedFileStore {
   createManagedFile(input: CreateManagedFileInput): Promise<ManagedFileRecord>;
   getManagedFile(input: {
@@ -354,6 +428,21 @@ export interface ArtifactPreviewStore {
     clientInstanceId: ClientInstanceId;
     sourceArtifactId: ManagedArtifactId;
   }): Promise<ArtifactPreviewJobRecord | undefined>;
+  claimNextArtifactPreviewJob(
+    input: ClaimNextArtifactPreviewJobInput
+  ): Promise<ArtifactPreviewJobRecord | undefined>;
+  completeClaimedArtifactPreviewJob(
+    input: CompleteClaimedArtifactPreviewJobInput
+  ): Promise<ArtifactPreviewJobRecord>;
+  failClaimedArtifactPreviewJob(
+    input: FailClaimedArtifactPreviewJobInput
+  ): Promise<ArtifactPreviewJobRecord>;
+  markClaimedArtifactPreviewJobUnsupported(
+    input: MarkClaimedArtifactPreviewJobUnsupportedInput
+  ): Promise<ArtifactPreviewJobRecord>;
+  recoverStaleArtifactPreviewJobs(
+    input: RecoverStaleArtifactPreviewJobsInput
+  ): Promise<ArtifactPreviewJobRecord[]>;
   getArtifactPreviewManifest(input: {
     clientInstanceId: ClientInstanceId;
     sourceArtifactId: ManagedArtifactId;

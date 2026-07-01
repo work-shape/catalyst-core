@@ -1,18 +1,19 @@
 import {
   AppError,
-  DEFAULT_ARTIFACT_PREVIEW_RENDERER,
-  DEFAULT_ARTIFACT_PREVIEW_RENDERER_VERSION,
-  DEFAULT_ARTIFACT_PREVIEW_SETTINGS_HASH,
   type ArtifactPreviewJobRecord,
   type ArtifactPreviewManifest,
   type ClientInstanceId,
   type ConversationAttachment,
   type ConversationAttachmentId,
   type ConversationId,
+  type ClaimNextArtifactPreviewJobInput,
+  type CompleteClaimedArtifactPreviewJobInput,
   type EnqueueArtifactPreviewJobInput,
   type CreateManagedArtifactInput,
   type CreateConversationAttachmentInput,
   type CreateManagedFileInput,
+  type FailClaimedArtifactPreviewJobInput,
+  type MarkClaimedArtifactPreviewJobUnsupportedInput,
   type PlatformFileStore,
   type DraftAttachment,
   type ManagedArtifactId,
@@ -22,10 +23,12 @@ import {
   type ManagedFileRecord,
   type ManagedObjectDeletionResult,
   type MessageId,
+  type RecoverStaleArtifactPreviewJobsInput,
   type UpdateConversationAttachmentInput,
   type WriteArtifactPreviewManifestInput,
   createPlatformId
 } from "./index";
+import { InMemoryArtifactPreviewStore } from "./testing-in-memory-artifact-preview-store";
 
 export type InMemoryPlatformFileStore = PlatformFileStore & {
   deleteAttachmentsForConversation(input: {
@@ -50,10 +53,15 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
   private readonly managedFiles = new Map<string, ManagedFileRecord>();
   private readonly managedArtifacts = new Map<string, ManagedArtifactRecord>();
   private readonly conversationAttachments = new Map<string, ConversationAttachment>();
-  private readonly artifactPreviewJobs = new Map<string, ArtifactPreviewJobRecord>();
-  private readonly artifactPreviewManifests = new Map<string, ArtifactPreviewManifest>();
+  private readonly artifactPreviewStore: InMemoryArtifactPreviewStore;
 
-  constructor(private readonly callbacks: InMemoryFileStoreCallbacks) {}
+  constructor(private readonly callbacks: InMemoryFileStoreCallbacks) {
+    this.artifactPreviewStore = new InMemoryArtifactPreviewStore({
+      managedArtifacts: this.managedArtifacts,
+      requireActiveConversation: (clientInstanceId, conversationId) =>
+        this.callbacks.requireActiveConversation(clientInstanceId, conversationId)
+    });
+  }
 
   async createManagedFile(input: CreateManagedFileInput): Promise<ManagedFileRecord> {
     const file: ManagedFileRecord = {
@@ -135,97 +143,57 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
   async enqueueArtifactPreviewJob(
     input: EnqueueArtifactPreviewJobInput
   ): Promise<ArtifactPreviewJobRecord> {
-    const renderer = input.renderer ?? DEFAULT_ARTIFACT_PREVIEW_RENDERER;
-    const rendererVersion = input.rendererVersion ?? DEFAULT_ARTIFACT_PREVIEW_RENDERER_VERSION;
-    const settingsHash = input.settingsHash ?? DEFAULT_ARTIFACT_PREVIEW_SETTINGS_HASH;
-    const key = artifactPreviewJobKey({
-      clientInstanceId: input.clientInstanceId,
-      sourceArtifactId: input.sourceArtifactId,
-      renderer,
-      rendererVersion,
-      settingsHash
-    });
-    const existing = this.artifactPreviewJobs.get(key);
-    if (existing) {
-      return existing;
-    }
-    const now = input.queuedAt ?? new Date().toISOString();
-    const job: ArtifactPreviewJobRecord = {
-      id: createPlatformId("apj"),
-      clientInstanceId: input.clientInstanceId,
-      conversationId: input.conversationId,
-      sourceArtifactId: input.sourceArtifactId,
-      sourceChecksum: input.sourceChecksum,
-      sourceMimeType: input.sourceMimeType,
-      renderer,
-      rendererVersion,
-      settingsHash,
-      status: "pending",
-      attempts: 0,
-      nextAttemptAt: now,
-      createdAt: now,
-      updatedAt: now
-    };
-    this.artifactPreviewJobs.set(key, job);
-    return job;
+    return this.artifactPreviewStore.enqueueArtifactPreviewJob(input);
   }
 
   async getArtifactPreviewJob(input: {
     clientInstanceId: ClientInstanceId;
     sourceArtifactId: ManagedArtifactId;
   }): Promise<ArtifactPreviewJobRecord | undefined> {
-    return [...this.artifactPreviewJobs.values()]
-      .filter(
-        (job) =>
-          job.clientInstanceId === input.clientInstanceId &&
-          job.sourceArtifactId === input.sourceArtifactId
-      )
-      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+    return this.artifactPreviewStore.getArtifactPreviewJob(input);
+  }
+
+  async claimNextArtifactPreviewJob(
+    input: ClaimNextArtifactPreviewJobInput
+  ): Promise<ArtifactPreviewJobRecord | undefined> {
+    return this.artifactPreviewStore.claimNextArtifactPreviewJob(input);
+  }
+
+  async completeClaimedArtifactPreviewJob(
+    input: CompleteClaimedArtifactPreviewJobInput
+  ): Promise<ArtifactPreviewJobRecord> {
+    return this.artifactPreviewStore.completeClaimedArtifactPreviewJob(input);
+  }
+
+  async failClaimedArtifactPreviewJob(
+    input: FailClaimedArtifactPreviewJobInput
+  ): Promise<ArtifactPreviewJobRecord> {
+    return this.artifactPreviewStore.failClaimedArtifactPreviewJob(input);
+  }
+
+  async markClaimedArtifactPreviewJobUnsupported(
+    input: MarkClaimedArtifactPreviewJobUnsupportedInput
+  ): Promise<ArtifactPreviewJobRecord> {
+    return this.artifactPreviewStore.markClaimedArtifactPreviewJobUnsupported(input);
+  }
+
+  async recoverStaleArtifactPreviewJobs(
+    input: RecoverStaleArtifactPreviewJobsInput
+  ): Promise<ArtifactPreviewJobRecord[]> {
+    return this.artifactPreviewStore.recoverStaleArtifactPreviewJobs(input);
   }
 
   async getArtifactPreviewManifest(input: {
     clientInstanceId: ClientInstanceId;
     sourceArtifactId: ManagedArtifactId;
   }): Promise<ArtifactPreviewManifest | undefined> {
-    const manifest = this.artifactPreviewManifests.get(
-      artifactPreviewKey(input.clientInstanceId, input.sourceArtifactId)
-    );
-    return manifest?.clientInstanceId === input.clientInstanceId ? manifest : undefined;
+    return this.artifactPreviewStore.getArtifactPreviewManifest(input);
   }
 
   async writeArtifactPreviewManifest(
     input: WriteArtifactPreviewManifestInput
   ): Promise<ArtifactPreviewManifest> {
-    const existing = await this.getArtifactPreviewManifest(input);
-    const writtenAt = input.writtenAt ?? new Date().toISOString();
-    const manifest: ArtifactPreviewManifest =
-      input.status === "ready"
-        ? {
-            status: "ready",
-            clientInstanceId: input.clientInstanceId,
-            conversationId: input.conversationId,
-            sourceArtifactId: input.sourceArtifactId,
-            type: "image_pages",
-            format: input.format,
-            pageCount: input.pages.length,
-            pages: input.pages,
-            createdAt: existing?.createdAt ?? writtenAt,
-            updatedAt: writtenAt
-          }
-        : {
-            status: input.status,
-            clientInstanceId: input.clientInstanceId,
-            conversationId: input.conversationId,
-            sourceArtifactId: input.sourceArtifactId,
-            ...(input.errorCode ? { errorCode: input.errorCode } : {}),
-            createdAt: existing?.createdAt ?? writtenAt,
-            updatedAt: writtenAt
-          };
-    this.artifactPreviewManifests.set(
-      artifactPreviewKey(input.clientInstanceId, input.sourceArtifactId),
-      manifest
-    );
-    return manifest;
+    return this.artifactPreviewStore.writeArtifactPreviewManifest(input);
   }
 
   async createConversationAttachment(
@@ -546,7 +514,7 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
         deletedAt: input.deletedAt
       });
     }
-    this.deleteArtifactPreviewStateForConversation(input);
+    this.artifactPreviewStore.deletePreviewStateForConversation(input);
 
     return {
       attachmentCount: attachments.length,
@@ -641,29 +609,7 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
         });
       }
     }
-    this.deleteArtifactPreviewStateForConversation(input);
-  }
-
-  private deleteArtifactPreviewStateForConversation(input: {
-    clientInstanceId: ClientInstanceId;
-    conversationId: ConversationId;
-  }): void {
-    for (const [key, job] of this.artifactPreviewJobs.entries()) {
-      if (
-        job.clientInstanceId === input.clientInstanceId &&
-        job.conversationId === input.conversationId
-      ) {
-        this.artifactPreviewJobs.delete(key);
-      }
-    }
-    for (const [key, manifest] of this.artifactPreviewManifests.entries()) {
-      if (
-        manifest.clientInstanceId === input.clientInstanceId &&
-        manifest.conversationId === input.conversationId
-      ) {
-        this.artifactPreviewManifests.delete(key);
-      }
-    }
+    this.artifactPreviewStore.deletePreviewStateForConversation(input);
   }
 
   private requireClaimedAttachment(input: {
@@ -716,24 +662,4 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
 
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values)];
-}
-
-function artifactPreviewKey(clientInstanceId: ClientInstanceId, artifactId: ManagedArtifactId): string {
-  return `${clientInstanceId}:${artifactId}`;
-}
-
-function artifactPreviewJobKey(input: {
-  clientInstanceId: ClientInstanceId;
-  sourceArtifactId: ManagedArtifactId;
-  renderer: string;
-  rendererVersion: string;
-  settingsHash: string;
-}): string {
-  return JSON.stringify([
-    input.clientInstanceId,
-    input.sourceArtifactId,
-    input.renderer,
-    input.rendererVersion,
-    input.settingsHash
-  ]);
 }

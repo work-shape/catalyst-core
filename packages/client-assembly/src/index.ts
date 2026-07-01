@@ -34,6 +34,12 @@ export {
   type CreateClientInstanceWorkspaceCommandWorkerInput
 } from "./workspace-command-worker";
 export {
+  createClientInstanceArtifactPreviewWorker,
+  runClientInstanceArtifactPreviewWorker,
+  type ClientInstanceArtifactPreviewWorker,
+  type CreateClientInstanceArtifactPreviewWorkerInput
+} from "./artifact-preview-worker";
+export {
   createExecutionWorkspaceManagedObjectReader,
   createExecutionWorkspaceSourceAttachmentHandler,
   detectWorkspaceSourceFileFormat,

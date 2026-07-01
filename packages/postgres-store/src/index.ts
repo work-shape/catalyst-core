@@ -469,6 +469,36 @@ export class PostgresPlatformStore
     return this.fileStore.getArtifactPreviewJob(input);
   }
 
+  async claimNextArtifactPreviewJob(
+    input: Parameters<PlatformFileStore["claimNextArtifactPreviewJob"]>[0]
+  ) {
+    return this.fileStore.claimNextArtifactPreviewJob(input);
+  }
+
+  async completeClaimedArtifactPreviewJob(
+    input: Parameters<PlatformFileStore["completeClaimedArtifactPreviewJob"]>[0]
+  ) {
+    return this.fileStore.completeClaimedArtifactPreviewJob(input);
+  }
+
+  async failClaimedArtifactPreviewJob(
+    input: Parameters<PlatformFileStore["failClaimedArtifactPreviewJob"]>[0]
+  ) {
+    return this.fileStore.failClaimedArtifactPreviewJob(input);
+  }
+
+  async markClaimedArtifactPreviewJobUnsupported(
+    input: Parameters<PlatformFileStore["markClaimedArtifactPreviewJobUnsupported"]>[0]
+  ) {
+    return this.fileStore.markClaimedArtifactPreviewJobUnsupported(input);
+  }
+
+  async recoverStaleArtifactPreviewJobs(
+    input: Parameters<PlatformFileStore["recoverStaleArtifactPreviewJobs"]>[0]
+  ) {
+    return this.fileStore.recoverStaleArtifactPreviewJobs(input);
+  }
+
   async getArtifactPreviewManifest(
     input: Parameters<PlatformFileStore["getArtifactPreviewManifest"]>[0]
   ) {

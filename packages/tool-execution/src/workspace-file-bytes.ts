@@ -40,6 +40,10 @@ export interface WorkspaceObjectStorage {
   deleteObject?(key: string): Promise<void>;
 }
 
+export interface DeletableWorkspaceObjectStorage extends WorkspaceObjectStorage {
+  deleteObject(key: string): Promise<void>;
+}
+
 export interface WorkspaceFileObjectKeyFactory {
   createWorkspaceFileObjectKey(input: WorkspaceFileObjectKeyInput): string;
 }
@@ -66,6 +70,12 @@ export function createLocalWorkspaceFileByteStore(input: {
     input.rootDirectory,
     input.keyFactory ?? DEFAULT_WORKSPACE_FILE_OBJECT_KEY_FACTORY
   );
+}
+
+export function createLocalWorkspaceObjectStorage(input: {
+  rootDirectory: string;
+}): DeletableWorkspaceObjectStorage {
+  return new LocalWorkspaceObjectStorage(input.rootDirectory);
 }
 
 export const DEFAULT_WORKSPACE_FILE_OBJECT_KEY_FACTORY: WorkspaceFileObjectKeyFactory = {
@@ -114,13 +124,17 @@ class ObjectStoreWorkspaceFileByteStore implements WorkspaceFileByteStore {
 }
 
 class LocalWorkspaceFileByteStore implements WorkspaceFileByteStore {
+  private readonly objectStorage: LocalWorkspaceObjectStorage;
+
   constructor(
     private readonly rootDirectory: string,
     private readonly keyFactory: WorkspaceFileObjectKeyFactory
-  ) {}
+  ) {
+    this.objectStorage = new LocalWorkspaceObjectStorage(rootDirectory);
+  }
 
   async getObject(key: string): Promise<Uint8Array> {
-    return readFile(this.resolveObjectPath(key));
+    return this.objectStorage.getObject(key);
   }
 
   async putWorkspaceFile(input: PutWorkspaceFileBytesInput): Promise<{ objectKey: string }> {
@@ -128,10 +142,31 @@ class LocalWorkspaceFileByteStore implements WorkspaceFileByteStore {
       ...input,
       byteSize: input.bytes.byteLength
     });
-    const objectPath = this.resolveObjectPath(objectKey);
-    await mkdir(dirname(objectPath), { recursive: true });
-    await writeFile(objectPath, input.bytes);
+    await this.objectStorage.putObject({
+      key: objectKey,
+      body: input.bytes,
+      contentType: input.mimeType
+    });
     return { objectKey };
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    await this.objectStorage.deleteObject(key);
+  }
+}
+
+class LocalWorkspaceObjectStorage implements WorkspaceObjectStorage {
+  constructor(private readonly rootDirectory: string) {}
+
+  async putObject(input: { key: string; body: Uint8Array; contentType?: string }): Promise<void> {
+    const objectPath = this.resolveObjectPath(input.key);
+    await mkdir(dirname(objectPath), { recursive: true });
+    await writeFile(objectPath, input.body);
+    void input.contentType;
+  }
+
+  async getObject(key: string): Promise<Uint8Array> {
+    return readFile(this.resolveObjectPath(key));
   }
 
   async deleteObject(key: string): Promise<void> {
