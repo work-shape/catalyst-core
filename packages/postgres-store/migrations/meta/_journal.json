@@ -64,6 +64,13 @@
       "when": 1782762527653,
       "tag": "0008_familiar_prowler",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1782905396665,
+      "tag": "0009_wealthy_firebrand",
+      "breakpoints": true
     }
   ]
 }

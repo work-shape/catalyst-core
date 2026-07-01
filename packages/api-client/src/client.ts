@@ -376,6 +376,13 @@ export function createApiClient(options: ApiClientOptions) {
           params: { conversationId, artifactId }
         })
       ),
+    conversationArtifactPreview: (conversationId: string, artifactId: string) =>
+      requestJson(
+        apiOperations.getConversationArtifactPreview.buildPath({
+          params: { conversationId, artifactId }
+        }),
+        apiOperations.getConversationArtifactPreview.responseSchema
+      ),
     deleteConversation: (conversationId: string) =>
       unwrapJson(
         generatedSdk.deleteConversation({

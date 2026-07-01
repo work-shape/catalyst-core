@@ -12,6 +12,10 @@ import {
 } from "drizzle-orm/pg-core";
 import type {
   AgentRun,
+  ArtifactPreviewImageFormat,
+  ArtifactPreviewImagePageRef,
+  ArtifactPreviewJobRecord,
+  ArtifactPreviewManifest,
   AuditEvent,
   ChatMessage,
   ConversationAttachment,
@@ -461,6 +465,85 @@ export const managedArtifacts = pgTable(
   ]
 );
 
+export const artifactPreviewJobs = pgTable(
+  "artifact_preview_jobs",
+  {
+    id: text("id").primaryKey(),
+    clientInstanceId: text("client_instance_id").notNull(),
+    conversationId: text("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    sourceArtifactId: text("source_artifact_id")
+      .notNull()
+      .references(() => managedArtifacts.id, { onDelete: "cascade" }),
+    sourceChecksum: text("source_checksum").notNull(),
+    sourceMimeType: text("source_mime_type").notNull(),
+    renderer: text("renderer").notNull(),
+    rendererVersion: text("renderer_version").notNull(),
+    settingsHash: text("settings_hash").notNull(),
+    status: text("status").$type<ArtifactPreviewJobRecord["status"]>().notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
+    leaseOwnerId: text("lease_owner_id"),
+    leaseToken: text("lease_token"),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    uniqueIndex("artifact_preview_jobs_source_settings_idx").on(
+      table.clientInstanceId,
+      table.sourceArtifactId,
+      table.renderer,
+      table.rendererVersion,
+      table.settingsHash
+    ),
+    index("artifact_preview_jobs_queue_idx").on(
+      table.clientInstanceId,
+      table.status,
+      table.nextAttemptAt,
+      table.createdAt
+    ),
+    index("artifact_preview_jobs_conversation_idx").on(
+      table.clientInstanceId,
+      table.conversationId
+    )
+  ]
+);
+
+export const artifactPreviewManifests = pgTable(
+  "artifact_preview_manifests",
+  {
+    clientInstanceId: text("client_instance_id").notNull(),
+    conversationId: text("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    sourceArtifactId: text("source_artifact_id")
+      .notNull()
+      .references(() => managedArtifacts.id, { onDelete: "cascade" }),
+    status: text("status").$type<ArtifactPreviewManifest["status"]>().notNull(),
+    type: text("type").$type<"image_pages">(),
+    format: text("format").$type<ArtifactPreviewImageFormat>(),
+    pageCount: integer("page_count").notNull().default(0),
+    pages: jsonb("pages").$type<ArtifactPreviewImagePageRef[]>().notNull().default([]),
+    errorCode: text("error_code"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    primaryKey({
+      name: "artifact_preview_manifests_pk",
+      columns: [table.clientInstanceId, table.sourceArtifactId]
+    }),
+    index("artifact_preview_manifests_conversation_idx").on(
+      table.clientInstanceId,
+      table.conversationId
+    )
+  ]
+);
+
 export const auditEvents = pgTable(
   "audit_events",
   {
@@ -518,6 +601,8 @@ export const schema = {
   executionWorkspaceFiles,
   managedFiles,
   managedArtifacts,
+  artifactPreviewJobs,
+  artifactPreviewManifests,
   conversationAttachments,
   auditEvents,
   modelUsageEvents

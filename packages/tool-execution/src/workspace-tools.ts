@@ -20,6 +20,7 @@ import {
   isAppError
 } from "@vivd-catalyst/core";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
+import { enqueueArtifactPreviewJobForPromotedArtifact } from "./artifact-preview-jobs";
 import type { WorkspaceFileByteStore, WorkspaceObjectStore } from "./workspace-file-bytes";
 import {
   emitWorkspaceCommandTelemetry,
@@ -75,6 +76,7 @@ export type WorkspaceToolStore = Pick<
   | "ensureExecutionWorkspace" | "listWorkspaceFiles" | "upsertWorkspaceFile"
   | "enqueueWorkspaceCommand" | "getWorkspaceCommand" | "requestWorkspaceCommandCancellation"
   | "countActiveWorkspaceCommands" | "createManagedArtifact"
+  | "enqueueArtifactPreviewJob"
 >;
 
 export interface WorkspaceSourceFileReader {
@@ -384,6 +386,7 @@ export class WorkspaceCommandService {
         workspacePath: file.value.file.path
       }
     });
+    await enqueueArtifactPreviewJobForPromotedArtifact(this.store, artifact);
     await this.markFilePromoted(file.value.file, {
       artifactId: artifact.id,
       kind: artifact.kind,

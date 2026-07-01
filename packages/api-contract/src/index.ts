@@ -201,6 +201,51 @@ export const retryDraftAttachmentResponseSchema = draftAttachmentUploadResponseS
 export type DraftAttachment = z.infer<typeof draftAttachmentSchema>;
 export type DraftAttachmentUploadResponse = z.infer<typeof draftAttachmentUploadResponseSchema>;
 
+export const artifactPreviewImagePageSchema = z.object({
+  artifactId: z.string(),
+  mimeType: z.enum(["image/png", "image/jpeg", "image/webp"]),
+  filename: z.string().optional(),
+  pageNumber: z.number().int().positive().optional(),
+  slideNumber: z.number().int().positive().optional(),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional()
+});
+
+export const artifactPreviewPendingResponseSchema = z.object({
+  status: z.literal("pending"),
+  artifactId: z.string(),
+  queuedAt: z.string().optional()
+});
+
+export const artifactPreviewReadyResponseSchema = z.object({
+  status: z.literal("ready"),
+  artifactId: z.string(),
+  type: z.literal("image_pages"),
+  format: z.enum(["png", "webp", "jpeg"]),
+  pages: z.array(artifactPreviewImagePageSchema)
+});
+
+export const artifactPreviewFailedResponseSchema = z.object({
+  status: z.literal("failed"),
+  artifactId: z.string(),
+  errorCode: z.string().optional()
+});
+
+export const artifactPreviewUnsupportedResponseSchema = z.object({
+  status: z.literal("unsupported"),
+  artifactId: z.string(),
+  errorCode: z.string().optional()
+});
+
+export const artifactPreviewResponseSchema = z.discriminatedUnion("status", [
+  artifactPreviewPendingResponseSchema,
+  artifactPreviewReadyResponseSchema,
+  artifactPreviewFailedResponseSchema,
+  artifactPreviewUnsupportedResponseSchema
+]);
+
+export type ArtifactPreviewResponse = z.infer<typeof artifactPreviewResponseSchema>;
+
 export const clientBrandingSchema = z.object({
   localization: localizationSchema,
   clientName: z.string(),
@@ -942,6 +987,12 @@ export const apiOperations = {
     operationId: "getConversationArtifactContent",
     method: "GET",
     path: "/api/conversations/:conversationId/artifacts/:artifactId/content"
+  }),
+  getConversationArtifactPreview: defineJsonApiOperation({
+    operationId: "getConversationArtifactPreview",
+    method: "GET",
+    path: "/api/conversations/:conversationId/artifacts/:artifactId/preview",
+    responseSchema: artifactPreviewResponseSchema
   }),
   listAuditEvents: defineJsonApiOperation({
     operationId: "listAuditEvents",

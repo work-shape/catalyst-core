@@ -2,11 +2,17 @@ import { and, asc, desc, eq, inArray, isNull, ne, sql as drizzleSql } from "driz
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import {
   AppError,
+  DEFAULT_ARTIFACT_PREVIEW_RENDERER,
+  DEFAULT_ARTIFACT_PREVIEW_RENDERER_VERSION,
+  DEFAULT_ARTIFACT_PREVIEW_SETTINGS_HASH,
+  type ArtifactPreviewJobRecord,
+  type ArtifactPreviewManifest,
   type ClientInstanceId,
   type ConversationAttachment,
   type ConversationAttachmentId,
   type ConversationId,
   type CreateConversationAttachmentInput,
+  type EnqueueArtifactPreviewJobInput,
   type CreateManagedArtifactInput,
   type CreateManagedFileInput,
   type PlatformFileStore,
@@ -19,10 +25,24 @@ import {
   type ManagedObjectDeletionResult,
   type MessageId,
   type UpdateConversationAttachmentInput,
+  type WriteArtifactPreviewManifestInput,
   createPlatformId
 } from "@vivd-catalyst/core";
-import { mapConversationAttachment, mapManagedArtifact, mapManagedFile } from "./rows";
-import { conversationAttachments, managedArtifacts, managedFiles, schema } from "./schema";
+import {
+  mapArtifactPreviewJob,
+  mapArtifactPreviewManifest,
+  mapConversationAttachment,
+  mapManagedArtifact,
+  mapManagedFile
+} from "./rows";
+import {
+  artifactPreviewJobs,
+  artifactPreviewManifests,
+  conversationAttachments,
+  managedArtifacts,
+  managedFiles,
+  schema
+} from "./schema";
 
 type PostgresDatabase = PostgresJsDatabase<typeof schema>;
 
@@ -146,6 +166,140 @@ class PostgresPlatformFileStore implements PlatformFileStore {
       .where(and(...where))
       .orderBy(desc(managedArtifacts.createdAt));
     return rows.map(mapManagedArtifact);
+  }
+
+  async enqueueArtifactPreviewJob(
+    input: EnqueueArtifactPreviewJobInput
+  ): Promise<ArtifactPreviewJobRecord> {
+    const now = new Date(input.queuedAt ?? new Date().toISOString());
+    const renderer = input.renderer ?? DEFAULT_ARTIFACT_PREVIEW_RENDERER;
+    const rendererVersion = input.rendererVersion ?? DEFAULT_ARTIFACT_PREVIEW_RENDERER_VERSION;
+    const settingsHash = input.settingsHash ?? DEFAULT_ARTIFACT_PREVIEW_SETTINGS_HASH;
+    const [inserted] = await this.db
+      .insert(artifactPreviewJobs)
+      .values({
+        id: createPlatformId<"ArtifactPreviewJobId">("apj"),
+        clientInstanceId: input.clientInstanceId,
+        conversationId: input.conversationId,
+        sourceArtifactId: input.sourceArtifactId,
+        sourceChecksum: input.sourceChecksum,
+        sourceMimeType: input.sourceMimeType,
+        renderer,
+        rendererVersion,
+        settingsHash,
+        status: "pending",
+        attempts: 0,
+        nextAttemptAt: now,
+        createdAt: now,
+        updatedAt: now
+      })
+      .onConflictDoNothing({
+        target: [
+          artifactPreviewJobs.clientInstanceId,
+          artifactPreviewJobs.sourceArtifactId,
+          artifactPreviewJobs.renderer,
+          artifactPreviewJobs.rendererVersion,
+          artifactPreviewJobs.settingsHash
+        ]
+      })
+      .returning();
+    if (inserted) {
+      return mapArtifactPreviewJob(inserted);
+    }
+
+    const [existing] = await this.db
+      .select()
+      .from(artifactPreviewJobs)
+      .where(
+        and(
+          eq(artifactPreviewJobs.clientInstanceId, input.clientInstanceId),
+          eq(artifactPreviewJobs.sourceArtifactId, input.sourceArtifactId),
+          eq(artifactPreviewJobs.renderer, renderer),
+          eq(artifactPreviewJobs.rendererVersion, rendererVersion),
+          eq(artifactPreviewJobs.settingsHash, settingsHash)
+        )
+      )
+      .limit(1);
+    if (!existing) {
+      throw new AppError("INTERNAL", "Artifact preview job could not be enqueued");
+    }
+    return mapArtifactPreviewJob(existing);
+  }
+
+  async getArtifactPreviewJob(input: {
+    clientInstanceId: ClientInstanceId;
+    sourceArtifactId: ManagedArtifactId;
+  }): Promise<ArtifactPreviewJobRecord | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(artifactPreviewJobs)
+      .where(
+        and(
+          eq(artifactPreviewJobs.clientInstanceId, input.clientInstanceId),
+          eq(artifactPreviewJobs.sourceArtifactId, input.sourceArtifactId)
+        )
+      )
+      .orderBy(desc(artifactPreviewJobs.createdAt))
+      .limit(1);
+    return row ? mapArtifactPreviewJob(row) : undefined;
+  }
+
+  async getArtifactPreviewManifest(input: {
+    clientInstanceId: ClientInstanceId;
+    sourceArtifactId: ManagedArtifactId;
+  }): Promise<ArtifactPreviewManifest | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(artifactPreviewManifests)
+      .where(
+        and(
+          eq(artifactPreviewManifests.clientInstanceId, input.clientInstanceId),
+          eq(artifactPreviewManifests.sourceArtifactId, input.sourceArtifactId)
+        )
+      )
+      .limit(1);
+    return row ? mapArtifactPreviewManifest(row) : undefined;
+  }
+
+  async writeArtifactPreviewManifest(
+    input: WriteArtifactPreviewManifestInput
+  ): Promise<ArtifactPreviewManifest> {
+    const existing = await this.getArtifactPreviewManifest(input);
+    const writtenAt = new Date(input.writtenAt ?? new Date().toISOString());
+    const createdAt = existing ? new Date(existing.createdAt) : writtenAt;
+    const [row] = await this.db
+      .insert(artifactPreviewManifests)
+      .values({
+        clientInstanceId: input.clientInstanceId,
+        conversationId: input.conversationId,
+        sourceArtifactId: input.sourceArtifactId,
+        status: input.status,
+        type: input.status === "ready" ? "image_pages" : null,
+        format: input.status === "ready" ? input.format : null,
+        pageCount: input.status === "ready" ? input.pages.length : 0,
+        pages: input.status === "ready" ? input.pages : [],
+        errorCode: input.status === "ready" ? null : (input.errorCode ?? null),
+        createdAt,
+        updatedAt: writtenAt
+      })
+      .onConflictDoUpdate({
+        target: [
+          artifactPreviewManifests.clientInstanceId,
+          artifactPreviewManifests.sourceArtifactId
+        ],
+        set: {
+          conversationId: input.conversationId,
+          status: input.status,
+          type: input.status === "ready" ? "image_pages" : null,
+          format: input.status === "ready" ? input.format : null,
+          pageCount: input.status === "ready" ? input.pages.length : 0,
+          pages: input.status === "ready" ? input.pages : [],
+          errorCode: input.status === "ready" ? null : (input.errorCode ?? null),
+          updatedAt: writtenAt
+        }
+      })
+      .returning();
+    return mapArtifactPreviewManifest(row);
   }
 
   async createConversationAttachment(
@@ -583,6 +737,22 @@ class PostgresPlatformFileStore implements PlatformFileStore {
             )
           );
       }
+      await tx
+        .delete(artifactPreviewJobs)
+        .where(
+          and(
+            eq(artifactPreviewJobs.clientInstanceId, input.clientInstanceId),
+            eq(artifactPreviewJobs.conversationId, input.conversationId)
+          )
+        );
+      await tx
+        .delete(artifactPreviewManifests)
+        .where(
+          and(
+            eq(artifactPreviewManifests.clientInstanceId, input.clientInstanceId),
+            eq(artifactPreviewManifests.conversationId, input.conversationId)
+          )
+        );
       await tx
         .update(managedArtifacts)
         .set({

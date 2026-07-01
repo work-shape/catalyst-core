@@ -25,6 +25,7 @@ import {
   type WorkspaceCommandPromotedArtifact,
   type WorkspaceFile
 } from "@vivd-catalyst/core";
+import { enqueueArtifactPreviewJobForPromotedArtifact } from "./artifact-preview-jobs";
 import type { WorkspaceCommandResultSource } from "./workspace-tools";
 import type { WorkspaceFileByteStore } from "./workspace-file-bytes";
 import {
@@ -60,6 +61,7 @@ export type WorkspaceCommandRunnerStore = Pick<
   | "failWorkspaceCommand"
   | "cancelClaimedWorkspaceCommand"
   | "createManagedArtifact"
+  | "enqueueArtifactPreviewJob"
 >;
 
 export interface LocalWorkspaceCommandRunnerOptions {
@@ -589,6 +591,7 @@ export class LocalWorkspaceCommandRunner {
           commandId: command.id
         }
       });
+      await enqueueArtifactPreviewJobForPromotedArtifact(this.store, artifact);
       changed.artifactId = artifact.id;
       await this.store.upsertWorkspaceFile({
         clientInstanceId: command.clientInstanceId,

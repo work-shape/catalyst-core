@@ -1589,6 +1589,51 @@ export type GetConversationArtifactContentResponses = {
 
 export type GetConversationArtifactContentResponse = GetConversationArtifactContentResponses[keyof GetConversationArtifactContentResponses];
 
+export type GetConversationArtifactPreviewData = {
+    body?: never;
+    path: {
+        conversationId: string;
+        artifactId: string;
+    };
+    query?: never;
+    url: '/api/conversations/{conversationId}/artifacts/{artifactId}/preview';
+};
+
+export type GetConversationArtifactPreviewResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        status: 'pending';
+        artifactId: string;
+        queuedAt?: string;
+    } | {
+        status: 'ready';
+        artifactId: string;
+        type: 'image_pages';
+        format: 'png' | 'webp' | 'jpeg';
+        pages: Array<{
+            artifactId: string;
+            mimeType: 'image/png' | 'image/jpeg' | 'image/webp';
+            filename?: string;
+            pageNumber?: number;
+            slideNumber?: number;
+            width?: number;
+            height?: number;
+        }>;
+    } | {
+        status: 'failed';
+        artifactId: string;
+        errorCode?: string;
+    } | {
+        status: 'unsupported';
+        artifactId: string;
+        errorCode?: string;
+    };
+};
+
+export type GetConversationArtifactPreviewResponse = GetConversationArtifactPreviewResponses[keyof GetConversationArtifactPreviewResponses];
+
 export type ListAuditEventsData = {
     body?: never;
     path?: never;

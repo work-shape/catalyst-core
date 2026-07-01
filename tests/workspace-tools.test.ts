@@ -653,10 +653,10 @@ describe("workspace tools", () => {
   it("promotes a workspace file as a managed artifact while unpromoted files stay hidden", async () => {
     const harness = await createWorkspaceHarness();
     await harness.putWorkspaceFile({
-      path: "reports/final.pdf",
-      objectKey: "workspace/reports/final.pdf",
-      bytes: "%PDF-preview",
-      mimeType: "application/pdf"
+      path: "reports/final.docx",
+      objectKey: "workspace/reports/final.docx",
+      bytes: "docx-preview",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     });
     await harness.putWorkspaceFile({
       path: "reports/draft.pdf",
@@ -666,10 +666,10 @@ describe("workspace tools", () => {
     });
 
     const promoted = await harness.runTool("workspace.promote_artifact", {
-      path: "reports/final.pdf",
-      kind: "document.pdf",
-      filename: "final.pdf",
-      mimeType: "application/pdf"
+      path: "reports/final.docx",
+      kind: "document.docx",
+      filename: "final.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     });
 
     expect(promoted.status).toBe("success");
@@ -679,18 +679,28 @@ describe("workspace tools", () => {
     expect(promoted.artifacts).toHaveLength(1);
     expect(promoted.artifacts?.[0]).toMatchObject({
       artifactId: promoted.output?.artifactId,
-      kind: "document.pdf",
-      filename: "final.pdf",
-      mimeType: "application/pdf"
+      kind: "document.docx",
+      filename: "final.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     });
     const artifact = await harness.store.getManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       artifactId: promoted.artifacts![0]!.artifactId
     });
     expect(artifact).toMatchObject({
-      kind: "document.pdf",
-      objectKey: "workspace/reports/final.pdf",
-      filename: "final.pdf"
+      kind: "document.docx",
+      objectKey: "workspace/reports/final.docx",
+      filename: "final.docx"
+    });
+    const previewJob = await harness.store.getArtifactPreviewJob({
+      clientInstanceId: harness.clientInstanceId,
+      sourceArtifactId: promoted.artifacts![0]!.artifactId
+    });
+    expect(previewJob).toMatchObject({
+      status: "pending",
+      conversationId: harness.conversation.id,
+      sourceChecksum: "sha256:reports/final.docx",
+      sourceMimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     });
 
     const listed = await harness.runTool("workspace.list_files", {});
@@ -705,11 +715,11 @@ describe("workspace tools", () => {
         promotedArtifacts: undefined
       }),
       expect.objectContaining({
-        path: "reports/final.pdf",
+        path: "reports/final.docx",
         promotedArtifacts: [
           expect.objectContaining({
             artifactId: promoted.output?.artifactId,
-            kind: "document.pdf"
+            kind: "document.docx"
           })
         ]
       })

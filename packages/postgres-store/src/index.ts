@@ -459,6 +459,28 @@ export class PostgresPlatformStore
     return this.fileStore.listManagedArtifactsForFile(input);
   }
 
+  async enqueueArtifactPreviewJob(
+    input: Parameters<PlatformFileStore["enqueueArtifactPreviewJob"]>[0]
+  ) {
+    return this.fileStore.enqueueArtifactPreviewJob(input);
+  }
+
+  async getArtifactPreviewJob(input: Parameters<PlatformFileStore["getArtifactPreviewJob"]>[0]) {
+    return this.fileStore.getArtifactPreviewJob(input);
+  }
+
+  async getArtifactPreviewManifest(
+    input: Parameters<PlatformFileStore["getArtifactPreviewManifest"]>[0]
+  ) {
+    return this.fileStore.getArtifactPreviewManifest(input);
+  }
+
+  async writeArtifactPreviewManifest(
+    input: Parameters<PlatformFileStore["writeArtifactPreviewManifest"]>[0]
+  ) {
+    return this.fileStore.writeArtifactPreviewManifest(input);
+  }
+
   async createConversationAttachment(
     input: Parameters<PlatformFileStore["createConversationAttachment"]>[0]
   ) {

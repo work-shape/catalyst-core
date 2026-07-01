@@ -24,6 +24,75 @@ export type SupportedImageMimeType =
   | "image/webp"
   | "image/gif";
 
+export type ArtifactPreviewImageFormat = "png" | "jpeg" | "webp";
+export type ArtifactPreviewStatus = "pending" | "ready" | "failed" | "unsupported";
+export type ArtifactPreviewJobStatus =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "unsupported";
+export type ArtifactPreviewSourceKind = "document" | "presentation";
+
+export const DEFAULT_ARTIFACT_PREVIEW_RENDERER = "artifact-preview-worker";
+export const DEFAULT_ARTIFACT_PREVIEW_RENDERER_VERSION = "preview-contract-v1";
+export const DEFAULT_ARTIFACT_PREVIEW_SETTINGS_HASH = "default-image-pages-v1";
+
+export interface ArtifactPreviewImagePageRef {
+  artifactId: ManagedArtifactId;
+  mimeType: "image/png" | "image/jpeg" | "image/webp";
+  filename?: string;
+  pageNumber?: number;
+  slideNumber?: number;
+  width?: number;
+  height?: number;
+}
+
+export type ArtifactPreviewManifest =
+  | {
+      status: "ready";
+      clientInstanceId: ClientInstanceId;
+      conversationId: ConversationId;
+      sourceArtifactId: ManagedArtifactId;
+      type: "image_pages";
+      format: ArtifactPreviewImageFormat;
+      pageCount: number;
+      pages: ArtifactPreviewImagePageRef[];
+      createdAt: ISODateString;
+      updatedAt: ISODateString;
+    }
+  | {
+      status: "failed" | "unsupported";
+      clientInstanceId: ClientInstanceId;
+      conversationId: ConversationId;
+      sourceArtifactId: ManagedArtifactId;
+      errorCode?: string;
+      createdAt: ISODateString;
+      updatedAt: ISODateString;
+    };
+
+export interface ArtifactPreviewJobRecord {
+  id: string;
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  sourceArtifactId: ManagedArtifactId;
+  sourceChecksum: string;
+  sourceMimeType: string;
+  renderer: string;
+  rendererVersion: string;
+  settingsHash: string;
+  status: ArtifactPreviewJobStatus;
+  attempts: number;
+  nextAttemptAt?: ISODateString;
+  leaseOwnerId?: string;
+  leaseToken?: string;
+  leaseExpiresAt?: ISODateString;
+  errorCode?: string;
+  errorMessage?: string;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+}
+
 export interface ModelVisibleArtifactHint {
   type: "image";
   mimeType: SupportedImageMimeType;
@@ -225,6 +294,38 @@ export interface CreateManagedArtifactInput {
   metadata?: JsonObject;
 }
 
+export interface EnqueueArtifactPreviewJobInput {
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  sourceArtifactId: ManagedArtifactId;
+  sourceChecksum: string;
+  sourceMimeType: string;
+  renderer?: string;
+  rendererVersion?: string;
+  settingsHash?: string;
+  queuedAt?: ISODateString;
+}
+
+export type WriteArtifactPreviewManifestInput =
+  | {
+      status: "ready";
+      clientInstanceId: ClientInstanceId;
+      conversationId: ConversationId;
+      sourceArtifactId: ManagedArtifactId;
+      type: "image_pages";
+      format: ArtifactPreviewImageFormat;
+      pages: ArtifactPreviewImagePageRef[];
+      writtenAt?: ISODateString;
+    }
+  | {
+      status: "failed" | "unsupported";
+      clientInstanceId: ClientInstanceId;
+      conversationId: ConversationId;
+      sourceArtifactId: ManagedArtifactId;
+      errorCode?: string;
+      writtenAt?: ISODateString;
+    };
+
 export interface ManagedFileStore {
   createManagedFile(input: CreateManagedFileInput): Promise<ManagedFileRecord>;
   getManagedFile(input: {
@@ -245,6 +346,21 @@ export interface ManagedArtifactStore {
     fileId: ManagedFileId;
     kind?: ManagedArtifactKind;
   }): Promise<ManagedArtifactRecord[]>;
+}
+
+export interface ArtifactPreviewStore {
+  enqueueArtifactPreviewJob(input: EnqueueArtifactPreviewJobInput): Promise<ArtifactPreviewJobRecord>;
+  getArtifactPreviewJob(input: {
+    clientInstanceId: ClientInstanceId;
+    sourceArtifactId: ManagedArtifactId;
+  }): Promise<ArtifactPreviewJobRecord | undefined>;
+  getArtifactPreviewManifest(input: {
+    clientInstanceId: ClientInstanceId;
+    sourceArtifactId: ManagedArtifactId;
+  }): Promise<ArtifactPreviewManifest | undefined>;
+  writeArtifactPreviewManifest(
+    input: WriteArtifactPreviewManifestInput
+  ): Promise<ArtifactPreviewManifest>;
 }
 
 export interface ConversationAttachmentStore {
@@ -324,4 +440,40 @@ export interface ConversationAttachmentStore {
 export interface PlatformFileStore
   extends ManagedFileStore,
     ManagedArtifactStore,
+    ArtifactPreviewStore,
     ConversationAttachmentStore {}
+
+export function detectArtifactPreviewSourceKind(input: {
+  filename?: string;
+  kind?: string;
+  mimeType?: string;
+}): ArtifactPreviewSourceKind | undefined {
+  const descriptor = `${input.mimeType ?? ""} ${input.kind ?? ""} ${input.filename ?? ""}`.toLowerCase();
+  if (containsOfficePresentationSignal(descriptor)) {
+    return "presentation";
+  }
+  if (containsOfficeDocumentSignal(descriptor)) {
+    return "document";
+  }
+  return undefined;
+}
+
+function containsOfficePresentationSignal(descriptor: string): boolean {
+  return (
+    descriptor.includes("presentationml") ||
+    descriptor.includes("powerpoint") ||
+    hasArtifactPreviewExtension(descriptor, ["pptx", "ppt"])
+  );
+}
+
+function containsOfficeDocumentSignal(descriptor: string): boolean {
+  return (
+    descriptor.includes("wordprocessingml") ||
+    descriptor.includes("msword") ||
+    hasArtifactPreviewExtension(descriptor, ["docx", "doc"])
+  );
+}
+
+function hasArtifactPreviewExtension(descriptor: string, extensions: string[]): boolean {
+  return extensions.some((extension) => new RegExp(`(^|[^a-z0-9])${extension}([^a-z0-9]|$)`, "iu").test(descriptor));
+}

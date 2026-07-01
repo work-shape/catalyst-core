@@ -379,8 +379,8 @@ describe("local workspace command runner", () => {
     const harness = await createRunnerHarness();
 
     const result = await harness.exec({
-      command: "printf '%s' '%PDF-example' > report.pdf",
-      expectedOutputs: [{ path: "report.pdf", kind: "document.pdf", promote: true }]
+      command: "printf '%s' 'pptx-placeholder' > deck.pptx",
+      expectedOutputs: [{ path: "deck.pptx", kind: "presentation.pptx", promote: true }]
     });
 
     expect(result.status).toBe("success");
@@ -390,23 +390,33 @@ describe("local workspace command runner", () => {
     expect(result.artifacts).toHaveLength(1);
     expect(result.output).toMatchObject({
       status: "completed",
-      changedFiles: [expect.objectContaining({ path: "report.pdf", artifactId: expect.any(String) })],
-      promotedArtifacts: [expect.objectContaining({ path: "report.pdf", kind: "document.pdf" })]
+      changedFiles: [expect.objectContaining({ path: "deck.pptx", artifactId: expect.any(String) })],
+      promotedArtifacts: [expect.objectContaining({ path: "deck.pptx", kind: "presentation.pptx" })]
     });
     expect(result.output.changedFiles[0]).not.toHaveProperty("objectKey");
     const workspaceFiles = await harness.store.listWorkspaceFiles({
       clientInstanceId: harness.clientInstanceId,
       workspaceId: asExecutionWorkspaceId(result.output.workspaceId)
     });
-    const reportFile = workspaceFiles.find((file) => file.path === "report.pdf");
-    expect(reportFile).toBeDefined();
+    const deckFile = workspaceFiles.find((file) => file.path === "deck.pptx");
+    expect(deckFile).toBeDefined();
     const artifact = await harness.store.getManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       artifactId: result.output!.promotedArtifacts[0]!.artifactId
     });
     expect(artifact).toMatchObject({
-      kind: "document.pdf",
-      objectKey: reportFile?.objectKey
+      kind: "presentation.pptx",
+      objectKey: deckFile?.objectKey
+    });
+    const previewJob = await harness.store.getArtifactPreviewJob({
+      clientInstanceId: harness.clientInstanceId,
+      sourceArtifactId: result.output!.promotedArtifacts[0]!.artifactId
+    });
+    expect(previewJob).toMatchObject({
+      status: "pending",
+      conversationId: harness.conversation.id,
+      sourceChecksum: deckFile?.checksum,
+      sourceMimeType: artifact?.mimeType
     });
   });
 

@@ -1,6 +1,8 @@
 import {
   AppError,
   type AgentRun,
+  type ArtifactPreviewJobRecord,
+  type ArtifactPreviewManifest,
   type AuditEvent,
   type ChatMessage,
   type ClientInstanceId,
@@ -29,6 +31,8 @@ import {
 import type {
   agentRunObservations,
   agentRuns,
+  artifactPreviewJobs,
+  artifactPreviewManifests,
   auditEvents,
   conversationAttachments,
   conversations,
@@ -44,6 +48,8 @@ import type {
 } from "./schema";
 
 export type AgentRunRow = typeof agentRuns.$inferSelect;
+export type ArtifactPreviewJobRow = typeof artifactPreviewJobs.$inferSelect;
+export type ArtifactPreviewManifestRow = typeof artifactPreviewManifests.$inferSelect;
 export type RunObservationRow = typeof agentRunObservations.$inferSelect;
 export type ConversationRow = typeof conversations.$inferSelect;
 export type MessageRow = typeof messages.$inferSelect;
@@ -242,6 +248,69 @@ export function mapManagedArtifact(row: ManagedArtifactRow | undefined): Managed
     createdAt: row.createdAt.toISOString(),
     deletedAt: row.deletedAt?.toISOString()
   };
+}
+
+export function mapArtifactPreviewJob(row: ArtifactPreviewJobRow | undefined): ArtifactPreviewJobRecord {
+  if (!row) {
+    throw new AppError("INTERNAL", "Expected artifact preview job row");
+  }
+  return {
+    id: row.id,
+    clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    conversationId: asConversationId(row.conversationId),
+    sourceArtifactId: asManagedArtifactId(row.sourceArtifactId),
+    sourceChecksum: row.sourceChecksum,
+    sourceMimeType: row.sourceMimeType,
+    renderer: row.renderer,
+    rendererVersion: row.rendererVersion,
+    settingsHash: row.settingsHash,
+    status: row.status,
+    attempts: row.attempts,
+    nextAttemptAt: row.nextAttemptAt?.toISOString(),
+    leaseOwnerId: row.leaseOwnerId ?? undefined,
+    leaseToken: row.leaseToken ?? undefined,
+    leaseExpiresAt: row.leaseExpiresAt?.toISOString(),
+    errorCode: row.errorCode ?? undefined,
+    errorMessage: row.errorMessage ?? undefined,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString()
+  };
+}
+
+export function mapArtifactPreviewManifest(
+  row: ArtifactPreviewManifestRow | undefined
+): ArtifactPreviewManifest {
+  if (!row) {
+    throw new AppError("INTERNAL", "Expected artifact preview manifest row");
+  }
+  const common = {
+    clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    conversationId: asConversationId(row.conversationId),
+    sourceArtifactId: asManagedArtifactId(row.sourceArtifactId),
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString()
+  };
+  if (row.status === "ready") {
+    if (row.type !== "image_pages" || !row.format) {
+      throw new AppError("INTERNAL", "Ready artifact preview manifest is incomplete");
+    }
+    return {
+      ...common,
+      status: "ready",
+      type: "image_pages",
+      format: row.format,
+      pageCount: row.pageCount,
+      pages: row.pages
+    };
+  }
+  if (row.status === "failed" || row.status === "unsupported") {
+    return {
+      ...common,
+      status: row.status,
+      ...(row.errorCode ? { errorCode: row.errorCode } : {})
+    };
+  }
+  throw new AppError("INTERNAL", "Unsupported artifact preview manifest status");
 }
 
 export function mapConversationAttachment(
