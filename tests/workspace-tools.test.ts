@@ -1069,6 +1069,153 @@ describe("workspace tools", () => {
     expect(JSON.stringify(result)).not.toContain("artifact-previews/private");
   });
 
+  it("canonicalizes unqualified spreadsheet ranges with a single sheet selector", async () => {
+    const harness = await createWorkspaceHarness();
+    const source = await harness.store.createManagedArtifact({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      kind: "spreadsheet.xlsx",
+      objectKey: "execution-workspaces/private/workbook.xlsx",
+      filename: "workbook.xlsx",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      byteSize: 128,
+      checksum: "sha256:workbook"
+    });
+
+    const pending = await harness.runTool("workspace.preview_images", {
+      artifactId: source.id,
+      sheets: ["Summary"],
+      ranges: ["A1:B4"],
+      maxImages: 1
+    });
+    expect(pending.status).toBe("success");
+    if (pending.status !== "success") {
+      throw new Error("Expected pending preview_images result");
+    }
+    expect(pending.output).toMatchObject({
+      artifactId: source.id,
+      status: "pending",
+      images: [],
+      warnings: [expect.objectContaining({ code: "preview_pending" })]
+    });
+
+    const previewBytes = encode("summary-a1-b4-png");
+    harness.objectStore.putObject("artifact-previews/private/workbook-summary-a1-b4.png", previewBytes);
+    const previewRange = await harness.store.createManagedArtifact({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      kind: "spreadsheet.preview_range_image",
+      objectKey: "artifact-previews/private/workbook-summary-a1-b4.png",
+      filename: "workbook-summary-a1-b4.png",
+      mimeType: "image/png",
+      byteSize: previewBytes.byteLength,
+      checksum: "sha256:preview-summary-a1-b4",
+      metadata: {
+        sourceArtifactId: source.id,
+        previewRole: "range",
+        sheet: "Summary",
+        range: "Summary!A1:B4"
+      }
+    });
+    await harness.store.writeArtifactPreviewManifest({
+      status: "ready",
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      sourceArtifactId: source.id,
+      type: "image_pages",
+      format: "png",
+      pages: [
+        {
+          artifactId: previewRange.id,
+          mimeType: "image/png",
+          sheet: "Summary",
+          range: "Summary!A1:B4",
+          width: 400,
+          height: 240
+        }
+      ]
+    });
+
+    const ready = await harness.runTool("workspace.preview_images", {
+      artifactId: source.id,
+      sheets: ["Summary"],
+      ranges: ["A1:B4"],
+      maxImages: 1
+    });
+
+    expect(ready.status).toBe("success");
+    if (ready.status !== "success") {
+      throw new Error("Expected ready preview_images result");
+    }
+    expect(ready.output).toEqual({
+      artifactId: source.id,
+      status: "ready",
+      maxImages: 1,
+      images: [
+        {
+          sourceArtifactId: source.id,
+          imageArtifactId: previewRange.id,
+          mimeType: "image/png",
+          status: "ready",
+          sheet: "Summary",
+          range: "Summary!A1:B4",
+          width: 400,
+          height: 240
+        }
+      ],
+      warnings: []
+    });
+    expect(ready.artifacts).toEqual([
+      expect.objectContaining({
+        artifactId: previewRange.id,
+        modelVisibility: {
+          type: "image",
+          mimeType: "image/png"
+        },
+        metadata: expect.objectContaining({
+          sheet: "Summary",
+          range: "Summary!A1:B4"
+        })
+      })
+    ]);
+  });
+
+  it("rejects selector requests that exceed maxImages before queueing", async () => {
+    const harness = await createWorkspaceHarness();
+    const source = await harness.store.createManagedArtifact({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      kind: "spreadsheet.xlsx",
+      objectKey: "execution-workspaces/private/workbook.xlsx",
+      filename: "workbook.xlsx",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      byteSize: 128,
+      checksum: "sha256:workbook"
+    });
+
+    const result = await harness.runTool("workspace.preview_images", {
+      artifactId: source.id,
+      sheets: ["Summary", "Detail"],
+      ranges: ["Summary!A1:B4", "Detail!A1:B4"],
+      maxImages: 1
+    });
+
+    expect(result.status).toBe("failed");
+    if (result.status !== "failed") {
+      throw new Error("Expected selector validation failure");
+    }
+    expect(result.error).toMatchObject({
+      code: "handler_failed",
+      message: "workspace.preview_images selector count exceeds maxImages"
+    });
+    await expect(
+      harness.store.getArtifactPreviewJob({
+        clientInstanceId: harness.clientInstanceId,
+        sourceArtifactId: source.id
+      })
+    ).resolves.toBeUndefined();
+  });
+
   it("attaches image artifacts directly as model-visible preview images", async () => {
     const harness = await createWorkspaceHarness();
     const image = await harness.store.createManagedArtifact({

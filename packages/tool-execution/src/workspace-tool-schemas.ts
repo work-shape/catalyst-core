@@ -343,7 +343,8 @@ export const workspacePreviewImagesInputJsonSchema: JsonObject = {
       minItems: 1,
       maxItems: DEFAULT_LIMITS.maxPreviewImages,
       items: { type: "string", minLength: 1, maxLength: 160 },
-      description: "Optional XLSX range labels to load when preview metadata has range labels."
+      description:
+        "Optional XLSX ranges to load. Prefer sheet-qualified ranges like `Summary!A1:B4`; unqualified ranges require exactly one `sheets` value."
     },
     maxImages: {
       type: "integer",

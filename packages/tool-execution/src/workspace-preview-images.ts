@@ -79,12 +79,23 @@ export async function resolveWorkspacePreviewImages(
   }
 
   const maxImages = Math.min(input.maxImages ?? options.maxImages, options.maxImages);
-  const selection = normalizeSelection(input);
+  const normalizedInput = normalizePreviewImagesInput(input);
+  if (!normalizedInput.ok) {
+    return failed("handler_failed", normalizedInput.error.message, normalizedInput.error.details);
+  }
+  const selectorCount = countRequestedPreviewImages(normalizedInput.input);
+  if (selectorCount > maxImages) {
+    return failed("handler_failed", "workspace.preview_images selector count exceeds maxImages", {
+      selectorCount,
+      maxImages
+    });
+  }
+  const selection = normalizeSelection(normalizedInput.input);
   const settingsHash = createArtifactPreviewSettingsHash({
-    pages: input.pages,
-    slides: input.slides,
-    sheets: input.sheets,
-    ranges: input.ranges,
+    pages: normalizedInput.input.pages,
+    slides: normalizedInput.input.slides,
+    sheets: normalizedInput.input.sheets,
+    ranges: normalizedInput.input.ranges,
     maxImages
   });
   const warnings: PreviewWarning[] = [];
@@ -457,6 +468,114 @@ function normalizeSelection(input: WorkspacePreviewImagesInput): NormalizedSelec
     ranges,
     hasSelection: Boolean(pageNumbers?.size || slideNumbers?.size || sheets?.size || ranges?.size)
   };
+}
+
+function normalizePreviewImagesInput(
+  input: WorkspacePreviewImagesInput
+):
+  | { ok: true; input: WorkspacePreviewImagesInput }
+  | { ok: false; error: { message: string; details: JsonObject } } {
+  if (!input.ranges?.length) {
+    return { ok: true, input };
+  }
+
+  const canonicalRanges: string[] = [];
+  const rangeSheets = new Set<string>();
+  for (const range of input.ranges) {
+    const parsed = splitSpreadsheetRangeSelector(range);
+    const sheet = parsed.sheet ?? singleSheetSelector(input.sheets);
+    if (!sheet) {
+      return {
+        ok: false,
+        error: {
+          message:
+            "XLSX range selectors must include a sheet name or be paired with exactly one sheet selector",
+          details: {
+            range,
+            sheets: input.sheets ?? [],
+            example: "Summary!A1:B4"
+          }
+        }
+      };
+    }
+    const canonical = `${quoteSpreadsheetSheetName(sheet)}!${parsed.range}`;
+    canonicalRanges.push(canonical);
+    rangeSheets.add(normalizeSelector(sheet));
+  }
+
+  const requestedSheets = input.sheets ? normalizedStringSet(input.sheets) : undefined;
+  const missingRangeSheets = requestedSheets
+    ? [...requestedSheets].filter((sheet) => !rangeSheets.has(sheet))
+    : [];
+  if (missingRangeSheets.length > 0) {
+    return {
+      ok: false,
+      error: {
+        message: "XLSX sheet selectors must match requested range sheets when ranges are provided",
+        details: {
+          sheets: input.sheets ?? [],
+          ranges: input.ranges,
+          missingRangeSheets
+        }
+      }
+    };
+  }
+
+  return {
+    ok: true,
+    input: {
+      ...input,
+      ranges: canonicalRanges
+    }
+  };
+}
+
+function countRequestedPreviewImages(input: WorkspacePreviewImagesInput): number {
+  return Math.max(
+    input.pages?.length ?? 0,
+    input.slides?.length ?? 0,
+    input.ranges?.length ?? input.sheets?.length ?? 0,
+    input.sheets?.length ?? 0
+  );
+}
+
+function splitSpreadsheetRangeSelector(range: string): { sheet?: string; range: string } {
+  const trimmed = range.trim();
+  let inQuotedSheet = false;
+  for (let index = 0; index < trimmed.length; index += 1) {
+    const char = trimmed[index];
+    if (char === "'") {
+      if (inQuotedSheet && trimmed[index + 1] === "'") {
+        index += 1;
+        continue;
+      }
+      inQuotedSheet = !inQuotedSheet;
+      continue;
+    }
+    if (char === "!" && !inQuotedSheet) {
+      return {
+        sheet: unquoteSpreadsheetSheetName(trimmed.slice(0, index)),
+        range: trimmed.slice(index + 1).trim()
+      };
+    }
+  }
+  return { range: trimmed };
+}
+
+function singleSheetSelector(sheets: readonly string[] | undefined): string | undefined {
+  return sheets?.length === 1 ? sheets[0]?.trim() : undefined;
+}
+
+function unquoteSpreadsheetSheetName(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
+    return trimmed.slice(1, -1).replaceAll("''", "'");
+  }
+  return trimmed;
+}
+
+function quoteSpreadsheetSheetName(sheetName: string): string {
+  return /^[A-Za-z0-9_]+$/u.test(sheetName) ? sheetName : `'${sheetName.replaceAll("'", "''")}'`;
 }
 
 function matchesSelection(candidate: PreviewImageCandidate, selection: NormalizedSelection): boolean {
