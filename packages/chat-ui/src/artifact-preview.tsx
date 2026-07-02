@@ -13,154 +13,33 @@ import {
 import { UniverSheetsCorePreset } from "@univerjs/preset-sheets-core";
 import enUS from "@univerjs/preset-sheets-core/locales/en-US";
 import { PptxViewer, RECOMMENDED_ZIP_LIMITS } from "@aiden0z/pptx-renderer";
-import type { ApiClient, ArtifactPreviewResponse } from "@vivd-catalyst/api-client";
+import type { ApiClient } from "@vivd-catalyst/api-client";
 import { renderAsync as renderDocxAsync } from "docx-preview";
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import * as XLSX from "xlsx";
+import {
+  LiveArtifactPreview,
+  shouldUseLiveArtifactPreviewState as shouldUseLiveArtifactPreviewStateValue
+} from "./artifact-preview-live";
+import { ArtifactPreviewFrame, ArtifactPreviewMessage } from "./artifact-preview-shell";
 import { useTranslation } from "./i18n";
-import { cn } from "./ui/cn";
 import { Spinner } from "./ui/spinner";
 import {
   artifactDisplayFilename,
   getArtifactFileType,
   getArtifactPreviewKind,
-  readArtifactImagePagesPreview,
   type ArtifactFileType,
-  type ToolArtifactImagePagesPreview,
   type ToolArtifactDownloadRef
 } from "./tool-artifacts";
 
-export const ARTIFACT_PREVIEW_POLL_DELAYS_MS = [
-  1000,
-  2000,
-  3000,
-  5000,
-  5000,
-  5000,
-  5000,
-  5000
-] as const;
-
-type ReadyArtifactPreview = Extract<ArtifactPreviewResponse, { status: "ready" }>;
-
-export type ArtifactSourceFallbackKind = "image" | "pdf" | "text";
-
-export type ArtifactPreviewView =
-  | {
-      kind: "loading";
-      fallbackKind?: ArtifactSourceFallbackKind;
-    }
-  | {
-      kind: "pending";
-      pollDelayMs?: number;
-      fallbackKind?: ArtifactSourceFallbackKind;
-    }
-  | {
-      kind: "ready";
-      preview: ReadyArtifactPreview;
-      refreshing: boolean;
-      fallbackKind?: ArtifactSourceFallbackKind;
-    }
-  | {
-      kind: "failed" | "unsupported";
-      errorCode?: string;
-      fallbackKind?: ArtifactSourceFallbackKind;
-    }
-  | {
-      kind: "error";
-      fallbackKind?: ArtifactSourceFallbackKind;
-    };
-
-export function artifactPreviewPollDelayMs(input: {
-  status: ArtifactPreviewResponse["status"];
-  pendingAttempt: number;
-}): number | undefined {
-  if (input.status !== "pending") {
-    return undefined;
-  }
-  return ARTIFACT_PREVIEW_POLL_DELAYS_MS[input.pendingAttempt];
-}
-
-export function createArtifactPreviewView(input: {
-  artifact: ToolArtifactDownloadRef;
-  preview?: ArtifactPreviewResponse;
-  refreshing: boolean;
-  apiError: boolean;
-  pendingAttempt: number;
-}): ArtifactPreviewView {
-  const fallbackKind = getArtifactSourceFallbackKind(input.artifact);
-  if (input.apiError) {
-    return { kind: "error", fallbackKind };
-  }
-  if (!input.preview) {
-    return { kind: "loading", fallbackKind };
-  }
-  if (input.preview.status === "ready") {
-    return {
-      kind: "ready",
-      preview: input.preview,
-      refreshing: input.refreshing,
-      fallbackKind
-    };
-  }
-  if (input.preview.status === "pending") {
-    return {
-      kind: "pending",
-      pollDelayMs: artifactPreviewPollDelayMs({
-        status: input.preview.status,
-        pendingAttempt: input.pendingAttempt
-      }),
-      fallbackKind
-    };
-  }
-  return {
-    kind: input.preview.status,
-    errorCode: input.preview.errorCode,
-    fallbackKind
-  };
-}
-
-export function shouldUseLiveArtifactPreviewState(artifact: ToolArtifactDownloadRef): boolean {
-  const previewKind = getArtifactPreviewKind(artifact);
-  return previewKind === "image-pages" || previewKind === "document" || previewKind === "presentation";
-}
-
-export function getArtifactSourceFallbackKind(
-  artifact: ToolArtifactDownloadRef
-): ArtifactSourceFallbackKind | undefined {
-  const descriptor = `${artifact.mimeType ?? ""} ${artifact.kind ?? ""} ${artifact.filename ?? ""}`.toLowerCase();
-  if (
-    descriptor.includes("image/png") ||
-    descriptor.includes("image/jpeg") ||
-    descriptor.includes("image/webp") ||
-    descriptor.includes("image/gif") ||
-    artifactPreviewDescriptorHasExtension(descriptor, ["png", "jpg", "jpeg", "webp", "gif"])
-  ) {
-    return "image";
-  }
-  if (descriptor.includes("application/pdf") || artifactPreviewDescriptorHasExtension(descriptor, ["pdf"])) {
-    return "pdf";
-  }
-  if (
-    descriptor.includes("text/") ||
-    descriptor.includes("application/json") ||
-    descriptor.includes("markdown") ||
-    artifactPreviewDescriptorHasExtension(descriptor, ["txt", "md", "csv", "json", "html", "rtf"])
-  ) {
-    return "text";
-  }
-  return undefined;
-}
-
-function artifactPreviewDescriptorHasExtension(value: string, extensions: string[]): boolean {
-  return extensions.some((extension) =>
-    new RegExp(`\\.${escapeArtifactPreviewRegExp(extension)}(?:\\s|$)`, "iu").test(value)
-  );
-}
-
-function escapeArtifactPreviewRegExp(value: string): string {
-  return value.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-}
+export {
+  ARTIFACT_PREVIEW_POLL_DELAYS_MS,
+  artifactPreviewPollDelayMs,
+  createArtifactPreviewView,
+  getArtifactSourceFallbackKind,
+  shouldUseLiveArtifactPreviewState
+} from "./artifact-preview-live";
+export type { ArtifactPreviewView, ArtifactSourceFallbackKind } from "./artifact-preview-live";
 
 export function ArtifactPreview({
   artifact,
@@ -185,12 +64,15 @@ export function ArtifactPreview({
     );
   }
 
-  if (previewKind === "image-pages") {
-    return <LiveArtifactPreview artifact={artifact} client={client} conversationId={conversationId} fileType={fileType} />;
-  }
-
-  if (shouldUseLiveArtifactPreviewState(artifact)) {
-    return <LiveArtifactPreview artifact={artifact} client={client} conversationId={conversationId} fileType={fileType} />;
+  if (previewKind === "image-pages" || shouldUseLiveArtifactPreviewStateValue(artifact)) {
+    return (
+      <LiveArtifactPreview
+        artifact={artifact}
+        client={client}
+        conversationId={conversationId}
+        fileType={fileType}
+      />
+    );
   }
 
   return (
@@ -202,165 +84,6 @@ export function ArtifactPreview({
       previewKind={previewKind}
     />
   );
-}
-
-function LiveArtifactPreview({
-  artifact,
-  client,
-  conversationId,
-  fileType
-}: {
-  artifact: ToolArtifactDownloadRef;
-  client: ApiClient;
-  conversationId: string;
-  fileType: ArtifactFileType;
-}) {
-  const { t } = useTranslation();
-  const embeddedPreviewKey = artifactPreviewStateKey(artifact.preview);
-  const [state, setState] = useState<{
-    apiError: boolean;
-    pendingAttempt: number;
-    preview?: ArtifactPreviewResponse;
-    refreshing: boolean;
-  }>(() => ({
-    apiError: false,
-    pendingAttempt: 0,
-    preview: artifact.preview,
-    refreshing: Boolean(artifact.preview)
-  }));
-
-  useEffect(() => {
-    let cancelled = false;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-
-    const poll = (pendingAttempt: number) => {
-      setState((current) => ({
-        apiError: false,
-        pendingAttempt,
-        preview: current.preview,
-        refreshing: true
-      }));
-      void client
-        .conversationArtifactPreview(conversationId, artifact.artifactId)
-        .then((preview) => {
-          if (cancelled) {
-            return;
-          }
-          setState({
-            apiError: false,
-            pendingAttempt,
-            preview,
-            refreshing: false
-          });
-          const delay = artifactPreviewPollDelayMs({
-            status: preview.status,
-            pendingAttempt
-          });
-          if (delay !== undefined) {
-            timeout = setTimeout(() => poll(pendingAttempt + 1), delay);
-          }
-        })
-        .catch(() => {
-          if (!cancelled) {
-            setState({
-              apiError: true,
-              pendingAttempt,
-              preview: undefined,
-              refreshing: false
-            });
-          }
-        });
-    };
-
-    setState({
-      apiError: false,
-      pendingAttempt: 0,
-      preview: artifact.preview,
-      refreshing: Boolean(artifact.preview)
-    });
-    poll(0);
-
-    return () => {
-      cancelled = true;
-      if (timeout) {
-        clearTimeout(timeout);
-      }
-    };
-  }, [artifact.artifactId, client, conversationId, embeddedPreviewKey]);
-
-  const view = createArtifactPreviewView({
-    artifact,
-    apiError: state.apiError,
-    pendingAttempt: state.pendingAttempt,
-    preview: state.preview,
-    refreshing: state.refreshing
-  });
-
-  if (view.kind === "ready") {
-    return (
-      <ArtifactPreviewFrame>
-        <ImagePagesArtifactPreview
-          artifact={{ ...artifact, preview: view.preview }}
-          client={client}
-          conversationId={conversationId}
-          fileType={fileType}
-        />
-      </ArtifactPreviewFrame>
-    );
-  }
-
-  if (view.kind === "loading" || view.kind === "pending") {
-    return (
-      <ArtifactPreviewMessage
-        fileType={fileType}
-        title={t("artifactPreviewLoading")}
-        detail={artifactDisplayFilename(artifact)}
-      />
-    );
-  }
-
-  if (view.kind === "failed") {
-    return (
-      <ArtifactPreviewMessage
-        fileType={fileType}
-        title={t("artifactPreviewFailed")}
-        detail={artifactPreviewStatusDetail(artifact, view.errorCode)}
-      />
-    );
-  }
-
-  if (view.kind === "unsupported") {
-    return (
-      <ArtifactPreviewMessage
-        fileType={fileType}
-        title={t("artifactPreviewUnavailable")}
-        detail={artifactPreviewStatusDetail(artifact, view.errorCode)}
-      />
-    );
-  }
-
-  return (
-    <ArtifactPreviewMessage
-      fileType={fileType}
-      title={t("artifactPreviewFailed")}
-      detail={artifactDisplayFilename(artifact)}
-    />
-  );
-}
-
-function artifactPreviewStateKey(preview: ArtifactPreviewResponse | undefined): string {
-  if (!preview) {
-    return "";
-  }
-  if (preview.status !== "ready") {
-    return `${preview.status}:${preview.artifactId}`;
-  }
-  return `${preview.status}:${preview.artifactId}:${preview.pages.map((page) => page.artifactId).join("|")}`;
-}
-
-function artifactPreviewStatusDetail(artifact: ToolArtifactDownloadRef, errorCode: string | undefined): string {
-  const filename = artifactDisplayFilename(artifact);
-  return errorCode ? `${filename}: ${errorCode}` : filename;
 }
 
 function BlobArtifactPreview({
@@ -455,157 +178,6 @@ function BlobArtifactPreview({
       ) : null}
     </ArtifactPreviewFrame>
   );
-}
-
-function ArtifactPreviewFrame({ children }: { children: ReactNode }) {
-  return (
-    <div className="-m-4 h-[calc(100%+2rem)] min-h-[34rem] bg-background lg:-m-5 lg:h-[calc(100%+2.5rem)]">
-      {children}
-    </div>
-  );
-}
-
-function ArtifactPreviewMessage({
-  detail,
-  fileType,
-  title
-}: {
-  detail?: string;
-  fileType: ArtifactFileType;
-  title: string;
-}) {
-  return (
-    <div className="flex min-h-64 items-center justify-center">
-      <div className="max-w-sm rounded-md border bg-card px-4 py-3 text-sm shadow-xs">
-        <div className="flex items-center gap-3">
-          <span
-            className={cn(
-              "grid size-10 shrink-0 place-items-center rounded-md text-xs font-bold text-white",
-              fileType.className
-            )}
-            aria-hidden="true"
-          >
-            {fileType.badge}
-          </span>
-          <div className="min-w-0">
-            <p className="font-medium">{title}</p>
-            {detail ? <p className="mt-1 text-xs text-muted-foreground">{detail}</p> : null}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ImagePagesArtifactPreview({
-  artifact,
-  client,
-  conversationId,
-  fileType
-}: {
-  artifact: ToolArtifactDownloadRef;
-  client: ApiClient;
-  conversationId: string;
-  fileType: ArtifactFileType;
-}) {
-  const { t } = useTranslation();
-  const preview = readArtifactImagePagesPreview(artifact);
-  const [state, setState] = useState<
-    | { status: "loading" }
-    | { status: "ready"; pages: Array<ToolArtifactImagePagesPreview["pages"][number] & { url: string }> }
-    | { status: "failed"; message: string }
-  >({ status: "loading" });
-  const previewKey = preview?.pages.map((page) => page.artifactId).join("|") ?? "";
-
-  useEffect(() => {
-    if (!preview) {
-      setState({ status: "failed", message: t("artifactPreviewUnavailable") });
-      return undefined;
-    }
-
-    let cancelled = false;
-    const objectUrls: string[] = [];
-    setState({ status: "loading" });
-    void Promise.all(
-      preview.pages.map(async (page) => {
-        const blob = await client.conversationArtifactContent(conversationId, page.artifactId);
-        const url = URL.createObjectURL(blob);
-        if (cancelled) {
-          URL.revokeObjectURL(url);
-        }
-        objectUrls.push(url);
-        return { ...page, url };
-      })
-    )
-      .then((pages) => {
-        if (cancelled) {
-          for (const page of pages) {
-            URL.revokeObjectURL(page.url);
-          }
-          return;
-        }
-        setState({ status: "ready", pages });
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          setState({
-            status: "failed",
-            message: error instanceof Error ? error.message : t("artifactPreviewFailed")
-          });
-        }
-      });
-
-    return () => {
-      cancelled = true;
-      for (const url of objectUrls) {
-        URL.revokeObjectURL(url);
-      }
-    };
-  }, [client, conversationId, preview, previewKey, t]);
-
-  if (state.status === "loading") {
-    return (
-      <ArtifactPreviewMessage
-        fileType={fileType}
-        title={t("artifactPreviewLoading")}
-        detail={artifactDisplayFilename(artifact)}
-      />
-    );
-  }
-
-  if (state.status === "failed") {
-    return (
-      <ArtifactPreviewMessage
-        fileType={fileType}
-        title={preview ? t("artifactPreviewFailed") : t("artifactPreviewUnavailable")}
-        detail={state.message}
-      />
-    );
-  }
-
-  return (
-    <div className="chat-scrollbar h-full overflow-auto bg-slate-100">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-6 py-6">
-        {state.pages.map((page, index) => (
-          <img
-            key={page.artifactId}
-            src={page.url}
-            alt={imagePageAltText(artifact, page, index)}
-            className="mx-auto block h-auto w-full rounded-sm bg-white object-contain shadow-sm ring-1 ring-border/70"
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function imagePageAltText(
-  artifact: ToolArtifactDownloadRef,
-  page: ToolArtifactImagePagesPreview["pages"][number],
-  index: number
-): string {
-  const ordinal = page.slideNumber ?? page.pageNumber ?? index + 1;
-  return `${artifactDisplayFilename(artifact)} ${ordinal}`;
 }
 
 function DocumentArtifactPreview({ blob, fileType }: { blob: Blob; fileType: ArtifactFileType }) {
