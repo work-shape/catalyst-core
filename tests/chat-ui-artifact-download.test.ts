@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { createElement } from "../packages/chat-ui/node_modules/react";
+import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
 import type { Message } from "@vivd-catalyst/api-client";
 import {
   asManagedArtifactId,
@@ -17,6 +19,8 @@ import {
   readSurfacedToolArtifactRefs,
   readToolArtifactRefs
 } from "../packages/chat-ui/src/tool-artifacts";
+import { ToolCallPart } from "../packages/chat-ui/src/tool-call";
+import { ToolDisplayPanelProvider } from "../packages/chat-ui/src/tool-display-panel";
 
 describe("chat UI artifact download cards", () => {
   it("surfaces promoted final artifacts on the final assistant message for common formats", () => {
@@ -349,6 +353,7 @@ describe("chat UI artifact download cards", () => {
     };
 
     expect(readSurfacedToolArtifactRefs(internalPreviewResult, "view_document_page")).toEqual([]);
+    expect(readSurfacedToolArtifactRefs(internalPreviewResult, "workspace.preview_images")).toEqual([]);
     expect(readSurfacedToolArtifactRefs(promotedResult, "workspace.promote_artifact")).toEqual([
       {
         artifactId: "art_final_pdf",
@@ -357,6 +362,60 @@ describe("chat UI artifact download cards", () => {
         mimeType: "application/pdf"
       }
     ]);
+  });
+
+  it("does not render preview image artifacts as download cards in expanded tool details", () => {
+    const result = {
+      status: "success",
+      output: {
+        artifactId: "art_source_pdf",
+        status: "ready",
+        maxImages: 1,
+        images: [
+          {
+            sourceArtifactId: "art_source_pdf",
+            imageArtifactId: "art_page_preview",
+            mimeType: "image/png",
+            status: "ready",
+            pageNumber: 1
+          }
+        ],
+        warnings: []
+      },
+      artifacts: [
+        {
+          artifactId: "art_page_preview",
+          kind: "document.preview_page_image",
+          filename: "page-1.png",
+          mimeType: "image/png",
+          modelVisibility: {
+            type: "image",
+            mimeType: "image/png"
+          }
+        }
+      ]
+    };
+
+    const markup = renderToStaticMarkup(
+      createElement(
+        ToolDisplayPanelProvider,
+        null,
+        createElement(ToolCallPart, {
+          toolName: "workspace.preview_images",
+          toolCallId: "call_preview_images",
+          args: { artifactId: "art_source_pdf", pages: [1] },
+          result,
+          isError: true,
+          displayPresentation: "full"
+        } as Parameters<typeof ToolCallPart>[0])
+      )
+    );
+
+    expect(markup).toContain("Preview images");
+    expect(markup).not.toContain("Download");
+    expect(markup).not.toContain("page-1.png");
+    expect(markup).not.toContain("art_page_preview");
+    expect(markup).not.toContain("document.preview_page_image");
   });
 
   it("classifies artifact badge types without proprietary assets", () => {

@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, extname, join } from "node:path";
+import * as XLSX from "xlsx";
 import {
   AppError,
   detectArtifactPreviewSourceKind,
@@ -15,6 +16,7 @@ import {
   type ManagedArtifactRecord,
   type PlatformStore
 } from "@vivd-catalyst/core";
+import { readArtifactPreviewSettingsHash } from "./artifact-preview-settings";
 import type { DeletableWorkspaceObjectStorage } from "./workspace-file-bytes";
 
 const DEFAULT_POLL_INTERVAL_MS = 1000;
@@ -30,6 +32,7 @@ const DEFAULT_CONVERSION_TIMEOUT_MS = 60000;
 const DEFAULT_RASTERIZATION_TIMEOUT_MS = 60000;
 const DEFAULT_PREVIEW_DPI = 144;
 const DEFAULT_OUTPUT_FORMAT: ArtifactPreviewImageFormat = "png";
+const MAX_SPREADSHEET_PREVIEW_CELLS = 5000;
 
 export type ArtifactPreviewWorkerStore = Pick<
   PlatformStore,
@@ -73,6 +76,10 @@ export interface ArtifactPreviewRenderInput {
   filename?: string;
   mimeType: string;
   bytes: Uint8Array;
+  pages?: number[];
+  slides?: number[];
+  sheets?: string[];
+  ranges?: string[];
   maxPages: number;
   previewDpi: number;
   outputFormat: ArtifactPreviewImageFormat;
@@ -86,6 +93,8 @@ export interface ArtifactPreviewRenderedPage {
   mimeType: "image/png" | "image/jpeg" | "image/webp";
   pageNumber?: number;
   slideNumber?: number;
+  sheet?: string;
+  range?: string;
   width?: number;
   height?: number;
 }
@@ -278,12 +287,17 @@ export class ArtifactPreviewWorker {
       return this.failClaimedJob(job, previewFailure("source_too_large", false));
     }
 
+    const renderSettings = readArtifactPreviewSettingsHash(job.settingsHash);
     const rendered = await this.renderer.render({
       sourceKind,
       filename: source.filename,
       mimeType: source.mimeType,
       bytes: sourceBytes,
-      maxPages: this.maxPages,
+      ...(renderSettings.pages ? { pages: renderSettings.pages } : {}),
+      ...(renderSettings.slides ? { slides: renderSettings.slides } : {}),
+      ...(renderSettings.sheets ? { sheets: renderSettings.sheets } : {}),
+      ...(renderSettings.ranges ? { ranges: renderSettings.ranges } : {}),
+      maxPages: Math.min(renderSettings.maxImages ?? this.maxPages, this.maxPages),
       previewDpi: this.previewDpi,
       outputFormat: this.outputFormat,
       conversionTimeoutMs: this.conversionTimeoutMs,
@@ -347,16 +361,17 @@ export class ArtifactPreviewWorker {
           body: page.bytes,
           contentType: page.mimeType
         });
-        const pageNumber = input.sourceKind === "document" ? (page.pageNumber ?? index + 1) : undefined;
+        const pageNumber =
+          input.sourceKind === "document" || input.sourceKind === "pdf"
+            ? (page.pageNumber ?? index + 1)
+            : undefined;
         const slideNumber =
           input.sourceKind === "presentation" ? (page.slideNumber ?? index + 1) : undefined;
         const filename = createPreviewFilename(input.source, input.sourceKind, index + 1, input.rendered.format);
+        const previewRole = previewRoleForPage(input.sourceKind, page);
         previewArtifacts.push({
           sourceFileId: input.source.sourceFileId,
-          kind:
-            input.sourceKind === "document"
-              ? "document.preview_page_image"
-              : "presentation.preview_slide_image",
+          kind: previewArtifactKind(input.sourceKind, page),
           objectKey,
           filename,
           mimeType: page.mimeType,
@@ -364,13 +379,17 @@ export class ArtifactPreviewWorker {
           checksum,
           metadata: {
             sourceArtifactId: input.job.sourceArtifactId,
-            previewRole: input.sourceKind === "document" ? "page" : "slide",
+            previewRole,
             ...(pageNumber ? { pageNumber } : {}),
             ...(slideNumber ? { slideNumber } : {}),
+            ...(page.sheet ? { sheet: page.sheet } : {}),
+            ...(page.range ? { range: page.range } : {}),
             rendererVersion: input.job.rendererVersion
           },
           ...(pageNumber ? { pageNumber } : {}),
           ...(slideNumber ? { slideNumber } : {}),
+          ...(page.sheet ? { sheet: page.sheet } : {}),
+          ...(page.range ? { range: page.range } : {}),
           ...(page.width ? { width: page.width } : {}),
           ...(page.height ? { height: page.height } : {})
         });
@@ -441,10 +460,72 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
     }
     const tempDirectory = await mkdtemp(join(this.tempRootDirectory, "catalyst-artifact-preview-"));
     try {
+      if (input.sourceKind === "spreadsheet") {
+        return await this.renderSpreadsheet(input, tempDirectory);
+      }
       const sourcePath = join(tempDirectory, `source${sourceExtension(input)}`);
       const outputDirectory = join(tempDirectory, "out");
       await mkdir(outputDirectory, { recursive: true });
       await writeFile(sourcePath, input.bytes);
+      const pdfPath =
+        input.sourceKind === "pdf"
+          ? sourcePath
+          : await this.convertToPdf({
+              sourcePath,
+              outputDirectory,
+              timeoutMs: input.conversionTimeoutMs,
+              signal: input.signal
+            });
+      const pageCount = await this.readPageCount({
+        pdfPath,
+        timeoutMs: input.rasterizationTimeoutMs,
+        signal: input.signal
+      });
+      if (pageCount <= 0) {
+        throw previewFailure("page_limit_exceeded", false);
+      }
+      const pageNumbers = rasterPageNumbers(input, pageCount);
+      const pages: ArtifactPreviewRenderedPage[] = [];
+      for (const [index, pageNumber] of pageNumbers.entries()) {
+        const bytes = await this.rasterizePdfPage({
+          input,
+          outputDirectory,
+          pageIndex: index,
+          pageNumber,
+          pdfPath
+        });
+        pages.push({
+          bytes,
+          mimeType: "image/png",
+          ...(input.sourceKind === "document" || input.sourceKind === "pdf"
+            ? { pageNumber }
+            : {}),
+          ...(input.sourceKind === "presentation" ? { slideNumber: pageNumber } : {}),
+          ...readPngDimensions(bytes)
+        });
+      }
+      return { format: "png", pages };
+    } finally {
+      await rm(tempDirectory, { recursive: true, force: true });
+    }
+  }
+
+  private async renderSpreadsheet(
+    input: ArtifactPreviewRenderInput,
+    tempDirectory: string
+  ): Promise<ArtifactPreviewRenderResult> {
+    const workbook = readSpreadsheetWorkbook(input.bytes);
+    const selections = spreadsheetRenderSelections(workbook, input);
+    if (selections.length === 0 || selections.length > input.maxPages) {
+      throw previewFailure("page_limit_exceeded", false);
+    }
+
+    const pages: ArtifactPreviewRenderedPage[] = [];
+    for (const [index, selection] of selections.entries()) {
+      const sourcePath = join(tempDirectory, `spreadsheet-preview-${index + 1}.xlsx`);
+      const outputDirectory = join(tempDirectory, `spreadsheet-out-${index + 1}`);
+      await mkdir(outputDirectory, { recursive: true });
+      await writeFile(sourcePath, createSpreadsheetPreviewWorkbookBytes(workbook, selection));
       const pdfPath = await this.convertToPdf({
         sourcePath,
         outputDirectory,
@@ -456,42 +537,56 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
         timeoutMs: input.rasterizationTimeoutMs,
         signal: input.signal
       });
-      if (pageCount <= 0 || pageCount > input.maxPages) {
+      if (pageCount <= 0) {
         throw previewFailure("page_limit_exceeded", false);
       }
-      const prefix = join(outputDirectory, "page");
-      await runProcess({
-        command: this.pdfToPpmCommand,
-        args: [
-          "-png",
-          "-r",
-          String(input.previewDpi),
-          "-f",
-          "1",
-          "-l",
-          String(pageCount),
-          pdfPath,
-          prefix
-        ],
-        timeoutMs: input.rasterizationTimeoutMs,
-        timeoutCode: "rasterization_failed",
-        failureCode: "rasterization_failed",
-        signal: input.signal
+      const bytes = await this.rasterizePdfPage({
+        input,
+        outputDirectory,
+        pageIndex: index,
+        pageNumber: 1,
+        pdfPath
       });
-      const pages: ArtifactPreviewRenderedPage[] = [];
-      for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
-        const bytes = await readFile(`${prefix}-${pageNumber}.png`);
-        pages.push({
-          bytes,
-          mimeType: "image/png",
-          ...(input.sourceKind === "document" ? { pageNumber } : { slideNumber: pageNumber }),
-          ...readPngDimensions(bytes)
-        });
-      }
-      return { format: "png", pages };
-    } finally {
-      await rm(tempDirectory, { recursive: true, force: true });
+      pages.push({
+        bytes,
+        mimeType: "image/png",
+        sheet: selection.sheetName,
+        ...(selection.metadataRange ? { range: selection.metadataRange } : {}),
+        ...readPngDimensions(bytes)
+      });
     }
+
+    return { format: "png", pages };
+  }
+
+  private async rasterizePdfPage(input: {
+    input: ArtifactPreviewRenderInput;
+    outputDirectory: string;
+    pageIndex: number;
+    pageNumber: number;
+    pdfPath: string;
+  }): Promise<Uint8Array> {
+    const prefix = join(input.outputDirectory, `page-${input.pageIndex + 1}`);
+    await runProcess({
+      command: this.pdfToPpmCommand,
+      args: [
+        "-png",
+        "-singlefile",
+        "-r",
+        String(input.input.previewDpi),
+        "-f",
+        String(input.pageNumber),
+        "-l",
+        String(input.pageNumber),
+        input.pdfPath,
+        prefix
+      ],
+      timeoutMs: input.input.rasterizationTimeoutMs,
+      timeoutCode: "rasterization_failed",
+      failureCode: "rasterization_failed",
+      signal: input.input.signal
+    });
+    return readFile(`${prefix}.png`);
   }
 
   private async convertToPdf(input: {
@@ -645,19 +740,339 @@ function createPreviewFilename(
   format: ArtifactPreviewImageFormat
 ): string {
   const base = basename(source.filename ?? source.id, extname(source.filename ?? source.id));
-  const role = sourceKind === "document" ? "page" : "slide";
+  const role = previewRoleForSourceKind(sourceKind);
   return `${base}-${role}-${position}.${format}`;
 }
 
 function sourceExtension(input: ArtifactPreviewRenderInput): string {
   const extension = extname(input.filename ?? "").toLowerCase();
-  if ([".doc", ".docx", ".ppt", ".pptx"].includes(extension)) {
+  if ([".doc", ".docx", ".ppt", ".pptx", ".pdf", ".xls", ".xlsx", ".ods"].includes(extension)) {
     return extension;
+  }
+  if (input.sourceKind === "pdf" || input.mimeType.includes("pdf")) {
+    return ".pdf";
   }
   if (input.mimeType.includes("presentation") || input.mimeType.includes("powerpoint")) {
     return ".pptx";
   }
+  if (
+    input.sourceKind === "spreadsheet" ||
+    input.mimeType.includes("spreadsheet") ||
+    input.mimeType.includes("excel")
+  ) {
+    return ".xlsx";
+  }
   return ".docx";
+}
+
+function rasterPageNumbers(input: ArtifactPreviewRenderInput, pageCount: number): number[] {
+  const requested = numericRasterSelection(input);
+  if (requested.length > 0) {
+    const selected = requested.filter((pageNumber) => pageNumber <= pageCount);
+    if (selected.length === 0 || selected.length > input.maxPages) {
+      throw previewFailure("page_limit_exceeded", false);
+    }
+    return selected;
+  }
+  if (pageCount > input.maxPages) {
+    throw previewFailure("page_limit_exceeded", false);
+  }
+  return Array.from({ length: pageCount }, (_, index) => index + 1);
+}
+
+function numericRasterSelection(input: ArtifactPreviewRenderInput): number[] {
+  if (input.sourceKind === "presentation") {
+    return input.slides ?? [];
+  }
+  if (input.sourceKind === "document" || input.sourceKind === "pdf") {
+    return input.pages ?? [];
+  }
+  return [];
+}
+
+function previewArtifactKind(
+  sourceKind: ArtifactPreviewSourceKind,
+  page: ArtifactPreviewRenderedPage
+): string {
+  if (sourceKind === "presentation") {
+    return "presentation.preview_slide_image";
+  }
+  if (sourceKind === "spreadsheet") {
+    return page.range ? "spreadsheet.preview_range_image" : "spreadsheet.preview_sheet_image";
+  }
+  return "document.preview_page_image";
+}
+
+function previewRoleForPage(
+  sourceKind: ArtifactPreviewSourceKind,
+  page: ArtifactPreviewRenderedPage
+): string {
+  if (sourceKind === "spreadsheet") {
+    return page.range ? "range" : "sheet";
+  }
+  return previewRoleForSourceKind(sourceKind);
+}
+
+function previewRoleForSourceKind(sourceKind: ArtifactPreviewSourceKind): string {
+  if (sourceKind === "presentation") {
+    return "slide";
+  }
+  if (sourceKind === "spreadsheet") {
+    return "sheet";
+  }
+  return "page";
+}
+
+interface SpreadsheetRenderSelection {
+  sheetName: string;
+  metadataRange?: string;
+  range: XLSX.Range;
+}
+
+function readSpreadsheetWorkbook(bytes: Uint8Array): XLSX.WorkBook {
+  try {
+    return XLSX.read(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength), {
+      cellStyles: true,
+      type: "buffer"
+    });
+  } catch {
+    throw previewFailure("conversion_failed", false);
+  }
+}
+
+function spreadsheetRenderSelections(
+  workbook: XLSX.WorkBook,
+  input: ArtifactPreviewRenderInput
+): SpreadsheetRenderSelection[] {
+  if (input.ranges?.length) {
+    const selections = input.ranges.flatMap((rangeText, index) => {
+      if (input.sheets && input.sheets.length > 1 && input.ranges?.length === 1) {
+        return input.sheets.map((sheetName) =>
+          spreadsheetSelectionFromRange(workbook, rangeText, sheetName)
+        );
+      }
+      return [
+        spreadsheetSelectionFromRange(
+          workbook,
+          rangeText,
+          input.sheets?.[index] ?? input.sheets?.[0]
+        )
+      ];
+    });
+    return selections.slice(0, input.maxPages);
+  }
+
+  if (input.sheets?.length) {
+    return input.sheets
+      .slice(0, input.maxPages)
+      .map((sheetName) => spreadsheetSelectionFromSheet(workbook, sheetName));
+  }
+
+  return workbook.SheetNames.slice(0, input.maxPages).map((sheetName) =>
+    spreadsheetSelectionFromSheet(workbook, sheetName)
+  );
+}
+
+function spreadsheetSelectionFromRange(
+  workbook: XLSX.WorkBook,
+  rangeText: string,
+  fallbackSheetName: string | undefined
+): SpreadsheetRenderSelection {
+  const parsed = splitQualifiedSpreadsheetRange(rangeText);
+  const sheetName = resolveSpreadsheetSheetName(workbook, parsed.sheetName ?? fallbackSheetName);
+  const range = decodeSpreadsheetRange(parsed.rangeText);
+  assertSpreadsheetRangeBounds(range);
+  return {
+    sheetName,
+    metadataRange: formatSpreadsheetRange(sheetName, range),
+    range
+  };
+}
+
+function spreadsheetSelectionFromSheet(
+  workbook: XLSX.WorkBook,
+  requestedSheetName: string
+): SpreadsheetRenderSelection {
+  const sheetName = resolveSpreadsheetSheetName(workbook, requestedSheetName);
+  const worksheet = workbook.Sheets[sheetName];
+  const ref = typeof worksheet?.["!ref"] === "string" ? worksheet["!ref"] : "A1:A1";
+  const range = decodeSpreadsheetRange(ref);
+  assertSpreadsheetRangeBounds(range);
+  return { sheetName, range };
+}
+
+function resolveSpreadsheetSheetName(
+  workbook: XLSX.WorkBook,
+  requestedSheetName: string | undefined
+): string {
+  const name = requestedSheetName?.trim() || workbook.SheetNames[0];
+  const match = workbook.SheetNames.find(
+    (sheetName) => sheetName.toLowerCase() === name?.toLowerCase()
+  );
+  if (!match) {
+    throw previewFailure("conversion_failed", false);
+  }
+  return match;
+}
+
+function splitQualifiedSpreadsheetRange(input: string): { sheetName?: string; rangeText: string } {
+  const trimmed = input.trim();
+  let inQuotedSheet = false;
+  for (let index = 0; index < trimmed.length; index += 1) {
+    const char = trimmed[index];
+    if (char === "'") {
+      if (inQuotedSheet && trimmed[index + 1] === "'") {
+        index += 1;
+        continue;
+      }
+      inQuotedSheet = !inQuotedSheet;
+      continue;
+    }
+    if (char === "!" && !inQuotedSheet) {
+      return {
+        sheetName: unquoteSpreadsheetSheetName(trimmed.slice(0, index)),
+        rangeText: trimmed.slice(index + 1)
+      };
+    }
+  }
+  return { rangeText: trimmed };
+}
+
+function unquoteSpreadsheetSheetName(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
+    return trimmed.slice(1, -1).replaceAll("''", "'");
+  }
+  return trimmed;
+}
+
+function decodeSpreadsheetRange(rangeText: string): XLSX.Range {
+  try {
+    return XLSX.utils.decode_range(rangeText.trim());
+  } catch {
+    throw previewFailure("conversion_failed", false);
+  }
+}
+
+function assertSpreadsheetRangeBounds(range: XLSX.Range): void {
+  const rowCount = range.e.r - range.s.r + 1;
+  const columnCount = range.e.c - range.s.c + 1;
+  if (
+    rowCount <= 0 ||
+    columnCount <= 0 ||
+    rowCount * columnCount > MAX_SPREADSHEET_PREVIEW_CELLS
+  ) {
+    throw previewFailure("page_limit_exceeded", false);
+  }
+}
+
+function formatSpreadsheetRange(sheetName: string, range: XLSX.Range): string {
+  return `${quoteSpreadsheetSheetName(sheetName)}!${XLSX.utils.encode_range(range)}`;
+}
+
+function quoteSpreadsheetSheetName(sheetName: string): string {
+  return /^[A-Za-z0-9_]+$/u.test(sheetName) ? sheetName : `'${sheetName.replaceAll("'", "''")}'`;
+}
+
+function createSpreadsheetPreviewWorkbookBytes(
+  workbook: XLSX.WorkBook,
+  selection: SpreadsheetRenderSelection
+): Uint8Array {
+  const sourceSheet = workbook.Sheets[selection.sheetName];
+  if (!sourceSheet) {
+    throw previewFailure("conversion_failed", false);
+  }
+  const outputSheet = copySpreadsheetRangeForPreview(sourceSheet, selection.range);
+  const outputWorkbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(outputWorkbook, outputSheet, previewSheetName(selection.sheetName));
+  const bytes = XLSX.write(outputWorkbook, {
+    bookType: "xlsx",
+    cellStyles: true,
+    type: "buffer"
+  }) as Uint8Array | string;
+  return typeof bytes === "string" ? Buffer.from(bytes, "binary") : bytes;
+}
+
+function copySpreadsheetRangeForPreview(
+  sourceSheet: XLSX.WorkSheet,
+  range: XLSX.Range
+): XLSX.WorkSheet {
+  const outputSheet: XLSX.WorkSheet = {
+    "!ref": XLSX.utils.encode_range({
+      s: { c: 0, r: 0 },
+      e: {
+        c: range.e.c - range.s.c,
+        r: range.e.r - range.s.r
+      }
+    })
+  };
+
+  for (let row = range.s.r; row <= range.e.r; row += 1) {
+    for (let column = range.s.c; column <= range.e.c; column += 1) {
+      const sourceAddress = XLSX.utils.encode_cell({ c: column, r: row });
+      const sourceCell = sourceSheet[sourceAddress] as XLSX.CellObject | undefined;
+      if (!sourceCell) {
+        continue;
+      }
+      const targetAddress = XLSX.utils.encode_cell({
+        c: column - range.s.c,
+        r: row - range.s.r
+      });
+      outputSheet[targetAddress] = spreadsheetPreviewCell(sourceCell);
+    }
+  }
+
+  const sourceColumns = sourceSheet["!cols"];
+  if (sourceColumns) {
+    outputSheet["!cols"] = sourceColumns
+      .slice(range.s.c, range.e.c + 1)
+      .map((column) => ({ ...column }));
+  }
+  const sourceRows = sourceSheet["!rows"];
+  if (sourceRows) {
+    outputSheet["!rows"] = sourceRows
+      .slice(range.s.r, range.e.r + 1)
+      .map((row) => ({ ...row }));
+  }
+  const merges = sourceSheet["!merges"] ?? [];
+  const copiedMerges = merges.flatMap((merge) => {
+    if (
+      merge.s.r < range.s.r ||
+      merge.e.r > range.e.r ||
+      merge.s.c < range.s.c ||
+      merge.e.c > range.e.c
+    ) {
+      return [];
+    }
+    return [
+      {
+        s: { c: merge.s.c - range.s.c, r: merge.s.r - range.s.r },
+        e: { c: merge.e.c - range.s.c, r: merge.e.r - range.s.r }
+      }
+    ];
+  });
+  if (copiedMerges.length > 0) {
+    outputSheet["!merges"] = copiedMerges;
+  }
+  return outputSheet;
+}
+
+function spreadsheetPreviewCell(sourceCell: XLSX.CellObject): XLSX.CellObject {
+  const cell: XLSX.CellObject = { ...sourceCell };
+  if (cell.f) {
+    delete cell.f;
+    delete cell.F;
+    if (cell.v === undefined && sourceCell.w !== undefined) {
+      cell.t = "s";
+      cell.v = sourceCell.w;
+    }
+  }
+  return cell;
+}
+
+function previewSheetName(sheetName: string): string {
+  const cleaned = sheetName.replaceAll(/[:\\/?*\[\]]/gu, " ").trim();
+  return (cleaned || "Preview").slice(0, 31);
 }
 
 function checksumBytes(bytes: Uint8Array): string {

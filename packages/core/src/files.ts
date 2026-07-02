@@ -32,7 +32,7 @@ export type ArtifactPreviewJobStatus =
   | "completed"
   | "failed"
   | "unsupported";
-export type ArtifactPreviewSourceKind = "document" | "presentation";
+export type ArtifactPreviewSourceKind = "document" | "presentation" | "pdf" | "spreadsheet";
 export type ArtifactPreviewFailureCode =
   | "unsupported_type"
   | "source_missing"
@@ -55,6 +55,8 @@ export interface ArtifactPreviewImagePageRef {
   filename?: string;
   pageNumber?: number;
   slideNumber?: number;
+  sheet?: string;
+  range?: string;
   width?: number;
   height?: number;
 }
@@ -125,6 +127,8 @@ export interface ManagedArtifactPreviewImagePageRef {
   mimeType: SupportedImageMimeType;
   pageNumber?: number;
   slideNumber?: number;
+  sheet?: string;
+  range?: string;
 }
 
 export interface ManagedArtifactImagePagesPreview {
@@ -335,6 +339,8 @@ export interface ArtifactPreviewImageArtifactInput {
   metadata?: JsonObject;
   pageNumber?: number;
   slideNumber?: number;
+  sheet?: string;
+  range?: string;
   width?: number;
   height?: number;
 }
@@ -348,6 +354,7 @@ export interface EnqueueArtifactPreviewJobInput {
   renderer?: string;
   rendererVersion?: string;
   settingsHash?: string;
+  replaceTerminal?: boolean;
   queuedAt?: ISODateString;
 }
 
@@ -557,13 +564,23 @@ export function detectArtifactPreviewSourceKind(input: {
   mimeType?: string;
 }): ArtifactPreviewSourceKind | undefined {
   const descriptor = `${input.mimeType ?? ""} ${input.kind ?? ""} ${input.filename ?? ""}`.toLowerCase();
+  if (containsPdfSignal(descriptor)) {
+    return "pdf";
+  }
   if (containsOfficePresentationSignal(descriptor)) {
     return "presentation";
   }
   if (containsOfficeDocumentSignal(descriptor)) {
     return "document";
   }
+  if (containsSpreadsheetSignal(descriptor)) {
+    return "spreadsheet";
+  }
   return undefined;
+}
+
+function containsPdfSignal(descriptor: string): boolean {
+  return descriptor.includes("application/pdf") || hasArtifactPreviewExtension(descriptor, ["pdf"]);
 }
 
 function containsOfficePresentationSignal(descriptor: string): boolean {
@@ -579,6 +596,17 @@ function containsOfficeDocumentSignal(descriptor: string): boolean {
     descriptor.includes("wordprocessingml") ||
     descriptor.includes("msword") ||
     hasArtifactPreviewExtension(descriptor, ["docx", "doc"])
+  );
+}
+
+function containsSpreadsheetSignal(descriptor: string): boolean {
+  return (
+    descriptor.includes("spreadsheetml") ||
+    descriptor.includes("ms-excel") ||
+    descriptor.includes("msexcel") ||
+    descriptor.includes("opendocument.spreadsheet") ||
+    descriptor.includes("spreadsheet") ||
+    hasArtifactPreviewExtension(descriptor, ["xlsx", "xls", "ods"])
   );
 }
 

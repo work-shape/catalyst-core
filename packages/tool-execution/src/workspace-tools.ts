@@ -48,6 +48,9 @@ import {
   workspacePromoteArtifactInputJsonSchema,
   workspacePromoteArtifactInputSchema,
   workspacePromoteArtifactOutputSchema,
+  workspacePreviewImagesInputJsonSchema,
+  workspacePreviewImagesInputSchema,
+  workspacePreviewImagesOutputSchema,
   workspaceReadFileInputSchema,
   workspaceReadFileOutputSchema,
   type WorkspaceCommandServiceLimits
@@ -73,6 +76,7 @@ import {
   createWorkspaceArtifactPreviewMetadata,
   type WorkspaceArtifactPreviewGenerator
 } from "./workspace-artifact-previews";
+import { resolveWorkspacePreviewImages } from "./workspace-preview-images";
 
 export { shapeWorkspaceCommandOutput, type WorkspaceRawCommandOutput } from "./workspace-tool-results";
 export type { WorkspaceCommandServiceLimits } from "./workspace-tool-schemas";
@@ -81,8 +85,8 @@ export type WorkspaceToolStore = Pick<
   PlatformStore,
   | "ensureExecutionWorkspace" | "listWorkspaceFiles" | "upsertWorkspaceFile"
   | "enqueueWorkspaceCommand" | "getWorkspaceCommand" | "requestWorkspaceCommandCancellation"
-  | "countActiveWorkspaceCommands" | "createManagedArtifact"
-  | "enqueueArtifactPreviewJob"
+  | "countActiveWorkspaceCommands" | "createManagedArtifact" | "getManagedArtifact"
+  | "enqueueArtifactPreviewJob" | "getArtifactPreviewJob" | "getArtifactPreviewManifest"
 >;
 
 export interface WorkspaceSourceFileReader {
@@ -446,6 +450,16 @@ export class WorkspaceCommandService {
           kind: artifact.kind
         }
       }
+    });
+  }
+
+  async previewImages(
+    input: z.infer<typeof workspacePreviewImagesInputSchema>,
+    context: ToolExecutionContext
+  ): Promise<ToolHandlerResult<z.infer<typeof workspacePreviewImagesOutputSchema>>> {
+    return resolveWorkspacePreviewImages(input, context, {
+      store: this.store,
+      maxImages: this.limits.maxPreviewImages
     });
   }
 
@@ -975,6 +989,17 @@ export function createWorkspaceToolDefinitions(
       inputJsonSchema: workspacePromoteArtifactInputJsonSchema,
       execute(input, context) {
         return service.promoteArtifact(input, context);
+      }
+    }),
+    defineTool({
+      name: "workspace.preview_images",
+      description:
+        "Load bounded rendered preview images for a managed artifact into model-visible visual context without promoting preview files to the user. Use this before claiming visual inspection of PDF/DOCX pages, PPTX slides, XLSX sheet/range previews, or image outputs. The result reports pending, failed, or unsupported when pixels are not actually attached.",
+      inputSchema: workspacePreviewImagesInputSchema,
+      outputSchema: workspacePreviewImagesOutputSchema,
+      inputJsonSchema: workspacePreviewImagesInputJsonSchema,
+      execute(input, context) {
+        return service.previewImages(input, context);
       }
     })
   ];

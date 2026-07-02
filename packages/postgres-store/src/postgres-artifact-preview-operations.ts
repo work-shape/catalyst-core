@@ -83,7 +83,33 @@ export async function enqueueArtifactPreviewJob(
   if (!existing) {
     throw new AppError("INTERNAL", "Artifact preview job could not be enqueued");
   }
+  if (input.replaceTerminal && isTerminalArtifactPreviewJob(existing.status)) {
+    const [replaced] = await db
+      .update(artifactPreviewJobs)
+      .set({
+        sourceChecksum: input.sourceChecksum,
+        sourceMimeType: input.sourceMimeType,
+        status: "pending",
+        attempts: 0,
+        nextAttemptAt: now,
+        leaseOwnerId: null,
+        leaseToken: null,
+        leaseExpiresAt: null,
+        errorCode: null,
+        errorMessage: null,
+        updatedAt: now
+      })
+      .where(eq(artifactPreviewJobs.id, existing.id))
+      .returning();
+    if (replaced) {
+      return mapArtifactPreviewJob(replaced);
+    }
+  }
   return mapArtifactPreviewJob(existing);
+}
+
+function isTerminalArtifactPreviewJob(status: ArtifactPreviewJobRecord["status"]): boolean {
+  return status === "completed" || status === "failed" || status === "unsupported";
 }
 
 export async function getArtifactPreviewJob(
@@ -507,6 +533,8 @@ async function createPreviewArtifacts(
       filename: artifactInput.filename,
       ...(artifactInput.pageNumber ? { pageNumber: artifactInput.pageNumber } : {}),
       ...(artifactInput.slideNumber ? { slideNumber: artifactInput.slideNumber } : {}),
+      ...(artifactInput.sheet ? { sheet: artifactInput.sheet } : {}),
+      ...(artifactInput.range ? { range: artifactInput.range } : {}),
       ...(artifactInput.width ? { width: artifactInput.width } : {}),
       ...(artifactInput.height ? { height: artifactInput.height } : {})
     });

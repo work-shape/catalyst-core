@@ -19,6 +19,7 @@
   "dependencies": {
     "@vivd-catalyst/core": "workspace:*",
     "@vivd-catalyst/tool-sdk": "workspace:*",
+    "xlsx": "0.18.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {

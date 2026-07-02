@@ -122,7 +122,7 @@ export function ToolCallPart({
     );
   }
 
-  const hasDisclosureContent = Boolean(summary) || artifacts.length > 0 || detailSections.length > 0;
+  const hasDisclosureContent = Boolean(summary) || surfacedArtifacts.length > 0 || detailSections.length > 0;
 
   if (!hasDisclosureContent) {
     return (
@@ -149,7 +149,6 @@ export function ToolCallPart({
       state={state}
       statusLabel={statusLabel}
       summary={summary}
-      artifacts={artifacts}
       surfacedArtifacts={surfacedArtifacts}
       toolCallId={toolCallId}
       toolTitle={toolDisplay.title}
@@ -542,7 +541,8 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
     "workspace.list_files": "List files",
     "workspace.import_files": "Import files",
     "workspace.read_file": "Read file",
-    "workspace.promote_artifact": "Prepare download"
+    "workspace.promote_artifact": "Prepare download",
+    "workspace.preview_images": "Preview images"
   },
   de: {
     read_skill: "Anleitung lesen",
@@ -551,7 +551,8 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
     "workspace.list_files": "Dateien auflisten",
     "workspace.import_files": "Dateien importieren",
     "workspace.read_file": "Datei lesen",
-    "workspace.promote_artifact": "Download vorbereiten"
+    "workspace.promote_artifact": "Download vorbereiten",
+    "workspace.preview_images": "Vorschau laden"
   }
 };
 
@@ -677,7 +678,6 @@ function CompactToolCall({
   state,
   statusLabel,
   summary,
-  artifacts,
   surfacedArtifacts,
   toolCallId,
   toolTitle
@@ -687,7 +687,6 @@ function CompactToolCall({
   state: "running" | "completed" | "failed";
   statusLabel: string;
   summary: string | undefined;
-  artifacts: ToolArtifactDownloadRef[];
   surfacedArtifacts: ToolArtifactDownloadRef[];
   toolCallId: string;
   toolTitle: string;
@@ -728,7 +727,6 @@ function CompactToolCall({
           {summary ? (
             <p className="text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]">{summary}</p>
           ) : null}
-          {surfacedArtifacts.length === 0 ? <ToolArtifactList artifacts={artifacts} /> : null}
           <ToolDetails sections={detailSections} />
         </div>
       ) : null}

@@ -118,6 +118,7 @@ const TOOL_ACTION_LABELS: Record<string, string> = {
   "workspace.read_file": "Read a workspace file",
   "workspace.import_files": "Imported files",
   "workspace.promote_artifact": "Saved an artifact",
+  "workspace.preview_images": "Loaded artifact preview images",
   "workspace.file": "Wrote a workspace file"
 };
 

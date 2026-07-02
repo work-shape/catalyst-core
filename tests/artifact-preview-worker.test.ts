@@ -1,10 +1,15 @@
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import * as XLSX from "../packages/tool-execution/node_modules/xlsx";
 import {
   type ArtifactPreviewRenderInput,
   type ArtifactPreviewRenderResult,
   type ArtifactPreviewRenderer,
   type ArtifactPreviewWorkerOptions,
   ArtifactPreviewWorker,
+  LibreOfficeArtifactPreviewRenderer,
+  createArtifactPreviewSettingsHash,
   type DeletableWorkspaceObjectStorage
 } from "@vivd-catalyst/tool-execution";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
@@ -138,13 +143,27 @@ describe("ArtifactPreviewWorker", () => {
     ).resolves.toEqual([]);
   });
 
-  it("writes unsupported manifests for queued jobs whose source type is not previewable", async () => {
+  it("renders queued PDF page jobs into managed preview image artifacts and a ready manifest", async () => {
     const fixture = await createWorkerFixture({
-      kind: "spreadsheet.xlsx",
-      filename: "sheet.xlsx",
-      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      kind: "document.pdf",
+      filename: "report.pdf",
+      mimeType: "application/pdf"
     });
-    const worker = createWorker(fixture, new FakeRenderer({ result: emptyRenderResult() }));
+    const renderer = new FakeRenderer({
+      result: {
+        format: "png",
+        pages: [
+          {
+            bytes: bytes("pdf-page-two"),
+            mimeType: "image/png",
+            pageNumber: 2,
+            width: 800,
+            height: 1000
+          }
+        ]
+      }
+    });
+    const worker = createWorker(fixture, renderer);
 
     const result = await worker.runOnce();
 
@@ -152,20 +171,170 @@ describe("ArtifactPreviewWorker", () => {
     if (result.status !== "claimed") {
       throw new Error("Expected preview job to be claimed");
     }
+    expect(renderer.inputs[0]).toMatchObject({
+      sourceKind: "pdf",
+      mimeType: "application/pdf"
+    });
     expect(result.job).toMatchObject({
-      status: "unsupported",
-      errorCode: "unsupported_type",
+      status: "completed",
+      errorCode: undefined
+    });
+    const manifest = await fixture.store.getArtifactPreviewManifest({
+      clientInstanceId: fixture.clientInstanceId,
+      sourceArtifactId: fixture.source.id
+    });
+    expect(manifest).toMatchObject({
+      status: "ready",
+      pageCount: 1,
+      pages: [
+        expect.objectContaining({
+          mimeType: "image/png",
+          pageNumber: 2,
+          width: 800,
+          height: 1000
+        })
+      ]
+    });
+    if (!manifest || manifest.status !== "ready") {
+      throw new Error("Expected ready PDF preview manifest");
+    }
+    const pageArtifact = await fixture.store.getManagedArtifact({
+      clientInstanceId: fixture.clientInstanceId,
+      artifactId: manifest.pages[0]!.artifactId
+    });
+    expect(pageArtifact).toMatchObject({
+      kind: "document.preview_page_image",
+      filename: "report-page-1.png",
+      metadata: {
+        sourceArtifactId: fixture.source.id,
+        previewRole: "page",
+        pageNumber: 2,
+        rendererVersion: "preview-contract-v1"
+      }
+    });
+  });
+
+  it("renders queued spreadsheet sheet and range jobs into internal preview artifacts", async () => {
+    const fixture = await createWorkerFixture({
+      kind: "spreadsheet.xlsx",
+      filename: "sheet.xlsx",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      settingsHash: createArtifactPreviewSettingsHash({
+        sheets: ["Summary"],
+        ranges: ["Summary!A1:H10"],
+        maxImages: 1
+      })
+    });
+    const renderer = new FakeRenderer({
+      result: {
+        format: "png",
+        pages: [
+          {
+            bytes: bytes("xlsx-range"),
+            mimeType: "image/png",
+            sheet: "Summary",
+            range: "Summary!A1:H10",
+            width: 900,
+            height: 520
+          }
+        ]
+      }
+    });
+    const worker = createWorker(fixture, renderer);
+
+    const result = await worker.runOnce();
+
+    expect(result.status).toBe("claimed");
+    if (result.status !== "claimed") {
+      throw new Error("Expected preview job to be claimed");
+    }
+    expect(renderer.inputs[0]).toMatchObject({
+      sourceKind: "spreadsheet",
+      sheets: ["Summary"],
+      ranges: ["Summary!A1:H10"],
+      maxPages: 1
+    });
+    expect(result.job).toMatchObject({
+      status: "completed",
+      errorCode: undefined,
       leaseToken: undefined
     });
-    await expect(
-      fixture.store.getArtifactPreviewManifest({
-        clientInstanceId: fixture.clientInstanceId,
-        sourceArtifactId: fixture.source.id
-      })
-    ).resolves.toMatchObject({
-      status: "unsupported",
-      errorCode: "unsupported_type"
+    const manifest = await fixture.store.getArtifactPreviewManifest({
+      clientInstanceId: fixture.clientInstanceId,
+      sourceArtifactId: fixture.source.id
     });
+    expect(manifest).toMatchObject({
+      status: "ready",
+      pageCount: 1,
+      pages: [
+        expect.objectContaining({
+          mimeType: "image/png",
+          sheet: "Summary",
+          range: "Summary!A1:H10",
+          width: 900,
+          height: 520
+        })
+      ]
+    });
+    if (!manifest || manifest.status !== "ready") {
+      throw new Error("Expected ready spreadsheet preview manifest");
+    }
+    const pageArtifact = await fixture.store.getManagedArtifact({
+      clientInstanceId: fixture.clientInstanceId,
+      artifactId: manifest.pages[0]!.artifactId
+    });
+    expect(pageArtifact).toMatchObject({
+      kind: "spreadsheet.preview_range_image",
+      metadata: {
+        sourceArtifactId: fixture.source.id,
+        previewRole: "range",
+        sheet: "Summary",
+        range: "Summary!A1:H10",
+        rendererVersion: "preview-contract-v1"
+      }
+    });
+  });
+
+  it("renders selected spreadsheet ranges with production pixels", async () => {
+    if (!hasPreviewRendererDependencies()) {
+      return;
+    }
+    const renderer = new LibreOfficeArtifactPreviewRenderer();
+    const sourceBytes = createDistinctWorkbookBytes();
+    const input = {
+      sourceKind: "spreadsheet" as const,
+      filename: "preview.xlsx",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      bytes: sourceBytes,
+      maxPages: 1,
+      previewDpi: 96,
+      outputFormat: "png" as const,
+      conversionTimeoutMs: 60000,
+      rasterizationTimeoutMs: 60000
+    };
+
+    const summary = await renderer.render({
+      ...input,
+      ranges: ["Summary!A1:B4"]
+    });
+    const detail = await renderer.render({
+      ...input,
+      ranges: ["Detail!A1:B4"]
+    });
+
+    expect(summary.pages).toHaveLength(1);
+    expect(detail.pages).toHaveLength(1);
+    expect(summary.pages[0]).toMatchObject({
+      mimeType: "image/png",
+      sheet: "Summary",
+      range: "Summary!A1:B4"
+    });
+    expect(detail.pages[0]).toMatchObject({
+      mimeType: "image/png",
+      sheet: "Detail",
+      range: "Detail!A1:B4"
+    });
+    expect(imageDigest(summary.pages[0]!.bytes)).not.toBe(imageDigest(detail.pages[0]!.bytes));
   });
 
   it("fails without retrying when the source artifact exceeds the size limit", async () => {
@@ -292,6 +461,7 @@ async function createWorkerFixture(input: {
   mimeType?: string;
   byteSize?: number;
   sourceBytes?: Uint8Array;
+  settingsHash?: string;
 } = {}): Promise<WorkerFixture> {
   const clientInstanceId = asClientInstanceId(`preview_worker_${globalThis.crypto.randomUUID()}`);
   const store = new InMemoryPlatformStore();
@@ -338,6 +508,7 @@ async function createWorkerFixture(input: {
     sourceArtifactId: source.id,
     sourceChecksum: source.checksum,
     sourceMimeType: source.mimeType,
+    ...(input.settingsHash ? { settingsHash: input.settingsHash } : {}),
     queuedAt: "2026-07-01T10:00:00.000Z"
   });
   return { clientInstanceId, store, objectStore, conversation, sourceFile, source };
@@ -415,6 +586,44 @@ function emptyRenderResult(): ArtifactPreviewRenderResult {
 
 function bytes(value: string): Uint8Array {
   return new TextEncoder().encode(value);
+}
+
+function createDistinctWorkbookBytes(): Uint8Array {
+  const workbook = XLSX.utils.book_new();
+  const summary = XLSX.utils.aoa_to_sheet([
+    ["SUMMARY ONLY", "alpha"],
+    ["Revenue", 1200],
+    ["Cost", 800],
+    ["Status", "green"]
+  ]);
+  const detail = XLSX.utils.aoa_to_sheet([
+    ["DETAIL ONLY", "omega"],
+    ["Tickets", 42],
+    ["Latency", 315],
+    ["Status", "red"]
+  ]);
+  summary["!cols"] = [{ wch: 18 }, { wch: 14 }];
+  detail["!cols"] = [{ wch: 18 }, { wch: 14 }];
+  XLSX.utils.book_append_sheet(workbook, summary, "Summary");
+  XLSX.utils.book_append_sheet(workbook, detail, "Detail");
+  const output = XLSX.write(workbook, {
+    bookType: "xlsx",
+    type: "buffer"
+  }) as Uint8Array | string;
+  return typeof output === "string" ? Buffer.from(output, "binary") : output;
+}
+
+function hasPreviewRendererDependencies(): boolean {
+  return ["soffice", "pdfinfo", "pdftoppm"].every((command) => {
+    const result = spawnSync("sh", ["-lc", `command -v ${command}`], {
+      stdio: "ignore"
+    });
+    return result.status === 0;
+  });
+}
+
+function imageDigest(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
 }
 
 function createDeferred<T>(): {

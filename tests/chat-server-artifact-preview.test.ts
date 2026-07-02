@@ -122,7 +122,7 @@ describe("artifact preview routes", () => {
         status: "unsupported",
         errorCode: "unsupported_type"
       });
-      const unsupportedArtifact = await store.createManagedArtifact({
+      const spreadsheetArtifact = await store.createManagedArtifact({
         clientInstanceId,
         conversationId: conversation.id,
         kind: "spreadsheet.xlsx",
@@ -225,18 +225,15 @@ describe("artifact preview routes", () => {
           errorCode: "unsupported_type"
         })
       });
-      await expect(
-        server.inject({
-          method: "GET",
-          url: `/api/conversations/${conversation.id}/artifacts/${unsupportedArtifact.id}/preview`
-        })
-      ).resolves.toMatchObject({
-        statusCode: 200,
-        payload: JSON.stringify({
-          status: "unsupported",
-          artifactId: unsupportedArtifact.id,
-          errorCode: "unsupported_type"
-        })
+      const spreadsheetPending = await server.inject({
+        method: "GET",
+        url: `/api/conversations/${conversation.id}/artifacts/${spreadsheetArtifact.id}/preview`
+      });
+      expect(spreadsheetPending.statusCode).toBe(200);
+      expect(spreadsheetPending.json()).toMatchObject({
+        status: "pending",
+        artifactId: spreadsheetArtifact.id,
+        queuedAt: expect.any(String)
       });
 
       const embedded = await server.inject({
