@@ -103,7 +103,12 @@ export function createArtifactPreviewView(input: {
 
 export function shouldUseLiveArtifactPreviewState(artifact: ToolArtifactDownloadRef): boolean {
   const previewKind = getArtifactPreviewKind(artifact);
-  return previewKind === "image-pages" || previewKind === "document" || previewKind === "presentation";
+  return (
+    previewKind === "image-pages" ||
+    previewKind === "document" ||
+    previewKind === "presentation" ||
+    previewKind === "pdf"
+  );
 }
 
 export function getArtifactSourceFallbackKind(

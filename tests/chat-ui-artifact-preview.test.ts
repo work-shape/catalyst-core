@@ -175,7 +175,7 @@ describe("chat UI artifact preview state", () => {
     });
   });
 
-  it("uses live preview state only for document and presentation page-image previews", () => {
+  it("uses live preview state for PDF, document, and presentation page-image previews", () => {
     expect(shouldUseLiveArtifactPreviewState({
       artifactId: "art_docx",
       filename: "memo.docx",
@@ -190,7 +190,7 @@ describe("chat UI artifact preview state", () => {
       artifactId: "art_pdf",
       filename: "report.pdf",
       mimeType: "application/pdf"
-    })).toBe(false);
+    })).toBe(true);
     expect(shouldUseLiveArtifactPreviewState({
       artifactId: "art_xlsx",
       filename: "analysis.xlsx",
