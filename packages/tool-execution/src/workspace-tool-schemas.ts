@@ -187,7 +187,7 @@ export const workspaceExecInputJsonSchema: JsonObject = {
       minLength: 1,
       maxLength: DEFAULT_LIMITS.maxCommandLength,
       description:
-        "Complete /bin/sh command or multiline script. Run helpers directly, e.g. `pptx_inspect deck.pptx --view summary`; do not write `set -e pptx_inspect ...`. If strict mode is needed, put `set -e` on its own line before the command. Do not pass helper flags such as `--view`, `--out`, or `--range` to `cat` or `ls`."
+        "Complete /bin/sh command or multiline script. Run helpers directly, e.g. `pptx_inspect deck.pptx --view summary`; do not write `set -e pptx_inspect ...`. If strict mode is needed, put `set -e` on its own line before the command. Do not pass helper flags such as `--view`, `--spec`, `--out`, `--range`, `--page`, or `--sheet` to `cat` or `ls`."
     },
     cwd: { type: "string", maxLength: DEFAULT_LIMITS.maxPathLength },
     timeoutSeconds: { type: "integer", minimum: 1, maximum: 300 },

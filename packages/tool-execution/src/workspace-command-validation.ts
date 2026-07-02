@@ -2,7 +2,7 @@ import { posix as path } from "node:path";
 import { validationFailed, type ValidationResult } from "./workspace-tool-results";
 
 const helperFlagSubstituteCommands = new Set(["cat", "ls"]);
-const helperOnlyFlags = ["--view", "--out", "--range"] as const;
+const helperOnlyFlags = ["--view", "--spec", "--out", "--range", "--page", "--sheet"] as const;
 
 export function validateWorkspaceShellCommand(command: string): ValidationResult<void> {
   const significantLines = command

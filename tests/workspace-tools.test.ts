@@ -37,7 +37,7 @@ describe("workspace tools", () => {
     const execTool = harness.tools.find((tool) => tool.name === "workspace.exec");
 
     expect(execTool?.description).toContain("put `set -e` on its own line");
-    expect(execTool?.description).toContain("`--view`, `--out`, or `--range`");
+    expect(execTool?.description).toContain("`--view`, `--spec`, `--out`, `--range`, `--page`, or `--sheet`");
     expect(execTool?.description).toContain("`cat` or `ls`");
     expect(workspaceExecInputJsonSchema).toMatchObject({
       properties: {
@@ -120,6 +120,12 @@ describe("workspace tools", () => {
     await expectToolFailure(
       "workspace.exec",
       { command: "cat --view summary deck.pptx" },
+      "validation_failed",
+      /Run the artifact helper directly/u
+    );
+    await expectToolFailure(
+      "workspace.exec",
+      { command: "cat --spec report.json --out report.pdf" },
       "validation_failed",
       /Run the artifact helper directly/u
     );
