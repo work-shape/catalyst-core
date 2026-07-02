@@ -14,4 +14,5 @@ export * from "./workspace-command-runner";
 export * from "./workspace-command-telemetry";
 export * from "./docker-workspace-command-runner";
 export * from "./workspace-command-worker";
+export * from "./artifact-preview-settings";
 export * from "./artifact-preview-worker";

@@ -5,6 +5,7 @@ import {
   type ArtifactPreviewRenderer,
   type ArtifactPreviewWorkerOptions,
   ArtifactPreviewWorker,
+  createArtifactPreviewSettingsHash,
   type DeletableWorkspaceObjectStorage
 } from "@vivd-catalyst/tool-execution";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
@@ -138,13 +139,27 @@ describe("ArtifactPreviewWorker", () => {
     ).resolves.toEqual([]);
   });
 
-  it("writes unsupported manifests for queued jobs whose source type is not previewable", async () => {
+  it("renders queued PDF page jobs into managed preview image artifacts and a ready manifest", async () => {
     const fixture = await createWorkerFixture({
-      kind: "spreadsheet.xlsx",
-      filename: "sheet.xlsx",
-      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      kind: "document.pdf",
+      filename: "report.pdf",
+      mimeType: "application/pdf"
     });
-    const worker = createWorker(fixture, new FakeRenderer({ result: emptyRenderResult() }));
+    const renderer = new FakeRenderer({
+      result: {
+        format: "png",
+        pages: [
+          {
+            bytes: bytes("pdf-page-two"),
+            mimeType: "image/png",
+            pageNumber: 2,
+            width: 800,
+            height: 1000
+          }
+        ]
+      }
+    });
+    const worker = createWorker(fixture, renderer);
 
     const result = await worker.runOnce();
 
@@ -152,19 +167,127 @@ describe("ArtifactPreviewWorker", () => {
     if (result.status !== "claimed") {
       throw new Error("Expected preview job to be claimed");
     }
+    expect(renderer.inputs[0]).toMatchObject({
+      sourceKind: "pdf",
+      mimeType: "application/pdf"
+    });
     expect(result.job).toMatchObject({
-      status: "unsupported",
-      errorCode: "unsupported_type",
+      status: "completed",
+      errorCode: undefined
+    });
+    const manifest = await fixture.store.getArtifactPreviewManifest({
+      clientInstanceId: fixture.clientInstanceId,
+      sourceArtifactId: fixture.source.id
+    });
+    expect(manifest).toMatchObject({
+      status: "ready",
+      pageCount: 1,
+      pages: [
+        expect.objectContaining({
+          mimeType: "image/png",
+          pageNumber: 2,
+          width: 800,
+          height: 1000
+        })
+      ]
+    });
+    if (!manifest || manifest.status !== "ready") {
+      throw new Error("Expected ready PDF preview manifest");
+    }
+    const pageArtifact = await fixture.store.getManagedArtifact({
+      clientInstanceId: fixture.clientInstanceId,
+      artifactId: manifest.pages[0]!.artifactId
+    });
+    expect(pageArtifact).toMatchObject({
+      kind: "document.preview_page_image",
+      filename: "report-page-1.png",
+      metadata: {
+        sourceArtifactId: fixture.source.id,
+        previewRole: "page",
+        pageNumber: 2,
+        rendererVersion: "preview-contract-v1"
+      }
+    });
+  });
+
+  it("renders queued spreadsheet sheet and range jobs into internal preview artifacts", async () => {
+    const fixture = await createWorkerFixture({
+      kind: "spreadsheet.xlsx",
+      filename: "sheet.xlsx",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      settingsHash: createArtifactPreviewSettingsHash({
+        sheets: ["Summary"],
+        ranges: ["Summary!A1:H10"],
+        maxImages: 1
+      })
+    });
+    const renderer = new FakeRenderer({
+      result: {
+        format: "png",
+        pages: [
+          {
+            bytes: bytes("xlsx-range"),
+            mimeType: "image/png",
+            sheet: "Summary",
+            range: "Summary!A1:H10",
+            width: 900,
+            height: 520
+          }
+        ]
+      }
+    });
+    const worker = createWorker(fixture, renderer);
+
+    const result = await worker.runOnce();
+
+    expect(result.status).toBe("claimed");
+    if (result.status !== "claimed") {
+      throw new Error("Expected preview job to be claimed");
+    }
+    expect(renderer.inputs[0]).toMatchObject({
+      sourceKind: "spreadsheet",
+      sheets: ["Summary"],
+      ranges: ["Summary!A1:H10"],
+      maxPages: 1
+    });
+    expect(result.job).toMatchObject({
+      status: "completed",
+      errorCode: undefined,
       leaseToken: undefined
     });
-    await expect(
-      fixture.store.getArtifactPreviewManifest({
-        clientInstanceId: fixture.clientInstanceId,
-        sourceArtifactId: fixture.source.id
-      })
-    ).resolves.toMatchObject({
-      status: "unsupported",
-      errorCode: "unsupported_type"
+    const manifest = await fixture.store.getArtifactPreviewManifest({
+      clientInstanceId: fixture.clientInstanceId,
+      sourceArtifactId: fixture.source.id
+    });
+    expect(manifest).toMatchObject({
+      status: "ready",
+      pageCount: 1,
+      pages: [
+        expect.objectContaining({
+          mimeType: "image/png",
+          sheet: "Summary",
+          range: "Summary!A1:H10",
+          width: 900,
+          height: 520
+        })
+      ]
+    });
+    if (!manifest || manifest.status !== "ready") {
+      throw new Error("Expected ready spreadsheet preview manifest");
+    }
+    const pageArtifact = await fixture.store.getManagedArtifact({
+      clientInstanceId: fixture.clientInstanceId,
+      artifactId: manifest.pages[0]!.artifactId
+    });
+    expect(pageArtifact).toMatchObject({
+      kind: "spreadsheet.preview_range_image",
+      metadata: {
+        sourceArtifactId: fixture.source.id,
+        previewRole: "range",
+        sheet: "Summary",
+        range: "Summary!A1:H10",
+        rendererVersion: "preview-contract-v1"
+      }
     });
   });
 
@@ -292,6 +415,7 @@ async function createWorkerFixture(input: {
   mimeType?: string;
   byteSize?: number;
   sourceBytes?: Uint8Array;
+  settingsHash?: string;
 } = {}): Promise<WorkerFixture> {
   const clientInstanceId = asClientInstanceId(`preview_worker_${globalThis.crypto.randomUUID()}`);
   const store = new InMemoryPlatformStore();
@@ -338,6 +462,7 @@ async function createWorkerFixture(input: {
     sourceArtifactId: source.id,
     sourceChecksum: source.checksum,
     sourceMimeType: source.mimeType,
+    ...(input.settingsHash ? { settingsHash: input.settingsHash } : {}),
     queuedAt: "2026-07-01T10:00:00.000Z"
   });
   return { clientInstanceId, store, objectStore, conversation, sourceFile, source };

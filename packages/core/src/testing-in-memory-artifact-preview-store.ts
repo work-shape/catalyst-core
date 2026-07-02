@@ -157,6 +157,8 @@ export class InMemoryArtifactPreviewStore {
             filename: artifact.filename,
             ...(artifactInput.pageNumber ? { pageNumber: artifactInput.pageNumber } : {}),
             ...(artifactInput.slideNumber ? { slideNumber: artifactInput.slideNumber } : {}),
+            ...(artifactInput.sheet ? { sheet: artifactInput.sheet } : {}),
+            ...(artifactInput.range ? { range: artifactInput.range } : {}),
             ...(artifactInput.width ? { width: artifactInput.width } : {}),
             ...(artifactInput.height ? { height: artifactInput.height } : {})
           };

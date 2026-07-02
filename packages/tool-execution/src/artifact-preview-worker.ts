@@ -15,6 +15,7 @@ import {
   type ManagedArtifactRecord,
   type PlatformStore
 } from "@vivd-catalyst/core";
+import { readArtifactPreviewSettingsHash } from "./artifact-preview-settings";
 import type { DeletableWorkspaceObjectStorage } from "./workspace-file-bytes";
 
 const DEFAULT_POLL_INTERVAL_MS = 1000;
@@ -73,6 +74,10 @@ export interface ArtifactPreviewRenderInput {
   filename?: string;
   mimeType: string;
   bytes: Uint8Array;
+  pages?: number[];
+  slides?: number[];
+  sheets?: string[];
+  ranges?: string[];
   maxPages: number;
   previewDpi: number;
   outputFormat: ArtifactPreviewImageFormat;
@@ -86,6 +91,8 @@ export interface ArtifactPreviewRenderedPage {
   mimeType: "image/png" | "image/jpeg" | "image/webp";
   pageNumber?: number;
   slideNumber?: number;
+  sheet?: string;
+  range?: string;
   width?: number;
   height?: number;
 }
@@ -278,12 +285,17 @@ export class ArtifactPreviewWorker {
       return this.failClaimedJob(job, previewFailure("source_too_large", false));
     }
 
+    const renderSettings = readArtifactPreviewSettingsHash(job.settingsHash);
     const rendered = await this.renderer.render({
       sourceKind,
       filename: source.filename,
       mimeType: source.mimeType,
       bytes: sourceBytes,
-      maxPages: this.maxPages,
+      ...(renderSettings.pages ? { pages: renderSettings.pages } : {}),
+      ...(renderSettings.slides ? { slides: renderSettings.slides } : {}),
+      ...(renderSettings.sheets ? { sheets: renderSettings.sheets } : {}),
+      ...(renderSettings.ranges ? { ranges: renderSettings.ranges } : {}),
+      maxPages: Math.min(renderSettings.maxImages ?? this.maxPages, this.maxPages),
       previewDpi: this.previewDpi,
       outputFormat: this.outputFormat,
       conversionTimeoutMs: this.conversionTimeoutMs,
@@ -347,16 +359,17 @@ export class ArtifactPreviewWorker {
           body: page.bytes,
           contentType: page.mimeType
         });
-        const pageNumber = input.sourceKind === "document" ? (page.pageNumber ?? index + 1) : undefined;
+        const pageNumber =
+          input.sourceKind === "document" || input.sourceKind === "pdf"
+            ? (page.pageNumber ?? index + 1)
+            : undefined;
         const slideNumber =
           input.sourceKind === "presentation" ? (page.slideNumber ?? index + 1) : undefined;
         const filename = createPreviewFilename(input.source, input.sourceKind, index + 1, input.rendered.format);
+        const previewRole = previewRoleForPage(input.sourceKind, page);
         previewArtifacts.push({
           sourceFileId: input.source.sourceFileId,
-          kind:
-            input.sourceKind === "document"
-              ? "document.preview_page_image"
-              : "presentation.preview_slide_image",
+          kind: previewArtifactKind(input.sourceKind, page),
           objectKey,
           filename,
           mimeType: page.mimeType,
@@ -364,13 +377,17 @@ export class ArtifactPreviewWorker {
           checksum,
           metadata: {
             sourceArtifactId: input.job.sourceArtifactId,
-            previewRole: input.sourceKind === "document" ? "page" : "slide",
+            previewRole,
             ...(pageNumber ? { pageNumber } : {}),
             ...(slideNumber ? { slideNumber } : {}),
+            ...(page.sheet ? { sheet: page.sheet } : {}),
+            ...(page.range ? { range: page.range } : {}),
             rendererVersion: input.job.rendererVersion
           },
           ...(pageNumber ? { pageNumber } : {}),
           ...(slideNumber ? { slideNumber } : {}),
+          ...(page.sheet ? { sheet: page.sheet } : {}),
+          ...(page.range ? { range: page.range } : {}),
           ...(page.width ? { width: page.width } : {}),
           ...(page.height ? { height: page.height } : {})
         });
@@ -445,46 +462,56 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
       const outputDirectory = join(tempDirectory, "out");
       await mkdir(outputDirectory, { recursive: true });
       await writeFile(sourcePath, input.bytes);
-      const pdfPath = await this.convertToPdf({
-        sourcePath,
-        outputDirectory,
-        timeoutMs: input.conversionTimeoutMs,
-        signal: input.signal
-      });
+      const pdfPath =
+        input.sourceKind === "pdf"
+          ? sourcePath
+          : await this.convertToPdf({
+              sourcePath,
+              outputDirectory,
+              timeoutMs: input.conversionTimeoutMs,
+              signal: input.signal
+            });
       const pageCount = await this.readPageCount({
         pdfPath,
         timeoutMs: input.rasterizationTimeoutMs,
         signal: input.signal
       });
-      if (pageCount <= 0 || pageCount > input.maxPages) {
+      if (pageCount <= 0) {
         throw previewFailure("page_limit_exceeded", false);
       }
-      const prefix = join(outputDirectory, "page");
-      await runProcess({
-        command: this.pdfToPpmCommand,
-        args: [
-          "-png",
-          "-r",
-          String(input.previewDpi),
-          "-f",
-          "1",
-          "-l",
-          String(pageCount),
-          pdfPath,
-          prefix
-        ],
-        timeoutMs: input.rasterizationTimeoutMs,
-        timeoutCode: "rasterization_failed",
-        failureCode: "rasterization_failed",
-        signal: input.signal
-      });
+      const pageNumbers = rasterPageNumbers(input, pageCount);
       const pages: ArtifactPreviewRenderedPage[] = [];
-      for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
-        const bytes = await readFile(`${prefix}-${pageNumber}.png`);
+      for (const [index, pageNumber] of pageNumbers.entries()) {
+        const prefix = join(outputDirectory, `page-${pageNumber}`);
+        await runProcess({
+          command: this.pdfToPpmCommand,
+          args: [
+            "-png",
+            "-singlefile",
+            "-r",
+            String(input.previewDpi),
+            "-f",
+            String(pageNumber),
+            "-l",
+            String(pageNumber),
+            pdfPath,
+            prefix
+          ],
+          timeoutMs: input.rasterizationTimeoutMs,
+          timeoutCode: "rasterization_failed",
+          failureCode: "rasterization_failed",
+          signal: input.signal
+        });
+        const bytes = await readFile(`${prefix}.png`);
+        const spreadsheetSelection = spreadsheetSelectionForPage(input, index);
         pages.push({
           bytes,
           mimeType: "image/png",
-          ...(input.sourceKind === "document" ? { pageNumber } : { slideNumber: pageNumber }),
+          ...(input.sourceKind === "document" || input.sourceKind === "pdf"
+            ? { pageNumber }
+            : {}),
+          ...(input.sourceKind === "presentation" ? { slideNumber: pageNumber } : {}),
+          ...spreadsheetSelection,
           ...readPngDimensions(bytes)
         });
       }
@@ -645,19 +672,112 @@ function createPreviewFilename(
   format: ArtifactPreviewImageFormat
 ): string {
   const base = basename(source.filename ?? source.id, extname(source.filename ?? source.id));
-  const role = sourceKind === "document" ? "page" : "slide";
+  const role = previewRoleForSourceKind(sourceKind);
   return `${base}-${role}-${position}.${format}`;
 }
 
 function sourceExtension(input: ArtifactPreviewRenderInput): string {
   const extension = extname(input.filename ?? "").toLowerCase();
-  if ([".doc", ".docx", ".ppt", ".pptx"].includes(extension)) {
+  if ([".doc", ".docx", ".ppt", ".pptx", ".pdf", ".xls", ".xlsx", ".ods"].includes(extension)) {
     return extension;
+  }
+  if (input.sourceKind === "pdf" || input.mimeType.includes("pdf")) {
+    return ".pdf";
   }
   if (input.mimeType.includes("presentation") || input.mimeType.includes("powerpoint")) {
     return ".pptx";
   }
+  if (
+    input.sourceKind === "spreadsheet" ||
+    input.mimeType.includes("spreadsheet") ||
+    input.mimeType.includes("excel")
+  ) {
+    return ".xlsx";
+  }
   return ".docx";
+}
+
+function rasterPageNumbers(input: ArtifactPreviewRenderInput, pageCount: number): number[] {
+  const requested = numericRasterSelection(input);
+  if (requested.length > 0) {
+    const selected = requested.filter((pageNumber) => pageNumber <= pageCount);
+    if (selected.length === 0 || selected.length > input.maxPages) {
+      throw previewFailure("page_limit_exceeded", false);
+    }
+    return selected;
+  }
+  if (pageCount > input.maxPages) {
+    throw previewFailure("page_limit_exceeded", false);
+  }
+  return Array.from({ length: pageCount }, (_, index) => index + 1);
+}
+
+function numericRasterSelection(input: ArtifactPreviewRenderInput): number[] {
+  if (input.sourceKind === "presentation") {
+    return input.slides ?? [];
+  }
+  if (input.sourceKind === "document" || input.sourceKind === "pdf") {
+    return input.pages ?? [];
+  }
+  return [];
+}
+
+function spreadsheetSelectionForPage(
+  input: ArtifactPreviewRenderInput,
+  index: number
+): { sheet?: string; range?: string } {
+  if (input.sourceKind !== "spreadsheet") {
+    return {};
+  }
+  const ranges = input.ranges ?? [];
+  const sheets = input.sheets ?? [];
+  const range = ranges[index] ?? (ranges.length === 1 ? ranges[0] : undefined);
+  const sheet = sheets[index] ?? (sheets.length === 1 ? sheets[0] : readSheetFromRange(range));
+  return {
+    ...(sheet ? { sheet } : {}),
+    ...(range ? { range } : {})
+  };
+}
+
+function readSheetFromRange(range: string | undefined): string | undefined {
+  const separatorIndex = range?.indexOf("!");
+  if (!range || separatorIndex === undefined || separatorIndex <= 0) {
+    return undefined;
+  }
+  return range.slice(0, separatorIndex).replace(/^'|'$/gu, "");
+}
+
+function previewArtifactKind(
+  sourceKind: ArtifactPreviewSourceKind,
+  page: ArtifactPreviewRenderedPage
+): string {
+  if (sourceKind === "presentation") {
+    return "presentation.preview_slide_image";
+  }
+  if (sourceKind === "spreadsheet") {
+    return page.range ? "spreadsheet.preview_range_image" : "spreadsheet.preview_sheet_image";
+  }
+  return "document.preview_page_image";
+}
+
+function previewRoleForPage(
+  sourceKind: ArtifactPreviewSourceKind,
+  page: ArtifactPreviewRenderedPage
+): string {
+  if (sourceKind === "spreadsheet") {
+    return page.range ? "range" : "sheet";
+  }
+  return previewRoleForSourceKind(sourceKind);
+}
+
+function previewRoleForSourceKind(sourceKind: ArtifactPreviewSourceKind): string {
+  if (sourceKind === "presentation") {
+    return "slide";
+  }
+  if (sourceKind === "spreadsheet") {
+    return "sheet";
+  }
+  return "page";
 }
 
 function checksumBytes(bytes: Uint8Array): string {

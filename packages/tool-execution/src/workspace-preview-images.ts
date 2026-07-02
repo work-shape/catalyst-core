@@ -18,6 +18,7 @@ import type {
   workspacePreviewImagesInputSchema,
   workspacePreviewImagesOutputSchema
 } from "./workspace-tool-schemas";
+import { createArtifactPreviewSettingsHash } from "./artifact-preview-settings";
 import { failed } from "./workspace-tool-results";
 
 export type WorkspacePreviewImagesInput = z.infer<typeof workspacePreviewImagesInputSchema>;
@@ -79,6 +80,13 @@ export async function resolveWorkspacePreviewImages(
 
   const maxImages = Math.min(input.maxImages ?? options.maxImages, options.maxImages);
   const selection = normalizeSelection(input);
+  const settingsHash = createArtifactPreviewSettingsHash({
+    pages: input.pages,
+    slides: input.slides,
+    sheets: input.sheets,
+    ranges: input.ranges,
+    maxImages
+  });
   const warnings: PreviewWarning[] = [];
 
   if (isSupportedImageMimeType(source.mimeType)) {
@@ -157,6 +165,10 @@ export async function resolveWorkspacePreviewImages(
     sourceArtifactId: source.id
   });
   if (job) {
+    if (job.settingsHash !== settingsHash && detectArtifactPreviewSourceKind(source)) {
+      const queued = await queuePreviewJob(source, options.store, settingsHash);
+      return queuedPending(source, maxImages, queued.createdAt);
+    }
     if (job.status === "failed" || job.status === "unsupported") {
       return success(source, job.status, maxImages, [], {
         errorCode: job.errorCode,
@@ -193,21 +205,8 @@ export async function resolveWorkspacePreviewImages(
   }
 
   if (detectArtifactPreviewSourceKind(source)) {
-    const queued = await options.store.enqueueArtifactPreviewJob({
-      clientInstanceId: source.clientInstanceId,
-      conversationId: source.conversationId,
-      sourceArtifactId: source.id,
-      sourceChecksum: source.checksum,
-      sourceMimeType: source.mimeType
-    });
-    return success(source, "pending", maxImages, [], {
-      warnings: [
-        {
-          code: "preview_pending",
-          message: `Preview image generation was queued at ${queued.createdAt}; no model-visible image parts were attached yet.`
-        }
-      ]
-    });
+    const queued = await queuePreviewJob(source, options.store, settingsHash);
+    return queuedPending(source, maxImages, queued.createdAt);
   }
 
   return success(source, "unsupported", maxImages, [], {
@@ -217,6 +216,36 @@ export async function resolveWorkspacePreviewImages(
         code: "unsupported_type",
         message:
           "No ready preview images are available, and this artifact type is not supported by the configured preview renderer."
+      }
+    ]
+  });
+}
+
+async function queuePreviewJob(
+  source: ManagedArtifactRecord,
+  store: WorkspacePreviewImagesStore,
+  settingsHash: string
+) {
+  return store.enqueueArtifactPreviewJob({
+    clientInstanceId: source.clientInstanceId,
+    conversationId: source.conversationId,
+    sourceArtifactId: source.id,
+    sourceChecksum: source.checksum,
+    sourceMimeType: source.mimeType,
+    settingsHash
+  });
+}
+
+function queuedPending(
+  source: ManagedArtifactRecord,
+  maxImages: number,
+  queuedAt: string
+): ToolHandlerResult<WorkspacePreviewImagesOutput> {
+  return success(source, "pending", maxImages, [], {
+    warnings: [
+      {
+        code: "preview_pending",
+        message: `Preview image generation was queued at ${queuedAt}; no model-visible image parts were attached yet.`
       }
     ]
   });

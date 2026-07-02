@@ -122,7 +122,7 @@ export function ToolCallPart({
     );
   }
 
-  const hasDisclosureContent = Boolean(summary) || artifacts.length > 0 || detailSections.length > 0;
+  const hasDisclosureContent = Boolean(summary) || surfacedArtifacts.length > 0 || detailSections.length > 0;
 
   if (!hasDisclosureContent) {
     return (
@@ -149,7 +149,6 @@ export function ToolCallPart({
       state={state}
       statusLabel={statusLabel}
       summary={summary}
-      artifacts={artifacts}
       surfacedArtifacts={surfacedArtifacts}
       toolCallId={toolCallId}
       toolTitle={toolDisplay.title}
@@ -679,7 +678,6 @@ function CompactToolCall({
   state,
   statusLabel,
   summary,
-  artifacts,
   surfacedArtifacts,
   toolCallId,
   toolTitle
@@ -689,7 +687,6 @@ function CompactToolCall({
   state: "running" | "completed" | "failed";
   statusLabel: string;
   summary: string | undefined;
-  artifacts: ToolArtifactDownloadRef[];
   surfacedArtifacts: ToolArtifactDownloadRef[];
   toolCallId: string;
   toolTitle: string;
@@ -730,7 +727,6 @@ function CompactToolCall({
           {summary ? (
             <p className="text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]">{summary}</p>
           ) : null}
-          {surfacedArtifacts.length === 0 ? <ToolArtifactList artifacts={artifacts} /> : null}
           <ToolDetails sections={detailSections} />
         </div>
       ) : null}
