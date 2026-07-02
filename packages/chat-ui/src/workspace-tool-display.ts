@@ -11,6 +11,11 @@ export interface WorkspaceToolDisplayProjection {
 
 const MAX_LISTED_NAMES = 3;
 const MAX_COMMAND_PARTS = 8;
+const MAX_FAILURE_PREVIEW_CHARS = 1800;
+const MAX_FAILURE_STRING_CHARS = 320;
+const MAX_FAILURE_JSON_DEPTH = 4;
+const MAX_FAILURE_JSON_ARRAY_ITEMS = 6;
+const MAX_FAILURE_JSON_OBJECT_FIELDS = 16;
 
 export function projectWorkspaceToolDisplay(input: {
   args: unknown;
@@ -35,6 +40,24 @@ export function projectWorkspaceToolDisplay(input: {
     default:
       return projectGenericWorkspaceTool(input.toolName, input.result);
   }
+}
+
+export function isFailedWorkspaceExecResult(input: {
+  result: unknown;
+  toolName: string;
+}): boolean {
+  if (input.toolName !== "workspace.exec") {
+    return false;
+  }
+  const output = readOutput(input.result);
+  return readString(output?.status) === "failed";
+}
+
+export function readWorkspaceToolErrorText(input: {
+  result: unknown;
+  toolName: string;
+}): string | undefined {
+  return isFailedWorkspaceExecResult(input) ? "Workspace command failed" : undefined;
 }
 
 export function summarizeWorkspaceCommand(command: string): string | undefined {
@@ -122,6 +145,9 @@ function projectWorkspaceExec(args: unknown, result: unknown): WorkspaceToolDisp
       ])
     });
   }
+  if (status === "failed") {
+    sections.push(...workspaceExecFailurePreviewSections(output, error, truncated));
+  }
 
   const changedSummary = summarizeWorkspaceFiles(changedFiles);
   const promotedSummary = summarizePromotedArtifacts(promotedArtifacts);
@@ -144,6 +170,159 @@ function projectWorkspaceExec(args: unknown, result: unknown): WorkspaceToolDisp
     ]),
     sections
   };
+}
+
+function workspaceExecFailurePreviewSections(
+  output: Record<string, unknown> | undefined,
+  error: Record<string, unknown> | undefined,
+  truncated: Record<string, unknown> | undefined
+): ToolDetailSection[] {
+  return compactSections([
+    failurePreviewSection("Stdout preview", readString(output?.stdoutPreview), truncated?.stdout === true),
+    failurePreviewSection("Stderr preview", readString(output?.stderrPreview), truncated?.stderr === true),
+    error ? { label: "Error", value: sanitizeWorkspaceFailurePreview(error) } : undefined
+  ]);
+}
+
+function failurePreviewSection(
+  label: string,
+  value: string | undefined,
+  runnerTruncated: boolean
+): ToolDetailSection | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const preview = sanitizeWorkspaceFailurePreview(value);
+  if (!preview) {
+    return undefined;
+  }
+  return {
+    label,
+    value: runnerTruncated ? `${preview}\n[truncated by runner]` : preview
+  };
+}
+
+function sanitizeWorkspaceFailurePreview(value: unknown): string {
+  const sanitized = typeof value === "string"
+    ? sanitizeFailurePreviewStringOrJson(value)
+    : stringifySanitizedFailureJson(value);
+  return boundText(sanitized, MAX_FAILURE_PREVIEW_CHARS);
+}
+
+function sanitizeFailurePreviewStringOrJson(value: string): string {
+  const parsed = tryParseJson(value);
+  if (parsed.parsed) {
+    return stringifySanitizedFailureJson(parsed.value);
+  }
+  return sanitizeFailureString(value, { broadContent: false });
+}
+
+function stringifySanitizedFailureJson(value: unknown): string {
+  try {
+    return JSON.stringify(sanitizeFailureJsonValue(value, 0, undefined), null, 2);
+  } catch {
+    return sanitizeFailureString(String(value), { broadContent: false });
+  }
+}
+
+function sanitizeFailureJsonValue(value: unknown, depth: number, key: string | undefined): unknown {
+  if (depth > MAX_FAILURE_JSON_DEPTH) {
+    return "[omitted nested data]";
+  }
+  if (value === undefined || value === null || typeof value === "number" || typeof value === "boolean") {
+    return value ?? null;
+  }
+  if (typeof value === "string") {
+    return sanitizeFailureString(value, { broadContent: isBroadContentKey(key) });
+  }
+  if (Array.isArray(value)) {
+    const items = value
+      .slice(0, MAX_FAILURE_JSON_ARRAY_ITEMS)
+      .map((item) => sanitizeFailureJsonValue(item, depth + 1, key));
+    if (value.length > MAX_FAILURE_JSON_ARRAY_ITEMS) {
+      items.push(`[${value.length - MAX_FAILURE_JSON_ARRAY_ITEMS} more items omitted]`);
+    }
+    return items;
+  }
+  if (!isRecord(value)) {
+    return sanitizeFailureString(String(value), { broadContent: false });
+  }
+  const output: Record<string, unknown> = {};
+  let included = 0;
+  let omitted = 0;
+  for (const [entryKey, entryValue] of Object.entries(value)) {
+    if (isOmittedFailureKey(entryKey)) {
+      omitted += 1;
+      continue;
+    }
+    if (isSensitiveFailureKey(entryKey)) {
+      output[entryKey] = "[redacted]";
+      included += 1;
+      continue;
+    }
+    if (included >= MAX_FAILURE_JSON_OBJECT_FIELDS) {
+      omitted += 1;
+      continue;
+    }
+    output[entryKey] = sanitizeFailureJsonValue(entryValue, depth + 1, entryKey);
+    included += 1;
+  }
+  if (omitted > 0) {
+    output.omittedFields = omitted;
+  }
+  return output;
+}
+
+function tryParseJson(value: string): { parsed: true; value: unknown } | { parsed: false } {
+  const trimmed = value.trim();
+  if (!trimmed || !/^[\[{]/u.test(trimmed)) {
+    return { parsed: false };
+  }
+  try {
+    return { parsed: true, value: JSON.parse(trimmed) as unknown };
+  } catch {
+    return { parsed: false };
+  }
+}
+
+function sanitizeFailureString(
+  value: string,
+  options: {
+    broadContent: boolean;
+  }
+): string {
+  if (options.broadContent && byteLength(value) > MAX_FAILURE_STRING_CHARS) {
+    return "[omitted broad content]";
+  }
+  return boundText(
+    value
+      .replaceAll(/https?:\/\/[^/@\s"']+:[^/@\s"']+@/giu, "https://[redacted]@")
+      .replaceAll(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gu, "Bearer [redacted]")
+      .replaceAll(
+        /\b(api[_-]?key|token|secret|password|passwd|credential|authorization)\b\s*[:=]\s*["']?[^"',\s;}]+/giu,
+        "$1=[redacted]"
+      )
+      .replaceAll(/\/Users\/[^\s"',;})]+/gu, "[redacted path]")
+      .replaceAll(/\/tmp\/[^\s"',;})]+/gu, "[redacted path]")
+      .replaceAll(/\/var\/folders\/[^\s"',;})]+/gu, "[redacted path]")
+      .replaceAll(/(?:^|[\s"',:])(?:scratch|\.artifact-previews|artifact-previews|execution-workspaces)\/[^\s"',;})]+/giu, (match) =>
+        match.slice(0, 1).match(/[\s"',:]/u) ? `${match.slice(0, 1)}[redacted path]` : "[redacted path]"
+      )
+      .replaceAll(/\b(?:art|ews|wcmd|file)_[a-z0-9_-]{6,}\b/giu, "[redacted id]"),
+    MAX_FAILURE_STRING_CHARS
+  );
+}
+
+function isOmittedFailureKey(key: string): boolean {
+  return /^(?:objectKey|workspacePath|commandId|workspaceId|artifactId|fileId)$/iu.test(key);
+}
+
+function isSensitiveFailureKey(key: string): boolean {
+  return /(?:secret|token|password|passwd|credential|authorization|bearer|api[_-]?key)/iu.test(key);
+}
+
+function isBroadContentKey(key: string | undefined): boolean {
+  return Boolean(key && /^(?:content|body|raw|rawXml|xml|html|base64|bytes|data|document)$/iu.test(key));
 }
 
 function projectWorkspaceImport(result: unknown): WorkspaceToolDisplayProjection {
@@ -298,8 +477,10 @@ function pushSection(sections: ToolDetailSection[], label: string, value: string
   }
 }
 
-function compactSections(sections: ToolDetailSection[]): ToolDetailSection[] {
-  return sections.filter((section) => section.value.trim().length > 0);
+function compactSections(sections: Array<ToolDetailSection | undefined>): ToolDetailSection[] {
+  return sections.filter(
+    (section): section is ToolDetailSection => Boolean(section && section.value.trim().length > 0)
+  );
 }
 
 function readOutput(result: unknown): Record<string, unknown> | undefined {
@@ -500,6 +681,10 @@ function sumNumbers(records: Record<string, unknown>[], key: string): number {
 
 function byteLength(value: string): number {
   return new TextEncoder().encode(value).byteLength;
+}
+
+function boundText(value: string, maxChars: number): string {
+  return value.length > maxChars ? `${value.slice(0, maxChars)}\n[truncated for display]` : value;
 }
 
 function formatBytes(bytes: number): string {

@@ -1110,9 +1110,9 @@ describe("chat UI message history projection", () => {
       toolName: "workspace.exec"
     })).toBe("xlsx_inspect --range Sheet1!A1:C10");
     expect(serializedDetails).toContain("reason handler_failed");
+    expect(serializedDetails).toContain("Command failed while reading");
     expect(serializedDetails).not.toContain("/Users/felixpahlke");
     expect(serializedDetails).not.toContain("scratch/workbook.xlsx");
-    expect(serializedDetails).not.toContain("Command failed while reading");
 
     const timeoutDetails = JSON.stringify(readToolDetailSections({
       args: {
@@ -1163,6 +1163,75 @@ describe("chat UI message history projection", () => {
 
     expect(timeoutDetails).toContain("reason timeout");
     expect(cancelledDetails).toContain("reason cancelled");
+  });
+
+  it("projects failed workspace exec command results as tool errors with sanitized output previews", () => {
+    const toolPart = projectPersistedToolPart({
+      toolName: "workspace.exec",
+      input: {
+        command: "docx_render scratch/final.docx --out scratch/previews"
+      },
+      result: {
+        status: "success",
+        output: {
+          commandId: "wcmd_private",
+          workspaceId: "ews_private",
+          status: "failed",
+          exitCode: 1,
+          stdoutPreview: JSON.stringify({
+            status: "failed",
+            message: "Document render failed",
+            objectKey: "execution-workspaces/private/final.docx",
+            workspacePath: "scratch/final.docx",
+            apiToken: "secret-token-value",
+            details: {
+              path: "/Users/felixpahlke/code/vivd-catalyst/.worktrees/private/scratch/final.docx",
+              content: "x".repeat(1000)
+            }
+          }),
+          stderrPreview: "Traceback in scratch/previews/page-1.png with Bearer abc.def.ghi",
+          durationMs: 2345,
+          changedFiles: [],
+          promotedArtifacts: [],
+          truncated: {
+            stdout: true,
+            stderr: false
+          }
+        }
+      }
+    });
+
+    expect(toolPart).toMatchObject({
+      type: "dynamic-tool",
+      state: "output-error",
+      errorText: "Workspace command failed"
+    });
+
+    const detailSections = readToolDetailSections({
+      args: toolPart.input,
+      labels: { input: "Input", output: "Output" },
+      result: toolPart.output,
+      toolName: "workspace.exec"
+    });
+    const serializedDetails = JSON.stringify(detailSections);
+
+    expect(serializedDetails).toContain("status failed");
+    expect(serializedDetails).toContain("exit 1");
+    expect(serializedDetails).toContain("Document render failed");
+    expect(serializedDetails).toContain("Stdout preview");
+    expect(serializedDetails).toContain("Stderr preview");
+    expect(serializedDetails).toContain("[truncated by runner]");
+    expect(serializedDetails).not.toContain("secret-token-value");
+    expect(serializedDetails).not.toContain("abc.def.ghi");
+    expect(serializedDetails).not.toContain("objectKey");
+    expect(serializedDetails).not.toContain("workspacePath");
+    expect(serializedDetails).not.toContain("execution-workspaces/private");
+    expect(serializedDetails).not.toContain("scratch/final.docx");
+    expect(serializedDetails).not.toContain("scratch/previews");
+    expect(serializedDetails).not.toContain("/Users/felixpahlke");
+    expect(serializedDetails).not.toContain("xxxxx");
+    expect(serializedDetails).not.toContain("wcmd_private");
+    expect(serializedDetails).not.toContain("ews_private");
   });
 
   it("keeps non-workspace tool details available", () => {
@@ -1337,6 +1406,7 @@ function projectPersistedToolPart(input: {
 }): {
   type: string;
   state?: string;
+  errorText?: string;
   input?: unknown;
   output?: unknown;
 } {
@@ -1384,6 +1454,7 @@ function projectPersistedToolPart(input: {
   return projected[0]?.parts[0] as {
     type: string;
     state?: string;
+    errorText?: string;
     input?: unknown;
     output?: unknown;
   };

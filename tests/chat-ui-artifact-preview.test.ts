@@ -4,7 +4,8 @@ import {
   ARTIFACT_PREVIEW_POLL_DELAYS_MS,
   artifactPreviewPollDelayMs,
   createArtifactPreviewView,
-  getArtifactSourceFallbackKind
+  getArtifactSourceFallbackKind,
+  shouldUseLiveArtifactPreviewState
 } from "../packages/chat-ui/src/artifact-preview";
 import type { ToolArtifactDownloadRef } from "../packages/chat-ui/src/tool-artifacts";
 
@@ -172,5 +173,40 @@ describe("chat UI artifact preview state", () => {
       kind: "error",
       fallbackKind: "image"
     });
+  });
+
+  it("uses live preview state only for document and presentation page-image previews", () => {
+    expect(shouldUseLiveArtifactPreviewState({
+      artifactId: "art_docx",
+      filename: "memo.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    })).toBe(true);
+    expect(shouldUseLiveArtifactPreviewState({
+      artifactId: "art_pptx",
+      filename: "deck.pptx",
+      mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    })).toBe(true);
+    expect(shouldUseLiveArtifactPreviewState({
+      artifactId: "art_pdf",
+      filename: "report.pdf",
+      mimeType: "application/pdf"
+    })).toBe(false);
+    expect(shouldUseLiveArtifactPreviewState({
+      artifactId: "art_xlsx",
+      filename: "analysis.xlsx",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    })).toBe(false);
+    expect(shouldUseLiveArtifactPreviewState({
+      artifactId: "art_docx",
+      filename: "memo.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      preview: {
+        status: "ready",
+        artifactId: "art_docx",
+        type: "image_pages",
+        format: "png",
+        pages: [{ artifactId: "art_docx_page_1", mimeType: "image/png" }]
+      }
+    })).toBe(true);
   });
 });

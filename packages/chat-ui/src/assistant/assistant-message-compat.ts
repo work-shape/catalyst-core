@@ -127,14 +127,27 @@ export function readCompatiblePersistedToolResult(
       errorText: typeof result.error.message === "string" ? result.error.message : "Tool call failed",
       output: {
         status: result.status,
-        error: {
-          code: typeof result.error.code === "string" ? result.error.code : "handler_failed"
-        },
+        error: persistedToolErrorSummary(runtime.toolName, result.error),
         projectionNotice: runtime.projectionNotice
       }
     };
   }
   return undefined;
+}
+
+function persistedToolErrorSummary(
+  toolName: string,
+  error: Record<string, unknown>
+): Record<string, unknown> {
+  const code = typeof error.code === "string" ? error.code : "handler_failed";
+  if (toolName !== "workspace.exec") {
+    return { code };
+  }
+  return {
+    code,
+    ...(typeof error.message === "string" ? { message: error.message } : {}),
+    ...(error.details !== undefined ? { details: error.details } : {})
+  };
 }
 
 function readCompatibleAttachmentManifestRefs(value: unknown): PersistedAttachmentRef[] {

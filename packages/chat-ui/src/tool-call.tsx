@@ -31,7 +31,11 @@ import {
 } from "./tool-artifacts";
 import { ToolSurfaceList } from "./tool-surface-card";
 import { readWorkspacePromotedSurfacesData } from "./tool-surfaces";
-import { projectWorkspaceToolDisplay, type ToolDetailSection } from "./workspace-tool-display";
+import {
+  isFailedWorkspaceExecResult,
+  projectWorkspaceToolDisplay,
+  type ToolDetailSection
+} from "./workspace-tool-display";
 
 interface DataPartProps {
   name: string;
@@ -55,7 +59,7 @@ export function ToolCallPart({
   const { locale, t } = useTranslation();
   const displayPanel = useToolDisplayPanel();
   const displayWidget = useToolDisplayWidget();
-  const state = toolUiState({ isError, result, status });
+  const state = toolUiState({ isError, result, status, toolName });
   const display = readToolDisplayPayloadFromToolResult(result);
   const renderedDisplay =
     display && displayWidget
@@ -447,17 +451,22 @@ function toolStatusLabel(
 function toolUiState({
   isError,
   result,
-  status
+  status,
+  toolName
 }: {
   isError?: boolean;
   result: unknown;
   status?: ToolCallMessagePartProps["status"];
+  toolName: string;
 }): "running" | "completed" | "failed" {
   if (isError || status?.type === "incomplete") {
     return "failed";
   }
   if (status?.type === "running" || status?.type === "requires-action" || result === undefined) {
     return "running";
+  }
+  if (isFailedWorkspaceExecResult({ result, toolName })) {
+    return "failed";
   }
   return "completed";
 }

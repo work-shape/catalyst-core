@@ -120,6 +120,11 @@ export function createArtifactPreviewView(input: {
   };
 }
 
+export function shouldUseLiveArtifactPreviewState(artifact: ToolArtifactDownloadRef): boolean {
+  const previewKind = getArtifactPreviewKind(artifact);
+  return previewKind === "image-pages" || previewKind === "document" || previewKind === "presentation";
+}
+
 export function getArtifactSourceFallbackKind(
   artifact: ToolArtifactDownloadRef
 ): ArtifactSourceFallbackKind | undefined {
@@ -181,16 +186,11 @@ export function ArtifactPreview({
   }
 
   if (previewKind === "image-pages") {
-    return (
-      <ArtifactPreviewFrame>
-        <ImagePagesArtifactPreview
-          artifact={artifact}
-          client={client}
-          conversationId={conversationId}
-          fileType={fileType}
-        />
-      </ArtifactPreviewFrame>
-    );
+    return <LiveArtifactPreview artifact={artifact} client={client} conversationId={conversationId} fileType={fileType} />;
+  }
+
+  if (shouldUseLiveArtifactPreviewState(artifact)) {
+    return <LiveArtifactPreview artifact={artifact} client={client} conversationId={conversationId} fileType={fileType} />;
   }
 
   return (
@@ -202,6 +202,165 @@ export function ArtifactPreview({
       previewKind={previewKind}
     />
   );
+}
+
+function LiveArtifactPreview({
+  artifact,
+  client,
+  conversationId,
+  fileType
+}: {
+  artifact: ToolArtifactDownloadRef;
+  client: ApiClient;
+  conversationId: string;
+  fileType: ArtifactFileType;
+}) {
+  const { t } = useTranslation();
+  const embeddedPreviewKey = artifactPreviewStateKey(artifact.preview);
+  const [state, setState] = useState<{
+    apiError: boolean;
+    pendingAttempt: number;
+    preview?: ArtifactPreviewResponse;
+    refreshing: boolean;
+  }>(() => ({
+    apiError: false,
+    pendingAttempt: 0,
+    preview: artifact.preview,
+    refreshing: Boolean(artifact.preview)
+  }));
+
+  useEffect(() => {
+    let cancelled = false;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+
+    const poll = (pendingAttempt: number) => {
+      setState((current) => ({
+        apiError: false,
+        pendingAttempt,
+        preview: current.preview,
+        refreshing: true
+      }));
+      void client
+        .conversationArtifactPreview(conversationId, artifact.artifactId)
+        .then((preview) => {
+          if (cancelled) {
+            return;
+          }
+          setState({
+            apiError: false,
+            pendingAttempt,
+            preview,
+            refreshing: false
+          });
+          const delay = artifactPreviewPollDelayMs({
+            status: preview.status,
+            pendingAttempt
+          });
+          if (delay !== undefined) {
+            timeout = setTimeout(() => poll(pendingAttempt + 1), delay);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setState({
+              apiError: true,
+              pendingAttempt,
+              preview: undefined,
+              refreshing: false
+            });
+          }
+        });
+    };
+
+    setState({
+      apiError: false,
+      pendingAttempt: 0,
+      preview: artifact.preview,
+      refreshing: Boolean(artifact.preview)
+    });
+    poll(0);
+
+    return () => {
+      cancelled = true;
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+    };
+  }, [artifact.artifactId, client, conversationId, embeddedPreviewKey]);
+
+  const view = createArtifactPreviewView({
+    artifact,
+    apiError: state.apiError,
+    pendingAttempt: state.pendingAttempt,
+    preview: state.preview,
+    refreshing: state.refreshing
+  });
+
+  if (view.kind === "ready") {
+    return (
+      <ArtifactPreviewFrame>
+        <ImagePagesArtifactPreview
+          artifact={{ ...artifact, preview: view.preview }}
+          client={client}
+          conversationId={conversationId}
+          fileType={fileType}
+        />
+      </ArtifactPreviewFrame>
+    );
+  }
+
+  if (view.kind === "loading" || view.kind === "pending") {
+    return (
+      <ArtifactPreviewMessage
+        fileType={fileType}
+        title={t("artifactPreviewLoading")}
+        detail={artifactDisplayFilename(artifact)}
+      />
+    );
+  }
+
+  if (view.kind === "failed") {
+    return (
+      <ArtifactPreviewMessage
+        fileType={fileType}
+        title={t("artifactPreviewFailed")}
+        detail={artifactPreviewStatusDetail(artifact, view.errorCode)}
+      />
+    );
+  }
+
+  if (view.kind === "unsupported") {
+    return (
+      <ArtifactPreviewMessage
+        fileType={fileType}
+        title={t("artifactPreviewUnavailable")}
+        detail={artifactPreviewStatusDetail(artifact, view.errorCode)}
+      />
+    );
+  }
+
+  return (
+    <ArtifactPreviewMessage
+      fileType={fileType}
+      title={t("artifactPreviewFailed")}
+      detail={artifactDisplayFilename(artifact)}
+    />
+  );
+}
+
+function artifactPreviewStateKey(preview: ArtifactPreviewResponse | undefined): string {
+  if (!preview) {
+    return "";
+  }
+  if (preview.status !== "ready") {
+    return `${preview.status}:${preview.artifactId}`;
+  }
+  return `${preview.status}:${preview.artifactId}:${preview.pages.map((page) => page.artifactId).join("|")}`;
+}
+
+function artifactPreviewStatusDetail(artifact: ToolArtifactDownloadRef, errorCode: string | undefined): string {
+  const filename = artifactDisplayFilename(artifact);
+  return errorCode ? `${filename}: ${errorCode}` : filename;
 }
 
 function BlobArtifactPreview({

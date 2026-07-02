@@ -34,6 +34,7 @@ import {
   readToolSurfaceRefs,
   type ToolSurfaceRef
 } from "./tool-surfaces";
+import { readWorkspaceToolErrorText } from "./workspace-tool-display";
 
 export interface AssistantUiActiveRun {
   run: {
@@ -534,16 +535,21 @@ function toToolCallUiPart(
   activeRun?: AssistantUiActiveRun
 ): UIMessage["parts"][number] {
   const terminalToolError = terminalToolErrorForActiveRun(toolCall, activeRun);
+  const workspaceToolError = readWorkspaceToolErrorText({
+    result: toolCall.output,
+    toolName: toolCall.toolName
+  });
+  const projectedErrorText = terminalToolError ?? workspaceToolError;
   return {
     type: "dynamic-tool",
     toolName: toolCall.toolName,
     toolCallId: toolCall.toolCallId,
     title: toolCall.toolName,
-    state: terminalToolError ? "output-error" : toAssistantToolState(toolCall.state),
+    state: projectedErrorText ? "output-error" : toAssistantToolState(toolCall.state),
     input: toolCall.input,
-    ...(terminalToolError
+    ...(projectedErrorText
       ? {
-          errorText: terminalToolError,
+          errorText: projectedErrorText,
           ...(toolCall.output !== undefined ? { output: toolCall.output } : {})
         }
       : toolCall.state === "output_error"
@@ -607,17 +613,21 @@ function toUiMessageParts(
 
   for (const toolCall of toolCalls) {
     const toolResult = toolResultsByToolCallId.get(toolCall.toolCallId);
+    const workspaceToolError = toolResult
+      ? readWorkspaceToolErrorText({ result: toolResult.output, toolName: toolCall.toolName })
+      : undefined;
+    const projectedErrorText = toolResult?.status === "failed" ? toolResult.errorText : workspaceToolError;
     parts.push({
       type: "dynamic-tool",
       toolName: toolCall.toolName,
       toolCallId: toolCall.toolCallId,
       title: toolCall.toolName,
-      state: toolResult?.status === "failed" ? "output-error" : toolResult ? "output-available" : "input-available",
+      state: projectedErrorText ? "output-error" : toolResult ? "output-available" : "input-available",
       input: toolCall.input,
-      ...(toolResult?.status === "failed"
+      ...(projectedErrorText
         ? {
-            errorText: toolResult.errorText,
-            ...(toolResult.output !== undefined ? { output: toolResult.output } : {})
+            errorText: projectedErrorText,
+            ...(toolResult?.output !== undefined ? { output: toolResult.output } : {})
           }
         : toolResult
           ? { output: toolResult.output }
