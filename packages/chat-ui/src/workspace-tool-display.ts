@@ -229,6 +229,9 @@ function sanitizeFailureJsonValue(value: unknown, depth: number, key: string | u
   if (depth > MAX_FAILURE_JSON_DEPTH) {
     return "[omitted nested data]";
   }
+  if (isBroadContentKey(key)) {
+    return "[omitted broad content]";
+  }
   if (value === undefined || value === null || typeof value === "number" || typeof value === "boolean") {
     return value ?? null;
   }
@@ -291,8 +294,11 @@ function sanitizeFailureString(
     broadContent: boolean;
   }
 ): string {
-  if (options.broadContent && byteLength(value) > MAX_FAILURE_STRING_CHARS) {
+  if (options.broadContent) {
     return "[omitted broad content]";
+  }
+  if (looksLikeStructuredMarkup(value)) {
+    return "[omitted structured markup]";
   }
   return boundText(
     value
@@ -310,6 +316,15 @@ function sanitizeFailureString(
       )
       .replaceAll(/\b(?:art|ews|wcmd|file)_[a-z0-9_-]{6,}\b/giu, "[redacted id]"),
     MAX_FAILURE_STRING_CHARS
+  );
+}
+
+function looksLikeStructuredMarkup(value: string): boolean {
+  const trimmed = value.trim();
+  return (
+    /^<\?(?:xml)\b/iu.test(trimmed) ||
+    /^<!doctype\s+html\b/iu.test(trimmed) ||
+    /<([A-Za-z][\w:-]*)\b[^>]*>[\s\S]*<\/\1>/u.test(trimmed)
   );
 }
 

@@ -1186,7 +1186,16 @@ describe("chat UI message history projection", () => {
             apiToken: "secret-token-value",
             details: {
               path: "/Users/felixpahlke/code/vivd-catalyst/.worktrees/private/scratch/final.docx",
-              content: "x".repeat(1000)
+              rawXml: "<w:document><w:t>secret document text</w:t></w:document>",
+              xml: "<root>secret xml</root>",
+              html: "<p>secret html</p>",
+              content: "short sensitive body",
+              body: "short body secret",
+              base64: "c2hvcnQtc2VjcmV0",
+              data: ["secret array item"],
+              document: {
+                text: "secret nested document text"
+              }
             }
           }),
           stderrPreview: "Traceback in scratch/previews/page-1.png with Bearer abc.def.ghi",
@@ -1221,8 +1230,17 @@ describe("chat UI message history projection", () => {
     expect(serializedDetails).toContain("Stdout preview");
     expect(serializedDetails).toContain("Stderr preview");
     expect(serializedDetails).toContain("[truncated by runner]");
+    expect(serializedDetails).toContain("[omitted broad content]");
     expect(serializedDetails).not.toContain("secret-token-value");
     expect(serializedDetails).not.toContain("abc.def.ghi");
+    expect(serializedDetails).not.toContain("secret document text");
+    expect(serializedDetails).not.toContain("secret xml");
+    expect(serializedDetails).not.toContain("secret html");
+    expect(serializedDetails).not.toContain("short sensitive body");
+    expect(serializedDetails).not.toContain("short body secret");
+    expect(serializedDetails).not.toContain("c2hvcnQtc2VjcmV0");
+    expect(serializedDetails).not.toContain("secret array item");
+    expect(serializedDetails).not.toContain("secret nested document text");
     expect(serializedDetails).not.toContain("objectKey");
     expect(serializedDetails).not.toContain("workspacePath");
     expect(serializedDetails).not.toContain("execution-workspaces/private");
@@ -1232,6 +1250,39 @@ describe("chat UI message history projection", () => {
     expect(serializedDetails).not.toContain("xxxxx");
     expect(serializedDetails).not.toContain("wcmd_private");
     expect(serializedDetails).not.toContain("ews_private");
+  });
+
+  it("omits non-JSON XML-like failed workspace exec previews", () => {
+    const detailSections = readToolDetailSections({
+      args: {
+        command: "docx_render final.docx --out previews"
+      },
+      labels: { input: "Input", output: "Output" },
+      result: {
+        status: "success",
+        output: {
+          status: "failed",
+          exitCode: 1,
+          stdoutPreview: "<w:document><w:t>secret document text</w:t></w:document>",
+          stderrPreview: "<p>secret html</p>",
+          durationMs: 20,
+          changedFiles: [],
+          promotedArtifacts: [],
+          truncated: {
+            stdout: false,
+            stderr: false
+          }
+        }
+      },
+      toolName: "workspace.exec"
+    });
+    const serializedDetails = JSON.stringify(detailSections);
+
+    expect(serializedDetails).toContain("[omitted structured markup]");
+    expect(serializedDetails).not.toContain("secret document text");
+    expect(serializedDetails).not.toContain("secret html");
+    expect(serializedDetails).not.toContain("<w:document>");
+    expect(serializedDetails).not.toContain("<p>");
   });
 
   it("keeps non-workspace tool details available", () => {
