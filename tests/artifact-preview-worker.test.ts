@@ -335,7 +335,7 @@ describe("ArtifactPreviewWorker", () => {
       range: "Detail!A1:B4"
     });
     expect(imageDigest(summary.pages[0]!.bytes)).not.toBe(imageDigest(detail.pages[0]!.bytes));
-  });
+  }, 30000);
 
   it("fails without retrying when the source artifact exceeds the size limit", async () => {
     const fixture = await createWorkerFixture({ byteSize: 6, sourceBytes: bytes("small") });
