@@ -139,6 +139,16 @@ export async function resolveWorkspacePreviewImages(
     sourceArtifactId: source.id
   });
   if (manifest) {
+    if (
+      manifest.status === "ready" &&
+      detectArtifactPreviewSourceKind(source) &&
+      !readyCandidatesCoverSelection(previewCandidatesFromManifest(manifest), selection)
+    ) {
+      const queued = await queuePreviewJob(source, options.store, settingsHash, {
+        replaceTerminal: true
+      });
+      return queuedPending(source, maxImages, queued.createdAt);
+    }
     return previewStateFromManifest(source, manifest, selection, maxImages, context.clientInstanceId, options.store);
   }
 
@@ -224,7 +234,8 @@ export async function resolveWorkspacePreviewImages(
 async function queuePreviewJob(
   source: ManagedArtifactRecord,
   store: WorkspacePreviewImagesStore,
-  settingsHash: string
+  settingsHash: string,
+  options: { replaceTerminal?: boolean } = {}
 ) {
   return store.enqueueArtifactPreviewJob({
     clientInstanceId: source.clientInstanceId,
@@ -232,7 +243,8 @@ async function queuePreviewJob(
     sourceArtifactId: source.id,
     sourceChecksum: source.checksum,
     sourceMimeType: source.mimeType,
-    settingsHash
+    settingsHash,
+    ...(options.replaceTerminal ? { replaceTerminal: true } : {})
   });
 }
 
@@ -274,30 +286,38 @@ async function previewStateFromManifest(
     });
   }
 
+  const candidates = previewCandidatesFromManifest(manifest);
   return previewStateFromReadyImages(
     source,
-    manifest.pages.flatMap((page) => {
-      const mimeType = readSupportedImageMimeType(page.mimeType);
-      return mimeType
-        ? [
-            {
-              artifactId: page.artifactId,
-              mimeType,
-              pageNumber: page.pageNumber,
-              slideNumber: page.slideNumber,
-              sheet: page.sheet,
-              range: page.range,
-              width: page.width,
-              height: page.height
-            }
-          ]
-        : [];
-    }),
+    candidates,
     selection,
     maxImages,
     clientInstanceId,
     store
   );
+}
+
+function previewCandidatesFromManifest(manifest: ArtifactPreviewManifest): PreviewImageCandidate[] {
+  if (manifest.status !== "ready") {
+    return [];
+  }
+  return manifest.pages.flatMap((page) => {
+    const mimeType = readSupportedImageMimeType(page.mimeType);
+    return mimeType
+      ? [
+          {
+            artifactId: page.artifactId,
+            mimeType,
+            pageNumber: page.pageNumber,
+            slideNumber: page.slideNumber,
+            sheet: page.sheet,
+            range: page.range,
+            width: page.width,
+            height: page.height
+          }
+        ]
+      : [];
+  });
 }
 
 async function previewStateFromReadyImages(
@@ -449,6 +469,48 @@ function matchesSelection(candidate: PreviewImageCandidate, selection: Normalize
     (candidate.sheet !== undefined && selection.sheets?.has(normalizeSelector(candidate.sheet))) ||
     (candidate.range !== undefined && selection.ranges?.has(normalizeSelector(candidate.range))) ||
     false
+  );
+}
+
+function readyCandidatesCoverSelection(
+  candidates: PreviewImageCandidate[],
+  selection: NormalizedSelection
+): boolean {
+  if (!selection.hasSelection) {
+    return true;
+  }
+  return (
+    coversAllNumbers(candidates, selection.pageNumbers, "pageNumber") &&
+    coversAllNumbers(candidates, selection.slideNumbers, "slideNumber") &&
+    coversAllStrings(candidates, selection.sheets, "sheet") &&
+    coversAllStrings(candidates, selection.ranges, "range")
+  );
+}
+
+function coversAllNumbers(
+  candidates: PreviewImageCandidate[],
+  values: Set<number> | undefined,
+  key: "pageNumber" | "slideNumber"
+): boolean {
+  if (!values?.size) {
+    return true;
+  }
+  return [...values].every((value) => candidates.some((candidate) => candidate[key] === value));
+}
+
+function coversAllStrings(
+  candidates: PreviewImageCandidate[],
+  values: Set<string> | undefined,
+  key: "sheet" | "range"
+): boolean {
+  if (!values?.size) {
+    return true;
+  }
+  return [...values].every((value) =>
+    candidates.some((candidate) => {
+      const candidateValue = candidate[key];
+      return candidateValue !== undefined && normalizeSelector(candidateValue) === value;
+    })
   );
 }
 

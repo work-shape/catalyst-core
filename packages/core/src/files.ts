@@ -354,6 +354,7 @@ export interface EnqueueArtifactPreviewJobInput {
   renderer?: string;
   rendererVersion?: string;
   settingsHash?: string;
+  replaceTerminal?: boolean;
   queuedAt?: ISODateString;
 }
 

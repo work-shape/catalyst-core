@@ -1123,6 +1123,138 @@ describe("workspace tools", () => {
     ]);
   });
 
+  it("queues selector-specific previews when an existing manifest does not cover the request", async () => {
+    const harness = await createWorkspaceHarness();
+    const pdf = await harness.store.createManagedArtifact({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      kind: "document.pdf",
+      objectKey: "execution-workspaces/private/report.pdf",
+      filename: "report.pdf",
+      mimeType: "application/pdf",
+      byteSize: 128,
+      checksum: "sha256:report"
+    });
+    await harness.store.writeArtifactPreviewManifest({
+      status: "ready",
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      sourceArtifactId: pdf.id,
+      type: "image_pages",
+      format: "png",
+      pages: [
+        {
+          artifactId: asManagedArtifactId("art_pdf_page_1"),
+          mimeType: "image/png",
+          pageNumber: 1
+        }
+      ]
+    });
+
+    const pdfPage2 = await harness.runTool("workspace.preview_images", {
+      artifactId: pdf.id,
+      pages: [2],
+      maxImages: 1
+    });
+    expect(pdfPage2.status).toBe("success");
+    if (pdfPage2.status !== "success") {
+      throw new Error("Expected pending PDF preview result");
+    }
+    expect(pdfPage2.output).toMatchObject({
+      artifactId: pdf.id,
+      status: "pending",
+      images: [],
+      warnings: [expect.objectContaining({ code: "preview_pending" })]
+    });
+
+    const deck = await harness.store.createManagedArtifact({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      kind: "presentation.pptx",
+      objectKey: "execution-workspaces/private/deck.pptx",
+      filename: "deck.pptx",
+      mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      byteSize: 128,
+      checksum: "sha256:deck"
+    });
+    await harness.store.writeArtifactPreviewManifest({
+      status: "ready",
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      sourceArtifactId: deck.id,
+      type: "image_pages",
+      format: "png",
+      pages: [
+        {
+          artifactId: asManagedArtifactId("art_deck_slide_1"),
+          mimeType: "image/png",
+          slideNumber: 1
+        }
+      ]
+    });
+
+    const slide2 = await harness.runTool("workspace.preview_images", {
+      artifactId: deck.id,
+      slides: [2],
+      maxImages: 1
+    });
+    expect(slide2.status).toBe("success");
+    if (slide2.status !== "success") {
+      throw new Error("Expected pending slide preview result");
+    }
+    expect(slide2.output).toMatchObject({
+      artifactId: deck.id,
+      status: "pending",
+      images: [],
+      warnings: [expect.objectContaining({ code: "preview_pending" })]
+    });
+
+    const workbook = await harness.store.createManagedArtifact({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      kind: "spreadsheet.xlsx",
+      objectKey: "execution-workspaces/private/workbook.xlsx",
+      filename: "workbook.xlsx",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      byteSize: 128,
+      checksum: "sha256:workbook"
+    });
+    await harness.store.writeArtifactPreviewManifest({
+      status: "ready",
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      sourceArtifactId: workbook.id,
+      type: "image_pages",
+      format: "png",
+      pages: [
+        {
+          artifactId: asManagedArtifactId("art_summary_range"),
+          mimeType: "image/png",
+          sheet: "Summary",
+          range: "Summary!A1:H10"
+        }
+      ]
+    });
+
+    const detail = await harness.runTool("workspace.preview_images", {
+      artifactId: workbook.id,
+      sheets: ["Detail"],
+      ranges: ["Detail!A1:H10"],
+      maxImages: 1
+    });
+    expect(detail.status).toBe("success");
+    if (detail.status !== "success") {
+      throw new Error("Expected pending spreadsheet preview result");
+    }
+    expect(detail.output).toMatchObject({
+      artifactId: workbook.id,
+      status: "pending",
+      images: [],
+      warnings: [expect.objectContaining({ code: "preview_pending" })]
+    });
+    expect(JSON.stringify([pdfPage2, slide2, detail])).not.toContain("selection_empty");
+  });
+
   it("reports pending and unsupported preview states without attaching images", async () => {
     const harness = await createWorkspaceHarness();
     const document = await harness.store.createManagedArtifact({

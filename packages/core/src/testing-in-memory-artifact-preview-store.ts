@@ -48,6 +48,25 @@ export class InMemoryArtifactPreviewStore {
     });
     const existing = this.artifactPreviewJobs.get(key);
     if (existing) {
+      if (input.replaceTerminal && isTerminalArtifactPreviewJob(existing)) {
+        const now = input.queuedAt ?? new Date().toISOString();
+        const replaced: ArtifactPreviewJobRecord = {
+          ...existing,
+          sourceChecksum: input.sourceChecksum,
+          sourceMimeType: input.sourceMimeType,
+          status: "pending",
+          attempts: 0,
+          nextAttemptAt: now,
+          leaseOwnerId: undefined,
+          leaseToken: undefined,
+          leaseExpiresAt: undefined,
+          errorCode: undefined,
+          errorMessage: undefined,
+          updatedAt: now
+        };
+        this.artifactPreviewJobs.set(key, replaced);
+        return replaced;
+      }
       return existing;
     }
     const now = input.queuedAt ?? new Date().toISOString();
@@ -381,6 +400,10 @@ export class InMemoryArtifactPreviewStore {
 
 function artifactPreviewKey(clientInstanceId: ClientInstanceId, artifactId: ManagedArtifactId): string {
   return `${clientInstanceId}:${artifactId}`;
+}
+
+function isTerminalArtifactPreviewJob(job: ArtifactPreviewJobRecord): boolean {
+  return job.status === "completed" || job.status === "failed" || job.status === "unsupported";
 }
 
 function artifactPreviewJobKey(input: {

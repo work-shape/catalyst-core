@@ -1,10 +1,14 @@
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import * as XLSX from "../packages/tool-execution/node_modules/xlsx";
 import {
   type ArtifactPreviewRenderInput,
   type ArtifactPreviewRenderResult,
   type ArtifactPreviewRenderer,
   type ArtifactPreviewWorkerOptions,
   ArtifactPreviewWorker,
+  LibreOfficeArtifactPreviewRenderer,
   createArtifactPreviewSettingsHash,
   type DeletableWorkspaceObjectStorage
 } from "@vivd-catalyst/tool-execution";
@@ -291,6 +295,48 @@ describe("ArtifactPreviewWorker", () => {
     });
   });
 
+  it("renders selected spreadsheet ranges with production pixels", async () => {
+    if (!hasPreviewRendererDependencies()) {
+      return;
+    }
+    const renderer = new LibreOfficeArtifactPreviewRenderer();
+    const sourceBytes = createDistinctWorkbookBytes();
+    const input = {
+      sourceKind: "spreadsheet" as const,
+      filename: "preview.xlsx",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      bytes: sourceBytes,
+      maxPages: 1,
+      previewDpi: 96,
+      outputFormat: "png" as const,
+      conversionTimeoutMs: 60000,
+      rasterizationTimeoutMs: 60000
+    };
+
+    const summary = await renderer.render({
+      ...input,
+      ranges: ["Summary!A1:B4"]
+    });
+    const detail = await renderer.render({
+      ...input,
+      ranges: ["Detail!A1:B4"]
+    });
+
+    expect(summary.pages).toHaveLength(1);
+    expect(detail.pages).toHaveLength(1);
+    expect(summary.pages[0]).toMatchObject({
+      mimeType: "image/png",
+      sheet: "Summary",
+      range: "Summary!A1:B4"
+    });
+    expect(detail.pages[0]).toMatchObject({
+      mimeType: "image/png",
+      sheet: "Detail",
+      range: "Detail!A1:B4"
+    });
+    expect(imageDigest(summary.pages[0]!.bytes)).not.toBe(imageDigest(detail.pages[0]!.bytes));
+  });
+
   it("fails without retrying when the source artifact exceeds the size limit", async () => {
     const fixture = await createWorkerFixture({ byteSize: 6, sourceBytes: bytes("small") });
     const worker = createWorker(fixture, new FakeRenderer({ result: emptyRenderResult() }), {
@@ -540,6 +586,44 @@ function emptyRenderResult(): ArtifactPreviewRenderResult {
 
 function bytes(value: string): Uint8Array {
   return new TextEncoder().encode(value);
+}
+
+function createDistinctWorkbookBytes(): Uint8Array {
+  const workbook = XLSX.utils.book_new();
+  const summary = XLSX.utils.aoa_to_sheet([
+    ["SUMMARY ONLY", "alpha"],
+    ["Revenue", 1200],
+    ["Cost", 800],
+    ["Status", "green"]
+  ]);
+  const detail = XLSX.utils.aoa_to_sheet([
+    ["DETAIL ONLY", "omega"],
+    ["Tickets", 42],
+    ["Latency", 315],
+    ["Status", "red"]
+  ]);
+  summary["!cols"] = [{ wch: 18 }, { wch: 14 }];
+  detail["!cols"] = [{ wch: 18 }, { wch: 14 }];
+  XLSX.utils.book_append_sheet(workbook, summary, "Summary");
+  XLSX.utils.book_append_sheet(workbook, detail, "Detail");
+  const output = XLSX.write(workbook, {
+    bookType: "xlsx",
+    type: "buffer"
+  }) as Uint8Array | string;
+  return typeof output === "string" ? Buffer.from(output, "binary") : output;
+}
+
+function hasPreviewRendererDependencies(): boolean {
+  return ["soffice", "pdfinfo", "pdftoppm"].every((command) => {
+    const result = spawnSync("sh", ["-lc", `command -v ${command}`], {
+      stdio: "ignore"
+    });
+    return result.status === 0;
+  });
+}
+
+function imageDigest(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
 }
 
 function createDeferred<T>(): {
