@@ -67,6 +67,8 @@ usage:
     tokensPerDay: 2500000
 ```
 
+Usage pricing uses exact `providerId` and `model` rows. Keep historical model ids in this list when old usage should remain priced after a model rename or provider migration.
+
 ## Tool Configuration
 
 Each tool entry controls whether a stable tool name is available in the client instance. The optional `config` object is passed to the matching configured tool factory and validated by that factory's schema during startup.

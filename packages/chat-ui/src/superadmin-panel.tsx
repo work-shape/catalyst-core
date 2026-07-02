@@ -1,13 +1,9 @@
 import {
   Activity,
   AlertCircle,
-  BarChart3,
   Bot,
   ChevronRight,
-  Database,
-  DollarSign,
   ScrollText,
-  Search,
   ShieldCheck,
   User as UserIcon,
   Users
@@ -29,6 +25,7 @@ import { Badge } from "./ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { cn } from "./ui/cn";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { UsageView } from "./usage-view";
 import { UserAdministrationPanel } from "./user-administration-panel";
 import type { SuperadminRouteTab } from "./workspace-route";
 
@@ -86,14 +83,12 @@ export function SuperadminPanel({
         </div>
 
         <nav className="flex items-end gap-1 overflow-x-auto" aria-label="Administration sections">
-          {canViewUsageGovernance ? (
-            <TabButton
-              active={selectedTab === "usage"}
-              icon={<Activity size={15} aria-hidden="true" />}
-              label="Usage"
-              onClick={() => onSelectTab("usage")}
-            />
-          ) : null}
+          <TabButton
+            active={selectedTab === "usage"}
+            icon={<Activity size={15} aria-hidden="true" />}
+            label="Usage"
+            onClick={() => onSelectTab("usage")}
+          />
           <TabButton
             active={selectedTab === "users"}
             icon={<Users size={15} aria-hidden="true" />}
@@ -113,7 +108,7 @@ export function SuperadminPanel({
       <div className="grid min-h-0 content-start gap-4 overflow-auto bg-background p-5">
         {selectedTab !== "users" && error ? <ErrorBanner message={error} /> : null}
 
-        {selectedTab === "usage" && canViewUsageGovernance ? <UsageView usage={usage} /> : null}
+        {selectedTab === "usage" ? <UsageView usage={usage} /> : null}
         {selectedTab === "users" ? (
           <UserAdministrationPanel
             users={users}
@@ -176,201 +171,6 @@ function ErrorBanner({ message }: { message: string }) {
       <span>{message}</span>
     </div>
   );
-}
-
-function UsageView({ usage }: { usage: UsageSummary | undefined }) {
-  const pricing = normalizeUsagePricing(usage);
-  return (
-    <>
-      <div className="grid gap-3 lg:grid-cols-4">
-        <UsageMetric
-          primary
-          icon={<DollarSign size={15} />}
-          label="Budgeted cost today"
-          value={formatCost(usage?.today.cost)}
-          detail={formatCostDetail(usage?.today.cost)}
-        />
-        <UsageMetric
-          icon={<DollarSign size={15} />}
-          label="Budgeted cost this month"
-          value={formatCost(usage?.currentMonth.cost)}
-          detail={formatCostDetail(usage?.currentMonth.cost)}
-        />
-        <UsageMetric
-          icon={<DollarSign size={15} />}
-          label="All-time budgeted cost"
-          value={formatCost(usage?.allTime.cost)}
-          detail={formatCostDetail(usage?.allTime.cost)}
-        />
-      </div>
-
-      <Card>
-        <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-base">Usage volume</CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 pt-2">
-          <dl className="grid gap-3 md:grid-cols-4">
-            <UsageStat
-              icon={<Activity size={15} />}
-              label="Calls today"
-              value={usage?.today.modelCallCount ?? 0}
-            />
-            <UsageStat
-              icon={<BarChart3 size={15} />}
-              label="Tokens today"
-              value={usage?.today.totalTokens ?? 0}
-            />
-            <UsageStat
-              icon={<Database size={15} />}
-              label="Tokens this month"
-              value={usage?.currentMonth.totalTokens ?? 0}
-            />
-            <UsageStat
-              icon={<Search size={15} />}
-              label="Web searches today"
-              value={usage?.today.webSearchCallCount ?? 0}
-            />
-          </dl>
-        </CardContent>
-      </Card>
-
-      <div className="grid items-start gap-4 xl:grid-cols-2">
-        <Card data-testid="configured-budget">
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-base">Spend budget</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-2">
-            <dl className="grid gap-3">
-              <UsageStat
-                icon={<ShieldCheck size={15} />}
-                label="Monthly spend limit"
-                value={
-                  usage?.budget.monthlySpendLimit === undefined
-                    ? undefined
-                    : formatCurrencyAmount(usage.budget.monthlySpendLimit, pricing.currency)
-                }
-              />
-              <UsageStat
-                icon={<ShieldCheck size={15} />}
-                label="Cost safety multiplier"
-                value={`${usage?.budget.costSafetyMultiplier ?? 1}x`}
-              />
-            </dl>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-base">Configured pricing</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-2">
-            {pricing.models.length + pricing.webSearch.length > 0 ? (
-              <dl className="grid gap-3">
-                {pricing.models.map((price) => (
-                  <UsagePricing
-                    key={`${price.providerId}:${price.model}`}
-                    label={`${price.providerId} / ${price.model}`}
-                    detail={`${formatCurrencyAmount(
-                      price.inputPricePerMillionTokens,
-                      pricing.currency
-                    )} in / 1M, ${formatCurrencyAmount(
-                      price.outputPricePerMillionTokens,
-                      pricing.currency
-                    )} out / 1M`}
-                  />
-                ))}
-                {pricing.webSearch.map((price) => (
-                  <UsagePricing
-                    key={`${price.providerId}:${price.model ?? "*"}:web_search`}
-                    icon={<Search size={15} aria-hidden="true" />}
-                    label={`${price.providerId}${price.model ? ` / ${price.model}` : ""} / web_search`}
-                    detail={`${formatCurrencyAmount(price.pricePerCall, pricing.currency)} / search`}
-                  />
-                ))}
-              </dl>
-            ) : (
-              <p className="text-sm text-muted-foreground">No usage pricing configured.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card data-testid="configured-safeguards">
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-base">Configured safeguards</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-2">
-            <dl className="grid gap-3">
-              <UsageStat
-                icon={<ShieldCheck size={15} />}
-                label="Model calls per day"
-                value={usage?.safeguards.modelCallsPerDay}
-              />
-              <UsageStat
-                icon={<ShieldCheck size={15} />}
-                label="Tokens per day"
-                value={usage?.safeguards.tokensPerDay}
-              />
-              <UsageStat
-                icon={<ShieldCheck size={15} />}
-                label="Tokens per month"
-                value={usage?.safeguards.tokensPerMonth}
-              />
-            </dl>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-base">Recent model usage</CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 pt-1">
-          {usage?.recentEvents.length ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Time</TableHead>
-                  <TableHead>Model</TableHead>
-                  <TableHead>Budgeted cost</TableHead>
-                  <TableHead>Tokens</TableHead>
-                  <TableHead>Web search</TableHead>
-                  <TableHead>Source</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {usage.recentEvents.map((event) => (
-                  <TableRow key={event.id}>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {formatDateTime(event.createdAt)}
-                    </TableCell>
-                    <TableCell className="font-medium break-words">{event.model}</TableCell>
-                    <TableCell className="whitespace-nowrap">{formatCost(event.cost)}</TableCell>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {event.totalTokens.toLocaleString()}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {event.webSearchCallCount.toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{event.source}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <p className="pt-1 text-sm text-muted-foreground">No model usage recorded yet.</p>
-          )}
-        </CardContent>
-      </Card>
-    </>
-  );
-}
-
-function normalizeUsagePricing(usage: UsageSummary | undefined): UsageSummary["pricing"] {
-  return {
-    currency: usage?.pricing.currency ?? "USD",
-    models: usage?.pricing.models ?? [],
-    webSearch: usage?.pricing.webSearch ?? []
-  };
 }
 
 function AuditView({ auditActivities }: { auditActivities: AuditActivity[] }) {
@@ -573,139 +373,6 @@ function evidenceReasonText(event: AuditEvent): string | undefined {
   return undefined;
 }
 
-function UsageMetric({
-  icon,
-  label,
-  value,
-  detail,
-  primary = false
-}: {
-  icon: ReactNode;
-  label: string;
-  value: ReactNode;
-  detail?: string;
-  primary?: boolean;
-}) {
-  return (
-    <Card className={cn("grid content-start gap-1.5 p-4", primary && "bg-accent/40 lg:col-span-2")}>
-      <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="grid size-6 place-items-center rounded-md bg-accent text-primary">{icon}</span>
-        {label}
-      </span>
-      <strong className={cn("break-words text-2xl font-semibold", primary && "text-3xl")}>{value}</strong>
-      {detail ? <small className="text-xs text-muted-foreground">{detail}</small> : null}
-    </Card>
-  );
-}
-
-function UsageStat({
-  icon,
-  label,
-  value
-}: {
-  icon: ReactNode;
-  label: string;
-  value: ReactNode | undefined;
-}) {
-  return (
-    <div className="rounded-md border bg-card p-3">
-      <dt className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-        {icon}
-        {label}
-      </dt>
-      <dd className="mt-1 font-medium">
-        {value === undefined ? "Not configured" : typeof value === "number" ? value.toLocaleString() : value}
-      </dd>
-    </div>
-  );
-}
-
-function UsagePricing({
-  icon = <DollarSign size={15} aria-hidden="true" />,
-  label,
-  detail
-}: {
-  icon?: ReactNode;
-  label: string;
-  detail: string;
-}) {
-  return (
-    <div className="rounded-md border bg-card p-3">
-      <dt className="inline-flex items-center gap-2 break-words text-xs text-muted-foreground">
-        {icon}
-        {label}
-      </dt>
-      <dd className="mt-1 text-sm font-medium">{detail}</dd>
-    </div>
-  );
-}
-
 function formatDateTime(value: string): string {
   return new Date(value).toLocaleString();
-}
-
-type UsageCost = UsageSummary["today"]["cost"] | UsageSummary["recentEvents"][number]["cost"];
-
-function formatCost(cost: UsageCost | undefined): string {
-  if (!cost) {
-    return "Not configured";
-  }
-
-  if (
-    "pricedModelCallCount" in cost &&
-    cost.pricedModelCallCount === 0 &&
-    cost.pricedWebSearchCallCount === 0 &&
-    cost.unpricedModelCallCount + cost.unpricedWebSearchCallCount > 0
-  ) {
-    return "No price";
-  }
-
-  if (!cost.pricingConfigured) {
-    return "Not configured";
-  }
-
-  return formatCurrencyMicros(cost.budgetedCostMicros, cost.currency);
-}
-
-function formatCostDetail(cost: UsageSummary["today"]["cost"] | undefined): string | undefined {
-  if (!cost) {
-    return undefined;
-  }
-
-  const details: string[] = [];
-  if (cost.pricingConfigured && cost.costSafetyMultiplier > 1) {
-    details.push(`${formatCurrencyMicros(cost.totalCostMicros, cost.currency)} provider estimate`);
-  }
-  if (cost.unpricedModelCallCount) {
-    details.push(
-      `${cost.unpricedModelCallCount.toLocaleString()} unpriced ${
-        cost.unpricedModelCallCount === 1 ? "call" : "calls"
-      }`
-    );
-  }
-  if (cost.unpricedWebSearchCallCount) {
-    details.push(
-      `${cost.unpricedWebSearchCallCount.toLocaleString()} unpriced ${
-        cost.unpricedWebSearchCallCount === 1 ? "web search" : "web searches"
-      }`
-    );
-  }
-  return details.length > 0 ? details.join("; ") : undefined;
-}
-
-function formatCurrencyMicros(valueMicros: number, currency: string): string {
-  return formatCurrencyAmount(valueMicros / 1_000_000, currency);
-}
-
-function formatCurrencyAmount(value: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: value < 1 ? 4 : 2,
-      maximumFractionDigits: 4
-    }).format(value);
-  } catch {
-    return `${currency} ${value.toFixed(value < 1 ? 4 : 2)}`;
-  }
 }

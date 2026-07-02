@@ -318,10 +318,6 @@ export const safeConfigSchema = z.object({
     allowUserDelete: z.boolean()
   }),
   usage: z.object({
-    budget: z.object({
-      monthlySpendLimit: z.number().optional(),
-      costSafetyMultiplier: z.number()
-    }),
     safeguards: z.object({
       modelCallsPerDay: z.number().optional(),
       tokensPerDay: z.number().optional(),
@@ -587,6 +583,8 @@ export const startConversationRunRequestSchema = z.object({
   })
 });
 
+export const usageSafeguardsSchema = safeConfigSchema.shape.usage.shape.safeguards;
+
 export const startConversationRunResponseSchema = z.object({
   conversation: conversationSchema,
   userMessage: messageSchema,
@@ -814,27 +812,7 @@ export const auditActivitySchema = z.object({
   evidence: z.array(auditEventSchema)
 });
 
-export const modelUsageCostSchema = z.object({
-  currency: z.string(),
-  inputCostMicros: z.number().int().nonnegative(),
-  outputCostMicros: z.number().int().nonnegative(),
-  webSearchCostMicros: z.number().int().nonnegative(),
-  totalCostMicros: z.number().int().nonnegative(),
-  budgetedCostMicros: z.number().int().nonnegative(),
-  costSafetyMultiplier: z.number(),
-  pricingConfigured: z.boolean(),
-  modelPricingConfigured: z.boolean(),
-  webSearchPricingConfigured: z.boolean()
-});
-
-export const modelUsageCostSummarySchema = modelUsageCostSchema.extend({
-  pricedModelCallCount: z.number().int().nonnegative(),
-  unpricedModelCallCount: z.number().int().nonnegative(),
-  pricedWebSearchCallCount: z.number().int().nonnegative(),
-  unpricedWebSearchCallCount: z.number().int().nonnegative()
-});
-
-export const modelUsageEventSchema = z.object({
+export const modelUsageVolumeEventSchema = z.object({
   id: z.string(),
   clientInstanceId: z.string(),
   conversationId: z.string(),
@@ -847,49 +825,62 @@ export const modelUsageEventSchema = z.object({
   totalTokens: z.number(),
   webSearchCallCount: z.number().int().nonnegative(),
   source: z.enum(["provider_reported", "not_reported", "estimated"]),
-  cost: modelUsageCostSchema,
   correlationId: z.string(),
   createdAt: z.string()
 });
 
-export const modelUsageWindowSummarySchema = z.object({
+export const modelUsageVolumeWindowSummarySchema = z.object({
   start: z.string().optional(),
   end: z.string().optional(),
   modelCallCount: z.number(),
   inputTokens: z.number(),
   outputTokens: z.number(),
   totalTokens: z.number(),
-  webSearchCallCount: z.number().int().nonnegative(),
-  cost: modelUsageCostSummarySchema
+  webSearchCallCount: z.number().int().nonnegative()
 });
 
-export const usagePricingSchema = z.object({
+export const modelUsageBilledCostSchema = z.object({
   currency: z.string(),
-  models: z.array(
-    z.object({
-      providerId: z.string(),
-      model: z.string(),
-      inputPricePerMillionTokens: z.number(),
-      outputPricePerMillionTokens: z.number()
-    })
-  ),
-  webSearch: z.array(
-    z.object({
-      providerId: z.string(),
-      model: z.string().optional(),
-      pricePerCall: z.number()
-    })
-  )
+  modelBilledCostMicros: z.number().int().nonnegative(),
+  webSearchBilledCostMicros: z.number().int().nonnegative().optional(),
+  billedCostMicros: z.number().int().nonnegative(),
+  webSearchCostVisible: z.boolean(),
+  pricingConfigured: z.boolean(),
+  modelPricingConfigured: z.boolean(),
+  webSearchPricingConfigured: z.boolean()
+});
+
+export const modelUsageBilledCostSummarySchema = modelUsageBilledCostSchema.extend({
+  pricedModelCallCount: z.number().int().nonnegative(),
+  unpricedModelCallCount: z.number().int().nonnegative(),
+  pricedWebSearchCallCount: z.number().int().nonnegative(),
+  unpricedWebSearchCallCount: z.number().int().nonnegative()
+});
+
+export const modelUsageEventSchema = modelUsageVolumeEventSchema.extend({
+  cost: modelUsageBilledCostSchema
+});
+
+export const modelUsageWindowSummarySchema = modelUsageVolumeWindowSummarySchema.extend({
+  cost: modelUsageBilledCostSummarySchema
+});
+
+export const modelUsageDailyBucketSchema = modelUsageWindowSummarySchema.extend({
+  date: z.string()
+});
+
+export const modelUsageMonthlyBucketSchema = modelUsageWindowSummarySchema.extend({
+  month: z.string()
 });
 
 export const usageSummarySchema = z.object({
   generatedAt: z.string(),
-  budget: safeConfigSchema.shape.usage.shape.budget,
-  safeguards: safeConfigSchema.shape.usage.shape.safeguards,
-  pricing: usagePricingSchema,
+  safeguards: usageSafeguardsSchema,
   today: modelUsageWindowSummarySchema,
   currentMonth: modelUsageWindowSummarySchema,
   allTime: modelUsageWindowSummarySchema,
+  dailyUsage: z.array(modelUsageDailyBucketSchema),
+  monthlyUsage: z.array(modelUsageMonthlyBucketSchema),
   recentEvents: z.array(modelUsageEventSchema)
 });
 
@@ -1177,7 +1168,11 @@ export type AuditEvent = z.infer<typeof auditEventSchema>;
 export type AuditActivity = z.infer<typeof auditActivitySchema>;
 export type AuditActivityActor = z.infer<typeof auditActivityActorSchema>;
 export type AuditActivityTarget = z.infer<typeof auditActivityTargetSchema>;
+export type ModelUsageVolumeEvent = z.infer<typeof modelUsageVolumeEventSchema>;
+export type ModelUsageBilledCost = z.infer<typeof modelUsageBilledCostSchema>;
+export type ModelUsageBilledCostSummary = z.infer<typeof modelUsageBilledCostSummarySchema>;
 export type ModelUsageEvent = z.infer<typeof modelUsageEventSchema>;
-export type ModelUsageCost = z.infer<typeof modelUsageCostSchema>;
+export type ModelUsageDailyBucket = z.infer<typeof modelUsageDailyBucketSchema>;
+export type ModelUsageMonthlyBucket = z.infer<typeof modelUsageMonthlyBucketSchema>;
 export type UsageSummary = z.infer<typeof usageSummarySchema>;
 export type ApiOperationName = keyof typeof apiOperations;

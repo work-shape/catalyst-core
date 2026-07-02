@@ -105,16 +105,199 @@ describe("client instance app vertical slice", () => {
     });
     expect(usage.statusCode).toBe(200);
     const usageBody = usage.json() as {
-      today: { modelCallCount: number; cost: { totalCostMicros: number } };
+      today: { modelCallCount: number; totalTokens: number };
     };
     expect(usageBody.today).toMatchObject({
-      cost: {
-        totalCostMicros: 0
-      }
+      totalTokens: 0
     });
     expect(usageBody.today.modelCallCount).toBeGreaterThan(0);
 
     await app.close();
+  });
+
+  it("shows admins billed usage without internal cost policy", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        developmentAuth: {
+          enabled: true,
+          defaultUserId: "admin-1",
+          users: [
+            {
+              id: "admin-1",
+              externalUserId: "admin-1",
+              displayLabel: "Admin",
+              roles: ["user", "admin"],
+              permissionRefs: ["demo-tools"]
+            },
+            {
+              id: "superadmin-1",
+              externalUserId: "superadmin-1",
+              displayLabel: "Superadmin",
+              roles: ["user", "admin", "superadmin"],
+              permissionRefs: ["demo-tools"]
+            }
+          ]
+        },
+        usageBudget: {
+          monthlySpendLimit: 200,
+          costSafetyMultiplier: 1.3
+        },
+        usageSafeguards: {
+          tokensPerMonth: 50000000
+        },
+        usagePricing: {
+          currency: "USD",
+          models: [
+            {
+              providerId: "local",
+              model: "local",
+              inputPricePerMillionTokens: 1,
+              outputPricePerMillionTokens: 2
+            }
+          ]
+        }
+      }),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+
+    const adminUsage = await app.server.inject({
+      method: "GET",
+      url: "/api/superadmin/usage",
+      headers: {
+        "x-dev-user-id": "admin-1"
+      }
+    });
+    expect(adminUsage.statusCode).toBe(200);
+    const adminUsageBody = adminUsage.json() as Record<string, unknown>;
+    expect(adminUsageBody).toMatchObject({
+      safeguards: {
+        tokensPerMonth: 50000000
+      },
+      today: {
+        modelCallCount: 0,
+        totalTokens: 0,
+        cost: {
+          currency: "USD",
+          modelBilledCostMicros: 0,
+          billedCostMicros: 0,
+          webSearchCostVisible: false
+        }
+      }
+    });
+    expect((adminUsageBody.today as { cost: Record<string, unknown> }).cost).not.toHaveProperty(
+      "webSearchBilledCostMicros"
+    );
+    expect(JSON.stringify(adminUsageBody)).not.toContain("monthlySpendLimit");
+    expect(JSON.stringify(adminUsageBody)).not.toContain("costSafetyMultiplier");
+    expect(JSON.stringify(adminUsageBody)).not.toContain("inputPricePerMillionTokens");
+    expect(JSON.stringify(adminUsageBody)).not.toContain("totalCostMicros");
+    expect(JSON.stringify(adminUsageBody)).not.toContain("budgetedCostMicros");
+
+    const adminConfig = await app.server.inject({
+      method: "GET",
+      url: "/api/config",
+      headers: {
+        "x-dev-user-id": "admin-1"
+      }
+    });
+    expect(adminConfig.statusCode).toBe(200);
+    expect(JSON.stringify(adminConfig.json())).not.toContain("monthlySpendLimit");
+    expect(JSON.stringify(adminConfig.json())).not.toContain("costSafetyMultiplier");
+
+    const superadminUsage = await app.server.inject({
+      method: "GET",
+      url: "/api/superadmin/usage",
+      headers: {
+        "x-dev-user-id": "superadmin-1"
+      }
+    });
+    expect(superadminUsage.statusCode).toBe(200);
+    expect(superadminUsage.json()).toMatchObject({
+      safeguards: {
+        tokensPerMonth: 50000000
+      },
+      today: {
+        modelCallCount: 0,
+        totalTokens: 0,
+        cost: {
+          currency: "USD",
+          modelBilledCostMicros: 0,
+          billedCostMicros: 0,
+          webSearchCostVisible: false
+        }
+      }
+    });
+    expect(JSON.stringify(superadminUsage.json())).not.toContain("monthlySpendLimit");
+    expect(JSON.stringify(superadminUsage.json())).not.toContain("costSafetyMultiplier");
+    expect(JSON.stringify(superadminUsage.json())).not.toContain("inputPricePerMillionTokens");
+    expect(JSON.stringify(superadminUsage.json())).not.toContain("totalCostMicros");
+    expect(JSON.stringify(superadminUsage.json())).not.toContain("budgetedCostMicros");
+
+    await app.close();
+
+    const webSearchApp = await createClientInstanceApp({
+      config: createTestConfig({
+        developmentAuth: {
+          enabled: true,
+          defaultUserId: "admin-1",
+          users: [
+            {
+              id: "admin-1",
+              externalUserId: "admin-1",
+              displayLabel: "Admin",
+              roles: ["user", "admin"],
+              permissionRefs: ["demo-tools"]
+            }
+          ]
+        },
+        webAccess: {
+          enabled: true,
+          search: {
+            enabled: true
+          }
+        },
+        usagePricing: {
+          currency: "USD",
+          models: [
+            {
+              providerId: "local",
+              model: "local",
+              inputPricePerMillionTokens: 1,
+              outputPricePerMillionTokens: 2
+            }
+          ],
+          webSearch: [
+            {
+              providerId: "local",
+              pricePerCall: 0.01
+            }
+          ]
+        }
+      }),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+    const webSearchUsage = await webSearchApp.server.inject({
+      method: "GET",
+      url: "/api/superadmin/usage",
+      headers: {
+        "x-dev-user-id": "admin-1"
+      }
+    });
+    expect(webSearchUsage.statusCode).toBe(200);
+    expect(webSearchUsage.json()).toMatchObject({
+      today: {
+        cost: {
+          webSearchCostVisible: true,
+          webSearchBilledCostMicros: 0
+        }
+      }
+    });
+    expect(JSON.stringify(webSearchUsage.json())).not.toContain("pricePerCall");
+    await webSearchApp.close();
   });
 
   it("exposes a thread snapshot with active run projection", async () => {
@@ -2643,7 +2826,24 @@ describe("client instance app vertical slice", () => {
     expect(usersBefore.statusCode).toBe(200);
     const usersBeforeBody = usersBefore.json() as Array<{ id: string; roles: string[] }>;
     const superadminUser = usersBeforeBody.find((user) => user.roles.includes("superadmin"));
-    expect(superadminUser).toBeDefined();
+    expect(superadminUser).toBeUndefined();
+
+    const superadminVisibleUsers = await app.server.inject({
+      method: "GET",
+      url: "/api/superadmin/users",
+      headers: {
+        "x-dev-user-id": "superadmin-1"
+      }
+    });
+    expect(superadminVisibleUsers.statusCode).toBe(200);
+    const superadminVisibleUsersBody = superadminVisibleUsers.json() as Array<{
+      id: string;
+      roles: string[];
+    }>;
+    const superadminManagedUser = superadminVisibleUsersBody.find((user) =>
+      user.roles.includes("superadmin")
+    );
+    expect(superadminManagedUser).toBeDefined();
 
     const created = await app.server.inject({
       method: "POST",
@@ -2691,7 +2891,7 @@ describe("client instance app vertical slice", () => {
 
     const superadminUpdate = await app.server.inject({
       method: "PATCH",
-      url: `/api/superadmin/users/${superadminUser?.id}`,
+      url: `/api/superadmin/users/${superadminManagedUser?.id}`,
       headers: {
         "x-dev-user-id": "admin-1"
       },
@@ -2718,7 +2918,7 @@ describe("client instance app vertical slice", () => {
 
     const selfDelete = await app.server.inject({
       method: "DELETE",
-      url: `/api/superadmin/users/${superadminUser?.id}`,
+      url: `/api/superadmin/users/${superadminManagedUser?.id}`,
       headers: {
         "x-dev-user-id": "superadmin-1"
       }
@@ -3635,6 +3835,7 @@ describe("client instance app vertical slice", () => {
       })
     ).toThrow("Monthly spend budget requires configured pricing for model openai/gpt-4.1");
   });
+
 });
 
 type LocalizedTestString =
@@ -3870,15 +4071,21 @@ function createTestConfig(input: {
   };
   usageSafeguards?: UsageSafeguardsConfig;
   executionWorkspaces?: unknown;
-  usagePricing?: {
-    currency: string;
-    models: Array<{
+	  usagePricing?: {
+	    currency: string;
+	    models: Array<{
+	      providerId: string;
+	      model: string;
+	      inputPricePerMillionTokens: number;
+	      outputPricePerMillionTokens: number;
+	    }>;
+    webSearch?: Array<{
       providerId: string;
-      model: string;
-      inputPricePerMillionTokens: number;
-      outputPricePerMillionTokens: number;
+      model?: string;
+      pricePerCall: number;
     }>;
   };
+  webAccess?: unknown;
   developmentAuth?: unknown;
   sessionToken?: unknown;
 } = {}) {
@@ -3920,6 +4127,7 @@ function createTestConfig(input: {
       safeguards: input.usageSafeguards ?? {},
       pricing: input.usagePricing
     },
+    ...(input.webAccess ? { webAccess: input.webAccess } : {}),
     ...(input.executionWorkspaces ? { executionWorkspaces: input.executionWorkspaces } : {}),
     tools: input.tools ?? []
   });

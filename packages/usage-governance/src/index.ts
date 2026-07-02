@@ -46,6 +46,40 @@ export interface CostedModelUsageEvent extends ModelUsageEvent {
   cost: ModelUsageCost;
 }
 
+export interface SafeModelUsageCost {
+  currency: string;
+  modelBilledCostMicros: number;
+  webSearchBilledCostMicros?: number;
+  billedCostMicros: number;
+  webSearchCostVisible: boolean;
+  pricingConfigured: boolean;
+  modelPricingConfigured: boolean;
+  webSearchPricingConfigured: boolean;
+}
+
+export interface SafeModelUsageCostSummary extends SafeModelUsageCost {
+  pricedModelCallCount: number;
+  unpricedModelCallCount: number;
+  pricedWebSearchCallCount: number;
+  unpricedWebSearchCallCount: number;
+}
+
+export interface SafeCostedModelUsageWindowSummary extends ModelUsageWindowSummary {
+  cost: SafeModelUsageCostSummary;
+}
+
+export interface SafeCostedModelUsageDailyBucket extends SafeCostedModelUsageWindowSummary {
+  date: string;
+}
+
+export interface SafeCostedModelUsageMonthlyBucket extends SafeCostedModelUsageWindowSummary {
+  month: string;
+}
+
+export interface SafeCostedModelUsageEvent extends ModelUsageEvent {
+  cost: SafeModelUsageCost;
+}
+
 export interface UsageSummary {
   generatedAt: string;
   budget: UsageBudgetConfig;
@@ -55,6 +89,17 @@ export interface UsageSummary {
   currentMonth: CostedModelUsageWindowSummary;
   allTime: CostedModelUsageWindowSummary;
   recentEvents: CostedModelUsageEvent[];
+}
+
+export interface SafeUsageSummary {
+  generatedAt: string;
+  safeguards: UsageSafeguardsConfig;
+  today: SafeCostedModelUsageWindowSummary;
+  currentMonth: SafeCostedModelUsageWindowSummary;
+  allTime: SafeCostedModelUsageWindowSummary;
+  dailyUsage: SafeCostedModelUsageDailyBucket[];
+  monthlyUsage: SafeCostedModelUsageMonthlyBucket[];
+  recentEvents: SafeCostedModelUsageEvent[];
 }
 
 export class ModelUsageGovernance implements ModelUsageEventStore {
@@ -130,6 +175,46 @@ export class ModelUsageGovernance implements ModelUsageEventStore {
         ...event,
         cost: pricingCatalog.calculateEventCost(event)
       }))
+    };
+  }
+
+  async createSafeSummary(input: {
+    clientInstanceId: ClientInstanceId;
+    now?: Date;
+    webSearchEnabled?: boolean;
+  }): Promise<SafeUsageSummary> {
+    const now = input.now ?? new Date();
+    const { todayStart, currentMonthStart } = createModelUsageWindowBounds(now);
+    const allEvents = await this.store.listModelUsageEvents({
+      clientInstanceId: input.clientInstanceId
+    });
+    const todayEvents = filterEventsByWindow(allEvents, todayStart);
+    const currentMonthEvents = filterEventsByWindow(allEvents, currentMonthStart);
+    const pricingCatalog = new UsagePricingCatalog(this.pricing, this.budget);
+    const inferredWebSearchCostVisibility =
+      pricingCatalog.hasWebSearchPricing() || allEvents.some((event) => event.webSearchCallCount > 0);
+    const showWebSearchCost = input.webSearchEnabled ?? inferredWebSearchCostVisibility;
+
+    return {
+      generatedAt: now.toISOString(),
+      safeguards: this.safeguards,
+      today: toSafeWindowSummary(
+        summarizeCostedEvents(todayEvents, todayStart, undefined, pricingCatalog),
+        showWebSearchCost
+      ),
+      currentMonth: toSafeWindowSummary(
+        summarizeCostedEvents(currentMonthEvents, currentMonthStart, undefined, pricingCatalog),
+        showWebSearchCost
+      ),
+      allTime: toSafeWindowSummary(
+        summarizeCostedEvents(allEvents, undefined, undefined, pricingCatalog),
+        showWebSearchCost
+      ),
+      dailyUsage: summarizeSafeDailyBuckets(allEvents, now, pricingCatalog, showWebSearchCost),
+      monthlyUsage: summarizeSafeMonthlyBuckets(allEvents, now, pricingCatalog, showWebSearchCost),
+      recentEvents: allEvents
+        .slice(0, 25)
+        .map((event) => toSafeEvent(event, pricingCatalog.calculateEventCost(event), showWebSearchCost))
     };
   }
 
@@ -336,6 +421,128 @@ function summarizeCostedEvents(
   );
 }
 
+const DAILY_USAGE_BUCKET_COUNT = 30;
+
+function summarizeSafeDailyBuckets(
+  events: ModelUsageEvent[],
+  now: Date,
+  pricingCatalog: UsagePricingCatalog,
+  showWebSearchCost: boolean
+): SafeCostedModelUsageDailyBucket[] {
+  const buckets: SafeCostedModelUsageDailyBucket[] = [];
+  for (let offset = DAILY_USAGE_BUCKET_COUNT - 1; offset >= 0; offset -= 1) {
+    const start = utcDayStart(now, -offset).toISOString();
+    const end = utcDayStart(now, -offset + 1).toISOString();
+    const dayEvents = filterEventsByWindow(events, start, end);
+    buckets.push({
+      date: start.slice(0, 10),
+      ...toSafeWindowSummary(
+        summarizeCostedEvents(dayEvents, start, end, pricingCatalog),
+        showWebSearchCost
+      )
+    });
+  }
+  return buckets;
+}
+
+function summarizeSafeMonthlyBuckets(
+  events: ModelUsageEvent[],
+  now: Date,
+  pricingCatalog: UsagePricingCatalog,
+  showWebSearchCost: boolean
+): SafeCostedModelUsageMonthlyBucket[] {
+  const earliestCreatedAt = events.reduce<string | undefined>(
+    (earliest, event) => (!earliest || event.createdAt < earliest ? event.createdAt : earliest),
+    undefined
+  );
+  const firstMonthStart = earliestCreatedAt
+    ? utcMonthStart(new Date(earliestCreatedAt), 0)
+    : utcMonthStart(now, 0);
+
+  const buckets: SafeCostedModelUsageMonthlyBucket[] = [];
+  for (let offset = 0; ; offset += 1) {
+    const monthStart = utcMonthStart(firstMonthStart, offset);
+    if (monthStart > now) {
+      break;
+    }
+    const start = monthStart.toISOString();
+    const end = utcMonthStart(firstMonthStart, offset + 1).toISOString();
+    const monthEvents = filterEventsByWindow(events, start, end);
+    buckets.push({
+      month: start.slice(0, 7),
+      ...toSafeWindowSummary(
+        summarizeCostedEvents(monthEvents, start, end, pricingCatalog),
+        showWebSearchCost
+      )
+    });
+  }
+  return buckets;
+}
+
+function utcDayStart(reference: Date, dayOffset: number): Date {
+  return new Date(
+    Date.UTC(
+      reference.getUTCFullYear(),
+      reference.getUTCMonth(),
+      reference.getUTCDate() + dayOffset
+    )
+  );
+}
+
+function utcMonthStart(reference: Date, monthOffset: number): Date {
+  return new Date(Date.UTC(reference.getUTCFullYear(), reference.getUTCMonth() + monthOffset, 1));
+}
+
+function toSafeWindowSummary(
+  summary: CostedModelUsageWindowSummary,
+  showWebSearchCost: boolean
+): SafeCostedModelUsageWindowSummary {
+  return {
+    start: summary.start,
+    end: summary.end,
+    modelCallCount: summary.modelCallCount,
+    inputTokens: summary.inputTokens,
+    outputTokens: summary.outputTokens,
+    totalTokens: summary.totalTokens,
+    webSearchCallCount: summary.webSearchCallCount,
+    cost: {
+      ...toSafeCost(summary.cost, showWebSearchCost),
+      pricedModelCallCount: summary.cost.pricedModelCallCount,
+      unpricedModelCallCount: summary.cost.unpricedModelCallCount,
+      pricedWebSearchCallCount: summary.cost.pricedWebSearchCallCount,
+      unpricedWebSearchCallCount: summary.cost.unpricedWebSearchCallCount
+    }
+  };
+}
+
+function toSafeEvent(
+  event: ModelUsageEvent,
+  cost: ModelUsageCost,
+  showWebSearchCost: boolean
+): SafeCostedModelUsageEvent {
+  return {
+    ...event,
+    cost: toSafeCost(cost, showWebSearchCost)
+  };
+}
+
+function toSafeCost(cost: ModelUsageCost, showWebSearchCost: boolean): SafeModelUsageCost {
+  const webSearchBilledCostMicros = Math.ceil(
+    cost.webSearchCostMicros * cost.costSafetyMultiplier
+  );
+  const modelBilledCostMicros = Math.max(0, cost.budgetedCostMicros - webSearchBilledCostMicros);
+  return {
+    currency: cost.currency,
+    modelBilledCostMicros,
+    ...(showWebSearchCost ? { webSearchBilledCostMicros } : {}),
+    billedCostMicros: cost.budgetedCostMicros,
+    webSearchCostVisible: showWebSearchCost,
+    pricingConfigured: cost.pricingConfigured,
+    modelPricingConfigured: cost.modelPricingConfigured,
+    webSearchPricingConfigured: cost.webSearchPricingConfigured
+  };
+}
+
 class UsagePricingCatalog {
   private readonly modelPrices: UsagePricingConfig["models"];
   private readonly webSearchPrices: NonNullable<UsagePricingConfig["webSearch"]>;
@@ -346,6 +553,10 @@ class UsagePricingCatalog {
   ) {
     this.modelPrices = pricing.models;
     this.webSearchPrices = pricing.webSearch ?? [];
+  }
+
+  hasWebSearchPricing(): boolean {
+    return this.webSearchPrices.length > 0;
   }
 
   createEmptySummary(): ModelUsageCostSummary {

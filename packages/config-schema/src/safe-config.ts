@@ -22,7 +22,6 @@ export function createSafeConfigView(config: ClientInstanceConfig, localeInput: 
     },
     retention: config.retention,
     usage: {
-      budget: config.usage.budget,
       safeguards: config.usage.safeguards
     },
     features: {

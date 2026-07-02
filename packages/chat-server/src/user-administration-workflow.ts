@@ -61,9 +61,13 @@ export class UserAdministrationWorkflow {
 
   async listUsers(user: AuthenticatedUser, context: RuntimeCallContext): Promise<UserRecord[]> {
     await this.authorize(user, context, "governance.users_viewed");
-    return this.options.userStore.listUsers({
+    const users = await this.options.userStore.listUsers({
       clientInstanceId: this.options.clientInstanceId
     });
+    if (this.isSuperadmin(user)) {
+      return users;
+    }
+    return users.filter((candidate) => !candidate.roles.includes("superadmin"));
   }
 
   async createUser(

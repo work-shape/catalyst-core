@@ -16,13 +16,14 @@ export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServ
       options,
       user,
       context,
-      requiredRole: "superadmin",
+      requiredRole: "admin",
       auditType: "governance.usage_viewed",
-      deniedMessage: "Usage governance requires a superadmin role"
+      deniedMessage: "Usage governance requires an admin role"
     });
 
-    return options.usageGovernance.createSummary({
-      clientInstanceId: options.clientInstanceId
+    return options.usageGovernance.createSafeSummary({
+      clientInstanceId: options.clientInstanceId,
+      webSearchEnabled: options.config.webAccess.enabled && options.config.webAccess.search.enabled
     });
   });
 

@@ -210,10 +210,6 @@ export type GetConfigResponses = {
             allowUserDelete: boolean;
         };
         usage: {
-            budget: {
-                monthlySpendLimit?: number;
-                costSafetyMultiplier: number;
-            };
             safeguards: {
                 modelCallsPerDay?: number;
                 tokensPerDay?: number;
@@ -2023,28 +2019,10 @@ export type GetUsageSummaryResponses = {
      */
     200: {
         generatedAt: string;
-        budget: {
-            monthlySpendLimit?: number;
-            costSafetyMultiplier: number;
-        };
         safeguards: {
             modelCallsPerDay?: number;
             tokensPerDay?: number;
             tokensPerMonth?: number;
-        };
-        pricing: {
-            currency: string;
-            models: Array<{
-                providerId: string;
-                model: string;
-                inputPricePerMillionTokens: number;
-                outputPricePerMillionTokens: number;
-            }>;
-            webSearch: Array<{
-                providerId: string;
-                model?: string;
-                pricePerCall: number;
-            }>;
         };
         today: {
             start?: string;
@@ -2056,12 +2034,10 @@ export type GetUsageSummaryResponses = {
             webSearchCallCount: number;
             cost: {
                 currency: string;
-                inputCostMicros: number;
-                outputCostMicros: number;
-                webSearchCostMicros: number;
-                totalCostMicros: number;
-                budgetedCostMicros: number;
-                costSafetyMultiplier: number;
+                modelBilledCostMicros: number;
+                webSearchBilledCostMicros?: number;
+                billedCostMicros: number;
+                webSearchCostVisible: boolean;
                 pricingConfigured: boolean;
                 modelPricingConfigured: boolean;
                 webSearchPricingConfigured: boolean;
@@ -2081,12 +2057,10 @@ export type GetUsageSummaryResponses = {
             webSearchCallCount: number;
             cost: {
                 currency: string;
-                inputCostMicros: number;
-                outputCostMicros: number;
-                webSearchCostMicros: number;
-                totalCostMicros: number;
-                budgetedCostMicros: number;
-                costSafetyMultiplier: number;
+                modelBilledCostMicros: number;
+                webSearchBilledCostMicros?: number;
+                billedCostMicros: number;
+                webSearchCostVisible: boolean;
                 pricingConfigured: boolean;
                 modelPricingConfigured: boolean;
                 webSearchPricingConfigured: boolean;
@@ -2106,12 +2080,10 @@ export type GetUsageSummaryResponses = {
             webSearchCallCount: number;
             cost: {
                 currency: string;
-                inputCostMicros: number;
-                outputCostMicros: number;
-                webSearchCostMicros: number;
-                totalCostMicros: number;
-                budgetedCostMicros: number;
-                costSafetyMultiplier: number;
+                modelBilledCostMicros: number;
+                webSearchBilledCostMicros?: number;
+                billedCostMicros: number;
+                webSearchCostVisible: boolean;
                 pricingConfigured: boolean;
                 modelPricingConfigured: boolean;
                 webSearchPricingConfigured: boolean;
@@ -2121,6 +2093,54 @@ export type GetUsageSummaryResponses = {
                 unpricedWebSearchCallCount: number;
             };
         };
+        dailyUsage: Array<{
+            start?: string;
+            end?: string;
+            modelCallCount: number;
+            inputTokens: number;
+            outputTokens: number;
+            totalTokens: number;
+            webSearchCallCount: number;
+            cost: {
+                currency: string;
+                modelBilledCostMicros: number;
+                webSearchBilledCostMicros?: number;
+                billedCostMicros: number;
+                webSearchCostVisible: boolean;
+                pricingConfigured: boolean;
+                modelPricingConfigured: boolean;
+                webSearchPricingConfigured: boolean;
+                pricedModelCallCount: number;
+                unpricedModelCallCount: number;
+                pricedWebSearchCallCount: number;
+                unpricedWebSearchCallCount: number;
+            };
+            date: string;
+        }>;
+        monthlyUsage: Array<{
+            start?: string;
+            end?: string;
+            modelCallCount: number;
+            inputTokens: number;
+            outputTokens: number;
+            totalTokens: number;
+            webSearchCallCount: number;
+            cost: {
+                currency: string;
+                modelBilledCostMicros: number;
+                webSearchBilledCostMicros?: number;
+                billedCostMicros: number;
+                webSearchCostVisible: boolean;
+                pricingConfigured: boolean;
+                modelPricingConfigured: boolean;
+                webSearchPricingConfigured: boolean;
+                pricedModelCallCount: number;
+                unpricedModelCallCount: number;
+                pricedWebSearchCallCount: number;
+                unpricedWebSearchCallCount: number;
+            };
+            month: string;
+        }>;
         recentEvents: Array<{
             id: string;
             clientInstanceId: string;
@@ -2134,20 +2154,18 @@ export type GetUsageSummaryResponses = {
             totalTokens: number;
             webSearchCallCount: number;
             source: 'provider_reported' | 'not_reported' | 'estimated';
+            correlationId: string;
+            createdAt: string;
             cost: {
                 currency: string;
-                inputCostMicros: number;
-                outputCostMicros: number;
-                webSearchCostMicros: number;
-                totalCostMicros: number;
-                budgetedCostMicros: number;
-                costSafetyMultiplier: number;
+                modelBilledCostMicros: number;
+                webSearchBilledCostMicros?: number;
+                billedCostMicros: number;
+                webSearchCostVisible: boolean;
                 pricingConfigured: boolean;
                 modelPricingConfigured: boolean;
                 webSearchPricingConfigured: boolean;
             };
-            correlationId: string;
-            createdAt: string;
         }>;
     };
 };

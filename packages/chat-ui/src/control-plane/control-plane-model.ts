@@ -89,17 +89,11 @@ export function useControlPlaneModel({
   showSuperadmin
 }: ControlPlaneModelInput): ControlPlaneModel {
   const canViewAdministration = adminPanel?.canView(user) ?? false;
-  const canViewUsage = canViewUsageGovernance(user);
+  const canViewOperationalUsage = canViewUsageGovernance(user);
+  const canViewUsage = canViewAdministration;
   const administrationEnabled = canViewAdministration && view === "superadmin";
   const routeTab = route.kind === "superadmin" ? route.tab : undefined;
-  const selectedAdministrationTab =
-    routeTab !== undefined
-      ? routeTab === "usage" && !canViewUsage
-        ? "users"
-        : routeTab
-      : canViewUsage
-        ? "usage"
-        : "users";
+  const selectedAdministrationTab = routeTab !== undefined ? routeTab : "usage";
   const usageQuery = useWorkspaceUsageQuery({
     apiBaseUrl,
     authScope,
@@ -143,12 +137,8 @@ export function useControlPlaneModel({
   useEffect(() => {
     if (isAuthenticated && route.kind === "superadmin" && !canViewAdministration) {
       goToDefaultChat({ replace: true });
-      return;
     }
-    if (isAuthenticated && route.kind === "superadmin" && routeTab === "usage" && !canViewUsage) {
-      showSuperadmin("users", { replace: true });
-    }
-  }, [canViewAdministration, canViewUsage, goToDefaultChat, isAuthenticated, route.kind, routeTab, showSuperadmin]);
+  }, [canViewAdministration, goToDefaultChat, isAuthenticated, route.kind]);
 
   return {
     canViewAdministration,
@@ -172,10 +162,10 @@ export function useControlPlaneModel({
         usage: usageQuery.data,
         auditActivities: auditQuery.data ?? [],
         users: usersQuery.data ?? [],
-        canViewUsageGovernance: canViewUsage,
+        canViewUsageGovernance: canViewOperationalUsage,
         loading: usageQuery.isLoading || auditQuery.isLoading,
         usersLoading: usersQuery.isLoading,
-        error: canViewUsage && usageQuery.error
+        error: usageQuery.error
           ? apiErrorMessage(usageQuery.error, undefined)
           : auditQuery.error
             ? apiErrorMessage(auditQuery.error, undefined)

@@ -350,6 +350,161 @@ describe("model usage governance", () => {
     });
   });
 
+  it("creates an admin usage summary without internal cost policy", async () => {
+    const clientInstanceId = asClientInstanceId("client-admin-usage-test");
+    const store = new InMemoryPlatformStore();
+    const governance = new ModelUsageGovernance({
+      store,
+      budget: {
+        monthlySpendLimit: 200,
+        costSafetyMultiplier: 1.5
+      },
+      safeguards: {
+        tokensPerMonth: 1000000
+      },
+      pricing: {
+        currency: "USD",
+        models: [
+          {
+            providerId: "openai",
+            model: "gpt-4.1",
+            inputPricePerMillionTokens: 2,
+            outputPricePerMillionTokens: 8
+          }
+        ]
+      }
+    });
+
+    await governance.appendModelUsageEvent({
+      clientInstanceId,
+      conversationId: asConversationId("conv_admin_usage"),
+      agentRunId: asAgentRunId("run_admin_usage"),
+      agentName: "agent",
+      providerId: "openai",
+      model: "gpt-4.1",
+      inputTokens: 1000,
+      outputTokens: 1000,
+      totalTokens: 2000,
+      source: "provider_reported",
+      correlationId: "corr_admin_usage"
+    });
+
+    const summary = await governance.createSafeSummary({ clientInstanceId });
+
+    expect(summary).toMatchObject({
+      safeguards: {
+        tokensPerMonth: 1000000
+      },
+      today: {
+        modelCallCount: 1,
+        totalTokens: 2000,
+        cost: {
+          currency: "USD",
+          modelBilledCostMicros: 15000,
+          billedCostMicros: 15000,
+          webSearchCostVisible: false,
+          pricingConfigured: true
+        }
+      },
+      recentEvents: [
+        expect.objectContaining({
+          providerId: "openai",
+          model: "gpt-4.1",
+          totalTokens: 2000,
+          cost: expect.objectContaining({
+            currency: "USD",
+            modelBilledCostMicros: 15000,
+            billedCostMicros: 15000,
+            webSearchCostVisible: false
+          })
+        })
+      ]
+    });
+    expect(summary.today.cost).not.toHaveProperty("webSearchBilledCostMicros");
+    expect(JSON.stringify(summary)).not.toContain("monthlySpendLimit");
+    expect(JSON.stringify(summary)).not.toContain("costSafetyMultiplier");
+    expect(JSON.stringify(summary)).not.toContain("inputPricePerMillionTokens");
+    expect(JSON.stringify(summary)).not.toContain("totalCostMicros");
+    expect(JSON.stringify(summary)).not.toContain("budgetedCostMicros");
+  });
+
+  it("shows web search billed cost only when web search accounting is enabled", async () => {
+    const clientInstanceId = asClientInstanceId("client-admin-web-search-usage-test");
+    const store = new InMemoryPlatformStore();
+    const governance = new ModelUsageGovernance({
+      store,
+      budget: {
+        monthlySpendLimit: 200,
+        costSafetyMultiplier: 1.5
+      },
+      safeguards: {},
+      pricing: {
+        currency: "USD",
+        models: [
+          {
+            providerId: "openai",
+            model: "gpt-4.1",
+            inputPricePerMillionTokens: 2,
+            outputPricePerMillionTokens: 8
+          }
+        ],
+        webSearch: [
+          {
+            providerId: "openai",
+            model: "gpt-4.1",
+            pricePerCall: 0.01
+          }
+        ]
+      }
+    });
+
+    await governance.appendModelUsageEvent({
+      clientInstanceId,
+      conversationId: asConversationId("conv_admin_web_search_usage"),
+      agentRunId: asAgentRunId("run_admin_web_search_usage"),
+      agentName: "agent",
+      providerId: "openai",
+      model: "gpt-4.1",
+      inputTokens: 1000,
+      outputTokens: 1000,
+      totalTokens: 2000,
+      webSearchCallCount: 2,
+      source: "provider_reported",
+      correlationId: "corr_admin_web_search_usage"
+    });
+
+    const visibleSummary = await governance.createSafeSummary({
+      clientInstanceId,
+      webSearchEnabled: true
+    });
+    expect(visibleSummary.today.cost).toMatchObject({
+      currency: "USD",
+      modelBilledCostMicros: 15000,
+      webSearchBilledCostMicros: 30000,
+      billedCostMicros: 45000,
+      webSearchCostVisible: true
+    });
+    expect(visibleSummary.recentEvents[0]?.cost).toMatchObject({
+      webSearchBilledCostMicros: 30000,
+      billedCostMicros: 45000,
+      webSearchCostVisible: true
+    });
+
+    const hiddenSummary = await governance.createSafeSummary({
+      clientInstanceId,
+      webSearchEnabled: false
+    });
+    expect(hiddenSummary.today.cost).toMatchObject({
+      billedCostMicros: 45000,
+      webSearchCostVisible: false
+    });
+    expect(hiddenSummary.today.cost).not.toHaveProperty("webSearchBilledCostMicros");
+    expect(JSON.stringify(visibleSummary)).not.toContain("costSafetyMultiplier");
+    expect(JSON.stringify(visibleSummary)).not.toContain("inputPricePerMillionTokens");
+    expect(JSON.stringify(visibleSummary)).not.toContain("pricePerCall");
+    expect(JSON.stringify(visibleSummary)).not.toContain("totalCostMicros");
+  });
+
   it("blocks new model calls after the monthly spend budget is reached", async () => {
     const clientInstanceId = asClientInstanceId("client-spend-limit-test");
     const store = new InMemoryPlatformStore();
@@ -443,6 +598,7 @@ describe("model usage governance", () => {
       }
     });
   });
+
 });
 
 function delay(ms: number): Promise<void> {
