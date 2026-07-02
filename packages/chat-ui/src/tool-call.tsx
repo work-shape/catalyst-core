@@ -542,7 +542,8 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
     "workspace.list_files": "List files",
     "workspace.import_files": "Import files",
     "workspace.read_file": "Read file",
-    "workspace.promote_artifact": "Prepare download"
+    "workspace.promote_artifact": "Prepare download",
+    "workspace.preview_images": "Preview images"
   },
   de: {
     read_skill: "Anleitung lesen",
@@ -551,7 +552,8 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
     "workspace.list_files": "Dateien auflisten",
     "workspace.import_files": "Dateien importieren",
     "workspace.read_file": "Datei lesen",
-    "workspace.promote_artifact": "Download vorbereiten"
+    "workspace.promote_artifact": "Download vorbereiten",
+    "workspace.preview_images": "Vorschau laden"
   }
 };
 

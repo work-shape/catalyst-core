@@ -91,6 +91,12 @@ function createVisualArtifactSummary(result: ToolExecutionResult): string | unde
         `artifactId: ${artifact.artifactId}`,
         `mimeType: ${artifact.modelVisibility?.mimeType ?? artifact.mimeType ?? "image/png"}`,
         typeof metadata.pageNumber === "number" ? `page: ${metadata.pageNumber}` : undefined,
+        typeof metadata.slideNumber === "number" ? `slide: ${metadata.slideNumber}` : undefined,
+        typeof metadata.sheet === "string" ? `sheet: ${metadata.sheet}` : undefined,
+        typeof metadata.range === "string" ? `range: ${metadata.range}` : undefined,
+        typeof metadata.width === "number" && typeof metadata.height === "number"
+          ? `size: ${metadata.width}x${metadata.height}`
+          : undefined,
         typeof metadata.dpi === "number" ? `dpi: ${metadata.dpi}` : undefined
       ].filter((value): value is string => value !== undefined);
       return `- ${details.join(", ")}`;

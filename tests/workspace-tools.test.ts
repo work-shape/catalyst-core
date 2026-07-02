@@ -17,6 +17,7 @@ import {
   type WorkspaceCommand
 } from "@vivd-catalyst/core";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+import { createModelVisibleToolOutput } from "../packages/agent-runtime/src/model-context-projection";
 import {
   createWorkspaceToolDefinitions,
   LocalWorkspaceCommandRunner,
@@ -801,6 +802,193 @@ describe("workspace tools", () => {
       })
     });
     await expect(harness.objectStore.getObject(previewArtifact!.objectKey)).resolves.toEqual(encode("slide-1"));
+  });
+
+  it("loads ready preview images as model-visible artifacts without exposing internal storage", async () => {
+    const harness = await createWorkspaceHarness();
+    const source = await harness.store.createManagedArtifact({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      kind: "document.pdf",
+      objectKey: "execution-workspaces/private/report.pdf",
+      filename: "report.pdf",
+      mimeType: "application/pdf",
+      byteSize: 128,
+      checksum: "sha256:report"
+    });
+    const previewBytes = encode("page-1-png");
+    harness.objectStore.putObject("artifact-previews/private/report-page-1.png", previewBytes);
+    const previewPage = await harness.store.createManagedArtifact({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      kind: "document.preview_page_image",
+      objectKey: "artifact-previews/private/report-page-1.png",
+      filename: "report-page-1.png",
+      mimeType: "image/png",
+      byteSize: previewBytes.byteLength,
+      checksum: "sha256:preview-page-1",
+      metadata: {
+        sourceArtifactId: source.id,
+        previewRole: "page",
+        pageNumber: 1
+      }
+    });
+    await harness.store.writeArtifactPreviewManifest({
+      status: "ready",
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      sourceArtifactId: source.id,
+      type: "image_pages",
+      format: "png",
+      pages: [
+        {
+          artifactId: previewPage.id,
+          mimeType: "image/png",
+          pageNumber: 1,
+          width: 640,
+          height: 480
+        }
+      ],
+      writtenAt: "2026-06-29T12:02:00.000Z"
+    });
+
+    const result = await harness.runTool("workspace.preview_images", {
+      artifactId: source.id,
+      pages: [1],
+      maxImages: 1
+    });
+
+    expect(result.status).toBe("success");
+    if (result.status !== "success") {
+      throw new Error("Expected preview_images to succeed");
+    }
+    expect(result.output).toEqual({
+      artifactId: source.id,
+      status: "ready",
+      maxImages: 1,
+      images: [
+        {
+          sourceArtifactId: source.id,
+          imageArtifactId: previewPage.id,
+          mimeType: "image/png",
+          status: "ready",
+          pageNumber: 1,
+          width: 640,
+          height: 480
+        }
+      ],
+      warnings: []
+    });
+    expect(result.artifacts).toEqual([
+      {
+        artifactId: previewPage.id,
+        kind: "document.preview_page_image",
+        filename: "report-page-1.png",
+        mimeType: "image/png",
+        modelVisibility: {
+          type: "image",
+          mimeType: "image/png"
+        },
+        metadata: {
+          sourceArtifactId: source.id,
+          status: "ready",
+          pageNumber: 1,
+          width: 640,
+          height: 480
+        }
+      }
+    ]);
+    expect(JSON.stringify(result)).not.toContain("objectKey");
+    expect(JSON.stringify(result)).not.toContain("artifact-previews/private");
+
+    const modelOutput = await createModelVisibleToolOutput(result, {
+      clientInstanceId: harness.clientInstanceId,
+      toolOutput: { maxTokens: 60_000 },
+      artifactReader: {
+        async readArtifact(input) {
+          const artifact = await harness.store.getManagedArtifact({
+            clientInstanceId: input.clientInstanceId,
+            artifactId: input.artifactId
+          });
+          if (!artifact) {
+            throw new Error("Missing artifact");
+          }
+          return {
+            bytes: await harness.objectStore.getObject(artifact.objectKey),
+            mimeType: artifact.mimeType
+          };
+        }
+      }
+    });
+    expect(Array.isArray(modelOutput.content)).toBe(true);
+    const imageParts = Array.isArray(modelOutput.content)
+      ? modelOutput.content.filter((part) => part.type === "image")
+      : [];
+    expect(imageParts).toEqual([
+      {
+        type: "image",
+        mimeType: "image/png",
+        data: previewBytes
+      }
+    ]);
+    expect(modelOutput.text).toContain("[Visual context loaded]");
+    expect(modelOutput.text).toContain("page: 1");
+    expect(modelOutput.text).toContain("size: 640x480");
+  });
+
+  it("reports pending and unsupported preview states without attaching images", async () => {
+    const harness = await createWorkspaceHarness();
+    const document = await harness.store.createManagedArtifact({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      kind: "document.docx",
+      objectKey: "execution-workspaces/private/report.docx",
+      filename: "report.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      byteSize: 128,
+      checksum: "sha256:report-docx"
+    });
+    const pending = await harness.runTool("workspace.preview_images", {
+      artifactId: document.id
+    });
+    expect(pending.status).toBe("success");
+    if (pending.status !== "success") {
+      throw new Error("Expected pending preview_images result");
+    }
+    expect(pending.output).toMatchObject({
+      artifactId: document.id,
+      status: "pending",
+      images: [],
+      warnings: [expect.objectContaining({ code: "preview_pending" })]
+    });
+    expect(pending.artifacts).toBeUndefined();
+
+    const workbook = await harness.store.createManagedArtifact({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      kind: "spreadsheet.xlsx",
+      objectKey: "execution-workspaces/private/workbook.xlsx",
+      filename: "workbook.xlsx",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      byteSize: 128,
+      checksum: "sha256:workbook"
+    });
+    const unsupported = await harness.runTool("workspace.preview_images", {
+      artifactId: workbook.id,
+      sheets: ["Summary"]
+    });
+    expect(unsupported.status).toBe("success");
+    if (unsupported.status !== "success") {
+      throw new Error("Expected unsupported preview_images result");
+    }
+    expect(unsupported.output).toMatchObject({
+      artifactId: workbook.id,
+      status: "unsupported",
+      images: [],
+      errorCode: "unsupported_type",
+      warnings: [expect.objectContaining({ code: "unsupported_type" })]
+    });
+    expect(unsupported.artifacts).toBeUndefined();
   });
 
   it("shapes command stdout and stderr to configured bounds", () => {

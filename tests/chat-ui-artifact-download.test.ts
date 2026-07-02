@@ -349,6 +349,7 @@ describe("chat UI artifact download cards", () => {
     };
 
     expect(readSurfacedToolArtifactRefs(internalPreviewResult, "view_document_page")).toEqual([]);
+    expect(readSurfacedToolArtifactRefs(internalPreviewResult, "workspace.preview_images")).toEqual([]);
     expect(readSurfacedToolArtifactRefs(promotedResult, "workspace.promote_artifact")).toEqual([
       {
         artifactId: "art_final_pdf",

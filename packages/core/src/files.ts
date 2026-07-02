@@ -55,6 +55,8 @@ export interface ArtifactPreviewImagePageRef {
   filename?: string;
   pageNumber?: number;
   slideNumber?: number;
+  sheet?: string;
+  range?: string;
   width?: number;
   height?: number;
 }
@@ -125,6 +127,8 @@ export interface ManagedArtifactPreviewImagePageRef {
   mimeType: SupportedImageMimeType;
   pageNumber?: number;
   slideNumber?: number;
+  sheet?: string;
+  range?: string;
 }
 
 export interface ManagedArtifactImagePagesPreview {
@@ -335,6 +339,8 @@ export interface ArtifactPreviewImageArtifactInput {
   metadata?: JsonObject;
   pageNumber?: number;
   slideNumber?: number;
+  sheet?: string;
+  range?: string;
   width?: number;
   height?: number;
 }

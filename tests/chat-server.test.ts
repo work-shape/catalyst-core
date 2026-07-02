@@ -3548,7 +3548,8 @@ describe("client instance app vertical slice", () => {
       "workspace.list_files",
       "workspace.import_files",
       "workspace.read_file",
-      "workspace.promote_artifact"
+      "workspace.promote_artifact",
+      "workspace.preview_images"
     ];
     const app = await createClientInstanceApp({
       config: createTestConfig({
