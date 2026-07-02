@@ -49,7 +49,7 @@ Audit events should not store:
 
 Model usage is governance metadata, not provider billing truth.
 
-Admin-facing usage views should expose consumption volume and client-billed cost totals: model calls, token counts, configured non-financial safeguards, recent model usage metadata, and the already-multiplied cost that the client should expect to be charged. They should not expose provider pricing tables, raw provider cost, monthly spend limits, or cost safety multipliers. Web-search costs should only be displayed when web search is enabled for the instance.
+Admin-facing usage views should expose consumption volume and client-billed cost totals: model calls, token counts, configured non-financial safeguards, recent model usage metadata, and the already-multiplied cost that the client should expect to be charged. This includes per-day and per-calendar-month billed summaries so admins can review historical consumption for billing. They should not expose provider pricing tables, raw provider cost, monthly spend limits, or cost safety multipliers. Web-search costs should only be displayed when web search is enabled for the instance.
 
 Record:
 

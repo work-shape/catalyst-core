@@ -216,6 +216,7 @@ function DailyUsageCard({
                   value={values[index] ?? 0}
                   maxValue={maxValue}
                   showWebSearchCosts={showWebSearchCosts}
+                  tooltipAlign={tooltipAlignForIndex(index, days.length)}
                 />
               ))}
             </div>
@@ -232,16 +233,34 @@ function DailyUsageCard({
   );
 }
 
+type TooltipAlign = "left" | "center" | "right";
+
+function tooltipAlignForIndex(index: number, count: number): TooltipAlign {
+  if (count < 2) {
+    return "center";
+  }
+  const position = index / (count - 1);
+  if (position < 0.2) {
+    return "left";
+  }
+  if (position > 0.8) {
+    return "right";
+  }
+  return "center";
+}
+
 function DailyUsageBar({
   day,
   value,
   maxValue,
-  showWebSearchCosts
+  showWebSearchCosts,
+  tooltipAlign
 }: {
   day: ModelUsageDailyBucket;
   value: number;
   maxValue: number;
   showWebSearchCosts: boolean;
+  tooltipAlign: TooltipAlign;
 }) {
   const heightPercent = value > 0 ? Math.max((value / maxValue) * 100, 3) : 0;
   return (
@@ -253,7 +272,14 @@ function DailyUsageBar({
         )}
         style={value > 0 ? { height: `${heightPercent}%` } : undefined}
       />
-      <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 hidden -translate-x-1/2 group-hover:block">
+      <div
+        className={cn(
+          "pointer-events-none absolute bottom-full z-10 mb-1.5 hidden group-hover:block",
+          tooltipAlign === "left" && "left-0",
+          tooltipAlign === "center" && "left-1/2 -translate-x-1/2",
+          tooltipAlign === "right" && "right-0"
+        )}
+      >
         <div className="grid gap-0.5 rounded-md border bg-popover px-2.5 py-1.5 text-xs whitespace-nowrap text-popover-foreground shadow-md">
           <span className="font-medium">{formatUtcDay(day.date)}</span>
           <span>{formatBilledCost(day.cost)} billed</span>

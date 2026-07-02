@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   asAgentRunId,
   asClientInstanceId,
@@ -425,6 +425,102 @@ describe("model usage governance", () => {
     expect(JSON.stringify(summary)).not.toContain("costSafetyMultiplier");
     expect(JSON.stringify(summary)).not.toContain("inputPricePerMillionTokens");
     expect(JSON.stringify(summary)).not.toContain("totalCostMicros");
+    expect(JSON.stringify(summary)).not.toContain("budgetedCostMicros");
+  });
+
+  it("summarizes safe daily and monthly usage buckets", async () => {
+    const clientInstanceId = asClientInstanceId("client-usage-buckets-test");
+    const store = new InMemoryPlatformStore();
+    const governance = new ModelUsageGovernance({
+      store,
+      budget: {
+        costSafetyMultiplier: 1.5
+      },
+      safeguards: {},
+      pricing: {
+        currency: "USD",
+        models: [
+          {
+            providerId: "openai",
+            model: "gpt-4.1",
+            inputPricePerMillionTokens: 2,
+            outputPricePerMillionTokens: 8
+          }
+        ]
+      }
+    });
+
+    const appendEventAt = async (isoTime: string, suffix: string) => {
+      vi.setSystemTime(new Date(isoTime));
+      await governance.appendModelUsageEvent({
+        clientInstanceId,
+        conversationId: asConversationId(`conv_${suffix}`),
+        agentRunId: asAgentRunId(`run_${suffix}`),
+        agentName: "agent",
+        providerId: "openai",
+        model: "gpt-4.1",
+        inputTokens: 1000,
+        outputTokens: 1000,
+        totalTokens: 2000,
+        source: "provider_reported",
+        correlationId: `corr_${suffix}`
+      });
+    };
+
+    vi.useFakeTimers();
+    try {
+      await appendEventAt("2026-05-20T10:00:00.000Z", "may");
+      await appendEventAt("2026-07-01T00:30:00.000Z", "july_first");
+      await appendEventAt("2026-07-02T08:00:00.000Z", "july_second_a");
+      await appendEventAt("2026-07-02T09:00:00.000Z", "july_second_b");
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const summary = await governance.createSafeSummary({
+      clientInstanceId,
+      now: new Date("2026-07-02T12:00:00.000Z")
+    });
+
+    // Each event bills ceil((1000 * 2 + 1000 * 8) * 1.5) = 15000 micros.
+    expect(summary.dailyUsage).toHaveLength(30);
+    expect(summary.dailyUsage[0]?.date).toBe("2026-06-03");
+    expect(summary.dailyUsage.at(-1)).toMatchObject({
+      date: "2026-07-02",
+      modelCallCount: 2,
+      totalTokens: 4000,
+      cost: { billedCostMicros: 30000 }
+    });
+    expect(summary.dailyUsage.at(-2)).toMatchObject({
+      date: "2026-07-01",
+      modelCallCount: 1,
+      cost: { billedCostMicros: 15000 }
+    });
+    expect(summary.dailyUsage.reduce((total, day) => total + day.modelCallCount, 0)).toBe(3);
+
+    expect(summary.monthlyUsage.map((month) => month.month)).toEqual([
+      "2026-05",
+      "2026-06",
+      "2026-07"
+    ]);
+    expect(summary.monthlyUsage[0]).toMatchObject({
+      month: "2026-05",
+      modelCallCount: 1,
+      cost: { billedCostMicros: 15000 }
+    });
+    expect(summary.monthlyUsage[1]).toMatchObject({
+      month: "2026-06",
+      modelCallCount: 0,
+      cost: { billedCostMicros: 0 }
+    });
+    expect(summary.monthlyUsage[2]).toMatchObject({
+      month: "2026-07",
+      modelCallCount: 3,
+      totalTokens: 6000,
+      cost: { billedCostMicros: 45000 }
+    });
+
+    expect(JSON.stringify(summary)).not.toContain("costSafetyMultiplier");
     expect(JSON.stringify(summary)).not.toContain("budgetedCostMicros");
   });
 

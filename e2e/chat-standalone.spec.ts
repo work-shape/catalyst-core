@@ -695,7 +695,7 @@ test("standalone settings and superadmin tabs are route-backed", async ({ page }
   await page.goto("/admin");
   await expect(page).toHaveURL(/\/admin\/usage$/u);
   await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
-  await expect(page.getByText("Budgeted cost today")).toBeVisible();
+  await expect(page.getByText("Billed this month")).toBeVisible();
 
   await page.getByRole("button", { name: /^Users/ }).click();
   await expect(page).toHaveURL(/\/admin\/users$/u);
@@ -762,18 +762,22 @@ test("superadmin can open usage and audit views", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Audit log" })).toBeVisible();
 });
 
-test("admin can manage users without usage governance", async ({ page }) => {
+test("admin sees billed usage and can manage users", async ({ page }) => {
   await signInViaUi(page, adminUser);
   await expect(page.getByRole("button", { name: "Open administration panel" })).toBeVisible();
   await page.getByRole("button", { name: "Open administration panel" }).click();
-  await expect(page).toHaveURL(/\/admin\/users$/u);
+  await expect(page).toHaveURL(/\/admin\/usage$/u);
   const adminPanel = page.getByRole("region", { name: "Administration panel" });
   await expect(adminPanel).toBeVisible();
   await expect(adminPanel.getByText("Admin", { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Usage/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Usage/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Users/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Audit log" })).toBeVisible();
+  await expect(page.getByText("Billed this month")).toBeVisible();
+  await expect(page.getByTestId("monthly-usage")).toBeVisible();
 
+  await page.getByRole("button", { name: /^Users/ }).click();
+  await expect(page).toHaveURL(/\/admin\/users$/u);
   await page.getByRole("button", { name: "New user" }).click();
   const timestamp = Date.now();
   const createdUser = {
@@ -844,10 +848,10 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
   await page.getByRole("button", { name: "Open administration panel" }).click();
   await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
   await expect(page.getByText("Administration")).toBeVisible();
-  await expect(page.getByText("Budgeted cost today")).toBeVisible();
-  await expect(page.getByText("Calls today")).toBeVisible();
-  await expect(page.getByText("Configured pricing")).toBeVisible();
-  await expect(page.getByText("local / deterministic-local")).toBeVisible();
+  await expect(page.getByText("Billed this month")).toBeVisible();
+  await expect(page.getByText("Billed today")).toBeVisible();
+  await expect(page.getByTestId("daily-usage")).toBeVisible();
+  await expect(page.getByTestId("monthly-usage")).toBeVisible();
   await expect(page.getByText("Configured safeguards")).toBeVisible();
   const configuredSafeguards = page.getByTestId("configured-safeguards");
   await expect(configuredSafeguards).toContainText("12");
