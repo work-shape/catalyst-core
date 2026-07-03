@@ -10,7 +10,7 @@ export interface WorkspaceToolDisplayProjection {
 }
 
 const MAX_LISTED_NAMES = 3;
-const MAX_COMMAND_PARTS = 8;
+const MAX_COMMAND_LABEL_CHARS = 320;
 const MAX_COMMAND_DISPLAY_CHARS = 5000;
 const MAX_FAILURE_PREVIEW_CHARS = 1800;
 const MAX_FAILURE_STRING_CHARS = 320;
@@ -61,79 +61,25 @@ export function readWorkspaceToolErrorText(input: {
   return isFailedWorkspaceExecResult(input) ? "Workspace command failed" : undefined;
 }
 
-export function summarizeWorkspaceCommand(command: string): string | undefined {
-  if (isMultilineCommand(command)) {
-    return "workspace script";
-  }
-  const tokens = tokenizeCommand(readCommandSummaryLine(command));
-  if (tokens.length === 0) {
+export function formatWorkspaceCommandActionLabel(command: string): string | undefined {
+  const commandDisplay = sanitizeWorkspaceCommandDisplay(command);
+  if (!commandDisplay) {
     return undefined;
   }
-
-  const commandPrefix = readCommandPrefix(tokens);
-  if (!commandPrefix) {
-    return undefined;
-  }
-
-  const parts = [...commandPrefix.parts];
-  for (let index = commandPrefix.nextIndex; index < tokens.length && parts.length < MAX_COMMAND_PARTS; index += 1) {
-    const token = tokens[index];
-    if (!token || isShellBoundaryToken(token)) {
-      break;
-    }
-    if (!token.startsWith("-") || !isSafeFlagToken(token)) {
-      continue;
-    }
-
-    const equalsIndex = token.indexOf("=");
-    if (equalsIndex > 0) {
-      const flag = token.slice(0, equalsIndex);
-      const value = token.slice(equalsIndex + 1);
-      parts.push(isSafeCommandValue(value) && flagAllowsDisplayedValue(flag) ? `${flag}=${value}` : flag);
-      continue;
-    }
-
-    parts.push(token);
-    const next = tokens[index + 1];
-    if (
-      next &&
-      !next.startsWith("-") &&
-      isSafeCommandValue(next) &&
-      flagAllowsDisplayedValue(token) &&
-      parts.length < MAX_COMMAND_PARTS
-    ) {
-      parts.push(next);
-      index += 1;
-    }
-  }
-
-  return parts.join(" ");
-}
-
-function isMultilineCommand(command: string): boolean {
-  return command
-    .split(/\r?\n/u)
-    .filter((line) => line.trim().length > 0 && !line.trim().startsWith("#")).length > 1;
-}
-
-function readCommandSummaryLine(command: string): string {
-  const lines = command
+  const inlineCommand = commandDisplay
     .split(/\r?\n/u)
     .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith("#"));
-  const firstOperationalLine = lines.find((line) => !isShellSetupLine(line));
-  return firstOperationalLine ?? command.trim();
-}
-
-function isShellSetupLine(line: string): boolean {
-  return /^set\s+[-+][A-Za-z0-9-]+(?:\s+[A-Za-z0-9-]+)*$/u.test(line);
+    .filter((line) => line.length > 0)
+    .join(" ");
+  return boundInlineText(inlineCommand, MAX_COMMAND_LABEL_CHARS);
 }
 
 function projectWorkspaceExec(args: unknown, result: unknown): WorkspaceToolDisplayProjection {
   const input = isRecord(args) ? args : undefined;
   const container = isRecord(result) ? result : undefined;
   const output = isRecord(container?.output) ? container.output : undefined;
-  const command = typeof input?.command === "string" ? summarizeWorkspaceCommand(input.command) : undefined;
+  const commandLabel =
+    typeof input?.command === "string" ? formatWorkspaceCommandActionLabel(input.command) : undefined;
   const commandDisplay = typeof input?.command === "string" ? sanitizeWorkspaceCommandDisplay(input.command) : undefined;
   const status = readString(output?.status) ?? readString(container?.status);
   const exitCode = readNumber(output?.exitCode);
@@ -182,11 +128,11 @@ function projectWorkspaceExec(args: unknown, result: unknown): WorkspaceToolDisp
     });
   }
 
-  const actionLabel = command ?? "Workspace command";
+  const actionLabel = commandLabel ?? "Workspace command";
   return {
     actionLabel,
     summary: joinParts([
-      command ? `Ran ${command}` : "Ran a workspace command",
+      commandLabel ? `Ran ${commandLabel}` : "Ran a workspace command",
       status ? `status ${status}` : undefined,
       exitCode !== undefined ? `exit ${exitCode}` : undefined,
       durationMs !== undefined ? formatDuration(durationMs) : undefined,
@@ -600,106 +546,6 @@ function workspaceReasonCode(
   return undefined;
 }
 
-function readCommandPrefix(tokens: string[]): { parts: string[]; nextIndex: number } | undefined {
-  const first = tokens[0];
-  if (!first || isShellBoundaryToken(first)) {
-    return undefined;
-  }
-  const command = safeCommandName(first);
-  if (!command) {
-    return undefined;
-  }
-
-  if ((command === "python" || command === "python3") && tokens[1] === "-m") {
-    const moduleName = tokens[2];
-    if (moduleName && isSafeModuleName(moduleName)) {
-      return { parts: [command, "-m", moduleName], nextIndex: 3 };
-    }
-  }
-
-  return { parts: [command], nextIndex: 1 };
-}
-
-function tokenizeCommand(command: string): string[] {
-  const tokens: string[] = [];
-  let token = "";
-  let quote: "'" | "\"" | undefined;
-  let escaped = false;
-
-  for (const char of command.trim()) {
-    if (escaped) {
-      token += char;
-      escaped = false;
-      continue;
-    }
-    if (char === "\\") {
-      escaped = true;
-      continue;
-    }
-    if (quote) {
-      if (char === quote) {
-        quote = undefined;
-      } else {
-        token += char;
-      }
-      continue;
-    }
-    if (char === "'" || char === "\"") {
-      quote = char;
-      continue;
-    }
-    if (/\s/u.test(char)) {
-      if (token) {
-        tokens.push(token);
-        token = "";
-      }
-      continue;
-    }
-    token += char;
-  }
-
-  if (token) {
-    tokens.push(token);
-  }
-  return tokens;
-}
-
-function safeCommandName(token: string): string | undefined {
-  const basename = readDisplayFilename(token);
-  if (!basename || !/^[a-zA-Z0-9_.-]{1,80}$/u.test(basename)) {
-    return undefined;
-  }
-  return basename;
-}
-
-function isSafeFlagToken(token: string): boolean {
-  return /^-{1,2}[a-zA-Z0-9][a-zA-Z0-9_.-]*(?:=.*)?$/u.test(token) && token.length <= 120;
-}
-
-function isSafeCommandValue(value: string): boolean {
-  return (
-    value.length > 0 &&
-    value.length <= 100 &&
-    !/[\\/\s]/u.test(value) &&
-    !/^(?:file|art|ews|wcmd)_[a-z0-9_-]+$/iu.test(value) &&
-    !/(?:objectkey|execution-workspaces|workspace-root|scratch|private|\/users\/|\/tmp\/)/iu.test(value)
-  );
-}
-
-function flagAllowsDisplayedValue(flag: string): boolean {
-  return !/(?:token|secret|password|passwd|credential|auth|bearer|key|path|file|dir|root|cwd|output|input|url|uri)/iu.test(
-    flag
-  );
-}
-
-function isSafeModuleName(value: string): boolean {
-  return /^[a-zA-Z0-9_.-]{1,100}$/u.test(value);
-}
-
-function isShellBoundaryToken(token: string): boolean {
-  return token === "&&" || token === "||" || token === "|" || token === ";" || token === "&";
-}
-
 function readDisplayFilename(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined;
@@ -743,6 +589,11 @@ function byteLength(value: string): number {
 
 function boundText(value: string, maxChars: number): string {
   return value.length > maxChars ? `${value.slice(0, maxChars)}\n[truncated for display]` : value;
+}
+
+function boundInlineText(value: string, maxChars: number): string {
+  const bounded = value.length > maxChars ? `${value.slice(0, maxChars).trimEnd()} [truncated]` : value;
+  return bounded.trim();
 }
 
 function formatBytes(bytes: number): string {

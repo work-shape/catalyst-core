@@ -905,7 +905,7 @@ describe("chat UI message history projection", () => {
       args: toolPart.input,
       result: toolPart.output,
       toolName: "workspace.exec"
-    })).toBe("pptx_inspect --view summary");
+    })).toBe("pptx_inspect --view summary [redacted path] && cat [redacted path]");
     const detailSections = readToolDetailSections({
       args: toolPart.input,
       labels: { input: "Input", output: "Output" },
@@ -1108,7 +1108,7 @@ describe("chat UI message history projection", () => {
       args: toolPart.input,
       result: toolPart.output,
       toolName: "workspace.exec"
-    })).toBe("xlsx_inspect --range Sheet1!A1:C10");
+    })).toBe("xlsx_inspect --range Sheet1!A1:C10 [redacted path]");
     expect(serializedDetails).toContain("reason handler_failed");
     expect(serializedDetails).toContain("Command failed while reading");
     expect(serializedDetails).not.toContain("/Users/felixpahlke");

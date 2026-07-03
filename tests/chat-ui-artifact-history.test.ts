@@ -148,7 +148,7 @@ describe("chat UI artifact history projection", () => {
       },
       result: toolPart?.output,
       toolName: "workspace.exec"
-    })).toBe("cat");
+    })).toBe("cat [redacted path] && echo shell");
     const serializedDetails = JSON.stringify(detailSections);
     expect(serializedDetails).toContain("status completed");
     expect(serializedDetails).toContain("final-report.pdf");
