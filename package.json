@@ -18,6 +18,7 @@
     "test:e2e:chat": "node scripts/run-chat-e2e.mjs --all",
     "test:e2e:chat-state": "node scripts/run-chat-e2e.mjs --state",
     "test:e2e:chat-state:headed": "node scripts/run-chat-e2e.mjs --state -- --headed",
+    "test:e2e:live-agent-artifacts": "node scripts/run-live-agent-artifact-e2e.mjs",
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
