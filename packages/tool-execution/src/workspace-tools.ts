@@ -939,7 +939,7 @@ export function createWorkspaceToolDefinitions(
     defineTool({
       name: "workspace.exec",
       description:
-        "Queue a bounded /bin/sh command for the conversation execution workspace. Pass a complete shell command or multiline script. Run artifact helpers directly, or put `set -e` on its own line before later commands. Do not prefix helpers with `set -e`, and do not pass helper flags such as `--view`, `--spec`, `--out`, `--range`, `--page`, or `--sheet` to `cat` or `ls`. Files created by future runners stay internal until promoted.",
+        "Run a bounded Bash command from /workspace in the conversation execution workspace. Each call starts in /workspace unless cwd is provided for that call; cwd, processes, and files outside /workspace do not persist. Pass a complete shell command or multiline script. Files created or changed under /workspace persist across calls and stay internal until promoted. Run artifact helpers directly, or put `set -e` on its own line before later commands. Do not prefix helpers with `set -e`, and do not pass helper flags such as `--view`, `--spec`, `--out`, `--range`, `--page`, or `--sheet` to `cat` or `ls`.",
       inputSchema: workspaceExecInputSchema,
       outputSchema: workspaceExecOutputSchema,
       inputJsonSchema: workspaceExecInputJsonSchema,

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { ExecutionWorkspaceRunnerConfig } from "@vivd-catalyst/core";
 import {
+  DEFAULT_WORKSPACE_COMMAND_SHELL,
   DEFAULT_WORKSPACE_COMMAND_PATH,
   runSpawnedProcess,
   type ProcessResult,
@@ -162,7 +163,7 @@ export function createDockerRunInvocation(
   )) {
     args.push("--env", `${key}=${value}`);
   }
-  args.push(options.image, "/bin/sh", "-lc", input.command.command);
+  args.push(options.image, DEFAULT_WORKSPACE_COMMAND_SHELL, "-lc", input.command.command);
   return {
     args,
     containerName,

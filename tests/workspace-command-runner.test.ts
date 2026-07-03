@@ -38,6 +38,75 @@ afterEach(async () => {
 });
 
 describe("local workspace command runner", () => {
+  it("runs Bash script-first workflows from the workspace root and persists generated files", async () => {
+    const harness = await createRunnerHarness();
+
+    const built = await harness.exec({
+      command: [
+        "mkdir -p scripts artifacts",
+        "touch scripts/empty.txt",
+        "export REPORT_NAME=alpha",
+        "cat > scripts/build-report.bash <<'BASH'",
+        "set -euo pipefail",
+        "mkdir -p artifacts",
+        "echo \"$REPORT_NAME\" | tr '[:lower:]' '[:upper:]' > artifacts/report.txt",
+        "printf 'script stderr\\n' >&2",
+        "BASH",
+        "bash scripts/build-report.bash",
+        "printf 'script stdout\\n'"
+      ].join("\n")
+    });
+
+    expect(built.status).toBe("success");
+    if (built.status !== "success") {
+      throw new Error("Expected Bash workflow to succeed");
+    }
+    expect(built.output).toMatchObject({
+      status: "completed",
+      exitCode: 0,
+      stdoutPreview: "script stdout\n",
+      stderrPreview: "script stderr\n",
+      changedFiles: expect.arrayContaining([
+        expect.objectContaining({ path: "artifacts/report.txt", mimeType: "text/plain" }),
+        expect.objectContaining({ path: "scripts/build-report.bash" }),
+        expect.objectContaining({ path: "scripts/empty.txt" })
+      ])
+    });
+
+    const report = await harness.service.readFile({ path: "artifacts/report.txt" }, harness.context);
+    expect(report.status).toBe("success");
+    if (report.status !== "success") {
+      throw new Error("Expected report to be readable");
+    }
+    expect(report.output?.contentPreview).toBe("ALPHA\n");
+  });
+
+  it("starts each workspace.exec call from the workspace root instead of a persisted cwd", async () => {
+    const harness = await createRunnerHarness();
+
+    const nested = await harness.exec({
+      command: "mkdir -p nested && cd nested && printf 'inside' > inside.txt"
+    });
+    expect(nested.status).toBe("success");
+    if (nested.status !== "success") {
+      throw new Error("Expected nested command to succeed");
+    }
+
+    const rootDefault = await harness.exec({
+      command: "test -f nested/inside.txt && test ! -e inside.txt && printf 'root' > root.txt"
+    });
+
+    expect(rootDefault.status).toBe("success");
+    if (rootDefault.status !== "success") {
+      throw new Error("Expected default cwd command to succeed");
+    }
+    expect(rootDefault.output).toMatchObject({
+      status: "completed",
+      exitCode: 0,
+      changedFiles: [expect.objectContaining({ path: "root.txt", byteSize: 4 })]
+    });
+  });
+
   it("runs commands through an explicit local result source and persists files across disposable execution directories", async () => {
     const harness = await createRunnerHarness();
 

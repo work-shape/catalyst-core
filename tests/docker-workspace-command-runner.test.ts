@@ -99,7 +99,7 @@ describe("docker workspace command runner", () => {
         "--workdir",
         "/workspace/reports",
         "runner:test",
-        "/bin/sh",
+        "/bin/bash",
         "-lc",
         "node build.js"
       ])

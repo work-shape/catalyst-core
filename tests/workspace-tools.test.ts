@@ -22,13 +22,19 @@ describe("workspace tools", () => {
     const harness = await createWorkspaceHarness();
     const execTool = harness.tools.find((tool) => tool.name === "workspace.exec");
 
+    expect(execTool?.description).toContain("Bash command from /workspace");
+    expect(execTool?.description).toContain("Each call starts in /workspace");
+    expect(execTool?.description).toContain("Files created or changed under /workspace persist");
     expect(execTool?.description).toContain("put `set -e` on its own line");
     expect(execTool?.description).toContain("`--view`, `--spec`, `--out`, `--range`, `--page`, or `--sheet`");
     expect(execTool?.description).toContain("`cat` or `ls`");
     expect(workspaceExecInputJsonSchema).toMatchObject({
       properties: {
         command: {
-          description: expect.stringContaining("Do not pass helper flags")
+          description: expect.stringContaining("Complete Bash command")
+        },
+        cwd: {
+          description: expect.stringContaining("does not persist")
         }
       }
     });
@@ -181,6 +187,18 @@ describe("workspace tools", () => {
       command: "ls -lh deck.pptx"
     });
     expect(simpleLs.status).toBe("success");
+
+    const hereDocHarness = await createWorkspaceHarness();
+    const hereDoc = await hereDocHarness.runTool("workspace.exec", {
+      command: [
+        "mkdir -p scripts",
+        "cat > scripts/notes.txt <<'EOF'",
+        "cat --spec report.json --out report.pdf",
+        "ls --range \"Summary!A1:H30\" source.xlsx",
+        "EOF"
+      ].join("\n")
+    });
+    expect(hereDoc.status).toBe("success");
   });
 
   it("enforces agent allowlists through in-process tool execution", async () => {

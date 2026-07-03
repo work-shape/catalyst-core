@@ -4,6 +4,7 @@ import type { WorkspaceCommand } from "@vivd-catalyst/core";
 
 export const DEFAULT_WORKSPACE_COMMAND_PATH =
   "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+export const DEFAULT_WORKSPACE_COMMAND_SHELL = "/bin/bash";
 
 export interface WorkspaceCommandProcessInput {
   command: WorkspaceCommand;
@@ -40,8 +41,8 @@ export class LocalWorkspaceCommandProcessExecutor implements WorkspaceCommandPro
   async execute(input: WorkspaceCommandProcessInput): Promise<ProcessResult> {
     await mkdir(input.tempDirectory, { recursive: true });
     return runSpawnedProcess({
-      executable: this.options.shellPath ?? "/bin/sh",
-      args: ["-c", input.command.command],
+      executable: this.options.shellPath ?? DEFAULT_WORKSPACE_COMMAND_SHELL,
+      args: ["-lc", input.command.command],
       cwd: input.cwd,
       env: input.env,
       timeoutSeconds: input.command.limits.timeoutSeconds,

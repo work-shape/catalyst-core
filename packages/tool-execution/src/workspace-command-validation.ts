@@ -5,10 +5,7 @@ const helperFlagSubstituteCommands = new Set(["cat", "ls"]);
 const helperOnlyFlags = ["--view", "--spec", "--out", "--range", "--page", "--sheet"] as const;
 
 export function validateWorkspaceShellCommand(command: string): ValidationResult<void> {
-  const significantLines = command
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith("#"));
+  const significantLines = commandValidationLines(command);
   const firstLine = significantLines[0];
   if (firstLine && /^set(?:\s|$)/u.test(firstLine)) {
     const firstCommand = splitShellCommandSegments(firstLine)?.[0];
@@ -30,6 +27,115 @@ export function validateWorkspaceShellCommand(command: string): ValidationResult
     }
   }
   return { status: "success", value: undefined };
+}
+
+function commandValidationLines(command: string): string[] {
+  const significantLines: string[] = [];
+  const pendingHereDocs: Array<{ delimiter: string; stripTabs: boolean }> = [];
+  for (const line of command.split(/\r?\n/u)) {
+    const hereDoc = pendingHereDocs[0];
+    if (hereDoc) {
+      const comparable = hereDoc.stripTabs ? line.replace(/^\t+/u, "") : line;
+      if (comparable.trim() === hereDoc.delimiter) {
+        pendingHereDocs.shift();
+      }
+      continue;
+    }
+    const trimmed = line.trim();
+    if (trimmed.length === 0 || trimmed.startsWith("#")) {
+      continue;
+    }
+    significantLines.push(trimmed);
+    pendingHereDocs.push(...extractHereDocDelimiters(line));
+  }
+  return significantLines;
+}
+
+function extractHereDocDelimiters(line: string): Array<{ delimiter: string; stripTabs: boolean }> {
+  const delimiters: Array<{ delimiter: string; stripTabs: boolean }> = [];
+  let quote: "'" | "\"" | undefined;
+  let escaped = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index] ?? "";
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (character === "\\" && quote !== "'") {
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) {
+        quote = undefined;
+      }
+      continue;
+    }
+    if (character === "'" || character === "\"") {
+      quote = character;
+      continue;
+    }
+    if (character !== "<" || line[index + 1] !== "<" || line[index + 2] === "<") {
+      continue;
+    }
+    let delimiterStart = index + 2;
+    let stripTabs = false;
+    if (line[delimiterStart] === "-") {
+      stripTabs = true;
+      delimiterStart += 1;
+    }
+    while (/\s/u.test(line[delimiterStart] ?? "")) {
+      delimiterStart += 1;
+    }
+    const parsed = parseHereDocDelimiter(line, delimiterStart);
+    if (!parsed) {
+      continue;
+    }
+    delimiters.push({
+      delimiter: parsed.delimiter,
+      stripTabs
+    });
+    index = parsed.endIndex - 1;
+  }
+  return delimiters;
+}
+
+function parseHereDocDelimiter(
+  line: string,
+  startIndex: number
+): { delimiter: string; endIndex: number } | undefined {
+  let delimiter = "";
+  let quote: "'" | "\"" | undefined;
+  let escaped = false;
+  for (let index = startIndex; index < line.length; index += 1) {
+    const character = line[index] ?? "";
+    if (escaped) {
+      delimiter += character;
+      escaped = false;
+      continue;
+    }
+    if (character === "\\" && quote !== "'") {
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) {
+        quote = undefined;
+      } else {
+        delimiter += character;
+      }
+      continue;
+    }
+    if (character === "'" || character === "\"") {
+      quote = character;
+      continue;
+    }
+    if (/\s|;|\||&|<|>/u.test(character)) {
+      return delimiter ? { delimiter, endIndex: index } : undefined;
+    }
+    delimiter += character;
+  }
+  return delimiter && !quote && !escaped ? { delimiter, endIndex: line.length } : undefined;
 }
 
 function validateShellSetupLine(firstSegment: string, hasFollowingCommand: boolean): ValidationResult<void> {
