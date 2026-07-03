@@ -11,6 +11,7 @@ export interface WorkspaceToolDisplayProjection {
 
 const MAX_LISTED_NAMES = 3;
 const MAX_COMMAND_PARTS = 8;
+const MAX_COMMAND_DISPLAY_CHARS = 5000;
 const MAX_FAILURE_PREVIEW_CHARS = 1800;
 const MAX_FAILURE_STRING_CHARS = 320;
 const MAX_FAILURE_JSON_DEPTH = 4;
@@ -133,6 +134,7 @@ function projectWorkspaceExec(args: unknown, result: unknown): WorkspaceToolDisp
   const container = isRecord(result) ? result : undefined;
   const output = isRecord(container?.output) ? container.output : undefined;
   const command = typeof input?.command === "string" ? summarizeWorkspaceCommand(input.command) : undefined;
+  const commandDisplay = typeof input?.command === "string" ? sanitizeWorkspaceCommandDisplay(input.command) : undefined;
   const status = readString(output?.status) ?? readString(container?.status);
   const exitCode = readNumber(output?.exitCode);
   const durationMs = readNumber(output?.durationMs);
@@ -145,8 +147,8 @@ function projectWorkspaceExec(args: unknown, result: unknown): WorkspaceToolDisp
   const reasonCode = workspaceReasonCode(status, exitCode, readString(error?.code));
   const sections: ToolDetailSection[] = [];
 
-  if (command) {
-    sections.push({ label: "Command", value: command });
+  if (commandDisplay) {
+    sections.push({ label: "Command", value: commandDisplay });
   }
   pushSection(
     sections,
@@ -204,6 +206,25 @@ function workspaceExecFailurePreviewSections(
     failurePreviewSection("Stderr preview", readString(output?.stderrPreview), truncated?.stderr === true),
     error ? { label: "Error", value: sanitizeWorkspaceFailurePreview(error) } : undefined
   ]);
+}
+
+function sanitizeWorkspaceCommandDisplay(command: string): string | undefined {
+  const sanitized = command
+    .replaceAll(/https?:\/\/[^/@\s"']+:[^/@\s"']+@/giu, "https://[redacted]@")
+    .replaceAll(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gu, "Bearer [redacted]")
+    .replaceAll(
+      /\b(api[_-]?key|token|secret|password|passwd|credential|authorization)\b\s*[:=]\s*["']?[^"',\s;}]+/giu,
+      "$1=[redacted]"
+    )
+    .replaceAll(/\/Users\/[^\s"',;})]+/gu, "[redacted path]")
+    .replaceAll(/\/tmp\/[^\s"',;})]+/gu, "[redacted path]")
+    .replaceAll(/\/var\/folders\/[^\s"',;})]+/gu, "[redacted path]")
+    .replaceAll(/(?:^|[\s"',:])(?:scratch|\.artifact-previews|artifact-previews|execution-workspaces)\/[^\s"',;})]+/giu, (match) =>
+      match.slice(0, 1).match(/[\s"',:]/u) ? `${match.slice(0, 1)}[redacted path]` : "[redacted path]"
+    )
+    .replaceAll(/\b(?:art|ews|wcmd|file)_[a-z0-9_-]{6,}\b/giu, "[redacted id]");
+  const bounded = boundText(sanitized, MAX_COMMAND_DISPLAY_CHARS).trim();
+  return bounded.length > 0 ? bounded : undefined;
 }
 
 function failurePreviewSection(
