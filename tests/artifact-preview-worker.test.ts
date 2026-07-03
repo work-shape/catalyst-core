@@ -1,5 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import * as XLSX from "../packages/tool-execution/node_modules/xlsx";
 import {
@@ -337,6 +340,52 @@ describe("ArtifactPreviewWorker", () => {
     expect(imageDigest(summary.pages[0]!.bytes)).not.toBe(imageDigest(detail.pages[0]!.bytes));
   }, 30000);
 
+  it("creates the configured renderer temp root before rendering", async () => {
+    const root = await mkdtemp(join(tmpdir(), "artifact-preview-renderer-temp-root-"));
+    try {
+      const bin = join(root, "bin");
+      const missingTempRoot = join(root, "missing", "preview-tmp");
+      await mkdir(bin);
+      const pdfInfo = join(bin, "fake-pdfinfo");
+      const pdfToPpm = join(bin, "fake-pdftoppm");
+      await writeExecutable(
+        pdfInfo,
+        `#!/usr/bin/env node\nconsole.log("Pages: 1");\n`
+      );
+      await writeExecutable(
+        pdfToPpm,
+        `#!/usr/bin/env node\nconst fs = require("node:fs");\nconst prefix = process.argv[process.argv.length - 1];\nfs.writeFileSync(prefix + ".png", Buffer.from("${onePixelPngHex()}", "hex"));\n`
+      );
+
+      const renderer = new LibreOfficeArtifactPreviewRenderer({
+        tempRootDirectory: missingTempRoot,
+        pdfInfoCommand: pdfInfo,
+        pdfToPpmCommand: pdfToPpm
+      });
+      const result = await renderer.render({
+        sourceKind: "pdf",
+        filename: "source.pdf",
+        mimeType: "application/pdf",
+        bytes: bytes("%PDF fake"),
+        maxPages: 1,
+        previewDpi: 96,
+        outputFormat: "png",
+        conversionTimeoutMs: 1000,
+        rasterizationTimeoutMs: 1000
+      });
+
+      expect(result.pages).toHaveLength(1);
+      expect(result.pages[0]).toMatchObject({
+        mimeType: "image/png",
+        pageNumber: 1,
+        width: 1,
+        height: 1
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("fails without retrying when the source artifact exceeds the size limit", async () => {
     const fixture = await createWorkerFixture({ byteSize: 6, sourceBytes: bytes("small") });
     const worker = createWorker(fixture, new FakeRenderer({ result: emptyRenderResult() }), {
@@ -624,6 +673,22 @@ function hasPreviewRendererDependencies(): boolean {
 
 function imageDigest(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+async function writeExecutable(path: string, content: string): Promise<void> {
+  await writeFile(path, content, "utf8");
+  await chmod(path, 0o755);
+}
+
+function onePixelPngHex(): string {
+  return [
+    "89504e470d0a1a0a",
+    "0000000d49484452",
+    "0000000100000001",
+    "08060000001f15c489",
+    "0000000049454e44",
+    "ae426082"
+  ].join("");
 }
 
 function createDeferred<T>(): {

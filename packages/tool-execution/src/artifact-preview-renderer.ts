@@ -73,6 +73,7 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
     if (input.outputFormat !== "png") {
       throw previewFailure("unsupported_type", false);
     }
+    await mkdir(this.tempRootDirectory, { recursive: true });
     const tempDirectory = await mkdtemp(join(this.tempRootDirectory, "catalyst-artifact-preview-"));
     try {
       if (input.sourceKind === "spreadsheet") {

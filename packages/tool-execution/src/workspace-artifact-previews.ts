@@ -91,6 +91,7 @@ export class LibreOfficeArtifactPreviewGenerator implements WorkspaceArtifactPre
   async generatePreviewImages(
     input: WorkspaceArtifactPreviewGeneratorInput
   ): Promise<WorkspaceArtifactPreviewImage[]> {
+    await mkdir(this.tempRootDirectory, { recursive: true });
     const tempDirectory = await mkdtemp(join(this.tempRootDirectory, "catalyst-artifact-preview-"));
     try {
       const pdfDirectory = join(tempDirectory, "pdf");
