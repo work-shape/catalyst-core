@@ -52,6 +52,11 @@ const requiredContextFiles = [
   "packages/postgres-store/migrations/0011_preview_manifest_identity.sql",
   "packages/postgres-store/migrations/meta/_journal.json"
 ];
+const requiredServerBuildOutputs = [
+  "clients/demo/dist/artifact-preview-worker.js",
+  "packages/client-assembly/dist/index.js",
+  "clients/demo/node_modules/@vivd-catalyst/client-assembly/dist/index.js"
+];
 
 describe("artifact preview runtime wiring", () => {
   it("keeps dependency and UI build layers out of artifact-preview-worker rebuilds", () => {
@@ -68,7 +73,16 @@ describe("artifact preview runtime wiring", () => {
     expect(deps.indexOf("pnpm fetch --frozen-lockfile")).toBeLessThan(deps.indexOf("COPY . ./"));
     expect(deps).toContain("install --offline --frozen-lockfile");
 
+    expect(serverBuild).toContain('pnpm --filter "${APP_PACKAGE}^..." build');
     expect(serverBuild).toContain('pnpm --filter "${APP_PACKAGE}" build:server');
+    expect(serverBuild.indexOf('pnpm --filter "${APP_PACKAGE}^..." build')).toBeLessThan(
+      serverBuild.indexOf('pnpm --filter "${APP_PACKAGE}" build:server')
+    );
+    for (const outputPath of requiredServerBuildOutputs) {
+      expect(serverBuild).toContain(`test -f ${outputPath}`);
+    }
+    expect(serverBuild).toContain("await import('@vivd-catalyst/client-assembly')");
+    expect(serverBuild).toContain("runClientInstanceArtifactPreviewWorker");
     expect(serverBuild).not.toContain("build:ui");
     expect(uiBuild).toContain('pnpm --filter "${UI_PACKAGE}" build:ui');
 

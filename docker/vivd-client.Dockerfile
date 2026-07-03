@@ -27,7 +27,13 @@ FROM deps AS server-build
 
 ARG APP_PACKAGE
 
-RUN pnpm --filter "${APP_PACKAGE}" build:server
+RUN pnpm --filter "${APP_PACKAGE}^..." build \
+  && pnpm --filter "${APP_PACKAGE}" build:server \
+  && test -f clients/demo/dist/artifact-preview-worker.js \
+  && test -f packages/client-assembly/dist/index.js \
+  && test -f clients/demo/node_modules/@vivd-catalyst/client-assembly/dist/index.js \
+  && cd clients/demo \
+  && node --input-type=module -e "const module = await import('@vivd-catalyst/client-assembly'); if (typeof module.runClientInstanceArtifactPreviewWorker !== 'function') throw new Error('artifact preview worker runtime export is missing');"
 
 FROM deps AS ui-build
 
