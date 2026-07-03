@@ -5,6 +5,7 @@ import { posix as posixPath } from "node:path";
 import {
   AppError,
   asConversationAttachmentId,
+  asManagedArtifactId,
   asManagedFileId,
   type AttachmentManifest,
   type AttachmentManifestEntry,
@@ -13,6 +14,7 @@ import {
   type ConversationId,
   type DraftAttachment,
   type JsonObject,
+  type ManagedArtifactRecord,
   type ManagedFileId,
   type ManagedObjectDeletionResult,
   type PlatformFileStore
@@ -27,6 +29,14 @@ const WORKSPACE_SOURCE_ATTACHMENT_KIND = "workspace_source";
 const WORKSPACE_SOURCE_METADATA_SOURCE = "execution_workspace_source";
 const WORKSPACE_ARTIFACT_METADATA_SOURCE = "execution_workspace";
 const DEFAULT_WORKSPACE_SOURCE_MAX_FILE_BYTES = 25 * 1024 * 1024;
+const ARTIFACT_PREVIEW_OBJECT_KEY_PREFIX = "artifact-previews/";
+const ARTIFACT_PREVIEW_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const ARTIFACT_PREVIEW_IMAGE_KINDS = new Set([
+  "document.preview_page_image",
+  "presentation.preview_slide_image",
+  "spreadsheet.preview_range_image",
+  "spreadsheet.preview_sheet_image"
+]);
 
 const WORKSPACE_SOURCE_EXTENSIONS = new Set([
   "csv",
@@ -159,7 +169,17 @@ export function createExecutionWorkspaceManagedObjectReader(input: {
         clientInstanceId: input.clientInstanceId,
         artifactId: readInput.artifactId
       });
-      if (!artifact || artifact.metadata.source !== WORKSPACE_ARTIFACT_METADATA_SOURCE) {
+      if (!artifact) {
+        throw new AppError("NOT_FOUND", "Managed workspace artifact is not available");
+      }
+      if (
+        artifact.metadata.source !== WORKSPACE_ARTIFACT_METADATA_SOURCE &&
+        !(await isReadableArtifactPreviewImage({
+          artifact,
+          clientInstanceId: input.clientInstanceId,
+          files: input.files
+        }))
+      ) {
         throw new AppError("NOT_FOUND", "Managed workspace artifact is not available");
       }
       return {
@@ -171,6 +191,40 @@ export function createExecutionWorkspaceManagedObjectReader(input: {
       throw new AppError("NOT_FOUND", "Execution workspace managed files are internal");
     }
   };
+}
+
+async function isReadableArtifactPreviewImage(input: {
+  artifact: ManagedArtifactRecord;
+  clientInstanceId: ClientInstanceId;
+  files: PlatformFileStore;
+}): Promise<boolean> {
+  if (
+    !ARTIFACT_PREVIEW_IMAGE_KINDS.has(input.artifact.kind) ||
+    !ARTIFACT_PREVIEW_IMAGE_MIME_TYPES.has(input.artifact.mimeType) ||
+    !input.artifact.objectKey.startsWith(ARTIFACT_PREVIEW_OBJECT_KEY_PREFIX)
+  ) {
+    return false;
+  }
+
+  const sourceArtifactId = readPreviewSourceArtifactId(input.artifact.metadata);
+  if (!sourceArtifactId || sourceArtifactId === input.artifact.id) {
+    return false;
+  }
+
+  const sourceArtifact = await input.files.getManagedArtifact({
+    clientInstanceId: input.clientInstanceId,
+    artifactId: asManagedArtifactId(sourceArtifactId)
+  });
+  return (
+    sourceArtifact?.clientInstanceId === input.artifact.clientInstanceId &&
+    sourceArtifact.conversationId === input.artifact.conversationId
+  );
+}
+
+function readPreviewSourceArtifactId(metadata: JsonObject): string | undefined {
+  return typeof metadata.sourceArtifactId === "string" && metadata.sourceArtifactId.length > 0
+    ? metadata.sourceArtifactId
+    : undefined;
 }
 
 export function detectWorkspaceSourceFileFormat(

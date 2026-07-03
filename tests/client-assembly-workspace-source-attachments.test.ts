@@ -383,6 +383,54 @@ describe("execution workspace source attachments", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it("serves managed artifact-preview image artifacts before broad managed-object readers", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vivd-workspace-preview-app-"));
+    const app = await createClientInstanceApp({
+      config: createWorkspaceAttachmentConfig(),
+      env: {
+        EXECUTION_WORKSPACE_OBJECT_ROOT: root
+      },
+      storeMode: "memory",
+      capabilities: [
+        createWorkspacePreviewArtifactSeedingCapability(root),
+        createBroadManagedObjectReaderCapability()
+      ],
+      tools: []
+    });
+    try {
+      const created = await app.server.inject({
+        method: "POST",
+        url: "/api/conversations",
+        payload: { title: "Workspace preview artifact dispatch test" }
+      });
+      expect(created.statusCode).toBe(200);
+      const conversation = created.json() as { id: string };
+
+      const uploaded = await uploadFile(app.server, conversation.id, {
+        filename: "deck.preview-seed",
+        contentType: "text/x-workspace-preview-test",
+        content: "PNG-preview"
+      });
+      expect(uploaded.statusCode).toBe(200);
+      const previewArtifactId = (uploaded.json() as { attachment: { artifactRefs: { preview?: string } } })
+        .attachment.artifactRefs.preview;
+      expect(previewArtifactId).toEqual(expect.any(String));
+
+      const downloaded = await app.server.inject({
+        method: "GET",
+        url: `/api/conversations/${conversation.id}/artifacts/${previewArtifactId}/content`
+      });
+      expect(downloaded.statusCode).toBe(200);
+      expect(downloaded.payload).toBe("PNG-preview");
+      expect(downloaded.headers["content-type"]).toContain("image/png");
+      expect(downloaded.headers["content-disposition"]).toContain("deck-slide-1.png");
+      expect(JSON.stringify(downloaded.headers)).not.toContain("artifact-previews");
+    } finally {
+      await app.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
 
 async function createSourceAttachmentFixture(input: { maxFileBytes?: number } = {}) {
@@ -625,6 +673,116 @@ function createWorkspaceArtifactSeedingCapability(root: string): ClientInstanceC
   };
 }
 
+function createWorkspacePreviewArtifactSeedingCapability(root: string): ClientInstanceCapability {
+  return {
+    name: "workspace-preview-artifact-seeding",
+    create(context) {
+      const managedObjects = context.managedObjectAccess.createAccess({
+        byteStore: createWorkspaceArtifactSeedByteStore(root),
+        keyFactory: createWorkspacePreviewArtifactSeedKeyFactory()
+      });
+      return {
+        attachments: [
+          {
+            name: "workspace-preview-artifact-seeding",
+            maxFileBytes: 1024,
+            acceptedFileTypes: ["text/x-workspace-preview-test"],
+            acceptsFile(file) {
+              return file.mimeType === "text/x-workspace-preview-test";
+            },
+            async listDraftAttachments(conversationId) {
+              return context.files.listDraftAttachments({
+                clientInstanceId: context.clientInstanceId,
+                conversationId
+              });
+            },
+            async uploadDraftAttachment(input) {
+              const file = await managedObjects.createFile({
+                ownerUserId: input.ownerUserId,
+                conversationId: input.conversationId,
+                filename: input.filename,
+                mimeType: "text/x-workspace-preview-test",
+                bytes: input.bytes
+              });
+              const source = await managedObjects.createArtifact({
+                conversationId: input.conversationId,
+                kind: "presentation.pptx",
+                filename: "deck.pptx",
+                mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                bytes: new TextEncoder().encode("pptx-source"),
+                metadata: {
+                  source: "execution_workspace",
+                  workspacePath: "deck.pptx"
+                }
+              });
+              const preview = await managedObjects.createArtifact({
+                conversationId: input.conversationId,
+                sourceFileId: file.id,
+                kind: "presentation.preview_slide_image",
+                filename: "deck-slide-1.png",
+                mimeType: "image/png",
+                bytes: input.bytes,
+                metadata: {
+                  sourceArtifactId: source.id,
+                  previewRole: "slide",
+                  slideNumber: 1,
+                  rendererVersion: "test"
+                }
+              });
+              return context.files.createConversationAttachment({
+                clientInstanceId: context.clientInstanceId,
+                conversationId: input.conversationId,
+                fileId: file.id,
+                filename: input.filename,
+                mimeType: "text/x-workspace-preview-test",
+                byteSize: input.bytes.byteLength,
+                checksum: file.checksum,
+                status: "ready",
+                artifactRefs: {
+                  source: source.id,
+                  preview: preview.id
+                },
+                processingMetadata: {
+                  source: "workspace_preview_artifact_seeding"
+                },
+                warnings: []
+              }) as Promise<DraftAttachment>;
+            },
+            async retryDraftAttachment() {
+              throw new AppError("NOT_FOUND", "Attachment is not available");
+            },
+            async deleteDraftAttachment() {
+              throw new AppError("NOT_FOUND", "Attachment is not available");
+            },
+            async deleteConversationAttachments() {
+              return {
+                attachmentCount: 0,
+                fileObjectKeys: [],
+                artifactObjectKeys: []
+              };
+            },
+            async readConversationFile() {
+              throw new AppError("NOT_FOUND", "Attachment is not available");
+            },
+            blockingDraftAttachmentMessage() {
+              return undefined;
+            },
+            createAttachmentManifest() {
+              return {
+                version: 1,
+                attachments: []
+              };
+            },
+            isInlineDisplayMimeType() {
+              return false;
+            }
+          }
+        ]
+      };
+    }
+  };
+}
+
 function createWorkspaceArtifactSeedByteStore(root: string) {
   return {
     async putObject(input: { key: string; body: Uint8Array }) {
@@ -671,6 +829,52 @@ function createWorkspaceArtifactSeedKeyFactory() {
         "wcmd_seed",
         encodeURIComponent(input.checksum),
         encodeURIComponent(input.filename ?? "final.csv")
+      ].join("/");
+    }
+  };
+}
+
+function createWorkspacePreviewArtifactSeedKeyFactory() {
+  return {
+    createFileObjectKey(input: {
+      clientInstanceId: string;
+      conversationId?: string;
+      checksum: string;
+      filename: string;
+    }) {
+      return [
+        "workspace-preview-seeding-source",
+        encodeURIComponent(input.clientInstanceId),
+        encodeURIComponent(input.conversationId ?? "conversationless"),
+        encodeURIComponent(input.checksum),
+        encodeURIComponent(input.filename)
+      ].join("/");
+    },
+    createArtifactObjectKey(input: {
+      clientInstanceId: string;
+      conversationId: string;
+      checksum: string;
+      filename?: string;
+      kind: string;
+    }) {
+      if (input.kind === "presentation.preview_slide_image") {
+        return [
+          "artifact-previews",
+          encodeURIComponent(input.clientInstanceId),
+          encodeURIComponent(input.conversationId),
+          "preview_seed",
+          encodeURIComponent(input.checksum),
+          encodeURIComponent(input.filename ?? "deck-slide-1.png")
+        ].join("/");
+      }
+      return [
+        "execution-workspaces",
+        encodeURIComponent(input.clientInstanceId),
+        encodeURIComponent(input.conversationId),
+        "ews_preview_seed",
+        "wcmd_preview_seed",
+        encodeURIComponent(input.checksum),
+        encodeURIComponent(input.filename ?? "deck.pptx")
       ].join("/");
     }
   };

@@ -4,6 +4,7 @@ import {
   ARTIFACT_PREVIEW_POLL_DELAYS_MS,
   artifactPreviewPollDelayMs,
   createArtifactPreviewView,
+  createImagePagesArtifactPreviewLoadPlan,
   getArtifactSourceFallbackKind,
   shouldUseLiveArtifactPreviewState
 } from "../packages/chat-ui/src/artifact-preview";
@@ -208,5 +209,57 @@ describe("chat UI artifact preview state", () => {
         pages: [{ artifactId: "art_docx_page_1", mimeType: "image/png" }]
       }
     })).toBe(true);
+  });
+
+  it("uses a stable primitive load key for image-page preview fetches", () => {
+    const firstArtifact: ToolArtifactDownloadRef = {
+      artifactId: "art_pptx",
+      filename: "deck.pptx",
+      mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      preview: {
+        status: "ready",
+        artifactId: "art_pptx",
+        type: "image_pages",
+        format: "png",
+        pages: [
+          { artifactId: "art_slide_1", mimeType: "image/png", slideNumber: 1 },
+          { artifactId: "art_slide_2", mimeType: "image/png", slideNumber: 2 }
+        ]
+      }
+    };
+    const rerenderedArtifact: ToolArtifactDownloadRef = {
+      ...firstArtifact,
+      preview: {
+        status: "ready",
+        artifactId: "art_pptx",
+        type: "image_pages",
+        format: "png",
+        pages: [
+          { artifactId: "art_slide_1", mimeType: "image/png", slideNumber: 1 },
+          { artifactId: "art_slide_2", mimeType: "image/png", slideNumber: 2 }
+        ]
+      }
+    };
+    const changedArtifact: ToolArtifactDownloadRef = {
+      ...firstArtifact,
+      preview: {
+        status: "ready",
+        artifactId: "art_pptx",
+        type: "image_pages",
+        format: "png",
+        pages: [
+          { artifactId: "art_slide_1", mimeType: "image/png", slideNumber: 1 },
+          { artifactId: "art_slide_3", mimeType: "image/png", slideNumber: 3 }
+        ]
+      }
+    };
+
+    const firstPlan = createImagePagesArtifactPreviewLoadPlan(firstArtifact);
+    const rerenderedPlan = createImagePagesArtifactPreviewLoadPlan(rerenderedArtifact);
+    const changedPlan = createImagePagesArtifactPreviewLoadPlan(changedArtifact);
+
+    expect(firstPlan?.pages).not.toBe(rerenderedPlan?.pages);
+    expect(firstPlan?.key).toBe(rerenderedPlan?.key);
+    expect(changedPlan?.key).not.toBe(firstPlan?.key);
   });
 });

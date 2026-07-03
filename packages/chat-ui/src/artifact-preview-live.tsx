@@ -138,6 +138,23 @@ export function getArtifactSourceFallbackKind(
   return undefined;
 }
 
+export interface ImagePagesArtifactPreviewLoadPlan {
+  key: string;
+  pages: ToolArtifactImagePagesPreview["pages"];
+}
+
+export function createImagePagesArtifactPreviewLoadPlan(
+  artifact: ToolArtifactDownloadRef
+): ImagePagesArtifactPreviewLoadPlan | undefined {
+  const preview = readArtifactImagePagesPreview(artifact);
+  return preview
+    ? {
+        key: JSON.stringify(preview.pages.map((page) => page.artifactId)),
+        pages: preview.pages
+      }
+    : undefined;
+}
+
 export function LiveArtifactPreview({
   artifact,
   client,
@@ -294,16 +311,16 @@ function ImagePagesArtifactPreview({
   fileType: ArtifactFileType;
 }) {
   const { t } = useTranslation();
-  const preview = readArtifactImagePagesPreview(artifact);
+  const previewPlan = createImagePagesArtifactPreviewLoadPlan(artifact);
+  const previewKey = previewPlan?.key ?? "";
   const [state, setState] = useState<
     | { status: "loading" }
     | { status: "ready"; pages: Array<ToolArtifactImagePagesPreview["pages"][number] & { url: string }> }
     | { status: "failed"; message: string }
   >({ status: "loading" });
-  const previewKey = preview?.pages.map((page) => page.artifactId).join("|") ?? "";
 
   useEffect(() => {
-    if (!preview) {
+    if (!previewPlan) {
       setState({ status: "failed", message: t("artifactPreviewUnavailable") });
       return undefined;
     }
@@ -311,42 +328,40 @@ function ImagePagesArtifactPreview({
     let cancelled = false;
     const objectUrls: string[] = [];
     setState({ status: "loading" });
-    void Promise.all(
-      preview.pages.map(async (page) => {
+    void Promise.allSettled(
+      previewPlan.pages.map(async (page) => {
         const blob = await client.conversationArtifactContent(conversationId, page.artifactId);
         const url = URL.createObjectURL(blob);
+        objectUrls.push(url);
         if (cancelled) {
           URL.revokeObjectURL(url);
         }
-        objectUrls.push(url);
         return { ...page, url };
       })
     )
-      .then((pages) => {
+      .then((results) => {
         if (cancelled) {
-          for (const page of pages) {
-            URL.revokeObjectURL(page.url);
-          }
+          revokeObjectUrls(objectUrls);
           return;
         }
-        setState({ status: "ready", pages });
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
+        const rejected = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+        if (rejected) {
+          revokeObjectUrls(objectUrls);
           setState({
             status: "failed",
-            message: error instanceof Error ? error.message : t("artifactPreviewFailed")
+            message: previewPageErrorMessage(rejected.reason, t("artifactPreviewFailed"))
           });
+          return;
         }
+        const pages = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
+        setState({ status: "ready", pages });
       });
 
     return () => {
       cancelled = true;
-      for (const url of objectUrls) {
-        URL.revokeObjectURL(url);
-      }
+      revokeObjectUrls(objectUrls);
     };
-  }, [client, conversationId, preview, previewKey, t]);
+  }, [client, conversationId, previewKey, t]);
 
   if (state.status === "loading") {
     return (
@@ -362,7 +377,7 @@ function ImagePagesArtifactPreview({
     return (
       <ArtifactPreviewMessage
         fileType={fileType}
-        title={preview ? t("artifactPreviewFailed") : t("artifactPreviewUnavailable")}
+        title={previewPlan ? t("artifactPreviewFailed") : t("artifactPreviewUnavailable")}
         detail={state.message}
       />
     );
@@ -382,6 +397,16 @@ function ImagePagesArtifactPreview({
       </div>
     </div>
   );
+}
+
+function revokeObjectUrls(urls: readonly string[]): void {
+  for (const url of urls) {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function previewPageErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
 }
 
 function artifactPreviewDescriptorHasExtension(value: string, extensions: string[]): boolean {

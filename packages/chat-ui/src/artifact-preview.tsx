@@ -36,6 +36,7 @@ export {
   ARTIFACT_PREVIEW_POLL_DELAYS_MS,
   artifactPreviewPollDelayMs,
   createArtifactPreviewView,
+  createImagePagesArtifactPreviewLoadPlan,
   getArtifactSourceFallbackKind,
   shouldUseLiveArtifactPreviewState
 } from "./artifact-preview-live";
