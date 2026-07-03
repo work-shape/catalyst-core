@@ -998,6 +998,11 @@ export class WorkspaceCommandService {
         return patched;
       }
       if (change.operation === "delete") {
+        if (patched.value.length > 0) {
+          return validationFailed("Workspace delete patch must remove the entire file", {
+            path: change.path
+          });
+        }
         deletes.push({ path: change.path });
         continue;
       }

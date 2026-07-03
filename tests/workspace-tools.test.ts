@@ -773,6 +773,37 @@ describe("workspace tools", () => {
     }
   });
 
+  it("rejects partial file delete patches without mutating the workspace file", async () => {
+    const harness = await createWorkspaceHarness();
+    await harness.putWorkspaceFile({
+      path: "notes.txt",
+      objectKey: "workspace/partial-delete-notes.txt",
+      bytes: "delete-me\nkeep-me\n",
+      mimeType: "text/plain"
+    });
+
+    const partialDelete = await harness.runTool("workspace.apply_patch", {
+      patch: [
+        "--- a/notes.txt",
+        "+++ /dev/null",
+        "@@ -1,1 +0,0 @@",
+        "-delete-me"
+      ].join("\n")
+    });
+
+    expect(partialDelete.status).toBe("failed");
+    if (partialDelete.status === "failed") {
+      expect(partialDelete.error.message).toMatch(/remove the entire file/u);
+    }
+
+    const read = await harness.runTool("workspace.read_file", { path: "notes.txt" });
+    expect(read.status).toBe("success");
+    if (read.status !== "success") {
+      throw new Error("Expected partial delete rejection to leave file readable");
+    }
+    expect(read.output.contentPreview).toBe("delete-me\nkeep-me\n");
+  });
+
   it("imports uploaded managed files into workspace storage without leaking object keys", async () => {
     const sourceBytes = new TextEncoder().encode("name,total\nAda,42\n");
     const harness = await createWorkspaceHarness({
