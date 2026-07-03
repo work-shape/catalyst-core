@@ -52,10 +52,11 @@ const requiredContextFiles = [
   "packages/postgres-store/migrations/0011_preview_manifest_identity.sql",
   "packages/postgres-store/migrations/meta/_journal.json"
 ];
-const requiredServerBuildOutputs = [
+const demoOnlyServerBuildGuards = [
   "clients/demo/dist/artifact-preview-worker.js",
   "packages/client-assembly/dist/index.js",
-  "clients/demo/node_modules/@vivd-catalyst/client-assembly/dist/index.js"
+  "clients/demo/node_modules/@vivd-catalyst/client-assembly",
+  "cd clients/demo"
 ];
 
 describe("artifact preview runtime wiring", () => {
@@ -75,11 +76,16 @@ describe("artifact preview runtime wiring", () => {
 
     expect(serverBuild).toContain('pnpm --filter "${APP_PACKAGE}^..." build');
     expect(serverBuild).toContain('pnpm --filter "${APP_PACKAGE}" build:server');
+    expect(serverBuild).toContain("ARG ARTIFACT_PREVIEW_WORKER_ENTRY");
     expect(serverBuild.indexOf('pnpm --filter "${APP_PACKAGE}^..." build')).toBeLessThan(
       serverBuild.indexOf('pnpm --filter "${APP_PACKAGE}" build:server')
     );
-    for (const outputPath of requiredServerBuildOutputs) {
-      expect(serverBuild).toContain(`test -f ${outputPath}`);
+    expect(serverBuild).toContain('test -f "${ARTIFACT_PREVIEW_WORKER_ENTRY}"');
+    expect(serverBuild).toContain(
+      'pnpm --filter "${APP_PACKAGE}" exec node --input-type=module'
+    );
+    for (const demoOnlyGuard of demoOnlyServerBuildGuards) {
+      expect(serverBuild).not.toContain(demoOnlyGuard);
     }
     expect(serverBuild).toContain("await import('@vivd-catalyst/client-assembly')");
     expect(serverBuild).toContain("runClientInstanceArtifactPreviewWorker");
