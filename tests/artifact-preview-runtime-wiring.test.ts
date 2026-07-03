@@ -15,26 +15,104 @@ const secretEnvNames = [
   "CHAT_SESSION_TOKEN_SECRET",
   "CHAT_SERVER_CREDENTIAL"
 ];
+const dockerIgnoreFiles = [".dockerignore", "docker/vivd-client.Dockerfile.dockerignore"];
+const expectedIgnoredContextPatterns = [
+  ".worktrees",
+  "**/.cache",
+  ".pnpm-store",
+  "**/.pnpm-store",
+  "node_modules",
+  "**/node_modules",
+  "dist",
+  "**/dist",
+  "coverage",
+  "**/coverage",
+  "tmp",
+  "**/tmp",
+  "previews",
+  "**/previews",
+  "screenshots",
+  "**/screenshots",
+  "playwright-report",
+  "**/playwright-report",
+  "test-results",
+  "**/test-results",
+  "**/.artifact-previews",
+  "**/artifact-preview-tmp",
+  "**/execution-workspaces",
+  "**/.terraform",
+  "**/terraform.tfstate",
+  "**/terraform.tfstate.*",
+  "**/*.tfvars"
+];
+const requiredContextFiles = [
+  "clients/demo/config/app.yaml",
+  "clients/demo/public/favicon.svg",
+  "packages/chat-ui/assets/favicon.svg",
+  "packages/postgres-store/migrations/0011_preview_manifest_identity.sql",
+  "packages/postgres-store/migrations/meta/_journal.json"
+];
 
 describe("artifact preview runtime wiring", () => {
+  it("keeps dependency and UI build layers out of artifact-preview-worker rebuilds", () => {
+    const dockerfile = readFile("docker/vivd-client.Dockerfile");
+    const deps = extractDockerStage(dockerfile, "deps");
+    const serverBuild = extractDockerStage(dockerfile, "server-build");
+    const uiBuild = extractDockerStage(dockerfile, "ui-build");
+    const api = extractDockerStage(dockerfile, "api");
+    const worker = extractDockerStage(dockerfile, "artifact-preview-worker");
+    const ui = extractDockerStage(dockerfile, "ui");
+
+    expect(deps).toContain("COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./");
+    expect(deps).toContain("pnpm fetch --frozen-lockfile");
+    expect(deps.indexOf("pnpm fetch --frozen-lockfile")).toBeLessThan(deps.indexOf("COPY . ./"));
+    expect(deps).toContain("install --offline --frozen-lockfile");
+
+    expect(serverBuild).toContain('pnpm --filter "${APP_PACKAGE}" build:server');
+    expect(serverBuild).not.toContain("build:ui");
+    expect(uiBuild).toContain('pnpm --filter "${UI_PACKAGE}" build:ui');
+
+    expect(api).toContain("COPY --from=server-build /app ./");
+    expect(worker).toContain("COPY --from=server-build /app ./");
+    expect(worker).not.toContain("COPY --from=ui-build");
+    expect(ui).toContain("COPY --from=ui-build");
+  });
+
   it("keeps native Office/PDF renderers isolated to the artifact-preview-worker image target", () => {
     const dockerfile = readFile("docker/vivd-client.Dockerfile");
     const api = extractDockerStage(dockerfile, "api");
     const workspaceWorker = extractDockerStage(dockerfile, "workspace-command-worker");
+    const artifactRuntime = extractDockerStage(dockerfile, "artifact-preview-runtime");
     const artifactWorker = extractDockerStage(dockerfile, "artifact-preview-worker");
 
     expect(api).toContain("FROM node:24-bookworm-slim AS api");
     expect(workspaceWorker).toContain("COPY --from=docker-cli");
-    expect(artifactWorker).toContain("FROM api AS artifact-preview-worker");
+    expect(artifactRuntime).toContain("FROM node:24-bookworm-slim AS artifact-preview-runtime");
+    expect(artifactWorker).toContain("FROM artifact-preview-runtime AS artifact-preview-worker");
     expect(artifactWorker).toContain("ARTIFACT_PREVIEW_WORKER_ENTRY");
-    expect(artifactWorker).toContain("soffice --headless --version");
-    expect(artifactWorker).toContain("pdfinfo -v");
-    expect(artifactWorker).toContain("pdftoppm -v");
+    expect(artifactRuntime).toContain("soffice --headless --version");
+    expect(artifactRuntime).toContain("pdfinfo -v");
+    expect(artifactRuntime).toContain("pdftoppm -v");
+    expect(artifactRuntime).not.toContain("COPY --from=server-build");
 
     for (const packageName of nativePreviewPackages) {
-      expect(artifactWorker).toContain(packageName);
+      expect(artifactRuntime).toContain(packageName);
       expect(api).not.toContain(packageName);
       expect(workspaceWorker).not.toContain(packageName);
+      expect(artifactWorker).not.toContain(packageName);
+    }
+  });
+
+  it.each(dockerIgnoreFiles)("keeps local build junk out of Docker contexts in %s", (ignorePath) => {
+    const ignorePatterns = readDockerIgnorePatterns(ignorePath);
+
+    for (const pattern of expectedIgnoredContextPatterns) {
+      expect(ignorePatterns).toContain(pattern);
+    }
+
+    for (const requiredPath of requiredContextFiles) {
+      expect(ignorePatterns).not.toContain(requiredPath);
+      expect(ignorePatterns).not.toContain(`**/${requiredPath}`);
     }
   });
 
@@ -62,6 +140,13 @@ describe("artifact preview runtime wiring", () => {
 
 function readFile(path: string): string {
   return readFileSync(resolve(root, path), "utf8");
+}
+
+function readDockerIgnorePatterns(path: string): string[] {
+  return readFile(path)
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("#"));
 }
 
 function extractDockerStage(dockerfile: string, stageName: string): string {
