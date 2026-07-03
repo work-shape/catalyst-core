@@ -274,7 +274,7 @@ export const workspaceExecInputJsonSchema: JsonObject = {
       minLength: 1,
       maxLength: DEFAULT_LIMITS.maxCommandLength,
       description:
-        "Complete Bash command or multiline script. Each call starts in /workspace unless cwd is provided for that call. Files created or changed under /workspace persist across calls. Run helpers directly, e.g. `pptx_inspect deck.pptx --view summary`; do not write `set -e pptx_inspect ...`. If strict mode is needed, put `set -e` on its own line before the command. Do not pass helper flags such as `--view`, `--spec`, `--out`, `--range`, `--page`, or `--sheet` to `cat`, `ls`, or `printf`."
+        "Complete Bash command or multiline script. Each call starts in /workspace unless cwd is provided for that call. Files created or changed under /workspace persist across calls, but empty directories are not durable; run `mkdir -p` in the same command before writing to scripts, artifacts, or previews directories. Run helpers directly, e.g. `pptx_inspect deck.pptx --view summary`; do not write `set -e pptx_inspect ...`. For multiline create-and-verify commands, put `set -e` on its own line before later commands. Do not pass helper flags such as `--view`, `--spec`, `--out`, `--range`, `--page`, or `--sheet` to `cat`, `ls`, or `printf`."
     },
     cwd: {
       type: "string",

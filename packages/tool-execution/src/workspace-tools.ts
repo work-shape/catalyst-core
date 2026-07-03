@@ -1338,7 +1338,7 @@ export function createWorkspaceToolDefinitions(
     defineTool({
       name: "workspace.exec",
       description:
-        "Run a bounded Bash command from /workspace in the conversation execution workspace. Each call starts in /workspace unless cwd is provided for that call; cwd, processes, and files outside /workspace do not persist. Pass a complete shell command or multiline script. Files created or changed under /workspace persist across calls and stay internal until promoted. Run artifact helpers directly, or put `set -e` on its own line before later commands. Do not prefix helpers with `set -e`, and do not pass helper flags such as `--view`, `--spec`, `--out`, `--range`, `--page`, or `--sheet` to `cat`, `ls`, or `printf`.",
+        "Run a bounded Bash command from /workspace in the conversation execution workspace. Each call starts in /workspace unless cwd is provided for that call; cwd, processes, and files outside /workspace do not persist. Pass a complete shell command or multiline script. Files created or changed under /workspace persist across calls and stay internal until promoted. Empty directories are not durable; run `mkdir -p` in the same command before writing to scripts, artifacts, or previews directories. For multiline create-and-verify commands, put `set -e` on its own line before later commands so helpers do not run after a failed script. Run artifact helpers directly. Do not prefix helpers with `set -e`, and do not pass helper flags such as `--view`, `--spec`, `--out`, `--range`, `--page`, or `--sheet` to `cat`, `ls`, or `printf`.",
       inputSchema: workspaceExecInputSchema,
       outputSchema: workspaceExecOutputSchema,
       inputJsonSchema: workspaceExecInputJsonSchema,

@@ -27,13 +27,15 @@ describe("workspace tools", () => {
     expect(execTool?.description).toContain("Bash command from /workspace");
     expect(execTool?.description).toContain("Each call starts in /workspace");
     expect(execTool?.description).toContain("Files created or changed under /workspace persist");
-    expect(execTool?.description).toContain("put `set -e` on its own line");
+    expect(execTool?.description).toContain("Empty directories are not durable");
+    expect(execTool?.description).toContain("run `mkdir -p` in the same command");
+    expect(execTool?.description).toContain("For multiline create-and-verify commands, put `set -e` on its own line");
     expect(execTool?.description).toContain("`--view`, `--spec`, `--out`, `--range`, `--page`, or `--sheet`");
     expect(execTool?.description).toContain("`cat`, `ls`, or `printf`");
     expect(workspaceExecInputJsonSchema).toMatchObject({
       properties: {
         command: {
-          description: expect.stringMatching(/Complete Bash command[\s\S]*`cat`, `ls`, or `printf`/u)
+          description: expect.stringMatching(/Complete Bash command[\s\S]*empty directories are not durable[\s\S]*`cat`, `ls`, or `printf`/u)
         },
         cwd: {
           description: expect.stringContaining("does not persist")
