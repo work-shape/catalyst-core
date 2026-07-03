@@ -68,6 +68,9 @@ export async function resolveWorkspacePreviewImages(
   if (!conversationId) {
     return failed("handler_failed", "workspace.preview_images requires an active tool request");
   }
+  if (!input.artifactId) {
+    return failed("handler_failed", "workspace.preview_images requires artifactId for managed artifact previews");
+  }
 
   const source = await options.store.getManagedArtifact({
     clientInstanceId: context.clientInstanceId,

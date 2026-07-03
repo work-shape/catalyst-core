@@ -69,7 +69,12 @@ function normalizeWorkspacePath(
   value: string,
   limits: WorkspacePathLimits
 ): WorkspacePathValidationResult<string> {
-  const trimmed = value.trim();
+  const trimmedInput = value.trim();
+  const trimmed = trimmedInput === "/workspace"
+    ? "."
+    : trimmedInput.startsWith("/workspace/")
+      ? trimmedInput.slice("/workspace/".length)
+      : trimmedInput;
   if (trimmed.length === 0) {
     return workspacePathFailed("Workspace path cannot be blank");
   }

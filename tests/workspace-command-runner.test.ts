@@ -809,6 +809,10 @@ describe("local workspace command runner", () => {
       status: "success",
       value: "notes.txt"
     });
+    expect(normalizeWorkspaceFilePath("/workspace/artifacts/report.pdf", { maxPathLength: 512 })).toEqual({
+      status: "success",
+      value: "artifacts/report.pdf"
+    });
     expect(normalizeWorkspaceFilePath("/tmp/notes.txt", { maxPathLength: 512 })).toMatchObject({
       status: "failed",
       message: expect.stringMatching(/relative/u)

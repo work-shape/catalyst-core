@@ -107,14 +107,31 @@ export const workspacePromoteArtifactInputSchema = z
 
 export const workspacePreviewImagesInputSchema = z
   .object({
-    artifactId: z.string().min(1).max(255),
+    artifactId: z.string().min(1).max(255).optional(),
+    path: workspacePathSchema.optional(),
+    paths: z.array(workspacePathSchema).min(1).max(DEFAULT_LIMITS.maxPreviewImages).optional(),
     pages: workspacePreviewPositiveIntegerListSchema.optional(),
     slides: workspacePreviewPositiveIntegerListSchema.optional(),
     sheets: workspacePreviewTextListSchema.optional(),
     ranges: workspacePreviewTextListSchema.optional(),
     maxImages: z.number().int().positive().max(DEFAULT_LIMITS.maxPreviewImages).optional()
   })
-  .strict();
+  .strict()
+  .superRefine((input, context) => {
+    const sourceCount = [input.artifactId, input.path, input.paths].filter((value) => value !== undefined).length;
+    if (sourceCount !== 1) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Provide exactly one preview source: artifactId, path, or paths"
+      });
+    }
+    if ((input.path || input.paths) && (input.pages || input.slides || input.sheets || input.ranges)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Page, slide, sheet, and range selectors apply only to artifactId previews"
+      });
+    }
+  });
 
 const changedFileOutputSchema = z.object({
   path: z.string(),
@@ -336,7 +353,12 @@ export const workspaceApplyPatchInputJsonSchema: JsonObject = {
 export const workspacePromoteArtifactInputJsonSchema: JsonObject = {
   ...workspacePathInputJsonSchema,
   properties: {
-    path: { type: "string", maxLength: DEFAULT_LIMITS.maxPathLength },
+    path: {
+      type: "string",
+      maxLength: DEFAULT_LIMITS.maxPathLength,
+      description:
+        "Workspace path to the final user-facing artifact. Prefer artifacts/ or /workspace/artifacts/ outputs."
+    },
     kind: { type: "string", maxLength: 160, default: "workspace.file" },
     filename: { type: "string", maxLength: 255 },
     mimeType: { type: "string", maxLength: 160 }
@@ -346,14 +368,37 @@ export const workspacePromoteArtifactInputJsonSchema: JsonObject = {
 export const workspacePreviewImagesInputJsonSchema: JsonObject = {
   type: "object",
   additionalProperties: false,
-  required: ["artifactId"],
+  anyOf: [
+    { required: ["artifactId"] },
+    { required: ["path"] },
+    { required: ["paths"] }
+  ],
   properties: {
     artifactId: {
       type: "string",
       minLength: 1,
       maxLength: 255,
       description:
-        "Managed source artifact id to inspect through already-rendered preview image artifacts."
+        "Managed source artifact id for DOCX/XLSX/PPTX/PDF preview rendering or already-managed image previews."
+    },
+    path: {
+      type: "string",
+      minLength: 1,
+      maxLength: DEFAULT_LIMITS.maxPathLength,
+      description:
+        "Workspace path to a rendered preview image, usually under previews/, e.g. previews/report/page-1.png or /workspace/previews/report/page-1.png."
+    },
+    paths: {
+      type: "array",
+      minItems: 1,
+      maxItems: DEFAULT_LIMITS.maxPreviewImages,
+      items: {
+        type: "string",
+        minLength: 1,
+        maxLength: DEFAULT_LIMITS.maxPathLength
+      },
+      description:
+        "Workspace paths to rendered preview images, usually under previews/. Preview images are model-visible but are not user-download artifacts unless separately promoted."
     },
     pages: {
       type: "array",

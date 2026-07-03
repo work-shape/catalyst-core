@@ -485,6 +485,91 @@ describe("workspace.preview_images", () => {
     ]);
   });
 
+  it("loads rendered workspace preview images from /workspace/previews paths", async () => {
+    const harness = await createWorkspaceHarness();
+    const previewBytes = encode("rendered-docx-page-1");
+    await harness.putWorkspaceFile({
+      path: "previews/report/page-1.png",
+      objectKey: "execution-workspaces/private/previews/report/page-1.png",
+      bytes: previewBytes,
+      mimeType: "image/png"
+    });
+
+    const result = await harness.runTool("workspace.preview_images", {
+      path: "/workspace/previews/report/page-1.png",
+      maxImages: 1
+    });
+
+    expect(result.status).toBe("success");
+    if (result.status !== "success") {
+      throw new Error("Expected preview_images to succeed");
+    }
+    expect(result.output).toEqual({
+      artifactId: expect.any(String),
+      status: "ready",
+      maxImages: 1,
+      images: [
+        {
+          sourceArtifactId: result.output.artifactId,
+          imageArtifactId: result.output.artifactId,
+          mimeType: "image/png",
+          status: "ready"
+        }
+      ],
+      warnings: []
+    });
+    expect(result.artifacts).toEqual([
+      {
+        artifactId: result.output.artifactId,
+        kind: "image.png",
+        filename: "page-1.png",
+        mimeType: "image/png",
+        modelVisibility: {
+          type: "image",
+          mimeType: "image/png"
+        },
+        metadata: {
+          sourceArtifactId: result.output.artifactId,
+          status: "ready",
+          workspacePath: "previews/report/page-1.png"
+        }
+      }
+    ]);
+    expect(JSON.stringify(result)).not.toContain("objectKey");
+    expect(JSON.stringify(result)).not.toContain("execution-workspaces/private");
+
+    const modelOutput = await createModelVisibleToolOutput(result, {
+      clientInstanceId: harness.clientInstanceId,
+      toolOutput: { maxTokens: 60_000 },
+      artifactReader: {
+        async readArtifact(input) {
+          const artifact = await harness.store.getManagedArtifact({
+            clientInstanceId: input.clientInstanceId,
+            artifactId: input.artifactId
+          });
+          if (!artifact) {
+            throw new Error("Missing artifact");
+          }
+          return {
+            bytes: await harness.objectStore.getObject(artifact.objectKey),
+            mimeType: artifact.mimeType
+          };
+        }
+      }
+    });
+    const imageParts = Array.isArray(modelOutput.content)
+      ? modelOutput.content.filter((part) => part.type === "image")
+      : [];
+    expect(imageParts).toEqual([
+      {
+        type: "image",
+        mimeType: "image/png",
+        data: previewBytes
+      }
+    ]);
+    expect(modelOutput.text).toContain("[Visual context loaded]");
+  });
+
   it("queues selector-specific previews when an existing manifest does not cover the request", async () => {
     const harness = await createWorkspaceHarness();
     const pdf = await harness.store.createManagedArtifact({

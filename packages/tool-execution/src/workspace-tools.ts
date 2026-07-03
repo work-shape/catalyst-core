@@ -10,6 +10,7 @@ import {
   type JsonObject,
   type ManagedFileId,
   type PlatformStore,
+  type SupportedImageMimeType,
   type ToolExecutionContext,
   type ToolHandlerResult,
   type WorkspaceCommand,
@@ -566,10 +567,131 @@ export class WorkspaceCommandService {
     input: z.infer<typeof workspacePreviewImagesInputSchema>,
     context: ToolExecutionContext
   ): Promise<ToolHandlerResult<z.infer<typeof workspacePreviewImagesOutputSchema>>> {
+    if (input.path || input.paths) {
+      return this.previewWorkspaceImagePaths(input, context);
+    }
     return resolveWorkspacePreviewImages(input, context, {
       store: this.store,
       maxImages: this.limits.maxPreviewImages
     });
+  }
+
+  private async previewWorkspaceImagePaths(
+    input: z.infer<typeof workspacePreviewImagesInputSchema>,
+    context: ToolExecutionContext
+  ): Promise<ToolHandlerResult<z.infer<typeof workspacePreviewImagesOutputSchema>>> {
+    const rawPaths = input.paths ?? (input.path ? [input.path] : []);
+    const maxImages = Math.min(input.maxImages ?? this.limits.maxPreviewImages, this.limits.maxPreviewImages);
+    if (rawPaths.length > maxImages) {
+      return failed("handler_failed", "workspace.preview_images path count exceeds maxImages", {
+        pathCount: rawPaths.length,
+        maxImages
+      });
+    }
+
+    const normalizedPaths = [];
+    const seenPaths = new Set<string>();
+    for (const rawPath of rawPaths) {
+      const normalizedPath = normalizeWorkspaceFilePath(rawPath, this.limits);
+      if (normalizedPath.status === "failed") {
+        return normalizedPath.result;
+      }
+      if (seenPaths.has(normalizedPath.value)) {
+        return failed("handler_failed", "workspace.preview_images paths must be unique", {
+          path: normalizedPath.value
+        });
+      }
+      seenPaths.add(normalizedPath.value);
+      normalizedPaths.push(normalizedPath.value);
+    }
+
+    const workspace = await this.ensureWorkspace(context);
+    if (workspace.status === "failed") {
+      return workspace.result;
+    }
+    const files = await this.store.listWorkspaceFiles({
+      clientInstanceId: context.clientInstanceId,
+      workspaceId: workspace.value.id
+    });
+    const filesByPath = new Map(files.map((file) => [file.path, file]));
+    const images: z.infer<typeof workspacePreviewImagesOutputSchema>["images"] = [];
+    const artifacts = [];
+    const warnings: z.infer<typeof workspacePreviewImagesOutputSchema>["warnings"] = [];
+
+    for (const imagePath of normalizedPaths) {
+      const file = filesByPath.get(imagePath);
+      if (!file) {
+        return failed("handler_failed", `Workspace preview image '${imagePath}' was not found`);
+      }
+      const mimeType = readPreviewImageMimeType(file.mimeType, file.path);
+      if (!mimeType) {
+        return failed("handler_failed", "Workspace preview image must be a supported image file", {
+          path: file.path,
+          ...(file.mimeType ? { mimeType: file.mimeType } : {}),
+          supportedMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/gif"]
+        });
+      }
+      const artifact = await this.store.createManagedArtifact({
+        clientInstanceId: context.clientInstanceId,
+        conversationId: workspace.value.conversationId,
+        kind: previewImageKind(mimeType),
+        objectKey: file.objectKey,
+        filename: path.basename(file.path),
+        mimeType,
+        byteSize: file.byteSize,
+        checksum: file.checksum,
+        metadata: {
+          source: "execution_workspace_preview",
+          workspaceId: workspace.value.id,
+          workspacePath: file.path
+        }
+      });
+      images.push({
+        sourceArtifactId: artifact.id,
+        imageArtifactId: artifact.id,
+        mimeType,
+        status: "ready"
+      });
+      artifacts.push({
+        artifactId: artifact.id,
+        kind: artifact.kind,
+        filename: artifact.filename,
+        mimeType,
+        modelVisibility: {
+          type: "image" as const,
+          mimeType
+        },
+        metadata: {
+          sourceArtifactId: artifact.id,
+          status: "ready",
+          workspacePath: file.path
+        }
+      });
+    }
+
+    return toolSuccess(
+      {
+        artifactId: images[0]?.imageArtifactId ?? "",
+        status: "ready",
+        maxImages,
+        images,
+        warnings
+      },
+      {
+        artifacts: artifacts.length > 0 ? artifacts : undefined,
+        auditSummary: {
+          action: "workspace.preview_images",
+          subject: workspace.value.id,
+          metadata: {
+            status: "ready",
+            source: "workspace_path",
+            imageCount: images.length,
+            maxImages,
+            warningCount: warnings.length
+          }
+        }
+      }
+    );
   }
 
   private normalizeExecInput(
@@ -1154,6 +1276,46 @@ function safeLocalFilename(filename: string): string {
   return basename && basename !== "." && basename !== ".." ? basename : "artifact";
 }
 
+function readPreviewImageMimeType(
+  mimeType: string | undefined,
+  filePath: string
+): SupportedImageMimeType | undefined {
+  if (isSupportedPreviewImageMimeType(mimeType)) {
+    return mimeType;
+  }
+  const extension = path.extname(filePath).toLowerCase();
+  if (extension === ".png") {
+    return "image/png";
+  }
+  if (extension === ".jpg" || extension === ".jpeg") {
+    return "image/jpeg";
+  }
+  if (extension === ".webp") {
+    return "image/webp";
+  }
+  if (extension === ".gif") {
+    return "image/gif";
+  }
+  return undefined;
+}
+
+function isSupportedPreviewImageMimeType(value: string | undefined): value is SupportedImageMimeType {
+  return value === "image/png" || value === "image/jpeg" || value === "image/webp" || value === "image/gif";
+}
+
+function previewImageKind(mimeType: SupportedImageMimeType): string {
+  switch (mimeType) {
+    case "image/jpeg":
+      return "image.jpeg";
+    case "image/webp":
+      return "image.webp";
+    case "image/gif":
+      return "image.gif";
+    case "image/png":
+      return "image.png";
+  }
+}
+
 export function createWorkspaceToolDefinitions(
   options: WorkspaceCommandServiceOptions | { service: WorkspaceCommandService }
 ): AnyToolDefinition[] {
@@ -1219,7 +1381,7 @@ export function createWorkspaceToolDefinitions(
     defineTool({
       name: "workspace.promote_artifact",
       description:
-        "Promote an internal workspace file to a managed artifact visible to the user.",
+        "Promote an internal workspace file to a managed artifact visible to the user. Prefer final outputs under /workspace/artifacts; do not promote scripts, scratch files, or preview images unless the user explicitly needs those files.",
       inputSchema: workspacePromoteArtifactInputSchema,
       outputSchema: workspacePromoteArtifactOutputSchema,
       inputJsonSchema: workspacePromoteArtifactInputJsonSchema,
@@ -1230,7 +1392,7 @@ export function createWorkspaceToolDefinitions(
     defineTool({
       name: "workspace.preview_images",
       description:
-        "Load bounded rendered preview images for a managed artifact into model-visible visual context without promoting preview files to the user. Use this before claiming visual inspection of PDF/DOCX pages, PPTX slides, XLSX sheet/range previews, or image outputs. The result reports pending, failed, or unsupported when pixels are not actually attached.",
+        "Load bounded rendered preview images into model-visible visual context without promoting preview files to the user. Use path/paths for rendered image files under /workspace/previews, or artifactId with page/slide/sheet/range selectors for managed DOCX/XLSX/PPTX/PDF artifacts. The result reports pending, failed, or unsupported when pixels are not actually attached.",
       inputSchema: workspacePreviewImagesInputSchema,
       outputSchema: workspacePreviewImagesOutputSchema,
       inputJsonSchema: workspacePreviewImagesInputJsonSchema,

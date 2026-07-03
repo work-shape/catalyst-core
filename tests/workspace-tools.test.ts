@@ -13,6 +13,7 @@ import {
   workspaceApplyPatchInputJsonSchema,
   shapeWorkspaceCommandOutput,
   workspaceExecInputJsonSchema,
+  workspacePreviewImagesInputJsonSchema,
   WorkspaceCommandWorker,
   type WorkspaceCommandTelemetry
 } from "@vivd-catalyst/tool-execution";
@@ -44,6 +45,15 @@ describe("workspace tools", () => {
     expect(applyPatchTool?.description).toContain("/workspace");
     expect(applyPatchTool?.description).toContain("create, update, and delete");
     expect(applyPatchTool?.description).toContain("binary files");
+    const previewTool = harness.tools.find((tool) => tool.name === "workspace.preview_images");
+    expect(previewTool?.description).toContain("/workspace/previews");
+    expect(workspacePreviewImagesInputJsonSchema).toMatchObject({
+      anyOf: expect.arrayContaining([
+        { required: ["artifactId"] },
+        { required: ["path"] },
+        { required: ["paths"] }
+      ])
+    });
     expect(workspaceApplyPatchInputJsonSchema).toMatchObject({
       properties: {
         patch: {
@@ -980,6 +990,105 @@ describe("workspace tools", () => {
             kind: "document.docx"
           })
         ]
+      })
+    ]);
+  });
+
+  it("supports script-first preview then promotion from previews and artifacts directories", async () => {
+    const harness = await createWorkspaceHarness();
+    await harness.putWorkspaceFile({
+      path: "artifacts/final-report.docx",
+      objectKey: "execution-workspaces/private/artifacts/final-report.docx",
+      bytes: "docx-bytes",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    });
+    await harness.putWorkspaceFile({
+      path: "previews/final-report/page-1.png",
+      objectKey: "execution-workspaces/private/previews/final-report/page-1.png",
+      bytes: encode("page-1"),
+      mimeType: "image/png"
+    });
+    await harness.putWorkspaceFile({
+      path: "scripts/build-report.py",
+      objectKey: "execution-workspaces/private/scripts/build-report.py",
+      bytes: "print('build')",
+      mimeType: "text/x-python"
+    });
+
+    const previewed = await harness.runTool("workspace.preview_images", {
+      paths: ["/workspace/previews/final-report/page-1.png"],
+      maxImages: 1
+    });
+
+    expect(previewed.status).toBe("success");
+    if (previewed.status !== "success") {
+      throw new Error("Expected preview_images to succeed");
+    }
+    expect(previewed.output).toMatchObject({
+      status: "ready",
+      images: [
+        expect.objectContaining({
+          mimeType: "image/png",
+          status: "ready"
+        })
+      ],
+      warnings: []
+    });
+    expect(previewed.artifacts).toEqual([
+      expect.objectContaining({
+        filename: "page-1.png",
+        modelVisibility: { type: "image", mimeType: "image/png" },
+        metadata: expect.objectContaining({
+          workspacePath: "previews/final-report/page-1.png"
+        })
+      })
+    ]);
+
+    const promoted = await harness.runTool("workspace.promote_artifact", {
+      path: "/workspace/artifacts/final-report.docx",
+      kind: "document.docx",
+      filename: "final-report.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    });
+
+    expect(promoted.status).toBe("success");
+    if (promoted.status !== "success") {
+      throw new Error("Expected promote_artifact to succeed");
+    }
+    expect(promoted.output).toMatchObject({
+      path: "artifacts/final-report.docx",
+      kind: "document.docx",
+      filename: "final-report.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    });
+    expect(promoted.artifacts).toEqual([
+      expect.objectContaining({
+        artifactId: promoted.output.artifactId,
+        kind: "document.docx",
+        filename: "final-report.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      })
+    ]);
+    expect(JSON.stringify([previewed, promoted])).not.toContain("objectKey");
+    expect(JSON.stringify([previewed, promoted])).not.toContain("execution-workspaces/private");
+
+    const listed = await harness.runTool("workspace.list_files", {});
+    expect(listed.status).toBe("success");
+    if (listed.status !== "success") {
+      throw new Error("Expected list_files to succeed");
+    }
+    expect(listed.output?.files).toEqual([
+      expect.objectContaining({
+        path: "artifacts/final-report.docx",
+        promotedArtifacts: [expect.objectContaining({ artifactId: promoted.output.artifactId })]
+      }),
+      expect.objectContaining({
+        path: "previews/final-report/page-1.png",
+        promotedArtifacts: undefined
+      }),
+      expect.objectContaining({
+        path: "scripts/build-report.py",
+        promotedArtifacts: undefined
       })
     ]);
   });
