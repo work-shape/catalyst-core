@@ -149,6 +149,9 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
   async getArtifactPreviewJob(input: {
     clientInstanceId: ClientInstanceId;
     sourceArtifactId: ManagedArtifactId;
+    renderer?: string;
+    rendererVersion?: string;
+    settingsHash?: string;
   }): Promise<ArtifactPreviewJobRecord | undefined> {
     return this.artifactPreviewStore.getArtifactPreviewJob(input);
   }
@@ -186,6 +189,9 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
   async getArtifactPreviewManifest(input: {
     clientInstanceId: ClientInstanceId;
     sourceArtifactId: ManagedArtifactId;
+    renderer?: string;
+    rendererVersion?: string;
+    settingsHash?: string;
   }): Promise<ArtifactPreviewManifest | undefined> {
     return this.artifactPreviewStore.getArtifactPreviewManifest(input);
   }

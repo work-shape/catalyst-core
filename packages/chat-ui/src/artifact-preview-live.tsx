@@ -1,4 +1,5 @@
 import type { ApiClient, ArtifactPreviewResponse } from "@vivd-catalyst/api-client";
+import { RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "./i18n";
 import { ArtifactPreviewFrame, ArtifactPreviewMessage } from "./artifact-preview-shell";
@@ -10,6 +11,7 @@ import {
   type ToolArtifactDownloadRef,
   type ToolArtifactImagePagesPreview
 } from "./tool-artifacts";
+import { Button } from "./ui/button";
 
 export const ARTIFACT_PREVIEW_POLL_DELAYS_MS = [
   1000,
@@ -43,7 +45,13 @@ export type ArtifactPreviewView =
       fallbackKind?: ArtifactSourceFallbackKind;
     }
   | {
-      kind: "failed" | "unsupported";
+      kind: "failed";
+      errorCode?: string;
+      retryable: boolean;
+      fallbackKind?: ArtifactSourceFallbackKind;
+    }
+  | {
+      kind: "unsupported";
       errorCode?: string;
       fallbackKind?: ArtifactSourceFallbackKind;
     }
@@ -94,8 +102,16 @@ export function createArtifactPreviewView(input: {
       fallbackKind
     };
   }
+  if (input.preview.status === "failed") {
+    return {
+      kind: "failed",
+      errorCode: input.preview.errorCode,
+      retryable: input.preview.retryable === true,
+      fallbackKind
+    };
+  }
   return {
-    kind: input.preview.status,
+    kind: "unsupported",
     errorCode: input.preview.errorCode,
     fallbackKind
   };
@@ -168,6 +184,8 @@ export function LiveArtifactPreview({
 }) {
   const { t } = useTranslation();
   const embeddedPreviewKey = artifactPreviewStateKey(artifact.preview);
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const [retrying, setRetrying] = useState(false);
   const [state, setState] = useState<{
     apiError: boolean;
     pendingAttempt: number;
@@ -223,11 +241,15 @@ export function LiveArtifactPreview({
         });
     };
 
-    setState({
-      apiError: false,
-      pendingAttempt: 0,
-      preview: artifact.preview,
-      refreshing: Boolean(artifact.preview)
+    setState((current) => {
+      const preview =
+        current.preview?.artifactId === artifact.artifactId ? current.preview : artifact.preview;
+      return {
+        apiError: false,
+        pendingAttempt: 0,
+        preview,
+        refreshing: Boolean(preview)
+      };
     });
     poll(0);
 
@@ -237,7 +259,32 @@ export function LiveArtifactPreview({
         clearTimeout(timeout);
       }
     };
-  }, [artifact.artifactId, client, conversationId, embeddedPreviewKey]);
+  }, [artifact.artifactId, client, conversationId, embeddedPreviewKey, refreshNonce]);
+
+  function retryPreview() {
+    setRetrying(true);
+    void client
+      .retryConversationArtifactPreview(conversationId, artifact.artifactId)
+      .then((preview) => {
+        setState({
+          apiError: false,
+          pendingAttempt: 0,
+          preview,
+          refreshing: false
+        });
+        setRefreshNonce((value) => value + 1);
+      })
+      .catch(() => {
+        setState((current) => ({
+          ...current,
+          apiError: true,
+          refreshing: false
+        }));
+      })
+      .finally(() => {
+        setRetrying(false);
+      });
+  }
 
   const view = createArtifactPreviewView({
     artifact,
@@ -276,6 +323,14 @@ export function LiveArtifactPreview({
         fileType={fileType}
         title={t("artifactPreviewFailed")}
         detail={artifactPreviewStatusDetail(artifact, view.errorCode)}
+        action={
+          view.retryable ? (
+            <Button type="button" size="sm" variant="outline" onClick={retryPreview} disabled={retrying}>
+              <RotateCcw aria-hidden="true" />
+              <span>{retrying ? t("artifactPreviewRetrying") : t("artifactPreviewRetry")}</span>
+            </Button>
+          ) : undefined
+        }
       />
     );
   }

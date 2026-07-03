@@ -1,8 +1,5 @@
 import {
   AppError,
-  DEFAULT_ARTIFACT_PREVIEW_RENDERER,
-  DEFAULT_ARTIFACT_PREVIEW_RENDERER_VERSION,
-  DEFAULT_ARTIFACT_PREVIEW_SETTINGS_HASH,
   type ArtifactPreviewJobRecord,
   type ArtifactPreviewManifest,
   type ClientInstanceId,
@@ -16,7 +13,8 @@ import {
   type MarkClaimedArtifactPreviewJobUnsupportedInput,
   type RecoverStaleArtifactPreviewJobsInput,
   type WriteArtifactPreviewManifestInput,
-  createPlatformId
+  createPlatformId,
+  normalizeArtifactPreviewIdentity
 } from "./index";
 
 export interface InMemoryArtifactPreviewStoreOptions {
@@ -36,9 +34,7 @@ export class InMemoryArtifactPreviewStore {
   async enqueueArtifactPreviewJob(
     input: EnqueueArtifactPreviewJobInput
   ): Promise<ArtifactPreviewJobRecord> {
-    const renderer = input.renderer ?? DEFAULT_ARTIFACT_PREVIEW_RENDERER;
-    const rendererVersion = input.rendererVersion ?? DEFAULT_ARTIFACT_PREVIEW_RENDERER_VERSION;
-    const settingsHash = input.settingsHash ?? DEFAULT_ARTIFACT_PREVIEW_SETTINGS_HASH;
+    const { renderer, rendererVersion, settingsHash } = normalizeArtifactPreviewIdentity(input);
     const key = artifactPreviewJobKey({
       clientInstanceId: input.clientInstanceId,
       sourceArtifactId: input.sourceArtifactId,
@@ -93,14 +89,17 @@ export class InMemoryArtifactPreviewStore {
   async getArtifactPreviewJob(input: {
     clientInstanceId: ClientInstanceId;
     sourceArtifactId: ManagedArtifactId;
+    renderer?: string;
+    rendererVersion?: string;
+    settingsHash?: string;
   }): Promise<ArtifactPreviewJobRecord | undefined> {
-    return [...this.artifactPreviewJobs.values()]
-      .filter(
-        (job) =>
-          job.clientInstanceId === input.clientInstanceId &&
-          job.sourceArtifactId === input.sourceArtifactId
-      )
-      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+    return this.artifactPreviewJobs.get(
+      artifactPreviewJobKey({
+        clientInstanceId: input.clientInstanceId,
+        sourceArtifactId: input.sourceArtifactId,
+        ...normalizeArtifactPreviewIdentity(input)
+      })
+    );
   }
 
   async claimNextArtifactPreviewJob(
@@ -200,6 +199,9 @@ export class InMemoryArtifactPreviewStore {
       clientInstanceId: completed.clientInstanceId,
       conversationId: completed.conversationId,
       sourceArtifactId: completed.sourceArtifactId,
+      renderer: completed.renderer,
+      rendererVersion: completed.rendererVersion,
+      settingsHash: completed.settingsHash,
       type: "image_pages",
       format: input.format,
       pages,
@@ -230,6 +232,9 @@ export class InMemoryArtifactPreviewStore {
         clientInstanceId: failed.clientInstanceId,
         conversationId: failed.conversationId,
         sourceArtifactId: failed.sourceArtifactId,
+        renderer: failed.renderer,
+        rendererVersion: failed.rendererVersion,
+        settingsHash: failed.settingsHash,
         errorCode: input.errorCode,
         writtenAt: input.failedAt
       });
@@ -258,6 +263,9 @@ export class InMemoryArtifactPreviewStore {
       clientInstanceId: unsupported.clientInstanceId,
       conversationId: unsupported.conversationId,
       sourceArtifactId: unsupported.sourceArtifactId,
+      renderer: unsupported.renderer,
+      rendererVersion: unsupported.rendererVersion,
+      settingsHash: unsupported.settingsHash,
       errorCode: unsupported.errorCode,
       writtenAt: input.unsupportedAt
     });
@@ -303,6 +311,9 @@ export class InMemoryArtifactPreviewStore {
           clientInstanceId: nextJob.clientInstanceId,
           conversationId: nextJob.conversationId,
           sourceArtifactId: nextJob.sourceArtifactId,
+          renderer: nextJob.renderer,
+          rendererVersion: nextJob.rendererVersion,
+          settingsHash: nextJob.settingsHash,
           errorCode: nextJob.errorCode,
           writtenAt: input.recoveredAt
         });
@@ -315,9 +326,16 @@ export class InMemoryArtifactPreviewStore {
   async getArtifactPreviewManifest(input: {
     clientInstanceId: ClientInstanceId;
     sourceArtifactId: ManagedArtifactId;
+    renderer?: string;
+    rendererVersion?: string;
+    settingsHash?: string;
   }): Promise<ArtifactPreviewManifest | undefined> {
     const manifest = this.artifactPreviewManifests.get(
-      artifactPreviewKey(input.clientInstanceId, input.sourceArtifactId)
+      artifactPreviewKey(
+        input.clientInstanceId,
+        input.sourceArtifactId,
+        normalizeArtifactPreviewIdentity(input)
+      )
     );
     return manifest?.clientInstanceId === input.clientInstanceId ? manifest : undefined;
   }
@@ -327,6 +345,7 @@ export class InMemoryArtifactPreviewStore {
   ): Promise<ArtifactPreviewManifest> {
     const existing = await this.getArtifactPreviewManifest(input);
     const writtenAt = input.writtenAt ?? new Date().toISOString();
+    const identity = normalizeArtifactPreviewIdentity(input);
     const manifest: ArtifactPreviewManifest =
       input.status === "ready"
         ? {
@@ -334,6 +353,7 @@ export class InMemoryArtifactPreviewStore {
             clientInstanceId: input.clientInstanceId,
             conversationId: input.conversationId,
             sourceArtifactId: input.sourceArtifactId,
+            ...identity,
             type: "image_pages",
             format: input.format,
             pageCount: input.pages.length,
@@ -346,12 +366,13 @@ export class InMemoryArtifactPreviewStore {
             clientInstanceId: input.clientInstanceId,
             conversationId: input.conversationId,
             sourceArtifactId: input.sourceArtifactId,
+            ...identity,
             ...(input.errorCode ? { errorCode: input.errorCode } : {}),
             createdAt: existing?.createdAt ?? writtenAt,
             updatedAt: writtenAt
           };
     this.artifactPreviewManifests.set(
-      artifactPreviewKey(input.clientInstanceId, input.sourceArtifactId),
+      artifactPreviewKey(input.clientInstanceId, input.sourceArtifactId, identity),
       manifest
     );
     return manifest;
@@ -398,8 +419,22 @@ export class InMemoryArtifactPreviewStore {
   }
 }
 
-function artifactPreviewKey(clientInstanceId: ClientInstanceId, artifactId: ManagedArtifactId): string {
-  return `${clientInstanceId}:${artifactId}`;
+function artifactPreviewKey(
+  clientInstanceId: ClientInstanceId,
+  artifactId: ManagedArtifactId,
+  identity: {
+    renderer: string;
+    rendererVersion: string;
+    settingsHash: string;
+  }
+): string {
+  return JSON.stringify([
+    clientInstanceId,
+    artifactId,
+    identity.renderer,
+    identity.rendererVersion,
+    identity.settingsHash
+  ]);
 }
 
 function isTerminalArtifactPreviewJob(job: ArtifactPreviewJobRecord): boolean {

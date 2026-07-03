@@ -4,8 +4,11 @@ import {
   AppError,
   asManagedArtifactId,
   detectArtifactPreviewSourceKind,
+  isRetryableArtifactPreviewErrorCode,
+  normalizeArtifactPreviewIdentity,
   requireAuthScope,
   type ArtifactPreviewImageFormat,
+  type ArtifactPreviewJobRecord,
   type ArtifactPreviewManifest,
   type ArtifactPreviewStore,
   type ManagedArtifactRecord
@@ -85,6 +88,23 @@ export function registerConversationFileRoutes(app: FastifyInstance, options: Ch
     const preview = await readArtifactPreviewState(options.conversationStore, artifactRecord);
     return reply.header("cache-control", "private, no-store, max-age=0").send(preview);
   });
+
+  app.post(apiOperations.retryConversationArtifactPreview.path, async (request, reply) => {
+    const { user } = await authenticateRequest(options, request);
+    requireAuthScope(user, "conversation:read");
+    const conversationId = getConversationId(request);
+    await conversations.requireOwnedActiveConversation(conversationId, user);
+    const artifactId = asManagedArtifactId(getArtifactId(request));
+    const artifactRecord = await options.conversationStore.getManagedArtifact({
+      clientInstanceId: options.clientInstanceId,
+      artifactId
+    });
+    if (!artifactRecord || artifactRecord.conversationId !== conversationId) {
+      throw new AppError("NOT_FOUND", "Managed artifact is not available in this conversation");
+    }
+    const preview = await retryArtifactPreviewState(options.conversationStore, artifactRecord);
+    return reply.header("cache-control", "private, no-store, max-age=0").send(preview);
+  });
 }
 
 function attachments(options: ChatServerOptions) {
@@ -137,10 +157,23 @@ async function readArtifactPreviewState(
   store: ArtifactPreviewStore,
   artifact: ManagedArtifactRecord
 ): Promise<ArtifactPreviewResponse> {
+  const previewIdentity = normalizeArtifactPreviewIdentity();
+  const job = await store.getArtifactPreviewJob({
+    clientInstanceId: artifact.clientInstanceId,
+    sourceArtifactId: artifact.id,
+    ...previewIdentity
+  });
   const manifest = await store.getArtifactPreviewManifest({
     clientInstanceId: artifact.clientInstanceId,
-    sourceArtifactId: artifact.id
+    sourceArtifactId: artifact.id,
+    ...previewIdentity
   });
+  if (manifest?.status === "ready") {
+    return artifactPreviewResponseFromManifest(artifact.id, manifest);
+  }
+  if (job && isActiveArtifactPreviewJob(job)) {
+    return pendingArtifactPreviewResponse(artifact.id, job);
+  }
   if (manifest) {
     return artifactPreviewResponseFromManifest(artifact.id, manifest);
   }
@@ -153,17 +186,9 @@ async function readArtifactPreviewState(
     };
   }
 
-  const job = await store.getArtifactPreviewJob({
-    clientInstanceId: artifact.clientInstanceId,
-    sourceArtifactId: artifact.id
-  });
   if (job) {
     if (job.status === "failed") {
-      return {
-        status: "failed",
-        artifactId: artifact.id,
-        ...(job.errorCode ? { errorCode: job.errorCode } : {})
-      };
+      return failedArtifactPreviewResponse(artifact.id, job.errorCode);
     }
     if (job.status === "unsupported") {
       return {
@@ -173,17 +198,9 @@ async function readArtifactPreviewState(
       };
     }
     if (job.status === "completed") {
-      return {
-        status: "failed",
-        artifactId: artifact.id,
-        errorCode: "preview_manifest_missing"
-      };
+      return failedArtifactPreviewResponse(artifact.id, "preview_manifest_missing");
     }
-    return {
-      status: "pending",
-      artifactId: artifact.id,
-      queuedAt: job.createdAt
-    };
+    return pendingArtifactPreviewResponse(artifact.id, job);
   }
 
   if (detectArtifactPreviewSourceKind(artifact)) {
@@ -194,11 +211,7 @@ async function readArtifactPreviewState(
       sourceChecksum: artifact.checksum,
       sourceMimeType: artifact.mimeType
     });
-    return {
-      status: "pending",
-      artifactId: artifact.id,
-      queuedAt: queued.createdAt
-    };
+    return pendingArtifactPreviewResponse(artifact.id, queued);
   }
 
   return {
@@ -206,6 +219,66 @@ async function readArtifactPreviewState(
     artifactId: artifact.id,
     errorCode: "unsupported_type"
   };
+}
+
+async function retryArtifactPreviewState(
+  store: ArtifactPreviewStore,
+  artifact: ManagedArtifactRecord
+): Promise<ArtifactPreviewResponse> {
+  const previewIdentity = normalizeArtifactPreviewIdentity();
+  const job = await store.getArtifactPreviewJob({
+    clientInstanceId: artifact.clientInstanceId,
+    sourceArtifactId: artifact.id,
+    ...previewIdentity
+  });
+  const manifest = await store.getArtifactPreviewManifest({
+    clientInstanceId: artifact.clientInstanceId,
+    sourceArtifactId: artifact.id,
+    ...previewIdentity
+  });
+  if (manifest?.status === "ready") {
+    return artifactPreviewResponseFromManifest(artifact.id, manifest);
+  }
+  if (job && isActiveArtifactPreviewJob(job)) {
+    return pendingArtifactPreviewResponse(artifact.id, job);
+  }
+  if (manifest?.status === "unsupported" || job?.status === "unsupported") {
+    return {
+      status: "unsupported",
+      artifactId: artifact.id,
+      errorCode: manifest?.errorCode ?? job?.errorCode ?? "unsupported_type"
+    };
+  }
+
+  const errorCode =
+    manifest?.status === "failed"
+      ? manifest.errorCode
+      : job?.status === "failed"
+        ? job.errorCode
+        : job?.status === "completed"
+          ? "preview_manifest_missing"
+          : undefined;
+  if (
+    errorCode &&
+    isRetryableArtifactPreviewErrorCode(errorCode) &&
+    detectArtifactPreviewSourceKind(artifact)
+  ) {
+    const queued = await store.enqueueArtifactPreviewJob({
+      clientInstanceId: artifact.clientInstanceId,
+      conversationId: artifact.conversationId,
+      sourceArtifactId: artifact.id,
+      sourceChecksum: artifact.checksum,
+      sourceMimeType: artifact.mimeType,
+      ...previewIdentity,
+      replaceTerminal: true
+    });
+    return pendingArtifactPreviewResponse(artifact.id, queued);
+  }
+  if (errorCode) {
+    return failedArtifactPreviewResponse(artifact.id, errorCode);
+  }
+
+  return readArtifactPreviewState(store, artifact);
 }
 
 function artifactPreviewResponseFromManifest(
@@ -232,8 +305,38 @@ function artifactPreviewResponseFromManifest(
   return {
     status: manifest.status,
     artifactId,
-    ...(manifest.errorCode ? { errorCode: manifest.errorCode } : {})
+    ...(manifest.errorCode ? { errorCode: manifest.errorCode } : {}),
+    ...(manifest.status === "failed" && isRetryableArtifactPreviewErrorCode(manifest.errorCode)
+      ? { retryable: true }
+      : {})
   };
+}
+
+function pendingArtifactPreviewResponse(
+  artifactId: string,
+  job: ArtifactPreviewJobRecord
+): ArtifactPreviewResponse {
+  return {
+    status: "pending",
+    artifactId,
+    queuedAt: job.nextAttemptAt ?? job.createdAt
+  };
+}
+
+function failedArtifactPreviewResponse(
+  artifactId: string,
+  errorCode: string | undefined
+): ArtifactPreviewResponse {
+  return {
+    status: "failed",
+    artifactId,
+    ...(errorCode ? { errorCode } : {}),
+    ...(isRetryableArtifactPreviewErrorCode(errorCode) ? { retryable: true } : {})
+  };
+}
+
+function isActiveArtifactPreviewJob(job: ArtifactPreviewJobRecord): boolean {
+  return job.status === "pending" || job.status === "processing";
 }
 
 function readEmbeddedImagePagesPreview(

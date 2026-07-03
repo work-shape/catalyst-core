@@ -1,9 +1,6 @@
-import { and, desc, eq, sql as drizzleSql } from "drizzle-orm";
+import { and, eq, sql as drizzleSql } from "drizzle-orm";
 import {
   AppError,
-  DEFAULT_ARTIFACT_PREVIEW_RENDERER,
-  DEFAULT_ARTIFACT_PREVIEW_RENDERER_VERSION,
-  DEFAULT_ARTIFACT_PREVIEW_SETTINGS_HASH,
   type ArtifactPreviewImagePageRef,
   type ArtifactPreviewJobRecord,
   type ArtifactPreviewManifest,
@@ -16,7 +13,8 @@ import {
   type MarkClaimedArtifactPreviewJobUnsupportedInput,
   type RecoverStaleArtifactPreviewJobsInput,
   type WriteArtifactPreviewManifestInput,
-  createPlatformId
+  createPlatformId,
+  normalizeArtifactPreviewIdentity
 } from "@vivd-catalyst/core";
 import type { PostgresDatabase } from "./postgres-database";
 import { mapArtifactPreviewJob, mapArtifactPreviewManifest } from "./rows";
@@ -32,9 +30,7 @@ export async function enqueueArtifactPreviewJob(
   input: EnqueueArtifactPreviewJobInput
 ): Promise<ArtifactPreviewJobRecord> {
   const now = new Date(input.queuedAt ?? new Date().toISOString());
-  const renderer = input.renderer ?? DEFAULT_ARTIFACT_PREVIEW_RENDERER;
-  const rendererVersion = input.rendererVersion ?? DEFAULT_ARTIFACT_PREVIEW_RENDERER_VERSION;
-  const settingsHash = input.settingsHash ?? DEFAULT_ARTIFACT_PREVIEW_SETTINGS_HASH;
+  const { renderer, rendererVersion, settingsHash } = normalizeArtifactPreviewIdentity(input);
   const [inserted] = await db
     .insert(artifactPreviewJobs)
     .values({
@@ -117,18 +113,24 @@ export async function getArtifactPreviewJob(
   input: {
     clientInstanceId: ClientInstanceId;
     sourceArtifactId: ManagedArtifactId;
+    renderer?: string;
+    rendererVersion?: string;
+    settingsHash?: string;
   }
 ): Promise<ArtifactPreviewJobRecord | undefined> {
+  const { renderer, rendererVersion, settingsHash } = normalizeArtifactPreviewIdentity(input);
   const [row] = await db
     .select()
     .from(artifactPreviewJobs)
     .where(
       and(
         eq(artifactPreviewJobs.clientInstanceId, input.clientInstanceId),
-        eq(artifactPreviewJobs.sourceArtifactId, input.sourceArtifactId)
+        eq(artifactPreviewJobs.sourceArtifactId, input.sourceArtifactId),
+        eq(artifactPreviewJobs.renderer, renderer),
+        eq(artifactPreviewJobs.rendererVersion, rendererVersion),
+        eq(artifactPreviewJobs.settingsHash, settingsHash)
       )
     )
-    .orderBy(desc(artifactPreviewJobs.createdAt))
     .limit(1);
   return row ? mapArtifactPreviewJob(row) : undefined;
 }
@@ -258,6 +260,9 @@ export async function completeClaimedArtifactPreviewJob(
         clientInstanceId: job.clientInstanceId,
         conversationId: job.conversationId,
         sourceArtifactId: job.sourceArtifactId,
+        renderer: job.renderer,
+        rendererVersion: job.rendererVersion,
+        settingsHash: job.settingsHash,
         status: "ready",
         type: "image_pages",
         format: input.format,
@@ -270,7 +275,10 @@ export async function completeClaimedArtifactPreviewJob(
       .onConflictDoUpdate({
         target: [
           artifactPreviewManifests.clientInstanceId,
-          artifactPreviewManifests.sourceArtifactId
+          artifactPreviewManifests.sourceArtifactId,
+          artifactPreviewManifests.renderer,
+          artifactPreviewManifests.rendererVersion,
+          artifactPreviewManifests.settingsHash
         ],
         set: {
           conversationId: job.conversationId,
@@ -436,15 +444,22 @@ export async function getArtifactPreviewManifest(
   input: {
     clientInstanceId: ClientInstanceId;
     sourceArtifactId: ManagedArtifactId;
+    renderer?: string;
+    rendererVersion?: string;
+    settingsHash?: string;
   }
 ): Promise<ArtifactPreviewManifest | undefined> {
+  const { renderer, rendererVersion, settingsHash } = normalizeArtifactPreviewIdentity(input);
   const [row] = await db
     .select()
     .from(artifactPreviewManifests)
     .where(
       and(
         eq(artifactPreviewManifests.clientInstanceId, input.clientInstanceId),
-        eq(artifactPreviewManifests.sourceArtifactId, input.sourceArtifactId)
+        eq(artifactPreviewManifests.sourceArtifactId, input.sourceArtifactId),
+        eq(artifactPreviewManifests.renderer, renderer),
+        eq(artifactPreviewManifests.rendererVersion, rendererVersion),
+        eq(artifactPreviewManifests.settingsHash, settingsHash)
       )
     )
     .limit(1);
@@ -458,12 +473,16 @@ export async function writeArtifactPreviewManifest(
   const existing = await getArtifactPreviewManifest(db, input);
   const writtenAt = new Date(input.writtenAt ?? new Date().toISOString());
   const createdAt = existing ? new Date(existing.createdAt) : writtenAt;
+  const { renderer, rendererVersion, settingsHash } = normalizeArtifactPreviewIdentity(input);
   const [row] = await db
     .insert(artifactPreviewManifests)
     .values({
       clientInstanceId: input.clientInstanceId,
       conversationId: input.conversationId,
       sourceArtifactId: input.sourceArtifactId,
+      renderer,
+      rendererVersion,
+      settingsHash,
       status: input.status,
       type: input.status === "ready" ? "image_pages" : null,
       format: input.status === "ready" ? input.format : null,
@@ -476,7 +495,10 @@ export async function writeArtifactPreviewManifest(
     .onConflictDoUpdate({
       target: [
         artifactPreviewManifests.clientInstanceId,
-        artifactPreviewManifests.sourceArtifactId
+        artifactPreviewManifests.sourceArtifactId,
+        artifactPreviewManifests.renderer,
+        artifactPreviewManifests.rendererVersion,
+        artifactPreviewManifests.settingsHash
       ],
       set: {
         conversationId: input.conversationId,
@@ -557,6 +579,9 @@ async function writeTerminalPreviewManifest(
       clientInstanceId: input.job.clientInstanceId,
       conversationId: input.job.conversationId,
       sourceArtifactId: input.job.sourceArtifactId,
+      renderer: input.job.renderer,
+      rendererVersion: input.job.rendererVersion,
+      settingsHash: input.job.settingsHash,
       status: input.status,
       type: null,
       format: null,
@@ -569,7 +594,10 @@ async function writeTerminalPreviewManifest(
     .onConflictDoUpdate({
       target: [
         artifactPreviewManifests.clientInstanceId,
-        artifactPreviewManifests.sourceArtifactId
+        artifactPreviewManifests.sourceArtifactId,
+        artifactPreviewManifests.renderer,
+        artifactPreviewManifests.rendererVersion,
+        artifactPreviewManifests.settingsHash
       ],
       set: {
         conversationId: input.job.conversationId,

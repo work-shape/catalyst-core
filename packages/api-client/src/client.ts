@@ -401,6 +401,14 @@ export function createApiClient(options: ApiClientOptions) {
         }),
         apiOperations.getConversationArtifactPreview.responseSchema
       ),
+    retryConversationArtifactPreview: (conversationId: string, artifactId: string) =>
+      requestJson(
+        apiOperations.retryConversationArtifactPreview.buildPath({
+          params: { conversationId, artifactId }
+        }),
+        apiOperations.retryConversationArtifactPreview.responseSchema,
+        { method: "POST" }
+      ),
     deleteConversation: (conversationId: string) =>
       unwrapJson(
         generatedSdk.deleteConversation({

@@ -143,10 +143,66 @@ async function expectPreviewJobIdentityContract(store: PreviewJobIdentityStore):
   await expect(
     store.getArtifactPreviewJob({
       clientInstanceId: fixture.clientInstanceId,
-      sourceArtifactId: fixture.artifact.id
+      sourceArtifactId: fixture.artifact.id,
+      renderer: "preview-renderer-a",
+      rendererVersion: "1.0.0",
+      settingsHash: "settings-b"
     })
   ).resolves.toMatchObject({
     id: changedSettings.id,
+    settingsHash: "settings-b"
+  });
+  await expect(
+    store.getArtifactPreviewJob({
+      clientInstanceId: fixture.clientInstanceId,
+      sourceArtifactId: fixture.artifact.id
+    })
+  ).resolves.toBeUndefined();
+
+  await store.writeArtifactPreviewManifest({
+    clientInstanceId: fixture.clientInstanceId,
+    conversationId: fixture.conversation.id,
+    sourceArtifactId: fixture.artifact.id,
+    status: "failed",
+    errorCode: "conversion_failed",
+    writtenAt: "2026-07-01T10:25:00.000Z"
+  });
+  await store.writeArtifactPreviewManifest({
+    clientInstanceId: fixture.clientInstanceId,
+    conversationId: fixture.conversation.id,
+    sourceArtifactId: fixture.artifact.id,
+    renderer: "preview-renderer-a",
+    rendererVersion: "1.0.0",
+    settingsHash: "settings-b",
+    status: "ready",
+    type: "image_pages",
+    format: "png",
+    pages: [],
+    writtenAt: "2026-07-01T10:30:00.000Z"
+  });
+  await expect(
+    store.getArtifactPreviewManifest({
+      clientInstanceId: fixture.clientInstanceId,
+      sourceArtifactId: fixture.artifact.id
+    })
+  ).resolves.toMatchObject({
+    status: "failed",
+    renderer: "artifact-preview-worker",
+    rendererVersion: "preview-contract-v1",
+    settingsHash: "default-image-pages-v1"
+  });
+  await expect(
+    store.getArtifactPreviewManifest({
+      clientInstanceId: fixture.clientInstanceId,
+      sourceArtifactId: fixture.artifact.id,
+      renderer: "preview-renderer-a",
+      rendererVersion: "1.0.0",
+      settingsHash: "settings-b"
+    })
+  ).resolves.toMatchObject({
+    status: "ready",
+    renderer: "preview-renderer-a",
+    rendererVersion: "1.0.0",
     settingsHash: "settings-b"
   });
 }
@@ -242,7 +298,10 @@ async function expectPreviewJobLeaseContract(store: PreviewJobIdentityStore): Pr
   await expect(
     store.getArtifactPreviewManifest({
       clientInstanceId: fixture.clientInstanceId,
-      sourceArtifactId: fixture.artifact.id
+      sourceArtifactId: fixture.artifact.id,
+      renderer: "preview-renderer-lease",
+      rendererVersion: "1.0.0",
+      settingsHash: "settings-lease"
     })
   ).resolves.toMatchObject({
     status: "ready",
@@ -326,7 +385,10 @@ async function expectPreviewArtifactCompletionContract(
   });
   const manifest = await store.getArtifactPreviewManifest({
     clientInstanceId: fixture.clientInstanceId,
-    sourceArtifactId: fixture.artifact.id
+    sourceArtifactId: fixture.artifact.id,
+    renderer: "preview-renderer-completion",
+    rendererVersion: "1.0.0",
+    settingsHash: "settings-completion"
   });
   expect(manifest).toMatchObject({
     status: "ready",
@@ -432,7 +494,10 @@ async function expectPreviewJobStaleRecoveryContract(
   await expect(
     store.getArtifactPreviewManifest({
       clientInstanceId: fixture.clientInstanceId,
-      sourceArtifactId: fixture.artifact.id
+      sourceArtifactId: fixture.artifact.id,
+      renderer: "preview-renderer-stale",
+      rendererVersion: "1.0.0",
+      settingsHash: "settings-stale"
     })
   ).resolves.toMatchObject({
     status: "failed",
@@ -492,4 +557,5 @@ type PreviewJobIdentityStore = Pick<
   | "markClaimedArtifactPreviewJobUnsupported"
   | "recoverStaleArtifactPreviewJobs"
   | "getArtifactPreviewManifest"
+  | "writeArtifactPreviewManifest"
 >;

@@ -256,7 +256,8 @@ export const artifactPreviewReadyResponseSchema = z.object({
 export const artifactPreviewFailedResponseSchema = z.object({
   status: z.literal("failed"),
   artifactId: z.string(),
-  errorCode: z.string().optional()
+  errorCode: z.string().optional(),
+  retryable: z.boolean().optional()
 });
 
 export const artifactPreviewUnsupportedResponseSchema = z.object({
@@ -273,6 +274,7 @@ export const artifactPreviewResponseSchema = z.discriminatedUnion("status", [
 ]);
 
 export type ArtifactPreviewResponse = z.infer<typeof artifactPreviewResponseSchema>;
+export const retryArtifactPreviewResponseSchema = artifactPreviewResponseSchema;
 
 export const clientBrandingSchema = z.object({
   localization: localizationSchema,
@@ -1037,6 +1039,12 @@ export const apiOperations = {
     method: "GET",
     path: "/api/conversations/:conversationId/artifacts/:artifactId/preview",
     responseSchema: artifactPreviewResponseSchema
+  }),
+  retryConversationArtifactPreview: defineJsonApiOperation({
+    operationId: "retryConversationArtifactPreview",
+    method: "POST",
+    path: "/api/conversations/:conversationId/artifacts/:artifactId/preview/retry",
+    responseSchema: retryArtifactPreviewResponseSchema
   }),
   listAuditEvents: defineJsonApiOperation({
     operationId: "listAuditEvents",

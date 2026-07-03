@@ -11,10 +11,12 @@ export function ArtifactPreviewFrame({ children }: { children: ReactNode }) {
 }
 
 export function ArtifactPreviewMessage({
+  action,
   detail,
   fileType,
   title
 }: {
+  action?: ReactNode;
   detail?: string;
   fileType: ArtifactFileType;
   title: string;
@@ -35,6 +37,7 @@ export function ArtifactPreviewMessage({
           <div className="min-w-0">
             <p className="font-medium">{title}</p>
             {detail ? <p className="mt-1 text-xs text-muted-foreground">{detail}</p> : null}
+            {action ? <div className="mt-3">{action}</div> : null}
           </div>
         </div>
       </div>

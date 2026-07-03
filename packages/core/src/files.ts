@@ -49,6 +49,40 @@ export const DEFAULT_ARTIFACT_PREVIEW_RENDERER = "artifact-preview-worker";
 export const DEFAULT_ARTIFACT_PREVIEW_RENDERER_VERSION = "preview-contract-v1";
 export const DEFAULT_ARTIFACT_PREVIEW_SETTINGS_HASH = "default-image-pages-v1";
 
+export interface ArtifactPreviewIdentityInput {
+  renderer?: string;
+  rendererVersion?: string;
+  settingsHash?: string;
+}
+
+export interface ArtifactPreviewIdentity {
+  renderer: string;
+  rendererVersion: string;
+  settingsHash: string;
+}
+
+export function normalizeArtifactPreviewIdentity(
+  input: ArtifactPreviewIdentityInput = {}
+): ArtifactPreviewIdentity {
+  return {
+    renderer: input.renderer ?? DEFAULT_ARTIFACT_PREVIEW_RENDERER,
+    rendererVersion: input.rendererVersion ?? DEFAULT_ARTIFACT_PREVIEW_RENDERER_VERSION,
+    settingsHash: input.settingsHash ?? DEFAULT_ARTIFACT_PREVIEW_SETTINGS_HASH
+  };
+}
+
+export function isRetryableArtifactPreviewErrorCode(errorCode: string | undefined): boolean {
+  return (
+    errorCode === "conversion_timeout" ||
+    errorCode === "conversion_failed" ||
+    errorCode === "rasterization_failed" ||
+    errorCode === "storage_failed" ||
+    errorCode === "internal_error" ||
+    errorCode === "stale_lease" ||
+    errorCode === "preview_manifest_missing"
+  );
+}
+
 export interface ArtifactPreviewImagePageRef {
   artifactId: ManagedArtifactId;
   mimeType: "image/png" | "image/jpeg" | "image/webp";
@@ -67,6 +101,9 @@ export type ArtifactPreviewManifest =
       clientInstanceId: ClientInstanceId;
       conversationId: ConversationId;
       sourceArtifactId: ManagedArtifactId;
+      renderer: string;
+      rendererVersion: string;
+      settingsHash: string;
       type: "image_pages";
       format: ArtifactPreviewImageFormat;
       pageCount: number;
@@ -79,6 +116,9 @@ export type ArtifactPreviewManifest =
       clientInstanceId: ClientInstanceId;
       conversationId: ConversationId;
       sourceArtifactId: ManagedArtifactId;
+      renderer: string;
+      rendererVersion: string;
+      settingsHash: string;
       errorCode?: string;
       createdAt: ISODateString;
       updatedAt: ISODateString;
@@ -364,6 +404,9 @@ export type WriteArtifactPreviewManifestInput =
       clientInstanceId: ClientInstanceId;
       conversationId: ConversationId;
       sourceArtifactId: ManagedArtifactId;
+      renderer?: string;
+      rendererVersion?: string;
+      settingsHash?: string;
       type: "image_pages";
       format: ArtifactPreviewImageFormat;
       pages: ArtifactPreviewImagePageRef[];
@@ -374,6 +417,9 @@ export type WriteArtifactPreviewManifestInput =
       clientInstanceId: ClientInstanceId;
       conversationId: ConversationId;
       sourceArtifactId: ManagedArtifactId;
+      renderer?: string;
+      rendererVersion?: string;
+      settingsHash?: string;
       errorCode?: string;
       writtenAt?: ISODateString;
     };
@@ -453,6 +499,9 @@ export interface ArtifactPreviewStore {
   getArtifactPreviewJob(input: {
     clientInstanceId: ClientInstanceId;
     sourceArtifactId: ManagedArtifactId;
+    renderer?: string;
+    rendererVersion?: string;
+    settingsHash?: string;
   }): Promise<ArtifactPreviewJobRecord | undefined>;
   claimNextArtifactPreviewJob(
     input: ClaimNextArtifactPreviewJobInput
@@ -472,6 +521,9 @@ export interface ArtifactPreviewStore {
   getArtifactPreviewManifest(input: {
     clientInstanceId: ClientInstanceId;
     sourceArtifactId: ManagedArtifactId;
+    renderer?: string;
+    rendererVersion?: string;
+    settingsHash?: string;
   }): Promise<ArtifactPreviewManifest | undefined>;
   writeArtifactPreviewManifest(
     input: WriteArtifactPreviewManifestInput

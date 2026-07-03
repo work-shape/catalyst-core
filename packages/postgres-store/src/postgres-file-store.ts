@@ -189,6 +189,9 @@ class PostgresPlatformFileStore implements PlatformFileStore {
   async getArtifactPreviewJob(input: {
     clientInstanceId: ClientInstanceId;
     sourceArtifactId: ManagedArtifactId;
+    renderer?: string;
+    rendererVersion?: string;
+    settingsHash?: string;
   }): Promise<ArtifactPreviewJobRecord | undefined> {
     return getPostgresArtifactPreviewJob(this.db, input);
   }
@@ -226,6 +229,9 @@ class PostgresPlatformFileStore implements PlatformFileStore {
   async getArtifactPreviewManifest(input: {
     clientInstanceId: ClientInstanceId;
     sourceArtifactId: ManagedArtifactId;
+    renderer?: string;
+    rendererVersion?: string;
+    settingsHash?: string;
   }): Promise<ArtifactPreviewManifest | undefined> {
     return getPostgresArtifactPreviewManifest(this.db, input);
   }

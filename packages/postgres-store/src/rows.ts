@@ -287,6 +287,9 @@ export function mapArtifactPreviewManifest(
     clientInstanceId: row.clientInstanceId as ClientInstanceId,
     conversationId: asConversationId(row.conversationId),
     sourceArtifactId: asManagedArtifactId(row.sourceArtifactId),
+    renderer: row.renderer,
+    rendererVersion: row.rendererVersion,
+    settingsHash: row.settingsHash,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
   };

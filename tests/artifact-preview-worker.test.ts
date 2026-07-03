@@ -218,15 +218,16 @@ describe("ArtifactPreviewWorker", () => {
   });
 
   it("renders queued spreadsheet sheet and range jobs into internal preview artifacts", async () => {
+    const settingsHash = createArtifactPreviewSettingsHash({
+      sheets: ["Summary"],
+      ranges: ["Summary!A1:H10"],
+      maxImages: 1
+    });
     const fixture = await createWorkerFixture({
       kind: "spreadsheet.xlsx",
       filename: "sheet.xlsx",
       mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      settingsHash: createArtifactPreviewSettingsHash({
-        sheets: ["Summary"],
-        ranges: ["Summary!A1:H10"],
-        maxImages: 1
-      })
+      settingsHash
     });
     const renderer = new FakeRenderer({
       result: {
@@ -264,7 +265,8 @@ describe("ArtifactPreviewWorker", () => {
     });
     const manifest = await fixture.store.getArtifactPreviewManifest({
       clientInstanceId: fixture.clientInstanceId,
-      sourceArtifactId: fixture.source.id
+      sourceArtifactId: fixture.source.id,
+      settingsHash
     });
     expect(manifest).toMatchObject({
       status: "ready",

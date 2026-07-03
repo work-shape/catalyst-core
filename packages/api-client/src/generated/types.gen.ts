@@ -1888,6 +1888,7 @@ export type GetConversationArtifactPreviewResponses = {
         status: 'failed';
         artifactId: string;
         errorCode?: string;
+        retryable?: boolean;
     } | {
         status: 'unsupported';
         artifactId: string;
@@ -1896,6 +1897,52 @@ export type GetConversationArtifactPreviewResponses = {
 };
 
 export type GetConversationArtifactPreviewResponse = GetConversationArtifactPreviewResponses[keyof GetConversationArtifactPreviewResponses];
+
+export type RetryConversationArtifactPreviewData = {
+    body?: never;
+    path: {
+        conversationId: string;
+        artifactId: string;
+    };
+    query?: never;
+    url: '/api/conversations/{conversationId}/artifacts/{artifactId}/preview/retry';
+};
+
+export type RetryConversationArtifactPreviewResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        status: 'pending';
+        artifactId: string;
+        queuedAt?: string;
+    } | {
+        status: 'ready';
+        artifactId: string;
+        type: 'image_pages';
+        format: 'png' | 'webp' | 'jpeg';
+        pages: Array<{
+            artifactId: string;
+            mimeType: 'image/png' | 'image/jpeg' | 'image/webp';
+            filename?: string;
+            pageNumber?: number;
+            slideNumber?: number;
+            width?: number;
+            height?: number;
+        }>;
+    } | {
+        status: 'failed';
+        artifactId: string;
+        errorCode?: string;
+        retryable?: boolean;
+    } | {
+        status: 'unsupported';
+        artifactId: string;
+        errorCode?: string;
+    };
+};
+
+export type RetryConversationArtifactPreviewResponse = RetryConversationArtifactPreviewResponses[keyof RetryConversationArtifactPreviewResponses];
 
 export type ListAuditEventsData = {
     body?: never;

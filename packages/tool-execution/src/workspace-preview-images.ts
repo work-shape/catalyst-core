@@ -2,6 +2,7 @@ import type { z } from "zod";
 import {
   asManagedArtifactId,
   detectArtifactPreviewSourceKind,
+  type ArtifactPreviewJobRecord,
   type ArtifactPreviewManifest,
   type ClientInstanceId,
   type JsonObject,
@@ -145,26 +146,52 @@ export async function resolveWorkspacePreviewImages(
     );
   }
 
+  const job = await options.store.getArtifactPreviewJob({
+    clientInstanceId: context.clientInstanceId,
+    sourceArtifactId: source.id,
+    settingsHash
+  });
   const manifest = await options.store.getArtifactPreviewManifest({
     clientInstanceId: context.clientInstanceId,
-    sourceArtifactId: source.id
+    sourceArtifactId: source.id,
+    settingsHash
   });
   if (manifest) {
-    if (
-      manifest.status === "ready" &&
-      detectArtifactPreviewSourceKind(source) &&
-      !readyCandidatesCoverSelection(previewCandidatesFromManifest(manifest), selection)
-    ) {
-      const queued = await queuePreviewJob(source, options.store, settingsHash, {
-        replaceTerminal: true
-      });
-      return queuedPending(source, maxImages, queued.createdAt);
+    if (manifest.status === "ready") {
+      if (
+        detectArtifactPreviewSourceKind(source) &&
+        !readyCandidatesCoverSelection(previewCandidatesFromManifest(manifest), selection)
+      ) {
+        if (job && isActiveArtifactPreviewJob(job)) {
+          return pendingPreviewImages(source, maxImages);
+        }
+        const queued = await queuePreviewJob(source, options.store, settingsHash, {
+          replaceTerminal: true
+        });
+        return queuedPending(source, maxImages, queued.nextAttemptAt ?? queued.createdAt);
+      }
+      return previewStateFromManifest(source, manifest, selection, maxImages, context.clientInstanceId, options.store);
+    }
+    if (job && isActiveArtifactPreviewJob(job)) {
+      return pendingPreviewImages(source, maxImages);
     }
     return previewStateFromManifest(source, manifest, selection, maxImages, context.clientInstanceId, options.store);
+  }
+  if (job && isActiveArtifactPreviewJob(job)) {
+    return pendingPreviewImages(source, maxImages);
   }
 
   const embeddedPreview = readEmbeddedImagePagesPreview(source.metadata);
   if (embeddedPreview.length > 0) {
+    if (
+      detectArtifactPreviewSourceKind(source) &&
+      !readyCandidatesCoverSelection(embeddedPreview, selection)
+    ) {
+      const queued = await queuePreviewJob(source, options.store, settingsHash, {
+        replaceTerminal: true
+      });
+      return queuedPending(source, maxImages, queued.nextAttemptAt ?? queued.createdAt);
+    }
     return previewStateFromReadyImages(
       source,
       embeddedPreview,
@@ -181,14 +208,10 @@ export async function resolveWorkspacePreviewImages(
     );
   }
 
-  const job = await options.store.getArtifactPreviewJob({
-    clientInstanceId: context.clientInstanceId,
-    sourceArtifactId: source.id
-  });
   if (job) {
     if (job.settingsHash !== settingsHash && detectArtifactPreviewSourceKind(source)) {
       const queued = await queuePreviewJob(source, options.store, settingsHash);
-      return queuedPending(source, maxImages, queued.createdAt);
+      return queuedPending(source, maxImages, queued.nextAttemptAt ?? queued.createdAt);
     }
     if (job.status === "failed" || job.status === "unsupported") {
       return success(source, job.status, maxImages, [], {
@@ -227,7 +250,7 @@ export async function resolveWorkspacePreviewImages(
 
   if (detectArtifactPreviewSourceKind(source)) {
     const queued = await queuePreviewJob(source, options.store, settingsHash);
-    return queuedPending(source, maxImages, queued.createdAt);
+    return queuedPending(source, maxImages, queued.nextAttemptAt ?? queued.createdAt);
   }
 
   return success(source, "unsupported", maxImages, [], {
@@ -237,6 +260,20 @@ export async function resolveWorkspacePreviewImages(
         code: "unsupported_type",
         message:
           "No ready preview images are available, and this artifact type is not supported by the configured preview renderer."
+      }
+    ]
+  });
+}
+
+function pendingPreviewImages(
+  source: ManagedArtifactRecord,
+  maxImages: number
+): ToolHandlerResult<WorkspacePreviewImagesOutput> {
+  return success(source, "pending", maxImages, [], {
+    warnings: [
+      {
+        code: "preview_pending",
+        message: "Preview image generation is pending; no model-visible image parts were attached."
       }
     ]
   });
@@ -604,6 +641,10 @@ function readyCandidatesCoverSelection(
     coversAllStrings(candidates, selection.sheets, "sheet") &&
     coversAllStrings(candidates, selection.ranges, "range")
   );
+}
+
+function isActiveArtifactPreviewJob(job: ArtifactPreviewJobRecord): boolean {
+  return job.status === "pending" || job.status === "processing";
 }
 
 function coversAllNumbers(

@@ -523,6 +523,9 @@ export const artifactPreviewManifests = pgTable(
     sourceArtifactId: text("source_artifact_id")
       .notNull()
       .references(() => managedArtifacts.id, { onDelete: "cascade" }),
+    renderer: text("renderer").notNull(),
+    rendererVersion: text("renderer_version").notNull(),
+    settingsHash: text("settings_hash").notNull(),
     status: text("status").$type<ArtifactPreviewManifest["status"]>().notNull(),
     type: text("type").$type<"image_pages">(),
     format: text("format").$type<ArtifactPreviewImageFormat>(),
@@ -535,7 +538,13 @@ export const artifactPreviewManifests = pgTable(
   (table) => [
     primaryKey({
       name: "artifact_preview_manifests_pk",
-      columns: [table.clientInstanceId, table.sourceArtifactId]
+      columns: [
+        table.clientInstanceId,
+        table.sourceArtifactId,
+        table.renderer,
+        table.rendererVersion,
+        table.settingsHash
+      ]
     }),
     index("artifact_preview_manifests_conversation_idx").on(
       table.clientInstanceId,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { asManagedArtifactId } from "@vivd-catalyst/core";
+import { createArtifactPreviewSettingsHash } from "@vivd-catalyst/tool-execution";
 import { createModelVisibleToolOutput } from "../packages/agent-runtime/src/model-context-projection";
 import { createWorkspaceHarness, encode } from "./workspace-tools-harness";
 
@@ -17,6 +18,7 @@ describe("workspace.preview_images", () => {
       checksum: "sha256:report"
     });
     const previewBytes = encode("page-1-png");
+    const settingsHash = createArtifactPreviewSettingsHash({ pages: [1], maxImages: 1 });
     harness.objectStore.putObject("artifact-previews/private/report-page-1.png", previewBytes);
     const previewPage = await harness.store.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
@@ -38,6 +40,7 @@ describe("workspace.preview_images", () => {
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       sourceArtifactId: source.id,
+      settingsHash,
       type: "image_pages",
       format: "png",
       pages: [
@@ -149,6 +152,11 @@ describe("workspace.preview_images", () => {
       checksum: "sha256:workbook"
     });
     const previewBytes = encode("summary-range-png");
+    const settingsHash = createArtifactPreviewSettingsHash({
+      sheets: ["Summary"],
+      ranges: ["Summary!A1:H10"],
+      maxImages: 1
+    });
     harness.objectStore.putObject("artifact-previews/private/workbook-summary-range.png", previewBytes);
     const previewRange = await harness.store.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
@@ -171,6 +179,7 @@ describe("workspace.preview_images", () => {
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       sourceArtifactId: source.id,
+      settingsHash,
       type: "image_pages",
       format: "png",
       pages: [
@@ -300,6 +309,11 @@ describe("workspace.preview_images", () => {
     });
 
     const previewBytes = encode("summary-a1-b4-png");
+    const settingsHash = createArtifactPreviewSettingsHash({
+      sheets: ["Summary"],
+      ranges: ["Summary!A1:B4"],
+      maxImages: 1
+    });
     harness.objectStore.putObject("artifact-previews/private/workbook-summary-a1-b4.png", previewBytes);
     const previewRange = await harness.store.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
@@ -322,6 +336,7 @@ describe("workspace.preview_images", () => {
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       sourceArtifactId: source.id,
+      settingsHash,
       type: "image_pages",
       format: "png",
       pages: [
@@ -600,6 +615,63 @@ describe("workspace.preview_images", () => {
       warnings: [expect.objectContaining({ code: "preview_pending" })]
     });
     expect(JSON.stringify([pdfPage2, slide2, detail])).not.toContain("selection_empty");
+  });
+
+  it("queues selector-specific previews instead of reusing a default failed manifest", async () => {
+    const harness = await createWorkspaceHarness();
+    const source = await harness.store.createManagedArtifact({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      kind: "document.pdf",
+      objectKey: "execution-workspaces/private/report.pdf",
+      filename: "report.pdf",
+      mimeType: "application/pdf",
+      byteSize: 128,
+      checksum: "sha256:report"
+    });
+    await harness.store.writeArtifactPreviewManifest({
+      status: "failed",
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      sourceArtifactId: source.id,
+      errorCode: "conversion_failed"
+    });
+
+    const result = await harness.runTool("workspace.preview_images", {
+      artifactId: source.id,
+      pages: [2],
+      maxImages: 1
+    });
+
+    expect(result.status).toBe("success");
+    if (result.status !== "success") {
+      throw new Error("Expected pending selector-specific preview result");
+    }
+    expect(result.output).toMatchObject({
+      artifactId: source.id,
+      status: "pending",
+      images: [],
+      warnings: [expect.objectContaining({ code: "preview_pending" })]
+    });
+    await expect(
+      harness.store.getArtifactPreviewManifest({
+        clientInstanceId: harness.clientInstanceId,
+        sourceArtifactId: source.id
+      })
+    ).resolves.toMatchObject({
+      status: "failed",
+      errorCode: "conversion_failed"
+    });
+    await expect(
+      harness.store.getArtifactPreviewJob({
+        clientInstanceId: harness.clientInstanceId,
+        sourceArtifactId: source.id,
+        settingsHash: createArtifactPreviewSettingsHash({ pages: [2], maxImages: 1 })
+      })
+    ).resolves.toMatchObject({
+      status: "pending",
+      settingsHash: createArtifactPreviewSettingsHash({ pages: [2], maxImages: 1 })
+    });
   });
 
   it("reports pending and unsupported preview states without attaching images", async () => {

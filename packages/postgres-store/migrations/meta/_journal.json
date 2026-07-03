@@ -78,6 +78,13 @@
       "when": 1782921779038,
       "tag": "0010_needy_arachne",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1783041227000,
+      "tag": "0011_preview_manifest_identity",
+      "breakpoints": true
     }
   ]
 }

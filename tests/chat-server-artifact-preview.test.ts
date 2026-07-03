@@ -209,7 +209,59 @@ describe("artifact preview routes", () => {
         payload: JSON.stringify({
           status: "failed",
           artifactId: failedArtifact.id,
-          errorCode: "conversion_failed"
+          errorCode: "conversion_failed",
+          retryable: true
+        })
+      });
+      const failedRetry = await server.inject({
+        method: "POST",
+        url: `/api/conversations/${conversation.id}/artifacts/${failedArtifact.id}/preview/retry`
+      });
+      expect(failedRetry.statusCode).toBe(200);
+      const failedRetryJson = failedRetry.json() as { queuedAt: string };
+      expect(failedRetry.json()).toMatchObject({
+        status: "pending",
+        artifactId: failedArtifact.id,
+        queuedAt: expect.any(String)
+      });
+      expect(failedRetry.payload).not.toContain("artifact-previews/private");
+      expect(failedRetry.payload).not.toContain("renderer");
+      const retriedJob = await store.getArtifactPreviewJob({
+        clientInstanceId,
+        sourceArtifactId: failedArtifact.id
+      });
+      expect(retriedJob).toMatchObject({
+        status: "pending"
+      });
+      expect(retriedJob?.errorCode).toBeUndefined();
+      await expect(
+        server.inject({
+          method: "POST",
+          url: `/api/conversations/${conversation.id}/artifacts/${failedArtifact.id}/preview/retry`
+        })
+      ).resolves.toMatchObject({
+        statusCode: 200,
+        payload: failedRetry.payload
+      });
+      await expect(
+        store.getArtifactPreviewJob({
+          clientInstanceId,
+          sourceArtifactId: failedArtifact.id
+        })
+      ).resolves.toMatchObject({
+        id: retriedJob?.id
+      });
+      await expect(
+        server.inject({
+          method: "GET",
+          url: `/api/conversations/${conversation.id}/artifacts/${failedArtifact.id}/preview`
+        })
+      ).resolves.toMatchObject({
+        statusCode: 200,
+        payload: JSON.stringify({
+          status: "pending",
+          artifactId: failedArtifact.id,
+          queuedAt: failedRetryJson.queuedAt
         })
       });
       await expect(
@@ -224,6 +276,83 @@ describe("artifact preview routes", () => {
           artifactId: unsupportedManifestArtifact.id,
           errorCode: "unsupported_type"
         })
+      });
+      await expect(
+        server.inject({
+          method: "POST",
+          url: `/api/conversations/${conversation.id}/artifacts/${unsupportedManifestArtifact.id}/preview/retry`
+        })
+      ).resolves.toMatchObject({
+        statusCode: 200,
+        payload: JSON.stringify({
+          status: "unsupported",
+          artifactId: unsupportedManifestArtifact.id,
+          errorCode: "unsupported_type"
+        })
+      });
+      const nonRetryableArtifact = await store.createManagedArtifact({
+        clientInstanceId,
+        conversationId: conversation.id,
+        kind: "document.docx",
+        objectKey: "execution-workspaces/private/large.docx",
+        filename: "large.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        byteSize: 1024,
+        checksum: "sha256:large-docx"
+      });
+      await store.writeArtifactPreviewManifest({
+        clientInstanceId,
+        conversationId: conversation.id,
+        sourceArtifactId: nonRetryableArtifact.id,
+        status: "failed",
+        errorCode: "source_too_large"
+      });
+      await expect(
+        server.inject({
+          method: "POST",
+          url: `/api/conversations/${conversation.id}/artifacts/${nonRetryableArtifact.id}/preview/retry`
+        })
+      ).resolves.toMatchObject({
+        statusCode: 200,
+        payload: JSON.stringify({
+          status: "failed",
+          artifactId: nonRetryableArtifact.id,
+          errorCode: "source_too_large"
+        })
+      });
+      await expect(
+        store.getArtifactPreviewJob({
+          clientInstanceId,
+          sourceArtifactId: nonRetryableArtifact.id
+        })
+      ).resolves.toBeUndefined();
+      const oldRendererFailureArtifact = await store.createManagedArtifact({
+        clientInstanceId,
+        conversationId: conversation.id,
+        kind: "presentation.pptx",
+        objectKey: "execution-workspaces/private/old-runtime.pptx",
+        filename: "old-runtime.pptx",
+        mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        byteSize: 1024,
+        checksum: "sha256:old-runtime-pptx"
+      });
+      await store.writeArtifactPreviewManifest({
+        clientInstanceId,
+        conversationId: conversation.id,
+        sourceArtifactId: oldRendererFailureArtifact.id,
+        rendererVersion: "previous-preview-runtime",
+        status: "failed",
+        errorCode: "conversion_failed"
+      });
+      const oldRendererPreview = await server.inject({
+        method: "GET",
+        url: `/api/conversations/${conversation.id}/artifacts/${oldRendererFailureArtifact.id}/preview`
+      });
+      expect(oldRendererPreview.statusCode).toBe(200);
+      expect(oldRendererPreview.json()).toMatchObject({
+        status: "pending",
+        artifactId: oldRendererFailureArtifact.id,
+        queuedAt: expect.any(String)
       });
       const spreadsheetPending = await server.inject({
         method: "GET",
@@ -304,6 +433,11 @@ describe("artifact preview routes", () => {
       });
 
       expect(preview.statusCode).toBe(403);
+      const retry = await server.inject({
+        method: "POST",
+        url: `/api/conversations/${conversation.id}/artifacts/${artifact.id}/preview/retry`
+      });
+      expect(retry.statusCode).toBe(403);
     } finally {
       await server.close();
     }

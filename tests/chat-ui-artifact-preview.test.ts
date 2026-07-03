@@ -159,6 +159,27 @@ describe("chat UI artifact preview state", () => {
     ).toEqual({
       kind: "failed",
       errorCode: "conversion_failed",
+      retryable: false,
+      fallbackKind: undefined
+    });
+
+    expect(
+      createArtifactPreviewView({
+        artifact: officeArtifact,
+        preview: {
+          status: "failed",
+          artifactId: "art_docx",
+          errorCode: "conversion_failed",
+          retryable: true
+        },
+        refreshing: false,
+        apiError: false,
+        pendingAttempt: 0
+      })
+    ).toEqual({
+      kind: "failed",
+      errorCode: "conversion_failed",
+      retryable: true,
       fallbackKind: undefined
     });
 
