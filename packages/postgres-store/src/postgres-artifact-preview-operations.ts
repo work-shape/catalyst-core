@@ -1,4 +1,4 @@
-import { and, eq, sql as drizzleSql } from "drizzle-orm";
+import { and, eq, inArray, sql as drizzleSql } from "drizzle-orm";
 import {
   AppError,
   type ArtifactPreviewImagePageRef,
@@ -95,10 +95,31 @@ export async function enqueueArtifactPreviewJob(
         errorMessage: null,
         updatedAt: now
       })
-      .where(eq(artifactPreviewJobs.id, existing.id))
+      .where(
+        and(
+          eq(artifactPreviewJobs.id, existing.id),
+          inArray(artifactPreviewJobs.status, ["completed", "failed", "unsupported"])
+        )
+      )
       .returning();
     if (replaced) {
       return mapArtifactPreviewJob(replaced);
+    }
+    const [current] = await db
+      .select()
+      .from(artifactPreviewJobs)
+      .where(
+        and(
+          eq(artifactPreviewJobs.clientInstanceId, input.clientInstanceId),
+          eq(artifactPreviewJobs.sourceArtifactId, input.sourceArtifactId),
+          eq(artifactPreviewJobs.renderer, renderer),
+          eq(artifactPreviewJobs.rendererVersion, rendererVersion),
+          eq(artifactPreviewJobs.settingsHash, settingsHash)
+        )
+      )
+      .limit(1);
+    if (current) {
+      return mapArtifactPreviewJob(current);
     }
   }
   return mapArtifactPreviewJob(existing);

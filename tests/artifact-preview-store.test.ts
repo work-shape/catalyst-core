@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import postgres, { type Sql } from "postgres";
 import {
   asClientInstanceId,
   type ClientInstanceId,
@@ -80,6 +81,23 @@ describe("artifact preview store adapters", () => {
       await store.close();
     }
   });
+
+  postgresIt(
+    "does not clear a processing lease when retry replacement races with worker claim in Postgres",
+    async () => {
+      const store = await PostgresPlatformStore.connect({
+        databaseUrl: databaseUrl!,
+        runMigrations: true
+      });
+      const rawSql = postgres(databaseUrl!, { max: 5 });
+      try {
+        await expectPreviewJobRetryReplacementRaceContract(store, rawSql);
+      } finally {
+        await rawSql.end();
+        await store.close();
+      }
+    }
+  );
 });
 
 async function expectPreviewJobIdentityContract(store: PreviewJobIdentityStore): Promise<void> {
@@ -503,6 +521,113 @@ async function expectPreviewJobStaleRecoveryContract(
     status: "failed",
     errorCode: "stale_lease"
   });
+}
+
+async function expectPreviewJobRetryReplacementRaceContract(
+  store: PostgresPlatformStore,
+  rawSql: Sql
+): Promise<void> {
+  const fixture = await createPreviewFixture(store);
+  const retryInput = {
+    clientInstanceId: fixture.clientInstanceId,
+    conversationId: fixture.conversation.id,
+    sourceArtifactId: fixture.artifact.id,
+    sourceChecksum: fixture.artifact.checksum,
+    sourceMimeType: fixture.artifact.mimeType,
+    renderer: "preview-renderer-retry-race",
+    rendererVersion: "1.0.0",
+    settingsHash: "settings-retry-race"
+  };
+  const job = await store.enqueueArtifactPreviewJob({
+    ...retryInput,
+    queuedAt: "2026-07-01T12:30:00.000Z"
+  });
+  const claimed = await store.claimNextArtifactPreviewJob({
+    clientInstanceId: fixture.clientInstanceId,
+    workerId: "preview-worker-initial",
+    leaseToken: "lease-initial",
+    now: "2026-07-01T12:30:01.000Z",
+    leaseExpiresAt: "2026-07-01T12:31:00.000Z"
+  });
+  expect(claimed).toMatchObject({
+    id: job.id,
+    status: "processing",
+    leaseToken: "lease-initial",
+    attempts: 1
+  });
+  await store.failClaimedArtifactPreviewJob({
+    clientInstanceId: fixture.clientInstanceId,
+    jobId: job.id,
+    leaseToken: "lease-initial",
+    errorCode: "conversion_failed",
+    errorMessage: "Renderer crashed",
+    failedAt: "2026-07-01T12:30:02.000Z"
+  });
+
+  let replacement: ReturnType<PostgresPlatformStore["enqueueArtifactPreviewJob"]> | undefined;
+  await rawSql.begin(async (tx) => {
+    await tx`select id from artifact_preview_jobs where id = ${job.id} for update`;
+    replacement = store.enqueueArtifactPreviewJob({
+      ...retryInput,
+      queuedAt: "2026-07-01T12:30:03.000Z",
+      replaceTerminal: true
+    });
+    await waitForBlockedArtifactPreviewJobUpdate(rawSql);
+
+    await tx`
+      update artifact_preview_jobs
+      set status = 'processing',
+          attempts = attempts + 1,
+          next_attempt_at = null,
+          lease_owner_id = 'preview-worker-race',
+          lease_token = 'lease-race',
+          lease_expires_at = ${"2026-07-01T12:35:00.000Z"}::timestamptz,
+          error_code = null,
+          error_message = null,
+          updated_at = ${"2026-07-01T12:30:04.000Z"}::timestamptz
+      where id = ${job.id}
+    `;
+  });
+
+  await expect(replacement!).resolves.toMatchObject({
+    id: job.id,
+    status: "processing",
+    attempts: 2,
+    leaseOwnerId: "preview-worker-race",
+    leaseToken: "lease-race"
+  });
+  await expect(
+    store.getArtifactPreviewJob({
+      clientInstanceId: fixture.clientInstanceId,
+      sourceArtifactId: fixture.artifact.id,
+      renderer: retryInput.renderer,
+      rendererVersion: retryInput.rendererVersion,
+      settingsHash: retryInput.settingsHash
+    })
+  ).resolves.toMatchObject({
+    id: job.id,
+    status: "processing",
+    attempts: 2,
+    leaseOwnerId: "preview-worker-race",
+    leaseToken: "lease-race"
+  });
+}
+
+async function waitForBlockedArtifactPreviewJobUpdate(sql: Sql): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const blocked = await sql`
+      select 1
+      from pg_stat_activity
+      where wait_event_type = 'Lock'
+        and query ilike '%update%artifact_preview_jobs%'
+      limit 1
+    `;
+    if (blocked.length > 0) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("Timed out waiting for blocked artifact preview job update");
 }
 
 async function createPreviewFixture(store: PreviewJobIdentityStore): Promise<{

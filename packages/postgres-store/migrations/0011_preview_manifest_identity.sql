@@ -19,3 +19,12 @@ ALTER TABLE "artifact_preview_manifests"
     "renderer_version",
     "settings_hash"
   );
+
+ALTER TABLE "artifact_preview_manifests"
+  ALTER COLUMN "renderer" DROP DEFAULT;
+
+ALTER TABLE "artifact_preview_manifests"
+  ALTER COLUMN "renderer_version" DROP DEFAULT;
+
+ALTER TABLE "artifact_preview_manifests"
+  ALTER COLUMN "settings_hash" DROP DEFAULT;
