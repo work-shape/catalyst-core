@@ -192,9 +192,21 @@ export class WorkspaceCommandService {
     }
     const expectedOutputs = normalized.value.expectedOutputs;
     if (resultCommand.value.output) {
+      const existingWorkspacePaths =
+        expectedOutputs.length > 0
+          ? new Set(
+              (
+                await this.store.listWorkspaceFiles({
+                  clientInstanceId: context.clientInstanceId,
+                  workspaceId: workspace.value.id
+                })
+              ).map((file) => file.path)
+            )
+          : new Set<string>();
       const expectedValidation = validateExpectedOutputResult(
         expectedOutputs,
-        resultCommand.value.output
+        resultCommand.value.output,
+        existingWorkspacePaths
       );
       if (expectedValidation) {
         return expectedValidation;

@@ -98,11 +98,19 @@ export function commandArtifacts(command: WorkspaceCommand): ManagedArtifactRef[
 
 export function validateExpectedOutputResult(
   expectedOutputs: readonly WorkspaceExpectedOutput[],
-  output: WorkspaceCommandOutput
+  output: WorkspaceCommandOutput,
+  existingWorkspacePaths: ReadonlySet<string> = new Set()
 ): ToolHandlerResult<never> | undefined {
   for (const expected of expectedOutputs) {
     const changed = output.changedFiles.find((file) => file.path === expected.path);
-    if (!changed) {
+    const existsAsFile = Boolean(changed) || existingWorkspacePaths.has(expected.path);
+    const expectsDirectory = isDirectoryExpectedOutput(expected);
+    const existsAsDirectory = expectsDirectory
+      && (
+        workspacePathSetContainsChild(existingWorkspacePaths, expected.path)
+        || output.changedFiles.some((file) => isWorkspacePathChildOf(file.path, expected.path))
+      );
+    if (!existsAsFile && !existsAsDirectory) {
       return failed("handler_failed", "Expected workspace output was not produced", {
         path: expected.path
       });
@@ -117,6 +125,24 @@ export function validateExpectedOutputResult(
     }
   }
   return undefined;
+}
+
+function isDirectoryExpectedOutput(expected: WorkspaceExpectedOutput): boolean {
+  const kind = expected.kind?.toLowerCase();
+  return kind === "directory" || kind === "folder";
+}
+
+function workspacePathSetContainsChild(paths: ReadonlySet<string>, parent: string): boolean {
+  for (const candidate of paths) {
+    if (isWorkspacePathChildOf(candidate, parent)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isWorkspacePathChildOf(candidate: string, parent: string): boolean {
+  return candidate.startsWith(`${parent}/`);
 }
 
 export function normalizeWorkspaceFilePath(

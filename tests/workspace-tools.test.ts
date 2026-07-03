@@ -90,6 +90,20 @@ describe("workspace tools", () => {
       promotedArtifacts: []
     });
 
+    const longScript = await createWorkspaceHarness();
+    const longScriptCommand = [
+      "mkdir -p scripts",
+      "cat > scripts/build_artifact.py <<'PY'",
+      `# ${"realistic script body ".repeat(700)}`,
+      "print('ok')",
+      "PY"
+    ].join("\n");
+    expect(longScriptCommand.length).toBeGreaterThan(8192);
+    const longScriptQueued = await longScript.runTool("workspace.exec", {
+      command: longScriptCommand
+    });
+    expect(longScriptQueued.status).toBe("success");
+
     await expectToolFailure(
       "workspace.exec",
       { command: "   " },
@@ -439,6 +453,48 @@ describe("workspace tools", () => {
         throw new Error("Expected read_file to succeed");
       }
       expect(read.output.contentPreview).toBe("ready");
+
+      const verified = await harness.runTool("workspace.exec", {
+        command: "printf 'verified\\n'",
+        expectedOutputs: [{ path: "result.txt" }]
+      });
+      expect(verified.status).toBe("success");
+      if (verified.status !== "success") {
+        throw new Error("Expected unchanged expected output to satisfy postcondition");
+      }
+      expect(verified.output).toMatchObject({
+        status: "completed",
+        exitCode: 0,
+        stdoutPreview: "verified\n",
+        changedFiles: []
+      });
+
+      const directoryPostcondition = await harness.runTool("workspace.exec", {
+        command: "mkdir -p previews/deck && printf 'preview' > previews/deck/slide-1.png",
+        expectedOutputs: [{ path: "previews/deck", kind: "directory" }]
+      });
+      expect(directoryPostcondition.status).toBe("success");
+      if (directoryPostcondition.status !== "success") {
+        throw new Error("Expected directory expected output to satisfy postcondition");
+      }
+      expect(directoryPostcondition.output.changedFiles).toEqual([
+        expect.objectContaining({ path: "previews/deck/slide-1.png" })
+      ]);
+
+      const existingDirectoryPostcondition = await harness.runTool("workspace.exec", {
+        command: "printf 'directory still present\\n'",
+        expectedOutputs: [{ path: "previews/deck", kind: "directory" }]
+      });
+      expect(existingDirectoryPostcondition.status).toBe("success");
+      if (existingDirectoryPostcondition.status !== "success") {
+        throw new Error("Expected existing directory expected output to satisfy postcondition");
+      }
+      expect(existingDirectoryPostcondition.output).toMatchObject({
+        status: "completed",
+        exitCode: 0,
+        stdoutPreview: "directory still present\n",
+        changedFiles: []
+      });
     } finally {
       await worker.stop({ cancelActive: true, reason: "test complete" });
       await workerLoop;

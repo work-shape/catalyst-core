@@ -30,7 +30,7 @@ export const DEFAULT_LIMITS: WorkspaceCommandServiceLimits = {
   maxReadFileBytes: 128 * 1024,
   maxReadPreviewBytes: 16 * 1024,
   maxApplyPatchBytes: 256 * 1024,
-  maxCommandLength: 8192,
+  maxCommandLength: 64 * 1024,
   maxExpectedOutputs: 32,
   maxPreviewImages: 12,
   maxPathLength: 512,
@@ -286,6 +286,8 @@ export const workspaceExecInputJsonSchema: JsonObject = {
     expectedOutputs: {
       type: "array",
       maxItems: DEFAULT_LIMITS.maxExpectedOutputs,
+      description:
+        "Optional postconditions for files that should exist in /workspace after the command. Use kind \"directory\" only when checking that a rendered/generated directory contains tracked files. Use this for created outputs or verification steps that depend on an existing artifact. Set promote only when the command itself should promote the output.",
       items: {
         type: "object",
         additionalProperties: false,
