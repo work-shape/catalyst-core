@@ -68,6 +68,7 @@ describe("artifact preview runtime wiring", () => {
     const api = extractDockerStage(dockerfile, "api");
     const worker = extractDockerStage(dockerfile, "artifact-preview-worker");
     const ui = extractDockerStage(dockerfile, "ui");
+    const uiDev = extractDockerStage(dockerfile, "ui-dev");
 
     expect(deps).toContain("COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./");
     expect(deps).toContain("pnpm fetch --frozen-lockfile");
@@ -96,6 +97,10 @@ describe("artifact preview runtime wiring", () => {
     expect(worker).toContain("COPY --from=server-build /app ./");
     expect(worker).not.toContain("COPY --from=ui-build");
     expect(ui).toContain("COPY --from=ui-build");
+    expect(uiDev).toContain("ARG VITE_CHAT_API_URL");
+    expect(uiDev).toContain("ARG VITE_CHAT_API_PORT");
+    expect(uiDev).toContain("ENV VITE_CHAT_API_URL=${VITE_CHAT_API_URL}");
+    expect(uiDev).toContain("ENV VITE_CHAT_API_PORT=${VITE_CHAT_API_PORT}");
   });
 
   it("keeps native Office/PDF renderers isolated to the artifact-preview-worker image target", () => {
