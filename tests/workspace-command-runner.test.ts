@@ -107,6 +107,50 @@ describe("local workspace command runner", () => {
     });
   });
 
+  it("does not source persisted Bash login profiles before later workspace commands", async () => {
+    const harness = await createRunnerHarness();
+
+    const profile = await harness.exec({
+      command: [
+        "mkdir -p nested",
+        "cat > .bash_profile <<'BASH'",
+        "cd nested",
+        "export PROFILE_RAN=1",
+        "BASH"
+      ].join("\n")
+    });
+    expect(profile.status).toBe("success");
+    if (profile.status !== "success") {
+      throw new Error("Expected profile seed command to succeed");
+    }
+
+    const next = await harness.exec({
+      command: [
+        "test \"${PROFILE_RAN-unset}\" = \"unset\"",
+        "printf 'root\\n' > profile-check.txt"
+      ].join("\n")
+    });
+
+    expect(next.status).toBe("success");
+    if (next.status !== "success") {
+      throw new Error("Expected non-login Bash command to succeed");
+    }
+    expect(next.output).toMatchObject({
+      status: "completed",
+      changedFiles: [expect.objectContaining({ path: "profile-check.txt" })]
+    });
+    expect(next.output.changedFiles).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: "nested/profile-check.txt" })])
+    );
+
+    const check = await harness.service.readFile({ path: "profile-check.txt" }, harness.context);
+    expect(check.status).toBe("success");
+    if (check.status !== "success") {
+      throw new Error("Expected profile check file to be readable");
+    }
+    expect(check.output?.contentPreview).toBe("root\n");
+  });
+
   it("runs commands through an explicit local result source and persists files across disposable execution directories", async () => {
     const harness = await createRunnerHarness();
 

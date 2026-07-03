@@ -163,7 +163,7 @@ export function createDockerRunInvocation(
   )) {
     args.push("--env", `${key}=${value}`);
   }
-  args.push(options.image, DEFAULT_WORKSPACE_COMMAND_SHELL, "-lc", input.command.command);
+  args.push(options.image, DEFAULT_WORKSPACE_COMMAND_SHELL, "-c", input.command.command);
   return {
     args,
     containerName,

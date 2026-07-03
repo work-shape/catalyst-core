@@ -27,11 +27,11 @@ describe("workspace tools", () => {
     expect(execTool?.description).toContain("Files created or changed under /workspace persist");
     expect(execTool?.description).toContain("put `set -e` on its own line");
     expect(execTool?.description).toContain("`--view`, `--spec`, `--out`, `--range`, `--page`, or `--sheet`");
-    expect(execTool?.description).toContain("`cat` or `ls`");
+    expect(execTool?.description).toContain("`cat`, `ls`, or `printf`");
     expect(workspaceExecInputJsonSchema).toMatchObject({
       properties: {
         command: {
-          description: expect.stringContaining("Complete Bash command")
+          description: expect.stringMatching(/Complete Bash command[\s\S]*`cat`, `ls`, or `printf`/u)
         },
         cwd: {
           description: expect.stringContaining("does not persist")
@@ -135,6 +135,12 @@ describe("workspace tools", () => {
     );
     await expectToolFailure(
       "workspace.exec",
+      { command: "printf --spec report.json --out report.pdf" },
+      "validation_failed",
+      /cat, ls, or printf/u
+    );
+    await expectToolFailure(
+      "workspace.exec",
       { command: "pwd", cwd: "../outside" },
       "validation_failed",
       /traverse/u
@@ -195,6 +201,7 @@ describe("workspace tools", () => {
         "cat > scripts/notes.txt <<'EOF'",
         "cat --spec report.json --out report.pdf",
         "ls --range \"Summary!A1:H30\" source.xlsx",
+        "printf --spec report.json --out report.pdf",
         "EOF"
       ].join("\n")
     });

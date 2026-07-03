@@ -102,6 +102,39 @@ describe("execution workspaces config", () => {
     });
   });
 
+  it("keeps local workspace runner mode development-only when execution workspaces are enabled", () => {
+    const development = parseClientInstanceConfig(
+      baseConfig({
+        executionWorkspaces: {
+          enabled: true,
+          runner: {
+            mode: "local"
+          }
+        }
+      })
+    );
+
+    expect(development.executionWorkspaces.runner.mode).toBe("local");
+
+    expect(() =>
+      parseClientInstanceConfig(
+        baseConfig({
+          clientInstance: {
+            id: "config-test",
+            displayName: "Config Test",
+            environment: "staging"
+          },
+          executionWorkspaces: {
+            enabled: true,
+            runner: {
+              mode: "local"
+            }
+          }
+        })
+      )
+    ).toThrow(/Local execution workspace runner mode is only allowed for development/u);
+  });
+
   it("rejects unsafe timeout and heartbeat settings", () => {
     expectConfigIssue(
       () =>

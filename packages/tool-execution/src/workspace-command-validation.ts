@@ -1,7 +1,7 @@
 import { posix as path } from "node:path";
 import { validationFailed, type ValidationResult } from "./workspace-tool-results";
 
-const helperFlagSubstituteCommands = new Set(["cat", "ls"]);
+const helperFlagSubstituteCommands = new Set(["cat", "ls", "printf"]);
 const helperOnlyFlags = ["--view", "--spec", "--out", "--range", "--page", "--sheet"] as const;
 
 export function validateWorkspaceShellCommand(command: string): ValidationResult<void> {
@@ -224,7 +224,7 @@ function validateFileDisplayCommandLine(line: string): ValidationResult<void> {
     return { status: "success", value: undefined };
   }
   return validationFailed(
-    "workspace.exec received cat/ls with artifact helper flags. Run the artifact helper directly, or use ls -lh only for file size checks.",
+    "workspace.exec received cat, ls, or printf with artifact helper flags. Run the artifact helper directly, or use ls -lh only for file size checks.",
     {
       command: commandName,
       helperFlags: [...helperOnlyFlags],

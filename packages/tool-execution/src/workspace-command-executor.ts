@@ -42,7 +42,7 @@ export class LocalWorkspaceCommandProcessExecutor implements WorkspaceCommandPro
     await mkdir(input.tempDirectory, { recursive: true });
     return runSpawnedProcess({
       executable: this.options.shellPath ?? DEFAULT_WORKSPACE_COMMAND_SHELL,
-      args: ["-lc", input.command.command],
+      args: ["-c", input.command.command],
       cwd: input.cwd,
       env: input.env,
       timeoutSeconds: input.command.limits.timeoutSeconds,

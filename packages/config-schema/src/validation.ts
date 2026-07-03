@@ -14,6 +14,7 @@ export function parseClientInstanceConfig(input: unknown): ClientInstanceConfig 
   }
 
   assertProductionSafeAuthConfig(parsed.data);
+  assertExecutionWorkspaceRunnerBoundary(parsed.data);
   assertConfigReferences(parsed.data);
   assertSpendBudgetPricingCoverage(parsed.data);
   return parsed.data;
@@ -41,6 +42,23 @@ function assertProductionSafeAuthConfig(config: ClientInstanceConfig): void {
   throw new AppError(
     "VALIDATION_FAILED",
     `Standalone auth seed user '${seedUserWithDevelopmentPassword.email}' uses developmentPassword in production config`
+  );
+}
+
+function assertExecutionWorkspaceRunnerBoundary(config: ClientInstanceConfig): void {
+  if (
+    !config.executionWorkspaces.enabled ||
+    config.executionWorkspaces.runner.mode !== "local" ||
+    config.clientInstance.environment === "development"
+  ) {
+    return;
+  }
+
+  // The local runner executes in host temp directories for development and unit tests.
+  // Customer-facing enabled workspaces need the Docker runner's mounted /workspace contract.
+  throw new AppError(
+    "VALIDATION_FAILED",
+    "Local execution workspace runner mode is only allowed for development client instances"
   );
 }
 
