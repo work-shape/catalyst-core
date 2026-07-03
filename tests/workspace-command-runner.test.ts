@@ -227,7 +227,9 @@ describe("local workspace command runner", () => {
       exitCode: 0,
       changedFiles: []
     });
-    await expect(harness.byteStore.getObject(createdFile!.objectKey)).rejects.toThrow();
+    await expect(
+      harness.byteStore.getObject(createdFile!.objectKey).then((bytes) => new TextDecoder().decode(bytes))
+    ).resolves.toBe("alpha");
 
     const listedAfterDelete = await harness.store.listWorkspaceFiles({
       clientInstanceId: harness.clientInstanceId,
@@ -593,6 +595,66 @@ describe("local workspace command runner", () => {
       sourceChecksum: deckFile?.checksum,
       sourceMimeType: artifact?.mimeType
     });
+  });
+
+  it("keeps promoted artifact bytes when the source workspace path is later deleted", async () => {
+    const harness = await createRunnerHarness();
+
+    const created = await harness.exec({
+      command: "printf '%s' 'final-bytes' > final.pdf"
+    });
+    expect(created.status).toBe("success");
+    if (created.status !== "success") {
+      throw new Error("Expected create command to succeed");
+    }
+    const promoted = await harness.service.promoteArtifact(
+      {
+        path: "final.pdf",
+        kind: "document.pdf"
+      },
+      harness.context
+    );
+    expect(promoted.status).toBe("success");
+    if (promoted.status !== "success") {
+      throw new Error("Expected promote_artifact result");
+    }
+    const workspaceId = asExecutionWorkspaceId(created.output.workspaceId);
+    const artifactId = promoted.output.artifactId;
+    const artifact = await harness.store.getManagedArtifact({
+      clientInstanceId: harness.clientInstanceId,
+      artifactId: asManagedArtifactId(artifactId)
+    });
+    expect(artifact?.objectKey).toEqual(expect.any(String));
+
+    const deleted = await harness.exec({
+      command: "rm final.pdf"
+    });
+    expect(deleted.status).toBe("success");
+    if (deleted.status !== "success") {
+      throw new Error("Expected delete command to succeed");
+    }
+    expect(deleted.output).toMatchObject({
+      status: "completed",
+      exitCode: 0,
+      changedFiles: []
+    });
+
+    await expect(
+      harness.store.listWorkspaceFiles({
+        clientInstanceId: harness.clientInstanceId,
+        workspaceId
+      })
+    ).resolves.not.toEqual(expect.arrayContaining([expect.objectContaining({ path: "final.pdf" })]));
+    const later = await harness.exec({
+      command: "test ! -e final.pdf && printf ok > after-promoted-delete.txt"
+    });
+    expect(later.status).toBe("success");
+    if (later.status !== "success") {
+      throw new Error("Expected later hydration command to succeed");
+    }
+    await expect(
+      harness.byteStore.getObject(artifact!.objectKey).then((bytes) => new TextDecoder().decode(bytes))
+    ).resolves.toBe("final-bytes");
   });
 
   it("attaches derived image-page previews to promoted office outputs", async () => {

@@ -575,16 +575,13 @@ export class LocalWorkspaceCommandRunner {
       if (scannedPaths.has(path)) {
         continue;
       }
-      const deleted = await this.store.deleteWorkspaceFile({
+      await this.store.deleteWorkspaceFile({
         clientInstanceId: command.clientInstanceId,
         workspaceId: workspace.id,
         path,
         lastCommandId: command.id,
         deletedAt: this.now()
       });
-      if (deleted && this.byteStore.deleteObject) {
-        await this.byteStore.deleteObject(baseline.objectKey);
-      }
     }
     return changedFiles;
   }
