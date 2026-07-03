@@ -5,6 +5,57 @@ FROM node:24-bookworm-slim AS base
 WORKDIR /app
 RUN corepack enable
 
+FROM base AS workspace-artifact-runtime
+
+WORKDIR /workspace
+ENV NODE_ENV=production
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+RUN --mount=type=cache,id=vivd-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+  --mount=type=cache,id=vivd-apt-cache,target=/var/cache/apt,sharing=locked \
+  apt-get update \
+  && apt-get install -y --no-install-recommends \
+    bash \
+    ca-certificates \
+    curl \
+    file \
+    fontconfig \
+    fonts-dejavu \
+    fonts-liberation \
+    imagemagick \
+    jq \
+    libreoffice-calc-nogui \
+    libreoffice-impress-nogui \
+    libreoffice-writer-nogui \
+    poppler-utils \
+    python3 \
+    python3-pip \
+    unzip \
+    zip \
+  && python3 -m pip install --no-cache-dir --break-system-packages \
+    Pillow==10.4.0 \
+    XlsxWriter==3.2.0 \
+    openpyxl==3.1.5 \
+    pdfplumber==0.11.4 \
+    pypdf==4.3.1 \
+    python-docx==1.1.2 \
+    python-pptx==0.6.23 \
+    reportlab==4.2.2 \
+  && /bin/bash --version \
+  && python3 -c "import docx, openpyxl, pdfplumber, pptx, pypdf, reportlab, xlsxwriter; from PIL import Image" \
+  && node --version \
+  && soffice --headless --version \
+  && pdfinfo -v \
+  && pdftoppm -v \
+  && convert -version \
+  && rm -rf /var/lib/apt/lists/*
+
+FROM workspace-artifact-runtime AS workspace-command-runner
+
+WORKDIR /workspace
+CMD ["/bin/bash"]
+
 FROM base AS deps
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -63,24 +114,10 @@ FROM api AS workspace-command-worker
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 RUN docker --version
 
-FROM node:24-bookworm-slim AS artifact-preview-runtime
+FROM workspace-artifact-runtime AS artifact-preview-runtime
 
 WORKDIR /app
 ENV NODE_ENV=production
-
-RUN --mount=type=cache,id=vivd-apt-lists,target=/var/lib/apt/lists,sharing=locked \
-  --mount=type=cache,id=vivd-apt-cache,target=/var/cache/apt,sharing=locked \
-  apt-get update \
-  && apt-get install -y --no-install-recommends \
-    fonts-dejavu \
-    fonts-liberation \
-    libreoffice-impress-nogui \
-    libreoffice-writer-nogui \
-    poppler-utils \
-  && soffice --headless --version \
-  && pdfinfo -v \
-  && pdftoppm -v \
-  && rm -rf /var/lib/apt/lists/*
 
 FROM artifact-preview-runtime AS artifact-preview-worker
 

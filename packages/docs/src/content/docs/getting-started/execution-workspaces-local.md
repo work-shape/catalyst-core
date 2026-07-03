@@ -21,6 +21,7 @@ corepack pnpm@10.29.3 --dir platform typecheck
 corepack pnpm@10.29.3 --dir platform test -- tests/workspace-command-runner.test.ts
 corepack pnpm@10.29.3 --dir platform test -- tests/workspace-command-worker.test.ts
 corepack pnpm@10.29.3 --dir platform test -- tests/workspace-tools.test.ts
+CATALYST_WORKSPACE_RUNNER_IMAGE_SMOKE=1 corepack pnpm@10.29.3 --dir platform test -- tests/artifact-preview-runtime-wiring.test.ts
 ```
 
 For the demo client:

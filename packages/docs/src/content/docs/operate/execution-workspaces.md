@@ -15,6 +15,14 @@ The production-shaped deployment has these roles:
 - object storage: stores workspace file bytes and promoted artifact bytes
 - Postgres: stores workspace, file manifest, command queue, leases, audit events, and managed artifact records
 
+## Runner Image
+
+The platform Dockerfile exposes a `workspace-command-runner` target for the `executionWorkspaces.runner.image` container. It includes `/bin/bash`, Node, Python artifact libraries, LibreOffice, Poppler, fonts, ImageMagick, and common shell utilities so `workspace.exec` can run ordinary script-first DOCX, XLSX, PPTX, PDF, and image workflows without package installs at command time.
+
+The image target intentionally does not copy the chat API build or deployment secrets. The `workspace-command-worker` target remains the trusted control process image with Docker CLI access; it starts short-lived runner containers from the configured runner image.
+
+Capability-owned Catalyst helper CLIs such as `docx_render`, `xlsx_scan_errors`, `pptx_render`, `pdf_inspect`, and `promote_artifact` are packaged outside the OSS platform. Deployments that enable those premium helpers should layer the capabilities helper package onto the platform runner image and publish that layered image tag through `EXECUTION_WORKSPACE_RUNNER_IMAGE`.
+
 ## Operational Signals
 
 Workspace command lifecycle audit events use these event types:
