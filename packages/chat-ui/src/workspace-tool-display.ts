@@ -61,7 +61,7 @@ export function readWorkspaceToolErrorText(input: {
 }
 
 export function summarizeWorkspaceCommand(command: string): string | undefined {
-  const tokens = tokenizeCommand(command);
+  const tokens = tokenizeCommand(readCommandSummaryLine(command));
   if (tokens.length === 0) {
     return undefined;
   }
@@ -104,6 +104,19 @@ export function summarizeWorkspaceCommand(command: string): string | undefined {
   }
 
   return parts.join(" ");
+}
+
+function readCommandSummaryLine(command: string): string {
+  const lines = command
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("#"));
+  const firstOperationalLine = lines.find((line) => !isShellSetupLine(line));
+  return firstOperationalLine ?? command.trim();
+}
+
+function isShellSetupLine(line: string): boolean {
+  return /^set\s+[-+][A-Za-z0-9-]+(?:\s+[A-Za-z0-9-]+)*$/u.test(line);
 }
 
 function projectWorkspaceExec(args: unknown, result: unknown): WorkspaceToolDisplayProjection {
