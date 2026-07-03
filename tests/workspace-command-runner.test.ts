@@ -107,6 +107,41 @@ describe("local workspace command runner", () => {
     });
   });
 
+  it("provides standard project directories on every workspace.exec call", async () => {
+    const harness = await createRunnerHarness();
+
+    const fresh = await harness.exec({
+      command: "test -d scripts && test -d artifacts && test -d previews && test -d tmp && printf 'ready' > artifacts/report.txt"
+    });
+    expect(fresh.status).toBe("success");
+    if (fresh.status !== "success") {
+      throw new Error("Expected fresh workspace directories to exist");
+    }
+    expect(fresh.output).toMatchObject({
+      status: "completed",
+      exitCode: 0,
+      changedFiles: [expect.objectContaining({ path: "artifacts/report.txt" })]
+    });
+
+    const later = await harness.exec({
+      command: "test -d scripts && test -d artifacts && test -d previews && test -d tmp && printf 'again' > scripts/next.txt"
+    });
+    expect(later.status).toBe("success");
+    if (later.status !== "success") {
+      throw new Error("Expected standard workspace directories to be recreated");
+    }
+
+    const listed = await harness.service.listFiles({}, harness.context);
+    expect(listed.status).toBe("success");
+    if (listed.status !== "success") {
+      throw new Error("Expected workspace files to be listable");
+    }
+    expect(listed.output?.files.map((file) => file.path).sort()).toEqual([
+      "artifacts/report.txt",
+      "scripts/next.txt"
+    ]);
+  });
+
   it("does not source persisted Bash login profiles before later workspace commands", async () => {
     const harness = await createRunnerHarness();
 

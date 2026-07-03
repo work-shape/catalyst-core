@@ -61,6 +61,9 @@ export function readWorkspaceToolErrorText(input: {
 }
 
 export function summarizeWorkspaceCommand(command: string): string | undefined {
+  if (isMultilineCommand(command)) {
+    return "workspace script";
+  }
   const tokens = tokenizeCommand(readCommandSummaryLine(command));
   if (tokens.length === 0) {
     return undefined;
@@ -104,6 +107,12 @@ export function summarizeWorkspaceCommand(command: string): string | undefined {
   }
 
   return parts.join(" ");
+}
+
+function isMultilineCommand(command: string): boolean {
+  return command
+    .split(/\r?\n/u)
+    .filter((line) => line.trim().length > 0 && !line.trim().startsWith("#")).length > 1;
 }
 
 function readCommandSummaryLine(command: string): string {

@@ -13,12 +13,12 @@ describe("workspace tool display", () => {
       "pptx_render artifacts/deck.pptx --out previews/surprise_deck"
     ].join("\n");
 
-    expect(summarizeWorkspaceCommand(command)).toBe("mkdir -p scripts");
+    expect(summarizeWorkspaceCommand(command)).toBe("workspace script");
   });
 
   it("skips strict-mode setup lines when summarizing multiline scripts", () => {
     expect(summarizeWorkspaceCommand("set -e\npython scripts/build.py\npptx_inspect deck.pptx --view summary")).toBe(
-      "python"
+      "workspace script"
     );
   });
 });

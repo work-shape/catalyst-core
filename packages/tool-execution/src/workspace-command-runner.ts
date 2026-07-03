@@ -54,6 +54,7 @@ import {
 const DEFAULT_MAX_PATH_LENGTH = 512;
 const DEFAULT_LEASE_DURATION_MS = 10 * 60 * 1000;
 const DEFAULT_WORKSPACE_BYTES = 100 * 1024 * 1024;
+const STANDARD_WORKSPACE_DIRECTORIES = ["scripts", "artifacts", "previews", "tmp"] as const;
 
 export type WorkspaceCommandRunnerStore = Pick<
   PlatformStore,
@@ -361,6 +362,7 @@ export class LocalWorkspaceCommandRunner {
     const executionDirectory = await mkdtemp(join(this.tempRootDirectory, "catalyst-workspace-"));
     const workspaceDirectory = join(executionDirectory, "workspace");
     await mkdir(workspaceDirectory, { recursive: true });
+    await this.ensureStandardWorkspaceDirectories(workspaceDirectory);
     const files = await this.store.listWorkspaceFiles({
       clientInstanceId: command.clientInstanceId,
       workspaceId: workspace.id
@@ -402,6 +404,12 @@ export class LocalWorkspaceCommandRunner {
       workspaceDirectory,
       baselineFiles
     };
+  }
+
+  private async ensureStandardWorkspaceDirectories(workspaceDirectory: string): Promise<void> {
+    for (const directory of STANDARD_WORKSPACE_DIRECTORIES) {
+      await mkdir(join(workspaceDirectory, directory), { recursive: true });
+    }
   }
 
   private async runProcess(
