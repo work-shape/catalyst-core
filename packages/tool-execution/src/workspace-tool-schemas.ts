@@ -10,6 +10,7 @@ export interface WorkspaceCommandServiceLimits {
   maxWorkspaceBytes: number;
   maxReadFileBytes: number;
   maxReadPreviewBytes: number;
+  maxApplyPatchBytes: number;
   maxCommandLength: number;
   maxExpectedOutputs: number;
   maxPreviewImages: number;
@@ -28,6 +29,7 @@ export const DEFAULT_LIMITS: WorkspaceCommandServiceLimits = {
   maxWorkspaceBytes: 100 * 1024 * 1024,
   maxReadFileBytes: 128 * 1024,
   maxReadPreviewBytes: 16 * 1024,
+  maxApplyPatchBytes: 256 * 1024,
   maxCommandLength: 8192,
   maxExpectedOutputs: 32,
   maxPreviewImages: 12,
@@ -85,6 +87,12 @@ export const workspaceImportFilesInputSchema = z
 export const workspaceReadFileInputSchema = z
   .object({
     path: workspacePathSchema
+  })
+  .strict();
+
+export const workspaceApplyPatchInputSchema = z
+  .object({
+    patch: z.string().min(1).max(DEFAULT_LIMITS.maxApplyPatchBytes)
   })
   .strict();
 
@@ -185,6 +193,16 @@ export const workspaceReadFileOutputSchema = z.object({
   encoding: z.literal("utf-8"),
   contentPreview: z.string(),
   truncated: z.boolean()
+});
+
+export const workspaceApplyPatchOutputSchema = z.object({
+  workspaceId: z.string(),
+  changedFiles: z.array(changedFileOutputSchema),
+  deletedFiles: z.array(
+    z.object({
+      path: z.string()
+    })
+  )
 });
 
 export const workspacePromoteArtifactOutputSchema = z.object({
@@ -298,6 +316,21 @@ export const workspacePathInputJsonSchema: JsonObject = {
   additionalProperties: false,
   required: ["path"],
   properties: { path: { type: "string", maxLength: DEFAULT_LIMITS.maxPathLength } }
+};
+
+export const workspaceApplyPatchInputJsonSchema: JsonObject = {
+  type: "object",
+  additionalProperties: false,
+  required: ["patch"],
+  properties: {
+    patch: {
+      type: "string",
+      minLength: 1,
+      maxLength: DEFAULT_LIMITS.maxApplyPatchBytes,
+      description:
+        "Unified diff patch for workspace text files. Use paths relative to /workspace, /workspace/path, or git-style a/path and b/path headers. Supports create, update, and delete; binary files and renames are rejected."
+    }
+  }
 };
 
 export const workspacePromoteArtifactInputJsonSchema: JsonObject = {

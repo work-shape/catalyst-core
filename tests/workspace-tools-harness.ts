@@ -58,9 +58,9 @@ export async function createWorkspaceHarness(input: {
   const service = new WorkspaceCommandService({
     store: input.serviceStore?.(store) ?? store,
     objectStore,
+    fileStore: objectStore,
     ...(input.sourceFiles || input.artifactPreviewGenerator
       ? {
-          fileStore: objectStore,
           ...(input.artifactPreviewGenerator ? { artifactPreviewGenerator: input.artifactPreviewGenerator } : {}),
           ...(input.sourceFiles ? {
           sourceFileReader: {

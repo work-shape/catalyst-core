@@ -10,6 +10,7 @@ import {
 } from "@vivd-catalyst/core";
 import {
   LocalWorkspaceCommandRunner,
+  workspaceApplyPatchInputJsonSchema,
   shapeWorkspaceCommandOutput,
   workspaceExecInputJsonSchema,
   WorkspaceCommandWorker,
@@ -35,6 +36,18 @@ describe("workspace tools", () => {
         },
         cwd: {
           description: expect.stringContaining("does not persist")
+        }
+      }
+    });
+    const applyPatchTool = harness.tools.find((tool) => tool.name === "workspace.apply_patch");
+    expect(applyPatchTool?.description).toContain("unified diff patch");
+    expect(applyPatchTool?.description).toContain("/workspace");
+    expect(applyPatchTool?.description).toContain("create, update, and delete");
+    expect(applyPatchTool?.description).toContain("binary files");
+    expect(workspaceApplyPatchInputJsonSchema).toMatchObject({
+      properties: {
+        patch: {
+          description: expect.stringContaining("Unified diff patch")
         }
       }
     });
@@ -168,6 +181,34 @@ describe("workspace tools", () => {
       { path: "../secret.txt" },
       "validation_failed",
       /traverse/u
+    );
+    await expectToolFailure(
+      "workspace.apply_patch",
+      {
+        patch: [
+          "--- a/../secret.txt",
+          "+++ b/../secret.txt",
+          "@@ -1 +1 @@",
+          "-old",
+          "+new"
+        ].join("\n")
+      },
+      "validation_failed",
+      /traverse/u
+    );
+    await expectToolFailure(
+      "workspace.apply_patch",
+      {
+        patch: [
+          "--- /etc/passwd",
+          "+++ /etc/passwd",
+          "@@ -1 +1 @@",
+          "-old",
+          "+new"
+        ].join("\n")
+      },
+      "validation_failed",
+      /under \/workspace/u
     );
 
     const strictScript = await createWorkspaceHarness();
@@ -562,6 +603,173 @@ describe("workspace tools", () => {
     expect(oversized.status).toBe("failed");
     if (oversized.status === "failed") {
       expect(oversized.error.message).toMatch(/too large/u);
+    }
+  });
+
+  it("applies create, update, and delete patches through workspace storage", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "workspace-apply-patch-"));
+    const harness = await createWorkspaceHarness({
+      execResultWaitMs: 5000,
+      execResultPollIntervalMs: 10
+    });
+    const runner = new LocalWorkspaceCommandRunner({
+      store: harness.store,
+      byteStore: harness.objectStore,
+      tempRootDirectory: tempRoot
+    });
+    const worker = new WorkspaceCommandWorker({
+      clientInstanceId: harness.clientInstanceId,
+      store: harness.store,
+      runner,
+      pollIntervalMs: 10,
+      tempStateCleanupIntervalMs: 60_000
+    });
+    const workerLoop = worker.start();
+
+    try {
+      const created = await harness.runTool("workspace.apply_patch", {
+        patch: [
+          "--- /dev/null",
+          "+++ b/scripts/build.py",
+          "@@ -0,0 +1,2 @@",
+          "+print(\"hello\")",
+          "+VALUE = 1"
+        ].join("\n")
+      });
+      expect(created.status).toBe("success");
+      if (created.status !== "success") {
+        throw new Error("Expected apply_patch create to succeed");
+      }
+      expect(created.output).toMatchObject({
+        changedFiles: [
+          expect.objectContaining({
+            path: "scripts/build.py",
+            mimeType: "text/plain"
+          })
+        ],
+        deletedFiles: []
+      });
+      expect(JSON.stringify(created)).not.toContain("objectKey");
+
+      const updated = await harness.runTool("workspace.apply_patch", {
+        patch: [
+          "--- a/scripts/build.py",
+          "+++ b/scripts/build.py",
+          "@@ -1,2 +1,2 @@",
+          " print(\"hello\")",
+          "-VALUE = 1",
+          "+VALUE = 2"
+        ].join("\n")
+      });
+      expect(updated.status).toBe("success");
+
+      const execRead = await harness.runTool("workspace.exec", {
+        command: "cat scripts/build.py"
+      });
+      expect(execRead.status).toBe("success");
+      if (execRead.status !== "success") {
+        throw new Error("Expected exec to read patched file");
+      }
+      expect(execRead.output).toMatchObject({
+        status: "completed",
+        exitCode: 0,
+        stdoutPreview: "print(\"hello\")\nVALUE = 2\n"
+      });
+
+      const deleted = await harness.runTool("workspace.apply_patch", {
+        patch: [
+          "--- a/scripts/build.py",
+          "+++ /dev/null",
+          "@@ -1,2 +0,0 @@",
+          "-print(\"hello\")",
+          "-VALUE = 2"
+        ].join("\n")
+      });
+      expect(deleted.status).toBe("success");
+      if (deleted.status !== "success") {
+        throw new Error("Expected apply_patch delete to succeed");
+      }
+      expect(deleted.output).toMatchObject({
+        changedFiles: [],
+        deletedFiles: [{ path: "scripts/build.py" }]
+      });
+
+      const listed = await harness.runTool("workspace.list_files", {});
+      expect(listed.status).toBe("success");
+      if (listed.status !== "success") {
+        throw new Error("Expected list_files to succeed");
+      }
+      expect(listed.output.files).toEqual([]);
+
+      const readDeleted = await harness.runTool("workspace.read_file", {
+        path: "scripts/build.py"
+      });
+      expect(readDeleted.status).toBe("failed");
+      if (readDeleted.status === "failed") {
+        expect(readDeleted.error.message).toMatch(/not found/u);
+      }
+
+      const execList = await harness.runTool("workspace.exec", {
+        command: "find . -type f | sort"
+      });
+      expect(execList.status).toBe("success");
+      if (execList.status !== "success") {
+        throw new Error("Expected exec to run after delete");
+      }
+      expect(execList.output).toMatchObject({
+        status: "completed",
+        exitCode: 0,
+        stdoutPreview: ""
+      });
+    } finally {
+      await worker.stop({ cancelActive: true, reason: "test complete" });
+      await workerLoop;
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects apply_patch when target context is missing or binary", async () => {
+    const contextHarness = await createWorkspaceHarness();
+    await contextHarness.putWorkspaceFile({
+      path: "notes.txt",
+      objectKey: "workspace/notes.txt",
+      bytes: "one\ntwo\n",
+      mimeType: "text/plain"
+    });
+    const missingContext = await contextHarness.runTool("workspace.apply_patch", {
+      patch: [
+        "--- a/notes.txt",
+        "+++ b/notes.txt",
+        "@@ -1,2 +1,2 @@",
+        " one",
+        "-three",
+        "+four"
+      ].join("\n")
+    });
+    expect(missingContext.status).toBe("failed");
+    if (missingContext.status === "failed") {
+      expect(missingContext.error.message).toMatch(/context did not match/u);
+    }
+
+    const binaryHarness = await createWorkspaceHarness();
+    await binaryHarness.putWorkspaceFile({
+      path: "bin/blob.dat",
+      objectKey: "workspace/bin/blob.dat",
+      bytes: new Uint8Array([0, 1, 2, 3]),
+      mimeType: "application/octet-stream"
+    });
+    const binaryPatch = await binaryHarness.runTool("workspace.apply_patch", {
+      patch: [
+        "--- a/bin/blob.dat",
+        "+++ b/bin/blob.dat",
+        "@@ -1 +1 @@",
+        "-old",
+        "+new"
+      ].join("\n")
+    });
+    expect(binaryPatch.status).toBe("failed");
+    if (binaryPatch.status === "failed") {
+      expect(binaryPatch.error.message).toMatch(/binary|MIME/u);
     }
   });
 
