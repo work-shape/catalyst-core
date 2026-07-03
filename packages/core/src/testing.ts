@@ -624,6 +624,12 @@ export class InMemoryPlatformStore
     return this.executionWorkspaceStore.upsertWorkspaceFile(input);
   }
 
+  async deleteWorkspaceFile(
+    input: Parameters<ExecutionWorkspaceFileStore["deleteWorkspaceFile"]>[0]
+  ) {
+    return this.executionWorkspaceStore.deleteWorkspaceFile(input);
+  }
+
   async listWorkspaceFiles(
     input: Parameters<ExecutionWorkspaceFileStore["listWorkspaceFiles"]>[0]
   ) {

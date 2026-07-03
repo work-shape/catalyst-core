@@ -197,6 +197,66 @@ describe("local workspace command runner", () => {
     expect(notes.output?.contentPreview).toBe("alpha-beta");
   });
 
+  it("persists file deletion across later workspace hydrations", async () => {
+    const harness = await createRunnerHarness();
+
+    const created = await harness.exec({
+      command: "printf 'alpha' > notes.txt"
+    });
+    expect(created.status).toBe("success");
+    if (created.status !== "success") {
+      throw new Error("Expected create command to succeed");
+    }
+    const workspace = await harness.workspace();
+    const beforeDelete = await harness.store.listWorkspaceFiles({
+      clientInstanceId: harness.clientInstanceId,
+      workspaceId: workspace.id
+    });
+    const createdFile = beforeDelete.find((file) => file.path === "notes.txt");
+    expect(createdFile?.objectKey).toEqual(expect.any(String));
+
+    const deleted = await harness.exec({
+      command: "rm notes.txt"
+    });
+    expect(deleted.status).toBe("success");
+    if (deleted.status !== "success") {
+      throw new Error("Expected delete command to succeed");
+    }
+    expect(deleted.output).toMatchObject({
+      status: "completed",
+      exitCode: 0,
+      changedFiles: []
+    });
+    await expect(harness.byteStore.getObject(createdFile!.objectKey)).rejects.toThrow();
+
+    const listedAfterDelete = await harness.store.listWorkspaceFiles({
+      clientInstanceId: harness.clientInstanceId,
+      workspaceId: workspace.id
+    });
+    expect(listedAfterDelete.map((file) => file.path)).not.toContain("notes.txt");
+    await expect(
+      harness.service.readFile({ path: "notes.txt" }, harness.context)
+    ).resolves.toMatchObject({
+      status: "failed",
+      error: {
+        code: "handler_failed",
+        message: "Workspace file 'notes.txt' was not found"
+      }
+    });
+
+    const later = await harness.exec({
+      command: "test ! -e notes.txt && printf 'still gone' > after-delete.txt"
+    });
+    expect(later.status).toBe("success");
+    if (later.status !== "success") {
+      throw new Error("Expected later command to succeed");
+    }
+    expect(later.output).toMatchObject({
+      status: "completed",
+      changedFiles: [expect.objectContaining({ path: "after-delete.txt" })]
+    });
+  });
+
   it("syncs changed files when the shell command exits non-zero", async () => {
     const harness = await createRunnerHarness();
 

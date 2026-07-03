@@ -90,6 +90,7 @@ import {
   claimNextWorkspaceCommand as claimNextPostgresWorkspaceCommand,
   completeWorkspaceCommand as completePostgresWorkspaceCommand,
   countActiveWorkspaceCommands as countActivePostgresWorkspaceCommands,
+  deleteWorkspaceFile as deletePostgresWorkspaceFile,
   enqueueWorkspaceCommand as enqueuePostgresWorkspaceCommand,
   ensureExecutionWorkspace as ensurePostgresExecutionWorkspace,
   failWorkspaceCommand as failPostgresWorkspaceCommand,
@@ -356,6 +357,12 @@ export class PostgresPlatformStore
     input: Parameters<ExecutionWorkspaceFileStore["upsertWorkspaceFile"]>[0]
   ): Promise<WorkspaceFile> {
     return upsertPostgresWorkspaceFile(this.db, input);
+  }
+
+  async deleteWorkspaceFile(
+    input: Parameters<ExecutionWorkspaceFileStore["deleteWorkspaceFile"]>[0]
+  ): Promise<WorkspaceFile | undefined> {
+    return deletePostgresWorkspaceFile(this.db, input);
   }
 
   async listWorkspaceFiles(

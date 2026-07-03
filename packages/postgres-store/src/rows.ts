@@ -172,7 +172,8 @@ export function mapWorkspaceFile(row: WorkspaceFileRow | undefined): WorkspaceFi
     metadata: row.metadata,
     lastCommandId: row.lastCommandId ? asWorkspaceCommandId(row.lastCommandId) : undefined,
     createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString()
+    updatedAt: row.updatedAt.toISOString(),
+    deletedAt: row.deletedAt?.toISOString()
   };
 }
 

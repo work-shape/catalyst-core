@@ -118,9 +118,9 @@ describe("conversation retention expiration", () => {
           fileCount: 1,
           artifactCount: 1,
           workspaceCount: 1,
-          workspaceFileCount: 1,
+          workspaceFileCount: 6,
           workspaceCommandCount: 1,
-          workspaceObjectCount: 1
+          workspaceObjectCount: 6
         })
       });
       expect(startupAudit).not.toHaveProperty("actor");
@@ -444,6 +444,7 @@ async function createWorkspaceObjects(input: {
 }): Promise<{
   workspaceId: string;
   objectKey: string;
+  objectKeys: string[];
 }> {
   const workspace = await input.store.ensureExecutionWorkspace({
     clientInstanceId: input.clientInstanceId,
@@ -451,19 +452,82 @@ async function createWorkspaceObjects(input: {
     ownerUserId: input.conversation.ownerUserId,
     now: "2023-12-31T23:00:00.000Z"
   });
-  const objectKey = `execution-workspaces/${input.conversation.id}/internal-notes.txt`;
-  const bytes = new TextEncoder().encode("internal workspace notes");
-  await input.byteStore.putObject({ key: objectKey, body: bytes });
+  const files = [
+    {
+      path: "scripts/build-report.py",
+      body: "print('retained script')\n",
+      mimeType: "text/x-python",
+      metadata: { source: "workspace.exec", role: "script" }
+    },
+    {
+      path: "previews/page-1.png",
+      body: "png bytes",
+      mimeType: "image/png",
+      metadata: { source: "workspace.exec", role: "preview" }
+    },
+    {
+      path: "tmp/session-cache.json",
+      body: "{\"cached\":true}\n",
+      mimeType: "application/json",
+      metadata: { source: "workspace.exec", role: "temporary" }
+    },
+    {
+      path: "artifacts/unpromoted.csv",
+      body: "value\n42\n",
+      mimeType: "text/csv",
+      metadata: { source: "workspace.exec", role: "unpromoted_artifact" }
+    },
+    {
+      path: "artifacts/final-report.pdf",
+      body: "%PDF promoted placeholder\n",
+      mimeType: "application/pdf",
+      metadata: {
+        source: "workspace.exec",
+        promotedArtifacts: [{ artifactId: "artifact_retention_seed", kind: "document.pdf" }]
+      }
+    }
+  ];
+  const objectKeys: string[] = [];
+  for (const file of files) {
+    const objectKey = `execution-workspaces/${input.conversation.id}/${file.path}`;
+    const bytes = new TextEncoder().encode(file.body);
+    objectKeys.push(objectKey);
+    await input.byteStore.putObject({ key: objectKey, body: bytes });
+    await input.store.upsertWorkspaceFile({
+      clientInstanceId: input.clientInstanceId,
+      workspaceId: workspace.id,
+      path: file.path,
+      objectKey,
+      byteSize: bytes.byteLength,
+      checksum: `sha256:${file.path}`,
+      mimeType: file.mimeType,
+      metadata: file.metadata,
+      lastCommandId: asWorkspaceCommandId("wcmd_retention_seed"),
+      updatedAt: "2023-12-31T23:01:00.000Z"
+    });
+  }
+  const deletedObjectKey = `execution-workspaces/${input.conversation.id}/tmp/deleted-before-retention.txt`;
+  const deletedBytes = new TextEncoder().encode("deleted before retention");
+  objectKeys.push(deletedObjectKey);
+  await input.byteStore.putObject({ key: deletedObjectKey, body: deletedBytes });
   await input.store.upsertWorkspaceFile({
     clientInstanceId: input.clientInstanceId,
     workspaceId: workspace.id,
-    path: "internal-notes.txt",
-    objectKey,
-    byteSize: bytes.byteLength,
-    checksum: "sha256:internal-notes",
+    path: "tmp/deleted-before-retention.txt",
+    objectKey: deletedObjectKey,
+    byteSize: deletedBytes.byteLength,
+    checksum: "sha256:deleted-before-retention",
     mimeType: "text/plain",
+    metadata: { source: "workspace.exec", role: "temporary" },
     lastCommandId: asWorkspaceCommandId("wcmd_retention_seed"),
-    updatedAt: "2023-12-31T23:01:00.000Z"
+    updatedAt: "2023-12-31T23:01:30.000Z"
+  });
+  await input.store.deleteWorkspaceFile({
+    clientInstanceId: input.clientInstanceId,
+    workspaceId: workspace.id,
+    path: "tmp/deleted-before-retention.txt",
+    lastCommandId: asWorkspaceCommandId("wcmd_retention_delete"),
+    deletedAt: "2023-12-31T23:01:45.000Z"
   });
   await input.store.enqueueWorkspaceCommand({
     clientInstanceId: input.clientInstanceId,
@@ -481,7 +545,8 @@ async function createWorkspaceObjects(input: {
   });
   return {
     workspaceId: workspace.id,
-    objectKey
+    objectKey: objectKeys[0]!,
+    objectKeys
   };
 }
 
@@ -571,14 +636,21 @@ async function expectDeletedWorkspaceObjects(
   objects: {
     workspaceId: string;
     objectKey: string;
+    objectKeys: string[];
   }
 ): Promise<void> {
   await expect(store.getExecutionWorkspace({
     clientInstanceId,
     workspaceId: asExecutionWorkspaceId(objects.workspaceId)
   })).resolves.toBeUndefined();
-  expect(byteStore.has(objects.objectKey)).toBe(false);
-  expect(byteStore.deletedKeys).toContain(objects.objectKey);
+  await expect(store.listWorkspaceFiles({
+    clientInstanceId,
+    workspaceId: asExecutionWorkspaceId(objects.workspaceId)
+  })).resolves.toEqual([]);
+  for (const objectKey of objects.objectKeys) {
+    expect(byteStore.has(objectKey)).toBe(false);
+  }
+  expect(byteStore.deletedKeys).toEqual(expect.arrayContaining(objects.objectKeys));
 }
 
 async function waitFor(assertion: () => Promise<void>): Promise<void> {

@@ -85,6 +85,13 @@
       "when": 1783041227000,
       "tag": "0011_preview_manifest_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1783075734034,
+      "tag": "0012_hard_nick_fury",
+      "breakpoints": true
     }
   ]
 }

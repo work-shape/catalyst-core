@@ -7,6 +7,7 @@ import {
   type ClientInstanceId,
   type CompleteWorkspaceCommandInput,
   type ConversationId,
+  type DeleteWorkspaceFileInput,
   type EnqueueWorkspaceCommandInput,
   type ExecutionWorkspaceCleanupStore,
   type ExecutionWorkspaceCleanupTarget,
@@ -131,6 +132,7 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
     const now = input.updatedAt ?? new Date().toISOString();
     const key = workspaceFileKey(input.workspaceId, input.path);
     const existing = this.workspaceFiles.get(key);
+    const metadata = workspaceFileMetadataForUpsert(input.metadata ?? {}, existing, input.objectKey);
     const file: WorkspaceFile = {
       workspaceId: input.workspaceId,
       clientInstanceId: input.clientInstanceId,
@@ -140,10 +142,11 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
       byteSize: input.byteSize,
       checksum: input.checksum,
       mimeType: input.mimeType,
-      metadata: input.metadata ?? {},
+      metadata,
       lastCommandId: input.lastCommandId,
       createdAt: existing?.createdAt ?? now,
-      updatedAt: now
+      updatedAt: now,
+      deletedAt: undefined
     };
     this.workspaceFiles.set(key, file);
     this.executionWorkspaces.set(workspace.id, {
@@ -153,6 +156,29 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
     return file;
   }
 
+  async deleteWorkspaceFile(input: DeleteWorkspaceFileInput): Promise<WorkspaceFile | undefined> {
+    const workspace = await this.requireActiveWorkspace(input.clientInstanceId, input.workspaceId);
+    const key = workspaceFileKey(input.workspaceId, input.path);
+    const existing = this.workspaceFiles.get(key);
+    if (!existing || existing.clientInstanceId !== input.clientInstanceId || existing.deletedAt) {
+      return undefined;
+    }
+    const deletedAt = input.deletedAt ?? new Date().toISOString();
+    const deleted: WorkspaceFile = {
+      ...existing,
+      metadata: workspaceFileMetadataWithRetainedObjectKey(existing.metadata, existing.objectKey),
+      lastCommandId: input.lastCommandId ?? existing.lastCommandId,
+      updatedAt: deletedAt,
+      deletedAt
+    };
+    this.workspaceFiles.set(key, deleted);
+    this.executionWorkspaces.set(workspace.id, {
+      ...workspace,
+      updatedAt: deletedAt
+    });
+    return deleted;
+  }
+
   async listWorkspaceFiles(input: {
     clientInstanceId: ClientInstanceId;
     workspaceId: ExecutionWorkspaceId;
@@ -160,7 +186,9 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
     return [...this.workspaceFiles.values()]
       .filter(
         (file) =>
-          file.clientInstanceId === input.clientInstanceId && file.workspaceId === input.workspaceId
+          file.clientInstanceId === input.clientInstanceId &&
+          file.workspaceId === input.workspaceId &&
+          !file.deletedAt
       )
       .sort((left, right) => left.path.localeCompare(right.path));
   }
@@ -619,7 +647,7 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
       workspaceCount: workspaceIds.size,
       fileCount: files.length,
       commandCount: commands.length,
-      fileObjectKeys: uniqueStrings(files.map((file) => file.objectKey))
+      fileObjectKeys: uniqueStrings(files.flatMap(workspaceFileObjectKeysForDeletion))
     };
   }
 }
@@ -658,4 +686,50 @@ function assertWorkspaceCommandScopeCapacity(
 
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function workspaceFileMetadataForUpsert(
+  metadata: WorkspaceFile["metadata"],
+  existing: WorkspaceFile | undefined,
+  nextObjectKey: string
+): WorkspaceFile["metadata"] {
+  if (!existing || existing.objectKey === nextObjectKey) {
+    return preserveRetainedObjectKeys(metadata, existing?.metadata);
+  }
+  return workspaceFileMetadataWithRetainedObjectKey(
+    preserveRetainedObjectKeys(metadata, existing.metadata),
+    existing.objectKey
+  );
+}
+
+function workspaceFileMetadataWithRetainedObjectKey(
+  metadata: WorkspaceFile["metadata"],
+  objectKey: string
+): WorkspaceFile["metadata"] {
+  return {
+    ...metadata,
+    retainedObjectKeys: uniqueStrings([...retainedObjectKeys(metadata), objectKey])
+  };
+}
+
+function preserveRetainedObjectKeys(
+  metadata: WorkspaceFile["metadata"],
+  existingMetadata: WorkspaceFile["metadata"] | undefined
+): WorkspaceFile["metadata"] {
+  const retained = retainedObjectKeys(existingMetadata);
+  return retained.length > 0
+    ? {
+        ...metadata,
+        retainedObjectKeys: uniqueStrings([...retainedObjectKeys(metadata), ...retained])
+      }
+    : metadata;
+}
+
+function workspaceFileObjectKeysForDeletion(file: WorkspaceFile): string[] {
+  return [file.objectKey, ...retainedObjectKeys(file.metadata)];
+}
+
+function retainedObjectKeys(metadata: WorkspaceFile["metadata"] | undefined): string[] {
+  const value = metadata?.retainedObjectKeys;
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }

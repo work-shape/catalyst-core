@@ -37,6 +37,7 @@ export interface WorkspaceFile {
   lastCommandId?: WorkspaceCommandId;
   createdAt: ISODateString;
   updatedAt: ISODateString;
+  deletedAt?: ISODateString;
 }
 
 export type WorkspaceCommandStatus =
@@ -160,6 +161,14 @@ export interface UpsertWorkspaceFileInput {
   metadata?: JsonObject;
   lastCommandId?: WorkspaceCommandId;
   updatedAt?: ISODateString;
+}
+
+export interface DeleteWorkspaceFileInput {
+  clientInstanceId: ClientInstanceId;
+  workspaceId: ExecutionWorkspaceId;
+  path: string;
+  lastCommandId?: WorkspaceCommandId;
+  deletedAt?: ISODateString;
 }
 
 export interface EnqueueWorkspaceCommandInput {
@@ -294,6 +303,7 @@ export interface ExecutionWorkspaceMetadataStore {
 
 export interface ExecutionWorkspaceFileStore {
   upsertWorkspaceFile(input: UpsertWorkspaceFileInput): Promise<WorkspaceFile>;
+  deleteWorkspaceFile(input: DeleteWorkspaceFileInput): Promise<WorkspaceFile | undefined>;
   listWorkspaceFiles(input: {
     clientInstanceId: ClientInstanceId;
     workspaceId: ExecutionWorkspaceId;

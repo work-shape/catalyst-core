@@ -108,7 +108,10 @@ describePostgres("Postgres execution workspace store", () => {
       objectKey: "workspace/updated.csv",
       byteSize: 21,
       checksum: "sha256:updated",
-      metadata: { source: "rerun" }
+      metadata: {
+        source: "rerun",
+        retainedObjectKeys: ["workspace/first.csv"]
+      }
     });
     expect(updated.createdAt).toBe(first.createdAt);
 
@@ -130,6 +133,95 @@ describePostgres("Postgres execution workspace store", () => {
       { path: "notes.txt" },
       { path: "reports/analysis.csv", objectKey: "workspace/updated.csv" }
     ]);
+  });
+
+  it("tombstones deleted workspace files and keeps superseded object keys cleanup-visible", async () => {
+    const fixture = await createWorkspaceFixture(store);
+
+    await store.upsertWorkspaceFile({
+      clientInstanceId: fixture.clientInstanceId,
+      workspaceId: fixture.workspace.id,
+      path: "tmp/scratch.txt",
+      objectKey: "workspace/scratch-v1.txt",
+      byteSize: 7,
+      checksum: "sha256:scratch-v1",
+      updatedAt: "2026-06-29T10:12:00.000Z"
+    });
+    await store.upsertWorkspaceFile({
+      clientInstanceId: fixture.clientInstanceId,
+      workspaceId: fixture.workspace.id,
+      path: "tmp/scratch.txt",
+      objectKey: "workspace/scratch-v2.txt",
+      byteSize: 8,
+      checksum: "sha256:scratch-v2",
+      updatedAt: "2026-06-29T10:13:00.000Z"
+    });
+
+    const deleted = await store.deleteWorkspaceFile({
+      clientInstanceId: fixture.clientInstanceId,
+      workspaceId: fixture.workspace.id,
+      path: "tmp/scratch.txt",
+      deletedAt: "2026-06-29T10:14:00.000Z"
+    });
+
+    expect(deleted).toMatchObject({
+      path: "tmp/scratch.txt",
+      objectKey: "workspace/scratch-v2.txt",
+      deletedAt: "2026-06-29T10:14:00.000Z",
+      metadata: {
+        retainedObjectKeys: ["workspace/scratch-v1.txt", "workspace/scratch-v2.txt"]
+      }
+    });
+    await expect(
+      store.listWorkspaceFiles({
+        clientInstanceId: fixture.clientInstanceId,
+        workspaceId: fixture.workspace.id
+      })
+    ).resolves.toEqual([]);
+    await expect(
+      store.listExecutionWorkspaceObjectsForDeletion({
+        clientInstanceId: fixture.clientInstanceId,
+        conversationId: fixture.conversation.id
+      })
+    ).resolves.toMatchObject({
+      workspaceCount: 1,
+      fileCount: 1,
+      fileObjectKeys: expect.arrayContaining([
+        "workspace/scratch-v1.txt",
+        "workspace/scratch-v2.txt"
+      ])
+    });
+
+    const recreated = await store.upsertWorkspaceFile({
+      clientInstanceId: fixture.clientInstanceId,
+      workspaceId: fixture.workspace.id,
+      path: "tmp/scratch.txt",
+      objectKey: "workspace/scratch-v3.txt",
+      byteSize: 9,
+      checksum: "sha256:scratch-v3",
+      updatedAt: "2026-06-29T10:15:00.000Z"
+    });
+
+    expect(recreated).toMatchObject({
+      path: "tmp/scratch.txt",
+      objectKey: "workspace/scratch-v3.txt",
+      deletedAt: undefined,
+      metadata: {
+        retainedObjectKeys: ["workspace/scratch-v1.txt", "workspace/scratch-v2.txt"]
+      }
+    });
+    await expect(
+      store.listExecutionWorkspaceObjectsForDeletion({
+        clientInstanceId: fixture.clientInstanceId,
+        conversationId: fixture.conversation.id
+      })
+    ).resolves.toMatchObject({
+      fileObjectKeys: expect.arrayContaining([
+        "workspace/scratch-v1.txt",
+        "workspace/scratch-v2.txt",
+        "workspace/scratch-v3.txt"
+      ])
+    });
   });
 
   it("enqueues, claims, completes, and reads a command through separate store connections", async () => {

@@ -60,6 +60,7 @@ export type WorkspaceCommandRunnerStore = Pick<
   | "getExecutionWorkspace"
   | "listWorkspaceFiles"
   | "upsertWorkspaceFile"
+  | "deleteWorkspaceFile"
   | "claimNextWorkspaceCommand"
   | "completeWorkspaceCommand"
   | "failWorkspaceCommand"
@@ -532,6 +533,7 @@ export class LocalWorkspaceCommandRunner {
     scannedFiles: ScannedWorkspaceFile[]
   ): Promise<WorkspaceCommandChangedFile[]> {
     const changedFiles: WorkspaceCommandChangedFile[] = [];
+    const scannedPaths = new Set(scannedFiles.map((file) => file.path));
     for (const scanned of scannedFiles) {
       const baseline = baselineFiles.get(scanned.path);
       if (baseline?.checksum === scanned.checksum && baseline.byteSize === scanned.byteSize) {
@@ -568,6 +570,21 @@ export class LocalWorkspaceCommandRunner {
         objectKey: stored.objectKey,
         mimeType: scanned.mimeType
       });
+    }
+    for (const [path, baseline] of baselineFiles) {
+      if (scannedPaths.has(path)) {
+        continue;
+      }
+      const deleted = await this.store.deleteWorkspaceFile({
+        clientInstanceId: command.clientInstanceId,
+        workspaceId: workspace.id,
+        path,
+        lastCommandId: command.id,
+        deletedAt: this.now()
+      });
+      if (deleted && this.byteStore.deleteObject) {
+        await this.byteStore.deleteObject(baseline.objectKey);
+      }
     }
     return changedFiles;
   }

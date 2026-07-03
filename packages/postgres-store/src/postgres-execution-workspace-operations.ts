@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, ne, sql as drizzleSql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, sql as drizzleSql } from "drizzle-orm";
 import {
   AppError,
   type ActiveWorkspaceCommandCounts,
@@ -8,6 +8,7 @@ import {
   type CompleteWorkspaceCommandInput,
   type CountActiveWorkspaceCommandsInput,
   type ConversationId,
+  type DeleteWorkspaceFileInput,
   type EnqueueWorkspaceCommandInput,
   type EnsureExecutionWorkspaceInput,
   type ExecutionWorkspace,
@@ -129,6 +130,22 @@ export async function upsertWorkspaceFile(
       workspaceId: input.workspaceId
     });
     const updatedAt = input.updatedAt ? new Date(input.updatedAt) : new Date();
+    const [existing] = await tx
+      .select()
+      .from(executionWorkspaceFiles)
+      .where(
+        and(
+          eq(executionWorkspaceFiles.clientInstanceId, input.clientInstanceId),
+          eq(executionWorkspaceFiles.workspaceId, input.workspaceId),
+          eq(executionWorkspaceFiles.path, input.path)
+        )
+      )
+      .limit(1);
+    const metadata = workspaceFileMetadataForUpsert(
+      input.metadata ?? {},
+      existing ? mapWorkspaceFile(existing) : undefined,
+      input.objectKey
+    );
     const [row] = await tx
       .insert(executionWorkspaceFiles)
       .values({
@@ -140,8 +157,9 @@ export async function upsertWorkspaceFile(
         byteSize: input.byteSize,
         checksum: input.checksum,
         mimeType: input.mimeType ?? null,
-        metadata: input.metadata ?? {},
+        metadata,
         lastCommandId: input.lastCommandId ?? null,
+        deletedAt: null,
         createdAt: updatedAt,
         updatedAt
       })
@@ -152,8 +170,9 @@ export async function upsertWorkspaceFile(
           byteSize: input.byteSize,
           checksum: input.checksum,
           mimeType: input.mimeType ?? null,
-          metadata: input.metadata ?? {},
+          metadata,
           lastCommandId: input.lastCommandId ?? null,
+          deletedAt: null,
           updatedAt
         }
       })
@@ -162,6 +181,63 @@ export async function upsertWorkspaceFile(
     await tx
       .update(executionWorkspaces)
       .set({ updatedAt })
+      .where(eq(executionWorkspaces.id, input.workspaceId));
+    return mapWorkspaceFile(row);
+  });
+}
+
+export async function deleteWorkspaceFile(
+  db: PostgresDatabase,
+  input: DeleteWorkspaceFileInput
+): Promise<WorkspaceFile | undefined> {
+  return db.transaction(async (tx) => {
+    await requireActiveWorkspace(tx, {
+      clientInstanceId: input.clientInstanceId,
+      workspaceId: input.workspaceId
+    });
+    const deletedAt = input.deletedAt ? new Date(input.deletedAt) : new Date();
+    const [existing] = await tx
+      .select()
+      .from(executionWorkspaceFiles)
+      .where(
+        and(
+          eq(executionWorkspaceFiles.clientInstanceId, input.clientInstanceId),
+          eq(executionWorkspaceFiles.workspaceId, input.workspaceId),
+          eq(executionWorkspaceFiles.path, input.path),
+          isNull(executionWorkspaceFiles.deletedAt)
+        )
+      )
+      .limit(1);
+    if (!existing) {
+      return undefined;
+    }
+    const existingFile = mapWorkspaceFile(existing);
+    const [row] = await tx
+      .update(executionWorkspaceFiles)
+      .set({
+        metadata: workspaceFileMetadataWithRetainedObjectKey(
+          existingFile.metadata,
+          existingFile.objectKey
+        ),
+        lastCommandId: input.lastCommandId ?? existingFile.lastCommandId ?? null,
+        deletedAt,
+        updatedAt: deletedAt
+      })
+      .where(
+        and(
+          eq(executionWorkspaceFiles.clientInstanceId, input.clientInstanceId),
+          eq(executionWorkspaceFiles.workspaceId, input.workspaceId),
+          eq(executionWorkspaceFiles.path, input.path),
+          isNull(executionWorkspaceFiles.deletedAt)
+        )
+      )
+      .returning();
+    if (!row) {
+      return undefined;
+    }
+    await tx
+      .update(executionWorkspaces)
+      .set({ updatedAt: deletedAt })
       .where(eq(executionWorkspaces.id, input.workspaceId));
     return mapWorkspaceFile(row);
   });
@@ -180,7 +256,8 @@ export async function listWorkspaceFiles(
     .where(
       and(
         eq(executionWorkspaceFiles.clientInstanceId, input.clientInstanceId),
-        eq(executionWorkspaceFiles.workspaceId, input.workspaceId)
+        eq(executionWorkspaceFiles.workspaceId, input.workspaceId),
+        isNull(executionWorkspaceFiles.deletedAt)
       )
     )
     .orderBy(asc(executionWorkspaceFiles.path));
@@ -806,7 +883,10 @@ async function collectExecutionWorkspaceDeletionSummary(
       )
     );
   const fileRows = await db
-    .select({ objectKey: executionWorkspaceFiles.objectKey })
+    .select({
+      objectKey: executionWorkspaceFiles.objectKey,
+      metadata: executionWorkspaceFiles.metadata
+    })
     .from(executionWorkspaceFiles)
     .where(
       and(
@@ -825,10 +905,54 @@ async function collectExecutionWorkspaceDeletionSummary(
     workspaceCount: workspaceRows.length,
     fileCount: fileRows.length,
     commandCount: Number(commandRows[0]?.count ?? 0),
-    fileObjectKeys: uniqueStrings(fileRows.map((file) => file.objectKey))
+    fileObjectKeys: uniqueStrings(
+      fileRows.flatMap((file) => [file.objectKey, ...retainedObjectKeys(file.metadata)])
+    )
   };
 }
 
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function workspaceFileMetadataForUpsert(
+  metadata: WorkspaceFile["metadata"],
+  existing: WorkspaceFile | undefined,
+  nextObjectKey: string
+): WorkspaceFile["metadata"] {
+  if (!existing || existing.objectKey === nextObjectKey) {
+    return preserveRetainedObjectKeys(metadata, existing?.metadata);
+  }
+  return workspaceFileMetadataWithRetainedObjectKey(
+    preserveRetainedObjectKeys(metadata, existing.metadata),
+    existing.objectKey
+  );
+}
+
+function workspaceFileMetadataWithRetainedObjectKey(
+  metadata: WorkspaceFile["metadata"],
+  objectKey: string
+): WorkspaceFile["metadata"] {
+  return {
+    ...metadata,
+    retainedObjectKeys: uniqueStrings([...retainedObjectKeys(metadata), objectKey])
+  };
+}
+
+function preserveRetainedObjectKeys(
+  metadata: WorkspaceFile["metadata"],
+  existingMetadata: WorkspaceFile["metadata"] | undefined
+): WorkspaceFile["metadata"] {
+  const retained = retainedObjectKeys(existingMetadata);
+  return retained.length > 0
+    ? {
+        ...metadata,
+        retainedObjectKeys: uniqueStrings([...retainedObjectKeys(metadata), ...retained])
+      }
+    : metadata;
+}
+
+function retainedObjectKeys(metadata: WorkspaceFile["metadata"] | undefined): string[] {
+  const value = metadata?.retainedObjectKeys;
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
