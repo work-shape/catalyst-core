@@ -107,9 +107,20 @@ Use `privateOutput` for data the platform may store, hydrate, or render but must
 
 Use `display` for typed UI outputs.
 
-Built-in HTML displays provide Tailwind CSS and Lucide icons inside the rendered iframe. For
-model-authored or private hydrated HTML, use Tailwind utility classes and Lucide markers such
-as `<i data-lucide="chart-column"></i>` instead of bundling those libraries into every result.
+Built-in HTML displays provide Tailwind CSS, Lucide icons, external HTTPS chart scripts, and
+runtime theme variables inside the rendered iframe. For model-authored or private hydrated
+HTML, use Tailwind utility classes and Lucide markers such as
+`<i data-lucide="chart-column"></i>` instead of bundling those libraries into every result.
+For canvas or Chart.js rendering, read colors from `window.vivdCatalystTheme.chartColors()`
+or CSS variables such as `var(--foreground)`, `var(--border)`, and `var(--primary)`.
+Do not hard-code white cards, gray/slate text, fixed dark backgrounds, or `!important`
+color overrides unless a color is genuinely data-semantic.
+
+By default, `show_view` allows external HTTPS script URLs so common charting CDNs can load.
+A client instance can tighten this with `show_view.config.allowedScriptSrc: []` or a specific
+list of HTTPS origins/paths, while `["*"]` keeps the default all-HTTPS script behavior.
+The tool owns the rendered CSP and strips model-supplied CSP tags; `connect-src` and external
+image loading remain blocked.
 
 When `display` needs a polished visual treatment, register a client-owned widget for the
 returned `display.kind`. Concrete widgets belong in `clients/*/widgets` for reference

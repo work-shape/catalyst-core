@@ -95,6 +95,9 @@ tools:
     enabled: true
   - name: show_view
     enabled: true
+    config:
+      allowedScriptSrc:
+        - "*"
   - name: demo.workflow_summary
     enabled: true
     config:
