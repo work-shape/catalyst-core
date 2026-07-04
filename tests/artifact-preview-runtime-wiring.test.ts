@@ -113,6 +113,7 @@ describe("artifact preview runtime wiring", () => {
     expect(serverBuild.indexOf('pnpm --filter "${APP_PACKAGE}^..." build')).toBeLessThan(
       serverBuild.indexOf('pnpm --filter "${APP_PACKAGE}" build:server')
     );
+    expect(serverBuild).toContain('if [ -n "${ARTIFACT_PREVIEW_WORKER_ENTRY}" ]');
     expect(serverBuild).toContain('test -f "${ARTIFACT_PREVIEW_WORKER_ENTRY}"');
     expect(serverBuild).toContain(
       'pnpm --filter "${APP_PACKAGE}" exec node --input-type=module'
@@ -123,12 +124,18 @@ describe("artifact preview runtime wiring", () => {
     expect(serverBuild).toContain("await import('@vivd-catalyst/client-assembly')");
     expect(serverBuild).toContain("runClientInstanceArtifactPreviewWorker");
     expect(serverBuild).not.toContain("build:ui");
+    expect(uiBuild).toContain('pnpm --filter "${UI_PACKAGE}^..." build');
     expect(uiBuild).toContain('pnpm --filter "${UI_PACKAGE}" build:ui');
+    expect(uiBuild.indexOf('pnpm --filter "${UI_PACKAGE}^..." build')).toBeLessThan(
+      uiBuild.indexOf('pnpm --filter "${UI_PACKAGE}" build:ui')
+    );
 
     expect(api).toContain("COPY --from=server-build /app ./");
     expect(runner).not.toContain("COPY --from=server-build");
     expect(runner).not.toContain("COPY --from=ui-build");
     expect(worker).toContain("COPY --from=server-build /app ./");
+    expect(worker).toContain('test -n "${ARTIFACT_PREVIEW_WORKER_ENTRY}"');
+    expect(worker).toContain('test -f "${ARTIFACT_PREVIEW_WORKER_ENTRY}"');
     expect(worker).not.toContain("COPY --from=ui-build");
     expect(ui).toContain("COPY --from=ui-build");
     expect(uiDev).toContain("ARG VITE_CHAT_API_URL");

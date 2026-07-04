@@ -77,12 +77,14 @@ RUN --mount=type=cache,id=vivd-pnpm-store,target=/root/.local/share/pnpm/store \
 FROM deps AS server-build
 
 ARG APP_PACKAGE
-ARG ARTIFACT_PREVIEW_WORKER_ENTRY
+ARG ARTIFACT_PREVIEW_WORKER_ENTRY=""
 
 RUN pnpm --filter "${APP_PACKAGE}^..." build \
   && pnpm --filter "${APP_PACKAGE}" build:server \
-  && test -f "${ARTIFACT_PREVIEW_WORKER_ENTRY}" \
-  && pnpm --filter "${APP_PACKAGE}" exec node --input-type=module -e "const module = await import('@vivd-catalyst/client-assembly'); if (typeof module.runClientInstanceArtifactPreviewWorker !== 'function') throw new Error('artifact preview worker runtime export is missing');"
+  && if [ -n "${ARTIFACT_PREVIEW_WORKER_ENTRY}" ]; then \
+    test -f "${ARTIFACT_PREVIEW_WORKER_ENTRY}" \
+    && pnpm --filter "${APP_PACKAGE}" exec node --input-type=module -e "const module = await import('@vivd-catalyst/client-assembly'); if (typeof module.runClientInstanceArtifactPreviewWorker !== 'function') throw new Error('artifact preview worker runtime export is missing');"; \
+  fi
 
 FROM deps AS ui-build
 
@@ -93,7 +95,8 @@ ARG VITE_CHAT_API_PORT
 ENV VITE_CHAT_API_URL=${VITE_CHAT_API_URL}
 ENV VITE_CHAT_API_PORT=${VITE_CHAT_API_PORT}
 
-RUN pnpm --filter "${UI_PACKAGE}" build:ui
+RUN pnpm --filter "${UI_PACKAGE}^..." build \
+  && pnpm --filter "${UI_PACKAGE}" build:ui
 
 FROM node:24-bookworm-slim AS api
 
@@ -125,6 +128,8 @@ ARG ARTIFACT_PREVIEW_WORKER_ENTRY
 ENV ARTIFACT_PREVIEW_WORKER_ENTRY=${ARTIFACT_PREVIEW_WORKER_ENTRY}
 
 COPY --from=server-build /app ./
+RUN test -n "${ARTIFACT_PREVIEW_WORKER_ENTRY}" \
+  && test -f "${ARTIFACT_PREVIEW_WORKER_ENTRY}"
 
 CMD ["sh", "-c", "node ${ARTIFACT_PREVIEW_WORKER_ENTRY}"]
 
