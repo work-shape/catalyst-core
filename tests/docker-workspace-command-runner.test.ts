@@ -110,13 +110,13 @@ describe("docker workspace command runner", () => {
     expect(serializedArgs).not.toContain("/var/run/docker.sock");
   });
 
-  it("defaults Docker runner containers to a 2 GiB memory limit", () => {
+  it("defaults Docker runner containers to a 4 GiB memory limit", () => {
     const invocation = createDockerRunInvocation(dockerProcessInput(), {
       image: "runner:test"
     });
 
     const memoryArgIndex = invocation.args.indexOf("--memory");
-    expect(invocation.args[memoryArgIndex + 1]).toBe(String(2 * 1024 * 1024 * 1024));
+    expect(invocation.args[memoryArgIndex + 1]).toBe(String(4 * 1024 * 1024 * 1024));
   });
 
   it("hands execution to Docker, captures output, and syncs files through the normal workspace lifecycle", async () => {

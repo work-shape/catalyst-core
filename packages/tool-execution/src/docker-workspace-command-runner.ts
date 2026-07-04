@@ -10,7 +10,7 @@ import {
 } from "./workspace-command-executor";
 
 const SANDBOX_ENV_KEYS = new Set(["HOME", "PATH", "TMPDIR", "WORKSPACE_DIR"]);
-const DEFAULT_DOCKER_WORKSPACE_COMMAND_MEMORY_BYTES = 2 * 1024 * 1024 * 1024;
+const DEFAULT_DOCKER_WORKSPACE_COMMAND_MEMORY_BYTES = 4 * 1024 * 1024 * 1024;
 
 export interface DockerWorkspaceCommandProcessExecutorOptions {
   image: string;

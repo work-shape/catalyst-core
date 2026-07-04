@@ -17,7 +17,7 @@ import type {
 } from "@vivd-catalyst/core";
 import { localizationConfigSchema, localizedStringSchema } from "./localization";
 
-const DEFAULT_EXECUTION_WORKSPACE_MEMORY_BYTES = 2 * 1024 * 1024 * 1024;
+const DEFAULT_EXECUTION_WORKSPACE_MEMORY_BYTES = 4 * 1024 * 1024 * 1024;
 
 export const userIdentitySchema = z.object({
   id: z.string().min(1).default("dev-user"),

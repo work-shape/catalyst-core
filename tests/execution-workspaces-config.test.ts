@@ -13,7 +13,7 @@ describe("execution workspaces config", () => {
         networkMode: "none",
         readOnlyRootFilesystem: true,
         cpuCount: 1,
-        memoryBytes: 2 * 1024 * 1024 * 1024,
+        memoryBytes: 4 * 1024 * 1024 * 1024,
         pidsLimit: 128
       },
       command: {
