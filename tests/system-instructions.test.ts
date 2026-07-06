@@ -20,6 +20,8 @@ describe("system instructions", () => {
     expect(content).toContain(CATALYST_INTERNAL_AGENT_PROMPT);
     expect(content).toContain("Keep the user informed with concise public text before tool calls");
     expect(content).toContain("import it by fileId with workspace.import_files");
+    expect(content).toContain("use the exact importedFiles[].path returned by the tool");
+    expect(content).toContain("never invent a shorter filename");
     expect(content).toContain("Promote only final user-facing workspace outputs");
     expect(content).toContain("without pasting shell logs unless the user asks for details");
     expect(content).toContain("- User selected language: German (locale: de).");

@@ -261,7 +261,7 @@ function createWorkspaceSourceAttachmentManifest(
           readable: false,
           modelContext: {
             section: "Attached source artifacts",
-            text: `- ${attachment.filename} (fileId: ${attachment.fileId}, status: ready, size: ${attachment.byteSize} bytes, format: ${attachment.format ?? "file"}). Use workspace.import_files({ "files": [{ "fileId": "${attachment.fileId}" }] }) before workspace.exec when you need to inspect, convert, or edit this file in the execution workspace.`
+            text: `- ${attachment.filename} (fileId: ${attachment.fileId}, status: ready, size: ${attachment.byteSize} bytes, format: ${attachment.format ?? "file"}). Use workspace.import_files({ "files": [{ "fileId": "${attachment.fileId}", "path": "${recommendedWorkspaceImportPath(attachment)}" }] }) before workspace.exec when you need to inspect, convert, or edit this file in the execution workspace. If you omit path, use the returned importedFiles[].path exactly; do not guess a shorter filename.`
           },
           metadata: {
             fileId: attachment.fileId,
@@ -533,6 +533,11 @@ function checksumBytes(bytes: Uint8Array): string {
 
 function extensionFromFilename(filename: string): string | undefined {
   return filename.trim().toLowerCase().match(/\.([a-z0-9]+)$/u)?.[1];
+}
+
+function recommendedWorkspaceImportPath(attachment: ConversationAttachment): string {
+  const extension = attachment.format ?? extensionFromFilename(attachment.filename) ?? "file";
+  return `inputs/${attachment.fileId}.${extension}`;
 }
 
 function safeObjectFilename(filename: string): string {

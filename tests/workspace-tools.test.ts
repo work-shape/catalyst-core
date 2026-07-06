@@ -13,6 +13,7 @@ import {
   workspaceApplyPatchInputJsonSchema,
   shapeWorkspaceCommandOutput,
   workspaceExecInputJsonSchema,
+  workspaceImportFilesInputJsonSchema,
   workspacePreviewImagesInputJsonSchema,
   WorkspaceCommandWorker,
   type WorkspaceCommandTelemetry
@@ -48,6 +49,10 @@ describe("workspace tools", () => {
     expect(applyPatchTool?.description).toContain("binary files");
     const previewTool = harness.tools.find((tool) => tool.name === "workspace.preview_images");
     expect(previewTool?.description).toContain("/workspace/previews");
+    const importTool = harness.tools.find((tool) => tool.name === "workspace.import_files");
+    expect(importTool?.description).toContain("Pass path when you want a simple stable workspace filename");
+    expect(importTool?.description).toContain("use the returned importedFiles[].path exactly");
+    expect(importTool?.description).toContain("do not invent shortened filenames");
     expect(workspacePreviewImagesInputJsonSchema).toMatchObject({
       anyOf: expect.arrayContaining([
         { required: ["artifactId"] },
@@ -59,6 +64,19 @@ describe("workspace tools", () => {
       properties: {
         patch: {
           description: expect.stringContaining("Unified diff patch")
+        }
+      }
+    });
+    expect(workspaceImportFilesInputJsonSchema).toMatchObject({
+      properties: {
+        files: {
+          items: {
+            properties: {
+              path: {
+                description: expect.stringContaining("use the returned importedFiles[].path exactly")
+              }
+            }
+          }
         }
       }
     });

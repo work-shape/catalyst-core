@@ -1360,7 +1360,7 @@ export function createWorkspaceToolDefinitions(
     defineTool({
       name: "workspace.import_files",
       description:
-        "Copy uploaded managed conversation files into the execution workspace by fileId. This uses managed file access and never exposes object-storage credentials.",
+        "Copy uploaded managed conversation files into the execution workspace by fileId. Pass path when you want a simple stable workspace filename for later commands. If path is omitted, use the returned importedFiles[].path exactly in workspace.exec; do not invent shortened filenames. This uses managed file access and never exposes object-storage credentials.",
       inputSchema: workspaceImportFilesInputSchema,
       outputSchema: workspaceImportFilesOutputSchema,
       inputJsonSchema: workspaceImportFilesInputJsonSchema,

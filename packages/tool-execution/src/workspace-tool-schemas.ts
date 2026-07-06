@@ -323,7 +323,12 @@ export const workspaceImportFilesInputJsonSchema: JsonObject = {
         required: ["fileId"],
         properties: {
           fileId: { type: "string", minLength: 1, maxLength: 255 },
-          path: { type: "string", maxLength: DEFAULT_LIMITS.maxPathLength }
+          path: {
+            type: "string",
+            maxLength: DEFAULT_LIMITS.maxPathLength,
+            description:
+              "Optional workspace-relative destination path. Use this to choose a simple stable name before workspace.exec; if omitted, use the returned importedFiles[].path exactly."
+          }
         }
       }
     }
