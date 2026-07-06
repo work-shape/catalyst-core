@@ -50,8 +50,8 @@ describe("workspace tools", () => {
     const previewTool = harness.tools.find((tool) => tool.name === "workspace.preview_images");
     expect(previewTool?.description).toContain("/workspace/previews");
     const importTool = harness.tools.find((tool) => tool.name === "workspace.import_files");
-    expect(importTool?.description).toContain("Pass path when you want a simple stable workspace filename");
-    expect(importTool?.description).toContain("use the returned importedFiles[].path exactly");
+    expect(importTool?.description).toContain("returns a shell-safe workspace path in importedFiles[].path");
+    expect(importTool?.description).toContain("use that exact path in workspace.exec");
     expect(importTool?.description).toContain("do not invent shortened filenames");
     expect(workspacePreviewImagesInputJsonSchema).toMatchObject({
       anyOf: expect.arrayContaining([
@@ -73,7 +73,7 @@ describe("workspace tools", () => {
           items: {
             properties: {
               path: {
-                description: expect.stringContaining("use the returned importedFiles[].path exactly")
+                description: expect.stringContaining("Usually omit this")
               }
             }
           }
@@ -941,6 +941,45 @@ describe("workspace tools", () => {
     ]);
     const storedBytes = await harness.objectStore.getObject(workspaceFiles[0]!.objectKey);
     expect(new TextDecoder().decode(storedBytes)).toBe("name,total\nAda,42\n");
+  });
+
+  it("imports uploaded managed files to shell-safe default paths", async () => {
+    const sourceBytes = encode("pdf bytes");
+    const harness = await createWorkspaceHarness({
+      sourceFiles: {
+        file_boardingpass_pdf: {
+          filename: "Boardingpass - YCX5CS.pdf",
+          mimeType: "application/pdf",
+          bytes: sourceBytes
+        }
+      }
+    });
+
+    const imported = await harness.runTool("workspace.import_files", {
+      files: [{ fileId: "file_boardingpass_pdf" }]
+    });
+
+    expect(imported.status).toBe("success");
+    if (imported.status !== "success") {
+      throw new Error("Expected import_files to succeed");
+    }
+    expect(imported.output.importedFiles[0]).toMatchObject({
+      fileId: "file_boardingpass_pdf",
+      path: "inputs/Boardingpass-YCX5CS.pdf",
+      filename: "Boardingpass - YCX5CS.pdf",
+      mimeType: "application/pdf"
+    });
+
+    const workspaceFiles = await harness.store.listWorkspaceFiles({
+      clientInstanceId: harness.clientInstanceId,
+      workspaceId: asExecutionWorkspaceId(imported.output.workspaceId)
+    });
+    expect(workspaceFiles[0]).toMatchObject({
+      path: "inputs/Boardingpass-YCX5CS.pdf",
+      metadata: expect.objectContaining({
+        filename: "Boardingpass - YCX5CS.pdf"
+      })
+    });
   });
 
   it("projects workspace command changed files without raw object storage keys", async () => {

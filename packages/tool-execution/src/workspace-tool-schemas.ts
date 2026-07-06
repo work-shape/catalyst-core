@@ -327,7 +327,7 @@ export const workspaceImportFilesInputJsonSchema: JsonObject = {
             type: "string",
             maxLength: DEFAULT_LIMITS.maxPathLength,
             description:
-              "Optional workspace-relative destination path. Use this to choose a simple stable name before workspace.exec; if omitted, use the returned importedFiles[].path exactly."
+              "Optional workspace-relative destination path override. Usually omit this and use the returned importedFiles[].path exactly in workspace.exec."
           }
         }
       }

@@ -255,7 +255,24 @@ export function createWorkspaceChecksum(bytes: Uint8Array): string {
 export function workspacePathFromFilename(filename: string, fileId: string): string {
   const normalizedFilename = filename.replaceAll("\\", "/");
   const basename = path.basename(normalizedFilename).trim();
-  return basename.length > 0 && basename !== "." && basename !== ".." ? basename : `${fileId}.bin`;
+  const extension = safeFileExtension(basename);
+  const rawStem = extension ? basename.slice(0, -extension.length) : basename;
+  const stem = safeWorkspaceFilenameStem(rawStem) || safeWorkspaceFilenameStem(fileId) || "file";
+  return `inputs/${stem}${extension}`;
+}
+
+function safeFileExtension(filename: string): string {
+  const extension = path.extname(filename).toLowerCase();
+  return /^\.[a-z0-9]{1,16}$/u.test(extension) ? extension : "";
+}
+
+function safeWorkspaceFilenameStem(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replaceAll(/[^A-Za-z0-9._-]+/gu, "-")
+    .replaceAll(/-+/gu, "-")
+    .replaceAll(/^[.-]+|[.-]+$/gu, "")
+    .slice(0, 160);
 }
 
 export function validationFailed(message: string, details?: JsonObject): ValidationResult<never> {

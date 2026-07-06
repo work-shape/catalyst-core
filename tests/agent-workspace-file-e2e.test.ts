@@ -122,6 +122,16 @@ describe("agent workspace file e2e", () => {
             const importOutput = toolOutputText(request.messages, "call_import");
             expect(importOutput).toContain("status-deck.txt");
             expect(importOutput).not.toContain("execution-workspaces/");
+            const imported = JSON.parse(importOutput) as {
+              importedFiles?: Array<{ path?: string }>;
+            };
+            const importedPath = imported.importedFiles?.[0]?.path;
+            expect(importedPath).toBe("inputs/status-deck.txt");
+            const script = [
+              "const fs=require('node:fs');",
+              `const text=fs.readFileSync(${JSON.stringify(importedPath)},'utf8');`,
+              "console.log(JSON.stringify({title:text.split('\\n')[0], containsStatus:text.includes('Status update')}));"
+            ].join(" ");
             sawImportOutput = true;
             return {
               text: "I will read the imported workspace file.",
@@ -130,8 +140,7 @@ describe("agent workspace file e2e", () => {
                   toolCallId: "call_read",
                   toolName: "workspace.exec",
                   input: {
-                    command:
-                      "node -e \"const fs=require('node:fs'); const text=fs.readFileSync('status-deck.txt','utf8'); console.log(JSON.stringify({title:text.split('\\\\n')[0], containsStatus:text.includes('Status update')}));\""
+                    command: `node -e ${JSON.stringify(script)}`
                   }
                 }
               ],

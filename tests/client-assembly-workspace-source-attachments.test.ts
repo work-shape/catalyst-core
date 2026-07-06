@@ -85,13 +85,10 @@ describe("execution workspace source attachments", () => {
         }
       });
       expect(manifest.attachments[0]?.modelContext?.text).toContain(
-        `"path": "inputs/${attachment.fileId}.xlsx"`
-      );
-      expect(manifest.attachments[0]?.modelContext?.text).toContain(
         "use the returned importedFiles[].path exactly"
       );
       expect(manifest.attachments[0]?.modelContext?.text).toContain(
-        "do not guess a shorter filename"
+        "do not guess or shorten filenames"
       );
       expect(JSON.stringify(manifest)).not.toContain("execution-workspace-source-files");
 
