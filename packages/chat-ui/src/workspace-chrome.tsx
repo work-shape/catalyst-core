@@ -35,6 +35,7 @@ export function SessionCheckPanel({
 export function WorkspaceChrome({
   agents,
   displayPanelOpen,
+  environment,
   sidebarOpen,
   selectedAgentName,
   themeMode,
@@ -44,6 +45,7 @@ export function WorkspaceChrome({
 }: {
   agents: SafeConfig["agents"];
   displayPanelOpen: boolean;
+  environment: SafeConfig["clientInstance"]["environment"] | undefined;
   sidebarOpen: boolean;
   selectedAgentName: string | undefined;
   themeMode: ResolvedThemeMode;
@@ -52,12 +54,23 @@ export function WorkspaceChrome({
   onToggleTheme: () => void;
 }) {
   const { t } = useTranslation();
+  const isStaging = environment === "staging";
 
   return (
     <>
+      {isStaging ? (
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 z-[60] grid h-6 place-items-center border-b border-amber-600/35 bg-amber-400 text-[11px] font-semibold tracking-[0.08em] text-amber-950"
+          role="status"
+        >
+          {t("testEnvironment")}
+        </div>
+      ) : null}
+
       <div
         className={cn(
-          "pointer-events-none absolute left-4 top-3 z-50 flex min-w-0 items-center gap-2 transition-[left] duration-200",
+          "pointer-events-none absolute left-4 z-50 flex min-w-0 items-center gap-2 transition-[left,top] duration-200",
+          isStaging ? "top-9" : "top-3",
           sidebarOpen && "max-md:hidden md:left-[19rem]"
         )}
       >
@@ -89,7 +102,8 @@ export function WorkspaceChrome({
 
       <div
         className={cn(
-          "pointer-events-none absolute right-4 top-3 z-50 flex items-center gap-2",
+          "pointer-events-none absolute right-4 z-50 flex items-center gap-2 transition-[top] duration-200",
+          isStaging ? "top-9" : "top-3",
           displayPanelOpen && "lg:hidden"
         )}
       >

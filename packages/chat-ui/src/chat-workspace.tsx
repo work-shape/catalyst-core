@@ -86,6 +86,7 @@ function ChatWorkspaceContent({
     />
   );
   const chat = model.selectedChat;
+  const isStaging = model.config.config?.clientInstance.environment === "staging";
 
   return (
     <TranslationProvider locale={model.config.activeLocale}>
@@ -93,6 +94,7 @@ function ChatWorkspaceContent({
         className={cn(
           "relative grid h-dvh w-full min-h-0 overflow-hidden bg-background text-foreground transition-colors md:grid-rows-[minmax(0,1fr)] max-md:grid-cols-1",
           model.chrome.sidebarOpen ? "md:grid-cols-[18rem_minmax(0,1fr)]" : "md:grid-cols-[minmax(0,1fr)]",
+          isStaging && "pt-6",
           model.config.resolvedThemeMode === "dark" && "dark",
           className
         )}
@@ -108,7 +110,12 @@ function ChatWorkspaceContent({
         ) : null}
 
         {model.chrome.sidebarOpen ? (
-          <div className="fixed inset-y-0 left-0 z-40 w-[min(18rem,calc(100vw-2rem))] min-w-0 translate-x-0 transition-transform duration-200 md:static md:z-auto md:w-auto md:translate-x-0">
+          <div
+            className={cn(
+              "fixed bottom-0 left-0 z-40 w-[min(18rem,calc(100vw-2rem))] min-w-0 translate-x-0 transition-[top,transform] duration-200 md:static md:z-auto md:w-auto md:translate-x-0",
+              isStaging ? "top-6" : "top-0"
+            )}
+          >
             <WorkspaceRail
               config={model.config.config}
               conversations={model.conversationRail.conversations}
@@ -130,6 +137,7 @@ function ChatWorkspaceContent({
         <WorkspaceChrome
           agents={model.config.config?.agents ?? []}
           displayPanelOpen={model.toolDisplay.open}
+          environment={model.config.config?.clientInstance.environment}
           sidebarOpen={model.chrome.sidebarOpen}
           selectedAgentName={model.config.activeAgentName}
           themeMode={model.config.resolvedThemeMode}
