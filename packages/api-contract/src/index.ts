@@ -67,6 +67,7 @@ export const apiUserSchema = z.object({
   emailVerified: z.boolean().optional(),
   roles: z.array(z.string()),
   permissionRefs: z.array(z.string()),
+  permissions: z.array(z.string()),
   clientInstanceId: z.string(),
   authSource: z.string(),
   principal: authPrincipalSchema.optional(),
@@ -673,6 +674,7 @@ export const issueSessionTokenRequestSchema = z.object({
   emailVerified: z.boolean().optional(),
   roles: z.array(z.string()).optional(),
   permissionRefs: z.array(z.string()).optional(),
+  permissions: z.array(z.string()).optional(),
   correlationId: z.string().optional(),
   scopes: z.array(chatSessionAuthScopeSchema).optional(),
   delegatedActor: delegatedActorSchema.optional()
@@ -705,6 +707,7 @@ export const administeredUserSchema = z.object({
   email: z.string().optional(),
   roles: z.array(z.string()),
   permissionRefs: z.array(z.string()),
+  permissions: z.array(z.string()),
   status: userStatusSchema,
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -721,6 +724,7 @@ export const createAdministeredUserRequestSchema = z.object({
   email: z.string().email().optional(),
   roles: z.array(z.string()).optional(),
   permissionRefs: z.array(z.string()).optional(),
+  permissions: z.array(z.string()).optional(),
   status: userStatusSchema.optional(),
   passwordSignIn: administeredUserPasswordSignInRequestSchema.optional()
 });
@@ -730,6 +734,7 @@ export const updateAdministeredUserRequestSchema = z.object({
   email: z.string().email().nullable().optional(),
   roles: z.array(z.string()).optional(),
   permissionRefs: z.array(z.string()).optional(),
+  permissions: z.array(z.string()).optional(),
   status: userStatusSchema.optional()
 });
 

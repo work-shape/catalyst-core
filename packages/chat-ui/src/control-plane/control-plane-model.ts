@@ -18,7 +18,7 @@ import {
   useWorkspaceUsersQuery
 } from "../api/workspace-queries";
 import type { ChatShellAdminPanel } from "../chat-shell";
-import { canViewUsageGovernance } from "../governance";
+import { canManageUsers, canViewAudit, canViewUsageGovernance } from "../governance";
 import type {
   SuperadminRouteTab,
   WorkspaceRoute,
@@ -89,11 +89,26 @@ export function useControlPlaneModel({
   showSuperadmin
 }: ControlPlaneModelInput): ControlPlaneModel {
   const canViewAdministration = adminPanel?.canView(user) ?? false;
-  const canViewOperationalUsage = canViewUsageGovernance(user);
-  const canViewUsage = canViewAdministration;
+  const canViewUsage = canViewUsageGovernance(user);
+  const userCanManageUsers = canManageUsers(user);
+  const userCanViewAudit = canViewAudit(user);
+  const canManageSuperadminAccess = Boolean(user?.roles.includes("superadmin"));
   const administrationEnabled = canViewAdministration && view === "superadmin";
   const routeTab = route.kind === "superadmin" ? route.tab : undefined;
-  const selectedAdministrationTab = routeTab !== undefined ? routeTab : "usage";
+  const defaultAdministrationTab = firstAvailableAdministrationTab({
+    canViewUsage,
+    canManageUsers: userCanManageUsers,
+    canViewAudit: userCanViewAudit
+  });
+  const selectedAdministrationTab =
+    routeTab &&
+    canViewAdministrationTab(routeTab, {
+      canViewUsage,
+      canManageUsers: userCanManageUsers,
+      canViewAudit: userCanViewAudit
+    })
+      ? routeTab
+      : defaultAdministrationTab;
   const usageQuery = useWorkspaceUsageQuery({
     apiBaseUrl,
     authScope,
@@ -104,13 +119,13 @@ export function useControlPlaneModel({
     apiBaseUrl,
     authScope,
     client,
-    enabled: administrationEnabled
+    enabled: administrationEnabled && userCanViewAudit
   });
   const usersQuery = useWorkspaceUsersQuery({
     apiBaseUrl,
     authScope,
     client,
-    enabled: administrationEnabled
+    enabled: administrationEnabled && userCanManageUsers
   });
   const updateCurrentUser = useUpdateCurrentUserMutation({
     apiBaseUrl,
@@ -135,10 +150,24 @@ export function useControlPlaneModel({
   });
 
   useEffect(() => {
-    if (isAuthenticated && route.kind === "superadmin" && !canViewAdministration) {
-      goToDefaultChat({ replace: true });
+    if (!isAuthenticated || route.kind !== "superadmin") {
+      return;
     }
-  }, [canViewAdministration, goToDefaultChat, isAuthenticated, route.kind]);
+    if (!canViewAdministration) {
+      goToDefaultChat({ replace: true });
+      return;
+    }
+    if (selectedAdministrationTab && route.tab !== selectedAdministrationTab) {
+      showSuperadmin(selectedAdministrationTab, { replace: true });
+    }
+  }, [
+    canViewAdministration,
+    goToDefaultChat,
+    isAuthenticated,
+    route,
+    selectedAdministrationTab,
+    showSuperadmin
+  ]);
 
   return {
     canViewAdministration,
@@ -162,7 +191,10 @@ export function useControlPlaneModel({
         usage: usageQuery.data,
         auditActivities: auditQuery.data ?? [],
         users: usersQuery.data ?? [],
-        canViewUsageGovernance: canViewOperationalUsage,
+        canViewUsageGovernance: canViewUsage,
+        canManageUsers: userCanManageUsers,
+        canViewAudit: userCanViewAudit,
+        canManageSuperadminAccess,
         loading: usageQuery.isLoading || auditQuery.isLoading,
         usersLoading: usersQuery.isLoading,
         error: usageQuery.error
@@ -182,9 +214,43 @@ export function useControlPlaneModel({
           superadminUserMutations.deleteUserIdentity.mutateAsync({ userId, identity }),
         onResetUserPassword: (userId, password) =>
           superadminUserMutations.resetUserPassword.mutateAsync({ userId, password }),
-        selectedTab: selectedAdministrationTab,
+        selectedTab: selectedAdministrationTab ?? "usage",
         onSelectTab: showSuperadmin
       }
     }
   };
+}
+
+function firstAvailableAdministrationTab(input: {
+  canViewUsage: boolean;
+  canManageUsers: boolean;
+  canViewAudit: boolean;
+}): SuperadminRouteTab | undefined {
+  if (input.canViewUsage) {
+    return "usage";
+  }
+  if (input.canManageUsers) {
+    return "users";
+  }
+  if (input.canViewAudit) {
+    return "audit";
+  }
+  return undefined;
+}
+
+function canViewAdministrationTab(
+  tab: SuperadminRouteTab,
+  input: {
+    canViewUsage: boolean;
+    canManageUsers: boolean;
+    canViewAudit: boolean;
+  }
+): boolean {
+  if (tab === "usage") {
+    return input.canViewUsage;
+  }
+  if (tab === "users") {
+    return input.canManageUsers;
+  }
+  return input.canViewAudit;
 }

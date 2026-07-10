@@ -44,6 +44,12 @@
                         "type": "string"
                       }
                     },
+                    "permissions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "clientInstanceId": {
                       "type": "string"
                     },
@@ -143,6 +149,7 @@
                     "displayLabel",
                     "roles",
                     "permissionRefs",
+                    "permissions",
                     "clientInstanceId",
                     "authSource"
                   ],
@@ -211,6 +218,12 @@
                         "type": "string"
                       }
                     },
+                    "permissions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "clientInstanceId": {
                       "type": "string"
                     },
@@ -310,6 +323,7 @@
                     "displayLabel",
                     "roles",
                     "permissionRefs",
+                    "permissions",
                     "clientInstanceId",
                     "authSource"
                   ],
@@ -8706,6 +8720,12 @@
                           "type": "string"
                         }
                       },
+                      "permissions": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
                       "status": {
                         "type": "string",
                         "enum": [
@@ -8777,6 +8797,7 @@
                       "displayLabel",
                       "roles",
                       "permissionRefs",
+                      "permissions",
                       "status",
                       "createdAt",
                       "updatedAt",
@@ -8816,6 +8837,12 @@
                     }
                   },
                   "permissionRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "permissions": {
                     "type": "array",
                     "items": {
                       "type": "string"
@@ -8882,6 +8909,12 @@
                         "type": "string"
                       }
                     },
+                    "permissions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "status": {
                       "type": "string",
                       "enum": [
@@ -8953,6 +8986,7 @@
                     "displayLabel",
                     "roles",
                     "permissionRefs",
+                    "permissions",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -9014,6 +9048,12 @@
                       "type": "string"
                     }
                   },
+                  "permissions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
                   "status": {
                     "type": "string",
                     "enum": [
@@ -9054,6 +9094,12 @@
                       }
                     },
                     "permissionRefs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "permissions": {
                       "type": "array",
                       "items": {
                         "type": "string"
@@ -9130,6 +9176,7 @@
                     "displayLabel",
                     "roles",
                     "permissionRefs",
+                    "permissions",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -9186,6 +9233,12 @@
                         "type": "string"
                       }
                     },
+                    "permissions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "status": {
                       "type": "string",
                       "enum": [
@@ -9257,6 +9310,7 @@
                     "displayLabel",
                     "roles",
                     "permissionRefs",
+                    "permissions",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -9352,6 +9406,12 @@
                         "type": "string"
                       }
                     },
+                    "permissions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "status": {
                       "type": "string",
                       "enum": [
@@ -9423,6 +9483,7 @@
                     "displayLabel",
                     "roles",
                     "permissionRefs",
+                    "permissions",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -9554,6 +9615,12 @@
                         "type": "string"
                       }
                     },
+                    "permissions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "status": {
                       "type": "string",
                       "enum": [
@@ -9625,6 +9692,7 @@
                     "displayLabel",
                     "roles",
                     "permissionRefs",
+                    "permissions",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -9672,6 +9740,12 @@
                     }
                   },
                   "permissionRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "permissions": {
                     "type": "array",
                     "items": {
                       "type": "string"

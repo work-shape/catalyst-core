@@ -41,6 +41,7 @@ export type GetCurrentUserResponses = {
         emailVerified?: boolean;
         roles: Array<string>;
         permissionRefs: Array<string>;
+        permissions: Array<string>;
         clientInstanceId: string;
         authSource: string;
         principal?: {
@@ -85,6 +86,7 @@ export type UpdateCurrentUserResponses = {
         emailVerified?: boolean;
         roles: Array<string>;
         permissionRefs: Array<string>;
+        permissions: Array<string>;
         clientInstanceId: string;
         authSource: string;
         principal?: {
@@ -2238,6 +2240,7 @@ export type ListAdministeredUsersResponses = {
         email?: string;
         roles: Array<string>;
         permissionRefs: Array<string>;
+        permissions: Array<string>;
         status: 'active' | 'disabled';
         createdAt: string;
         updatedAt: string;
@@ -2265,6 +2268,7 @@ export type CreateAdministeredUserData = {
         email?: string;
         roles?: Array<string>;
         permissionRefs?: Array<string>;
+        permissions?: Array<string>;
         status?: 'active' | 'disabled';
         passwordSignIn?: {
             password: string;
@@ -2286,6 +2290,7 @@ export type CreateAdministeredUserResponses = {
         email?: string;
         roles: Array<string>;
         permissionRefs: Array<string>;
+        permissions: Array<string>;
         status: 'active' | 'disabled';
         createdAt: string;
         updatedAt: string;
@@ -2327,6 +2332,7 @@ export type DeleteAdministeredUserResponses = {
         email?: string;
         roles: Array<string>;
         permissionRefs: Array<string>;
+        permissions: Array<string>;
         status: 'active' | 'disabled';
         createdAt: string;
         updatedAt: string;
@@ -2354,6 +2360,7 @@ export type UpdateAdministeredUserData = {
         email?: string | null;
         roles?: Array<string>;
         permissionRefs?: Array<string>;
+        permissions?: Array<string>;
         status?: 'active' | 'disabled';
     };
     path: {
@@ -2374,6 +2381,7 @@ export type UpdateAdministeredUserResponses = {
         email?: string;
         roles: Array<string>;
         permissionRefs: Array<string>;
+        permissions: Array<string>;
         status: 'active' | 'disabled';
         createdAt: string;
         updatedAt: string;
@@ -2421,6 +2429,7 @@ export type UpsertAdministeredUserIdentityResponses = {
         email?: string;
         roles: Array<string>;
         permissionRefs: Array<string>;
+        permissions: Array<string>;
         status: 'active' | 'disabled';
         createdAt: string;
         updatedAt: string;
@@ -2486,6 +2495,7 @@ export type DeleteAdministeredUserIdentityResponses = {
         email?: string;
         roles: Array<string>;
         permissionRefs: Array<string>;
+        permissions: Array<string>;
         status: 'active' | 'disabled';
         createdAt: string;
         updatedAt: string;
@@ -2515,6 +2525,7 @@ export type IssueSessionTokenData = {
         emailVerified?: boolean;
         roles?: Array<string>;
         permissionRefs?: Array<string>;
+        permissions?: Array<string>;
         correlationId?: string;
         scopes?: Array<'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command'>;
         delegatedActor?: {

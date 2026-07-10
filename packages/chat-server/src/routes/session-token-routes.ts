@@ -24,6 +24,7 @@ export function registerSessionTokenRoutes(app: FastifyInstance, options: ChatSe
       metadata: {
         roles: body.roles ?? [],
         permissionRefs: body.permissionRefs ?? [],
+        permissions: body.permissions ?? [],
         scopes: body.scopes ?? [...CHAT_SESSION_AUTH_SCOPES],
         ...(body.delegatedActor
           ? {

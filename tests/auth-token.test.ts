@@ -21,7 +21,8 @@ describe("HMAC chat session tokens", () => {
       externalUserId: "external-123",
       displayLabel: "Jane Reviewer",
       roles: ["user"],
-      permissionRefs: ["demo-tools"]
+      permissionRefs: ["demo-tools"],
+      permissions: ["usage.view"]
     });
 
     const user = await adapter.authenticate({
@@ -35,6 +36,7 @@ describe("HMAC chat session tokens", () => {
     expect(user.externalUserId).toBe("external-123");
     expect(user.displayLabel).toBe("Jane Reviewer");
     expect(user.permissionRefs).toContain("demo-tools");
+    expect(user.permissions).toEqual(["usage.view"]);
     expect(user.clientInstanceId).toBe(clientInstanceId);
     expect(user.subjectUserId).toBe(`${clientInstanceId}:external-123`);
     expect(user.principal).toMatchObject({

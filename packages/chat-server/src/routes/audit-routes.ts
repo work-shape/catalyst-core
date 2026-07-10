@@ -19,9 +19,9 @@ export function registerAuditRoutes(app: FastifyInstance, options: ChatServerOpt
       options,
       user,
       context,
-      requiredRole: "admin",
+      requiredPermission: "audit.view",
       auditType: "governance.audit_events_viewed",
-      deniedMessage: "Audit events require a governance role"
+      deniedMessage: "Audit events require 'audit.view' permission"
     });
     return options.auditEventStore.listAuditEvents({
       clientInstanceId: options.clientInstanceId,
@@ -38,9 +38,9 @@ export function registerAuditRoutes(app: FastifyInstance, options: ChatServerOpt
       options,
       user,
       context,
-      requiredRole: "admin",
+      requiredPermission: "audit.view",
       auditType: "governance.audit_events_viewed",
-      deniedMessage: "Audit events require a governance role"
+      deniedMessage: "Audit events require 'audit.view' permission"
     });
     const events = await options.auditEventStore.listAuditEvents({
       clientInstanceId: options.clientInstanceId,

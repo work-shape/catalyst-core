@@ -1069,6 +1069,7 @@ export class InMemoryPlatformStore
       email: input.email,
       roles: input.roles ?? ["user"],
       permissionRefs: input.permissionRefs ?? [],
+      permissions: input.permissions ?? [],
       status: input.status ?? "active",
       createdAt: now,
       updatedAt: now,
@@ -1090,6 +1091,7 @@ export class InMemoryPlatformStore
       email: input.email === undefined ? user.email : (input.email ?? undefined),
       roles: input.roles ?? user.roles,
       permissionRefs: input.permissionRefs ?? user.permissionRefs,
+      permissions: input.permissions ?? user.permissions,
       status: input.status ?? user.status,
       updatedAt: new Date().toISOString()
     };
@@ -1220,6 +1222,7 @@ export class InMemoryPlatformStore
       email: input.email,
       roles: input.roles,
       permissionRefs: input.permissionRefs,
+      permissions: input.permissions,
       status: "active",
       createdAt: now,
       updatedAt: now,

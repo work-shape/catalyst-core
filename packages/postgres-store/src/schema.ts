@@ -40,6 +40,7 @@ export const productUsers = pgTable(
     email: text("email"),
     roles: jsonb("roles").$type<UserRecord["roles"]>().notNull(),
     permissionRefs: jsonb("permission_refs").$type<string[]>().notNull(),
+    permissions: jsonb("permissions").$type<string[]>().notNull().default([]),
     status: text("status").$type<UserRecord["status"]>().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),

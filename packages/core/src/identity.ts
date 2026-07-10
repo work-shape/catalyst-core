@@ -58,6 +58,7 @@ export interface AuthenticatedUser {
   emailVerified?: boolean;
   roles: UserRole[];
   permissionRefs: string[];
+  permissions?: string[];
   clientInstanceId: ClientInstanceId;
   authSource: string;
   correlationId?: string;

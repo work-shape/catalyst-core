@@ -3,6 +3,9 @@ import { canViewAdministrationPanel } from "./governance";
 import { SuperadminPanel } from "./superadmin-panel";
 
 export {
+  canEditConfigAssets,
+  canManageUsers,
+  canViewAudit,
   canViewAdministrationPanel,
   canViewSuperadminPanel,
   canViewUsageGovernance

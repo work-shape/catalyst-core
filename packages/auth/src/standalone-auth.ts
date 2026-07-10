@@ -27,6 +27,7 @@ export interface StandaloneAuthSeedUser {
   password: string;
   roles: string[];
   permissionRefs: string[];
+  permissions: string[];
 }
 
 export interface StandaloneAuthOptions {
@@ -50,6 +51,7 @@ export interface SetOrCreateStandalonePasswordSignInInput {
   displayLabel: string;
   roles: string[];
   permissionRefs: string[];
+  permissions: string[];
   password: string;
 }
 
@@ -177,6 +179,7 @@ class BetterAuthAdapter implements AuthAdapter {
       emailVerified: session.user.emailVerified ?? false,
       roles: profile.roles,
       permissionRefs: profile.permissionRefs,
+      permissions: profile.permissions,
       clientInstanceId: request.clientInstanceId,
       authSource: this.id,
       correlationId: request.correlationId,
@@ -234,7 +237,8 @@ class StandaloneAuthProfileStore {
       externalUserId: authUser.id,
       displayLabel: input.displayLabel,
       roles: input.roles,
-      permissionRefs: input.permissionRefs
+      permissionRefs: input.permissionRefs,
+      permissions: input.permissions
     });
     await this.db.delete(authSessions).where(eq(authSessions.userId, authUser.id));
     return {
@@ -310,7 +314,8 @@ class StandaloneAuthProfileStore {
       externalUserId: authUser.id,
       displayLabel: seedUser.displayLabel,
       roles: seedUser.roles,
-      permissionRefs: seedUser.permissionRefs
+      permissionRefs: seedUser.permissionRefs,
+      permissions: seedUser.permissions
     });
   }
 
@@ -386,6 +391,7 @@ class StandaloneAuthProfileStore {
     displayLabel: string;
     roles: string[];
     permissionRefs: string[];
+    permissions: string[];
   }): Promise<void> {
     const now = new Date();
     await this.db
@@ -397,6 +403,7 @@ class StandaloneAuthProfileStore {
         displayLabel: input.displayLabel,
         roles: input.roles,
         permissionRefs: input.permissionRefs,
+        permissions: input.permissions,
         createdAt: now,
         updatedAt: now
       })
@@ -407,6 +414,7 @@ class StandaloneAuthProfileStore {
           displayLabel: input.displayLabel,
           roles: input.roles,
           permissionRefs: input.permissionRefs,
+          permissions: input.permissions,
           updatedAt: now
         }
       });

@@ -26,6 +26,7 @@ export interface UserRecord {
   email?: string;
   roles: UserRole[];
   permissionRefs: string[];
+  permissions: string[];
   status: UserStatus;
   createdAt: ISODateString;
   updatedAt: ISODateString;
@@ -43,6 +44,7 @@ export interface ResolveUserIdentityInput {
   emailVerified?: boolean;
   roles: UserRole[];
   permissionRefs: string[];
+  permissions: string[];
   correlationId?: string;
   linkByVerifiedEmail?: boolean;
 }
@@ -53,6 +55,7 @@ export interface CreateUserInput {
   email?: string;
   roles?: UserRole[];
   permissionRefs?: string[];
+  permissions?: string[];
   status?: UserStatus;
 }
 
@@ -63,6 +66,7 @@ export interface UpdateUserInput {
   email?: string | null;
   roles?: UserRole[];
   permissionRefs?: string[];
+  permissions?: string[];
   status?: UserStatus;
 }
 
@@ -118,6 +122,7 @@ export function authenticatedUserFromRecord(input: {
     email: input.user.email,
     roles: input.user.roles,
     permissionRefs: input.user.permissionRefs,
+    permissions: input.user.permissions,
     clientInstanceId: input.user.clientInstanceId,
     authSource: input.identity.authSource,
     correlationId: input.correlationId,

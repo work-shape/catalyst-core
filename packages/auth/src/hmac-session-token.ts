@@ -19,6 +19,7 @@ export interface SessionTokenInput {
   emailVerified?: boolean;
   roles?: string[];
   permissionRefs?: string[];
+  permissions?: string[];
   correlationId?: string;
   scopes?: AuthScope[];
   delegatedActor?: DelegatedActor;
@@ -31,6 +32,7 @@ interface SessionTokenClaims {
   emailVerified?: boolean;
   roles: string[];
   permissionRefs: string[];
+  permissions?: string[];
   clientInstanceId: string;
   authSource: string;
   iss: string;
@@ -69,6 +71,7 @@ export class HmacSessionTokenIssuer {
       emailVerified: input.emailVerified,
       roles: input.roles ?? ["user"],
       permissionRefs: input.permissionRefs ?? [],
+      permissions: input.permissions ?? [],
       clientInstanceId: String(this.options.clientInstanceId),
       authSource: this.options.authSource ?? "session-token",
       iss: this.options.issuer,
@@ -122,6 +125,7 @@ export class HmacSessionTokenAuthAdapter implements AuthAdapter {
       emailVerified: claims.emailVerified,
       roles: claims.roles,
       permissionRefs: claims.permissionRefs,
+      permissions: claims.permissions ?? [],
       clientInstanceId,
       authSource: claims.authSource,
       correlationId: claims.correlationId ?? request.correlationId,

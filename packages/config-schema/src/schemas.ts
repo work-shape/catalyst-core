@@ -27,6 +27,7 @@ export const userIdentitySchema = z.object({
   emailVerified: z.boolean().optional(),
   roles: z.array(z.string().min(1)).default(["user", "admin"]),
   permissionRefs: z.array(z.string().min(1)).default(["demo-tools"]),
+  permissions: z.array(z.string().min(1)).default([]),
   authSource: z.string().min(1).default("development")
 });
 
@@ -36,6 +37,7 @@ const defaultDevelopmentUser = {
   displayLabel: "Development User",
   roles: ["user", "admin"],
   permissionRefs: ["demo-tools"],
+  permissions: [],
   authSource: "development"
 };
 
@@ -53,7 +55,8 @@ const standaloneSeedUserSchema = z.object({
   passwordEnvName: z.string().min(1),
   developmentPassword: z.string().min(8).optional(),
   roles: z.array(z.string().min(1)).default(["user"]),
-  permissionRefs: z.array(z.string().min(1)).default([])
+  permissionRefs: z.array(z.string().min(1)).default([]),
+  permissions: z.array(z.string().min(1)).default([])
 });
 
 const standaloneAuthConfigSchema = z.object({

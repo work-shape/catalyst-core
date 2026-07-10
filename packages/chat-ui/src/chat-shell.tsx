@@ -31,6 +31,9 @@ export interface ChatShellAdminPanel {
     loading: boolean;
     usersLoading: boolean;
     canViewUsageGovernance: boolean;
+    canManageUsers: boolean;
+    canViewAudit: boolean;
+    canManageSuperadminAccess: boolean;
     error?: string;
     usersError?: string;
     usersMutating: boolean;

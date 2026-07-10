@@ -36,6 +36,9 @@ export function SuperadminPanel({
   loading,
   usersLoading,
   canViewUsageGovernance,
+  canManageUsers,
+  canViewAudit,
+  canManageSuperadminAccess,
   error,
   usersError,
   usersMutating,
@@ -54,6 +57,9 @@ export function SuperadminPanel({
   loading: boolean;
   usersLoading: boolean;
   canViewUsageGovernance: boolean;
+  canManageUsers: boolean;
+  canViewAudit: boolean;
+  canManageSuperadminAccess: boolean;
   error?: string;
   usersError?: string;
   usersMutating: boolean;
@@ -77,44 +83,50 @@ export function SuperadminPanel({
       <div className="grid gap-3 border-b px-5 pt-20">
         <div className="grid min-w-0 gap-1">
           <span className="text-xs text-muted-foreground">
-            {canViewUsageGovernance ? "Superadmin" : "Admin"}
+            {canManageSuperadminAccess ? "Superadmin" : "Admin"}
           </span>
           <h1 className="text-xl font-semibold tracking-normal">Administration</h1>
         </div>
 
         <nav className="flex items-end gap-1 overflow-x-auto" aria-label="Administration sections">
-          <TabButton
-            active={selectedTab === "usage"}
-            icon={<Activity size={15} aria-hidden="true" />}
-            label="Usage"
-            onClick={() => onSelectTab("usage")}
-          />
-          <TabButton
-            active={selectedTab === "users"}
-            icon={<Users size={15} aria-hidden="true" />}
-            label="Users"
-            badge={users.length > 0 ? users.length : undefined}
-            onClick={() => onSelectTab("users")}
-          />
-          <TabButton
-            active={selectedTab === "audit"}
-            icon={<ScrollText size={15} aria-hidden="true" />}
-            label="Audit log"
-            onClick={() => onSelectTab("audit")}
-          />
+          {canViewUsageGovernance ? (
+            <TabButton
+              active={selectedTab === "usage"}
+              icon={<Activity size={15} aria-hidden="true" />}
+              label="Usage"
+              onClick={() => onSelectTab("usage")}
+            />
+          ) : null}
+          {canManageUsers ? (
+            <TabButton
+              active={selectedTab === "users"}
+              icon={<Users size={15} aria-hidden="true" />}
+              label="Users"
+              badge={users.length > 0 ? users.length : undefined}
+              onClick={() => onSelectTab("users")}
+            />
+          ) : null}
+          {canViewAudit ? (
+            <TabButton
+              active={selectedTab === "audit"}
+              icon={<ScrollText size={15} aria-hidden="true" />}
+              label="Audit log"
+              onClick={() => onSelectTab("audit")}
+            />
+          ) : null}
         </nav>
       </div>
 
       <div className="grid min-h-0 content-start gap-4 overflow-auto bg-background p-5">
         {selectedTab !== "users" && error ? <ErrorBanner message={error} /> : null}
 
-        {selectedTab === "usage" ? <UsageView usage={usage} /> : null}
-        {selectedTab === "users" ? (
+        {selectedTab === "usage" && canViewUsageGovernance ? <UsageView usage={usage} /> : null}
+        {selectedTab === "users" && canManageUsers ? (
           <UserAdministrationPanel
             users={users}
             loading={usersLoading}
             error={usersError}
-            canManageSuperadminAccess={canViewUsageGovernance}
+            canManageSuperadminAccess={canManageSuperadminAccess}
             mutating={usersMutating}
             onCreateUser={onCreateUser}
             onUpdateUser={onUpdateUser}
@@ -124,7 +136,9 @@ export function SuperadminPanel({
             onResetPassword={onResetUserPassword}
           />
         ) : null}
-        {selectedTab === "audit" ? <AuditView auditActivities={auditActivities} /> : null}
+        {selectedTab === "audit" && canViewAudit ? (
+          <AuditView auditActivities={auditActivities} />
+        ) : null}
       </div>
     </section>
   );

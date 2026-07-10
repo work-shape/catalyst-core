@@ -85,6 +85,7 @@ export const standaloneAuthProfiles = pgTable(
     displayLabel: text("display_label").notNull(),
     roles: jsonb("roles").$type<string[]>().notNull(),
     permissionRefs: jsonb("permission_refs").$type<string[]>().notNull(),
+    permissions: jsonb("permissions").$type<string[]>().notNull().default([]),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
   },

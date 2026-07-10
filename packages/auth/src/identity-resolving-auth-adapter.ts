@@ -33,6 +33,7 @@ export class IdentityResolvingAuthAdapter implements AuthAdapter {
       emailVerified: claims.emailVerified,
       roles: claims.roles,
       permissionRefs: claims.permissionRefs,
+      permissions: claims.permissions ?? [],
       correlationId: claims.correlationId ?? request.correlationId,
       linkByVerifiedEmail: this.options.linkByVerifiedEmail
     });

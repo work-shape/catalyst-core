@@ -14,6 +14,7 @@ import { STANDALONE_AUTH_SOURCE } from "@vivd-catalyst/auth";
 import {
   AppError,
   NoopAuditRecorder,
+  PERMISSIONS,
   StoreBackedAuditRecorder,
   asToolCallId,
   asClientInstanceId,
@@ -2471,6 +2472,14 @@ describe("client instance app vertical slice", () => {
               displayLabel: "Normal User",
               roles: ["user"],
               permissionRefs: ["demo-tools"]
+            },
+            {
+              id: "usage-viewer-1",
+              externalUserId: "usage-viewer-1",
+              displayLabel: "Usage Viewer",
+              roles: ["user"],
+              permissionRefs: ["demo-tools"],
+              permissions: ["usage.view"]
             }
           ]
         }
@@ -2494,7 +2503,8 @@ describe("client instance app vertical slice", () => {
     expect(defaultMe.json()).toMatchObject({
       displayLabel: "Superadmin",
       externalUserId: "superadmin-1",
-      roles: ["user", "admin", "superadmin"]
+      roles: ["user", "admin", "superadmin"],
+      permissions: [...PERMISSIONS]
     });
 
     const normalMe = await app.server.inject({
@@ -2508,7 +2518,8 @@ describe("client instance app vertical slice", () => {
     expect(normalMe.json()).toMatchObject({
       displayLabel: "Normal User",
       externalUserId: "user-1",
-      roles: ["user"]
+      roles: ["user"],
+      permissions: []
     });
 
     const normalUsage = await app.server.inject({
@@ -2519,6 +2530,15 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(normalUsage.statusCode).toBe(403);
+
+    const grantedUsage = await app.server.inject({
+      method: "GET",
+      url: "/api/superadmin/usage",
+      headers: {
+        "x-dev-user-id": "usage-viewer-1"
+      }
+    });
+    expect(grantedUsage.statusCode).toBe(200);
 
     const unknownUser = await app.server.inject({
       method: "GET",

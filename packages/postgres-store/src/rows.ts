@@ -423,6 +423,7 @@ export function mapUserRecord(
     email: row.email ?? undefined,
     roles: row.roles,
     permissionRefs: row.permissionRefs,
+    permissions: row.permissions,
     status: row.status,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

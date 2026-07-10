@@ -1,0 +1,2 @@
+ALTER TABLE "product_users" ADD COLUMN "permissions" jsonb DEFAULT '[]'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "standalone_auth_profiles" ADD COLUMN "permissions" jsonb DEFAULT '[]'::jsonb NOT NULL;
