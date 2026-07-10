@@ -2242,6 +2242,11 @@ export type GetConfigAssetsOverviewResponses = {
             revision: number;
             updatedAt: string;
         }>;
+        references: {
+            modelProviderIds: Array<string>;
+            modelBindingIds: Array<string>;
+            enabledToolNames: Array<string>;
+        };
     };
 };
 

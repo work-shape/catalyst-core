@@ -8737,11 +8737,41 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "references": {
+                      "type": "object",
+                      "properties": {
+                        "modelProviderIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "modelBindingIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "enabledToolNames": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "modelProviderIds",
+                        "modelBindingIds",
+                        "enabledToolNames"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
                     "version",
-                    "assets"
+                    "assets",
+                    "references"
                   ],
                   "additionalProperties": false
                 }

@@ -62,7 +62,8 @@ export class ConfigAssetWorkflow {
         name: asset.name,
         revision: asset.revision,
         updatedAt: asset.updatedAt
-      }))
+      })),
+      references: this.options.configAssets.validationRefs
     };
   }
 

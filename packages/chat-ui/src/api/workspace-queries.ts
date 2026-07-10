@@ -101,6 +101,33 @@ export function useWorkspaceUsersQuery(
   });
 }
 
+export function useConfigAssetsOverviewQuery(
+  input: WorkspaceQueryInput & {
+    enabled: boolean;
+  }
+) {
+  return useQuery({
+    queryKey: workspaceQueryKeys.configAssetsOverview(input.apiBaseUrl, input.authScope),
+    queryFn: input.client.configAssetsOverview,
+    enabled: input.enabled
+  });
+}
+
+export function useConfigAssetsExportQuery(
+  input: WorkspaceQueryInput & {
+    enabled: boolean;
+  }
+) {
+  return useQuery({
+    queryKey: [
+      ...workspaceQueryKeys.configAssetsOverview(input.apiBaseUrl, input.authScope),
+      "export"
+    ] as const,
+    queryFn: input.client.exportConfigAssets,
+    enabled: input.enabled
+  });
+}
+
 export interface WorkspaceCacheActions {
   refreshThreadSnapshot(conversationId: string): Promise<ConversationThreadSnapshot>;
   invalidateCurrentUser(): void;

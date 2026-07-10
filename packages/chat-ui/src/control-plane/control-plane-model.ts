@@ -8,17 +8,22 @@ import type {
 } from "@vivd-catalyst/api-client";
 import {
   useChangeCurrentUserPasswordMutation,
+  useConfigAssetMutations,
   useDeleteCurrentUserMutation,
   useSuperadminUserMutations,
   useUpdateCurrentUserMutation
 } from "../api/workspace-mutations";
 import {
+  useConfigAssetsExportQuery,
+  useConfigAssetsOverviewQuery,
   useWorkspaceAuditActivitiesQuery,
   useWorkspaceUsageQuery,
   useWorkspaceUsersQuery
 } from "../api/workspace-queries";
+import { useQueryClient } from "@tanstack/react-query";
+import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import type { ChatShellAdminPanel } from "../chat-shell";
-import { canManageUsers, canViewAudit, canViewUsageGovernance } from "../governance";
+import { canEditConfigAssets, canManageUsers, canViewAudit, canViewUsageGovernance } from "../governance";
 import type {
   SuperadminRouteTab,
   WorkspaceRoute,
@@ -92,20 +97,23 @@ export function useControlPlaneModel({
   const canViewUsage = canViewUsageGovernance(user);
   const userCanManageUsers = canManageUsers(user);
   const userCanViewAudit = canViewAudit(user);
+  const userCanEditConfigAssets = canEditConfigAssets(user);
   const canManageSuperadminAccess = Boolean(user?.roles.includes("superadmin"));
   const administrationEnabled = canViewAdministration && view === "superadmin";
   const routeTab = route.kind === "superadmin" ? route.tab : undefined;
   const defaultAdministrationTab = firstAvailableAdministrationTab({
     canViewUsage,
     canManageUsers: userCanManageUsers,
-    canViewAudit: userCanViewAudit
+    canViewAudit: userCanViewAudit,
+    canEditConfigAssets: userCanEditConfigAssets
   });
   const selectedAdministrationTab =
     routeTab &&
     canViewAdministrationTab(routeTab, {
       canViewUsage,
       canManageUsers: userCanManageUsers,
-      canViewAudit: userCanViewAudit
+      canViewAudit: userCanViewAudit,
+      canEditConfigAssets: userCanEditConfigAssets
     })
       ? routeTab
       : defaultAdministrationTab;
@@ -144,6 +152,25 @@ export function useControlPlaneModel({
     onDeleted: onAccountDeleted
   });
   const superadminUserMutations = useSuperadminUserMutations({
+    apiBaseUrl,
+    authScope,
+    client
+  });
+  const queryClient = useQueryClient();
+  const configAssetsEnabled = administrationEnabled && userCanEditConfigAssets;
+  const configAssetsOverviewQuery = useConfigAssetsOverviewQuery({
+    apiBaseUrl,
+    authScope,
+    client,
+    enabled: configAssetsEnabled
+  });
+  const configAssetsExportQuery = useConfigAssetsExportQuery({
+    apiBaseUrl,
+    authScope,
+    client,
+    enabled: configAssetsEnabled
+  });
+  const configAssetMutations = useConfigAssetMutations({
     apiBaseUrl,
     authScope,
     client
@@ -214,6 +241,28 @@ export function useControlPlaneModel({
           superadminUserMutations.deleteUserIdentity.mutateAsync({ userId, identity }),
         onResetUserPassword: (userId, password) =>
           superadminUserMutations.resetUserPassword.mutateAsync({ userId, password }),
+        canEditConfigAssets: userCanEditConfigAssets,
+        configAssets: {
+          overview: configAssetsOverviewQuery.data,
+          agents: namedBundleEntries(configAssetsExportQuery.data?.agents),
+          skills: namedBundleEntries(configAssetsExportQuery.data?.skills),
+          loading: configAssetsOverviewQuery.isLoading || configAssetsExportQuery.isLoading,
+          error:
+            configAssetsOverviewQuery.error || configAssetsExportQuery.error
+              ? apiErrorMessage(configAssetsOverviewQuery.error ?? configAssetsExportQuery.error, undefined)
+              : undefined,
+          mutating: configAssetMutations.isPending,
+          onSaveAsset: (saveInput) => configAssetMutations.putAsset.mutateAsync(saveInput),
+          onDeleteAsset: (deleteInput) => configAssetMutations.deleteAsset.mutateAsync(deleteInput),
+          onSetDefaultAgent: (defaultInput) =>
+            configAssetMutations.setDefaultAgent.mutateAsync(defaultInput),
+          onRevertAsset: (revertInput) => configAssetMutations.revertAsset.mutateAsync(revertInput),
+          onLoadRevisions: (kind, name) => client.configAssetRevisions(kind, name),
+          onReload: () =>
+            queryClient.invalidateQueries({
+              queryKey: workspaceQueryKeys.configAssetsOverview(apiBaseUrl, authScope)
+            })
+        },
         selectedTab: selectedAdministrationTab ?? "usage",
         onSelectTab: showSuperadmin
       }
@@ -225,12 +274,16 @@ function firstAvailableAdministrationTab(input: {
   canViewUsage: boolean;
   canManageUsers: boolean;
   canViewAudit: boolean;
+  canEditConfigAssets: boolean;
 }): SuperadminRouteTab | undefined {
   if (input.canViewUsage) {
     return "usage";
   }
   if (input.canManageUsers) {
     return "users";
+  }
+  if (input.canEditConfigAssets) {
+    return "config";
   }
   if (input.canViewAudit) {
     return "audit";
@@ -244,6 +297,7 @@ function canViewAdministrationTab(
     canViewUsage: boolean;
     canManageUsers: boolean;
     canViewAudit: boolean;
+    canEditConfigAssets: boolean;
   }
 ): boolean {
   if (tab === "usage") {
@@ -252,5 +306,17 @@ function canViewAdministrationTab(
   if (tab === "users") {
     return input.canManageUsers;
   }
+  if (tab === "config") {
+    return input.canEditConfigAssets;
+  }
   return input.canViewAudit;
+}
+
+function namedBundleEntries(
+  configs: Array<Record<string, unknown>> | undefined
+): Array<{ name: string; config: Record<string, unknown> }> {
+  return (configs ?? []).flatMap((config) => {
+    const name = config.name;
+    return typeof name === "string" ? [{ name, config }] : [];
+  });
 }

@@ -1,4 +1,4 @@
-export type SuperadminRouteTab = "usage" | "users" | "audit";
+export type SuperadminRouteTab = "usage" | "users" | "audit" | "config";
 export type WorkspaceRouteView = "chat" | "settings" | "superadmin";
 
 export type WorkspaceRoute =

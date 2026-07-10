@@ -713,6 +713,153 @@ test("standalone settings and superadmin tabs are route-backed", async ({ page }
   ).toBeVisible();
 });
 
+test("superadmin manages config assets with validation and conflict protection", async ({ page }) => {
+  test.setTimeout(60_000);
+  await signInViaApi(page, superadminUser);
+  const originalResponse = await page.request.get(`${apiBaseUrl}/api/admin/config/export`);
+  expect(originalResponse.ok()).toBe(true);
+  const original = (await originalResponse.json()) as {
+    version: number;
+    defaultAgentName?: string;
+    agents: Array<Record<string, unknown>>;
+    skills: Array<Record<string, unknown>>;
+  };
+  const originalResearchAgent = original.agents.find(
+    (agent) => agent.name === "research_assistant"
+  );
+  expect(originalResearchAgent).toBeDefined();
+
+  const versionLabel = (version: number) =>
+    page.getByText(`Config version ${version}.`, { exact: false });
+  const form = () => page.locator("form");
+  const fieldset = (name: string) => form().getByRole("group", { name, exact: true });
+  const fieldControl = (label: string, selector: string) =>
+    form()
+      .locator("label")
+      .filter({ hasText: new RegExp(`^${label}`) })
+      .locator(selector)
+      .first();
+  const clickAgent = async () => {
+    await page.getByRole("button", { name: "research_assistant", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "research_assistant", exact: true })).toBeVisible();
+  };
+  const clickSkill = async () => {
+    await page.getByRole("button", { name: "config_e2e_skill", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "config_e2e_skill", exact: true })).toBeVisible();
+  };
+
+  try {
+    await page.goto("/admin/config");
+    await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
+    await expect(page).toHaveURL(/\/admin\/config$/u);
+    await expect(versionLabel(original.version)).toBeVisible();
+
+    await clickAgent();
+    await expect(fieldset("Tools").getByLabel("read_skill", { exact: true })).toBeVisible();
+    await expect(fieldset("Tools").getByLabel("show_view", { exact: true })).toBeVisible();
+    await expect(fieldControl("Model", "select").locator("option")).toContainText([
+      "Instance default",
+      "local"
+    ]);
+
+    await page
+      .getByRole("region", { name: "Skills" })
+      .getByRole("button", { name: "New", exact: true })
+      .click();
+    await page.locator('input[placeholder="generic_workflow_review"]').fill("config_e2e_skill");
+    await fieldControl("Title", "input").fill("Config E2E skill");
+    await fieldControl("Description", "input").fill("Verifies config asset editing");
+    await fieldControl("Content", "textarea").fill("# Verify config assets");
+    await form().getByRole("button", { name: "Create skill", exact: true }).click();
+    await expect(versionLabel(original.version + 1)).toBeVisible();
+    await expect(page.getByRole("heading", { name: "config_e2e_skill", exact: true })).toBeVisible();
+    await expect(fieldControl("Title", "input")).toHaveValue("Config E2E skill");
+    await expect(fieldControl("Description", "input")).toHaveValue(
+      "Verifies config asset editing"
+    );
+    await expect(fieldControl("Content", "textarea")).toHaveValue("# Verify config assets");
+
+    await clickAgent();
+    await fieldset("Skills").getByLabel("config_e2e_skill", { exact: true }).check();
+    await form().getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(
+      page.getByText(
+        "Agent 'research_assistant' references skills but does not allow 'read_skill'",
+        { exact: true }
+      )
+    ).toBeVisible();
+    await expect(versionLabel(original.version + 1)).toBeVisible();
+
+    await fieldset("Tools").getByLabel("read_skill", { exact: true }).check();
+    await form().getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(versionLabel(original.version + 2)).toBeVisible();
+
+    await clickSkill();
+    await form().getByRole("button", { name: "Delete", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "Delete skill 'config_e2e_skill'?", exact: true })
+      .getByRole("button", { name: "Delete", exact: true })
+      .click();
+    await expect(
+      page.getByText(
+        "Agent 'research_assistant' references missing skill 'config_e2e_skill'",
+        { exact: true }
+      )
+    ).toBeVisible();
+    await expect(versionLabel(original.version + 2)).toBeVisible();
+
+    await clickAgent();
+    await fieldset("Skills").getByLabel("config_e2e_skill", { exact: true }).uncheck();
+    await form().getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(versionLabel(original.version + 3)).toBeVisible();
+    await clickSkill();
+    await form().getByRole("button", { name: "Delete", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "Delete skill 'config_e2e_skill'?", exact: true })
+      .getByRole("button", { name: "Delete", exact: true })
+      .click();
+    await expect(versionLabel(original.version + 4)).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Skills" }).getByText("None yet.", { exact: true })
+    ).toBeVisible();
+
+    await clickAgent();
+    const instructions = fieldControl("Instructions", "textarea");
+    const serverInstructions = `${String(originalResearchAgent?.instructions)}\n\nServer change.`;
+    const serverChange = await page.request.put(
+      `${apiBaseUrl}/api/admin/config/assets/agent/research_assistant`,
+      {
+        data: {
+          baseVersion: original.version + 4,
+          config: { ...originalResearchAgent, instructions: serverInstructions }
+        }
+      }
+    );
+    expect(serverChange.ok()).toBe(true);
+    await instructions.fill(`${String(originalResearchAgent?.instructions)}\n\nUnsaved UI change.`);
+    await form().getByRole("button", { name: "Save changes", exact: true }).click();
+    const conflict = page.getByRole("dialog", {
+      name: "Configuration changed on the server",
+      exact: true
+    });
+    await expect(conflict).toBeVisible();
+    await conflict.getByRole("button", { name: "Reload latest", exact: true }).click();
+    await expect(conflict).toBeHidden();
+    await expect(versionLabel(original.version + 5)).toBeVisible();
+    await expect(fieldControl("Instructions", "textarea")).toHaveValue(serverInstructions);
+  } finally {
+    const restored = await page.request.post(`${apiBaseUrl}/api/admin/config/import`, {
+      data: {
+        baseVersion: null,
+        defaultAgentName: original.defaultAgentName,
+        agents: original.agents,
+        skills: original.skills
+      }
+    });
+    expect(restored.ok()).toBe(true);
+  }
+});
+
 test("normal users are redirected away from superadmin routes", async ({ page }) => {
   await signInViaApi(page, normalUser);
 

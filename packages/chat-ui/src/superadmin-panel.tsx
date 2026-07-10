@@ -4,6 +4,7 @@ import {
   Bot,
   ChevronRight,
   ScrollText,
+  Settings2,
   ShieldCheck,
   User as UserIcon,
   Users
@@ -25,6 +26,7 @@ import { Badge } from "./ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { cn } from "./ui/cn";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { ConfigAssetsPanel, type ConfigAssetsPanelInput } from "./config-assets-panel";
 import { UsageView } from "./usage-view";
 import { UserAdministrationPanel } from "./user-administration-panel";
 import type { SuperadminRouteTab } from "./workspace-route";
@@ -39,6 +41,8 @@ export function SuperadminPanel({
   canManageUsers,
   canViewAudit,
   canManageSuperadminAccess,
+  canEditConfigAssets,
+  configAssets,
   error,
   usersError,
   usersMutating,
@@ -60,6 +64,8 @@ export function SuperadminPanel({
   canManageUsers: boolean;
   canViewAudit: boolean;
   canManageSuperadminAccess: boolean;
+  canEditConfigAssets: boolean;
+  configAssets: ConfigAssetsPanelInput;
   error?: string;
   usersError?: string;
   usersMutating: boolean;
@@ -106,6 +112,14 @@ export function SuperadminPanel({
               onClick={() => onSelectTab("users")}
             />
           ) : null}
+          {canEditConfigAssets ? (
+            <TabButton
+              active={selectedTab === "config"}
+              icon={<Settings2 size={15} aria-hidden="true" />}
+              label="Config"
+              onClick={() => onSelectTab("config")}
+            />
+          ) : null}
           {canViewAudit ? (
             <TabButton
               active={selectedTab === "audit"}
@@ -135,6 +149,9 @@ export function SuperadminPanel({
             onDeleteIdentity={onDeleteUserIdentity}
             onResetPassword={onResetUserPassword}
           />
+        ) : null}
+        {selectedTab === "config" && canEditConfigAssets ? (
+          <ConfigAssetsPanel {...configAssets} />
         ) : null}
         {selectedTab === "audit" && canViewAudit ? (
           <AuditView auditActivities={auditActivities} />

@@ -66,6 +66,10 @@ usage:
         inputPricePerMillionTokens: 0
         outputPricePerMillionTokens: 0
 tools:
+  - name: read_skill
+    enabled: true
+  - name: show_view
+    enabled: true
   - name: demo.workflow_summary
     enabled: true
   - name: demo.weather_forecast

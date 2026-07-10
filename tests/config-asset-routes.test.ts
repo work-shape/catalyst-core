@@ -52,7 +52,12 @@ describe("config asset admin routes", () => {
     expect(overview.statusCode).toBe(200);
     expect(overview.json()).toMatchObject({
       version: 1,
-      assets: [{ kind: "agent", name: "assistant", revision: 1 }]
+      assets: [{ kind: "agent", name: "assistant", revision: 1 }],
+      references: {
+        modelProviderIds: ["local"],
+        modelBindingIds: [],
+        enabledToolNames: ["known.tool", "read_skill"]
+      }
     });
 
     const updated = await request(fixture.server, token, {
@@ -179,6 +184,79 @@ describe("config asset admin routes", () => {
     expect(stale.json()).toMatchObject({ error: { code: "CONFLICT" } });
   });
 
+  it("rejects broken skill references without advancing the config version", async () => {
+    const fixture = await createFixture();
+    const token = await mintToken(fixture.server);
+    const skill = await request(fixture.server, token, {
+      method: "PUT",
+      url: "/api/admin/config/assets/skill/review",
+      payload: {
+        config: {
+          name: "review",
+          title: "Review",
+          description: "Review the request",
+          content: "# Review"
+        }
+      }
+    });
+    expect(skill.json()).toEqual({ version: 1, revision: 1 });
+    const agent = await request(fixture.server, token, {
+      method: "PUT",
+      url: "/api/admin/config/assets/agent/assistant",
+      payload: {
+        baseVersion: 1,
+        config: agentConfig("Uses the review skill", {
+          toolNames: ["read_skill"],
+          skillNames: ["review"]
+        })
+      }
+    });
+    expect(agent.json()).toEqual({ version: 2, revision: 1 });
+
+    const referencedDelete = await request(fixture.server, token, {
+      method: "POST",
+      url: "/api/admin/config/assets/skill/review/delete",
+      payload: { baseVersion: 2 }
+    });
+    expect(referencedDelete.statusCode).toBe(422);
+    expect(referencedDelete.json()).toMatchObject({
+      error: {
+        code: "VALIDATION_FAILED",
+        details: {
+          issues: [{ message: "Agent 'assistant' references missing skill 'review'" }]
+        }
+      }
+    });
+
+    const missingReadSkill = await request(fixture.server, token, {
+      method: "PUT",
+      url: "/api/admin/config/assets/agent/assistant",
+      payload: {
+        baseVersion: 2,
+        config: agentConfig("Uses the review skill", { skillNames: ["review"] })
+      }
+    });
+    expect(missingReadSkill.statusCode).toBe(422);
+    expect(missingReadSkill.json()).toMatchObject({
+      error: {
+        code: "VALIDATION_FAILED",
+        details: {
+          issues: [
+            {
+              message: "Agent 'assistant' references skills but does not allow 'read_skill'"
+            }
+          ]
+        }
+      }
+    });
+
+    const overview = await request(fixture.server, token, {
+      method: "GET",
+      url: "/api/admin/config/assets"
+    });
+    expect(overview.json()).toMatchObject({ version: 2 });
+  });
+
   it("rejects chat-scoped tokens and service users without write permission", async () => {
     const fixture = await createFixture();
     const chatToken = await mintToken(fixture.server, {
@@ -272,7 +350,10 @@ async function createFixture() {
     },
     auth: {},
     modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
-    tools: [{ name: "known.tool", enabled: true }]
+    tools: [
+      { name: "known.tool", enabled: true },
+      { name: "read_skill", enabled: true }
+    ]
   });
   const authOptions = {
     secret: "a-development-session-token-secret",
@@ -304,7 +385,7 @@ async function createFixture() {
       validationRefs: {
         modelProviderIds: ["local"],
         modelBindingIds: [],
-        enabledToolNames: ["known.tool"]
+        enabledToolNames: ["known.tool", "read_skill"]
       }
     },
     agentRuntime: createUnusedAgentRuntime(),

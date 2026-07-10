@@ -818,7 +818,12 @@ export const configAssetRevisionSchema = z.object({
 export const configAssetsOverviewSchema = z.object({
   version: z.number().int().nonnegative(),
   defaultAgentName: z.string().optional(),
-  assets: z.array(configAssetSummarySchema)
+  assets: z.array(configAssetSummarySchema),
+  references: z.object({
+    modelProviderIds: z.array(z.string()),
+    modelBindingIds: z.array(z.string()),
+    enabledToolNames: z.array(z.string())
+  })
 });
 
 export const configAssetBundleSchema = z.object({
