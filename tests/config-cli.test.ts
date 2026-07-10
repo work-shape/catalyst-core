@@ -1,0 +1,388 @@
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import type { FastifyInstance } from "fastify";
+import { HmacSessionTokenAuthAdapter, HmacSessionTokenIssuer } from "@vivd-catalyst/auth";
+import { createChatServer } from "@vivd-catalyst/chat-server";
+import {
+  AppError,
+  StoreBackedAuditRecorder,
+  asClientInstanceId,
+  type AgentRuntime,
+  type RuntimeCallContext
+} from "@vivd-catalyst/core";
+import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import type { ModelProvider } from "@vivd-catalyst/model-provider";
+import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+import {
+  STATE_FILENAME,
+  canonicalBundleFiles,
+  canonicalizeAgentConfig,
+  createUnifiedDiff,
+  parseAgentYaml,
+  parseManifest,
+  parseSkillFile,
+  readStateFile,
+  resolveInstance,
+  runConfigCommand,
+  serializeAgentYaml,
+  serializeSkillMarkdown,
+  writeStateFile
+} from "../packages/config-cli/src/index";
+
+const servers: FastifyInstance[] = [];
+const temporaryDirectories: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(servers.splice(0).map((server) => server.close()));
+  await Promise.all(
+    temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true }))
+  );
+});
+
+describe("config CLI serialization", () => {
+  it("deterministically round-trips agent YAML and ignores provenance comments", () => {
+    const input = agentConfig("First line\nSecond line");
+    const serialized = serializeAgentYaml(input, { instance: "local", version: 12 });
+
+    expect(serialized).toMatch(/^# Pulled from local \(config version 12\)\./u);
+    expect(serialized).toMatch(/instructions: \|[-+]?\n/u);
+    expect(parseAgentYaml(serialized)).toEqual(canonicalizeAgentConfig(input));
+    expect(serializeAgentYaml(parseAgentYaml(serialized))).toBe(
+      serializeAgentYaml(canonicalizeAgentConfig(input))
+    );
+    expect(Object.keys(canonicalizeAgentConfig(input))).toEqual([
+      "name",
+      "displayName",
+      "instructions",
+      "modelProviderId",
+      "toolNames",
+      "skillNames",
+      "initialPrompts"
+    ]);
+  });
+
+  it("round-trips SKILL.md with provenance comments inside frontmatter", () => {
+    const skill = {
+      name: "review",
+      title: "Review",
+      description: "Review a workflow",
+      content: "# Review\n\nCheck the workflow."
+    };
+    const serialized = serializeSkillMarkdown(skill, { instance: "staging", version: 4 });
+
+    expect(serialized).toContain("---\n# Pulled from staging (config version 4).\n");
+    expect(parseSkillFile(serialized)).toEqual(skill);
+    expect(serializeSkillMarkdown(parseSkillFile(serialized))).toBe(
+      serializeSkillMarkdown(skill)
+    );
+  });
+});
+
+describe("config CLI state and manifest", () => {
+  it("reads and atomically writes state files", async () => {
+    const directory = await createTemporaryDirectory();
+    const path = resolve(directory, STATE_FILENAME);
+
+    expect(await readStateFile(path)).toEqual({ instances: {} });
+    await writeStateFile(path, {
+      instances: {
+        local: { lastPulledVersion: 12 },
+        staging: { lastPulledVersion: 3 }
+      }
+    });
+
+    expect(await readStateFile(path)).toEqual({
+      instances: {
+        local: { lastPulledVersion: 12 },
+        staging: { lastPulledVersion: 3 }
+      }
+    });
+    expect(await readFile(path, "utf8")).toContain('"lastPulledVersion": 12');
+  });
+
+  it("resolves named, default, and direct URL instances", () => {
+    const manifest = parseManifest(`instances:
+  local:
+    url: http://127.0.0.1:4100/
+defaultInstance: local
+defaultAgentName: workflow_assistant
+agents:
+  - agents/*.agent.yaml
+skills:
+  - skills/*/SKILL.md
+`);
+
+    expect(resolveInstance(manifest)).toEqual({ key: "local", url: "http://127.0.0.1:4100" });
+    expect(resolveInstance(manifest, "local")).toEqual({
+      key: "local",
+      url: "http://127.0.0.1:4100"
+    });
+    expect(resolveInstance(manifest, "https://catalyst.example.test/")).toEqual({
+      key: "https://catalyst.example.test/",
+      url: "https://catalyst.example.test"
+    });
+  });
+});
+
+describe("config CLI diff", () => {
+  it("prints a unified diff for a changed agent", () => {
+    const remote = canonicalBundleFiles({
+      defaultAgentName: "assistant",
+      agents: [agentConfig("Remote instructions")],
+      skills: []
+    });
+    const local = canonicalBundleFiles({
+      defaultAgentName: "assistant",
+      agents: [agentConfig("Local instructions")],
+      skills: []
+    });
+    const path = "agents/assistant.agent.yaml";
+    const output = createUnifiedDiff(
+      { path, contents: remote.get(path) },
+      { path, contents: local.get(path) }
+    );
+
+    expect(output).toContain(`diff --git a/${path} b/${path}`);
+    expect(output).toContain("-instructions: Remote instructions");
+    expect(output).toContain("+instructions: Local instructions");
+  });
+});
+
+describe("config CLI command flows", () => {
+  it("pulls, pushes, and reports a stale-version conflict against Fastify", async () => {
+    const fixture = await createFixture();
+    await fixture.store.applyConfigAssetMutations({
+      clientInstanceId: fixture.clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: "assistant",
+          config: agentConfig("Remote instructions")
+        },
+        { type: "setDefaultAgent", agentName: "assistant" }
+      ]
+    });
+    const url = "http://catalyst.test";
+    const directory = await createTemporaryDirectory();
+    await writeFile(
+      resolve(directory, "catalyst.yaml"),
+      `# Keep this manifest comment
+instances:
+  local:
+    url: ${url}
+defaultInstance: local
+defaultAgentName: stale_default
+agents:
+  - agents/*.agent.yaml
+skills:
+  - skills/*/SKILL.md
+`,
+      "utf8"
+    );
+    const obsoleteAgentPath = resolve(directory, "agents", "obsolete.agent.yaml");
+    await mkdir(resolve(directory, "agents"), { recursive: true });
+    await writeFile(
+      obsoleteAgentPath,
+      serializeAgentYaml(agentConfig("Obsolete", { name: "obsolete" })),
+      "utf8"
+    );
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const commandOptions = {
+      cwd: directory,
+      env: { CATALYST_SERVER_CREDENTIAL: "server-credential" },
+      fetchImpl: createFastifyFetch(fixture.server),
+      stdout: (text: string) => stdout.push(text),
+      stderr: (text: string) => stderr.push(text)
+    };
+
+    expect(await runConfigCommand("pull", commandOptions)).toBe(0);
+    const agentPath = resolve(directory, "agents", "assistant.agent.yaml");
+    const pulledAgent = parseAgentYaml(await readFile(agentPath, "utf8"));
+    expect(pulledAgent.instructions).toBe("Remote instructions");
+    await expect(readFile(obsoleteAgentPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await readStateFile(resolve(directory, STATE_FILENAME))).toEqual({
+      instances: { local: { lastPulledVersion: 1 } }
+    });
+    expect(await readFile(resolve(directory, "catalyst.yaml"), "utf8")).toContain(
+      "# Keep this manifest comment"
+    );
+    expect(await readFile(resolve(directory, "catalyst.yaml"), "utf8")).toContain(
+      "defaultAgentName: assistant"
+    );
+    expect(stdout.join("")).toContain("Pulled 1 agent, 0 skills, version 1.");
+
+    await writeFile(
+      agentPath,
+      serializeAgentYaml({ ...pulledAgent, instructions: "Local instructions" }),
+      "utf8"
+    );
+    stdout.length = 0;
+    expect(await runConfigCommand("push", commandOptions)).toBe(0);
+    expect(stdout.join("")).toContain("Pushed 1 agent, 0 skills, version 2.");
+    expect(
+      await fixture.store.getConfigAsset({
+        clientInstanceId: fixture.clientInstanceId,
+        kind: "agent",
+        name: "assistant"
+      })
+    ).toMatchObject({ config: { instructions: "Local instructions" } });
+
+    await fixture.store.applyConfigAssetMutations({
+      clientInstanceId: fixture.clientInstanceId,
+      baseVersion: 2,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: "assistant",
+          config: agentConfig("New remote instructions")
+        }
+      ]
+    });
+    await writeFile(
+      agentPath,
+      serializeAgentYaml({ ...pulledAgent, instructions: "Stale local instructions" }),
+      "utf8"
+    );
+    stderr.length = 0;
+    expect(await runConfigCommand("push", commandOptions)).toBe(1);
+    expect(stderr.join("")).toContain("remote is at version 3; you last pulled 2");
+    expect(stderr.join("")).toContain("catalyst config diff");
+    expect(stderr.join("")).toContain("--force");
+  });
+});
+
+async function createTemporaryDirectory(): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), "catalyst-config-cli-"));
+  temporaryDirectories.push(directory);
+  return directory;
+}
+
+async function createFixture() {
+  const clientInstanceId = asClientInstanceId("config-cli-test");
+  const store = new InMemoryPlatformStore();
+  const config = parseClientInstanceConfig({
+    version: 1,
+    clientInstance: {
+      id: clientInstanceId,
+      displayName: "Config CLI test",
+      environment: "development"
+    },
+    auth: {},
+    defaultAgentName: "runtime-agent",
+    agents: [agentConfig("Runtime config", { name: "runtime-agent" })],
+    modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
+    tools: [{ name: "known.tool", enabled: true }]
+  });
+  const authOptions = {
+    secret: "a-development-session-token-secret",
+    clientInstanceId,
+    issuer: "config-cli-test",
+    ttlSeconds: 900
+  };
+  const issuer = new HmacSessionTokenIssuer(authOptions);
+  const auditRecorder = new StoreBackedAuditRecorder({ clientInstanceId, store });
+  const server = await createChatServer({
+    config,
+    clientInstanceId,
+    authAdapter: new HmacSessionTokenAuthAdapter(authOptions),
+    conversationStore: store,
+    auditEventStore: store,
+    userStore: store,
+    usageGovernance: new ModelUsageGovernance({
+      store,
+      budget: config.usage.budget,
+      safeguards: config.usage.safeguards,
+      pricing: config.usage.pricing
+    }),
+    auditRecorder,
+    configAssets: {
+      store,
+      validationRefs: {
+        modelProviderIds: ["local"],
+        modelBindingIds: [],
+        enabledToolNames: ["known.tool"]
+      }
+    },
+    agentRuntime: createUnusedAgentRuntime(),
+    modelProvider: createUnusedModelProvider(),
+    sessionToken: { issuer, serverCredential: "server-credential" }
+  });
+  servers.push(server);
+  return { clientInstanceId, server, store };
+}
+
+function agentConfig(
+  instructions: string,
+  overrides: { name?: string } = {}
+) {
+  return {
+    name: overrides.name ?? "assistant",
+    displayName: "Assistant",
+    instructions,
+    modelProviderId: "local",
+    toolNames: [],
+    skillNames: [],
+    initialPrompts: []
+  };
+}
+
+function createUnusedAgentRuntime(): AgentRuntime {
+  return {
+    async start() {
+      throw new AppError("INTERNAL", "Agent runtime should not be used by config CLI tests");
+    },
+    async *observe() {
+      throw new AppError("INTERNAL", "Agent runtime should not be used by config CLI tests");
+    },
+    async getStatus() {
+      throw new AppError("INTERNAL", "Agent runtime should not be used by config CLI tests");
+    },
+    async resume() {
+      throw new AppError("INTERNAL", "Agent runtime should not be used by config CLI tests");
+    },
+    async cancel() {
+      throw new AppError("INTERNAL", "Agent runtime should not be used by config CLI tests");
+    }
+  };
+}
+
+function createUnusedModelProvider(): ModelProvider {
+  return {
+    id: "unused",
+    async complete(_request, _context: RuntimeCallContext) {
+      throw new AppError("INTERNAL", "Model provider should not be used by config CLI tests");
+    }
+  };
+}
+
+function createFastifyFetch(server: FastifyInstance): typeof fetch {
+  return async (input, init) => {
+    const request = input instanceof Request ? input : undefined;
+    const url = new URL(request?.url ?? String(input));
+    const headers = new Headers(request?.headers);
+    new Headers(init?.headers).forEach((value, key) => headers.set(key, value));
+    const body = init?.body;
+    const response = await server.inject({
+      method: (init?.method ?? request?.method ?? "GET") as "GET" | "POST" | "PUT",
+      url: `${url.pathname}${url.search}`,
+      headers: Object.fromEntries(headers),
+      ...(typeof body === "string" ? { payload: body } : {})
+    });
+    const responseHeaders = new Headers();
+    for (const [name, value] of Object.entries(response.headers)) {
+      if (value !== undefined) {
+        responseHeaders.set(name, Array.isArray(value) ? value.join(", ") : String(value));
+      }
+    }
+    return new Response(response.body, {
+      status: response.statusCode,
+      headers: responseHeaders
+    });
+  };
+}

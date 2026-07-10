@@ -90,7 +90,7 @@ async function loadSkillFile(baseDir: string, skillFile: string) {
   return skill.data;
 }
 
-function parseSkillMarkdown(contents: string, skillFile: string, skillPath: string): unknown {
+export function parseSkillMarkdown(contents: string, skillFile: string, skillPath: string): unknown {
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/u.exec(contents);
   if (!match) {
     throw new AppError(

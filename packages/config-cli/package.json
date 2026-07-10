@@ -1,0 +1,33 @@
+{
+  "name": "@vivd-catalyst/config-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "catalyst": "./dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@vivd-catalyst/api-contract": "workspace:*",
+    "@vivd-catalyst/config-schema": "workspace:*",
+    "js-yaml": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^24.13.1",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3"
+  }
+}
