@@ -308,6 +308,7 @@ async function createFixture() {
       validationRefs: {
         modelProviderIds: ["local"],
         modelBindingIds: [],
+        modelBindings: [],
         reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
         enabledToolNames: ["known.tool"]
       }

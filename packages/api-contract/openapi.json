@@ -8808,6 +8808,25 @@
                             "type": "string"
                           }
                         },
+                        "modelBindings": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "model": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "model"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
                         "reasoningEfforts": {
                           "type": "array",
                           "items": {
@@ -8831,6 +8850,7 @@
                       "required": [
                         "modelProviderIds",
                         "modelBindingIds",
+                        "modelBindings",
                         "reasoningEfforts",
                         "enabledToolNames"
                       ],

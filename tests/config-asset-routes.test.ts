@@ -56,6 +56,7 @@ describe("config asset admin routes", () => {
       references: {
         modelProviderIds: ["local"],
         modelBindingIds: [],
+        modelBindings: [],
         reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
         enabledToolNames: ["known.tool", "read_skill"]
       }
@@ -474,6 +475,7 @@ async function createFixture(input: { agentConfiguration?: Record<string, unknow
       validationRefs: {
         modelProviderIds: ["local"],
         modelBindingIds: [],
+        modelBindings: [],
         reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
         enabledToolNames: ["known.tool", "read_skill"]
       }

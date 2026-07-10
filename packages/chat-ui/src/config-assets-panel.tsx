@@ -477,6 +477,10 @@ function AgentEditor({
   const canEditModel = canEdit("modelBindingId");
   const canEditReasoningEffort = canEdit("reasoningEffort");
   const canEditMaxSteps = canEdit("maxSteps");
+  const modelBindings =
+    references?.modelBindings ??
+    references?.modelBindingIds.map((id) => ({ id, model: id })) ??
+    [];
 
   const update = (patch: Partial<AgentFormState>) => setForm((value) => ({ ...value, ...patch }));
 
@@ -600,11 +604,11 @@ function AgentEditor({
                   }
                 >
                   <option value="">Instance default</option>
-                  {references?.modelBindingIds.length ? (
+                  {modelBindings.length ? (
                     <optgroup label="Configured bindings">
-                      {references.modelBindingIds.map((id) => (
-                        <option key={id} value={id}>
-                          {id}
+                      {modelBindings.map((binding) => (
+                        <option key={binding.id} value={binding.id}>
+                          {modelBindingLabel(binding, modelBindings)}
                         </option>
                       ))}
                     </optgroup>
@@ -705,6 +709,16 @@ function AgentEditor({
       ) : null}
     </form>
   );
+}
+
+function modelBindingLabel(
+  binding: { id: string; model: string },
+  bindings: Array<{ id: string; model: string }>
+): string {
+  const duplicateModel = bindings.some(
+    (candidate) => candidate.id !== binding.id && candidate.model === binding.model
+  );
+  return duplicateModel ? `${binding.model} (${binding.id})` : binding.model;
 }
 
 function SkillEditor({

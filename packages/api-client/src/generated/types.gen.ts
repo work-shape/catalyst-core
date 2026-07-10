@@ -2253,6 +2253,10 @@ export type GetConfigAssetsOverviewResponses = {
         references: {
             modelProviderIds: Array<string>;
             modelBindingIds: Array<string>;
+            modelBindings: Array<{
+                id: string;
+                model: string;
+            }>;
             reasoningEfforts: Array<'none' | 'low' | 'medium' | 'high' | 'xhigh'>;
             enabledToolNames: Array<string>;
         };

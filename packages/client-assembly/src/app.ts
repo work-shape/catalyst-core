@@ -262,6 +262,14 @@ export async function createClientInstanceApp(
         modelBindingIds: config.modelBindings
           .filter((binding) => binding.agentSelectable !== false)
           .map((binding) => binding.id),
+        modelBindings: config.modelBindings
+          .filter((binding) => binding.agentSelectable !== false)
+          .map((binding) => ({
+            id: binding.id,
+            model:
+              binding.model ??
+              config.modelProviders.find((provider) => provider.id === binding.providerId)!.model
+          })),
         reasoningEfforts: [...REASONING_EFFORTS],
         enabledToolNames: [...getEnabledToolNames(config)]
       }

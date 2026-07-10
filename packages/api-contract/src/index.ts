@@ -858,6 +858,12 @@ export const configAssetsOverviewSchema = z.object({
   references: z.object({
     modelProviderIds: z.array(z.string()),
     modelBindingIds: z.array(z.string()),
+    modelBindings: z.array(
+      z.object({
+        id: z.string(),
+        model: z.string()
+      })
+    ),
     reasoningEfforts: z.array(reasoningEffortSchema),
     enabledToolNames: z.array(z.string())
   })
