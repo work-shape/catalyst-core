@@ -526,6 +526,27 @@ export const uiConfigSchema = z
     defaultThemeMode: "system"
   });
 
+export const administrationConfigSchema = z
+  .object({
+    configAssets: z
+      .object({
+        enabled: z.boolean().default(false),
+        editableAgentFields: z
+          .object({
+            model: z.boolean().default(false),
+            maxSteps: z.boolean().default(false)
+          })
+          .default({ model: false, maxSteps: false })
+      })
+      .default({ enabled: false, editableAgentFields: { model: false, maxSteps: false } })
+  })
+  .default({
+    configAssets: {
+      enabled: false,
+      editableAgentFields: { model: false, maxSteps: false }
+    }
+  });
+
 export const clientInstanceConfigSchema = z.object({
   version: z.literal(1).default(1),
   clientInstance: z.object({
@@ -578,6 +599,7 @@ export const clientInstanceConfigSchema = z.object({
   modelContext: modelContextConfigSchema,
   webAccess: webAccessConfigSchema,
   executionWorkspaces: executionWorkspacesConfigSchema,
+  administration: administrationConfigSchema,
   capabilities: z.record(z.string(), z.unknown()).default({}),
   usage: z
     .object({

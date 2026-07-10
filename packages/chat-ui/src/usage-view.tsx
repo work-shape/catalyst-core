@@ -5,6 +5,7 @@ import type {
   ModelUsageMonthlyBucket,
   UsageSummary
 } from "@vivd-catalyst/api-client";
+import { ControlPlanePage } from "./control-plane/control-plane-page";
 import { Badge } from "./ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { cn } from "./ui/cn";
@@ -14,7 +15,10 @@ export function UsageView({ usage }: { usage: UsageSummary | undefined }) {
   const recentEvents = usage?.recentEvents ?? [];
   const showWebSearchCosts = shouldShowWebSearchCosts(usage);
   return (
-    <>
+    <ControlPlanePage
+      title="Usage"
+      description={`${(usage?.currentMonth.modelCallCount ?? 0).toLocaleString()} model calls · ${(usage?.currentMonth.totalTokens ?? 0).toLocaleString()} tokens this month`}
+    >
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <UsageMetric
           primary
@@ -167,7 +171,7 @@ export function UsageView({ usage }: { usage: UsageSummary | undefined }) {
           )}
         </CardContent>
       </Card>
-    </>
+    </ControlPlanePage>
   );
 }
 

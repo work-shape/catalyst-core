@@ -75,7 +75,7 @@ function createStandaloneChatRouter(options: StandaloneChatRouterOptions) {
     getParentRoute: () => rootRoute,
     path: "admin",
     beforeLoad: () => {
-      throw redirect({ to: "/admin/usage" });
+      throw redirect({ to: "/admin/users" });
     }
   });
   const adminUsageRoute = createRoute({

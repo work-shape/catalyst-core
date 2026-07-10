@@ -337,6 +337,13 @@ export const safeConfigSchema = z.object({
     attachments: z.object({
       enabled: z.boolean(),
       accept: z.string()
+    }),
+    configAssets: z.object({
+      enabled: z.boolean(),
+      editableAgentFields: z.object({
+        model: z.boolean(),
+        maxSteps: z.boolean()
+      })
     })
   }),
   defaultAgentName: z.string().optional(),

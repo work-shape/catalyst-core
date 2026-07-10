@@ -1,4 +1,4 @@
-import { Bot, BookOpen, History, Plus, Star, Trash2 } from "lucide-react";
+import { Bot, BookOpen, ChevronDown, History, Plus, Star, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import type {
   ConfigAssetKind,
@@ -23,6 +23,7 @@ import {
   InitialPromptsEditor,
   LocalizedField
 } from "./config-asset-form-fields";
+import { ControlPlanePage } from "./control-plane/control-plane-page";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { cn } from "./ui/cn";
@@ -38,6 +39,10 @@ export interface ConfigAssetBundleEntry {
 }
 
 export interface ConfigAssetsPanelInput {
+  editableAgentFields: {
+    model: boolean;
+    maxSteps: boolean;
+  };
   overview: ConfigAssetsOverview | undefined;
   agents: ConfigAssetBundleEntry[];
   skills: ConfigAssetBundleEntry[];
@@ -80,6 +85,14 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
   const defaultAgentName = input.overview?.defaultAgentName;
   const agentNames = input.agents.map((agent) => agent.name);
   const skillNames = input.skills.map((skill) => skill.name);
+  const pageDescription = (
+    <>
+      {agentNames.length.toLocaleString()} {agentNames.length === 1 ? "agent" : "agents"}
+      {" · "}
+      {skillNames.length.toLocaleString()} {skillNames.length === 1 ? "skill" : "skills"}
+      {version !== undefined ? ` · Version ${version}` : ""}
+    </>
+  );
 
   const selectedEntry =
     selection?.mode === "existing"
@@ -109,60 +122,99 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
 
   if (input.loading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Spinner className="size-4" />
-        Loading configuration…
-      </div>
+      <ControlPlanePage title="Configuration" description={pageDescription}>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner className="size-4" />
+          Loading configuration…
+        </div>
+      </ControlPlanePage>
     );
   }
 
   return (
-    <div className="grid min-h-0 gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]">
-      {input.error ? (
-        <p className="col-span-full text-sm text-destructive">{input.error}</p>
-      ) : null}
+    <ControlPlanePage
+      title="Configuration"
+      description={pageDescription}
+      actions={
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setSelection({ mode: "new", kind: "skill" })}
+          >
+            <Plus size={16} aria-hidden="true" />
+            New skill
+          </Button>
+          <Button type="button" onClick={() => setSelection({ mode: "new", kind: "agent" })}>
+            <Plus size={16} aria-hidden="true" />
+            New agent
+          </Button>
+        </>
+      }
+    >
+      {input.error ? <p className="text-sm text-destructive">{input.error}</p> : null}
 
-      <aside className="grid content-start gap-4">
-        <AssetList
-          label="Agents"
-          icon={<Bot size={14} aria-hidden="true" />}
-          names={agentNames}
-          decorate={(name) =>
-            name === defaultAgentName ? (
-              <Badge variant="secondary" className="gap-1 px-1.5 text-[10px]">
-                <Star size={10} aria-hidden="true" />
-                Default
-              </Badge>
-            ) : null
-          }
-          selectedName={selection?.mode === "existing" && selection.kind === "agent" ? selection.name : undefined}
-          creating={selection?.mode === "new" && selection.kind === "agent"}
-          onSelect={(name) => setSelection({ mode: "existing", kind: "agent", name })}
-          onCreate={() => setSelection({ mode: "new", kind: "agent" })}
-        />
-        <AssetList
-          label="Skills"
-          icon={<BookOpen size={14} aria-hidden="true" />}
-          names={skillNames}
-          decorate={() => null}
-          selectedName={selection?.mode === "existing" && selection.kind === "skill" ? selection.name : undefined}
-          creating={selection?.mode === "new" && selection.kind === "skill"}
-          onSelect={(name) => setSelection({ mode: "existing", kind: "skill", name })}
-          onCreate={() => setSelection({ mode: "new", kind: "skill" })}
-        />
-        {version !== undefined ? (
-          <p className="px-1 text-xs text-muted-foreground">
-            Config version {version}. Also editable with the <code>catalyst</code> CLI.
-          </p>
-        ) : null}
-      </aside>
+      <div className="grid min-h-[38rem] min-w-0 auto-rows-max rounded-lg border bg-card text-card-foreground shadow-xs lg:grid-cols-[18rem_minmax(0,1fr)]">
+        <aside className="grid min-w-0 content-start gap-4 overflow-hidden border-b bg-muted/10 p-3 sm:grid-cols-2 lg:grid-cols-1 lg:border-r lg:border-b-0">
+          <AssetList
+            label="Agents"
+            icon={<Bot size={14} aria-hidden="true" />}
+            names={agentNames}
+            decorate={(name) =>
+              name === defaultAgentName ? (
+                <span
+                  className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-primary"
+                  title="Default agent"
+                  aria-label="Default agent"
+                >
+                  <Star size={13} aria-hidden="true" />
+                </span>
+              ) : null
+            }
+            selectedName={
+              selection?.mode === "existing" && selection.kind === "agent"
+                ? selection.name
+                : undefined
+            }
+            creating={selection?.mode === "new" && selection.kind === "agent"}
+            onSelect={(name) => setSelection({ mode: "existing", kind: "agent", name })}
+          />
+          <AssetList
+            label="Skills"
+            icon={<BookOpen size={14} aria-hidden="true" />}
+            names={skillNames}
+            decorate={() => null}
+            selectedName={
+              selection?.mode === "existing" && selection.kind === "skill"
+                ? selection.name
+                : undefined
+            }
+            creating={selection?.mode === "new" && selection.kind === "skill"}
+            onSelect={(name) => setSelection({ mode: "existing", kind: "skill", name })}
+          />
+          {version !== undefined ? (
+            <p className="border-t px-1 pt-3 text-xs leading-5 text-muted-foreground sm:col-span-2 lg:col-span-1">
+              Also editable with the <code>catalyst</code> CLI.
+            </p>
+          ) : null}
+        </aside>
 
-      <div className="min-w-0">
+        <div className="min-w-0 bg-background/30">
         {selection === undefined ? (
-          <p className="pt-1 text-sm text-muted-foreground">
-            Select an agent or skill to edit it, or create a new one. Changes apply to new
-            conversations immediately — no deployment needed.
-          </p>
+          <div className="grid min-h-[28rem] place-items-center p-6 text-center">
+            <div className="grid max-w-sm justify-items-center gap-3">
+              <span className="inline-flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <Bot size={18} aria-hidden="true" />
+              </span>
+              <div className="grid gap-1">
+                <h2 className="text-base font-semibold">Select an agent or skill</h2>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Choose an item from the navigation to edit it. Changes apply to new conversations
+                  immediately, without a deployment.
+                </p>
+              </div>
+            </div>
+          </div>
         ) : selection.kind === "agent" ? (
           <AgentEditor
             key={`${resetToken}:${selectionKey(selection)}`}
@@ -174,6 +226,7 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
             isNew={selection.mode === "new"}
             isDefault={selection.mode === "existing" && selection.name === defaultAgentName}
             references={input.overview?.references}
+            editableAgentFields={input.editableAgentFields}
             skillNames={skillNames}
             mutating={input.mutating}
             onSave={(form) =>
@@ -297,6 +350,7 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
             }
           />
         )}
+        </div>
       </div>
 
       <Dialog
@@ -317,7 +371,7 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
           </div>
         </div>
       </Dialog>
-    </div>
+    </ControlPlanePage>
   );
 }
 
@@ -332,8 +386,7 @@ function AssetList({
   decorate,
   selectedName,
   creating,
-  onSelect,
-  onCreate
+  onSelect
 }: {
   label: string;
   icon: React.ReactNode;
@@ -342,36 +395,31 @@ function AssetList({
   selectedName: string | undefined;
   creating: boolean;
   onSelect(name: string): void;
-  onCreate(): void;
 }) {
   return (
-    <section className="grid gap-1" aria-label={label}>
-      <div className="flex items-center justify-between px-1">
-        <h2 className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase">
+    <section className="grid min-w-0 gap-1.5 overflow-hidden" aria-label={label}>
+      <div className="flex min-h-7 items-center justify-between gap-2 px-1">
+        <h2 className="inline-flex min-w-0 items-center gap-1.5 text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase">
           {icon}
           {label}
         </h2>
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-          onClick={onCreate}
-        >
-          <Plus size={13} aria-hidden="true" />
-          New
-        </button>
+        <span className="text-xs tabular-nums text-muted-foreground">{names.length}</span>
       </div>
-      <ul className="grid gap-0.5">
+      <ul className="grid min-w-0 gap-1 overflow-hidden">
         {names.map((name) => (
-          <li key={name}>
+          <li key={name} className="min-w-0 overflow-hidden">
             <button
               type="button"
               className={cn(
-                "flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted/60",
-                selectedName === name && "bg-muted font-medium"
+                "flex h-9 w-full min-w-0 items-center justify-between gap-2 overflow-hidden rounded-md px-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground",
+                selectedName === name && "bg-primary/10 font-medium text-foreground hover:bg-primary/15"
               )}
+              title={name}
               onClick={() => onSelect(name)}
             >
-              <span className="truncate font-mono text-xs">{name}</span>
+              <span className="block min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs">
+                {name}
+              </span>
               {decorate(name)}
             </button>
           </li>
@@ -394,6 +442,7 @@ function AgentEditor({
   isNew,
   isDefault,
   references,
+  editableAgentFields,
   skillNames,
   mutating,
   onSave,
@@ -405,6 +454,7 @@ function AgentEditor({
   isNew: boolean;
   isDefault: boolean;
   references: ConfigAssetsOverview["references"] | undefined;
+  editableAgentFields: ConfigAssetsPanelInput["editableAgentFields"];
   skillNames: string[];
   mutating: boolean;
   onSave(form: AgentFormState): Promise<MutationOutcome>;
@@ -424,9 +474,15 @@ function AgentEditor({
   };
 
   return (
-    <form className="grid max-w-3xl content-start gap-5" onSubmit={submit}>
+    <form className="grid min-w-0 content-start" onSubmit={submit}>
       <EditorHeader
-        title={isNew ? "New agent" : form.name}
+        eyebrow="Agent"
+        title={
+          isNew
+            ? "New agent"
+            : form.displayName.en.trim() || form.displayName.de.trim() || form.name
+        }
+        identifier={isNew ? undefined : form.name}
         badges={isDefault ? <Badge variant="secondary">Default agent</Badge> : null}
         actions={
           <>
@@ -445,9 +501,9 @@ function AgentEditor({
             {onDelete ? (
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                className="text-destructive hover:text-destructive"
+                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                 disabled={mutating}
                 onClick={() => setDeleteOpen(true)}
               >
@@ -459,114 +515,150 @@ function AgentEditor({
         }
       />
 
-      {isNew ? (
-        <Field label="Name" hint="Stable identifier, letters/digits/underscores. Cannot be renamed later.">
-          <Input
-            value={form.name}
-            required
-            placeholder="workflow_assistant"
-            onChange={(event) => update({ name: event.target.value })}
-          />
-        </Field>
-      ) : null}
-
-      <LocalizedField
-        label="Display name"
-        required
-        value={form.displayName}
-        onChange={(displayName) => update({ displayName })}
-      />
-      <LocalizedField
-        label="Welcome message"
-        value={form.welcomeMessage}
-        onChange={(welcomeMessage) => update({ welcomeMessage })}
-      />
-      <LocalizedField
-        label="Welcome subtitle"
-        value={form.welcomeSubtitle}
-        onChange={(welcomeSubtitle) => update({ welcomeSubtitle })}
-      />
-
-      <Field label="Instructions" hint="The agent's system prompt.">
-        <Textarea
-          value={form.instructions}
+      <EditorSection
+        title="Identity and welcome"
+        description="Names and messages shown to people when they start a conversation."
+      >
+        {isNew ? (
+          <Field label="Name" hint="Stable identifier, letters/digits/underscores. Cannot be renamed later.">
+            <Input
+              value={form.name}
+              required
+              placeholder="workflow_assistant"
+              onChange={(event) => update({ name: event.target.value })}
+            />
+          </Field>
+        ) : null}
+        <LocalizedField
+          label="Display name"
           required
-          rows={10}
-          className="font-mono text-xs leading-5"
-          onChange={(event) => update({ instructions: event.target.value })}
+          value={form.displayName}
+          onChange={(displayName) => update({ displayName })}
         />
-      </Field>
+        <LocalizedField
+          label="Welcome message"
+          value={form.welcomeMessage}
+          onChange={(welcomeMessage) => update({ welcomeMessage })}
+        />
+        <LocalizedField
+          label="Welcome subtitle"
+          value={form.welcomeSubtitle}
+          onChange={(welcomeSubtitle) => update({ welcomeSubtitle })}
+        />
+      </EditorSection>
 
-      <div className="grid gap-5 sm:grid-cols-2">
-        <Field label="Model">
-          <Select value={form.model} onChange={(event) => update({ model: event.target.value })}>
-            <option value="">Instance default</option>
-            {references?.modelProviderIds.length ? (
-              <optgroup label="Providers">
-                {references.modelProviderIds.map((id) => (
-                  <option key={id} value={`provider:${id}`}>
-                    {id}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
-            {references?.modelBindingIds.length ? (
-              <optgroup label="Bindings">
-                {references.modelBindingIds.map((id) => (
-                  <option key={id} value={`binding:${id}`}>
-                    {id}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
-          </Select>
-        </Field>
-        <Field label="Max steps" hint="Empty uses the instance default.">
-          <Input
-            type="number"
-            min={1}
-            value={form.maxSteps}
-            onChange={(event) => update({ maxSteps: event.target.value })}
+      <EditorSection
+        title="Behavior"
+        description={
+          editableAgentFields.model || editableAgentFields.maxSteps
+            ? "Core instructions and permitted runtime controls for this agent."
+            : "Core instructions for this agent."
+        }
+      >
+        <Field label="Instructions" hint="The agent's system prompt.">
+          <EditorTextarea
+            label="System prompt"
+            value={form.instructions}
+            required
+            className="min-h-72"
+            onChange={(event) => update({ instructions: event.target.value })}
           />
         </Field>
-      </div>
+        {editableAgentFields.model || editableAgentFields.maxSteps ? (
+          <div
+            className={cn(
+              "grid gap-5",
+              editableAgentFields.model && editableAgentFields.maxSteps && "sm:grid-cols-2"
+            )}
+          >
+            {editableAgentFields.model ? (
+              <Field
+                label="Model"
+                hint="Overrides the model configured for this agent in release config."
+              >
+                <Select
+                  value={form.model}
+                  onChange={(event) => update({ model: event.target.value })}
+                >
+                  <option value="">Instance default</option>
+                  {references?.modelProviderIds.length ? (
+                    <optgroup label="Configured providers">
+                      {references.modelProviderIds.map((id) => (
+                        <option key={id} value={`provider:${id}`}>
+                          {id}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : null}
+                  {references?.modelBindingIds.length ? (
+                    <optgroup label="Configured bindings">
+                      {references.modelBindingIds.map((id) => (
+                        <option key={id} value={`binding:${id}`}>
+                          {id}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : null}
+                </Select>
+              </Field>
+            ) : null}
+            {editableAgentFields.maxSteps ? (
+              <Field
+                label="Max steps"
+                hint="Maximum model and tool turns for one response. Empty uses release config."
+              >
+                <Input
+                  type="number"
+                  min={1}
+                  value={form.maxSteps}
+                  onChange={(event) => update({ maxSteps: event.target.value })}
+                />
+              </Field>
+            ) : null}
+          </div>
+        ) : null}
+      </EditorSection>
 
-      <CheckboxGroup
-        label="Tools"
-        options={references?.enabledToolNames ?? []}
-        selected={form.toolNames}
-        emptyHint="No tools are enabled for this instance."
-        onChange={(toolNames) => update({ toolNames })}
-      />
-      <CheckboxGroup
-        label="Skills"
-        options={skillNames}
-        selected={form.skillNames}
-        emptyHint="No skills defined yet."
-        hint={
-          form.skillNames.length > 0 && !form.toolNames.includes("read_skill")
-            ? "Skills require the read_skill tool to be selected above."
-            : undefined
-        }
-        onChange={(selected) => update({ skillNames: selected })}
-      />
+      <EditorSection
+        title="Capabilities"
+        description="Only tools enabled for this deployment can be assigned here."
+      >
+        <CheckboxGroup
+          label="Tools"
+          options={references?.enabledToolNames ?? []}
+          selected={form.toolNames}
+          emptyHint="No tools are enabled for this instance."
+          onChange={(toolNames) => update({ toolNames })}
+        />
+        <CheckboxGroup
+          label="Skills"
+          options={skillNames}
+          selected={form.skillNames}
+          emptyHint="No skills defined yet."
+          hint={
+            form.skillNames.length > 0 && !form.toolNames.includes("read_skill")
+              ? "Skills require the read_skill tool to be selected above."
+              : undefined
+          }
+          onChange={(selected) => update({ skillNames: selected })}
+        />
+      </EditorSection>
 
-      <InitialPromptsEditor
-        prompts={form.initialPrompts}
-        onChange={(initialPrompts) => update({ initialPrompts })}
-      />
+      <EditorSection
+        title="Starter prompts"
+        description="Suggestion cards shown before the first message is sent."
+      >
+        <InitialPromptsEditor
+          prompts={form.initialPrompts}
+          onChange={(initialPrompts) => update({ initialPrompts })}
+        />
+      </EditorSection>
 
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
-
-      <div className="flex items-center gap-3">
-        <Button type="submit" disabled={mutating}>
-          {mutating ? <Spinner className="size-4" /> : null}
-          {isNew ? "Create agent" : "Save changes"}
-        </Button>
-        <span className="text-xs text-muted-foreground">Applies to new conversations immediately.</span>
-      </div>
+      {error ? <p className="px-5 py-3 text-sm text-destructive">{error}</p> : null}
 
       {revisions}
+
+      <SaveBar label={isNew ? "Create agent" : "Save changes"} mutating={mutating} />
 
       {onDelete ? (
         <DeleteDialog
@@ -610,17 +702,19 @@ function SkillEditor({
   };
 
   return (
-    <form className="grid max-w-3xl content-start gap-5" onSubmit={submit}>
+    <form className="grid min-w-0 content-start" onSubmit={submit}>
       <EditorHeader
-        title={isNew ? "New skill" : form.name}
+        eyebrow="Skill"
+        title={isNew ? "New skill" : form.title.trim() || form.name}
+        identifier={isNew ? undefined : form.name}
         badges={null}
         actions={
           onDelete ? (
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="sm"
-              className="text-destructive hover:text-destructive"
+              className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
               disabled={mutating}
               onClick={() => setDeleteOpen(true)}
             >
@@ -631,48 +725,52 @@ function SkillEditor({
         }
       />
 
-      {isNew ? (
-        <Field label="Name" hint="Stable identifier. Cannot be renamed later.">
+      <EditorSection
+        title="Skill details"
+        description="Metadata used to decide when this skill is relevant."
+      >
+        {isNew ? (
+          <Field label="Name" hint="Stable identifier. Cannot be renamed later.">
+            <Input
+              value={form.name}
+              required
+              placeholder="generic_workflow_review"
+              onChange={(event) => update({ name: event.target.value })}
+            />
+          </Field>
+        ) : null}
+        <Field label="Title" hint="Shown to the model in the skill list.">
+          <Input value={form.title} required onChange={(event) => update({ title: event.target.value })} />
+        </Field>
+        <Field label="Description" hint="Tells the model when to read this skill.">
           <Input
-            value={form.name}
+            value={form.description}
             required
-            placeholder="generic_workflow_review"
-            onChange={(event) => update({ name: event.target.value })}
+            onChange={(event) => update({ description: event.target.value })}
           />
         </Field>
-      ) : null}
+      </EditorSection>
 
-      <Field label="Title" hint="Shown to the model in the skill list.">
-        <Input value={form.title} required onChange={(event) => update({ title: event.target.value })} />
-      </Field>
-      <Field label="Description" hint="Tells the model when to read this skill.">
-        <Input
-          value={form.description}
-          required
-          onChange={(event) => update({ description: event.target.value })}
-        />
-      </Field>
-      <Field label="Content" hint="Markdown instructions the model reads on demand.">
-        <Textarea
-          value={form.content}
-          required
-          rows={16}
-          className="font-mono text-xs leading-5"
-          onChange={(event) => update({ content: event.target.value })}
-        />
-      </Field>
+      <EditorSection
+        title="Instructions"
+        description="Markdown content loaded when the agent reads this skill."
+      >
+        <Field label="Content" hint="Keep instructions focused on this skill's workflow.">
+          <EditorTextarea
+            label="Markdown"
+            value={form.content}
+            required
+            className="min-h-96"
+            onChange={(event) => update({ content: event.target.value })}
+          />
+        </Field>
+      </EditorSection>
 
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
-
-      <div className="flex items-center gap-3">
-        <Button type="submit" disabled={mutating}>
-          {mutating ? <Spinner className="size-4" /> : null}
-          {isNew ? "Create skill" : "Save changes"}
-        </Button>
-        <span className="text-xs text-muted-foreground">Applies to new conversations immediately.</span>
-      </div>
+      {error ? <p className="px-5 py-3 text-sm text-destructive">{error}</p> : null}
 
       {revisions}
+
+      <SaveBar label={isNew ? "Create skill" : "Save changes"} mutating={mutating} />
 
       {onDelete ? (
         <DeleteDialog
@@ -724,81 +822,161 @@ function RevisionHistory({
   );
 
   return (
-    <section className="grid gap-2 border-t pt-4">
+    <section className="grid border-t">
       <button
         type="button"
-        className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+        className="flex w-full min-w-0 items-center gap-2 px-5 py-4 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground"
         aria-expanded={open}
         onClick={toggle}
       >
         <History size={14} aria-hidden="true" />
         Revision history
+        <ChevronDown
+          size={15}
+          aria-hidden="true"
+          className={cn("ml-auto transition-transform", open && "rotate-180")}
+        />
       </button>
       {open ? (
-        error ? (
-          <p className="text-sm text-destructive">{error}</p>
-        ) : revisions === undefined ? (
-          <Spinner className="size-4" />
-        ) : (
-          <ul className="grid gap-1">
-            {[...revisions].reverse().map((revision) => (
-              <li
-                key={revision.revision}
-                className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-1.5 text-xs"
-              >
-                <span className="font-mono">#{revision.revision}</span>
-                <Badge variant="outline" className="capitalize">
-                  {revision.operation}
-                </Badge>
-                <span className="text-muted-foreground">
-                  {new Date(revision.createdAt).toLocaleString()}
-                </span>
-                {revision.actor ? (
-                  <span className="text-muted-foreground">{revision.actor.displayLabel}</span>
-                ) : null}
-                {revision.revision !== currentRevision && revision.config !== null ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="ml-auto h-6 px-2 text-xs"
-                    disabled={mutating}
-                    onClick={async () => {
-                      const outcome = await onRevert(revision.revision);
-                      if (outcome.ok) {
-                        setRevisions(undefined);
-                        setOpen(false);
-                      } else if (outcome.error) {
-                        setError(outcome.error);
-                      }
-                    }}
-                  >
-                    Restore
-                  </Button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )
+        <div className="border-t bg-muted/10 px-5 py-4">
+          {error ? (
+            <p className="text-sm text-destructive">{error}</p>
+          ) : revisions === undefined ? (
+            <Spinner className="size-4" />
+          ) : revisions.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No revisions yet.</p>
+          ) : (
+            <ul className="divide-y overflow-hidden rounded-lg border bg-background">
+              {[...revisions].reverse().map((revision) => (
+                <li
+                  key={revision.revision}
+                  className="grid min-w-0 items-center gap-2 px-3 py-2.5 text-xs sm:grid-cols-[auto_auto_minmax(0,1fr)_auto]"
+                >
+                  <span className="font-mono font-medium">#{revision.revision}</span>
+                  <Badge variant="outline" className="w-fit capitalize">
+                    {revision.operation}
+                  </Badge>
+                  <span className="min-w-0 text-muted-foreground">
+                    {new Date(revision.createdAt).toLocaleString()}
+                    {revision.actor ? ` · ${revision.actor.displayLabel}` : ""}
+                  </span>
+                  {revision.revision !== currentRevision && revision.config !== null ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 w-fit px-2 text-xs"
+                      disabled={mutating}
+                      onClick={async () => {
+                        const outcome = await onRevert(revision.revision);
+                        if (outcome.ok) {
+                          setRevisions(undefined);
+                          setOpen(false);
+                        } else if (outcome.error) {
+                          setError(outcome.error);
+                        }
+                      }}
+                    >
+                      Restore
+                    </Button>
+                  ) : (
+                    <span className="text-right text-muted-foreground">Current</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       ) : null}
     </section>
   );
 }
 
 function EditorHeader({
+  eyebrow,
   title,
+  identifier,
   badges,
   actions
 }: {
+  eyebrow: string;
   title: string;
+  identifier?: string;
   badges: React.ReactNode;
   actions: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <h2 className="font-mono text-base font-semibold">{title}</h2>
-      {badges}
-      <div className="ml-auto flex items-center gap-2">{actions}</div>
+    <header className="flex min-w-0 flex-wrap items-start justify-between gap-4 border-b px-5 py-5">
+      <div className="grid min-w-0 gap-1">
+        <span className="text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
+          {eyebrow}
+        </span>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h2 className="min-w-0 break-words text-lg font-semibold tracking-normal">{title}</h2>
+          {badges}
+        </div>
+        {identifier ? (
+          <code className="min-w-0 truncate text-xs text-muted-foreground" title={identifier}>
+            {identifier}
+          </code>
+        ) : null}
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
+    </header>
+  );
+}
+
+function EditorSection({
+  title,
+  description,
+  children
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="grid min-w-0 gap-4 border-b px-5 py-6 xl:grid-cols-[13rem_minmax(0,1fr)] xl:gap-8">
+      <div className="grid content-start gap-1">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <p className="text-xs leading-5 text-muted-foreground">{description}</p>
+      </div>
+      <div className="grid min-w-0 max-w-3xl gap-5">{children}</div>
+    </section>
+  );
+}
+
+function EditorTextarea({
+  label,
+  className,
+  ...props
+}: React.ComponentProps<typeof Textarea> & { label: string }) {
+  return (
+    <div className="overflow-hidden rounded-lg border bg-muted/15 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
+      <div className="flex h-9 items-center border-b bg-muted/20 px-3 text-xs font-medium text-muted-foreground">
+        {label}
+      </div>
+      <Textarea
+        {...props}
+        className={cn(
+          "resize-y rounded-none border-0 bg-transparent p-4 font-mono text-[13px] leading-6 shadow-none focus-visible:border-0 focus-visible:ring-0 dark:[color-scheme:dark]",
+          className
+        )}
+      />
+    </div>
+  );
+}
+
+function SaveBar({ label, mutating }: { label: string; mutating: boolean }) {
+  return (
+    <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 border-t bg-background/95 px-5 py-3 shadow-[0_-8px_20px_-20px_rgba(0,0,0,0.7)] backdrop-blur">
+      <Button type="submit" className="w-full sm:w-auto" disabled={mutating}>
+        {mutating ? <Spinner className="size-4" /> : null}
+        {label}
+      </Button>
+      <span className="text-xs text-muted-foreground">
+        Applies to new conversations immediately.
+      </span>
     </div>
   );
 }

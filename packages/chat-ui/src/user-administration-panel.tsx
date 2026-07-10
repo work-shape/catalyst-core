@@ -54,6 +54,7 @@ import {
   type UserStatusFilter
 } from "./user-administration-model";
 import { Field, FormNotice, StatusBadge, UserAvatar } from "./user-administration-primitives";
+import { ControlPlanePage } from "./control-plane/control-plane-page";
 
 interface UserAdministrationPanelProps {
   users: AdministeredUser[];
@@ -162,20 +163,16 @@ export function UserAdministrationPanel({
   }
 
   return (
-    <div className="grid content-start gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="grid min-w-0 gap-1">
-          <h1 className="text-[22px] font-semibold tracking-normal text-foreground">Users</h1>
-          <p className="text-sm text-muted-foreground">
-            {users.length.toLocaleString()} users · {activeUserCount.toLocaleString()} active
-          </p>
-        </div>
+    <ControlPlanePage
+      title="Users"
+      description={`${users.length.toLocaleString()} users · ${activeUserCount.toLocaleString()} active`}
+      actions={
         <Button type="button" onClick={() => setCreateOpen(true)}>
           <UserPlus size={16} aria-hidden="true" />
           New user
         </Button>
-      </div>
-
+      }
+    >
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative min-w-56 flex-1">
           <Search
@@ -402,7 +399,7 @@ export function UserAdministrationPanel({
           setSelectedUserId(user.id);
         }}
       />
-    </div>
+    </ControlPlanePage>
   );
 }
 

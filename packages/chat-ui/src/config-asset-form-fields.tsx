@@ -1,6 +1,7 @@
 import { Plus } from "lucide-react";
 import type { AgentFormState, LocalizedPair } from "./config-assets-model";
 import { Button } from "./ui/button";
+import { cn } from "./ui/cn";
 import { Dialog } from "./ui/dialog";
 import { Input } from "./ui/input";
 
@@ -37,23 +38,25 @@ export function LocalizedField({
     <div className="grid gap-1.5">
       <span className="text-sm font-medium">{label}</span>
       <div className="grid gap-2 sm:grid-cols-2">
-        <div className="grid gap-1">
+        <label className="grid gap-1.5">
+          <span className="text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase">
+            EN · English
+          </span>
           <Input
             value={value.en}
             required={required && !value.de.trim()}
-            placeholder="English"
             onChange={(event) => onChange({ ...value, en: event.target.value })}
           />
-          <span className="px-1 text-[10px] text-muted-foreground uppercase">en</span>
-        </div>
-        <div className="grid gap-1">
+        </label>
+        <label className="grid gap-1.5">
+          <span className="text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase">
+            DE · Deutsch
+          </span>
           <Input
             value={value.de}
-            placeholder="Deutsch"
             onChange={(event) => onChange({ ...value, de: event.target.value })}
           />
-          <span className="px-1 text-[10px] text-muted-foreground uppercase">de</span>
-        </div>
+        </label>
       </div>
     </div>
   );
@@ -75,32 +78,53 @@ export function CheckboxGroup({
   onChange(selected: string[]): void;
 }) {
   return (
-    <fieldset className="grid gap-1.5">
-      <legend className="text-sm font-medium">{label}</legend>
-      {options.length === 0 ? (
-        <p className="text-xs text-muted-foreground">{emptyHint}</p>
-      ) : (
-        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-          {options.map((option) => (
-            <label key={option} className="inline-flex items-center gap-1.5 text-sm">
-              <input
-                type="checkbox"
-                className="accent-primary"
-                checked={selected.includes(option)}
-                onChange={(event) =>
-                  onChange(
-                    event.target.checked
-                      ? [...selected, option]
-                      : selected.filter((entry) => entry !== option)
-                  )
-                }
-              />
-              <span className="font-mono text-xs">{option}</span>
-            </label>
-          ))}
+    <fieldset className="grid min-w-0 gap-2">
+      <legend className="sr-only">{label}</legend>
+      <div className="overflow-hidden rounded-lg border bg-background">
+        <div className="flex items-center justify-between gap-3 border-b bg-muted/20 px-3 py-2">
+          <span className="text-sm font-medium">{label}</span>
+          <span className="text-xs tabular-nums text-muted-foreground">
+            {selected.length.toLocaleString()} selected
+          </span>
         </div>
-      )}
-      {hint ? <p className="text-xs text-amber-600">{hint}</p> : null}
+        {options.length === 0 ? (
+          <p className="px-3 py-4 text-xs text-muted-foreground">{emptyHint}</p>
+        ) : (
+          <div className="grid gap-px bg-border sm:grid-cols-2">
+            {options.map((option) => {
+              const checked = selected.includes(option);
+              return (
+                <label
+                  key={option}
+                  className={cn(
+                    "flex min-h-10 min-w-0 items-center gap-2 bg-background px-3 py-2 text-sm transition-colors hover:bg-muted/40",
+                    checked && "bg-primary/5"
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    className="size-4 shrink-0 accent-primary"
+                    checked={checked}
+                    onChange={(event) =>
+                      onChange(
+                        event.target.checked
+                          ? [...selected, option]
+                          : selected.filter((entry) => entry !== option)
+                      )
+                    }
+                  />
+                  <span className="min-w-0 break-words font-mono text-xs leading-5">{option}</span>
+                </label>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      {hint ? (
+        <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+          {hint}
+        </p>
+      ) : null}
     </fieldset>
   );
 }
@@ -113,9 +137,9 @@ export function InitialPromptsEditor({
   onChange(prompts: AgentFormState["initialPrompts"]): void;
 }) {
   return (
-    <section className="grid gap-2">
+    <section className="grid gap-3">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">Initial prompts</span>
+        <span className="text-sm font-medium">Prompts</span>
         <Button
           type="button"
           variant="outline"
@@ -137,7 +161,7 @@ export function InitialPromptsEditor({
         </p>
       ) : null}
       {prompts.map((prompt, index) => (
-        <div key={index} className="grid gap-2 rounded-md border p-3">
+        <div key={index} className="grid gap-3 rounded-lg border bg-muted/10 p-3 sm:p-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">Prompt {index + 1}</span>
             <button

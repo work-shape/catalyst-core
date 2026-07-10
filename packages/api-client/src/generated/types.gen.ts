@@ -224,6 +224,13 @@ export type GetConfigResponses = {
                 enabled: boolean;
                 accept: string;
             };
+            configAssets: {
+                enabled: boolean;
+                editableAgentFields: {
+                    model: boolean;
+                    maxSteps: boolean;
+                };
+            };
         };
         defaultAgentName?: string;
         agents: Array<{

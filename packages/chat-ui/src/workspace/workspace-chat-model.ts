@@ -332,6 +332,7 @@ export function useWorkspaceChatModel({
     client,
     adminPanel,
     user: meQuery.data,
+    configAssetManagement: config?.features.configAssets,
     isAuthenticated,
     route,
     view,

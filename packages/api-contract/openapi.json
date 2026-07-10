@@ -740,10 +740,40 @@
                             "accept"
                           ],
                           "additionalProperties": false
+                        },
+                        "configAssets": {
+                          "type": "object",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            },
+                            "editableAgentFields": {
+                              "type": "object",
+                              "properties": {
+                                "model": {
+                                  "type": "boolean"
+                                },
+                                "maxSteps": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "model",
+                                "maxSteps"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "enabled",
+                            "editableAgentFields"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
-                        "attachments"
+                        "attachments",
+                        "configAssets"
                       ],
                       "additionalProperties": false
                     },

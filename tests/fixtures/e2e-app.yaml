@@ -47,6 +47,12 @@ retention:
   conversationDays: 1
   auditDays: 30
   allowUserDelete: true
+administration:
+  configAssets:
+    enabled: true
+    editableAgentFields:
+      model: true
+      maxSteps: true
 modelProviders:
   - id: local
     type: deterministic

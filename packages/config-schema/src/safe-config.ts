@@ -36,6 +36,10 @@ export function createSafeConfigView(
       attachments: {
         enabled: false,
         accept: ""
+      },
+      configAssets: {
+        enabled: config.administration.configAssets.enabled,
+        editableAgentFields: config.administration.configAssets.editableAgentFields
       }
     },
     defaultAgentName: assets.defaultAgentName,

@@ -4,6 +4,7 @@ import type {
   ApiUser,
   ChangeCurrentUserPasswordRequest,
   LocaleCode,
+  SafeConfig,
   UpdateCurrentUserRequest
 } from "@vivd-catalyst/api-client";
 import {
@@ -38,6 +39,7 @@ export interface ControlPlaneModelInput {
   client: ApiClient;
   adminPanel: ChatShellAdminPanel | undefined;
   user: ApiUser | undefined;
+  configAssetManagement: SafeConfig["features"]["configAssets"] | undefined;
   isAuthenticated: boolean;
   route: WorkspaceRoute;
   view: WorkspaceRouteView;
@@ -83,6 +85,7 @@ export function useControlPlaneModel({
   client,
   adminPanel,
   user,
+  configAssetManagement,
   isAuthenticated,
   route,
   view,
@@ -93,11 +96,19 @@ export function useControlPlaneModel({
   onAccountDeleted,
   showSuperadmin
 }: ControlPlaneModelInput): ControlPlaneModel {
-  const canViewAdministration = adminPanel?.canView(user) ?? false;
   const canViewUsage = canViewUsageGovernance(user);
   const userCanManageUsers = canManageUsers(user);
   const userCanViewAudit = canViewAudit(user);
-  const userCanEditConfigAssets = canEditConfigAssets(user);
+  const userCanEditConfigAssets =
+    configAssetManagement?.enabled === true && canEditConfigAssets(user);
+  const requestedConfigPending =
+    route.kind === "superadmin" &&
+    route.tab === "config" &&
+    configAssetManagement === undefined &&
+    canEditConfigAssets(user);
+  const canViewAdministration =
+    (adminPanel?.canView(user) ?? false) &&
+    (canViewUsage || userCanManageUsers || userCanViewAudit || userCanEditConfigAssets);
   const canManageSuperadminAccess = Boolean(user?.roles.includes("superadmin"));
   const administrationEnabled = canViewAdministration && view === "superadmin";
   const routeTab = route.kind === "superadmin" ? route.tab : undefined;
@@ -107,14 +118,15 @@ export function useControlPlaneModel({
     canViewAudit: userCanViewAudit,
     canEditConfigAssets: userCanEditConfigAssets
   });
-  const selectedAdministrationTab =
-    routeTab &&
-    canViewAdministrationTab(routeTab, {
-      canViewUsage,
-      canManageUsers: userCanManageUsers,
-      canViewAudit: userCanViewAudit,
-      canEditConfigAssets: userCanEditConfigAssets
-    })
+  const selectedAdministrationTab = requestedConfigPending
+    ? "config"
+    : routeTab &&
+        canViewAdministrationTab(routeTab, {
+          canViewUsage,
+          canManageUsers: userCanManageUsers,
+          canViewAudit: userCanViewAudit,
+          canEditConfigAssets: userCanEditConfigAssets
+        })
       ? routeTab
       : defaultAdministrationTab;
   const usageQuery = useWorkspaceUsageQuery({
@@ -180,6 +192,9 @@ export function useControlPlaneModel({
     if (!isAuthenticated || route.kind !== "superadmin") {
       return;
     }
+    if (requestedConfigPending) {
+      return;
+    }
     if (!canViewAdministration) {
       goToDefaultChat({ replace: true });
       return;
@@ -192,6 +207,7 @@ export function useControlPlaneModel({
     goToDefaultChat,
     isAuthenticated,
     route,
+    requestedConfigPending,
     selectedAdministrationTab,
     showSuperadmin
   ]);
@@ -243,6 +259,10 @@ export function useControlPlaneModel({
           superadminUserMutations.resetUserPassword.mutateAsync({ userId, password }),
         canEditConfigAssets: userCanEditConfigAssets,
         configAssets: {
+          editableAgentFields: configAssetManagement?.editableAgentFields ?? {
+            model: false,
+            maxSteps: false
+          },
           overview: configAssetsOverviewQuery.data,
           agents: namedBundleEntries(configAssetsExportQuery.data?.agents),
           skills: namedBundleEntries(configAssetsExportQuery.data?.skills),
@@ -263,7 +283,7 @@ export function useControlPlaneModel({
               queryKey: workspaceQueryKeys.configAssetsOverview(apiBaseUrl, authScope)
             })
         },
-        selectedTab: selectedAdministrationTab ?? "usage",
+        selectedTab: selectedAdministrationTab ?? "users",
         onSelectTab: showSuperadmin
       }
     }
@@ -276,14 +296,14 @@ function firstAvailableAdministrationTab(input: {
   canViewAudit: boolean;
   canEditConfigAssets: boolean;
 }): SuperadminRouteTab | undefined {
-  if (input.canViewUsage) {
-    return "usage";
-  }
   if (input.canManageUsers) {
     return "users";
   }
   if (input.canEditConfigAssets) {
     return "config";
+  }
+  if (input.canViewUsage) {
+    return "usage";
   }
   if (input.canViewAudit) {
     return "audit";

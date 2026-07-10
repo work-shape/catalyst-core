@@ -687,30 +687,41 @@ test("standalone auth gates superadmin views", async ({ page }) => {
 test("standalone settings and superadmin tabs are route-backed", async ({ page }) => {
   await signInViaApi(page, superadminUser);
 
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open administration panel" }).click();
+  await expect(page).toHaveURL(/\/admin\/users$/u);
+  await expect(
+    page.getByRole("region", { name: "Administration panel" }).getByRole("heading", { name: "Users" })
+  ).toBeVisible();
+
   await page.goto("/settings");
   await expect(page.getByRole("region", { name: "User settings" })).toBeVisible();
   await expect(page).toHaveURL(/\/settings$/u);
 
   await page.goto("/admin");
-  await expect(page).toHaveURL(/\/admin\/usage$/u);
-  await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
-  await expect(page.getByText("Billed this month")).toBeVisible();
-
-  await page.getByRole("button", { name: /^Users/ }).click();
   await expect(page).toHaveURL(/\/admin\/users$/u);
+  await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
   await expect(
     page.getByRole("region", { name: "Administration panel" }).getByRole("heading", { name: "Users" })
   ).toBeVisible();
+
+  await page.getByRole("button", { name: "Config" }).click();
+  await expect(page).toHaveURL(/\/admin\/config$/u);
+  await expect(page.getByRole("heading", { name: "Configuration" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Usage" }).click();
+  await expect(page).toHaveURL(/\/admin\/usage$/u);
+  await expect(page.getByRole("heading", { name: "Usage", exact: true })).toBeVisible();
+  await expect(page.getByText("Billed this month")).toBeVisible();
 
   await page.getByRole("button", { name: "Audit log" }).click();
   await expect(page).toHaveURL(/\/admin\/audit$/u);
+  await expect(page.getByRole("heading", { name: "Audit log", exact: true })).toBeVisible();
   await expect(page.getByText("Recent activity")).toBeVisible();
 
   await page.goBack();
-  await expect(page).toHaveURL(/\/admin\/users$/u);
-  await expect(
-    page.getByRole("region", { name: "Administration panel" }).getByRole("heading", { name: "Users" })
-  ).toBeVisible();
+  await expect(page).toHaveURL(/\/admin\/usage$/u);
+  await expect(page.getByText("Billed this month")).toBeVisible();
 });
 
 test("superadmin manages config assets with validation and conflict protection", async ({ page }) => {
@@ -730,7 +741,7 @@ test("superadmin manages config assets with validation and conflict protection",
   expect(originalResearchAgent).toBeDefined();
 
   const versionLabel = (version: number) =>
-    page.getByText(`Config version ${version}.`, { exact: false });
+    page.getByText(`Version ${version}`, { exact: false });
   const form = () => page.locator("form");
   const fieldset = (name: string) => form().getByRole("group", { name, exact: true });
   const fieldControl = (label: string, selector: string) =>
@@ -741,11 +752,11 @@ test("superadmin manages config assets with validation and conflict protection",
       .first();
   const clickAgent = async () => {
     await page.getByRole("button", { name: "research_assistant", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "research_assistant", exact: true })).toBeVisible();
+    await expect(form()).toBeVisible();
   };
   const clickSkill = async () => {
     await page.getByRole("button", { name: "config_e2e_skill", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "config_e2e_skill", exact: true })).toBeVisible();
+    await expect(form()).toBeVisible();
   };
 
   try {
@@ -762,17 +773,14 @@ test("superadmin manages config assets with validation and conflict protection",
       "local"
     ]);
 
-    await page
-      .getByRole("region", { name: "Skills" })
-      .getByRole("button", { name: "New", exact: true })
-      .click();
+    await page.getByRole("button", { name: "New skill", exact: true }).click();
     await page.locator('input[placeholder="generic_workflow_review"]').fill("config_e2e_skill");
     await fieldControl("Title", "input").fill("Config E2E skill");
     await fieldControl("Description", "input").fill("Verifies config asset editing");
     await fieldControl("Content", "textarea").fill("# Verify config assets");
     await form().getByRole("button", { name: "Create skill", exact: true }).click();
     await expect(versionLabel(original.version + 1)).toBeVisible();
-    await expect(page.getByRole("heading", { name: "config_e2e_skill", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Config E2E skill", exact: true })).toBeVisible();
     await expect(fieldControl("Title", "input")).toHaveValue("Config E2E skill");
     await expect(fieldControl("Description", "input")).toHaveValue(
       "Verifies config asset editing"
@@ -912,13 +920,15 @@ test("admin sees billed usage and can manage users", async ({ page }) => {
   await signInViaUi(page, adminUser);
   await expect(page.getByRole("button", { name: "Open administration panel" })).toBeVisible();
   await page.getByRole("button", { name: "Open administration panel" }).click();
-  await expect(page).toHaveURL(/\/admin\/usage$/u);
+  await expect(page).toHaveURL(/\/admin\/users$/u);
   const adminPanel = page.getByRole("region", { name: "Administration panel" });
   await expect(adminPanel).toBeVisible();
   await expect(adminPanel.getByText("Admin", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: /^Usage/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Users/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Audit log" })).toBeVisible();
+  await page.getByRole("button", { name: /^Usage/ }).click();
+  await expect(page).toHaveURL(/\/admin\/usage$/u);
   await expect(page.getByText("Billed this month")).toBeVisible();
   await expect(page.getByTestId("monthly-usage")).toBeVisible();
 

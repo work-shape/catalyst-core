@@ -40,6 +40,12 @@ retention:
   conversationDays: 30
   auditDays: 365
   allowUserDelete: true
+administration:
+  configAssets:
+    enabled: true
+    editableAgentFields:
+      model: false
+      maxSteps: false
 modelProviders:
   - id: openai
     type: openai-compatible
