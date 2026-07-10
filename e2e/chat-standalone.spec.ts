@@ -766,6 +766,14 @@ test("superadmin manages config assets with validation and conflict protection",
     await expect(versionLabel(original.version)).toBeVisible();
 
     await clickAgent();
+    await expect
+      .poll(() =>
+        form()
+          .getByRole("button", { name: "Save changes", exact: true })
+          .locator("..")
+          .evaluate((element) => getComputedStyle(element).position)
+      )
+      .toBe("static");
     await expect(fieldset("Tools").getByLabel("read_skill", { exact: true })).toBeVisible();
     await expect(fieldset("Tools").getByLabel("show_view", { exact: true })).toBeVisible();
     await expect(fieldControl("Model", "select").locator("option")).toContainText([

@@ -98,7 +98,7 @@ export function CheckboxGroup({
                   key={option}
                   className={cn(
                     "flex min-h-10 min-w-0 items-center gap-2 bg-background px-3 py-2 text-sm transition-colors hover:bg-muted/40",
-                    checked && "bg-primary/5"
+                    checked && "bg-muted/30"
                   )}
                 >
                   <input

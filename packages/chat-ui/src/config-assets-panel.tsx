@@ -154,8 +154,8 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
     >
       {input.error ? <p className="text-sm text-destructive">{input.error}</p> : null}
 
-      <div className="grid min-h-[38rem] min-w-0 auto-rows-max rounded-lg border bg-card text-card-foreground shadow-xs lg:grid-cols-[18rem_minmax(0,1fr)]">
-        <aside className="grid min-w-0 content-start gap-4 overflow-hidden border-b bg-muted/10 p-3 sm:grid-cols-2 lg:grid-cols-1 lg:border-r lg:border-b-0">
+      <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
+        <aside className="grid min-w-0 content-start gap-4 overflow-hidden rounded-lg border bg-card p-3 shadow-xs sm:grid-cols-2 lg:sticky lg:top-0 lg:grid-cols-1">
           <AssetList
             label="Agents"
             icon={<Bot size={14} aria-hidden="true" />}
@@ -199,7 +199,7 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
           ) : null}
         </aside>
 
-        <div className="min-w-0 bg-background/30">
+        <div className="min-w-0 overflow-hidden rounded-lg border bg-card text-card-foreground shadow-xs">
         {selection === undefined ? (
           <div className="grid min-h-[28rem] place-items-center p-6 text-center">
             <div className="grid max-w-sm justify-items-center gap-3">
@@ -936,12 +936,12 @@ function EditorSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="grid min-w-0 gap-4 border-b px-5 py-6 xl:grid-cols-[13rem_minmax(0,1fr)] xl:gap-8">
+    <section className="grid min-w-0 gap-4 border-b px-5 py-6 xl:grid-cols-[11rem_minmax(0,1fr)] xl:gap-6">
       <div className="grid content-start gap-1">
         <h3 className="text-sm font-semibold">{title}</h3>
         <p className="text-xs leading-5 text-muted-foreground">{description}</p>
       </div>
-      <div className="grid min-w-0 max-w-3xl gap-5">{children}</div>
+      <div className="grid min-w-0 gap-5">{children}</div>
     </section>
   );
 }
@@ -969,7 +969,7 @@ function EditorTextarea({
 
 function SaveBar({ label, mutating }: { label: string; mutating: boolean }) {
   return (
-    <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 border-t bg-background/95 px-5 py-3 shadow-[0_-8px_20px_-20px_rgba(0,0,0,0.7)] backdrop-blur">
+    <div className="flex flex-wrap items-center gap-3 bg-muted/10 px-5 py-4">
       <Button type="submit" className="w-full sm:w-auto" disabled={mutating}>
         {mutating ? <Spinner className="size-4" /> : null}
         {label}
