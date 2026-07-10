@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom
 import { describe, expect, it } from "vitest";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 import { WorkspaceChrome } from "../packages/chat-ui/src/workspace-chrome";
+import { createEnvironmentDocumentTitle } from "../packages/chat-ui/src/workspace-utils";
 
 const noop = () => undefined;
 
@@ -41,4 +42,21 @@ describe("staging environment banner", () => {
     expect(markup).not.toContain('role="status"');
     expect(markup).not.toContain("Testumgebung");
   });
+});
+
+describe("environment document title", () => {
+  it("prefixes staging titles with the user-facing test label", () => {
+    expect(createEnvironmentDocumentTitle("Musterfinanz", "staging")).toBe(
+      "(Test) Musterfinanz"
+    );
+  });
+
+  it.each(["development", "production", undefined])(
+    "leaves titles unchanged in %s",
+    (environment) => {
+      expect(createEnvironmentDocumentTitle("Musterfinanz", environment)).toBe(
+        "Musterfinanz"
+      );
+    }
+  );
 });

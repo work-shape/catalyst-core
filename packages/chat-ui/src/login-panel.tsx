@@ -16,6 +16,7 @@ import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { cn } from "./ui/cn";
 import { Input } from "./ui/input";
+import { createEnvironmentDocumentTitle } from "./workspace-utils";
 
 const DEFAULT_LOGIN_LOCALES: LocaleCode[] = ["en", "de"];
 
@@ -55,6 +56,9 @@ export function LoginPanel({
   const supportedLocales = branding?.localization.supportedLocales ?? DEFAULT_LOGIN_LOCALES;
   const resolvedThemeMode = resolveThemeModePreference(branding?.defaultThemeMode, systemThemeMode);
   const themeStyle = createThemeStyle(branding, resolvedThemeMode);
+  const documentTitle = branding
+    ? createEnvironmentDocumentTitle(branding.title, branding.environment)
+    : undefined;
 
   useEffect(() => {
     const media = window.matchMedia?.("(prefers-color-scheme: dark)");
@@ -77,17 +81,17 @@ export function LoginPanel({
   }, [resolvedThemeMode]);
 
   useEffect(() => {
-    if (!manageDocumentTitle || !branding?.title) {
+    if (!manageDocumentTitle || !documentTitle) {
       return undefined;
     }
     const previousTitle = document.title;
-    document.title = branding.title;
+    document.title = documentTitle;
     return () => {
-      if (document.title === branding.title) {
+      if (document.title === documentTitle) {
         document.title = previousTitle;
       }
     };
-  }, [branding?.title, manageDocumentTitle]);
+  }, [documentTitle, manageDocumentTitle]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();

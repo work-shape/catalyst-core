@@ -6,6 +6,7 @@ import {
 } from "./localization";
 
 export interface ClientBranding {
+  environment: ClientInstanceConfig["clientInstance"]["environment"];
   localization: {
     locale: string;
     defaultLocale: string;
@@ -47,6 +48,7 @@ export function createClientBranding(
   const locale = resolveConfigLocale(config.localization, localeInput);
   const accentColor = config.ui.theme.accentColor ?? config.ui.accentColor;
   return {
+    environment: config.clientInstance.environment,
     localization: {
       locale,
       defaultLocale: config.localization.defaultLocale,

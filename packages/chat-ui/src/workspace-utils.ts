@@ -32,6 +32,13 @@ export function apiErrorMessage(error: unknown, fallback: string | undefined): s
   return fallback;
 }
 
+export function createEnvironmentDocumentTitle(
+  title: string,
+  environment: string | undefined
+): string {
+  return environment === "staging" ? `(Test) ${title}` : title;
+}
+
 export function readStoredThemeMode(): ResolvedThemeMode | undefined {
   const storedThemeMode = window.localStorage.getItem(THEME_STORAGE_KEY);
   return storedThemeMode === "dark" || storedThemeMode === "light" ? storedThemeMode : undefined;

@@ -8,6 +8,9 @@ import {
 
 export function createSafeConfigView(config: ClientInstanceConfig, localeInput: ConfigLocaleInput = {}) {
   const locale = resolveConfigLocale(config.localization, localeInput);
+  const { environment: _environment, ...ui } = createClientBranding(config, {
+    requestedLocale: locale
+  });
 
   return {
     clientInstance: {
@@ -49,6 +52,6 @@ export function createSafeConfigView(config: ClientInstanceConfig, localeInput: 
         prompt: resolveLocalizedString(initialPrompt.prompt, locale, config.localization.defaultLocale)
       }))
     })),
-    ui: createClientBranding(config, { requestedLocale: locale })
+    ui
   };
 }

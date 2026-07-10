@@ -175,6 +175,7 @@ export type GetBrandingResponses = {
             borderColor: string;
         };
         defaultThemeMode: 'light' | 'dark' | 'system';
+        environment: string;
     };
 };
 

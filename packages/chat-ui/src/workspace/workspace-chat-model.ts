@@ -41,7 +41,12 @@ import { useToolDisplayPanel } from "../tool-display-panel";
 import type { ResolvedThemeMode } from "../theme";
 import type { WorkspaceView } from "../workspace-rail";
 import type { WorkspaceRoute } from "../workspace-route";
-import { apiErrorMessage, apiErrorStatus, applyFavicon } from "../workspace-utils";
+import {
+  apiErrorMessage,
+  apiErrorStatus,
+  applyFavicon,
+  createEnvironmentDocumentTitle
+} from "../workspace-utils";
 import { useWorkspaceDraft, useWorkspaceDraftController } from "./workspace-drafts";
 import {
   useWorkspaceChromeState,
@@ -356,18 +361,22 @@ export function useWorkspaceChatModel({
     });
   }, [config]);
 
+  const documentTitle = config?.ui.title
+    ? createEnvironmentDocumentTitle(config.ui.title, config.clientInstance.environment)
+    : undefined;
+
   useEffect(() => {
-    if (!manageDocumentTitle || !config?.ui.title) {
+    if (!manageDocumentTitle || !documentTitle) {
       return undefined;
     }
     const previousTitle = document.title;
-    document.title = config.ui.title;
+    document.title = documentTitle;
     return () => {
-      if (document.title === config.ui.title) {
+      if (document.title === documentTitle) {
         document.title = previousTitle;
       }
     };
-  }, [config?.ui.title, manageDocumentTitle]);
+  }, [documentTitle, manageDocumentTitle]);
 
   useEffect(() => {
     if (!manageDocumentTitle) {

@@ -276,7 +276,7 @@ export const artifactPreviewResponseSchema = z.discriminatedUnion("status", [
 export type ArtifactPreviewResponse = z.infer<typeof artifactPreviewResponseSchema>;
 export const retryArtifactPreviewResponseSchema = artifactPreviewResponseSchema;
 
-export const clientBrandingSchema = z.object({
+const clientUiBrandingSchema = z.object({
   localization: localizationSchema,
   clientName: z.string(),
   logoUrl: z.string().optional(),
@@ -305,6 +305,10 @@ export const clientBrandingSchema = z.object({
     borderColor: z.string()
   }),
   defaultThemeMode: z.enum(["light", "dark", "system"])
+});
+
+export const clientBrandingSchema = clientUiBrandingSchema.extend({
+  environment: z.string()
 });
 
 export const safeConfigSchema = z.object({
@@ -347,7 +351,7 @@ export const safeConfigSchema = z.object({
       )
     })
   ),
-  ui: clientBrandingSchema
+  ui: clientUiBrandingSchema
 });
 
 export const createConversationRequestSchema = z.object({

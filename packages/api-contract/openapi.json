@@ -559,6 +559,9 @@
                         "dark",
                         "system"
                       ]
+                    },
+                    "environment": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -570,7 +573,8 @@
                     "accentColor",
                     "theme",
                     "darkTheme",
-                    "defaultThemeMode"
+                    "defaultThemeMode",
+                    "environment"
                   ],
                   "additionalProperties": false
                 }
