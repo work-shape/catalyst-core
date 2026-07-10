@@ -69,6 +69,7 @@ const translations = {
     newPasswordsDoNotMatch: "New passwords do not match",
     newPasswordTooShort: "New password must be at least 8 characters",
     noConversations: "No conversations yet.",
+    noConversationMatches: "No matching conversations.",
     openArtifactPreview: "Open preview for {filename}",
     openSidebar: "Open sidebar",
     openSuperadminPanel: "Open administration panel",
@@ -89,6 +90,7 @@ const translations = {
     saveProfile: "Save profile",
     saving: "Saving",
     scrollToBottom: "Scroll to bottom",
+    searchConversations: "Search conversations",
     selectAgent: "Select agent",
     sendMessage: "Send message",
     sessionCheckingDescription: "Your account is being checked before the chat loads.",
@@ -123,7 +125,8 @@ const translations = {
     updating: "Updating",
     updatedRecently: "Updated recently",
     userFallback: "User",
-    userSettings: "User settings"
+    userSettings: "User settings",
+    workspace: "Workspace"
   },
   de: {
     account: "Konto",
@@ -190,6 +193,7 @@ const translations = {
     newPasswordsDoNotMatch: "Neue Passwörter stimmen nicht überein",
     newPasswordTooShort: "Neues Passwort muss mindestens 8 Zeichen lang sein",
     noConversations: "Noch keine Unterhaltungen.",
+    noConversationMatches: "Keine passenden Unterhaltungen.",
     openArtifactPreview: "Vorschau für {filename} öffnen",
     openSidebar: "Seitenleiste öffnen",
     openSuperadminPanel: "Administrationsbereich öffnen",
@@ -210,6 +214,7 @@ const translations = {
     saveProfile: "Profil speichern",
     saving: "Speichert",
     scrollToBottom: "Zum Ende scrollen",
+    searchConversations: "Unterhaltungen suchen",
     selectAgent: "Agent auswählen",
     sendMessage: "Nachricht senden",
     sessionCheckingDescription: "Dein Konto wird geprüft, bevor der Chat geladen wird.",
@@ -244,7 +249,8 @@ const translations = {
     updating: "Aktualisiert",
     updatedRecently: "Gerade aktualisiert",
     userFallback: "Benutzer",
-    userSettings: "Benutzereinstellungen"
+    userSettings: "Benutzereinstellungen",
+    workspace: "Arbeitsbereich"
   }
 } satisfies Record<LocaleCode, Record<string, string>>;
 

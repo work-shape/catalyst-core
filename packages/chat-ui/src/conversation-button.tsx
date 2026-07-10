@@ -31,13 +31,16 @@ export function ConversationButton({
       <div
         data-testid="conversation-row"
         className={cn(
-          "group/conversation grid min-w-0 grid-cols-[minmax(0,1fr)_2.25rem] items-center rounded-md border border-transparent transition-colors",
-          "hover:border-sidebar-border hover:bg-sidebar-accent/70",
-          selected && "border-primary/40 bg-sidebar-accent shadow-xs"
+          "group/conversation relative grid min-w-0 grid-cols-[minmax(0,1fr)_2.25rem] items-center overflow-hidden rounded-md border border-transparent transition-colors",
+          "hover:bg-sidebar-accent/55",
+          selected && "bg-sidebar-accent/80"
         )}
       >
+        {selected ? (
+          <span className="absolute inset-y-2 left-0 w-0.5 rounded-r-full bg-primary" aria-hidden="true" />
+        ) : null}
         <Button
-          className="h-auto min-w-0 justify-start gap-2 px-2 py-2 text-left text-foreground hover:bg-transparent"
+          className="h-auto min-w-0 justify-start gap-2.5 px-3 py-3 text-left text-foreground hover:bg-transparent"
           type="button"
           variant="ghost"
           onClick={onSelect}
@@ -70,7 +73,7 @@ export function ConversationButton({
                 />
               ) : null}
             </span>
-            <span className="truncate text-xs text-muted-foreground">
+            <span className="truncate text-[0.8125rem] text-muted-foreground">
               {running ? (
                 <span className="inline-flex min-w-0 items-center gap-1 text-primary" data-testid="conversation-running-indicator">
                   {t("conversationRunning")}
@@ -166,7 +169,7 @@ function AnimatedConversationTitle({ title }: { title: string }) {
   const { text, typing } = useTypewriterTitle(title);
 
   return (
-    <span className="inline-flex min-w-0 max-w-full items-baseline text-sm font-medium" title={title} aria-label={title}>
+    <span className="inline-flex min-w-0 max-w-full items-baseline text-sm font-medium leading-5" title={title} aria-label={title}>
       <span className="truncate" aria-hidden="true">
         {text}
       </span>

@@ -19,7 +19,7 @@ export function ThemeToggle({
       type="button"
       variant="ghost"
       size="icon"
-      className="size-10 bg-background/95 shadow-sm backdrop-blur"
+      className="size-10 text-muted-foreground"
       aria-label={label}
       title={label}
       onClick={onToggle}
