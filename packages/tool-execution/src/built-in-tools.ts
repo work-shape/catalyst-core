@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { createPlatformId, type JsonObject } from "@vivd-catalyst/core";
+import { createPlatformId } from "@vivd-catalyst/core";
 import {
   defineConfiguredTool,
   defineTool,
@@ -25,6 +25,14 @@ const visualizationThemeColorNames = [
   "accent",
   "accent-foreground",
   "destructive",
+  "success",
+  "warning",
+  "info",
+  "chart-1",
+  "chart-2",
+  "chart-3",
+  "chart-4",
+  "chart-5",
   "border",
   "input",
   "ring",
@@ -46,7 +54,7 @@ const tailwindThemeBootstrapScript = [
   'tailwind.config={theme:{extend:{colors:vcThemeColors,borderRadius:{lg:"var(--radius)",md:"calc(var(--radius) - 2px)",sm:"calc(var(--radius) - 4px)"}}}};'
 ].join("");
 const displayHeightBootstrapScript = `(()=>{const t="vivd-catalyst:display-height";let e=0;function n(){const t=document.documentElement,n=document.body;return Math.ceil(Math.max(t?.scrollHeight??0,t?.offsetHeight??0,n?.scrollHeight??0,n?.offsetHeight??0))}function o(){const o=n();o>0&&Math.abs(o-e)>1&&(e=o,parent.postMessage({type:t,height:o},"*"))}document.addEventListener("DOMContentLoaded",()=>{o();if("ResizeObserver"in window&&document.body){window.__vivdCatalystResizeObserver=new ResizeObserver(o);window.__vivdCatalystResizeObserver.observe(document.body)}setTimeout(o,50);setTimeout(o,250);setTimeout(o,1000)});window.addEventListener("load",o)})();`;
-const visualizationThemeHelperScript = `(()=>{function color(name,fallback){const key=name.startsWith("--")?name:"--"+name;const value=getComputedStyle(document.documentElement).getPropertyValue(key).trim();return value||fallback||""}function chartColors(){return{background:color("background"),foreground:color("foreground"),card:color("card"),cardForeground:color("card-foreground"),mutedForeground:color("muted-foreground"),border:color("border"),primary:color("primary"),accent:color("accent"),destructive:color("destructive")}}window.vivdCatalystTheme={color,chartColors}})();`;
+const visualizationThemeHelperScript = `(()=>{function color(name,fallback){const key=name.startsWith("--")?name:"--"+name;const value=getComputedStyle(document.documentElement).getPropertyValue(key).trim();return value||fallback||""}function chartColors(){return{background:color("background"),foreground:color("foreground"),card:color("card"),cardForeground:color("card-foreground"),mutedForeground:color("muted-foreground"),border:color("border"),primary:color("primary"),accent:color("accent"),destructive:color("destructive"),success:color("success"),warning:color("warning"),info:color("info")}}function chartPalette(){return[color("chart-1"),color("chart-2"),color("chart-3"),color("chart-4"),color("chart-5")]}window.vivdCatalystTheme={color,chartColors,chartPalette}})();`;
 const defaultVisualizationScriptSources = ["https://cdn.tailwindcss.com", "https://unpkg.com"];
 const visualizationDefaultThemeStyle = `<style id="vivd-catalyst-default-theme">
 :root {
@@ -66,6 +74,14 @@ const visualizationDefaultThemeStyle = `<style id="vivd-catalyst-default-theme">
   --accent: #e5f3ef;
   --accent-foreground: #0b5f59;
   --destructive: #b42318;
+  --success: #047857;
+  --warning: #b45309;
+  --info: #0369a1;
+  --chart-1: #0f766e;
+  --chart-2: #b45309;
+  --chart-3: #0369a1;
+  --chart-4: #7c3aed;
+  --chart-5: #be185d;
   --border: #d8d3c7;
   --input: #d8d3c7;
   --ring: #0f766e;
@@ -115,11 +131,27 @@ const showViewConfigSchema = z.object({
 
 export type ShowViewToolConfig = z.infer<typeof showViewConfigSchema>;
 
-const showViewInputSchema = z.object({
-  html: z.string().min(1).max(200_000),
-  mode: z.enum(["inline", "side_panel", "fullscreen"]).default("inline"),
-  title: z.string().min(1).max(160).optional()
-});
+const showViewColorGuidance =
+  'Use theme tokens for structure/layout: bg-background text-foreground, bg-card text-card-foreground border-border, text-muted-foreground, bg-primary text-primary-foreground. Use semantic tokens for status/severity/priority: text-success, text-warning, text-destructive, text-info, including translucent fills/borders like bg-success/10 border-success/30. Example: <span class="rounded-md border border-warning/30 bg-warning/10 px-2 py-1 text-warning">needs review</span>. Do not make the view monochrome when status, severity, or priority matters. Never use color as the only signal -- pair it with labels or icons. Do not hard-code surfaces/text with bg-white, text-gray-*/text-slate-*, #fff, #ffffff, #111827, fixed dark backgrounds, or !important color overrides. For categorical or series data, use the ordered palette window.vivdCatalystTheme.chartPalette() (an array) or Tailwind classes text-chart-1 through text-chart-5 / bg-chart-2/20; window.vivdCatalystTheme.chartColors() returns a named object of theme colors, so never index it like an array. For canvas or Chart.js charts, read colors from window.vivdCatalystTheme.chartColors() (includes success, warning, info) or window.vivdCatalystTheme.color(\'foreground\') for text, grid, and borders.';
+
+function createShowViewInputSchema(scriptSourceHint: string) {
+  return z.object({
+    html: z
+      .string()
+      .min(1)
+      .max(200_000)
+      .describe(
+        `Complete standalone HTML fragment or document to render for the user. ${showViewColorGuidance} Lucide icons are available with elements such as <i data-lucide="chart-column"></i>. ${scriptSourceHint}`
+      ),
+    mode: z
+      .enum(["inline", "side_panel", "fullscreen"])
+      .default("inline")
+      .describe(
+        "How prominently the user interface should render the HTML. Use side_panel when the user should keep chatting while the view opens in the right preview panel."
+      ),
+    title: z.string().min(1).max(160).describe("Optional short title for the rendered display.").optional()
+  });
+}
 
 const showViewOutputSchema = z.object({
   displayed: z.literal(true),
@@ -145,19 +177,17 @@ export function createShowViewTool(config: ShowViewToolConfig = showViewConfigSc
   const parsedConfig = showViewConfigSchema.parse(config);
   const allowedScriptSrc = uniqueScriptSources(parsedConfig.allowedScriptSrc);
   const scriptSourceHint = externalScriptSourceHint(allowedScriptSrc);
+  const inputSchema = createShowViewInputSchema(scriptSourceHint);
   return defineTool({
     name: "show_view",
     description: [
       "Show model-authored HTML to the user as a visual view. Use this when a table, widget, chart, dashboard, or richer visual explanation would help.",
       "Tailwind CSS, Lucide icons, Chart.js-compatible inline scripts, and shadcn-style app theme classes are available in the rendered iframe.",
-      "Use theme classes and CSS variables for the whole view: bg-background text-foreground, bg-card text-card-foreground border-border, text-muted-foreground, bg-primary text-primary-foreground, or var(--card) / var(--foreground).",
-      "Do not hard-code page/card/text colors such as bg-white, text-gray/text-slate, #fff, #ffffff, #111827, fixed dark backgrounds, or !important color overrides unless a color is genuinely data-semantic.",
-      "For canvas or Chart.js charts, read colors from window.vivdCatalystTheme.chartColors() or window.vivdCatalystTheme.color('foreground') and set chart text, grid, and border colors from those values.",
+      showViewColorGuidance,
       scriptSourceHint
     ].join(" "),
-    inputSchema: showViewInputSchema,
+    inputSchema,
     outputSchema: showViewOutputSchema,
-    inputJsonSchema: createShowViewInputJsonSchema(scriptSourceHint),
     async execute(input) {
       const displayId = createPlatformId<"ToolDisplayId">("display");
       const output = {
@@ -188,36 +218,6 @@ export function createShowViewTool(config: ShowViewToolConfig = showViewConfigSc
       });
     }
   });
-}
-
-function createShowViewInputJsonSchema(scriptSourceHint: string): JsonObject {
-  return {
-    type: "object",
-    additionalProperties: false,
-    required: ["html"],
-    properties: {
-      html: {
-        type: "string",
-        minLength: 1,
-        maxLength: 200000,
-        description:
-          `Complete standalone HTML fragment or document to render for the user. Use Tailwind utility classes with shadcn-style theme classes such as bg-background, bg-card, text-foreground, text-muted-foreground, border-border, bg-primary, and text-primary-foreground. Do not hard-code white cards, gray/slate text, fixed dark backgrounds, or !important color overrides. Chart/canvas colors should come from window.vivdCatalystTheme.chartColors() or CSS variables such as var(--foreground), var(--border), and var(--primary). Lucide icons are available with elements such as <i data-lucide="chart-column"></i>. ${scriptSourceHint}`
-      },
-      mode: {
-        type: "string",
-        enum: ["inline", "side_panel", "fullscreen"],
-        default: "inline",
-        description:
-          "How prominently the user interface should render the HTML. Use side_panel when the user should keep chatting while the view opens in the right preview panel."
-      },
-      title: {
-        type: "string",
-        minLength: 1,
-        maxLength: 160,
-        description: "Optional short title for the rendered display."
-      }
-    }
-  };
 }
 
 export function prepareVisualizationHtml(html: string, config: ShowViewToolConfig = showViewConfigSchema.parse({})): string {

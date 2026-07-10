@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { asClientInstanceId, type ToolExecutionContext } from "@vivd-catalyst/core";
-import { showViewTool, showViewToolDefinition } from "@vivd-catalyst/tool-execution";
+import { asClientInstanceId, isJsonObject, type ToolExecutionContext } from "@vivd-catalyst/core";
+import { prepareVisualizationHtml, showViewTool, showViewToolDefinition } from "@vivd-catalyst/tool-execution";
 
 describe("built-in platform tools", () => {
   it("renders model-authored HTML through display without echoing HTML into model-visible output", async () => {
@@ -154,6 +154,47 @@ describe("built-in platform tools", () => {
     expect(csp).toContain(scriptHashSource(inlineScript));
   });
 
+  it("provides semantic status and chart theme colors to Tailwind and default iframe styles", () => {
+    const html = prepareVisualizationHtml("<section>Status</section>");
+
+    expect(html).toContain('const vcThemeColorNames=["background"');
+    expect(html).toContain('"destructive","success","warning","info","chart-1","chart-2","chart-3","chart-4","chart-5","border"');
+    expect(html).toContain("--success: #047857;");
+    expect(html).toContain("--warning: #b45309;");
+    expect(html).toContain("--info: #0369a1;");
+    expect(html).toContain("--chart-1: #0f766e;");
+    expect(html).toContain("--chart-2: #b45309;");
+    expect(html).toContain("--chart-3: #0369a1;");
+    expect(html).toContain("--chart-4: #7c3aed;");
+    expect(html).toContain("--chart-5: #be185d;");
+    expect(html).toContain('success:color("success")');
+    expect(html).toContain('warning:color("warning")');
+    expect(html).toContain('info:color("info")');
+    expect(html).toContain('function chartPalette(){return[color("chart-1"),color("chart-2"),color("chart-3"),color("chart-4"),color("chart-5")]}');
+    expect(html).toContain("window.vivdCatalystTheme={color,chartColors,chartPalette}");
+  });
+
+  it("keeps show_view color guidance aligned between tool and JSON schema descriptions", () => {
+    const htmlDescription = readHtmlSchemaDescription();
+
+    for (const description of [showViewTool.description, htmlDescription]) {
+      expect(description).toContain("text-success");
+      expect(description).toContain("bg-success/10");
+      expect(description).toContain("border-warning/30 bg-warning/10");
+      expect(description).toContain("Do not make the view monochrome");
+      expect(description).toContain("Never use color as the only signal");
+      expect(description).toContain("bg-white");
+      expect(description).toContain("text-gray-*/text-slate-*");
+      expect(description).toContain("success, warning, info");
+      expect(description).toContain("chartPalette()");
+      expect(description).toContain("text-chart-1");
+      expect(description).toContain("text-chart-5");
+      expect(description).toContain("bg-chart-2/20");
+      expect(description).toContain("chartColors() returns a named object");
+      expect(description).toContain("never index it like an array");
+    }
+  });
+
   it("rejects unsafe configured script sources", () => {
     expect(showViewToolDefinition.configSchema?.safeParse({
       allowedScriptSrc: ["http://cdn.jsdelivr.net"]
@@ -164,6 +205,18 @@ describe("built-in platform tools", () => {
     }).success).toBe(false);
   });
 });
+
+function readHtmlSchemaDescription(): string {
+  const properties = showViewTool.inputJsonSchema?.properties;
+  if (!isJsonObject(properties)) {
+    throw new Error("Expected show_view input JSON schema to include properties");
+  }
+  const html = properties.html;
+  if (!isJsonObject(html) || typeof html.description !== "string") {
+    throw new Error("Expected show_view input JSON schema to describe html");
+  }
+  return html.description;
+}
 
 function readCsp(html: string | undefined): string {
   const match = html?.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/u);
