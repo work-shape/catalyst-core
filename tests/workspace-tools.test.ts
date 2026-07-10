@@ -10,11 +10,7 @@ import {
 } from "@vivd-catalyst/core";
 import {
   LocalWorkspaceCommandRunner,
-  workspaceApplyPatchInputJsonSchema,
   shapeWorkspaceCommandOutput,
-  workspaceExecInputJsonSchema,
-  workspaceImportFilesInputJsonSchema,
-  workspacePreviewImagesInputJsonSchema,
   WorkspaceCommandWorker,
   type WorkspaceCommandTelemetry
 } from "@vivd-catalyst/tool-execution";
@@ -32,7 +28,7 @@ describe("workspace tools", () => {
     expect(execTool?.description).toContain("For multiline create-and-verify commands, put `set -e` on its own line");
     expect(execTool?.description).toContain("`--view`, `--spec`, `--out`, `--range`, `--page`, or `--sheet`");
     expect(execTool?.description).toContain("`cat`, `ls`, or `printf`");
-    expect(workspaceExecInputJsonSchema).toMatchObject({
+    expect(execTool?.inputJsonSchema).toMatchObject({
       properties: {
         command: {
           description: expect.stringMatching(/Complete Bash command[\s\S]*standard project directories scripts, artifacts, previews, and tmp[\s\S]*`cat`, `ls`, or `printf`/u)
@@ -53,21 +49,21 @@ describe("workspace tools", () => {
     expect(importTool?.description).toContain("returns a shell-safe workspace path in importedFiles[].path");
     expect(importTool?.description).toContain("use that exact path in workspace.exec");
     expect(importTool?.description).toContain("do not invent shortened filenames");
-    expect(workspacePreviewImagesInputJsonSchema).toMatchObject({
+    expect(previewTool?.inputJsonSchema).toMatchObject({
       anyOf: expect.arrayContaining([
         { required: ["artifactId"] },
         { required: ["path"] },
         { required: ["paths"] }
       ])
     });
-    expect(workspaceApplyPatchInputJsonSchema).toMatchObject({
+    expect(applyPatchTool?.inputJsonSchema).toMatchObject({
       properties: {
         patch: {
           description: expect.stringContaining("Unified diff patch")
         }
       }
     });
-    expect(workspaceImportFilesInputJsonSchema).toMatchObject({
+    expect(importTool?.inputJsonSchema).toMatchObject({
       properties: {
         files: {
           items: {

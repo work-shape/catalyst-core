@@ -35,21 +35,16 @@ import {
 import { validateWorkspaceShellCommand } from "./workspace-command-validation";
 import {
   DEFAULT_LIMITS,
-  emptyObjectInputJsonSchema,
   expectedOutputInputSchema,
-  workspaceApplyPatchInputJsonSchema,
   workspaceApplyPatchInputSchema,
   workspaceApplyPatchOutputSchema,
   workspaceExecInputJsonSchema,
   workspaceExecInputSchema,
   workspaceExecOutputSchema,
-  workspaceImportFilesInputJsonSchema,
   workspaceImportFilesInputSchema,
   workspaceImportFilesOutputSchema,
   workspaceListFilesInputSchema,
   workspaceListFilesOutputSchema,
-  workspacePathInputJsonSchema,
-  workspacePromoteArtifactInputJsonSchema,
   workspacePromoteArtifactInputSchema,
   workspacePromoteArtifactOutputSchema,
   workspacePreviewImagesInputJsonSchema,
@@ -1352,7 +1347,6 @@ export function createWorkspaceToolDefinitions(
         "List internal files currently tracked in the conversation execution workspace.",
       inputSchema: workspaceListFilesInputSchema,
       outputSchema: workspaceListFilesOutputSchema,
-      inputJsonSchema: emptyObjectInputJsonSchema,
       execute(input, context) {
         return service.listFiles(input, context);
       }
@@ -1363,7 +1357,6 @@ export function createWorkspaceToolDefinitions(
         "Copy uploaded managed conversation files into the execution workspace by fileId. The result returns a shell-safe workspace path in importedFiles[].path; use that exact path in workspace.exec and do not invent shortened filenames. This uses managed file access and never exposes object-storage credentials.",
       inputSchema: workspaceImportFilesInputSchema,
       outputSchema: workspaceImportFilesOutputSchema,
-      inputJsonSchema: workspaceImportFilesInputJsonSchema,
       execute(input, context) {
         return service.importFiles(input, context);
       }
@@ -1374,7 +1367,6 @@ export function createWorkspaceToolDefinitions(
         "Read a bounded UTF-8 preview of a text file from the conversation execution workspace.",
       inputSchema: workspaceReadFileInputSchema,
       outputSchema: workspaceReadFileOutputSchema,
-      inputJsonSchema: workspacePathInputJsonSchema,
       execute(input, context) {
         return service.readFile(input, context);
       }
@@ -1385,7 +1377,6 @@ export function createWorkspaceToolDefinitions(
         "Apply a unified diff patch to text files in /workspace. Supports create, update, and delete for workspace paths; rejects path traversal, renames, and binary files. Use workspace.exec for normal shell work and scripts.",
       inputSchema: workspaceApplyPatchInputSchema,
       outputSchema: workspaceApplyPatchOutputSchema,
-      inputJsonSchema: workspaceApplyPatchInputJsonSchema,
       execute(input, context) {
         return service.applyPatch(input, context);
       }
@@ -1396,7 +1387,6 @@ export function createWorkspaceToolDefinitions(
         "Promote an internal workspace file to a managed artifact visible to the user. Prefer final outputs under /workspace/artifacts; do not promote scripts, scratch files, or preview images unless the user explicitly needs those files.",
       inputSchema: workspacePromoteArtifactInputSchema,
       outputSchema: workspacePromoteArtifactOutputSchema,
-      inputJsonSchema: workspacePromoteArtifactInputJsonSchema,
       execute(input, context) {
         return service.promoteArtifact(input, context);
       }

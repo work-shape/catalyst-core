@@ -8,7 +8,7 @@ const skillNameSchema = z
   .regex(/^[A-Za-z][A-Za-z0-9_.-]*$/u);
 
 const readSkillInputSchema = z.object({
-  name: skillNameSchema
+  name: skillNameSchema.describe("The skill name from the available client skills list.")
 });
 
 const readSkillOutputSchema = z.object({
@@ -31,17 +31,6 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
       "Read the full Markdown instructions for one available client skill. Use this before applying a listed skill whose title and description match the user's task.",
     inputSchema: readSkillInputSchema,
     outputSchema: readSkillOutputSchema,
-    inputJsonSchema: {
-      type: "object",
-      additionalProperties: false,
-      required: ["name"],
-      properties: {
-        name: {
-          type: "string",
-          description: "The skill name from the available client skills list."
-        }
-      }
-    },
     execute(input, context) {
       const agentName = context.toolRequest?.agentName;
       if (!agentName) {

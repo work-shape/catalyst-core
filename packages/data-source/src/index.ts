@@ -39,7 +39,11 @@ export interface CreateDataSourceQueryToolsInput {
 }
 
 const queryToolInputSchema = z.object({
-  query: z.string().min(1).max(20000)
+  query: z
+    .string()
+    .min(1)
+    .max(20000)
+    .describe("Read-only SQL query for the configured data source.")
 });
 
 const queryToolOutputSchema = z.object({
@@ -110,19 +114,6 @@ export function createDataSourceQueryTools(input: CreateDataSourceQueryToolsInpu
           .join(" "),
         inputSchema: queryToolInputSchema,
         outputSchema: queryToolOutputSchema,
-        inputJsonSchema: {
-          type: "object",
-          additionalProperties: false,
-          required: ["query"],
-          properties: {
-            query: {
-              type: "string",
-              minLength: 1,
-              maxLength: 20000,
-              description: "Read-only SQL query for the configured data source."
-            }
-          }
-        },
         async execute(toolInput) {
           const result = await dataSources.query({
             sourceName: name,

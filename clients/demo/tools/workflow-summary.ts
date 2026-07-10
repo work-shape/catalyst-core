@@ -26,18 +26,6 @@ export const workflowSummaryToolFactory = defineConfiguredTool({
         "Summarize structured workflow information and return governance-safe review flags.",
       inputSchema,
       outputSchema,
-      inputJsonSchema: {
-        type: "object",
-        additionalProperties: false,
-        required: ["applicantName", "grossMonthlyPay"],
-        properties: {
-          applicantName: { type: "string" },
-          grossMonthlyPay: { type: "number", minimum: 0 },
-          netMonthlyPay: { type: "number", minimum: 0 },
-          currency: { type: "string", minLength: 3, maxLength: 3, default: config.defaultCurrency },
-          notes: { type: "string", maxLength: 2000 }
-        }
-      },
       permission: {
         mode: "allow",
         requiredPermissionRefs: [config.permissionRef]

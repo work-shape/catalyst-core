@@ -4,6 +4,7 @@ import {
   asClientInstanceId,
   asConversationId,
   asToolCallId,
+  isJsonObject,
   type LocaleCode,
   type ToolExecutionContext,
   type ToolExecutionResult
@@ -12,6 +13,45 @@ import { InProcessToolExecution, ToolRegistry } from "@vivd-catalyst/tool-execut
 import { weatherForecastTool } from "../clients/demo/tools/weather-forecast";
 
 describe("demo weather forecast tool", () => {
+  it("derives the configured model-facing input schema from the Zod schema", () => {
+    const schema = weatherForecastTool.inputJsonSchema;
+    const properties = schema.properties;
+    if (!isJsonObject(properties)) {
+      throw new Error("Expected weather tool input schema properties");
+    }
+
+    expect(schema).toMatchObject({
+      type: "object",
+      additionalProperties: false,
+      required: ["location"]
+    });
+    expect(schema).not.toHaveProperty("$schema");
+    expect(properties.location).toMatchObject({
+      type: "string",
+      minLength: 1,
+      maxLength: 120,
+      description: "City, region, or place name for the forecast."
+    });
+    expect(properties.days).toMatchObject({
+      type: "integer",
+      minimum: 1,
+      maximum: 5,
+      default: 3,
+      description: "Number of forecast days to return."
+    });
+    expect(properties.unit).toMatchObject({
+      type: "string",
+      enum: ["celsius", "fahrenheit"],
+      default: "celsius"
+    });
+    expect(properties.startDate).toMatchObject({
+      type: "string",
+      pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+      description: "Optional ISO date for deterministic demos."
+    });
+    expect(schema.required).not.toContain("startDate");
+  });
+
   it("returns a structured forecast with a weather display payload", async () => {
     const result = await runWeatherTool();
     expect(result.status).toBe("success");

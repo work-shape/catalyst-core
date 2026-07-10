@@ -40,8 +40,35 @@ export const DEFAULT_LIMITS: WorkspaceCommandServiceLimits = {
 };
 
 const workspacePathSchema = z.string().min(1).max(DEFAULT_LIMITS.maxPathLength);
+const workspaceCommandDescription =
+  "Complete Bash command or multiline script. Each call starts in /workspace unless cwd is provided for that call. The standard project directories scripts, artifacts, previews, and tmp are available at the start of every command. Files created or changed under /workspace persist across calls. Run helpers directly, e.g. `pptx_inspect deck.pptx --view summary`; do not write `set -e pptx_inspect ...`. For multiline create-and-verify commands, put `set -e` on its own line before later commands. Do not pass helper flags such as `--view`, `--spec`, `--out`, `--range`, `--page`, or `--sheet` to `cat`, `ls`, or `printf`.";
+const workspaceCwdDescription =
+  "Optional workspace-relative directory for this command only. It does not persist as the next command's cwd.";
+const workspaceExpectedOutputsDescription =
+  "Optional postconditions for files that should exist in /workspace after the command. Use kind \"directory\" only when checking that a rendered/generated directory contains tracked files. Use this for created outputs or verification steps that depend on an existing artifact. Set promote only when the command itself should promote the output.";
+const workspaceImportPathDescription =
+  "Optional workspace-relative destination path override. Usually omit this and use the returned importedFiles[].path exactly in workspace.exec.";
+const workspaceApplyPatchDescription =
+  "Unified diff patch for workspace text files. Use paths relative to /workspace, /workspace/path, or git-style a/path and b/path headers. Supports create, update, and delete; binary files and renames are rejected.";
+const workspacePromotePathDescription =
+  "Workspace path to the final user-facing artifact. Prefer artifacts/ or /workspace/artifacts/ outputs.";
+const workspacePreviewArtifactDescription =
+  "Managed source artifact id for DOCX/XLSX/PPTX/PDF preview rendering or already-managed image previews.";
+const workspacePreviewPathDescription =
+  "Workspace path to a rendered preview image, usually under previews/, e.g. previews/report/page-1.png or /workspace/previews/report/page-1.png.";
+const workspacePreviewPathsDescription =
+  "Workspace paths to rendered preview images, usually under previews/. Preview images are model-visible but are not user-download artifacts unless separately promoted.";
+const workspacePreviewPagesDescription =
+  "Optional PDF/DOCX page numbers to load when preview metadata has page numbers.";
+const workspacePreviewSlidesDescription =
+  "Optional PPTX slide numbers to load when preview metadata has slide numbers.";
+const workspacePreviewSheetsDescription =
+  "Optional XLSX sheet names to load when preview metadata has sheet labels.";
+const workspacePreviewRangesDescription =
+  "Optional XLSX ranges to load. Prefer sheet-qualified ranges like `Summary!A1:B4`; unqualified ranges require exactly one `sheets` value.";
+const workspacePreviewMaxImagesDescription = "Maximum preview images to attach to model context.";
 const workspacePreviewPositiveIntegerListSchema = z
-  .array(z.number().int().positive())
+  .array(z.number().int().min(1))
   .min(1)
   .max(DEFAULT_LIMITS.maxPreviewImages);
 const workspacePreviewTextListSchema = z
@@ -53,16 +80,20 @@ export const expectedOutputInputSchema = z
   .object({
     path: workspacePathSchema,
     kind: z.string().min(1).max(160).optional(),
-    promote: z.boolean().optional()
+    promote: z.boolean().default(false)
   })
   .strict();
 
 export const workspaceExecInputSchema = z
   .object({
-    command: z.string().min(1).max(DEFAULT_LIMITS.maxCommandLength),
-    cwd: workspacePathSchema.optional(),
-    timeoutSeconds: z.number().int().positive().max(86_400).optional(),
-    expectedOutputs: z.array(expectedOutputInputSchema).max(DEFAULT_LIMITS.maxExpectedOutputs).optional()
+    command: z.string().min(1).max(DEFAULT_LIMITS.maxCommandLength).describe(workspaceCommandDescription),
+    cwd: workspacePathSchema.describe(workspaceCwdDescription).optional(),
+    timeoutSeconds: z.number().int().min(1).max(86_400).optional(),
+    expectedOutputs: z
+      .array(expectedOutputInputSchema)
+      .max(DEFAULT_LIMITS.maxExpectedOutputs)
+      .describe(workspaceExpectedOutputsDescription)
+      .optional()
   })
   .strict();
 
@@ -75,7 +106,7 @@ export const workspaceImportFilesInputSchema = z
         z
           .object({
             fileId: z.string().min(1).max(255),
-            path: workspacePathSchema.optional()
+            path: workspacePathSchema.describe(workspaceImportPathDescription).optional()
           })
           .strict()
       )
@@ -92,13 +123,13 @@ export const workspaceReadFileInputSchema = z
 
 export const workspaceApplyPatchInputSchema = z
   .object({
-    patch: z.string().min(1).max(DEFAULT_LIMITS.maxApplyPatchBytes)
+    patch: z.string().min(1).max(DEFAULT_LIMITS.maxApplyPatchBytes).describe(workspaceApplyPatchDescription)
   })
   .strict();
 
 export const workspacePromoteArtifactInputSchema = z
   .object({
-    path: workspacePathSchema,
+    path: workspacePathSchema.describe(workspacePromotePathDescription),
     kind: z.string().min(1).max(160).default("workspace.file"),
     filename: z.string().min(1).max(255).optional(),
     mimeType: z.string().min(1).max(160).optional()
@@ -107,14 +138,25 @@ export const workspacePromoteArtifactInputSchema = z
 
 export const workspacePreviewImagesInputSchema = z
   .object({
-    artifactId: z.string().min(1).max(255).optional(),
-    path: workspacePathSchema.optional(),
-    paths: z.array(workspacePathSchema).min(1).max(DEFAULT_LIMITS.maxPreviewImages).optional(),
-    pages: workspacePreviewPositiveIntegerListSchema.optional(),
-    slides: workspacePreviewPositiveIntegerListSchema.optional(),
-    sheets: workspacePreviewTextListSchema.optional(),
-    ranges: workspacePreviewTextListSchema.optional(),
-    maxImages: z.number().int().positive().max(DEFAULT_LIMITS.maxPreviewImages).optional()
+    artifactId: z.string().min(1).max(255).describe(workspacePreviewArtifactDescription).optional(),
+    path: workspacePathSchema.describe(workspacePreviewPathDescription).optional(),
+    paths: z
+      .array(workspacePathSchema)
+      .min(1)
+      .max(DEFAULT_LIMITS.maxPreviewImages)
+      .describe(workspacePreviewPathsDescription)
+      .optional(),
+    pages: workspacePreviewPositiveIntegerListSchema.describe(workspacePreviewPagesDescription).optional(),
+    slides: workspacePreviewPositiveIntegerListSchema.describe(workspacePreviewSlidesDescription).optional(),
+    sheets: workspacePreviewTextListSchema.describe(workspacePreviewSheetsDescription).optional(),
+    ranges: workspacePreviewTextListSchema.describe(workspacePreviewRangesDescription).optional(),
+    maxImages: z
+      .number()
+      .int()
+      .min(1)
+      .max(DEFAULT_LIMITS.maxPreviewImages)
+      .default(DEFAULT_LIMITS.maxPreviewImages)
+      .describe(workspacePreviewMaxImagesDescription)
   })
   .strict()
   .superRefine((input, context) => {
@@ -264,6 +306,7 @@ export const workspacePreviewImagesOutputSchema = z.object({
   errorCode: z.string().optional()
 });
 
+// Override required: validation allows high values so configured runtime limits can return limit-specific errors.
 export const workspaceExecInputJsonSchema: JsonObject = {
   type: "object",
   additionalProperties: false,
@@ -273,28 +316,26 @@ export const workspaceExecInputJsonSchema: JsonObject = {
       type: "string",
       minLength: 1,
       maxLength: DEFAULT_LIMITS.maxCommandLength,
-      description:
-        "Complete Bash command or multiline script. Each call starts in /workspace unless cwd is provided for that call. The standard project directories scripts, artifacts, previews, and tmp are available at the start of every command. Files created or changed under /workspace persist across calls. Run helpers directly, e.g. `pptx_inspect deck.pptx --view summary`; do not write `set -e pptx_inspect ...`. For multiline create-and-verify commands, put `set -e` on its own line before later commands. Do not pass helper flags such as `--view`, `--spec`, `--out`, `--range`, `--page`, or `--sheet` to `cat`, `ls`, or `printf`."
+      description: workspaceCommandDescription
     },
     cwd: {
       type: "string",
+      minLength: 1,
       maxLength: DEFAULT_LIMITS.maxPathLength,
-      description:
-        "Optional workspace-relative directory for this command only. It does not persist as the next command's cwd."
+      description: workspaceCwdDescription
     },
-    timeoutSeconds: { type: "integer", minimum: 1, maximum: 300 },
+    timeoutSeconds: { type: "integer", minimum: 1, maximum: DEFAULT_LIMITS.maxTimeoutSeconds },
     expectedOutputs: {
       type: "array",
       maxItems: DEFAULT_LIMITS.maxExpectedOutputs,
-      description:
-        "Optional postconditions for files that should exist in /workspace after the command. Use kind \"directory\" only when checking that a rendered/generated directory contains tracked files. Use this for created outputs or verification steps that depend on an existing artifact. Set promote only when the command itself should promote the output.",
+      description: workspaceExpectedOutputsDescription,
       items: {
         type: "object",
         additionalProperties: false,
         required: ["path"],
         properties: {
-          path: { type: "string", maxLength: DEFAULT_LIMITS.maxPathLength },
-          kind: { type: "string", maxLength: 160 },
+          path: { type: "string", minLength: 1, maxLength: DEFAULT_LIMITS.maxPathLength },
+          kind: { type: "string", minLength: 1, maxLength: 160 },
           promote: { type: "boolean", default: false }
         }
       }
@@ -302,76 +343,7 @@ export const workspaceExecInputJsonSchema: JsonObject = {
   }
 };
 
-export const emptyObjectInputJsonSchema: JsonObject = {
-  type: "object",
-  additionalProperties: false,
-  properties: {}
-};
-
-export const workspaceImportFilesInputJsonSchema: JsonObject = {
-  type: "object",
-  additionalProperties: false,
-  required: ["files"],
-  properties: {
-    files: {
-      type: "array",
-      minItems: 1,
-      maxItems: 16,
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["fileId"],
-        properties: {
-          fileId: { type: "string", minLength: 1, maxLength: 255 },
-          path: {
-            type: "string",
-            maxLength: DEFAULT_LIMITS.maxPathLength,
-            description:
-              "Optional workspace-relative destination path override. Usually omit this and use the returned importedFiles[].path exactly in workspace.exec."
-          }
-        }
-      }
-    }
-  }
-};
-
-export const workspacePathInputJsonSchema: JsonObject = {
-  type: "object",
-  additionalProperties: false,
-  required: ["path"],
-  properties: { path: { type: "string", maxLength: DEFAULT_LIMITS.maxPathLength } }
-};
-
-export const workspaceApplyPatchInputJsonSchema: JsonObject = {
-  type: "object",
-  additionalProperties: false,
-  required: ["patch"],
-  properties: {
-    patch: {
-      type: "string",
-      minLength: 1,
-      maxLength: DEFAULT_LIMITS.maxApplyPatchBytes,
-      description:
-        "Unified diff patch for workspace text files. Use paths relative to /workspace, /workspace/path, or git-style a/path and b/path headers. Supports create, update, and delete; binary files and renames are rejected."
-    }
-  }
-};
-
-export const workspacePromoteArtifactInputJsonSchema: JsonObject = {
-  ...workspacePathInputJsonSchema,
-  properties: {
-    path: {
-      type: "string",
-      maxLength: DEFAULT_LIMITS.maxPathLength,
-      description:
-        "Workspace path to the final user-facing artifact. Prefer artifacts/ or /workspace/artifacts/ outputs."
-    },
-    kind: { type: "string", maxLength: 160, default: "workspace.file" },
-    filename: { type: "string", maxLength: 255 },
-    mimeType: { type: "string", maxLength: 160 }
-  }
-};
-
+// Override required: the model-facing schema must advertise the exactly-one preview source constraint.
 export const workspacePreviewImagesInputJsonSchema: JsonObject = {
   type: "object",
   additionalProperties: false,
@@ -385,15 +357,13 @@ export const workspacePreviewImagesInputJsonSchema: JsonObject = {
       type: "string",
       minLength: 1,
       maxLength: 255,
-      description:
-        "Managed source artifact id for DOCX/XLSX/PPTX/PDF preview rendering or already-managed image previews."
+      description: workspacePreviewArtifactDescription
     },
     path: {
       type: "string",
       minLength: 1,
       maxLength: DEFAULT_LIMITS.maxPathLength,
-      description:
-        "Workspace path to a rendered preview image, usually under previews/, e.g. previews/report/page-1.png or /workspace/previews/report/page-1.png."
+      description: workspacePreviewPathDescription
     },
     paths: {
       type: "array",
@@ -404,44 +374,42 @@ export const workspacePreviewImagesInputJsonSchema: JsonObject = {
         minLength: 1,
         maxLength: DEFAULT_LIMITS.maxPathLength
       },
-      description:
-        "Workspace paths to rendered preview images, usually under previews/. Preview images are model-visible but are not user-download artifacts unless separately promoted."
+      description: workspacePreviewPathsDescription
     },
     pages: {
       type: "array",
       minItems: 1,
       maxItems: DEFAULT_LIMITS.maxPreviewImages,
       items: { type: "integer", minimum: 1 },
-      description: "Optional PDF/DOCX page numbers to load when preview metadata has page numbers."
+      description: workspacePreviewPagesDescription
     },
     slides: {
       type: "array",
       minItems: 1,
       maxItems: DEFAULT_LIMITS.maxPreviewImages,
       items: { type: "integer", minimum: 1 },
-      description: "Optional PPTX slide numbers to load when preview metadata has slide numbers."
+      description: workspacePreviewSlidesDescription
     },
     sheets: {
       type: "array",
       minItems: 1,
       maxItems: DEFAULT_LIMITS.maxPreviewImages,
       items: { type: "string", minLength: 1, maxLength: 160 },
-      description: "Optional XLSX sheet names to load when preview metadata has sheet labels."
+      description: workspacePreviewSheetsDescription
     },
     ranges: {
       type: "array",
       minItems: 1,
       maxItems: DEFAULT_LIMITS.maxPreviewImages,
       items: { type: "string", minLength: 1, maxLength: 160 },
-      description:
-        "Optional XLSX ranges to load. Prefer sheet-qualified ranges like `Summary!A1:B4`; unqualified ranges require exactly one `sheets` value."
+      description: workspacePreviewRangesDescription
     },
     maxImages: {
       type: "integer",
       minimum: 1,
       maximum: DEFAULT_LIMITS.maxPreviewImages,
       default: DEFAULT_LIMITS.maxPreviewImages,
-      description: "Maximum preview images to attach to model context."
+      description: workspacePreviewMaxImagesDescription
     }
   }
 };

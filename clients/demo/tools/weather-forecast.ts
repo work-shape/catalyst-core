@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { defineConfiguredTool, defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+import {
+  weatherForecastOutputSchema,
+  type WeatherForecastOutput
+} from "./weather-forecast-schema";
 
 const toolConfigSchema = z
   .object({
@@ -12,25 +16,6 @@ const toolConfigSchema = z
     path: ["defaultDays"]
   });
 
-const forecastDaySchema = z.object({
-  date: z.string(),
-  condition: z.enum(["sunny", "partly_cloudy", "cloudy", "rain", "wind"]),
-  high: z.number(),
-  low: z.number(),
-  precipitationChance: z.number().int().min(0).max(100),
-  windKph: z.number().int().nonnegative(),
-  summary: z.string()
-});
-
-const outputSchema = z.object({
-  location: z.string(),
-  generatedAt: z.string(),
-  unit: z.enum(["celsius", "fahrenheit"]),
-  days: z.array(forecastDaySchema),
-  advisory: z.string()
-});
-
-type WeatherForecastOutput = z.infer<typeof outputSchema>;
 type WeatherForecastInput = {
   location: string;
   days: number;
@@ -48,37 +33,7 @@ export const weatherForecastToolFactory = defineConfiguredTool({
       description:
         "Return a deterministic sample weather forecast for demo scheduling and travel-planning conversations.",
       inputSchema,
-      outputSchema,
-      inputJsonSchema: {
-        type: "object",
-        additionalProperties: false,
-        required: ["location"],
-        properties: {
-          location: {
-            type: "string",
-            minLength: 1,
-            maxLength: 120,
-            description: "City, region, or place name for the forecast."
-          },
-          days: {
-            type: "integer",
-            minimum: 1,
-            maximum: config.maxDays,
-            default: config.defaultDays,
-            description: "Number of forecast days to return."
-          },
-          unit: {
-            type: "string",
-            enum: ["celsius", "fahrenheit"],
-            default: "celsius"
-          },
-          startDate: {
-            type: "string",
-            pattern: "^\\d{4}-\\d{2}-\\d{2}$",
-            description: "Optional ISO date for deterministic demos."
-          }
-        }
-      },
+      outputSchema: weatherForecastOutputSchema,
       permission: {
         mode: "allow",
         requiredPermissionRefs: [config.permissionRef]
@@ -112,10 +67,20 @@ export const weatherForecastTool = weatherForecastToolFactory.create(toolConfigS
 
 function createInputSchema(config: z.infer<typeof toolConfigSchema>) {
   return z.object({
-    location: z.string().min(1).max(120),
-    days: z.number().int().min(1).max(config.maxDays).default(config.defaultDays),
+    location: z.string().min(1).max(120).describe("City, region, or place name for the forecast."),
+    days: z
+      .number()
+      .int()
+      .min(1)
+      .max(config.maxDays)
+      .default(config.defaultDays)
+      .describe("Number of forecast days to return."),
     unit: z.enum(["celsius", "fahrenheit"]).default("celsius"),
-    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u).optional()
+    startDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/u)
+      .describe("Optional ISO date for deterministic demos.")
+      .optional()
   });
 }
 

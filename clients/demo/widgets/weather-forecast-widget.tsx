@@ -8,7 +8,12 @@ import {
   ThermometerSun,
   Wind
 } from "lucide-react";
-import type { ToolDisplayRenderInput, ToolDisplayWidget } from "@vivd-catalyst/chat-ui/shell";
+import { defineToolDisplayWidget, type ToolDisplayRenderInput } from "@vivd-catalyst/chat-ui/shell";
+import {
+  weatherForecastOutputSchema,
+  type WeatherForecastDay,
+  type WeatherForecastOutput
+} from "../tools/weather-forecast-schema";
 
 const translations = {
   en: {
@@ -25,21 +30,18 @@ const translations = {
   }
 } as const;
 
-export const weatherForecastWidget: ToolDisplayWidget = (input) => {
-  if (input.display.version !== 1) {
-    return undefined;
-  }
-
-  return isWeatherForecast(input.display.data) ? (
-    <WeatherForecastPreview forecast={input.display.data} input={input} />
-  ) : undefined;
-};
+export const weatherForecastWidget = defineToolDisplayWidget({
+  kind: "weather.forecast",
+  version: 1,
+  dataSchema: weatherForecastOutputSchema,
+  render: ({ data, input }) => <WeatherForecastPreview forecast={data} input={input} />
+});
 
 function WeatherForecastPreview({
   forecast,
   input
 }: {
-  forecast: WeatherForecast;
+  forecast: WeatherForecastOutput;
   input: ToolDisplayRenderInput;
 }) {
   const locale = input.locale === "de" ? "de" : "en";
@@ -97,66 +99,6 @@ function WeatherForecastPreview({
       </div>
     </div>
   );
-}
-
-interface WeatherForecast {
-  location: string;
-  generatedAt?: string;
-  unit: "celsius" | "fahrenheit";
-  days: WeatherForecastDay[];
-  advisory?: string;
-}
-
-interface WeatherForecastDay {
-  date: string;
-  condition: "sunny" | "partly_cloudy" | "cloudy" | "rain" | "wind";
-  high: number;
-  low: number;
-  precipitationChance: number;
-  windKph: number;
-  summary: string;
-}
-
-function isWeatherForecast(value: unknown): value is WeatherForecast {
-  if (!isRecord(value)) {
-    return false;
-  }
-  return (
-    typeof value.location === "string" &&
-    (value.unit === "celsius" || value.unit === "fahrenheit") &&
-    Array.isArray(value.days) &&
-    value.days.every(isWeatherForecastDay) &&
-    (value.advisory === undefined || typeof value.advisory === "string")
-  );
-}
-
-function isWeatherForecastDay(value: unknown): value is WeatherForecastDay {
-  if (!isRecord(value)) {
-    return false;
-  }
-  return (
-    typeof value.date === "string" &&
-    isWeatherCondition(value.condition) &&
-    typeof value.high === "number" &&
-    typeof value.low === "number" &&
-    typeof value.precipitationChance === "number" &&
-    typeof value.windKph === "number" &&
-    typeof value.summary === "string"
-  );
-}
-
-function isWeatherCondition(value: unknown): value is WeatherForecastDay["condition"] {
-  return (
-    value === "sunny" ||
-    value === "partly_cloudy" ||
-    value === "cloudy" ||
-    value === "rain" ||
-    value === "wind"
-  );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function weatherIconFor(condition: WeatherForecastDay["condition"]) {
