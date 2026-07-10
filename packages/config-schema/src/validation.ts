@@ -1,5 +1,15 @@
 import { AppError } from "@vivd-catalyst/core";
-import { clientInstanceConfigSchema, type ClientInstanceConfig } from "./schemas";
+import {
+  clientInstanceConfigSchema,
+  type AgentConfig,
+  type ClientInstanceConfig
+} from "./schemas";
+import {
+  findAgentModelReferenceIssues,
+  findDefaultAgentReferenceIssues,
+  findDuplicates,
+  findMissingAgentSkillReferences
+} from "./reference-validation";
 import {
   getModelSelectionForAgent,
   getModelSelectionForConversationTitles
@@ -63,11 +73,19 @@ function assertExecutionWorkspaceRunnerBoundary(config: ClientInstanceConfig): v
 }
 
 function assertConfigReferences(config: ClientInstanceConfig): void {
-  const agentNames = new Set(config.agents.map((agent) => agent.name));
-  if (!agentNames.has(config.defaultAgentName)) {
+  const defaultAgentIssues = findDefaultAgentReferenceIssues({
+    agentNames: config.agents.map((agent) => agent.name),
+    defaultAgentName: config.defaultAgentName
+  });
+  if (defaultAgentIssues[0]) {
+    throw new AppError("VALIDATION_FAILED", defaultAgentIssues[0]);
+  }
+
+  const duplicateAgentNames = findDuplicates(config.agents.map((agent) => agent.name));
+  if (duplicateAgentNames.length > 0) {
     throw new AppError(
       "VALIDATION_FAILED",
-      `Default agent '${config.defaultAgentName}' is not defined`
+      `Duplicate agent definitions: ${duplicateAgentNames.join(", ")}`
     );
   }
 
@@ -98,25 +116,13 @@ function assertConfigReferences(config: ClientInstanceConfig): void {
     }
   }
 
-  for (const agent of config.agents) {
-    if (agent.modelProviderId && agent.modelBindingId) {
-      throw new AppError(
-        "VALIDATION_FAILED",
-        `Agent '${agent.name}' must use either modelProviderId or modelBindingId, not both`
-      );
-    }
-    if (agent.modelProviderId && !providerIds.has(agent.modelProviderId)) {
-      throw new AppError(
-        "VALIDATION_FAILED",
-        `Agent '${agent.name}' references missing model provider '${agent.modelProviderId}'`
-      );
-    }
-    if (agent.modelBindingId && !modelBindingIds.has(agent.modelBindingId)) {
-      throw new AppError(
-        "VALIDATION_FAILED",
-        `Agent '${agent.name}' references missing model binding '${agent.modelBindingId}'`
-      );
-    }
+  const agentModelIssues = findAgentModelReferenceIssues({
+    agents: config.agents,
+    modelProviderIds: [...providerIds],
+    modelBindingIds: [...modelBindingIds]
+  });
+  if (agentModelIssues[0]) {
+    throw new AppError("VALIDATION_FAILED", agentModelIssues[0]);
   }
 
   if (
@@ -160,20 +166,22 @@ function assertConfigReferences(config: ClientInstanceConfig): void {
     );
   }
 
-  const skillNames = new Set(config.skills.map((skill) => skill.name));
-  for (const agent of config.agents) {
-    for (const skillName of agent.skillNames) {
-      if (!skillNames.has(skillName)) {
-        throw new AppError(
-          "VALIDATION_FAILED",
-          `Agent '${agent.name}' references missing skill '${skillName}'`
-        );
-      }
-    }
+  const missingSkillReferences = findMissingAgentSkillReferences(
+    config.agents,
+    config.skills.map((skill) => skill.name)
+  );
+  if (missingSkillReferences[0]) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Agent '${missingSkillReferences[0].agentName}' references missing skill '${missingSkillReferences[0].referenceName}'`
+    );
   }
 }
 
-function assertSpendBudgetPricingCoverage(config: ClientInstanceConfig): void {
+export function assertSpendBudgetPricingCoverage(
+  config: ClientInstanceConfig,
+  agents: readonly AgentConfig[] = config.agents
+): void {
   if (!config.usage.budget.monthlySpendLimit) {
     return;
   }
@@ -183,7 +191,7 @@ function assertSpendBudgetPricingCoverage(config: ClientInstanceConfig): void {
   );
   const requiredPrices = new Set<string>();
 
-  for (const agent of config.agents) {
+  for (const agent of agents) {
     const selection = getModelSelectionForAgent(config, agent);
     if (selection.provider.type !== "deterministic") {
       requiredPrices.add(createPricingKey(selection.provider.id, selection.model));
@@ -210,16 +218,4 @@ function assertSpendBudgetPricingCoverage(config: ClientInstanceConfig): void {
 
 function createPricingKey(providerId: string, model: string): string {
   return `${providerId}/${model}`;
-}
-
-function findDuplicates(values: readonly string[]): string[] {
-  const seen = new Set<string>();
-  const duplicates = new Set<string>();
-  for (const value of values) {
-    if (seen.has(value)) {
-      duplicates.add(value);
-    }
-    seen.add(value);
-  }
-  return [...duplicates];
 }

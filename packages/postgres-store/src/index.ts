@@ -7,6 +7,10 @@ import {
   type AuditEventStore,
   type ChatMessage,
   type ClientInstanceId,
+  type ConfigAssetRecord,
+  type ConfigAssetRevisionRecord,
+  type ConfigAssetState,
+  type ConfigAssetStore,
   type Conversation,
   type ConversationId,
   type ConversationRetentionStore,
@@ -69,6 +73,13 @@ import {
   listModelUsageEvents as listPostgresModelUsageEvents,
   summarizeModelUsageEvents as summarizePostgresModelUsageEvents
 } from "./postgres-audit-usage-operations";
+import {
+  applyConfigAssetMutations as applyPostgresConfigAssetMutations,
+  getConfigAsset as getPostgresConfigAsset,
+  getConfigAssetState as getPostgresConfigAssetState,
+  listActiveConfigAssets as listActivePostgresConfigAssets,
+  listConfigAssetRevisions as listPostgresConfigAssetRevisions
+} from "./postgres-config-asset-operations";
 import {
   appendMessage as appendPostgresMessage,
   createConversation as createPostgresConversation,
@@ -151,7 +162,8 @@ export class PostgresPlatformStore
     ExecutionWorkspaceCleanupStore,
     AuditEventStore,
     ModelUsageEventStore,
-    UserStore
+    UserStore,
+    ConfigAssetStore
 {
   private readonly postgresClient: Sql;
   private readonly db: PostgresDatabase;
@@ -187,6 +199,36 @@ export class PostgresPlatformStore
 
   async migrate(): Promise<void> {
     await runPostgresMigrations(this.postgresClient, this.db);
+  }
+
+  async getConfigAssetState(
+    input: Parameters<ConfigAssetStore["getConfigAssetState"]>[0]
+  ): Promise<ConfigAssetState> {
+    return getPostgresConfigAssetState(this.db, input);
+  }
+
+  async listActiveConfigAssets(
+    input: Parameters<ConfigAssetStore["listActiveConfigAssets"]>[0]
+  ): Promise<ConfigAssetRecord[]> {
+    return listActivePostgresConfigAssets(this.db, input);
+  }
+
+  async getConfigAsset(
+    input: Parameters<ConfigAssetStore["getConfigAsset"]>[0]
+  ): Promise<ConfigAssetRecord | undefined> {
+    return getPostgresConfigAsset(this.db, input);
+  }
+
+  async listConfigAssetRevisions(
+    input: Parameters<ConfigAssetStore["listConfigAssetRevisions"]>[0]
+  ): Promise<ConfigAssetRevisionRecord[]> {
+    return listPostgresConfigAssetRevisions(this.db, input);
+  }
+
+  async applyConfigAssetMutations(
+    input: Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0]
+  ): Promise<{ version: number }> {
+    return applyPostgresConfigAssetMutations(this.db, input);
   }
 
   async resolveUserIdentity(input: ResolveUserIdentityInput) {

@@ -6,6 +6,10 @@ import type {
   ClientInstanceConfig,
   ModelProviderConfig
 } from "@vivd-catalyst/config-schema";
+import {
+  findAgentModelReferenceIssues,
+  findMissingAgentToolReferences
+} from "@vivd-catalyst/config-schema";
 import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
 
 const READ_SKILL_TOOL_NAME = "read_skill";
@@ -17,6 +21,12 @@ export function assertClientAssemblyValid(input: {
   const issues = [
     ...findDuplicateToolImplementations(input.tools),
     ...findModelProviderReferenceIssues(input.config),
+    ...findAgentModelReferenceIssues({
+      agents: input.config.agents,
+      modelProviderIds: input.config.modelProviders.map((provider) => provider.id),
+      modelBindingIds: input.config.modelBindings.map((binding) => binding.id)
+    }),
+    ...findConfiguredToolReferenceIssues(input.config),
     ...findToolReferenceIssues(input.config, input.tools)
   ];
 
@@ -80,23 +90,19 @@ function findModelProviderReferenceIssues(config: ClientInstanceConfig): string[
     );
   }
 
-  for (const agent of config.agents) {
-    if (agent.modelProviderId && agent.modelBindingId) {
-      issues.push(`Agent '${agent.name}' must use either modelProviderId or modelBindingId, not both`);
-    }
-    if (agent.modelProviderId && !configuredProviderIds.has(agent.modelProviderId)) {
-      issues.push(
-        `Agent '${agent.name}' references model provider '${agent.modelProviderId}' that is missing from release config`
-      );
-    }
-    if (agent.modelBindingId && !configuredModelBindingIds.has(agent.modelBindingId)) {
-      issues.push(
-        `Agent '${agent.name}' references model binding '${agent.modelBindingId}' that is missing from release config`
-      );
-    }
-  }
-
   return issues;
+}
+
+function findConfiguredToolReferenceIssues(config: ClientInstanceConfig): string[] {
+  const configuredTools = new Map(config.tools.map((tool) => [tool.name, tool.enabled]));
+  return findMissingAgentToolReferences(
+    config.agents,
+    config.tools.filter((tool) => tool.enabled).map((tool) => tool.name)
+  ).map(({ agentName, referenceName }) =>
+    configuredTools.has(referenceName)
+      ? `Agent '${agentName}' references disabled tool '${referenceName}'`
+      : `Agent '${agentName}' references tool '${referenceName}' that is missing from release config`
+  );
 }
 
 function findToolReferenceIssues(
@@ -131,11 +137,7 @@ function findToolReferenceIssues(
     }
     for (const toolName of agent.toolNames) {
       if (!configuredTools.has(toolName)) {
-        issues.push(`Agent '${agent.name}' references tool '${toolName}' that is missing from release config`);
         continue;
-      }
-      if (!configuredTools.get(toolName)) {
-        issues.push(`Agent '${agent.name}' references disabled tool '${toolName}'`);
       }
       if (toolName === WEB_SEARCH_MODEL_TOOL_NAME) {
         const modelProvider = getModelProviderForAgentValidation(config, agent);

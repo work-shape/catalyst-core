@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   index,
   integer,
@@ -16,11 +17,15 @@ import type {
   ArtifactPreviewImagePageRef,
   ArtifactPreviewJobRecord,
   ArtifactPreviewManifest,
+  AuditActor,
   AuditEvent,
   ChatMessage,
+  ConfigAssetRecord,
+  ConfigAssetRevisionRecord,
   ConversationAttachment,
   Conversation,
   ExecutionWorkspace,
+  JsonObject,
   ManagedArtifactRecord,
   ManagedFileRecord,
   ModelUsageEvent,
@@ -600,6 +605,64 @@ export const modelUsageEvents = pgTable(
   ]
 );
 
+export const configAssetState = pgTable("config_asset_state", {
+  clientInstanceId: text("client_instance_id").primaryKey(),
+  version: bigint("version", { mode: "number" }).notNull().default(0),
+  defaultAgentName: text("default_agent_name"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
+});
+
+export const configAssets = pgTable(
+  "config_assets",
+  {
+    id: text("id").primaryKey(),
+    clientInstanceId: text("client_instance_id").notNull(),
+    kind: text("kind").$type<ConfigAssetRecord["kind"]>().notNull(),
+    name: text("name").notNull(),
+    status: text("status").$type<ConfigAssetRecord["status"]>().notNull(),
+    activeRevisionId: text("active_revision_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    uniqueIndex("config_assets_client_kind_name_idx").on(
+      table.clientInstanceId,
+      table.kind,
+      table.name
+    )
+  ]
+);
+
+export const configAssetRevisions = pgTable(
+  "config_asset_revisions",
+  {
+    id: text("id").primaryKey(),
+    clientInstanceId: text("client_instance_id").notNull(),
+    assetId: text("asset_id")
+      .notNull()
+      .references(() => configAssets.id, { onDelete: "cascade" }),
+    revision: integer("revision").notNull(),
+    operation: text("operation")
+      .$type<ConfigAssetRevisionRecord["operation"]>()
+      .notNull(),
+    config: jsonb("config").$type<JsonObject>(),
+    actor: jsonb("actor").$type<AuditActor>(),
+    globalVersion: bigint("global_version", { mode: "number" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    uniqueIndex("config_asset_revisions_asset_revision_idx").on(
+      table.assetId,
+      table.revision
+    ),
+    index("config_asset_revisions_client_asset_revision_idx").on(
+      table.clientInstanceId,
+      table.assetId,
+      table.revision.desc()
+    )
+  ]
+);
+
 export const schema = {
   productUsers,
   userIdentities,
@@ -617,5 +680,8 @@ export const schema = {
   artifactPreviewManifests,
   conversationAttachments,
   auditEvents,
-  modelUsageEvents
+  modelUsageEvents,
+  configAssetState,
+  configAssets,
+  configAssetRevisions
 };

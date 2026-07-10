@@ -1,6 +1,7 @@
 import type { AgentRunStore, RunObservationStore } from "./agent-runtime";
 import type { AuditEventStore } from "./audit";
 import type { ConversationRetentionStore, ConversationStore } from "./conversation";
+import type { ConfigAssetStore } from "./config-assets";
 import type {
   ExecutionWorkspaceCleanupStore,
   ExecutionWorkspaceFileStore,
@@ -23,6 +24,7 @@ export interface PlatformStore
     ExecutionWorkspaceCleanupStore,
     AuditEventStore,
     ModelUsageEventStore,
-    UserStore {
+    UserStore,
+    ConfigAssetStore {
   close?: () => Promise<void>;
 }

@@ -11,6 +11,10 @@ import {
   type ClaimRunStartCommandInput,
   type ClaimRunStartCommandResult,
   type ClientInstanceId,
+  type ConfigAssetRecord,
+  type ConfigAssetRevisionRecord,
+  type ConfigAssetState,
+  type ConfigAssetStore,
   type CompleteRunStartCommandInput,
   type Conversation,
   type ConversationId,
@@ -50,6 +54,7 @@ import {
   createUserId,
   createPlatformId
 } from "./index";
+import { InMemoryConfigAssetStore } from "./testing-in-memory-config-asset-store";
 import {
   createInMemoryExecutionWorkspaceStore,
   type InMemoryExecutionWorkspaceStore
@@ -72,7 +77,8 @@ export class InMemoryPlatformStore
     ExecutionWorkspaceCleanupStore,
     AuditEventStore,
     ModelUsageEventStore,
-    UserStore
+    UserStore,
+    ConfigAssetStore
 {
   private readonly conversations = new Map<string, Conversation>();
   private readonly messages = new Map<string, ChatMessage[]>();
@@ -98,6 +104,37 @@ export class InMemoryPlatformStore
   private readonly modelUsageEvents: ModelUsageEvent[] = [];
   private readonly users = new Map<string, UserRecord>();
   private readonly identities = new Map<string, UserIdentity>();
+  private readonly configAssetStore = new InMemoryConfigAssetStore();
+
+  async getConfigAssetState(
+    input: Parameters<ConfigAssetStore["getConfigAssetState"]>[0]
+  ): Promise<ConfigAssetState> {
+    return this.configAssetStore.getConfigAssetState(input);
+  }
+
+  async listActiveConfigAssets(
+    input: Parameters<ConfigAssetStore["listActiveConfigAssets"]>[0]
+  ): Promise<ConfigAssetRecord[]> {
+    return this.configAssetStore.listActiveConfigAssets(input);
+  }
+
+  async getConfigAsset(
+    input: Parameters<ConfigAssetStore["getConfigAsset"]>[0]
+  ): Promise<ConfigAssetRecord | undefined> {
+    return this.configAssetStore.getConfigAsset(input);
+  }
+
+  async listConfigAssetRevisions(
+    input: Parameters<ConfigAssetStore["listConfigAssetRevisions"]>[0]
+  ): Promise<ConfigAssetRevisionRecord[]> {
+    return this.configAssetStore.listConfigAssetRevisions(input);
+  }
+
+  async applyConfigAssetMutations(
+    input: Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0]
+  ): Promise<{ version: number }> {
+    return this.configAssetStore.applyConfigAssetMutations(input);
+  }
 
   async createConversation(input: CreateConversationInput): Promise<Conversation> {
     const now = new Date().toISOString();
