@@ -3056,7 +3056,7 @@ describe("client instance app vertical slice", () => {
 
     const issued = await app.server.inject({
       method: "POST",
-      url: "/auth/session-token",
+      url: "/api/superadmin/session-tokens",
       headers: {
         "x-server-credential": "server-credential"
       },
@@ -3172,7 +3172,7 @@ describe("client instance app vertical slice", () => {
 
     const issued = await app.server.inject({
       method: "POST",
-      url: "/auth/session-token",
+      url: "/api/superadmin/session-tokens",
       headers: {
         "x-server-credential": "server-credential"
       },
@@ -3246,7 +3246,7 @@ describe("client instance app vertical slice", () => {
 
     const ambiguousIssued = await app.server.inject({
       method: "POST",
-      url: "/auth/session-token",
+      url: "/api/superadmin/session-tokens",
       headers: {
         "x-server-credential": "server-credential"
       },
@@ -3311,7 +3311,7 @@ describe("client instance app vertical slice", () => {
 
     const issued = await app.server.inject({
       method: "POST",
-      url: "/auth/session-token",
+      url: "/api/superadmin/session-tokens",
       headers: {
         "x-server-credential": "server-credential"
       },
@@ -3376,7 +3376,7 @@ describe("client instance app vertical slice", () => {
 
     const issued = await app.server.inject({
       method: "POST",
-      url: "/auth/session-token",
+      url: "/api/superadmin/session-tokens",
       headers: {
         "x-server-credential": "server-credential"
       },
@@ -3449,7 +3449,7 @@ describe("client instance app vertical slice", () => {
 
     const issued = await app.server.inject({
       method: "POST",
-      url: "/auth/session-token",
+      url: "/api/superadmin/session-tokens",
       headers: {
         "x-server-credential": "server-credential"
       },

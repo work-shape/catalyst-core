@@ -25,7 +25,9 @@ export const FIRST_PARTY_AUTH_SCOPES = [
   "governance:read",
   "governance:write",
   "user_admin:read",
-  "user_admin:write"
+  "user_admin:write",
+  "config_assets:read",
+  "config_assets:write"
 ] as const;
 
 export type ChatSessionAuthScope = (typeof CHAT_SESSION_AUTH_SCOPES)[number];

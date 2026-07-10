@@ -256,6 +256,14 @@ export async function createClientInstanceApp(
     userStore: store,
     usageGovernance,
     auditRecorder,
+    configAssets: {
+      store,
+      validationRefs: {
+        modelProviderIds: config.modelProviders.map((provider) => provider.id),
+        modelBindingIds: config.modelBindings.map((binding) => binding.id),
+        enabledToolNames: [...getEnabledToolNames(config)]
+      }
+    },
     agentRuntime,
     attachments,
     managedObjects,

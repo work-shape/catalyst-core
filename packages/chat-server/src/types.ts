@@ -4,6 +4,7 @@ import type {
   AgentRunStore,
   AuditEventStore,
   ClientInstanceId,
+  ConfigAssetStore,
   ConversationRetentionStore,
   ConversationStore,
   ExecutionWorkspaceCleanupStore,
@@ -35,6 +36,14 @@ export interface ChatServerOptions {
   userStore: UserStore;
   usageGovernance: ModelUsageGovernance;
   auditRecorder: AuditRecorder;
+  configAssets: {
+    store: ConfigAssetStore;
+    validationRefs: {
+      modelProviderIds: string[];
+      modelBindingIds: string[];
+      enabledToolNames: string[];
+    };
+  };
   agentRuntime: AgentRuntime;
   attachments?: ChatAttachmentService;
   managedObjects?: {
