@@ -59,7 +59,7 @@ export type GetCurrentUserResponses = {
             displayLabel?: string;
             authSource: string;
         };
-        scopes?: Array<'*' | 'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'config_assets:read' | 'config_assets:write'>;
+        scopes?: Array<'*' | 'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
     };
 };
 
@@ -104,7 +104,7 @@ export type UpdateCurrentUserResponses = {
             displayLabel?: string;
             authSource: string;
         };
-        scopes?: Array<'*' | 'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'config_assets:read' | 'config_assets:write'>;
+        scopes?: Array<'*' | 'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
     };
 };
 
@@ -226,10 +226,11 @@ export type GetConfigResponses = {
             };
             configAssets: {
                 enabled: boolean;
-                editableAgentFields: {
-                    model: boolean;
-                    maxSteps: boolean;
-                };
+                editableAgentFields: Array<'displayName' | 'welcomeMessage' | 'welcomeSubtitle' | 'instructions' | 'modelProviderId' | 'modelBindingId' | 'reasoningEffort' | 'maxSteps' | 'toolNames' | 'skillNames' | 'initialPrompts'>;
+                allowAgentCreation: boolean;
+                allowAgentDeletion: boolean;
+                allowDefaultAgentChange: boolean;
+                allowSkillEditing: boolean;
             };
         };
         defaultAgentName?: string;
@@ -2252,6 +2253,7 @@ export type GetConfigAssetsOverviewResponses = {
         references: {
             modelProviderIds: Array<string>;
             modelBindingIds: Array<string>;
+            reasoningEfforts: Array<'none' | 'low' | 'medium' | 'high' | 'xhigh'>;
             enabledToolNames: Array<string>;
         };
     };
@@ -2808,7 +2810,7 @@ export type IssueSessionTokenData = {
         permissionRefs?: Array<string>;
         permissions?: Array<string>;
         correlationId?: string;
-        scopes?: Array<'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'config_assets:read' | 'config_assets:write'>;
+        scopes?: Array<'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
         delegatedActor?: {
             kind: 'service_principal';
             id: string;

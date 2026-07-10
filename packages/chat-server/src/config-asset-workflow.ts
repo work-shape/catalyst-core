@@ -1,4 +1,5 @@
 import {
+  AGENT_EDITABLE_FIELDS,
   AppError,
   auditActorFromUser,
   isJsonObject,
@@ -6,6 +7,7 @@ import {
   requirePermission,
   unknownToJsonValue,
   type AgentConfig,
+  type AgentEditableField,
   type AuthenticatedUser,
   type ConfigAssetKind,
   type ConfigAssetMutation,
@@ -82,7 +84,7 @@ export class ConfigAssetWorkflow {
     context: RuntimeCallContext,
     command: PutConfigAssetCommand
   ) {
-    await this.authorizeWrite(user, context);
+    await this.authorizeInteractiveWrite(user, context);
     requireMatchingConfigName(command.config, command.name);
     const current = await this.loadCurrentBundle();
     const setInitialDefault = shouldSetInitialDefault(current, command.kind);
@@ -92,6 +94,12 @@ export class ConfigAssetWorkflow {
       : replaced;
     const validated = this.validateBundle(candidate);
     const config = findValidatedConfig(validated, command.kind, command.name);
+    this.assertInteractiveAssetUpsertAllowed({
+      kind: command.kind,
+      name: command.name,
+      currentConfig: findBundleConfig(current, command.kind, command.name),
+      nextConfig: config
+    });
     const mutations: ConfigAssetMutation[] = [
       {
         type: "upsert",
@@ -124,7 +132,8 @@ export class ConfigAssetWorkflow {
     context: RuntimeCallContext,
     command: AssetMutationCommand
   ) {
-    await this.authorizeWrite(user, context);
+    await this.authorizeInteractiveWrite(user, context);
+    this.assertInteractiveDeleteAllowed(command.kind);
     const existing = await this.getActiveAssetOrThrow(command);
     const current = await this.loadCurrentBundle();
     const clearLastDefault = shouldClearLastDefault(current, command);
@@ -159,7 +168,10 @@ export class ConfigAssetWorkflow {
     context: RuntimeCallContext,
     command: { agentName?: string; baseVersion?: number }
   ) {
-    await this.authorizeWrite(user, context);
+    await this.authorizeInteractiveWrite(user, context);
+    if (!this.options.config.administration.agentConfiguration.allowDefaultAgentChange) {
+      throw new AppError("FORBIDDEN", "Interactive default-agent changes are disabled");
+    }
     const current = await this.loadCurrentBundle();
     this.validateBundle({
       agents: current.agents,
@@ -204,7 +216,7 @@ export class ConfigAssetWorkflow {
     context: RuntimeCallContext,
     command: AssetMutationCommand & { revision: number }
   ) {
-    await this.authorizeWrite(user, context);
+    await this.authorizeInteractiveWrite(user, context);
     const revisions = await this.options.configAssets.store.listConfigAssetRevisions({
       clientInstanceId: this.options.clientInstanceId,
       kind: command.kind,
@@ -230,6 +242,12 @@ export class ConfigAssetWorkflow {
       : replaced;
     const validated = this.validateBundle(candidate);
     const config = findValidatedConfig(validated, command.kind, command.name);
+    this.assertInteractiveAssetUpsertAllowed({
+      kind: command.kind,
+      name: command.name,
+      currentConfig: findBundleConfig(current, command.kind, command.name),
+      nextConfig: config
+    });
     const mutations: ConfigAssetMutation[] = [
       {
         type: "upsert",
@@ -281,7 +299,7 @@ export class ConfigAssetWorkflow {
     context: RuntimeCallContext,
     command: ConfigAssetBundleInput & { baseVersion: number | null }
   ) {
-    await this.authorizeWrite(user, context);
+    await this.authorizeReleaseWrite(user, context);
     const validated = this.validateBundle(command);
     const currentAssets = await this.options.configAssets.store.listActiveConfigAssets({
       clientInstanceId: this.options.clientInstanceId
@@ -325,7 +343,7 @@ export class ConfigAssetWorkflow {
     context: RuntimeCallContext,
     command: ConfigAssetBundleInput
   ): Promise<{ valid: true }> {
-    await this.authorizeWrite(user, context);
+    await this.authorizeReleaseWrite(user, context);
     this.validateBundle(command);
     return { valid: true };
   }
@@ -350,7 +368,7 @@ export class ConfigAssetWorkflow {
     });
   }
 
-  private async authorizeWrite(
+  private async authorizeInteractiveWrite(
     user: AuthenticatedUser,
     context: RuntimeCallContext
   ): Promise<void> {
@@ -363,6 +381,66 @@ export class ConfigAssetWorkflow {
       auditType: "governance.config_assets_write_authorized",
       deniedMessage: "Config asset changes require 'config_assets.write' permission"
     });
+    if (!this.options.config.administration.agentConfiguration.enabled) {
+      throw new AppError("FORBIDDEN", "Interactive agent configuration is disabled");
+    }
+  }
+
+  private async authorizeReleaseWrite(
+    user: AuthenticatedUser,
+    context: RuntimeCallContext
+  ): Promise<void> {
+    requireAuthScope(user, "config_assets:release");
+    await authorizeGovernanceAction({
+      options: this.options,
+      user,
+      context,
+      requiredPermission: "config_assets.release",
+      auditType: "governance.config_assets_release_authorized",
+      deniedMessage: "Config asset release sync requires 'config_assets.release' permission"
+    });
+  }
+
+  private assertInteractiveDeleteAllowed(kind: ConfigAssetKind): void {
+    const policy = this.options.config.administration.agentConfiguration;
+    if (kind === "skill" && !policy.allowSkillEditing) {
+      throw new AppError("FORBIDDEN", "Interactive skill editing is disabled");
+    }
+    if (kind === "agent" && !policy.allowAgentDeletion) {
+      throw new AppError("FORBIDDEN", "Interactive agent deletion is disabled");
+    }
+  }
+
+  private assertInteractiveAssetUpsertAllowed(input: {
+    kind: ConfigAssetKind;
+    name: string;
+    currentConfig: AgentConfig | SkillConfig | undefined;
+    nextConfig: AgentConfig | SkillConfig;
+  }): void {
+    const policy = this.options.config.administration.agentConfiguration;
+    if (input.kind === "skill") {
+      if (!policy.allowSkillEditing) {
+        throw new AppError("FORBIDDEN", "Interactive skill editing is disabled");
+      }
+      return;
+    }
+    if (!input.currentConfig && !policy.allowAgentCreation) {
+      throw new AppError("FORBIDDEN", "Interactive agent creation is disabled");
+    }
+
+    const currentAgent = input.currentConfig as AgentConfig | undefined;
+    const nextAgent = input.nextConfig as AgentConfig;
+    const editableFields = new Set<AgentEditableField>(policy.editableAgentFields);
+    const changedFields = AGENT_EDITABLE_FIELDS.filter(
+      (field) => !configValuesEqual(currentAgent?.[field], nextAgent[field])
+    );
+    const protectedFields = changedFields.filter((field) => !editableFields.has(field));
+    if (protectedFields.length > 0) {
+      throw new AppError(
+        "FORBIDDEN",
+        `Interactive changes are not allowed for agent field${protectedFields.length === 1 ? "" : "s"}: ${protectedFields.join(", ")}`
+      );
+    }
   }
 
   private validateBundle(input: ConfigAssetBundleInput): {
@@ -502,6 +580,20 @@ function findValidatedConfig(
     throw new AppError("VALIDATION_FAILED", `Validated config ${kind} '${name}' was not found`);
   }
   return config;
+}
+
+function findBundleConfig(
+  bundle: ConfigAssetBundleInput,
+  kind: ConfigAssetKind,
+  name: string
+): AgentConfig | SkillConfig | undefined {
+  return (kind === "agent" ? bundle.agents : bundle.skills).find(
+    (candidate) => readConfigName(candidate) === name
+  ) as AgentConfig | SkillConfig | undefined;
+}
+
+function configValuesEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function toJsonObject(value: unknown): JsonObject {

@@ -41,11 +41,22 @@ retention:
   auditDays: 365
   allowUserDelete: true
 administration:
-  configAssets:
+  agentConfiguration:
     enabled: true
     editableAgentFields:
-      model: false
-      maxSteps: false
+      - displayName
+      - welcomeMessage
+      - welcomeSubtitle
+      - instructions
+      - modelBindingId
+      - reasoningEffort
+      - toolNames
+      - skillNames
+      - initialPrompts
+    allowAgentCreation: true
+    allowAgentDeletion: true
+    allowDefaultAgentChange: true
+    allowSkillEditing: true
 modelProviders:
   - id: openai
     type: openai-compatible
@@ -54,6 +65,11 @@ modelProviders:
     reasoningEffort: high
     baseUrl: https://api.openai.com/v1
     apiKeyEnvName: OPENAI_API_KEY
+modelBindings:
+  - id: primary
+    providerId: openai
+    model: gpt-5.5
+    reasoningEffort: high
 localization:
   defaultLocale: en
   supportedLocales:

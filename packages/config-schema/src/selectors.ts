@@ -33,13 +33,19 @@ export function getModelSelectionForAgent(
   agent: AgentConfig
 ): ResolvedModelSelection {
   if (agent.modelBindingId) {
-    return resolveModelBinding(config, agent.modelBindingId);
+    const selection = resolveModelBinding(config, agent.modelBindingId);
+    return {
+      ...selection,
+      reasoningEffort: agent.reasoningEffort ?? selection.reasoningEffort
+    };
   }
   const provider = resolveModelProvider(config, agent.modelProviderId ?? config.modelProviders[0]?.id);
   return {
     provider,
     model: provider.model,
-    reasoningEffort: provider.type === "openai-compatible" ? provider.reasoningEffort : undefined
+    reasoningEffort:
+      agent.reasoningEffort ??
+      (provider.type === "openai-compatible" ? provider.reasoningEffort : undefined)
   };
 }
 

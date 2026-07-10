@@ -642,7 +642,7 @@ describe("local agent runtime", () => {
     });
   });
 
-  it("resolves the configured model binding for an agent run", async () => {
+  it("resolves the configured model binding and per-agent reasoning effort for a run", async () => {
     const clientInstanceId = asClientInstanceId("binding-client");
     const context: RuntimeCallContext = {
       clientInstanceId,
@@ -686,6 +686,7 @@ describe("local agent runtime", () => {
           displayName: "Binding Agent",
           instructions: "Use the configured model binding.",
           modelBindingId: "primaryReasoning",
+          reasoningEffort: "xhigh",
           toolNames: [],
           initialPrompts: []
         }
@@ -733,7 +734,7 @@ describe("local agent runtime", () => {
     expect(providerRequest).toMatchObject({
       providerId: "test-provider",
       model: "bound-model",
-      reasoningEffort: "high"
+      reasoningEffort: "xhigh"
     });
   });
 

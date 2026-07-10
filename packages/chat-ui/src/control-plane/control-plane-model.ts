@@ -259,10 +259,11 @@ export function useControlPlaneModel({
           superadminUserMutations.resetUserPassword.mutateAsync({ userId, password }),
         canEditConfigAssets: userCanEditConfigAssets,
         configAssets: {
-          editableAgentFields: configAssetManagement?.editableAgentFields ?? {
-            model: false,
-            maxSteps: false
-          },
+          editableAgentFields: configAssetManagement?.editableAgentFields ?? [],
+          allowAgentCreation: configAssetManagement?.allowAgentCreation ?? false,
+          allowAgentDeletion: configAssetManagement?.allowAgentDeletion ?? false,
+          allowDefaultAgentChange: configAssetManagement?.allowDefaultAgentChange ?? false,
+          allowSkillEditing: configAssetManagement?.allowSkillEditing ?? false,
           overview: configAssetsOverviewQuery.data,
           agents: namedBundleEntries(configAssetsExportQuery.data?.agents),
           skills: namedBundleEntries(configAssetsExportQuery.data?.skills),

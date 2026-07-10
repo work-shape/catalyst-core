@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import { createToolDefinitions } from "@vivd-catalyst/client-assembly";
+import { createClientInstanceApp, createToolDefinitions } from "@vivd-catalyst/client-assembly";
 import { defineConfiguredTool, defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 
 describe("client assembly configured tools", () => {
@@ -51,6 +51,26 @@ describe("client assembly configured tools", () => {
       })
     ).toThrow(/Config for tool 'demo.configured' is invalid/u);
   });
+
+  it("rejects capability config without a registered implementation", async () => {
+    await expect(
+      createClientInstanceApp({
+        config: createTestConfig({
+          tools: [],
+          capabilities: {
+            misspelledCapability: { enabled: true }
+          }
+        }),
+        tools: [],
+        capabilities: [],
+        storeMode: "memory",
+        env: {}
+      })
+    ).rejects.toMatchObject({
+      code: "VALIDATION_FAILED",
+      message: "Capability config has no registered implementation: misspelledCapability"
+    });
+  });
 });
 
 const configuredToolFactory = defineConfiguredTool({
@@ -81,6 +101,7 @@ function createTestConfig(input: {
     enabled: boolean;
     config?: Record<string, unknown>;
   }>;
+  capabilities?: Record<string, unknown>;
 }) {
   return parseClientInstanceConfig({
     version: 1,
@@ -95,6 +116,7 @@ function createTestConfig(input: {
       }
     },
     modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
+    capabilities: input.capabilities,
     tools: input.tools
   });
 }

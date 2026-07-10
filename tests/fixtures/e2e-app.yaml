@@ -19,6 +19,8 @@ auth:
           - user
           - admin
           - superadmin
+        permissions:
+          - config_assets.release
         permissionRefs:
           - demo-tools
       - email: e2e-user@example.test
@@ -48,14 +50,31 @@ retention:
   auditDays: 30
   allowUserDelete: true
 administration:
-  configAssets:
+  agentConfiguration:
     enabled: true
     editableAgentFields:
-      model: true
-      maxSteps: true
+      - displayName
+      - welcomeMessage
+      - welcomeSubtitle
+      - instructions
+      - modelProviderId
+      - modelBindingId
+      - reasoningEffort
+      - maxSteps
+      - toolNames
+      - skillNames
+      - initialPrompts
+    allowAgentCreation: true
+    allowAgentDeletion: true
+    allowDefaultAgentChange: true
+    allowSkillEditing: true
 modelProviders:
   - id: local
     type: deterministic
+    model: deterministic-local
+modelBindings:
+  - id: primary
+    providerId: local
     model: deterministic-local
 usage:
   budget:

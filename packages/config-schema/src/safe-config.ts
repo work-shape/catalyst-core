@@ -38,8 +38,7 @@ export function createSafeConfigView(
         accept: ""
       },
       configAssets: {
-        enabled: config.administration.configAssets.enabled,
-        editableAgentFields: config.administration.configAssets.editableAgentFields
+        ...config.administration.agentConfiguration
       }
     },
     defaultAgentName: assets.defaultAgentName,

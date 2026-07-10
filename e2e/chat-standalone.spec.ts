@@ -816,7 +816,15 @@ test("superadmin manages config assets with validation and conflict protection",
     await expect(fieldset("Tools").getByLabel("show_view", { exact: true })).toBeVisible();
     await expect(fieldControl("Model", "select").locator("option")).toContainText([
       "Instance default",
-      "local"
+      "primary"
+    ]);
+    await expect(fieldControl("Reasoning effort", "select").locator("option")).toContainText([
+      "Model default",
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
     ]);
 
     await page.getByRole("button", { name: "New skill", exact: true }).click();

@@ -31,8 +31,8 @@ export async function createConfigApi(options: ConfigApiOptions) {
   const sessionRequest = apiOperations.issueSessionToken.requestSchema.parse({
     externalUserId: "catalyst-cli",
     displayLabel: "Catalyst CLI",
-    scopes: ["config_assets:read", "config_assets:write"],
-    permissions: ["config_assets.read", "config_assets.write"],
+    scopes: ["config_assets:read", "config_assets:release"],
+    permissions: ["config_assets.read", "config_assets.release"],
     delegatedActor: {
       kind: "service_principal",
       id: "catalyst-cli",

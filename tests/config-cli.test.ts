@@ -44,7 +44,10 @@ afterEach(async () => {
 
 describe("config CLI serialization", () => {
   it("deterministically round-trips agent YAML and ignores provenance comments", () => {
-    const input = agentConfig("First line\nSecond line");
+    const input = {
+      ...agentConfig("First line\nSecond line"),
+      reasoningEffort: "xhigh" as const
+    };
     const serialized = serializeAgentYaml(input, { instance: "local", version: 12 });
 
     expect(serialized).toMatch(/^# Pulled from local \(config version 12\)\./u);
@@ -58,6 +61,7 @@ describe("config CLI serialization", () => {
       "displayName",
       "instructions",
       "modelProviderId",
+      "reasoningEffort",
       "toolNames",
       "skillNames",
       "initialPrompts"
@@ -304,6 +308,7 @@ async function createFixture() {
       validationRefs: {
         modelProviderIds: ["local"],
         modelBindingIds: [],
+        reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
         enabledToolNames: ["known.tool"]
       }
     },

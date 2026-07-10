@@ -494,6 +494,7 @@ export class LocalAgentRuntime implements AgentRuntime {
         provider,
         model: binding.model ?? provider.model,
         reasoningEffort:
+          agent.reasoningEffort ??
           binding.reasoningEffort ??
           (provider.type === "openai-compatible" ? provider.reasoningEffort : undefined)
       };
@@ -503,7 +504,9 @@ export class LocalAgentRuntime implements AgentRuntime {
     return {
       provider,
       model: provider.model,
-      reasoningEffort: provider.type === "openai-compatible" ? provider.reasoningEffort : undefined
+      reasoningEffort:
+        agent.reasoningEffort ??
+        (provider.type === "openai-compatible" ? provider.reasoningEffort : undefined)
     };
   }
 

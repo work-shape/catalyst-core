@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
-import { StoreBackedAuditRecorder } from "@vivd-catalyst/core";
+import { REASONING_EFFORTS, StoreBackedAuditRecorder } from "@vivd-catalyst/core";
 import { createChatServer } from "@vivd-catalyst/chat-server";
 import type { ChatAttachmentService } from "@vivd-catalyst/chat-server";
 import { createManagedObjectAccess } from "@vivd-catalyst/capability-sdk";
@@ -259,7 +259,10 @@ export async function createClientInstanceApp(
       source: assetSource,
       validationRefs: {
         modelProviderIds: config.modelProviders.map((provider) => provider.id),
-        modelBindingIds: config.modelBindings.map((binding) => binding.id),
+        modelBindingIds: config.modelBindings
+          .filter((binding) => binding.agentSelectable !== false)
+          .map((binding) => binding.id),
+        reasoningEfforts: [...REASONING_EFFORTS],
         enabledToolNames: [...getEnabledToolNames(config)]
       }
     },
@@ -286,23 +289,19 @@ export async function createClientInstanceApp(
     sessionToken
   });
 
-  try {
-    const assets = await assetSource.getSnapshot();
-    validateConfigAssetBundle({
-      agents: assets.agents,
-      skills: assets.skills,
-      defaultAgentName: assets.defaultAgentName,
-      refs: {
-        modelProviderIds: config.modelProviders.map((provider) => provider.id),
-        modelBindingIds: config.modelBindings.map((binding) => binding.id),
-        enabledToolNames: [...getEnabledToolNames(config)]
-      }
-    });
-  } catch (error) {
-    // Stored assets are validated on every write; a mismatch here means the file
-    // config changed underneath them. Boot anyway and surface the drift.
-    console.warn("Stored config assets no longer validate against the client instance config:", error);
-  }
+  const assets = await assetSource.getSnapshot();
+  validateConfigAssetBundle({
+    agents: assets.agents,
+    skills: assets.skills,
+    defaultAgentName: assets.defaultAgentName,
+    refs: {
+      modelProviderIds: config.modelProviders.map((provider) => provider.id),
+      modelBindingIds: config.modelBindings
+        .filter((binding) => binding.agentSelectable !== false)
+        .map((binding) => binding.id),
+      enabledToolNames: [...getEnabledToolNames(config)]
+    }
+  });
 
   return {
     config,
@@ -327,11 +326,38 @@ async function createCapabilityContributions(
   capabilities: readonly ClientInstanceCapability[],
   context: Parameters<ClientInstanceCapability["create"]>[0]
 ): Promise<ClientInstanceCapabilityContribution[]> {
+  assertCapabilityConfigKeys(capabilities, context.capabilitiesConfig);
   const contributions: ClientInstanceCapabilityContribution[] = [];
   for (const capability of capabilities) {
     contributions.push(await capability.create(context));
   }
   return contributions;
+}
+
+function assertCapabilityConfigKeys(
+  capabilities: readonly ClientInstanceCapability[],
+  config: Record<string, unknown>
+): void {
+  const registeredKeys = capabilities.flatMap((capability) =>
+    capability.configKey ? [capability.configKey] : []
+  );
+  const duplicateKeys = registeredKeys.filter(
+    (key, index) => registeredKeys.indexOf(key) !== index
+  );
+  if (duplicateKeys.length > 0) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Duplicate capability config registrations: ${[...new Set(duplicateKeys)].join(", ")}`
+    );
+  }
+  const registered = new Set(registeredKeys);
+  const unknown = Object.keys(config).filter((key) => !registered.has(key));
+  if (unknown.length > 0) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Capability config has no registered implementation: ${unknown.join(", ")}`
+    );
+  }
 }
 
 function resolveAttachmentHandlers(

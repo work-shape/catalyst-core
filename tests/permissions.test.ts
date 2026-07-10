@@ -14,7 +14,9 @@ describe("permissions", () => {
       permissions: []
     });
 
-    expect([...effective]).toEqual(PERMISSIONS);
+    expect([...effective]).toEqual(
+      PERMISSIONS.filter((permission) => permission !== "config_assets.release")
+    );
   });
 
   it("applies grants and revocations while ignoring unknown permission entries", () => {
@@ -32,7 +34,8 @@ describe("permissions", () => {
     expect(effective.has("config_assets.read")).toBe(true);
     expect(effective.has("audit.view")).toBe(false);
     expect(effective.has("usage.view")).toBe(false);
-    expect(effective.size).toBe(PERMISSIONS.length - 2);
+    expect(effective.has("config_assets.release")).toBe(false);
+    expect(effective.size).toBe(PERMISSIONS.length - 3);
   });
 
   it("allows per-user grants for roles without defaults", () => {
@@ -42,6 +45,15 @@ describe("permissions", () => {
     });
 
     expect([...effective]).toEqual(["usage.view"]);
+  });
+
+  it("requires an explicit grant for release synchronization", () => {
+    const effective = resolveEffectivePermissions({
+      roles: ["superadmin"],
+      permissions: ["config_assets.release"]
+    });
+
+    expect(effective.has("config_assets.release")).toBe(true);
   });
 
   it("checks and requires permissions", () => {

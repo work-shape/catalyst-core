@@ -8,14 +8,15 @@ describe("administration config", () => {
   it("keeps config asset management disabled by default", () => {
     const config = parseClientInstanceConfig(baseConfig());
 
-    expect(config.administration.configAssets.enabled).toBe(false);
-    expect(config.administration.configAssets.editableAgentFields).toEqual({
-      model: false,
-      maxSteps: false
-    });
+    expect(config.administration.agentConfiguration.enabled).toBe(false);
+    expect(config.administration.agentConfiguration.editableAgentFields).toEqual([]);
     expect(createSafeConfigView(config, emptyAssets()).features.configAssets).toEqual({
       enabled: false,
-      editableAgentFields: { model: false, maxSteps: false }
+      editableAgentFields: [],
+      allowAgentCreation: false,
+      allowAgentDeletion: false,
+      allowDefaultAgentChange: false,
+      allowSkillEditing: false
     });
   });
 
@@ -23,18 +24,23 @@ describe("administration config", () => {
     const config = parseClientInstanceConfig(
       baseConfig({
         administration: {
-          configAssets: {
+          agentConfiguration: {
             enabled: true,
-            editableAgentFields: { model: true, maxSteps: false }
+            editableAgentFields: ["modelBindingId", "reasoningEffort"],
+            allowAgentCreation: true
           }
         }
       })
     );
 
-    expect(config.administration.configAssets.enabled).toBe(true);
+    expect(config.administration.agentConfiguration.enabled).toBe(true);
     expect(createSafeConfigView(config, emptyAssets()).features.configAssets).toEqual({
       enabled: true,
-      editableAgentFields: { model: true, maxSteps: false }
+      editableAgentFields: ["modelBindingId", "reasoningEffort"],
+      allowAgentCreation: true,
+      allowAgentDeletion: false,
+      allowDefaultAgentChange: false,
+      allowSkillEditing: false
     });
   });
 });

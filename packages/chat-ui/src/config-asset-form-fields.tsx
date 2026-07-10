@@ -26,11 +26,13 @@ export function Field({
 export function LocalizedField({
   label,
   required,
+  disabled,
   value,
   onChange
 }: {
   label: string;
   required?: boolean;
+  disabled?: boolean;
   value: LocalizedPair;
   onChange(value: LocalizedPair): void;
 }) {
@@ -45,6 +47,7 @@ export function LocalizedField({
           <Input
             value={value.en}
             required={required && !value.de.trim()}
+            disabled={disabled}
             onChange={(event) => onChange({ ...value, en: event.target.value })}
           />
         </label>
@@ -54,6 +57,7 @@ export function LocalizedField({
           </span>
           <Input
             value={value.de}
+            disabled={disabled}
             onChange={(event) => onChange({ ...value, de: event.target.value })}
           />
         </label>
@@ -68,6 +72,7 @@ export function CheckboxGroup({
   selected,
   emptyHint,
   hint,
+  disabled,
   onChange
 }: {
   label: string;
@@ -75,6 +80,7 @@ export function CheckboxGroup({
   selected: string[];
   emptyHint: string;
   hint?: string;
+  disabled?: boolean;
   onChange(selected: string[]): void;
 }) {
   return (
@@ -105,6 +111,7 @@ export function CheckboxGroup({
                     type="checkbox"
                     className="size-4 shrink-0 accent-primary"
                     checked={checked}
+                    disabled={disabled}
                     onChange={(event) =>
                       onChange(
                         event.target.checked
@@ -131,9 +138,11 @@ export function CheckboxGroup({
 
 export function InitialPromptsEditor({
   prompts,
+  disabled,
   onChange
 }: {
   prompts: AgentFormState["initialPrompts"];
+  disabled?: boolean;
   onChange(prompts: AgentFormState["initialPrompts"]): void;
 }) {
   return (
@@ -144,6 +153,7 @@ export function InitialPromptsEditor({
           type="button"
           variant="outline"
           size="sm"
+          disabled={disabled}
           onClick={() =>
             onChange([
               ...prompts,
@@ -167,6 +177,7 @@ export function InitialPromptsEditor({
             <button
               type="button"
               className="text-xs text-muted-foreground transition-colors hover:text-destructive"
+              disabled={disabled}
               onClick={() => onChange(prompts.filter((_, promptIndex) => promptIndex !== index))}
             >
               Remove
@@ -175,6 +186,7 @@ export function InitialPromptsEditor({
           <LocalizedField
             label="Title"
             value={prompt.title}
+            disabled={disabled}
             onChange={(title) =>
               onChange(
                 prompts.map((entry, promptIndex) =>
@@ -186,6 +198,7 @@ export function InitialPromptsEditor({
           <LocalizedField
             label="Prompt"
             value={prompt.prompt}
+            disabled={disabled}
             onChange={(promptValue) =>
               onChange(
                 prompts.map((entry, promptIndex) =>

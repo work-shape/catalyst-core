@@ -147,6 +147,7 @@ export interface ClientInstanceManagedObjectReaderContribution extends ClientIns
 
 export interface ClientInstanceCapability {
   name: string;
+  configKey?: string;
   create(
     context: ClientInstanceCapabilityContext
   ): ClientInstanceCapabilityContribution | Promise<ClientInstanceCapabilityContribution>;

@@ -56,6 +56,7 @@ describe("config asset admin routes", () => {
       references: {
         modelProviderIds: ["local"],
         modelBindingIds: [],
+        reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
         enabledToolNames: ["known.tool", "read_skill"]
       }
     });
@@ -286,6 +287,74 @@ describe("config asset admin routes", () => {
     });
   });
 
+  it("enforces editable agent fields on interactive writes", async () => {
+    const fixture = await createFixture({
+      agentConfiguration: {
+        enabled: true,
+        editableAgentFields: ["displayName"]
+      }
+    });
+    const token = await mintToken(fixture.server);
+    const initial = agentConfig("Release-managed instructions");
+    const imported = await request(fixture.server, token, {
+      method: "POST",
+      url: "/api/admin/config/import",
+      payload: {
+        baseVersion: null,
+        defaultAgentName: "assistant",
+        agents: [initial],
+        skills: []
+      }
+    });
+    expect(imported.statusCode).toBe(200);
+
+    const displayNameUpdate = await request(fixture.server, token, {
+      method: "PUT",
+      url: "/api/admin/config/assets/agent/assistant",
+      payload: {
+        baseVersion: 1,
+        config: { ...initial, displayName: "Renamed Assistant" }
+      }
+    });
+    expect(displayNameUpdate.statusCode).toBe(200);
+
+    const protectedUpdate = await request(fixture.server, token, {
+      method: "PUT",
+      url: "/api/admin/config/assets/agent/assistant",
+      payload: {
+        baseVersion: 2,
+        config: {
+          ...initial,
+          displayName: "Renamed Assistant",
+          instructions: "Changed interactively"
+        }
+      }
+    });
+    expect(protectedUpdate.statusCode).toBe(403);
+    expect(protectedUpdate.json()).toMatchObject({
+      error: {
+        code: "FORBIDDEN",
+        message: "Interactive changes are not allowed for agent field: instructions"
+      }
+    });
+  });
+
+  it("requires the release-sync permission for bundle replacement", async () => {
+    const fixture = await createFixture();
+    const interactiveToken = await mintToken(fixture.server, {
+      scopes: ["config_assets:read", "config_assets:write"],
+      permissions: ["config_assets.read", "config_assets.write"]
+    });
+    const response = await request(fixture.server, interactiveToken, {
+      method: "POST",
+      url: "/api/admin/config/import",
+      payload: { baseVersion: null, agents: [], skills: [] }
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({ error: { code: "FORBIDDEN" } });
+  });
+
   it.each([
     ["unknown tool", agentConfig("Invalid", { toolNames: ["missing.tool"] })],
     ["unknown skill", agentConfig("Invalid", { skillNames: ["missing-skill"] })],
@@ -338,7 +407,7 @@ describe("config asset admin routes", () => {
   });
 });
 
-async function createFixture() {
+async function createFixture(input: { agentConfiguration?: Record<string, unknown> } = {}) {
   const clientInstanceId = asClientInstanceId("config-routes-test");
   const store = new InMemoryPlatformStore();
   const config = parseClientInstanceConfig({
@@ -349,6 +418,26 @@ async function createFixture() {
       environment: "development"
     },
     auth: {},
+    administration: {
+      agentConfiguration: {
+        enabled: true,
+        editableAgentFields: [
+          "displayName",
+          "instructions",
+          "modelProviderId",
+          "modelBindingId",
+          "reasoningEffort",
+          "toolNames",
+          "skillNames",
+          "initialPrompts"
+        ],
+        allowAgentCreation: true,
+        allowAgentDeletion: true,
+        allowDefaultAgentChange: true,
+        allowSkillEditing: true,
+        ...input.agentConfiguration
+      }
+    },
     modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
     tools: [
       { name: "known.tool", enabled: true },
@@ -385,6 +474,7 @@ async function createFixture() {
       validationRefs: {
         modelProviderIds: ["local"],
         modelBindingIds: [],
+        reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
         enabledToolNames: ["known.tool", "read_skill"]
       }
     },
@@ -417,8 +507,16 @@ async function mintToken(
     externalUserId: "config-cli",
     displayLabel: "Config CLI",
     roles: ["user"],
-    permissions: overrides.permissions ?? ["config_assets.read", "config_assets.write"],
-    scopes: overrides.scopes ?? ["config_assets:read", "config_assets:write"],
+    permissions: overrides.permissions ?? [
+      "config_assets.read",
+      "config_assets.write",
+      "config_assets.release"
+    ],
+    scopes: overrides.scopes ?? [
+      "config_assets:read",
+      "config_assets:write",
+      "config_assets:release"
+    ],
     ...("delegatedActor" in overrides
       ? { delegatedActor: overrides.delegatedActor }
       : {

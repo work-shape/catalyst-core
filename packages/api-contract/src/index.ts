@@ -30,8 +30,36 @@ export const authScopeSchema = z.enum([
   "user_admin:read",
   "user_admin:write",
   "config_assets:read",
-  "config_assets:write"
+  "config_assets:write",
+  "config_assets:release"
 ]);
+
+export const reasoningEffortSchema = z.enum(["none", "low", "medium", "high", "xhigh"]);
+
+export const agentEditableFieldSchema = z.enum([
+  "displayName",
+  "welcomeMessage",
+  "welcomeSubtitle",
+  "instructions",
+  "modelProviderId",
+  "modelBindingId",
+  "reasoningEffort",
+  "maxSteps",
+  "toolNames",
+  "skillNames",
+  "initialPrompts"
+]);
+
+const editableAgentFieldsSchema = z.preprocess((value) => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return value;
+  }
+  const legacy = value as { model?: unknown; maxSteps?: unknown };
+  return [
+    ...(legacy.model === true ? ["modelBindingId", "reasoningEffort"] : []),
+    ...(legacy.maxSteps === true ? ["maxSteps"] : [])
+  ];
+}, z.array(agentEditableFieldSchema));
 
 export const chatSessionAuthScopeSchema = z.enum([
   "me:read",
@@ -340,10 +368,11 @@ export const safeConfigSchema = z.object({
     }),
     configAssets: z.object({
       enabled: z.boolean(),
-      editableAgentFields: z.object({
-        model: z.boolean(),
-        maxSteps: z.boolean()
-      })
+      editableAgentFields: editableAgentFieldsSchema,
+      allowAgentCreation: z.boolean().default(false),
+      allowAgentDeletion: z.boolean().default(false),
+      allowDefaultAgentChange: z.boolean().default(false),
+      allowSkillEditing: z.boolean().default(false)
     })
   }),
   defaultAgentName: z.string().optional(),
@@ -829,6 +858,7 @@ export const configAssetsOverviewSchema = z.object({
   references: z.object({
     modelProviderIds: z.array(z.string()),
     modelBindingIds: z.array(z.string()),
+    reasoningEfforts: z.array(reasoningEffortSchema),
     enabledToolNames: z.array(z.string())
   })
 });

@@ -43,6 +43,7 @@ export interface ChatServerOptions {
     validationRefs: {
       modelProviderIds: string[];
       modelBindingIds: string[];
+      reasoningEfforts: string[];
       enabledToolNames: string[];
     };
   };

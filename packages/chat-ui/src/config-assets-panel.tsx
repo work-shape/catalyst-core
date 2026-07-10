@@ -39,10 +39,11 @@ export interface ConfigAssetBundleEntry {
 }
 
 export interface ConfigAssetsPanelInput {
-  editableAgentFields: {
-    model: boolean;
-    maxSteps: boolean;
-  };
+  editableAgentFields: string[];
+  allowAgentCreation: boolean;
+  allowAgentDeletion: boolean;
+  allowDefaultAgentChange: boolean;
+  allowSkillEditing: boolean;
   overview: ConfigAssetsOverview | undefined;
   agents: ConfigAssetBundleEntry[];
   skills: ConfigAssetBundleEntry[];
@@ -137,18 +138,22 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
       description={pageDescription}
       actions={
         <>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setSelection({ mode: "new", kind: "skill" })}
-          >
-            <Plus size={16} aria-hidden="true" />
-            New skill
-          </Button>
-          <Button type="button" onClick={() => setSelection({ mode: "new", kind: "agent" })}>
-            <Plus size={16} aria-hidden="true" />
-            New agent
-          </Button>
+          {input.allowSkillEditing ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setSelection({ mode: "new", kind: "skill" })}
+            >
+              <Plus size={16} aria-hidden="true" />
+              New skill
+            </Button>
+          ) : null}
+          {input.allowAgentCreation ? (
+            <Button type="button" onClick={() => setSelection({ mode: "new", kind: "agent" })}>
+              <Plus size={16} aria-hidden="true" />
+              New agent
+            </Button>
+          ) : null}
         </>
       }
     >
@@ -248,7 +253,7 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
               )
             }
             onDelete={
-              selection.mode === "existing"
+              selection.mode === "existing" && input.allowAgentDeletion
                 ? () =>
                     runMutation(() =>
                       input
@@ -258,7 +263,9 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
                 : undefined
             }
             onMakeDefault={
-              selection.mode === "existing" && selection.name !== defaultAgentName
+              selection.mode === "existing" &&
+              selection.name !== defaultAgentName &&
+              input.allowDefaultAgentChange
                 ? () =>
                     runMutation(() =>
                       input.onSetDefaultAgent({ agentName: selection.name, baseVersion: version })
@@ -297,6 +304,7 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
                 : emptySkillForm()
             }
             isNew={selection.mode === "new"}
+            editable={input.allowSkillEditing}
             mutating={input.mutating}
             onSave={(form) =>
               runMutation(() =>
@@ -317,7 +325,7 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
               )
             }
             onDelete={
-              selection.mode === "existing"
+              selection.mode === "existing" && input.allowSkillEditing
                 ? () =>
                     runMutation(() =>
                       input
@@ -327,7 +335,7 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
                 : undefined
             }
             revisions={
-              selection.mode === "existing" ? (
+              selection.mode === "existing" && input.allowSkillEditing ? (
                 <RevisionHistory
                   kind="skill"
                   name={selection.name}
@@ -465,6 +473,10 @@ function AgentEditor({
   const [form, setForm] = useState(initialForm);
   const [error, setError] = useState<string | undefined>(undefined);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const canEdit = (field: string) => editableAgentFields.includes(field);
+  const canEditModel = canEdit("modelBindingId");
+  const canEditReasoningEffort = canEdit("reasoningEffort");
+  const canEditMaxSteps = canEdit("maxSteps");
 
   const update = (patch: Partial<AgentFormState>) => setForm((value) => ({ ...value, ...patch }));
 
@@ -532,16 +544,19 @@ function AgentEditor({
         <LocalizedField
           label="Display name"
           required
+          disabled={!canEdit("displayName")}
           value={form.displayName}
           onChange={(displayName) => update({ displayName })}
         />
         <LocalizedField
           label="Welcome message"
+          disabled={!canEdit("welcomeMessage")}
           value={form.welcomeMessage}
           onChange={(welcomeMessage) => update({ welcomeMessage })}
         />
         <LocalizedField
           label="Welcome subtitle"
+          disabled={!canEdit("welcomeSubtitle")}
           value={form.welcomeSubtitle}
           onChange={(welcomeSubtitle) => update({ welcomeSubtitle })}
         />
@@ -550,7 +565,7 @@ function AgentEditor({
       <EditorSection
         title="Behavior"
         description={
-          editableAgentFields.model || editableAgentFields.maxSteps
+          canEditModel || canEditReasoningEffort || canEditMaxSteps
             ? "Core instructions and permitted runtime controls for this agent."
             : "Core instructions for this agent."
         }
@@ -560,40 +575,35 @@ function AgentEditor({
             label="System prompt"
             value={form.instructions}
             required
+            disabled={!canEdit("instructions")}
             className="min-h-72"
             onChange={(event) => update({ instructions: event.target.value })}
           />
         </Field>
-        {editableAgentFields.model || editableAgentFields.maxSteps ? (
+        {canEditModel || canEditReasoningEffort || canEditMaxSteps ? (
           <div
             className={cn(
               "grid gap-5",
-              editableAgentFields.model && editableAgentFields.maxSteps && "sm:grid-cols-2"
+              [canEditModel, canEditReasoningEffort, canEditMaxSteps].filter(Boolean).length > 1 &&
+                "sm:grid-cols-2"
             )}
           >
-            {editableAgentFields.model ? (
+            {canEditModel ? (
               <Field
                 label="Model"
-                hint="Overrides the model configured for this agent in release config."
+                hint="Selects one of the model bindings approved in instance config."
               >
                 <Select
-                  value={form.model}
-                  onChange={(event) => update({ model: event.target.value })}
+                  value={form.modelBindingId}
+                  onChange={(event) =>
+                    update({ modelBindingId: event.target.value, modelProviderId: "" })
+                  }
                 >
                   <option value="">Instance default</option>
-                  {references?.modelProviderIds.length ? (
-                    <optgroup label="Configured providers">
-                      {references.modelProviderIds.map((id) => (
-                        <option key={id} value={`provider:${id}`}>
-                          {id}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ) : null}
                   {references?.modelBindingIds.length ? (
                     <optgroup label="Configured bindings">
                       {references.modelBindingIds.map((id) => (
-                        <option key={id} value={`binding:${id}`}>
+                        <option key={id} value={id}>
                           {id}
                         </option>
                       ))}
@@ -602,7 +612,22 @@ function AgentEditor({
                 </Select>
               </Field>
             ) : null}
-            {editableAgentFields.maxSteps ? (
+            {canEditReasoningEffort ? (
+              <Field label="Reasoning effort" hint="Overrides the selected binding's default effort.">
+                <Select
+                  value={form.reasoningEffort}
+                  onChange={(event) => update({ reasoningEffort: event.target.value })}
+                >
+                  <option value="">Model default</option>
+                  {(references?.reasoningEfforts ?? []).map((effort) => (
+                    <option key={effort} value={effort}>
+                      {effort}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            ) : null}
+            {canEditMaxSteps ? (
               <Field
                 label="Max steps"
                 hint="Maximum model and tool turns for one response. Empty uses release config."
@@ -627,6 +652,7 @@ function AgentEditor({
           label="Tools"
           options={references?.enabledToolNames ?? []}
           selected={form.toolNames}
+          disabled={!canEdit("toolNames")}
           emptyHint="No tools are enabled for this instance."
           onChange={(toolNames) => update({ toolNames })}
         />
@@ -634,6 +660,7 @@ function AgentEditor({
           label="Skills"
           options={skillNames}
           selected={form.skillNames}
+          disabled={!canEdit("skillNames")}
           emptyHint="No skills defined yet."
           hint={
             form.skillNames.length > 0 && !form.toolNames.includes("read_skill")
@@ -650,6 +677,7 @@ function AgentEditor({
       >
         <InitialPromptsEditor
           prompts={form.initialPrompts}
+          disabled={!canEdit("initialPrompts")}
           onChange={(initialPrompts) => update({ initialPrompts })}
         />
       </EditorSection>
@@ -658,7 +686,11 @@ function AgentEditor({
 
       {revisions}
 
-      <SaveBar label={isNew ? "Create agent" : "Save changes"} mutating={mutating} />
+      <SaveBar
+        label={isNew ? "Create agent" : "Save changes"}
+        mutating={mutating}
+        disabled={editableAgentFields.length === 0}
+      />
 
       {onDelete ? (
         <DeleteDialog
@@ -678,6 +710,7 @@ function AgentEditor({
 function SkillEditor({
   initialForm,
   isNew,
+  editable,
   mutating,
   onSave,
   onDelete,
@@ -685,6 +718,7 @@ function SkillEditor({
 }: {
   initialForm: SkillFormState;
   isNew: boolean;
+  editable: boolean;
   mutating: boolean;
   onSave(form: SkillFormState): Promise<MutationOutcome>;
   onDelete?: () => Promise<MutationOutcome>;
@@ -733,6 +767,7 @@ function SkillEditor({
           <Field label="Name" hint="Stable identifier. Cannot be renamed later.">
             <Input
               value={form.name}
+              disabled={!editable}
               required
               placeholder="generic_workflow_review"
               onChange={(event) => update({ name: event.target.value })}
@@ -740,12 +775,18 @@ function SkillEditor({
           </Field>
         ) : null}
         <Field label="Title" hint="Shown to the model in the skill list.">
-          <Input value={form.title} required onChange={(event) => update({ title: event.target.value })} />
+          <Input
+            value={form.title}
+            required
+            disabled={!editable}
+            onChange={(event) => update({ title: event.target.value })}
+          />
         </Field>
         <Field label="Description" hint="Tells the model when to read this skill.">
           <Input
             value={form.description}
             required
+            disabled={!editable}
             onChange={(event) => update({ description: event.target.value })}
           />
         </Field>
@@ -760,6 +801,7 @@ function SkillEditor({
             label="Markdown"
             value={form.content}
             required
+            disabled={!editable}
             className="min-h-96"
             onChange={(event) => update({ content: event.target.value })}
           />
@@ -770,7 +812,11 @@ function SkillEditor({
 
       {revisions}
 
-      <SaveBar label={isNew ? "Create skill" : "Save changes"} mutating={mutating} />
+      <SaveBar
+        label={isNew ? "Create skill" : "Save changes"}
+        mutating={mutating}
+        disabled={!editable}
+      />
 
       {onDelete ? (
         <DeleteDialog
@@ -967,10 +1013,18 @@ function EditorTextarea({
   );
 }
 
-function SaveBar({ label, mutating }: { label: string; mutating: boolean }) {
+function SaveBar({
+  label,
+  mutating,
+  disabled = false
+}: {
+  label: string;
+  mutating: boolean;
+  disabled?: boolean;
+}) {
   return (
     <div className="flex flex-wrap items-center gap-3 bg-muted/10 px-5 py-4">
-      <Button type="submit" className="w-full sm:w-auto" disabled={mutating}>
+      <Button type="submit" className="w-full sm:w-auto" disabled={mutating || disabled}>
         {mutating ? <Spinner className="size-4" /> : null}
         {label}
       </Button>

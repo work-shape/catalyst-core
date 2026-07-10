@@ -14,7 +14,9 @@ export interface AgentFormState {
   welcomeMessage: LocalizedPair;
   welcomeSubtitle: LocalizedPair;
   instructions: string;
-  model: string;
+  modelProviderId: string;
+  modelBindingId: string;
+  reasoningEffort: string;
   maxSteps: string;
   toolNames: string[];
   skillNames: string[];
@@ -69,7 +71,9 @@ export function agentConfigToForm(config: Record<string, unknown>): AgentFormSta
     welcomeMessage: localizedToPair(config.welcomeMessage),
     welcomeSubtitle: localizedToPair(config.welcomeSubtitle),
     instructions: typeof config.instructions === "string" ? config.instructions : "",
-    model: modelBindingId ? `binding:${modelBindingId}` : modelProviderId ? `provider:${modelProviderId}` : "",
+    modelProviderId,
+    modelBindingId,
+    reasoningEffort: typeof config.reasoningEffort === "string" ? config.reasoningEffort : "",
     maxSteps: typeof config.maxSteps === "number" ? String(config.maxSteps) : "",
     toolNames: stringArray(config.toolNames),
     skillNames: stringArray(config.skillNames),
@@ -96,8 +100,12 @@ export function agentFormToConfig(form: AgentFormState): Record<string, unknown>
     ...(welcomeMessage === undefined ? {} : { welcomeMessage }),
     ...(welcomeSubtitle === undefined ? {} : { welcomeSubtitle }),
     instructions: form.instructions,
-    ...(form.model.startsWith("provider:") ? { modelProviderId: form.model.slice("provider:".length) } : {}),
-    ...(form.model.startsWith("binding:") ? { modelBindingId: form.model.slice("binding:".length) } : {}),
+    ...(form.modelBindingId
+      ? { modelBindingId: form.modelBindingId }
+      : form.modelProviderId
+        ? { modelProviderId: form.modelProviderId }
+        : {}),
+    ...(form.reasoningEffort ? { reasoningEffort: form.reasoningEffort } : {}),
     ...(maxSteps === undefined ? {} : { maxSteps }),
     toolNames: form.toolNames,
     skillNames: form.skillNames,
@@ -117,7 +125,9 @@ export function emptyAgentForm(): AgentFormState {
     welcomeMessage: { ...EMPTY_LOCALIZED_PAIR },
     welcomeSubtitle: { ...EMPTY_LOCALIZED_PAIR },
     instructions: "",
-    model: "",
+    modelProviderId: "",
+    modelBindingId: "",
+    reasoningEffort: "",
     maxSteps: "",
     toolNames: [],
     skillNames: [],

@@ -33,6 +33,7 @@ export function canonicalizeAgentConfig(input: unknown): AgentConfig {
     instructions: agent.instructions,
     ...(agent.modelProviderId === undefined ? {} : { modelProviderId: agent.modelProviderId }),
     ...(agent.modelBindingId === undefined ? {} : { modelBindingId: agent.modelBindingId }),
+    ...(agent.reasoningEffort === undefined ? {} : { reasoningEffort: agent.reasoningEffort }),
     ...(agent.maxSteps === undefined ? {} : { maxSteps: agent.maxSteps }),
     toolNames: agent.toolNames,
     skillNames: agent.skillNames,

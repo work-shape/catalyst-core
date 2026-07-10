@@ -15,6 +15,7 @@ import type {
   UsageSafeguardsConfig,
   WebAccessConfig
 } from "@vivd-catalyst/core";
+import { AGENT_EDITABLE_FIELDS, REASONING_EFFORTS } from "@vivd-catalyst/core";
 import { localizationConfigSchema, localizedStringSchema } from "./localization";
 
 const DEFAULT_EXECUTION_WORKSPACE_MEMORY_BYTES = 4 * 1024 * 1024 * 1024;
@@ -87,7 +88,7 @@ const openAiCompatibleModelProviderSchema = z.object({
   apiKeyEnvName: z.string().min(1).default("OPENAI_API_KEY"),
   authMode: z.enum(["bearer", "api-key"]).default("bearer"),
   organizationEnvName: z.string().min(1).optional(),
-  reasoningEffort: z.enum(["none", "low", "medium", "high", "xhigh"]).optional(),
+  reasoningEffort: z.enum(REASONING_EFFORTS).optional(),
   compliance: modelProviderComplianceSchema.optional()
 });
 
@@ -159,7 +160,8 @@ export const modelBindingConfigSchema = z.object({
   id: z.string().min(1),
   providerId: z.string().min(1),
   model: z.string().min(1).optional(),
-  reasoningEffort: z.enum(["none", "low", "medium", "high", "xhigh"]).optional()
+  reasoningEffort: z.enum(REASONING_EFFORTS).optional(),
+  agentSelectable: z.boolean().default(true)
 });
 
 const welcomeSubtitleSchema = z.union([
@@ -183,6 +185,7 @@ export const agentConfigSchema = z.object({
   instructions: z.string().min(1),
   modelProviderId: z.string().min(1).optional(),
   modelBindingId: z.string().min(1).optional(),
+  reasoningEffort: z.enum(REASONING_EFFORTS).optional(),
   maxSteps: z.number().int().positive().optional(),
   toolNames: z.array(z.string().min(1)).default([]),
   skillNames: z.array(skillNameSchema).default([]),
@@ -528,22 +531,32 @@ export const uiConfigSchema = z
 
 export const administrationConfigSchema = z
   .object({
-    configAssets: z
+    agentConfiguration: z
       .object({
         enabled: z.boolean().default(false),
-        editableAgentFields: z
-          .object({
-            model: z.boolean().default(false),
-            maxSteps: z.boolean().default(false)
-          })
-          .default({ model: false, maxSteps: false })
+        editableAgentFields: z.array(z.enum(AGENT_EDITABLE_FIELDS)).default([]),
+        allowAgentCreation: z.boolean().default(false),
+        allowAgentDeletion: z.boolean().default(false),
+        allowDefaultAgentChange: z.boolean().default(false),
+        allowSkillEditing: z.boolean().default(false)
       })
-      .default({ enabled: false, editableAgentFields: { model: false, maxSteps: false } })
+      .default({
+        enabled: false,
+        editableAgentFields: [],
+        allowAgentCreation: false,
+        allowAgentDeletion: false,
+        allowDefaultAgentChange: false,
+        allowSkillEditing: false
+      })
   })
   .default({
-    configAssets: {
+    agentConfiguration: {
       enabled: false,
-      editableAgentFields: { model: false, maxSteps: false }
+      editableAgentFields: [],
+      allowAgentCreation: false,
+      allowAgentDeletion: false,
+      allowDefaultAgentChange: false,
+      allowSkillEditing: false
     }
   });
 

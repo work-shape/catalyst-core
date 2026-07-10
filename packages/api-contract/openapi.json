@@ -140,7 +140,8 @@
                           "user_admin:read",
                           "user_admin:write",
                           "config_assets:read",
-                          "config_assets:write"
+                          "config_assets:write",
+                          "config_assets:release"
                         ]
                       }
                     }
@@ -316,7 +317,8 @@
                           "user_admin:read",
                           "user_admin:write",
                           "config_assets:read",
-                          "config_assets:write"
+                          "config_assets:write",
+                          "config_assets:release"
                         ]
                       }
                     }
@@ -748,25 +750,48 @@
                               "type": "boolean"
                             },
                             "editableAgentFields": {
-                              "type": "object",
-                              "properties": {
-                                "model": {
-                                  "type": "boolean"
-                                },
-                                "maxSteps": {
-                                  "type": "boolean"
-                                }
-                              },
-                              "required": [
-                                "model",
-                                "maxSteps"
-                              ],
-                              "additionalProperties": false
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "displayName",
+                                  "welcomeMessage",
+                                  "welcomeSubtitle",
+                                  "instructions",
+                                  "modelProviderId",
+                                  "modelBindingId",
+                                  "reasoningEffort",
+                                  "maxSteps",
+                                  "toolNames",
+                                  "skillNames",
+                                  "initialPrompts"
+                                ]
+                              }
+                            },
+                            "allowAgentCreation": {
+                              "default": false,
+                              "type": "boolean"
+                            },
+                            "allowAgentDeletion": {
+                              "default": false,
+                              "type": "boolean"
+                            },
+                            "allowDefaultAgentChange": {
+                              "default": false,
+                              "type": "boolean"
+                            },
+                            "allowSkillEditing": {
+                              "default": false,
+                              "type": "boolean"
                             }
                           },
                           "required": [
                             "enabled",
-                            "editableAgentFields"
+                            "editableAgentFields",
+                            "allowAgentCreation",
+                            "allowAgentDeletion",
+                            "allowDefaultAgentChange",
+                            "allowSkillEditing"
                           ],
                           "additionalProperties": false
                         }
@@ -8783,6 +8808,19 @@
                             "type": "string"
                           }
                         },
+                        "reasoningEfforts": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "none",
+                              "low",
+                              "medium",
+                              "high",
+                              "xhigh"
+                            ]
+                          }
+                        },
                         "enabledToolNames": {
                           "type": "array",
                           "items": {
@@ -8793,6 +8831,7 @@
                       "required": [
                         "modelProviderIds",
                         "modelBindingIds",
+                        "reasoningEfforts",
                         "enabledToolNames"
                       ],
                       "additionalProperties": false
@@ -10611,7 +10650,8 @@
                         "user_admin:read",
                         "user_admin:write",
                         "config_assets:read",
-                        "config_assets:write"
+                        "config_assets:write",
+                        "config_assets:release"
                       ]
                     }
                   },

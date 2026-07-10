@@ -40,10 +40,12 @@ describe("config assets form model", () => {
       skillNames: [],
       initialPrompts: []
     });
-    form.model = "binding:fast";
+    form.modelBindingId = "fast";
+    form.reasoningEffort = "xhigh";
 
     const config = agentFormToConfig(form);
     expect(config.modelBindingId).toBe("fast");
+    expect(config.reasoningEffort).toBe("xhigh");
     expect(config).not.toHaveProperty("modelProviderId");
   });
 

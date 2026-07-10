@@ -4,6 +4,7 @@ import type { AuthenticatedUser } from "./identity";
 export const PERMISSIONS = [
   "config_assets.read",
   "config_assets.write",
+  "config_assets.release",
   "usage.view",
   "users.manage",
   "audit.view"
@@ -11,13 +12,17 @@ export const PERMISSIONS = [
 
 export type Permission = (typeof PERMISSIONS)[number];
 
+const ADMIN_PERMISSIONS = PERMISSIONS.filter(
+  (permission) => permission !== "config_assets.release"
+);
+
 export const ROLE_DEFAULT_PERMISSIONS: Record<
   "user" | "admin" | "superadmin",
   readonly Permission[]
 > = {
   user: [],
-  admin: PERMISSIONS,
-  superadmin: PERMISSIONS
+  admin: ADMIN_PERMISSIONS,
+  superadmin: ADMIN_PERMISSIONS
 };
 
 export function resolveEffectivePermissions(

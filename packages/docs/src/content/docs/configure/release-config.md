@@ -3,18 +3,18 @@ title: Release Config
 description: Use source-controlled config as the source of truth for instance behavior.
 ---
 
-Release config defines what a client instance does. It is version-controlled, validated at startup, and deployed with the client assembly app.
+Static release config defines the code-deployed ceiling of a client instance. It is version-controlled, validated at startup, and deployed with the client assembly app.
 
-V1 does not rely on runtime mutation for agent behavior, tool availability, model providers, UI settings, or retention policy.
+Agents and client skills are separate versioned configuration assets. The Catalyst CLI synchronizes their complete YAML and Markdown working copies with the active instance. Static release config decides which of their fields and operations are additionally editable through interactive administration.
 
 ## What Release Config Owns
 
 Release config should cover:
 
-- agents and instructions
-- client skill files and agent skill allowlists
-- tool enablement, tool parameters, and agent tool allowlists
-- model provider choices
+- tool enablement and tool parameters
+- model providers and approved model bindings
+- capability activation and settings
+- interactive agent-configuration policy
 - supported locales and default locale
 - client branding and theme
 - welcome copy, placeholders, and suggested prompts
@@ -27,17 +27,24 @@ Release config should cover:
 ## Example
 
 ```yaml
+version: 1
 clientInstance:
   id: example-support
   displayName: Example Support Chat
 
-agents:
-  support_agent:
-    displayName: Support Agent
-    instructions: ./agents/instructions/support-agent.md
-    tools:
-      - support.lookup_ticket
-      - support.create_escalation
+administration:
+  agentConfiguration:
+    enabled: true
+    editableAgentFields:
+      - displayName
+      - welcomeMessage
+      - modelBindingId
+      - reasoningEffort
+      - initialPrompts
+    allowAgentCreation: false
+    allowAgentDeletion: false
+    allowDefaultAgentChange: false
+    allowSkillEditing: false
 
 ui:
   clientName: Example Company
@@ -95,25 +102,38 @@ Startup validation fails when:
 - an agent references a disabled or missing tool
 - an enabled tool requires approval before approval resume is implemented
 
-## Client Skills
+## Agent And Skill Configuration Assets
 
-Client skills are source-controlled Markdown guidance documents. Release config lists skill files explicitly, and each agent allowlists the skills it may read.
+Agents and client skills remain source-controlled YAML and Markdown, but runtime reads them from the versioned configuration-asset store. A `catalyst.yaml` manifest selects the working-copy files and target instances:
 
 ```yaml
-skillFiles:
-  - ../skills/support-review/SKILL.md
-
+instances:
+  staging:
+    url: https://catalyst.example.test
+defaultInstance: staging
+defaultAgentName: support_agent
 agents:
-  - name: support_agent
-    skillNames:
-      - support_review
-    toolNames:
-      - read_skill
-      - support.lookup_ticket
+  - agents/*.agent.yaml
+skills:
+  - skills/*/SKILL.md
+```
 
-tools:
-  - name: read_skill
-    enabled: true
+Use `catalyst config pull`, `diff`, `validate`, and `push` to synchronize the complete entities. Push uses the last pulled version and conflicts when the active instance changed in the meantime. The CLI release path has full entity access; ordinary administration writes are limited by `administration.agentConfiguration` and enforced by the server.
+
+An agent YAML file contains its behavior and grants:
+
+```yaml
+name: support_agent
+displayName: Support Agent
+instructions: Help users with support cases.
+modelBindingId: primary
+reasoningEffort: medium
+toolNames:
+  - read_skill
+  - support.lookup_ticket
+skillNames:
+  - support_review
+initialPrompts: []
 ```
 
 Each skill file starts with YAML frontmatter:
@@ -150,7 +170,15 @@ modelProviders:
     reasoningEffort: high
     baseUrl: https://api.openai.com/v1
     apiKeyEnvName: OPENAI_API_KEY
+modelBindings:
+  - id: primary
+    providerId: openai
+    model: gpt-5.5
+    reasoningEffort: high
+    agentSelectable: true
 ```
+
+Agent configuration may override a binding's default with one of Catalyst's product-owned reasoning efforts: `none`, `low`, `medium`, `high`, or `xhigh`. Only bindings with `agentSelectable: true` are valid agent choices; set it to `false` for internal bindings such as conversation-title generation. Interactive selection is available only when `modelBindingId` and/or `reasoningEffort` appear in `editableAgentFields`. The server validates model-binding references and reasoning values; the UI does not accept arbitrary model identifiers.
 
 ## Config Is Not A Secret Store
 
@@ -169,12 +197,12 @@ Use runtime env files or a secret manager for:
 Treat config changes like code changes:
 
 ```text
-edit config
-  -> validate assembly
+edit static release config and/or agent working copy
+  -> validate static assembly and agent references
   -> run tests
-  -> build image
-  -> deploy explicit version
-  -> record active config version
+  -> push versioned agent assets when changed
+  -> build and deploy the image when static config changed
+  -> record active static and asset versions
 ```
 
-The control plane may display active config and snapshots. It should not silently change agent behavior in production.
+Interactive administration changes apply to new conversations immediately. Pull and commit those changes when the repository should retain them. Static tool availability, model providers and bindings, capabilities, retention, and security policy still require the normal release/deploy flow.

@@ -2522,7 +2522,7 @@ describe("client instance app vertical slice", () => {
       displayLabel: "Superadmin",
       externalUserId: "superadmin-1",
       roles: ["user", "admin", "superadmin"],
-      permissions: [...PERMISSIONS]
+      permissions: PERMISSIONS.filter((permission) => permission !== "config_assets.release")
     });
 
     const normalMe = await app.server.inject({
