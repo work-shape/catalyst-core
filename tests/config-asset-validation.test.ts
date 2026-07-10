@@ -5,7 +5,7 @@ import { validateConfigAssetBundle } from "@vivd-catalyst/config-schema";
 describe("config asset bundle validation", () => {
   it("parses a valid agent and skill bundle", () => {
     const result = validateConfigAssetBundle({
-      agents: [agent({ skillNames: ["research"], toolNames: ["search"] })],
+      agents: [agent({ skillNames: ["research"], toolNames: ["search", "read_skill"] })],
       skills: [skill()],
       defaultAgentName: "assistant",
       refs: refs()
@@ -16,7 +16,7 @@ describe("config asset bundle validation", () => {
         name: "assistant",
         modelProviderId: "provider-1",
         skillNames: ["research"],
-        toolNames: ["search"],
+        toolNames: ["search", "read_skill"],
         initialPrompts: []
       }
     ]);
@@ -160,7 +160,7 @@ function refs() {
   return {
     modelProviderIds: ["provider-1"],
     modelBindingIds: ["binding-1"],
-    enabledToolNames: ["search"]
+    enabledToolNames: ["search", "read_skill"]
   };
 }
 

@@ -54,7 +54,6 @@ test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
   await expect(page.getByRole("option", { name: /Research Assistant/ })).toBeVisible();
   await page.getByRole("option", { name: /Research Assistant/ }).click();
   await expect(page.getByRole("button", { name: "Select agent" })).toContainText("Research Assistant");
-  await expect(page.getByText("Research Assistant is ready for this conversation.")).toBeVisible();
 
   const appShell = page.locator("main").first();
   const backgroundBefore = await appShell.evaluate((element) =>

@@ -53,6 +53,13 @@ export function validateConfigAssetBundle(input: {
       message: `Agent '${issue.agentName}' references unavailable tool '${issue.referenceName}'`
     }))
   );
+  for (const agent of agents) {
+    if (agent.skillNames.length > 0 && !agent.toolNames.includes("read_skill")) {
+      issues.push({
+        message: `Agent '${agent.name}' references skills but does not allow 'read_skill'`
+      });
+    }
+  }
 
   if (issues.length > 0) {
     throw new AppError("VALIDATION_FAILED", "Config asset bundle is invalid", { issues });

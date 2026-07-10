@@ -1,18 +1,7 @@
 import { AppError } from "@vivd-catalyst/core";
-import { findModelToolMaterializationIssues } from "@vivd-catalyst/agent-runtime";
 import { WEB_SEARCH_MODEL_TOOL_NAME } from "@vivd-catalyst/model-provider";
-import type {
-  AgentConfig,
-  ClientInstanceConfig,
-  ModelProviderConfig
-} from "@vivd-catalyst/config-schema";
-import {
-  findAgentModelReferenceIssues,
-  findMissingAgentToolReferences
-} from "@vivd-catalyst/config-schema";
+import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
-
-const READ_SKILL_TOOL_NAME = "read_skill";
 
 export function assertClientAssemblyValid(input: {
   config: ClientInstanceConfig;
@@ -21,12 +10,6 @@ export function assertClientAssemblyValid(input: {
   const issues = [
     ...findDuplicateToolImplementations(input.tools),
     ...findModelProviderReferenceIssues(input.config),
-    ...findAgentModelReferenceIssues({
-      agents: input.config.agents,
-      modelProviderIds: input.config.modelProviders.map((provider) => provider.id),
-      modelBindingIds: input.config.modelBindings.map((binding) => binding.id)
-    }),
-    ...findConfiguredToolReferenceIssues(input.config),
     ...findToolReferenceIssues(input.config, input.tools)
   ];
 
@@ -93,18 +76,6 @@ function findModelProviderReferenceIssues(config: ClientInstanceConfig): string[
   return issues;
 }
 
-function findConfiguredToolReferenceIssues(config: ClientInstanceConfig): string[] {
-  const configuredTools = new Map(config.tools.map((tool) => [tool.name, tool.enabled]));
-  return findMissingAgentToolReferences(
-    config.agents,
-    config.tools.filter((tool) => tool.enabled).map((tool) => tool.name)
-  ).map(({ agentName, referenceName }) =>
-    configuredTools.has(referenceName)
-      ? `Agent '${agentName}' references disabled tool '${referenceName}'`
-      : `Agent '${agentName}' references tool '${referenceName}' that is missing from release config`
-  );
-}
-
 function findToolReferenceIssues(
   config: ClientInstanceConfig,
   tools: AnyToolDefinition[]
@@ -112,7 +83,6 @@ function findToolReferenceIssues(
   const issues: string[] = [];
   const providedTools = new Map(tools.map((tool) => [tool.name, tool]));
   const providedToolNames = new Set(providedTools.keys());
-  const configuredTools = new Map(config.tools.map((tool) => [tool.name, tool.enabled]));
 
   for (const tool of config.tools) {
     if (tool.name === WEB_SEARCH_MODEL_TOOL_NAME) {
@@ -128,53 +98,5 @@ function findToolReferenceIssues(
     }
   }
 
-  for (const agent of config.agents) {
-    const skillNames = agent.skillNames ?? [];
-    if (skillNames.length > 0 && !agent.toolNames.includes(READ_SKILL_TOOL_NAME)) {
-      issues.push(
-        `Agent '${agent.name}' references skills but does not allow '${READ_SKILL_TOOL_NAME}'`
-      );
-    }
-    for (const toolName of agent.toolNames) {
-      if (!configuredTools.has(toolName)) {
-        continue;
-      }
-      if (toolName === WEB_SEARCH_MODEL_TOOL_NAME) {
-        const modelProvider = getModelProviderForAgentValidation(config, agent);
-        if (modelProvider) {
-          issues.push(
-            ...findModelToolMaterializationIssues({
-              agent,
-              modelProvider,
-              webAccess: config.webAccess
-            })
-          );
-        }
-        continue;
-      }
-      if (!providedToolNames.has(toolName)) {
-        issues.push(`Agent '${agent.name}' references tool '${toolName}' with no registered implementation`);
-      }
-    }
-  }
-
   return issues;
-}
-
-function getModelProviderForAgentValidation(
-  config: ClientInstanceConfig,
-  agent: AgentConfig
-): ModelProviderConfig | undefined {
-  if (agent.modelProviderId && agent.modelBindingId) {
-    return undefined;
-  }
-  if (agent.modelBindingId) {
-    const binding = config.modelBindings.find((candidate) => candidate.id === agent.modelBindingId);
-    if (!binding) {
-      return undefined;
-    }
-    return config.modelProviders.find((provider) => provider.id === binding.providerId);
-  }
-  const providerId = agent.modelProviderId ?? config.modelProviders[0]?.id;
-  return config.modelProviders.find((provider) => provider.id === providerId);
 }

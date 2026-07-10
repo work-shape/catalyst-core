@@ -10,14 +10,6 @@ export function getClientInstanceId(config: ClientInstanceConfig) {
   return asClientInstanceId(config.clientInstance.id);
 }
 
-export function getAgentConfig(config: ClientInstanceConfig, agentName: string): AgentConfig {
-  const agent = config.agents.find((candidate) => candidate.name === agentName);
-  if (!agent) {
-    throw new AppError("NOT_FOUND", `Agent '${agentName}' is not defined`);
-  }
-  return agent;
-}
-
 export interface ResolvedModelSelection {
   provider: ModelProviderConfig;
   binding?: ModelBindingConfig;

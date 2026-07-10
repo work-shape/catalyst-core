@@ -335,15 +335,6 @@ function createRetentionOptions(input: {
         auditDays: 365,
         allowUserDelete: true
       },
-      defaultAgentName: "test_agent",
-      agents: [
-        {
-          name: "test_agent",
-          displayName: "Test Agent",
-          instructions: "Test only.",
-          toolNames: []
-        }
-      ],
       modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
       tools: []
     }),

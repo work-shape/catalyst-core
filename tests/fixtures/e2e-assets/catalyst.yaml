@@ -1,0 +1,9 @@
+instances:
+  e2e:
+    url: http://127.0.0.1:4210
+defaultInstance: e2e
+defaultAgentName: application_assistant
+agents:
+  - agents/*.agent.yaml
+skills:
+  - skills/*/SKILL.md

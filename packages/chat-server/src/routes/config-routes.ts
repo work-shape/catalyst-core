@@ -24,7 +24,8 @@ export function registerConfigRoutes(app: FastifyInstance, options: ChatServerOp
   app.get(apiOperations.getConfig.path, async (request) => {
     const { user } = await authenticateRequest(options, request);
     requireAuthScope(user, "config:read");
-    const config = createSafeConfigView(options.config, {
+    const assets = await options.configAssets.source.getSnapshot();
+    const config = createSafeConfigView(options.config, assets, {
       requestedLocale: resolveRequestLocale(options, request)
     });
     return {

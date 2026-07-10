@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { AddressInfo } from "net";
 import {
-  createClientInstanceApp,
+  createClientInstanceApp as createUnseededClientInstanceApp,
   type ClientInstanceCapability
 } from "@vivd-catalyst/client-assembly";
 import {
@@ -20,6 +20,8 @@ import {
   asClientInstanceId,
   createAssistantFinalMetadata,
   createPlatformId,
+  isJsonObject,
+  unknownToJsonValue,
   type AgentRun,
   type AgentRuntime,
   type AuthenticatedUser,
@@ -29,6 +31,7 @@ import {
   type AttachmentManifestEntry,
   type FileAttachmentFormat,
   type ImageFileFormat,
+  type JsonObject,
   type ManagedFileId,
   type RuntimeCallContext,
   type SupportedImageMimeType
@@ -40,6 +43,21 @@ import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 
 describe("client instance app vertical slice", () => {
+  it("boots and exposes safe config with zero stored assets", async () => {
+    const app = await createUnseededClientInstanceApp({
+      config: createTestConfig(),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+
+    const response = await app.server.inject({ method: "GET", url: "/api/config" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ agents: [] });
+    await app.close();
+  });
+
   it("creates a user-scoped conversation and runs a configured tool", async () => {
     const config = createTestConfig({
       tools: [{ name: "demo.echo", enabled: true }],
@@ -4110,7 +4128,7 @@ function createTestConfig(input: {
   developmentAuth?: unknown;
   sessionToken?: unknown;
 } = {}) {
-  return parseClientInstanceConfig({
+  const config = parseClientInstanceConfig({
     version: 1,
     clientInstance: {
       id: "demo-local",
@@ -4130,18 +4148,6 @@ function createTestConfig(input: {
       },
       ...(input.sessionToken ? { sessionToken: input.sessionToken } : {})
     },
-    defaultAgentName: "test_agent",
-    agents: [
-      {
-        name: "test_agent",
-        displayName: input.displayName ?? "Test Agent",
-        ...(input.welcomeMessage ? { welcomeMessage: input.welcomeMessage } : {}),
-        instructions: "Use configured tools only.",
-        modelProviderId: input.modelProviders?.[0]?.id ?? "local",
-        toolNames: input.toolNames ?? [],
-        initialPrompts: input.initialPrompts ?? []
-      }
-    ],
     modelProviders: input.modelProviders ?? [{ id: "local", type: "deterministic", model: "local" }],
     usage: {
       budget: input.usageBudget ?? {},
@@ -4152,6 +4158,54 @@ function createTestConfig(input: {
     ...(input.executionWorkspaces ? { executionWorkspaces: input.executionWorkspaces } : {}),
     tools: input.tools ?? []
   });
+  testAssetsByConfig.set(config, {
+    defaultAgentName: "test_agent",
+    agent: toJsonObject({
+      name: "test_agent",
+      displayName: input.displayName ?? "Test Agent",
+      ...(input.welcomeMessage ? { welcomeMessage: input.welcomeMessage } : {}),
+      instructions: "Use configured tools only.",
+      modelProviderId: input.modelProviders?.[0]?.id ?? "local",
+      toolNames: input.toolNames ?? [],
+      initialPrompts: input.initialPrompts ?? []
+    })
+  });
+  return config;
+}
+
+const testAssetsByConfig = new WeakMap<
+  object,
+  { defaultAgentName: string; agent: JsonObject }
+>();
+
+async function createClientInstanceApp(
+  input: Parameters<typeof createUnseededClientInstanceApp>[0]
+): Promise<Awaited<ReturnType<typeof createUnseededClientInstanceApp>>> {
+  const app = await createUnseededClientInstanceApp(input);
+  const assets = testAssetsByConfig.get(app.config);
+  if (assets) {
+    await app.store.applyConfigAssetMutations({
+      clientInstanceId: asClientInstanceId(app.config.clientInstance.id),
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: assets.defaultAgentName,
+          config: assets.agent
+        },
+        { type: "setDefaultAgent", agentName: assets.defaultAgentName }
+      ]
+    });
+  }
+  return app;
+}
+
+function toJsonObject(input: object): JsonObject {
+  const value = unknownToJsonValue(input);
+  if (!isJsonObject(value)) {
+    throw new Error("Expected JSON object fixture");
+  }
+  return value;
 }
 
 type TestServer = Awaited<ReturnType<typeof createClientInstanceApp>>["server"];

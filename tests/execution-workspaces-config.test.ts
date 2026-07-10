@@ -210,14 +210,6 @@ function baseConfig(overrides: Record<string, unknown> = {}) {
       defaultLocale: "en",
       supportedLocales: ["en"]
     },
-    defaultAgentName: "test_agent",
-    agents: [
-      {
-        name: "test_agent",
-        displayName: "Test Agent",
-        instructions: "Test."
-      }
-    ],
     modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
     ...overrides
   };

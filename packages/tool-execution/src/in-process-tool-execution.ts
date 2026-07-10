@@ -14,13 +14,15 @@ import { failed, toPreview } from "./tool-results";
 
 export interface InProcessToolExecutionOptions {
   registry: ToolRegistry;
-  getAgentToolNames(agentName: string): readonly string[];
+  getAgentToolNames(agentName: string): readonly string[] | Promise<readonly string[]>;
   auditRecorder?: AuditRecorder;
 }
 
 export class InProcessToolExecution implements ToolExecution {
   private readonly registry: ToolRegistry;
-  private readonly getAgentToolNames: (agentName: string) => readonly string[];
+  private readonly getAgentToolNames: (
+    agentName: string
+  ) => readonly string[] | Promise<readonly string[]>;
   private readonly auditRecorder?: AuditRecorder;
 
   constructor(options: InProcessToolExecutionOptions) {
@@ -42,7 +44,8 @@ export class InProcessToolExecution implements ToolExecution {
       );
     }
 
-    if (!this.getAgentToolNames(request.agentName).includes(request.toolName)) {
+    const agentToolNames = await this.getAgentToolNames(request.agentName);
+    if (!agentToolNames.includes(request.toolName)) {
       return this.auditAuthorizationDecision(
         {
           status: "denied",

@@ -1,0 +1,9 @@
+name: research_assistant
+displayName: Research Assistant
+modelProviderId: local
+instructions: |
+  You help users summarize policy and research context for sensitive workflows.
+toolNames: []
+initialPrompts:
+  - title: Summarize policy
+    prompt: Summarize the policy context I should consider first.

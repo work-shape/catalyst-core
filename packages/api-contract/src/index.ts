@@ -339,7 +339,7 @@ export const safeConfigSchema = z.object({
       accept: z.string()
     })
   }),
-  defaultAgentName: z.string(),
+  defaultAgentName: z.string().optional(),
   agents: z.array(
     z.object({
       name: z.string(),

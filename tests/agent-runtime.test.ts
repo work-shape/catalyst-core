@@ -16,7 +16,10 @@ import {
   type ToolExecution,
   type ToolExecutionResult
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+import {
+  createStaticConfigAssetSource,
+  InMemoryPlatformStore
+} from "@vivd-catalyst/core/testing";
 import { LocalAgentRuntime, type LocalAgentRunFailureReport } from "@vivd-catalyst/agent-runtime";
 import {
   modelContentText,
@@ -82,6 +85,109 @@ describe("local agent runtime", () => {
     });
   });
 
+  it("loads an edited asset snapshot on the next run", async () => {
+    const clientInstanceId = asClientInstanceId("mutable-assets-client");
+    const context: RuntimeCallContext = {
+      clientInstanceId,
+      correlationId: "corr-mutable-assets",
+      user: {
+        id: "user-1",
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const store = new InMemoryPlatformStore();
+    const conversationId = await createConversationWithMessages(store, {
+      clientInstanceId,
+      messages: []
+    });
+    const providerConfig: ModelProviderConfig = {
+      id: "test-provider",
+      type: "deterministic",
+      model: "test-model"
+    };
+    let assetVersion = 1;
+    let instructions = "First asset instructions.";
+    const seenSystemInstructions: string[] = [];
+    const runtime = new LocalAgentRuntime({
+      assetSource: {
+        async getSnapshot() {
+          return {
+            version: assetVersion,
+            defaultAgentName: "mutable_agent",
+            agents: [
+              {
+                name: "mutable_agent",
+                displayName: "Mutable Agent",
+                instructions,
+                modelProviderId: "test-provider",
+                toolNames: [],
+                skillNames: [],
+                initialPrompts: []
+              }
+            ],
+            skills: []
+          };
+        }
+      },
+      modelProviders: [providerConfig],
+      defaultModelProvider: providerConfig,
+      conversationHistory: store,
+      modelProvider: {
+        id: "test-provider",
+        async complete(request) {
+          const systemMessage = request.messages.find((message) => message.role === "system");
+          seenSystemInstructions.push(systemMessage ? modelContentText(systemMessage.content) : "");
+          return {
+            text: "Done.",
+            toolCalls: [],
+            usage: noReportedUsage()
+          };
+        }
+      },
+      toolRegistry: new ToolRegistry({ tools: [] }),
+      toolExecution: createUnusedToolExecution(),
+      usageGovernance: new ModelUsageGovernance({
+        store,
+        budget: { costSafetyMultiplier: 1 },
+        safeguards: {}
+      })
+    });
+
+    const firstRun = await runtime.start(
+      {
+        agentName: "mutable_agent",
+        conversationId,
+        message: { text: "First run" }
+      },
+      context
+    );
+    for await (const _event of runtime.observe(firstRun.runId, context)) {
+      // Drain the run before editing the source.
+    }
+
+    assetVersion = 2;
+    instructions = "Edited asset instructions.";
+    const secondRun = await runtime.start(
+      {
+        agentName: "mutable_agent",
+        conversationId,
+        message: { text: "Second run" }
+      },
+      context
+    );
+    for await (const _event of runtime.observe(secondRun.runId, context)) {
+      // Drain the run so the second snapshot is observed.
+    }
+
+    expect(seenSystemInstructions[0]).toContain("First asset instructions.");
+    expect(seenSystemInstructions[1]).toContain("Edited asset instructions.");
+  });
+
   it("observes a completed local run from an event cursor", async () => {
     const clientInstanceId = asClientInstanceId("cursor-client");
     const context: RuntimeCallContext = {
@@ -108,7 +214,7 @@ describe("local agent runtime", () => {
       model: "test-model"
     };
     const runtime = new LocalAgentRuntime({
-      agents: [
+      assetSource: createStaticConfigAssetSource({ agents: [
         {
           name: "cursor_agent",
           displayName: "Cursor Agent",
@@ -117,7 +223,7 @@ describe("local agent runtime", () => {
           toolNames: [],
           initialPrompts: []
         }
-      ],
+      ] }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -205,7 +311,7 @@ describe("local agent runtime", () => {
       releaseProvider = resolve;
     });
     const runtime = new LocalAgentRuntime({
-      agents: [
+      assetSource: createStaticConfigAssetSource({ agents: [
         {
           name: "cancel_prefix_agent",
           displayName: "Cancel Prefix Agent",
@@ -214,7 +320,7 @@ describe("local agent runtime", () => {
           toolNames: [],
           initialPrompts: []
         }
-      ],
+      ] }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -377,7 +483,7 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      agents: [
+      assetSource: createStaticConfigAssetSource({ agents: [
         {
           name: "history_agent",
           displayName: "History Agent",
@@ -386,7 +492,7 @@ describe("local agent runtime", () => {
           toolNames: [],
           initialPrompts: []
         }
-      ],
+      ] }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -469,7 +575,7 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      agents: [
+      assetSource: createStaticConfigAssetSource({ agents: [
         {
           name: "observation_failure_agent",
           displayName: "Observation Failure Agent",
@@ -478,7 +584,7 @@ describe("local agent runtime", () => {
           toolNames: [],
           initialPrompts: []
         }
-      ],
+      ] }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -574,7 +680,7 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      agents: [
+      assetSource: createStaticConfigAssetSource({ agents: [
         {
           name: "binding_agent",
           displayName: "Binding Agent",
@@ -583,7 +689,7 @@ describe("local agent runtime", () => {
           toolNames: [],
           initialPrompts: []
         }
-      ],
+      ] }),
       modelProviders: [providerConfig],
       modelBindings: [
         {
@@ -707,7 +813,7 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      agents: [
+      assetSource: createStaticConfigAssetSource({ agents: [
         {
           name: "tool_history_agent",
           displayName: "Tool History Agent",
@@ -716,7 +822,7 @@ describe("local agent runtime", () => {
           toolNames: [],
           initialPrompts: []
         }
-      ],
+      ] }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -806,7 +912,7 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      agents: [
+      assetSource: createStaticConfigAssetSource({ agents: [
         {
           name: "locale_agent",
           displayName: "Locale Agent",
@@ -815,7 +921,7 @@ describe("local agent runtime", () => {
           toolNames: [],
           initialPrompts: []
         }
-      ],
+      ] }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -932,7 +1038,7 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      agents: [
+      assetSource: createStaticConfigAssetSource({ agents: [
         {
           name: "tool_stream_agent",
           displayName: "Tool Stream Agent",
@@ -941,7 +1047,7 @@ describe("local agent runtime", () => {
           toolNames: ["test.inspect"],
           initialPrompts: []
         }
-      ],
+      ] }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -1095,7 +1201,7 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      agents: [
+      assetSource: createStaticConfigAssetSource({ agents: [
         {
           name: "provider_tool_stream_agent",
           displayName: "Provider Tool Stream Agent",
@@ -1104,7 +1210,7 @@ describe("local agent runtime", () => {
           toolNames: [],
           initialPrompts: []
         }
-      ],
+      ] }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -1235,7 +1341,7 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      agents: [
+      assetSource: createStaticConfigAssetSource({ agents: [
         {
           name: "artifact_agent",
           displayName: "Artifact Agent",
@@ -1244,7 +1350,7 @@ describe("local agent runtime", () => {
           toolNames: ["test.promote_artifact"],
           initialPrompts: []
         }
-      ],
+      ] }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -1420,7 +1526,7 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      agents: [
+      assetSource: createStaticConfigAssetSource({ agents: [
         {
           name: "invalid_tool_json_agent",
           displayName: "Invalid Tool JSON Agent",
@@ -1429,7 +1535,7 @@ describe("local agent runtime", () => {
           toolNames: ["test.inspect"],
           initialPrompts: []
         }
-      ],
+      ] }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -1546,7 +1652,7 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      agents: [
+      assetSource: createStaticConfigAssetSource({ agents: [
         {
           name: "error_agent",
           displayName: "Error Agent",
@@ -1555,7 +1661,7 @@ describe("local agent runtime", () => {
           toolNames: [],
           initialPrompts: []
         }
-      ],
+      ] }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -1629,7 +1735,7 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      agents: [
+      assetSource: createStaticConfigAssetSource({ agents: [
         {
           name: "app_error_agent",
           displayName: "App Error Agent",
@@ -1638,7 +1744,7 @@ describe("local agent runtime", () => {
           toolNames: [],
           initialPrompts: []
         }
-      ],
+      ] }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,

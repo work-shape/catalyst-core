@@ -13,8 +13,10 @@ import {
   type ClientInstanceId,
   type ConfigAssetRecord,
   type ConfigAssetRevisionRecord,
+  type ConfigAssetSource,
   type ConfigAssetState,
   type ConfigAssetStore,
+  type RuntimeAssetSnapshot,
   type CompleteRunStartCommandInput,
   type Conversation,
   type ConversationId,
@@ -54,6 +56,7 @@ import {
   createUserId,
   createPlatformId
 } from "./index";
+import type { AgentConfig, SkillConfig } from "./config";
 import { InMemoryConfigAssetStore } from "./testing-in-memory-config-asset-store";
 import {
   createInMemoryExecutionWorkspaceStore,
@@ -1432,4 +1435,22 @@ function summarizeEvents(
       webSearchCallCount: 0
     }
   );
+}
+
+export function createStaticConfigAssetSource(input: {
+  agents?: AgentConfig[];
+  skills?: SkillConfig[];
+  defaultAgentName?: string;
+  version?: number;
+}): ConfigAssetSource {
+  return {
+    async getSnapshot(): Promise<RuntimeAssetSnapshot> {
+      return {
+        version: input.version ?? 1,
+        defaultAgentName: input.defaultAgentName,
+        agents: input.agents ?? [],
+        skills: input.skills ?? []
+      };
+    }
+  };
 }

@@ -7,7 +7,10 @@ import {
   asManagedFileId,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+import {
+  createStaticConfigAssetSource,
+  InMemoryPlatformStore
+} from "@vivd-catalyst/core/testing";
 import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
 import {
   modelContentText,
@@ -165,7 +168,7 @@ describe("agent workspace file e2e", () => {
         }
       };
       const runtime = new LocalAgentRuntime({
-        agents: [
+        assetSource: createStaticConfigAssetSource({ agents: [
           {
             name: "workspace_file_agent",
             displayName: "Workspace File Agent",
@@ -175,7 +178,7 @@ describe("agent workspace file e2e", () => {
             toolNames: tools.map((tool) => tool.name),
             initialPrompts: []
           }
-        ],
+        ] }),
         modelProviders: [
           {
             id: "test-provider",

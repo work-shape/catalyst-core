@@ -85,11 +85,6 @@ runtime:
 modelContext:
   toolOutput:
     maxTokens: 60000
-defaultAgentName: workflow_assistant
-agentFiles:
-  - ../agents/workflow-assistant.agent.yaml
-skillFiles:
-  - ../skills/generic-workflow-review/SKILL.md
 tools:
   - name: read_skill
     enabled: true

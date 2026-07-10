@@ -47,15 +47,6 @@ describe("client instance standalone auth trusted origins", () => {
             enabled: true
           }
         },
-        defaultAgentName: "test_agent",
-        agents: [
-          {
-            name: "test_agent",
-            displayName: "Test Agent",
-            instructions: "Use configured tools only.",
-            modelProviderId: "local"
-          }
-        ],
         modelProviders: [{ id: "local", type: "deterministic", model: "local" }]
       })
     ).toThrow(/Development auth must not be enabled in production/u);
@@ -109,15 +100,6 @@ function createTestConfig(input: {
         seedUsers: input.seedUsers ?? []
       }
     },
-    defaultAgentName: "test_agent",
-    agents: [
-      {
-        name: "test_agent",
-        displayName: "Test Agent",
-        instructions: "Use configured tools only.",
-        modelProviderId: "local"
-      }
-    ],
     modelProviders: [{ id: "local", type: "deterministic", model: "local" }]
   });
 }

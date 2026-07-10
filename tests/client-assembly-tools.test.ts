@@ -94,15 +94,6 @@ function createTestConfig(input: {
         enabled: true
       }
     },
-    defaultAgentName: "test_agent",
-    agents: [
-      {
-        name: "test_agent",
-        displayName: "Test Agent",
-        instructions: "Use configured tools only.",
-        modelProviderId: "local"
-      }
-    ],
     modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
     tools: input.tools
   });

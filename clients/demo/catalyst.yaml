@@ -1,0 +1,9 @@
+instances:
+  local:
+    url: "http://127.0.0.1:4100"
+defaultInstance: local
+defaultAgentName: workflow_assistant
+agents:
+  - "agents/*.agent.yaml"
+skills:
+  - "skills/*/SKILL.md"

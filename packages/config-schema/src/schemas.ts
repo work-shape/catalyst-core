@@ -596,9 +596,6 @@ export const clientInstanceConfigSchema = z.object({
         webSearch: []
       }
     }),
-  defaultAgentName: z.string().min(1),
-  agents: z.array(agentConfigSchema).min(1),
-  skills: z.array(skillConfigSchema).default([]),
   tools: z
     .array(toolInstanceConfigSchema)
     .default([]),
@@ -606,19 +603,38 @@ export const clientInstanceConfigSchema = z.object({
   ui: uiConfigSchema
 });
 
-export const clientInstanceConfigFileSchema = clientInstanceConfigSchema
-  .omit({
-    agents: true,
-    ui: true
-  })
-  .extend({
-    agents: z.array(agentConfigSchema).default([]),
-    agentFiles: z.array(z.string().min(1)).default([]),
-    skills: z.array(skillConfigSchema).default([]),
-    skillFiles: z.array(z.string().min(1)).default([]),
-    ui: uiConfigSchema.optional(),
-    uiFile: z.string().min(1).optional()
-  });
+const MOVED_ASSET_CONFIG_KEYS = [
+  "agents",
+  "agentFiles",
+  "skills",
+  "skillFiles",
+  "defaultAgentName"
+] as const;
+
+export const clientInstanceConfigFileSchema = z.preprocess(
+  (raw, context) => {
+    if (typeof raw === "object" && raw !== null) {
+      for (const key of MOVED_ASSET_CONFIG_KEYS) {
+        if (key in raw) {
+          context.addIssue({
+            code: "custom",
+            path: [key],
+            message: `'${key}' moved to the platform asset store and is no longer read from config files - manage agents and skills with 'catalyst config push'`
+          });
+        }
+      }
+    }
+    return raw;
+  },
+  clientInstanceConfigSchema
+    .omit({
+      ui: true
+    })
+    .extend({
+      ui: uiConfigSchema.optional(),
+      uiFile: z.string().min(1).optional()
+    })
+);
 
 export type UserIdentityConfig = z.infer<typeof userIdentitySchema>;
 export type StandaloneSeedUserConfig = z.infer<typeof standaloneSeedUserSchema>;

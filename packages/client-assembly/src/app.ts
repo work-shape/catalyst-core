@@ -4,13 +4,13 @@ import { StoreBackedAuditRecorder } from "@vivd-catalyst/core";
 import { createChatServer } from "@vivd-catalyst/chat-server";
 import type { ChatAttachmentService } from "@vivd-catalyst/chat-server";
 import { createManagedObjectAccess } from "@vivd-catalyst/capability-sdk";
-import { AppError } from "@vivd-catalyst/core";
+import { AppError, type PlatformStore } from "@vivd-catalyst/core";
 import {
   type ClientInstanceConfig,
-  getAgentConfig,
   getClientInstanceId,
   getEnabledToolNames,
-  loadClientInstanceConfigFromFile
+  loadClientInstanceConfigFromFile,
+  validateConfigAssetBundle
 } from "@vivd-catalyst/config-schema";
 import { createModelProviderRegistry } from "@vivd-catalyst/model-provider";
 import {
@@ -27,12 +27,12 @@ import {
   createWorkspaceToolDefinitions,
   InProcessToolExecution,
   LibreOfficeArtifactPreviewGenerator,
-  SkillCatalog,
   ToolRegistry
 } from "@vivd-catalyst/tool-execution";
 import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { assertClientAssemblyValid } from "./assembly-validation";
+import { createConfigAssetSource } from "./config-asset-source";
 import { createClientInstanceAuth } from "./auth";
 import type {
   ClientInstanceAttachmentHandler,
@@ -62,6 +62,7 @@ export interface CreateClientInstanceAppInput {
 export interface ClientInstanceApp {
   readonly config: ClientInstanceConfig;
   readonly server: FastifyInstance;
+  readonly store: PlatformStore;
   listen(input?: { host?: string; port?: number }): Promise<void>;
   close(): Promise<void>;
 }
@@ -133,8 +134,9 @@ export async function createClientInstanceApp(
     ...(workspaceManagedObjectReader ? [workspaceManagedObjectReader] : []),
     ...capabilityContributions.flatMap((contribution) => contribution.managedObjects ?? []),
   ]);
-  const skillCatalog = new SkillCatalog({
-    skills: config.skills
+  const assetSource = createConfigAssetSource({
+    store,
+    clientInstanceId
   });
   const workspaceTools = config.executionWorkspaces.enabled
     ? createWorkspaceToolDefinitions({
@@ -168,12 +170,7 @@ export async function createClientInstanceApp(
       ...workspaceTools,
       ...webAccessTools,
       ...createDataSourceQueryTools({ dataSources }),
-      createReadSkillTool({
-        catalog: skillCatalog,
-        getAgentSkillNames(agentName) {
-          return getAgentConfig(config, agentName).skillNames;
-        }
-      }),
+      createReadSkillTool({ assetSource }),
       ...capabilityContributions.flatMap((contribution) => contribution.tools ?? []),
       ...input.tools
     ]
@@ -194,8 +191,10 @@ export async function createClientInstanceApp(
   });
   const toolExecution = new InProcessToolExecution({
     registry: toolRegistry,
-    getAgentToolNames(agentName) {
-      return getAgentConfig(config, agentName).toolNames;
+    async getAgentToolNames(agentName) {
+      const assets = await assetSource.getSnapshot();
+      const agent = assets.agents.find((candidate) => candidate.name === agentName);
+      return agent?.toolNames ?? [];
     },
     auditRecorder
   });
@@ -208,7 +207,7 @@ export async function createClientInstanceApp(
     throw new AppError("VALIDATION_FAILED", "At least one model provider is required");
   }
   const agentRuntime = new LocalAgentRuntime({
-    agents: config.agents,
+    assetSource,
     modelProviders: config.modelProviders,
     modelBindings: config.modelBindings,
     defaultModelProvider,
@@ -223,7 +222,6 @@ export async function createClientInstanceApp(
     maxSteps: config.runtime.maxSteps,
     repeatedToolCallLimit: config.runtime.repeatedToolCallLimit,
     modelContext: config.modelContext,
-    skills: config.skills,
     runFailureReporter: createRuntimeFailureReporter(),
     artifactReader: managedObjects
       ? {
@@ -258,6 +256,7 @@ export async function createClientInstanceApp(
     auditRecorder,
     configAssets: {
       store,
+      source: assetSource,
       validationRefs: {
         modelProviderIds: config.modelProviders.map((provider) => provider.id),
         modelBindingIds: config.modelBindings.map((binding) => binding.id),
@@ -287,9 +286,28 @@ export async function createClientInstanceApp(
     sessionToken
   });
 
+  try {
+    const assets = await assetSource.getSnapshot();
+    validateConfigAssetBundle({
+      agents: assets.agents,
+      skills: assets.skills,
+      defaultAgentName: assets.defaultAgentName,
+      refs: {
+        modelProviderIds: config.modelProviders.map((provider) => provider.id),
+        modelBindingIds: config.modelBindings.map((binding) => binding.id),
+        enabledToolNames: [...getEnabledToolNames(config)]
+      }
+    });
+  } catch (error) {
+    // Stored assets are validated on every write; a mismatch here means the file
+    // config changed underneath them. Boot anyway and surface the drift.
+    console.warn("Stored config assets no longer validate against the client instance config:", error);
+  }
+
   return {
     config,
     server,
+    store,
     async listen(listenInput = {}) {
       await server.listen({
         host: listenInput.host ?? env.HOST ?? "127.0.0.1",

@@ -1,10 +1,20 @@
 import { Buffer } from "node:buffer";
 import { createServer } from "node:http";
 import { describe, expect, it } from "vitest";
-import { materializeModelTools } from "@vivd-catalyst/agent-runtime";
-import { createClientInstanceApp } from "@vivd-catalyst/client-assembly";
-import { AppError } from "@vivd-catalyst/core";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import {
+  findModelToolMaterializationIssues,
+  materializeModelTools
+} from "@vivd-catalyst/agent-runtime";
+import { createClientInstanceApp as createUnseededClientInstanceApp } from "@vivd-catalyst/client-assembly";
+import {
+  AppError,
+  asClientInstanceId,
+  isJsonObject,
+  unknownToJsonValue,
+  type AgentConfig,
+  type JsonObject
+} from "@vivd-catalyst/core";
+import { agentConfigSchema, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
   createWebFetchTool,
   DirectWebFetcher,
@@ -283,7 +293,7 @@ describe("web access app assembly", () => {
         toolNames: ["web_fetch"],
         tools: [{ name: "web_fetch", enabled: true }]
       }),
-      "Agent 'test_agent' references tool 'web_fetch' with no registered implementation"
+      "Enabled tool 'web_fetch' has no implementation registered by the client assembly app"
     );
   });
 
@@ -299,7 +309,7 @@ describe("web access app assembly", () => {
         toolNames: ["web_fetch"],
         tools: [{ name: "web_fetch", enabled: true }]
       }),
-      "Agent 'test_agent' references tool 'web_fetch' with no registered implementation"
+      "Enabled tool 'web_fetch' has no implementation registered by the client assembly app"
     );
   });
 
@@ -315,7 +325,7 @@ describe("web access app assembly", () => {
         toolNames: ["web_fetch"],
         tools: [{ name: "web_fetch", enabled: true }]
       }),
-      "Agent 'test_agent' references tool 'web_fetch' with no registered implementation"
+      "Enabled tool 'web_fetch' has no implementation registered by the client assembly app"
     );
   });
 
@@ -339,9 +349,8 @@ describe("web access app assembly", () => {
     await app.close();
   });
 
-  it("does not expose web_search when the top-level web access gate is disabled", async () => {
-    await expectAppAssemblyInvalid(
-      createTestConfig({
+  it("does not expose web_search when the top-level web access gate is disabled", () => {
+    const config = createTestConfig({
         webAccess: {
           enabled: false,
           search: {
@@ -350,14 +359,15 @@ describe("web access app assembly", () => {
         },
         toolNames: ["web_search"],
         tools: [{ name: "web_search", enabled: true }]
-      }),
+      });
+    expectModelToolInvalid(
+      config,
       "Agent 'test_agent' references web_search but web access is disabled"
     );
   });
 
-  it("does not expose web_search when search is disabled", async () => {
-    await expectAppAssemblyInvalid(
-      createTestConfig({
+  it("does not expose web_search when search is disabled", () => {
+    const config = createTestConfig({
         webAccess: {
           enabled: true,
           search: {
@@ -366,14 +376,15 @@ describe("web access app assembly", () => {
         },
         toolNames: ["web_search"],
         tools: [{ name: "web_search", enabled: true }]
-      }),
+      });
+    expectModelToolInvalid(
+      config,
       "Agent 'test_agent' references web_search but webAccess.search is disabled"
     );
   });
 
-  it("fails closed when native web_search is requested for an unsupported provider", async () => {
-    await expectAppAssemblyInvalid(
-      createTestConfig({
+  it("fails closed when native web_search is requested for an unsupported provider", () => {
+    const config = createTestConfig({
         webAccess: {
           enabled: true,
           search: {
@@ -383,14 +394,15 @@ describe("web access app assembly", () => {
         },
         toolNames: ["web_search"],
         tools: [{ name: "web_search", enabled: true }]
-      }),
+      });
+    expectModelToolInvalid(
+      config,
       "Agent 'test_agent' references web_search but model provider 'local' does not support provider-native web search"
     );
   });
 
-  it("fails closed when managed web_search is pinned before a managed provider exists", async () => {
-    await expectAppAssemblyInvalid(
-      createTestConfig({
+  it("fails closed when managed web_search is pinned before a managed provider exists", () => {
+    const config = createTestConfig({
         webAccess: {
           enabled: true,
           search: {
@@ -412,7 +424,9 @@ describe("web access app assembly", () => {
         modelProviderId: "openai",
         toolNames: ["web_search"],
         tools: [{ name: "web_search", enabled: true }]
-      }),
+      });
+    expectModelToolInvalid(
+      config,
       "Agent 'test_agent' references web_search with managed provider 'serper', but managed web search providers are not implemented"
     );
   });
@@ -476,7 +490,7 @@ describe("web search model tool materialization", () => {
         { name: "web_search", enabled: true }
       ]
     });
-    const agent = config.agents[0]!;
+    const agent = testAgentsByConfig.get(config)!;
     const requestedToolNames: string[][] = [];
 
     const tools = materializeModelTools({
@@ -568,7 +582,7 @@ function createTestConfig(input: {
   toolNames?: string[];
   tools?: Array<{ name: string; enabled?: boolean }>;
 } = {}) {
-  return parseClientInstanceConfig({
+  const config = parseClientInstanceConfig({
     version: 1,
     clientInstance: {
       id: "web-access-test",
@@ -588,17 +602,67 @@ function createTestConfig(input: {
       }
     },
     ...(input.webAccess ? { webAccess: input.webAccess } : {}),
-    defaultAgentName: "test_agent",
-    agents: [
-      {
-        name: "test_agent",
-        displayName: "Test Agent",
-        instructions: "Test web access.",
-        modelProviderId: input.modelProviderId ?? "local",
-        toolNames: input.toolNames ?? []
-      }
-    ],
     modelProviders: input.modelProviders ?? [{ id: "local", type: "deterministic", model: "deterministic-local" }],
     tools: input.tools ?? []
   });
+  testAgentsByConfig.set(
+    config,
+    agentConfigSchema.parse({
+      name: "test_agent",
+      displayName: "Test Agent",
+      instructions: "Test web access.",
+      modelProviderId: input.modelProviderId ?? "local",
+      toolNames: input.toolNames ?? []
+    })
+  );
+  return config;
+}
+
+const testAgentsByConfig = new WeakMap<object, AgentConfig>();
+
+async function createClientInstanceApp(
+  input: Parameters<typeof createUnseededClientInstanceApp>[0]
+): Promise<Awaited<ReturnType<typeof createUnseededClientInstanceApp>>> {
+  const app = await createUnseededClientInstanceApp(input);
+  const agent = testAgentsByConfig.get(app.config);
+  if (agent) {
+    await app.store.applyConfigAssetMutations({
+      clientInstanceId: asClientInstanceId(app.config.clientInstance.id),
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: agent.name,
+          config: toJsonObject(agent)
+        },
+        { type: "setDefaultAgent", agentName: agent.name }
+      ]
+    });
+  }
+  return app;
+}
+
+function expectModelToolInvalid(
+  config: ReturnType<typeof createTestConfig>,
+  message: string
+): void {
+  const agent = testAgentsByConfig.get(config);
+  if (!agent) {
+    throw new Error("Missing test agent fixture");
+  }
+  expect(
+    findModelToolMaterializationIssues({
+      agent,
+      modelProvider: config.modelProviders[0]!,
+      webAccess: config.webAccess
+    })
+  ).toContain(message);
+}
+
+function toJsonObject(input: object): JsonObject {
+  const value = unknownToJsonValue(input);
+  if (!isJsonObject(value)) {
+    throw new Error("Expected JSON object fixture");
+  }
+  return value;
 }

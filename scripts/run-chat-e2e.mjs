@@ -26,6 +26,7 @@ const requiredBuilds = [
   ["packages/client-assembly", "build"],
   ["packages/api-client", "build"],
   ["packages/chat-ui", "build"],
+  ["packages/config-cli", "build"],
   ["clients/demo", "build:server"]
 ];
 
@@ -41,6 +42,8 @@ const e2eApiUrl = process.env.E2E_API_URL ?? `http://${e2eHost}:${e2eApiPort}`;
 const e2eUiUrl = process.env.E2E_UI_URL ?? `http://${e2eHost}:${e2eUiPort}`;
 const generatedConfigPath = resolve(repoRoot, ".tmp/e2e/e2e-app.yaml");
 const e2eConfigPath = resolve(repoRoot, process.env.E2E_CONFIG_PATH ?? generatedConfigPath);
+const e2eSessionTokenSecret = "e2e-session-token-secret-with-at-least-24-characters";
+const e2eServerCredential = "e2e-server-to-server-credential";
 
 const children = new Set();
 let cleanupStarted = false;
@@ -76,6 +79,7 @@ try {
       waitForUrl(e2eUiUrl, { label: "Vite UI" })
     ])
   );
+  await withServerMonitoring(pushConfigAssets());
   await withServerMonitoring(waitForAuthReady());
   await withServerMonitoring(runPlaywright());
   await cleanup();
@@ -208,9 +212,35 @@ function startApiServer() {
       BETTER_AUTH_URL: `${e2eApiUrl}/api/auth`,
       BETTER_AUTH_SECRET: "e2e-better-auth-secret-with-at-least-32-characters",
       E2E_SUPERADMIN_EMAIL: "e2e-superadmin@example.test",
-      E2E_USER_EMAIL: "e2e-user@example.test"
+      E2E_USER_EMAIL: "e2e-user@example.test",
+      CHAT_SESSION_TOKEN_SECRET: e2eSessionTokenSecret,
+      CHAT_SERVER_CREDENTIAL: e2eServerCredential
     }
   });
+}
+
+async function pushConfigAssets() {
+  await run(
+    process.execPath,
+    [
+      "packages/config-cli/dist/index.js",
+      "config",
+      "push",
+      "--force",
+      "--dir",
+      "tests/fixtures/e2e-assets",
+      "--instance",
+      e2eApiUrl
+    ],
+    {
+      cwd: repoRoot,
+      label: "config asset push",
+      env: {
+        ...process.env,
+        CATALYST_SERVER_CREDENTIAL: e2eServerCredential
+      }
+    }
+  );
 }
 
 function startUiServer() {

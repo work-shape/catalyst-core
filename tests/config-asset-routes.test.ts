@@ -271,8 +271,6 @@ async function createFixture() {
       environment: "development"
     },
     auth: {},
-    defaultAgentName: "runtime-agent",
-    agents: [agentConfig("Runtime config", { name: "runtime-agent" })],
     modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
     tools: [{ name: "known.tool", enabled: true }]
   });

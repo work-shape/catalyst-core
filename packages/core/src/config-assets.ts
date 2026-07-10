@@ -1,8 +1,20 @@
 import type { AuditActor } from "./audit";
+import type { AgentConfig, SkillConfig } from "./config";
 import type { ClientInstanceId } from "./ids";
 import type { JsonObject } from "./json";
 
 export type ConfigAssetKind = "agent" | "skill";
+
+export interface RuntimeAssetSnapshot {
+  version: number;
+  defaultAgentName?: string;
+  agents: AgentConfig[];
+  skills: SkillConfig[];
+}
+
+export interface ConfigAssetSource {
+  getSnapshot(): Promise<RuntimeAssetSnapshot>;
+}
 
 export interface ConfigAssetRecord {
   id: string;

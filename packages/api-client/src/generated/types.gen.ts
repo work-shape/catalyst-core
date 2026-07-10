@@ -225,7 +225,7 @@ export type GetConfigResponses = {
                 accept: string;
             };
         };
-        defaultAgentName: string;
+        defaultAgentName?: string;
         agents: Array<{
             name: string;
             displayName: string;

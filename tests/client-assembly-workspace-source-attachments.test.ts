@@ -481,16 +481,6 @@ function createWorkspaceAttachmentConfig(input: { toolNames?: string[] } = {}) {
         enabled: true
       }
     },
-    defaultAgentName: "test_agent",
-    agents: [
-      {
-        name: "test_agent",
-        displayName: "Test Agent",
-        instructions: "Use configured tools only.",
-        modelProviderId: "local",
-        toolNames: input.toolNames ?? []
-      }
-    ],
     modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
     executionWorkspaces: {
       enabled: true

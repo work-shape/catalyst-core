@@ -4,12 +4,7 @@ import {
   type AgentConfig,
   type ClientInstanceConfig
 } from "./schemas";
-import {
-  findAgentModelReferenceIssues,
-  findDefaultAgentReferenceIssues,
-  findDuplicates,
-  findMissingAgentSkillReferences
-} from "./reference-validation";
+import { findDuplicates } from "./reference-validation";
 import {
   getModelSelectionForAgent,
   getModelSelectionForConversationTitles
@@ -26,7 +21,7 @@ export function parseClientInstanceConfig(input: unknown): ClientInstanceConfig 
   assertProductionSafeAuthConfig(parsed.data);
   assertExecutionWorkspaceRunnerBoundary(parsed.data);
   assertConfigReferences(parsed.data);
-  assertSpendBudgetPricingCoverage(parsed.data);
+  assertSpendBudgetPricingCoverage(parsed.data, []);
   return parsed.data;
 }
 
@@ -73,22 +68,6 @@ function assertExecutionWorkspaceRunnerBoundary(config: ClientInstanceConfig): v
 }
 
 function assertConfigReferences(config: ClientInstanceConfig): void {
-  const defaultAgentIssues = findDefaultAgentReferenceIssues({
-    agentNames: config.agents.map((agent) => agent.name),
-    defaultAgentName: config.defaultAgentName
-  });
-  if (defaultAgentIssues[0]) {
-    throw new AppError("VALIDATION_FAILED", defaultAgentIssues[0]);
-  }
-
-  const duplicateAgentNames = findDuplicates(config.agents.map((agent) => agent.name));
-  if (duplicateAgentNames.length > 0) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      `Duplicate agent definitions: ${duplicateAgentNames.join(", ")}`
-    );
-  }
-
   const providerIds = new Set(config.modelProviders.map((provider) => provider.id));
   const duplicateProviderIds = findDuplicates(config.modelProviders.map((provider) => provider.id));
   if (duplicateProviderIds.length > 0) {
@@ -114,15 +93,6 @@ function assertConfigReferences(config: ClientInstanceConfig): void {
         `Model binding '${binding.id}' references missing model provider '${binding.providerId}'`
       );
     }
-  }
-
-  const agentModelIssues = findAgentModelReferenceIssues({
-    agents: config.agents,
-    modelProviderIds: [...providerIds],
-    modelBindingIds: [...modelBindingIds]
-  });
-  if (agentModelIssues[0]) {
-    throw new AppError("VALIDATION_FAILED", agentModelIssues[0]);
   }
 
   if (
@@ -157,30 +127,11 @@ function assertConfigReferences(config: ClientInstanceConfig): void {
       `Conversation title generation references missing model binding '${config.conversationTitles.modelBindingId}'`
     );
   }
-
-  const duplicateSkillNames = findDuplicates(config.skills.map((skill) => skill.name));
-  if (duplicateSkillNames.length > 0) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      `Duplicate skill definitions: ${duplicateSkillNames.join(", ")}`
-    );
-  }
-
-  const missingSkillReferences = findMissingAgentSkillReferences(
-    config.agents,
-    config.skills.map((skill) => skill.name)
-  );
-  if (missingSkillReferences[0]) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      `Agent '${missingSkillReferences[0].agentName}' references missing skill '${missingSkillReferences[0].referenceName}'`
-    );
-  }
 }
 
 export function assertSpendBudgetPricingCoverage(
   config: ClientInstanceConfig,
-  agents: readonly AgentConfig[] = config.agents
+  agents: readonly AgentConfig[]
 ): void {
   if (!config.usage.budget.monthlySpendLimit) {
     return;

@@ -3,9 +3,7 @@ import { basename, dirname, extname, resolve } from "node:path";
 import yaml from "js-yaml";
 import { AppError } from "@vivd-catalyst/core";
 import {
-  agentConfigSchema,
   clientInstanceConfigFileSchema,
-  skillConfigSchema,
   skillFileFrontmatterSchema,
   uiConfigSchema,
   type ClientInstanceConfig
@@ -34,28 +32,10 @@ export async function loadClientInstanceConfigFromFile(
     : hasInlineUi
       ? parsed.data.ui
       : undefined;
-  const fileAgents = await Promise.all(
-    parsed.data.agentFiles.map(async (agentFile) => {
-      const agentPath = resolve(baseDir, agentFile);
-      const agentRaw = await readStructuredFile(agentPath);
-      const agent = agentConfigSchema.safeParse(agentRaw);
-      if (!agent.success) {
-        throw new AppError("VALIDATION_FAILED", `Agent config '${agentFile}' is invalid`, {
-          issues: agent.error.issues
-        });
-      }
-      return agent.data;
-    })
-  );
-  const fileSkills = await Promise.all(
-    parsed.data.skillFiles.map((skillFile) => loadSkillFile(baseDir, skillFile))
-  );
 
   return parseClientInstanceConfig({
     ...parsed.data,
-    ui: fileUi,
-    agents: [...parsed.data.agents, ...fileAgents],
-    skills: [...parsed.data.skills, ...fileSkills]
+    ui: fileUi
   });
 }
 
@@ -75,19 +55,6 @@ async function readStructuredFile(path: string): Promise<unknown> {
   const contents = await readFile(path, "utf8");
   const extension = extname(path).toLowerCase();
   return extension === ".json" ? JSON.parse(contents) : yaml.load(contents);
-}
-
-async function loadSkillFile(baseDir: string, skillFile: string) {
-  const skillPath = resolve(baseDir, skillFile);
-  const contents = await readFile(skillPath, "utf8");
-  const parsed = parseSkillMarkdown(contents, skillFile, skillPath);
-  const skill = skillConfigSchema.safeParse(parsed);
-  if (!skill.success) {
-    throw new AppError("VALIDATION_FAILED", `Skill file '${skillFile}' is invalid`, {
-      issues: skill.error.issues
-    });
-  }
-  return skill.data;
 }
 
 export function parseSkillMarkdown(contents: string, skillFile: string, skillPath: string): unknown {

@@ -1,23 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { createSafeConfigView, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import {
+  agentConfigSchema,
+  createSafeConfigView,
+  parseClientInstanceConfig
+} from "@vivd-catalyst/config-schema";
 
 describe("agent welcome subtitle config", () => {
   it("allows an empty subtitle so deployments can hide the empty-state subline", () => {
-    const config = parseClientInstanceConfig(
-      baseConfig({
-        agents: [
-          {
-            name: "test_agent",
-            displayName: "Test Agent",
-            welcomeMessage: "How can I help?",
-            welcomeSubtitle: "",
-            instructions: "Test."
-          }
-        ]
-      })
-    );
+    const config = parseClientInstanceConfig(baseConfig());
+    const assets = createAssets({
+      welcomeMessage: "How can I help?",
+      welcomeSubtitle: ""
+    });
 
-    const safeConfig = createSafeConfigView(config, { requestedLocale: "en" });
+    const safeConfig = createSafeConfigView(config, assets, { requestedLocale: "en" });
 
     expect(safeConfig.agents[0]?.welcomeSubtitle).toBe("");
   });
@@ -28,23 +24,18 @@ describe("agent welcome subtitle config", () => {
         localization: {
           defaultLocale: "en",
           supportedLocales: ["en", "de"]
-        },
-        agents: [
-          {
-            name: "test_agent",
-            displayName: "Test Agent",
-            welcomeMessage: "How can I help?",
-            welcomeSubtitle: {
-              en: "Ready for this conversation.",
-              de: "Bereit fuer diese Unterhaltung."
-            },
-            instructions: "Test."
-          }
-        ]
+        }
       })
     );
+    const assets = createAssets({
+      welcomeMessage: "How can I help?",
+      welcomeSubtitle: {
+        en: "Ready for this conversation.",
+        de: "Bereit fuer diese Unterhaltung."
+      }
+    });
 
-    const safeConfig = createSafeConfigView(config, { requestedLocale: "de" });
+    const safeConfig = createSafeConfigView(config, assets, { requestedLocale: "de" });
 
     expect(safeConfig.agents[0]?.welcomeSubtitle).toBe("Bereit fuer diese Unterhaltung.");
   });
@@ -67,15 +58,23 @@ function baseConfig(overrides: Record<string, unknown> = {}) {
       defaultLocale: "en",
       supportedLocales: ["en"]
     },
-    defaultAgentName: "test_agent",
-    agents: [
-      {
-        name: "test_agent",
-        displayName: "Test Agent",
-        instructions: "Test."
-      }
-    ],
     modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
     ...overrides
+  };
+}
+
+function createAssets(overrides: Record<string, unknown>) {
+  return {
+    version: 1,
+    defaultAgentName: "test_agent",
+    agents: [
+      agentConfigSchema.parse({
+        name: "test_agent",
+        displayName: "Test Agent",
+        instructions: "Test.",
+        ...overrides
+      })
+    ],
+    skills: []
   };
 }

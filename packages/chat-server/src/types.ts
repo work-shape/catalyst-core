@@ -4,6 +4,7 @@ import type {
   AgentRunStore,
   AuditEventStore,
   ClientInstanceId,
+  ConfigAssetSource,
   ConfigAssetStore,
   ConversationRetentionStore,
   ConversationStore,
@@ -38,6 +39,7 @@ export interface ChatServerOptions {
   auditRecorder: AuditRecorder;
   configAssets: {
     store: ConfigAssetStore;
+    source: ConfigAssetSource;
     validationRefs: {
       modelProviderIds: string[];
       modelBindingIds: string[];
