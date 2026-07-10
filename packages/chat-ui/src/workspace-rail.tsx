@@ -1,4 +1,4 @@
-import { PanelLeftClose, Plus, Search, Shield } from "lucide-react";
+import { ChevronLeft, PanelLeft, Plus, Search, Shield } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import type { ConversationListItem, SafeConfig } from "@vivd-catalyst/api-client";
 import { ConversationButton } from "./conversation-button";
@@ -73,19 +73,31 @@ export function WorkspaceRail({
     >
       <Button
         type="button"
-        variant="outline"
+        variant="ghost"
         size="icon"
-        className="absolute right-3 top-4 z-20 bg-sidebar md:-right-[1.125rem] md:top-1/2 md:-translate-y-1/2 md:rounded-full md:border-sidebar-border md:shadow-sm"
+        className="absolute right-4 top-4 z-20 size-9 text-muted-foreground hover:text-sidebar-foreground"
         aria-label={t("closeSidebar")}
         title={t("closeSidebar")}
         aria-pressed="true"
         onClick={onToggleSidebar}
       >
-        <PanelLeftClose size={17} aria-hidden="true" />
+        <PanelLeft size={17} aria-hidden="true" />
+      </Button>
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="absolute -right-3 top-1/2 z-20 hidden h-11 w-6 -translate-y-1/2 rounded-xl border border-sidebar-border/60 bg-sidebar/95 text-muted-foreground/70 shadow-none hover:bg-sidebar-accent hover:text-sidebar-foreground md:inline-flex"
+        aria-label={t("collapseSidebar")}
+        title={t("collapseSidebar")}
+        onClick={onToggleSidebar}
+      >
+        <ChevronLeft size={12} strokeWidth={1.75} aria-hidden="true" />
       </Button>
 
       {logoUrl ? (
-        <div className="flex h-[5.75rem] min-w-0 items-start border-b border-sidebar-border pb-5 pr-11">
+        <div className="flex h-16 min-w-0 items-start border-b border-sidebar-border pb-3 pr-11">
           <div className="flex h-12 min-w-0 max-w-[11rem] items-center justify-start overflow-hidden text-primary">
               <img
                 className={cn(
@@ -106,7 +118,7 @@ export function WorkspaceRail({
           </div>
         </div>
       ) : (
-        <div className="grid h-[5.75rem] min-w-0 grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-2.5 border-b border-sidebar-border pb-5 pr-11">
+        <div className="grid h-16 min-w-0 grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-2.5 border-b border-sidebar-border pb-3 pr-11">
           <div className="grid size-9 place-items-center overflow-hidden rounded-md border border-sidebar-border bg-sidebar-accent/50 text-primary">
             <Shield size={18} aria-hidden="true" />
           </div>
@@ -152,7 +164,7 @@ export function WorkspaceRail({
         </label>
       </div>
 
-      <nav className="chat-scrollbar -mx-1 grid min-h-0 content-start gap-1 overflow-y-auto overflow-x-hidden px-1 pb-3">
+      <nav className="chat-scrollbar -mx-1 grid min-h-0 auto-rows-max content-start gap-1 overflow-y-auto overflow-x-hidden px-1 pb-3">
         {conversations.length === 0 ? (
           <div className="rounded-md border border-dashed border-sidebar-border px-3 py-4 text-sm text-muted-foreground">
             {t("noConversations")}

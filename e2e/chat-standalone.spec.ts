@@ -29,6 +29,7 @@ test("standalone login renders the authenticated chat workspace", async ({ page 
   await expect(page.getByRole("button", { name: "E2E User account" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Select agent" })).toContainText("Application Assistant");
   await expect(page.getByRole("button", { name: "Close sidebar" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Switch to (dark|light) theme/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Language" })).toHaveCount(0);
   await expect(page.locator("header").getByText("Ready", { exact: true })).toHaveCount(0);
@@ -41,14 +42,21 @@ test("standalone login renders the authenticated chat workspace", async ({ page 
 });
 
 test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
-  await signInViaUi(page, normalUser);
+  await signInViaApi(page, normalUser);
   await page.goto("/");
 
+  const conversationRail = page.getByRole("complementary", { name: "Conversations" });
   await page.getByRole("button", { name: "Close sidebar" }).click();
-  await expect(page.getByText("E2E Customer")).toBeHidden();
+  await expect(conversationRail).toBeHidden();
   await expect(page.getByRole("button", { name: "Open sidebar" })).toBeVisible();
   await page.getByRole("button", { name: "Open sidebar" }).click();
-  await expect(page.getByText("E2E Customer")).toBeVisible();
+  await expect(conversationRail).toBeVisible();
+  await expect(page.getByRole("searchbox", { name: "Search conversations" })).toBeVisible();
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(conversationRail).toBeHidden();
+  await expect(page.getByRole("button", { name: "Open sidebar" })).toBeVisible();
+  await page.getByRole("button", { name: "Open sidebar" }).click();
+  await expect(conversationRail).toBeVisible();
 
   await page.getByRole("button", { name: "Select agent" }).click();
   await expect(page.getByRole("option", { name: /Research Assistant/ })).toBeVisible();
@@ -65,6 +73,36 @@ test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
       appShell.evaluate((element) => getComputedStyle(element).getPropertyValue("--background"))
     )
     .not.toBe(backgroundBefore);
+});
+
+test("conversation rail keeps dense histories readable and scrollable", async ({ page }) => {
+  await signInViaApi(page, normalUser);
+  const titlePrefix = `Dense rail ${Date.now()}`;
+  const responses = await Promise.all(
+    Array.from({ length: 18 }, (_, index) =>
+      page.request.post(`${apiBaseUrl}/api/conversations`, {
+        data: { title: `${titlePrefix} item-${String(index + 1).padStart(2, "0")}` }
+      })
+    )
+  );
+  expect(responses.every((response) => response.ok())).toBe(true);
+
+  await page.goto("/");
+  const targetConversation = page
+    .getByTestId("conversation-row")
+    .filter({ hasText: `${titlePrefix} item-01` });
+  await expect(targetConversation).toHaveCount(1);
+  await expect
+    .poll(() => targetConversation.evaluate((element) => element.getBoundingClientRect().height))
+    .toBeGreaterThanOrEqual(60);
+
+  const conversationNavigation = page.getByRole("navigation");
+  await expect(conversationNavigation).toBeVisible();
+  const overflow = await conversationNavigation.evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight
+  }));
+  expect(overflow.scrollHeight).toBeGreaterThan(overflow.clientHeight);
 });
 
 test("composer grows for multiline input", async ({ page }) => {
@@ -169,7 +207,7 @@ test("new conversation action returns from a persisted conversation to a clean d
   const conversationId = currentConversationId(page);
   const createdConversation = page.getByTestId("conversation-row").filter({ hasText: messageText });
   await expect(createdConversation).toHaveCount(1);
-  await expect(createdConversation).toHaveClass(/border-primary/);
+  await expect(createdConversation).toHaveAttribute("data-selected", "true");
 
   await page.getByRole("button", { name: "New", exact: true }).click();
 
@@ -195,7 +233,7 @@ test("standalone conversation routes are addressable and follow rail navigation"
   const input = page.getByPlaceholder("Message");
   const targetConversation = page.getByTestId("conversation-row").filter({ hasText: title });
   await expect(input).toBeVisible();
-  await expect(targetConversation).toHaveClass(/border-primary/);
+  await expect(targetConversation).toHaveAttribute("data-selected", "true");
   await expect(page).toHaveURL(new RegExp(`${escapeRegExp(conversationPath(conversation.id))}$`));
 
   await page.getByRole("button", { name: "New", exact: true }).click();
@@ -236,7 +274,7 @@ test("first message from the root route moves to the persisted conversation rout
   await expect(page).toHaveURL(new RegExp(`${escapeRegExp(conversationPath(started.conversation.id))}$`, "u"));
   expect(legacyChatRequests).toBe(0);
   const createdConversation = page.getByTestId("conversation-row").filter({ hasText: messageText });
-  await expect(createdConversation).toHaveClass(/border-primary/);
+  await expect(createdConversation).toHaveAttribute("data-selected", "true");
 
   await page.getByRole("button", { name: "New", exact: true }).click();
   await expect(page).toHaveURL(/\/$/u);
@@ -511,7 +549,7 @@ test("direct conversation links resume a running stream from stored state", { ta
     has: page.getByTestId("conversation-running-indicator")
   });
   await expect(runningConversation).toHaveCount(1);
-  await expect(runningConversation).toHaveClass(/border-primary/);
+  await expect(runningConversation).toHaveAttribute("data-selected", "true");
   await expect.poll(() => eventRequests.length, { timeout: 10_000 }).toBeGreaterThan(0);
   await expect(chatRegion.locator('[data-role="assistant"]').filter({ hasText: uniqueToken }).first()).toBeVisible({
     timeout: 15_000
@@ -553,11 +591,11 @@ test("new conversation run completion does not steal the selected conversation",
 
   const targetConversation = page.getByTestId("conversation-row").filter({ hasText: targetTitle });
   await targetConversation.getByRole("button").first().click();
-  await expect(targetConversation).toHaveClass(/border-primary/);
+  await expect(targetConversation).toHaveAttribute("data-selected", "true");
   await expect(chatRegion.getByText(messageToken, { exact: false })).toHaveCount(0);
   await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
   await page.waitForTimeout(1_000);
-  await expect(targetConversation).toHaveClass(/border-primary/);
+  await expect(targetConversation).toHaveAttribute("data-selected", "true");
 });
 
 test("completed background turns are marked unread until viewed", { tag: "@chat-state" }, async ({ page }) => {

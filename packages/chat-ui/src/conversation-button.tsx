@@ -30,8 +30,9 @@ export function ConversationButton({
     <>
       <div
         data-testid="conversation-row"
+        data-selected={selected ? "true" : undefined}
         className={cn(
-          "group/conversation relative grid min-w-0 grid-cols-[minmax(0,1fr)_2.25rem] items-center overflow-hidden rounded-md border border-transparent transition-colors",
+          "group/conversation relative grid min-h-[3.75rem] min-w-0 grid-cols-[minmax(0,1fr)_2.25rem] items-center overflow-hidden rounded-md border border-transparent transition-colors",
           "hover:bg-sidebar-accent/55",
           selected && "bg-sidebar-accent/80"
         )}
