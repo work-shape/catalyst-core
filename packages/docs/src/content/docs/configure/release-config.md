@@ -76,6 +76,30 @@ usage:
 
 Usage pricing uses exact `providerId` and `model` rows. Keep historical model ids in this list when old usage should remain priced after a model rename or provider migration.
 
+## Sharing Config Across Environments With `extends`
+
+A config file can start from another config file and override only what differs:
+
+```yaml
+# app.staging.yaml
+extends: ./app.base.yaml
+clientInstance:
+  id: example-staging
+  environment: staging
+auth:
+  standalone:
+    baseUrl: https://staging.example.test/api/auth
+```
+
+Merge rules:
+
+- Objects merge recursively; the extending file wins on conflicts.
+- Arrays and scalars replace the base value wholesale — overriding one list entry means restating the whole list.
+- `extends` chains are allowed; cycles fail validation with a clear error.
+- Relative paths in the merged result (such as `uiFile`) resolve against the entry file's directory, not the extended file's.
+
+Keep everything shared in one base file and put only genuine per-environment differences in the environment files. Reading an environment file should answer "what makes this environment different?" at a glance.
+
 ## Tool Configuration
 
 Each tool entry controls whether a stable tool name is available in the client instance. The optional `config` object is passed to the matching configured tool factory and validated by that factory's schema during startup.

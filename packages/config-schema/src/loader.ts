@@ -13,7 +13,7 @@ import { parseClientInstanceConfig } from "./validation";
 export async function loadClientInstanceConfigFromFile(
   path: string
 ): Promise<ClientInstanceConfig> {
-  const raw = await readStructuredFile(path);
+  const raw = await readConfigFileWithExtends(resolve(path), new Set());
   const hasInlineUi = hasOwnProperty(raw, "ui");
   const parsed = clientInstanceConfigFileSchema.safeParse(raw);
   if (!parsed.success) {
@@ -55,6 +55,80 @@ async function readStructuredFile(path: string): Promise<unknown> {
   const contents = await readFile(path, "utf8");
   const extension = extname(path).toLowerCase();
   return extension === ".json" ? JSON.parse(contents) : yaml.load(contents);
+}
+
+/**
+ * Reads a config file, resolving an optional top-level `extends: <relative path>`
+ * against another config file. Objects merge recursively with the extending file
+ * winning; arrays and scalars replace the base value wholesale. Relative paths in
+ * the merged result (such as `uiFile`) always resolve against the entry file's
+ * directory, not the extended file's.
+ */
+async function readConfigFileWithExtends(path: string, visited: Set<string>): Promise<unknown> {
+  if (visited.has(path)) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Config file extends cycle detected: ${[...visited, path].join(" -> ")}`
+    );
+  }
+  visited.add(path);
+
+  const raw = await readStructuredFile(path);
+  if (!isPlainObject(raw) || !("extends" in raw)) {
+    return raw;
+  }
+  const { extends: extendsValue, ...overrides } = raw;
+  if (typeof extendsValue !== "string" || extendsValue.length === 0) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Config file '${path}' has an invalid extends value; expected a relative file path`
+    );
+  }
+  const base = await readConfigFileWithExtends(resolve(dirname(path), extendsValue), visited);
+  if (!isPlainObject(base)) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Config file '${extendsValue}' extended from '${path}' must contain an object`
+    );
+  }
+  // ui and uiFile are mutually exclusive: overriding either one replaces the
+  // base's choice of UI source instead of colliding with it.
+  const effectiveBase = { ...base };
+  if ("ui" in overrides) {
+    delete effectiveBase.uiFile;
+  }
+  if ("uiFile" in overrides) {
+    delete effectiveBase.ui;
+  }
+  return mergeConfigObjects(effectiveBase, overrides);
+}
+
+function mergeConfigObjects(
+  base: Record<string, unknown>,
+  overrides: Record<string, unknown>
+): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...base };
+  for (const [key, override] of Object.entries(overrides)) {
+    if (key === "__proto__") {
+      continue;
+    }
+    const baseValue = result[key];
+    result[key] =
+      isPlainObject(baseValue) && isPlainObject(override)
+        ? mergeConfigObjects(baseValue, override)
+        : override;
+  }
+  return result;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  // Exclude arrays and YAML-derived non-record objects such as Date: those
+  // replace the base value wholesale instead of merging into it.
+  const prototype: unknown = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
 export function parseSkillMarkdown(contents: string, skillFile: string, skillPath: string): unknown {
