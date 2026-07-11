@@ -1,6 +1,11 @@
+import { findModelToolMaterializationIssues } from "@vivd-catalyst/agent-runtime";
 import { AppError } from "@vivd-catalyst/core";
 import { WEB_SEARCH_MODEL_TOOL_NAME } from "@vivd-catalyst/model-provider";
-import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import {
+  getModelSelectionForAgent,
+  type AgentConfig,
+  type ClientInstanceConfig
+} from "@vivd-catalyst/config-schema";
 import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
 
 export function assertClientAssemblyValid(input: {
@@ -18,6 +23,27 @@ export function assertClientAssemblyValid(input: {
       issues: issues.map((message) => ({ message }))
     });
   }
+}
+
+export function findConfigAssetAgentValidationIssues(
+  config: ClientInstanceConfig,
+  agents: AgentConfig[]
+): string[] {
+  return agents.flatMap((agent) => {
+    if (!agent.toolNames.includes(WEB_SEARCH_MODEL_TOOL_NAME)) {
+      return [];
+    }
+    try {
+      return findModelToolMaterializationIssues({
+        agent,
+        modelProvider: getModelSelectionForAgent(config, agent).provider,
+        webAccess: config.webAccess
+      });
+    } catch {
+      // Unknown model references are rejected by config-asset validation first.
+      return [];
+    }
+  });
 }
 
 function findDuplicateToolImplementations(tools: AnyToolDefinition[]): string[] {

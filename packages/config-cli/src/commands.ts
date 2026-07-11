@@ -14,6 +14,7 @@ import {
   STATE_FILENAME,
   WorkingCopyValidationError,
   agentAssetPath,
+  matchesManifestPath,
   readManifest,
   readStateFile,
   readWorkingCopy,
@@ -68,17 +69,25 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
   const agents = exported.agents.map((agent) => agentConfigSchema.parse(agent)).sort(byName);
   const skills = exported.skills.map((skill) => skillConfigSchema.parse(skill)).sort(byName);
   const provenance = { instance: instance.key, version: exported.version };
-  const desiredPaths = new Set<string>();
+  const agentTargets = agents.map((agent) => ({
+    agent,
+    path: agentAssetPath(workingDir, agent.name)
+  }));
+  const skillTargets = skills.map((skill) => ({
+    skill,
+    path: skillAssetPath(workingDir, skill.name)
+  }));
+  assertPullTargetsMatchManifest(workingDir, manifest, agentTargets, skillTargets);
+  const desiredPaths = new Set([
+    ...agentTargets.map((target) => target.path),
+    ...skillTargets.map((target) => target.path)
+  ]);
 
-  for (const agent of agents) {
-    const path = agentAssetPath(workingDir, agent.name);
-    desiredPaths.add(path);
+  for (const { agent, path } of agentTargets) {
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, serializeAgentYaml(agent, provenance), "utf8");
   }
-  for (const skill of skills) {
-    const path = skillAssetPath(workingDir, skill.name);
-    desiredPaths.add(path);
+  for (const { skill, path } of skillTargets) {
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, serializeSkillMarkdown(skill, provenance), "utf8");
   }
@@ -93,6 +102,27 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
     `Pulled ${formatCount(agents.length, "agent")}, ${formatCount(skills.length, "skill")}, version ${exported.version}.`
   );
   return 0;
+}
+
+function assertPullTargetsMatchManifest(
+  workingDir: string,
+  manifest: Awaited<ReturnType<typeof readManifest>>,
+  agentTargets: Array<{ path: string }>,
+  skillTargets: Array<{ path: string }>
+): void {
+  const unmatched = [
+    ...agentTargets.filter(
+      (target) => !matchesManifestPath(workingDir, target.path, manifest.agents)
+    ),
+    ...skillTargets.filter(
+      (target) => !matchesManifestPath(workingDir, target.path, manifest.skills)
+    )
+  ];
+  if (unmatched.length > 0) {
+    throw new Error(
+      "Pulled assets use the canonical layout (agents/*.agent.yaml and skills/*/SKILL.md), but one or more target paths are not matched by catalyst.yaml. Use the canonical layout or adjust the manifest globs before pulling."
+    );
+  }
 }
 
 export async function pushConfig(options: ConfigCommandOptions): Promise<number> {

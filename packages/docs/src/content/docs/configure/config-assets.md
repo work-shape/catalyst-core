@@ -10,6 +10,8 @@ This gives config assets a different lifecycle than release config:
 - **Release config** (`app.yaml`) ships with a deployment and owns infrastructure: auth, model providers and bindings, usage budgets, tool enablement, workspaces.
 - **Config assets** change at runtime — through the admin UI's Config tab or a `catalyst config push` — and apply to new conversations immediately, without a deployment. A running conversation keeps the agent snapshot it started with.
 
+Skill content is read on demand by the `read_skill` tool, so edits are visible to reads after the edit even within an already-running conversation; the agent's system prompt, model selection, and tool list remain on the run's snapshot.
+
 Every mutation is validated against the full resulting asset set before it is stored (unknown tool or skill references, missing default agent, duplicate names, and skill use without the `read_skill` tool are all rejected), appended to a per-asset revision history, and audited. A fresh instance boots with zero assets; the chat UI shows a "not configured" notice until the first push.
 
 ## The CLI working copy

@@ -6,6 +6,7 @@ import {
   AppError,
   StoreBackedAuditRecorder,
   asClientInstanceId,
+  type AgentConfig,
   type AgentRuntime,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
@@ -13,6 +14,7 @@ import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { ModelProvider } from "@vivd-catalyst/model-provider";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+import { findConfigAssetAgentValidationIssues } from "../packages/client-assembly/src/assembly-validation";
 
 const servers: FastifyInstance[] = [];
 
@@ -21,6 +23,15 @@ afterEach(async () => {
 });
 
 describe("config asset admin routes", () => {
+  it("issues session tokens through the current and legacy endpoints", async () => {
+    const fixture = await createFixture();
+
+    await expect(mintToken(fixture.server)).resolves.toEqual(expect.any(String));
+    await expect(
+      mintToken(fixture.server, { endpoint: "/auth/session-token" })
+    ).resolves.toEqual(expect.any(String));
+  });
+
   it("mints a service token and supports CRUD, revisions, revert, and export/import", async () => {
     const fixture = await createFixture();
     const token = await mintToken(fixture.server);
@@ -356,6 +367,77 @@ describe("config asset admin routes", () => {
     expect(response.json()).toMatchObject({ error: { code: "FORBIDDEN" } });
   });
 
+  it("requires pricing for every non-deterministic agent model when spend budgets are enabled", async () => {
+    const fixture = await createFixture({ pricingCoverage: true });
+    const token = await mintToken(fixture.server);
+    const unpriced = await request(fixture.server, token, {
+      method: "PUT",
+      url: "/api/admin/config/assets/agent/assistant",
+      payload: {
+        config: agentConfig("Unpriced", { modelProviderId: "provider-b" })
+      }
+    });
+
+    expect(unpriced.statusCode).toBe(422);
+    expect(unpriced.json()).toMatchObject({
+      error: {
+        code: "VALIDATION_FAILED",
+        message: expect.stringContaining("pricing")
+      }
+    });
+
+    const priced = await request(fixture.server, token, {
+      method: "PUT",
+      url: "/api/admin/config/assets/agent/assistant",
+      payload: {
+        config: agentConfig("Priced", { modelProviderId: "provider-a" })
+      }
+    });
+    expect(priced.statusCode).toBe(200);
+  });
+
+  it("rejects web_search when materialization is disabled and accepts a capable provider", async () => {
+    const disabledFixture = await createFixture({ webSearch: "disabled" });
+    const disabledToken = await mintToken(disabledFixture.server);
+    const disabled = await request(disabledFixture.server, disabledToken, {
+      method: "PUT",
+      url: "/api/admin/config/assets/agent/assistant",
+      payload: {
+        config: agentConfig("Search", {
+          modelProviderId: "openai",
+          toolNames: ["web_search"]
+        })
+      }
+    });
+    expect(disabled.statusCode).toBe(422);
+    expect(disabled.json()).toMatchObject({
+      error: {
+        code: "VALIDATION_FAILED",
+        details: {
+          issues: [
+            {
+              message: "Agent 'assistant' references web_search but web access is disabled"
+            }
+          ]
+        }
+      }
+    });
+
+    const enabledFixture = await createFixture({ webSearch: "enabled" });
+    const enabledToken = await mintToken(enabledFixture.server);
+    const enabled = await request(enabledFixture.server, enabledToken, {
+      method: "PUT",
+      url: "/api/admin/config/assets/agent/assistant",
+      payload: {
+        config: agentConfig("Search", {
+          modelProviderId: "openai",
+          toolNames: ["web_search"]
+        })
+      }
+    });
+    expect(enabled.statusCode).toBe(200);
+  });
+
   it.each([
     ["unknown tool", agentConfig("Invalid", { toolNames: ["missing.tool"] })],
     ["unknown skill", agentConfig("Invalid", { skillNames: ["missing-skill"] })],
@@ -408,9 +490,38 @@ describe("config asset admin routes", () => {
   });
 });
 
-async function createFixture(input: { agentConfiguration?: Record<string, unknown> } = {}) {
+async function createFixture(
+  input: {
+    agentConfiguration?: Record<string, unknown>;
+    pricingCoverage?: boolean;
+    webSearch?: "disabled" | "enabled";
+  } = {}
+) {
   const clientInstanceId = asClientInstanceId("config-routes-test");
   const store = new InMemoryPlatformStore();
+  const modelProviders = input.pricingCoverage
+    ? [
+        {
+          id: "provider-a",
+          type: "openai-compatible" as const,
+          model: "model-a"
+        },
+        {
+          id: "provider-b",
+          type: "openai-compatible" as const,
+          model: "model-b"
+        }
+      ]
+    : input.webSearch
+      ? [
+          {
+            id: "openai",
+            type: "openai-compatible" as const,
+            api: "responses" as const,
+            model: "gpt-test"
+          }
+        ]
+      : [{ id: "local", type: "deterministic" as const, model: "local" }];
   const config = parseClientInstanceConfig({
     version: 1,
     clientInstance: {
@@ -439,10 +550,36 @@ async function createFixture(input: { agentConfiguration?: Record<string, unknow
         ...input.agentConfiguration
       }
     },
-    modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
+    modelProviders,
+    ...(input.pricingCoverage
+      ? {
+          usage: {
+            budget: { monthlySpendLimit: 100 },
+            pricing: {
+              models: [
+                {
+                  providerId: "provider-a",
+                  model: "model-a",
+                  inputPricePerMillionTokens: 1,
+                  outputPricePerMillionTokens: 2
+                }
+              ]
+            }
+          }
+        }
+      : {}),
+    ...(input.webSearch
+      ? {
+          webAccess: {
+            enabled: input.webSearch === "enabled",
+            search: { enabled: input.webSearch === "enabled" }
+          }
+        }
+      : {}),
     tools: [
       { name: "known.tool", enabled: true },
-      { name: "read_skill", enabled: true }
+      { name: "read_skill", enabled: true },
+      ...(input.webSearch ? [{ name: "web_search", enabled: true }] : [])
     ]
   });
   const authOptions = {
@@ -473,12 +610,22 @@ async function createFixture(input: { agentConfiguration?: Record<string, unknow
     configAssets: {
       store,
       validationRefs: {
-        modelProviderIds: ["local"],
+        modelProviderIds: modelProviders.map((provider) => provider.id),
         modelBindingIds: [],
         modelBindings: [],
         reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
-        enabledToolNames: ["known.tool", "read_skill"]
-      }
+        enabledToolNames: [
+          "known.tool",
+          "read_skill",
+          ...(input.webSearch ? ["web_search"] : [])
+        ]
+      },
+      ...(input.webSearch
+        ? {
+            validateAgents: (agents: AgentConfig[]) =>
+              findConfigAssetAgentValidationIssues(config, agents)
+          }
+        : {})
     },
     agentRuntime: createUnusedAgentRuntime(),
     modelProvider: createUnusedModelProvider(),
@@ -494,6 +641,7 @@ async function createFixture(input: { agentConfiguration?: Record<string, unknow
 async function mintToken(
   server: FastifyInstance,
   overrides: {
+    endpoint?: string;
     scopes?: string[];
     permissions?: string[];
     delegatedActor?:
@@ -531,7 +679,7 @@ async function mintToken(
   };
   const response = await server.inject({
     method: "POST",
-    url: "/api/superadmin/session-tokens",
+    url: overrides.endpoint ?? "/api/superadmin/session-tokens",
     headers: { "x-server-credential": "server-credential" },
     payload
   });

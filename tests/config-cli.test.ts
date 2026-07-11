@@ -259,6 +259,62 @@ skills:
     expect(stderr.join("")).toContain("catalyst config diff");
     expect(stderr.join("")).toContain("--force");
   });
+
+  it("rejects noncanonical pull globs before writing or deleting assets", async () => {
+    const fixture = await createFixture();
+    await fixture.store.applyConfigAssetMutations({
+      clientInstanceId: fixture.clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: "assistant",
+          config: agentConfig("Remote instructions")
+        },
+        { type: "setDefaultAgent", agentName: "assistant" }
+      ]
+    });
+    const directory = await createTemporaryDirectory();
+    await writeFile(
+      resolve(directory, "catalyst.yaml"),
+      `instances:
+  local:
+    url: http://catalyst.test
+defaultInstance: local
+defaultAgentName: unchanged
+agents:
+  - config/agents/*.yaml
+skills:
+  - skills/*/SKILL.md
+`,
+      "utf8"
+    );
+    const existingPath = resolve(directory, "config", "agents", "existing.yaml");
+    await mkdir(resolve(directory, "config", "agents"), { recursive: true });
+    await writeFile(existingPath, "existing contents\n", "utf8");
+    const stderr: string[] = [];
+
+    expect(
+      await runConfigCommand("pull", {
+        cwd: directory,
+        env: { CATALYST_SERVER_CREDENTIAL: "server-credential" },
+        fetchImpl: createFastifyFetch(fixture.server),
+        stderr: (text: string) => stderr.push(text)
+      })
+    ).toBe(1);
+    expect(stderr.join("")).toContain("canonical layout");
+    expect(stderr.join("")).toContain("adjust the manifest globs");
+    await expect(readFile(existingPath, "utf8")).resolves.toBe("existing contents\n");
+    await expect(
+      readFile(resolve(directory, "agents", "assistant.agent.yaml"), "utf8")
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(resolve(directory, STATE_FILENAME), "utf8")).rejects.toMatchObject({
+      code: "ENOENT"
+    });
+    expect(await readFile(resolve(directory, "catalyst.yaml"), "utf8")).toContain(
+      "defaultAgentName: unchanged"
+    );
+  });
 });
 
 async function createTemporaryDirectory(): Promise<string> {

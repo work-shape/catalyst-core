@@ -19,7 +19,7 @@ Agents and skills are loaded live from the database. The YAML and Markdown files
 pnpm config:push
 ```
 
-The API and CLI must use the same `CHAT_SERVER_CREDENTIAL`. The development Compose stack provides a dev-safe default; set the variable explicitly when running the server outside Compose.
+The script builds the config CLI before pushing. The API's `CHAT_SERVER_CREDENTIAL` and the CLI's `CATALYST_SERVER_CREDENTIAL` must have the same value. When the CLI credential is unset, this script uses the development Docker Compose default (`replace-with-a-server-to-server-secret`); that default applies only to the local Compose stack. Set `CATALYST_SERVER_CREDENTIAL` explicitly for any other server.
 
 For the production-style Compose stack, copy `.env.prod.example` to `.env.prod`, replace every placeholder secret, then run:
 

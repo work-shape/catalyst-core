@@ -2893,11 +2893,48 @@ describe("client instance app vertical slice", () => {
         displayLabel: "Admin Created User",
         email: "admin-created@example.test",
         roles: ["user", "admin"],
-        permissionRefs: ["demo-tools"]
+        permissionRefs: ["demo-tools"],
+        permissions: ["config_assets.write"]
       }
     });
     expect(created.statusCode).toBe(200);
+    expect(created.json()).toMatchObject({ permissions: ["config_assets.write"] });
     const createdUser = created.json() as { id: string };
+
+    const releasePermissionCreate = await app.server.inject({
+      method: "POST",
+      url: "/api/superadmin/users",
+      headers: {
+        "x-dev-user-id": "admin-1"
+      },
+      payload: {
+        displayLabel: "Release User",
+        roles: ["user"],
+        permissions: ["config_assets.release"]
+      }
+    });
+    expect(releasePermissionCreate.statusCode).toBe(422);
+    expect(releasePermissionCreate.json()).toMatchObject({
+      error: {
+        code: "VALIDATION_FAILED",
+        message: "Release permission can only be carried by service tokens"
+      }
+    });
+
+    const releasePermissionUpdate = await app.server.inject({
+      method: "PATCH",
+      url: `/api/superadmin/users/${createdUser.id}`,
+      headers: {
+        "x-dev-user-id": "superadmin-1"
+      },
+      payload: {
+        permissions: ["config_assets.release"]
+      }
+    });
+    expect(releasePermissionUpdate.statusCode).toBe(422);
+    expect(releasePermissionUpdate.json()).toMatchObject({
+      error: { code: "VALIDATION_FAILED" }
+    });
 
     const escalatedCreate = await app.server.inject({
       method: "POST",

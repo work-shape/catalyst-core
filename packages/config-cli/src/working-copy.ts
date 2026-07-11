@@ -211,6 +211,13 @@ export async function matchManifestFiles(root: string, patterns: string[]): Prom
   return [...matches].sort((left, right) => left.localeCompare(right));
 }
 
+export function matchesManifestPath(root: string, path: string, patterns: string[]): boolean {
+  const relativePath = toRelativePath(root, path);
+  return patterns
+    .map(validateGlob)
+    .some((pattern) => globPatternToRegExp(pattern).test(relativePath));
+}
+
 export function agentAssetPath(workingDir: string, name: string): string {
   assertSafeAssetName(name);
   return resolve(workingDir, "agents", `${name}.agent.yaml`);

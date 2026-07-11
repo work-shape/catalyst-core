@@ -31,7 +31,10 @@ import {
 } from "@vivd-catalyst/tool-execution";
 import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
-import { assertClientAssemblyValid } from "./assembly-validation";
+import {
+  assertClientAssemblyValid,
+  findConfigAssetAgentValidationIssues
+} from "./assembly-validation";
 import { createConfigAssetSource } from "./config-asset-source";
 import { createClientInstanceAuth } from "./auth";
 import type {
@@ -272,7 +275,8 @@ export async function createClientInstanceApp(
           })),
         reasoningEfforts: [...REASONING_EFFORTS],
         enabledToolNames: [...getEnabledToolNames(config)]
-      }
+      },
+      validateAgents: (agents) => findConfigAssetAgentValidationIssues(config, agents)
     },
     agentRuntime,
     attachments,

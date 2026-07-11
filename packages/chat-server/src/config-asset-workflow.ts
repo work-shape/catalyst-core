@@ -16,7 +16,10 @@ import {
   type RuntimeCallContext,
   type SkillConfig
 } from "@vivd-catalyst/core";
-import { validateConfigAssetBundle } from "@vivd-catalyst/config-schema";
+import {
+  assertSpendBudgetPricingCoverage,
+  validateConfigAssetBundle
+} from "@vivd-catalyst/config-schema";
 import { authorizeGovernanceAction } from "./governance-actions";
 import type { ChatServerOptions } from "./types";
 
@@ -447,10 +450,18 @@ export class ConfigAssetWorkflow {
     agents: AgentConfig[];
     skills: SkillConfig[];
   } {
-    return validateConfigAssetBundle({
+    const validated = validateConfigAssetBundle({
       ...input,
       refs: this.options.configAssets.validationRefs
     });
+    assertSpendBudgetPricingCoverage(this.options.config, validated.agents);
+    const issues = this.options.configAssets.validateAgents?.(validated.agents) ?? [];
+    if (issues.length > 0) {
+      throw new AppError("VALIDATION_FAILED", "Config asset bundle is invalid", {
+        issues: issues.map((message) => ({ message }))
+      });
+    }
+    return validated;
   }
 
   private async loadCurrentBundle(): Promise<ConfigAssetBundleInput> {

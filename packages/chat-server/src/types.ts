@@ -1,5 +1,6 @@
 import type { HmacSessionTokenIssuer, StandaloneAuthRuntime } from "@vivd-catalyst/auth";
 import type {
+  AgentConfig,
   AgentRuntime,
   AgentRunStore,
   AuditEventStore,
@@ -47,6 +48,7 @@ export interface ChatServerOptions {
       reasoningEfforts: string[];
       enabledToolNames: string[];
     };
+    validateAgents?(agents: AgentConfig[]): string[];
   };
   agentRuntime: AgentRuntime;
   attachments?: ChatAttachmentService;
