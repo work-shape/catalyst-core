@@ -482,6 +482,31 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/config-cli:
+    dependencies:
+      '@vivd-catalyst/api-contract':
+        specifier: workspace:*
+        version: link:../api-contract
+      '@vivd-catalyst/config-schema':
+        specifier: workspace:*
+        version: link:../config-schema
+      js-yaml:
+        specifier: ^4.2.0
+        version: 4.2.0
+    devDependencies:
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
+      '@types/node':
+        specifier: ^24.13.1
+        version: 24.13.1
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.4)(typescript@6.0.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/config-schema:
     dependencies:
       '@vivd-catalyst/core':

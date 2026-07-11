@@ -141,6 +141,7 @@ export class UserAccountWorkflow {
         requestedBy: "self",
         roles: deleted.roles,
         permissionRefs: deleted.permissionRefs,
+        permissions: deleted.permissions,
         ...deletionTotals
       }
     });

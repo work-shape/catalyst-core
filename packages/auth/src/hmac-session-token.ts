@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import {
   AppError,
   CHAT_SESSION_AUTH_SCOPES,
+  FIRST_PARTY_AUTH_SCOPES,
   isChatSessionAuthScope,
   type AuthenticatedUser,
   type AuthScope,
@@ -19,6 +20,7 @@ export interface SessionTokenInput {
   emailVerified?: boolean;
   roles?: string[];
   permissionRefs?: string[];
+  permissions?: string[];
   correlationId?: string;
   scopes?: AuthScope[];
   delegatedActor?: DelegatedActor;
@@ -31,6 +33,7 @@ interface SessionTokenClaims {
   emailVerified?: boolean;
   roles: string[];
   permissionRefs: string[];
+  permissions?: string[];
   clientInstanceId: string;
   authSource: string;
   iss: string;
@@ -69,13 +72,14 @@ export class HmacSessionTokenIssuer {
       emailVerified: input.emailVerified,
       roles: input.roles ?? ["user"],
       permissionRefs: input.permissionRefs ?? [],
+      permissions: input.permissions ?? [],
       clientInstanceId: String(this.options.clientInstanceId),
       authSource: this.options.authSource ?? "session-token",
       iss: this.options.issuer,
       iat: issuedAt,
       exp: expiresAt,
       correlationId: input.correlationId,
-      scopes: normalizeSessionTokenScopes(input.scopes),
+      scopes: normalizeSessionTokenScopes(input.scopes, input.delegatedActor),
       delegatedActor: input.delegatedActor
     };
 
@@ -122,6 +126,7 @@ export class HmacSessionTokenAuthAdapter implements AuthAdapter {
       emailVerified: claims.emailVerified,
       roles: claims.roles,
       permissionRefs: claims.permissionRefs,
+      permissions: claims.permissions ?? [],
       clientInstanceId,
       authSource: claims.authSource,
       correlationId: claims.correlationId ?? request.correlationId,
@@ -143,13 +148,31 @@ export class HmacSessionTokenAuthAdapter implements AuthAdapter {
             authSource: claims.authSource
           },
       delegatedActor,
-      scopes: normalizeSessionTokenScopes(claims.scopes)
+      scopes: normalizeSessionTokenScopes(claims.scopes, delegatedActor)
     };
   }
 }
 
-function normalizeSessionTokenScopes(scopes: readonly string[] | undefined): AuthScope[] {
+function normalizeSessionTokenScopes(
+  scopes: readonly string[] | undefined,
+  delegatedActor?: DelegatedActor
+): AuthScope[] {
   const normalizedScopes = scopes ?? CHAT_SESSION_AUTH_SCOPES;
+  if (delegatedActor?.kind === "service_principal") {
+    const unsupported = normalizedScopes.filter(
+      (scope) =>
+        scope === "*" ||
+        !FIRST_PARTY_AUTH_SCOPES.includes(scope as (typeof FIRST_PARTY_AUTH_SCOPES)[number])
+    );
+    if (unsupported.length > 0) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "Service session token scopes must be limited to explicit first-party API operations",
+        { unsupportedScopes: unsupported }
+      );
+    }
+    return [...new Set(normalizedScopes)];
+  }
   const unsupported = normalizedScopes.filter((scope) => !isChatSessionAuthScope(scope));
   if (unsupported.length > 0) {
     throw new AppError("VALIDATION_FAILED", "Chat session token scopes must be limited to chat API operations", {

@@ -34,6 +34,7 @@ export function SessionCheckPanel({
 
 export function WorkspaceChrome({
   agents,
+  contextLabel,
   displayPanelOpen,
   environment,
   sidebarOpen,
@@ -44,6 +45,7 @@ export function WorkspaceChrome({
   onToggleTheme
 }: {
   agents: SafeConfig["agents"];
+  contextLabel?: string;
   displayPanelOpen: boolean;
   environment: SafeConfig["clientInstance"]["environment"] | undefined;
   sidebarOpen: boolean;
@@ -67,50 +69,42 @@ export function WorkspaceChrome({
         </div>
       ) : null}
 
-      <div
+      <header
         className={cn(
-          "pointer-events-none absolute left-4 z-50 flex min-w-0 items-center gap-2 transition-[left,top] duration-200",
-          isStaging ? "top-9" : "top-3",
-          sidebarOpen && "max-md:hidden md:left-[19rem]"
+          "pointer-events-auto absolute inset-x-0 z-40 flex h-16 min-w-0 items-center justify-between gap-3 border-b bg-background/95 px-4 backdrop-blur transition-[left,top] duration-200",
+          isStaging ? "top-6" : "top-0",
+          sidebarOpen && "max-md:hidden md:left-80"
         )}
       >
-        {!sidebarOpen ? (
-          <button
-            type="button"
-            className={cn(
-              "pointer-events-auto inline-flex size-10 shrink-0 items-center justify-center rounded-md bg-background/95 text-muted-foreground shadow-sm backdrop-blur transition-colors outline-none",
-              "hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40"
-            )}
-            aria-label={t("openSidebar")}
-            title={t("openSidebar")}
-            aria-pressed="false"
-            onClick={onToggleSidebar}
-          >
-            <PanelLeft size={17} aria-hidden="true" />
-          </button>
-        ) : null}
-        {agents.length > 0 ? (
-          <div className="pointer-events-auto min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          {!sidebarOpen ? (
+            <button
+              type="button"
+              className={cn(
+                "inline-flex size-10 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors outline-none",
+                "hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40"
+              )}
+              aria-label={t("openSidebar")}
+              title={t("openSidebar")}
+              aria-pressed="false"
+              onClick={onToggleSidebar}
+            >
+              <PanelLeft size={17} aria-hidden="true" />
+            </button>
+          ) : null}
+          {agents.length > 0 ? (
             <AgentSelector
               agents={agents}
+              contextLabel={contextLabel}
               selectedAgentName={selectedAgentName}
               onSelectAgent={onSelectAgent}
             />
-          </div>
-        ) : null}
-      </div>
-
-      <div
-        className={cn(
-          "pointer-events-none absolute right-4 z-50 flex items-center gap-2 transition-[top] duration-200",
-          isStaging ? "top-9" : "top-3",
-          displayPanelOpen && "lg:hidden"
-        )}
-      >
-        <div className="pointer-events-auto">
+          ) : null}
+        </div>
+        <div className={cn("flex shrink-0 items-center gap-2", displayPanelOpen && "lg:hidden")}>
           <ThemeToggle mode={themeMode} onToggle={onToggleTheme} />
         </div>
-      </div>
+      </header>
     </>
   );
 }

@@ -75,7 +75,7 @@ function createStandaloneChatRouter(options: StandaloneChatRouterOptions) {
     getParentRoute: () => rootRoute,
     path: "admin",
     beforeLoad: () => {
-      throw redirect({ to: "/admin/usage" });
+      throw redirect({ to: "/admin/users" });
     }
   });
   const adminUsageRoute = createRoute({
@@ -90,6 +90,10 @@ function createStandaloneChatRouter(options: StandaloneChatRouterOptions) {
     getParentRoute: () => rootRoute,
     path: "admin/audit"
   });
+  const adminConfigRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "admin/config"
+  });
   const routeTree = rootRoute.addChildren([
     indexRoute,
     conversationRoute,
@@ -97,7 +101,8 @@ function createStandaloneChatRouter(options: StandaloneChatRouterOptions) {
     adminIndexRoute,
     adminUsageRoute,
     adminUsersRoute,
-    adminAuditRoute
+    adminAuditRoute,
+    adminConfigRoute
   ]);
 
   return createRouter({
@@ -184,7 +189,7 @@ function decodePathSegment(value: string): string {
 }
 
 function isSuperadminRouteTab(value: string): value is SuperadminRouteTab {
-  return value === "usage" || value === "users" || value === "audit";
+  return value === "usage" || value === "users" || value === "audit" || value === "config";
 }
 
 function resolveApiBaseUrl(apiBaseUrl: string | undefined, defaultApiPort: string | number | undefined): string {

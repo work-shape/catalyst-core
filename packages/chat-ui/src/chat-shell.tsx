@@ -11,6 +11,7 @@ import type {
   UsageSummary
 } from "@vivd-catalyst/api-client";
 import { ChatWorkspace } from "./chat-workspace";
+import type { ConfigAssetsPanelInput } from "./config-assets-panel";
 import {
   ToolDisplayWidgetProvider,
   type ToolDisplayWidgetRegistry
@@ -31,6 +32,11 @@ export interface ChatShellAdminPanel {
     loading: boolean;
     usersLoading: boolean;
     canViewUsageGovernance: boolean;
+    canManageUsers: boolean;
+    canViewAudit: boolean;
+    canManageSuperadminAccess: boolean;
+    canEditConfigAssets: boolean;
+    configAssets: ConfigAssetsPanelInput;
     error?: string;
     usersError?: string;
     usersMutating: boolean;

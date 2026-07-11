@@ -44,6 +44,12 @@
                         "type": "string"
                       }
                     },
+                    "permissions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "clientInstanceId": {
                       "type": "string"
                     },
@@ -132,7 +138,10 @@
                           "governance:read",
                           "governance:write",
                           "user_admin:read",
-                          "user_admin:write"
+                          "user_admin:write",
+                          "config_assets:read",
+                          "config_assets:write",
+                          "config_assets:release"
                         ]
                       }
                     }
@@ -143,6 +152,7 @@
                     "displayLabel",
                     "roles",
                     "permissionRefs",
+                    "permissions",
                     "clientInstanceId",
                     "authSource"
                   ],
@@ -211,6 +221,12 @@
                         "type": "string"
                       }
                     },
+                    "permissions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "clientInstanceId": {
                       "type": "string"
                     },
@@ -299,7 +315,10 @@
                           "governance:read",
                           "governance:write",
                           "user_admin:read",
-                          "user_admin:write"
+                          "user_admin:write",
+                          "config_assets:read",
+                          "config_assets:write",
+                          "config_assets:release"
                         ]
                       }
                     }
@@ -310,6 +329,7 @@
                     "displayLabel",
                     "roles",
                     "permissionRefs",
+                    "permissions",
                     "clientInstanceId",
                     "authSource"
                   ],
@@ -722,10 +742,63 @@
                             "accept"
                           ],
                           "additionalProperties": false
+                        },
+                        "configAssets": {
+                          "type": "object",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            },
+                            "editableAgentFields": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "displayName",
+                                  "welcomeMessage",
+                                  "welcomeSubtitle",
+                                  "instructions",
+                                  "modelProviderId",
+                                  "modelBindingId",
+                                  "reasoningEffort",
+                                  "maxSteps",
+                                  "toolNames",
+                                  "skillNames",
+                                  "initialPrompts"
+                                ]
+                              }
+                            },
+                            "allowAgentCreation": {
+                              "default": false,
+                              "type": "boolean"
+                            },
+                            "allowAgentDeletion": {
+                              "default": false,
+                              "type": "boolean"
+                            },
+                            "allowDefaultAgentChange": {
+                              "default": false,
+                              "type": "boolean"
+                            },
+                            "allowSkillEditing": {
+                              "default": false,
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "enabled",
+                            "editableAgentFields",
+                            "allowAgentCreation",
+                            "allowAgentDeletion",
+                            "allowDefaultAgentChange",
+                            "allowSkillEditing"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
-                        "attachments"
+                        "attachments",
+                        "configAssets"
                       ],
                       "additionalProperties": false
                     },
@@ -940,7 +1013,6 @@
                     "retention",
                     "usage",
                     "features",
-                    "defaultAgentName",
                     "agents",
                     "ui"
                   ],
@@ -8668,6 +8740,844 @@
         }
       }
     },
+    "/api/admin/config/assets": {
+      "get": {
+        "operationId": "getConfigAssetsOverview",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "defaultAgentName": {
+                      "type": "string"
+                    },
+                    "assets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "agent",
+                              "skill"
+                            ]
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "revision": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "name",
+                          "revision",
+                          "updatedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "references": {
+                      "type": "object",
+                      "properties": {
+                        "modelProviderIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "modelBindingIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "modelBindings": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "model": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "model"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "reasoningEfforts": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "none",
+                              "low",
+                              "medium",
+                              "high",
+                              "xhigh"
+                            ]
+                          }
+                        },
+                        "enabledToolNames": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "modelProviderIds",
+                        "modelBindingIds",
+                        "modelBindings",
+                        "reasoningEfforts",
+                        "enabledToolNames"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "version",
+                    "assets",
+                    "references"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/config/assets/{kind}/{name}": {
+      "get": {
+        "operationId": "getConfigAsset",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "agent",
+                        "skill"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "config": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "name",
+                    "revision",
+                    "config",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "putConfigAsset",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "config": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  },
+                  "baseVersion": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "config"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "version",
+                    "revision"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/config/assets/{kind}/{name}/delete": {
+      "post": {
+        "operationId": "deleteConfigAsset",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "baseVersion": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "version"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/config/default-agent": {
+      "put": {
+        "operationId": "setDefaultConfigAgent",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "agentName": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "baseVersion": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "version"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/config/assets/{kind}/{name}/revisions": {
+      "get": {
+        "operationId": "listConfigAssetRevisions",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "revision": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "operation": {
+                        "type": "string",
+                        "enum": [
+                          "create",
+                          "update",
+                          "delete",
+                          "revert"
+                        ]
+                      },
+                      "config": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "actor": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "userId": {
+                                "type": "string"
+                              },
+                              "externalUserId": {
+                                "type": "string"
+                              },
+                              "displayLabel": {
+                                "type": "string"
+                              },
+                              "roles": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "principalKind": {
+                                "type": "string",
+                                "enum": [
+                                  "user",
+                                  "service"
+                                ]
+                              },
+                              "principalId": {
+                                "type": "string"
+                              },
+                              "principalDisplayLabel": {
+                                "type": "string"
+                              },
+                              "subjectUserId": {
+                                "type": "string"
+                              },
+                              "delegatedActor": {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "default": "service_principal",
+                                    "type": "string",
+                                    "const": "service_principal"
+                                  },
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "displayLabel": {
+                                    "type": "string"
+                                  },
+                                  "authSource": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "id",
+                                  "authSource"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "userId",
+                              "externalUserId",
+                              "displayLabel",
+                              "roles"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "globalVersion": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "revision",
+                      "operation",
+                      "config",
+                      "actor",
+                      "globalVersion",
+                      "createdAt"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/config/assets/{kind}/{name}/revert": {
+      "post": {
+        "operationId": "revertConfigAsset",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "revision": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "baseVersion": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "revision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "version",
+                    "revision"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/config/export": {
+      "get": {
+        "operationId": "exportConfigAssets",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "defaultAgentName": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {}
+                      }
+                    },
+                    "skills": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {}
+                      }
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "agents",
+                    "skills",
+                    "version"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/config/import": {
+      "post": {
+        "operationId": "replaceConfigAssets",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "defaultAgentName": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "agents": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    }
+                  },
+                  "skills": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    }
+                  },
+                  "baseVersion": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "agents",
+                  "skills",
+                  "baseVersion"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "version"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/config/validate": {
+      "post": {
+        "operationId": "validateConfigAssets",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "defaultAgentName": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "agents": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    }
+                  },
+                  "skills": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    }
+                  }
+                },
+                "required": [
+                  "agents",
+                  "skills"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "valid": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "valid"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/superadmin/users": {
       "get": {
         "operationId": "listAdministeredUsers",
@@ -8701,6 +9611,12 @@
                         }
                       },
                       "permissionRefs": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "permissions": {
                         "type": "array",
                         "items": {
                           "type": "string"
@@ -8777,6 +9693,7 @@
                       "displayLabel",
                       "roles",
                       "permissionRefs",
+                      "permissions",
                       "status",
                       "createdAt",
                       "updatedAt",
@@ -8816,6 +9733,12 @@
                     }
                   },
                   "permissionRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "permissions": {
                     "type": "array",
                     "items": {
                       "type": "string"
@@ -8882,6 +9805,12 @@
                         "type": "string"
                       }
                     },
+                    "permissions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "status": {
                       "type": "string",
                       "enum": [
@@ -8953,6 +9882,7 @@
                     "displayLabel",
                     "roles",
                     "permissionRefs",
+                    "permissions",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -9014,6 +9944,12 @@
                       "type": "string"
                     }
                   },
+                  "permissions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
                   "status": {
                     "type": "string",
                     "enum": [
@@ -9054,6 +9990,12 @@
                       }
                     },
                     "permissionRefs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "permissions": {
                       "type": "array",
                       "items": {
                         "type": "string"
@@ -9130,6 +10072,7 @@
                     "displayLabel",
                     "roles",
                     "permissionRefs",
+                    "permissions",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -9186,6 +10129,12 @@
                         "type": "string"
                       }
                     },
+                    "permissions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "status": {
                       "type": "string",
                       "enum": [
@@ -9257,6 +10206,7 @@
                     "displayLabel",
                     "roles",
                     "permissionRefs",
+                    "permissions",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -9352,6 +10302,12 @@
                         "type": "string"
                       }
                     },
+                    "permissions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "status": {
                       "type": "string",
                       "enum": [
@@ -9423,6 +10379,7 @@
                     "displayLabel",
                     "roles",
                     "permissionRefs",
+                    "permissions",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -9554,6 +10511,12 @@
                         "type": "string"
                       }
                     },
+                    "permissions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "status": {
                       "type": "string",
                       "enum": [
@@ -9625,6 +10588,7 @@
                     "displayLabel",
                     "roles",
                     "permissionRefs",
+                    "permissions",
                     "status",
                     "createdAt",
                     "updatedAt",
@@ -9638,7 +10602,7 @@
         }
       }
     },
-    "/auth/session-token": {
+    "/api/superadmin/session-tokens": {
       "post": {
         "operationId": "issueSessionToken",
         "parameters": [],
@@ -9677,6 +10641,12 @@
                       "type": "string"
                     }
                   },
+                  "permissions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
                   "correlationId": {
                     "type": "string"
                   },
@@ -9693,7 +10663,15 @@
                         "run:start",
                         "run:observe",
                         "run:cancel",
-                        "run:command"
+                        "run:command",
+                        "me:write",
+                        "governance:read",
+                        "governance:write",
+                        "user_admin:read",
+                        "user_admin:write",
+                        "config_assets:read",
+                        "config_assets:write",
+                        "config_assets:release"
                       ]
                     }
                   },

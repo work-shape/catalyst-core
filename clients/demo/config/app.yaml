@@ -40,6 +40,23 @@ retention:
   conversationDays: 30
   auditDays: 365
   allowUserDelete: true
+administration:
+  agentConfiguration:
+    enabled: true
+    editableAgentFields:
+      - displayName
+      - welcomeMessage
+      - welcomeSubtitle
+      - instructions
+      - modelBindingId
+      - reasoningEffort
+      - toolNames
+      - skillNames
+      - initialPrompts
+    allowAgentCreation: true
+    allowAgentDeletion: true
+    allowDefaultAgentChange: true
+    allowSkillEditing: true
 modelProviders:
   - id: openai
     type: openai-compatible
@@ -48,6 +65,11 @@ modelProviders:
     reasoningEffort: high
     baseUrl: https://api.openai.com/v1
     apiKeyEnvName: OPENAI_API_KEY
+modelBindings:
+  - id: primary
+    providerId: openai
+    model: gpt-5.5
+    reasoningEffort: high
 localization:
   defaultLocale: en
   supportedLocales:
@@ -85,11 +107,6 @@ runtime:
 modelContext:
   toolOutput:
     maxTokens: 60000
-defaultAgentName: workflow_assistant
-agentFiles:
-  - ../agents/workflow-assistant.agent.yaml
-skillFiles:
-  - ../skills/generic-workflow-review/SKILL.md
 tools:
   - name: read_skill
     enabled: true

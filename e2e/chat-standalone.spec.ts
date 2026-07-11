@@ -29,6 +29,7 @@ test("standalone login renders the authenticated chat workspace", async ({ page 
   await expect(page.getByRole("button", { name: "E2E User account" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Select agent" })).toContainText("Application Assistant");
   await expect(page.getByRole("button", { name: "Close sidebar" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Switch to (dark|light) theme/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Language" })).toHaveCount(0);
   await expect(page.locator("header").getByText("Ready", { exact: true })).toHaveCount(0);
@@ -41,20 +42,26 @@ test("standalone login renders the authenticated chat workspace", async ({ page 
 });
 
 test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
-  await signInViaUi(page, normalUser);
+  await signInViaApi(page, normalUser);
   await page.goto("/");
 
+  const conversationRail = page.getByRole("complementary", { name: "Conversations" });
   await page.getByRole("button", { name: "Close sidebar" }).click();
-  await expect(page.getByText("E2E Customer")).toBeHidden();
+  await expect(conversationRail).toBeHidden();
   await expect(page.getByRole("button", { name: "Open sidebar" })).toBeVisible();
   await page.getByRole("button", { name: "Open sidebar" }).click();
-  await expect(page.getByText("E2E Customer")).toBeVisible();
+  await expect(conversationRail).toBeVisible();
+  await expect(page.getByRole("searchbox", { name: "Search conversations" })).toBeVisible();
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(conversationRail).toBeHidden();
+  await expect(page.getByRole("button", { name: "Open sidebar" })).toBeVisible();
+  await page.getByRole("button", { name: "Open sidebar" }).click();
+  await expect(conversationRail).toBeVisible();
 
   await page.getByRole("button", { name: "Select agent" }).click();
   await expect(page.getByRole("option", { name: /Research Assistant/ })).toBeVisible();
   await page.getByRole("option", { name: /Research Assistant/ }).click();
   await expect(page.getByRole("button", { name: "Select agent" })).toContainText("Research Assistant");
-  await expect(page.getByText("Research Assistant is ready for this conversation.")).toBeVisible();
 
   const appShell = page.locator("main").first();
   const backgroundBefore = await appShell.evaluate((element) =>
@@ -66,6 +73,36 @@ test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
       appShell.evaluate((element) => getComputedStyle(element).getPropertyValue("--background"))
     )
     .not.toBe(backgroundBefore);
+});
+
+test("conversation rail keeps dense histories readable and scrollable", async ({ page }) => {
+  await signInViaApi(page, normalUser);
+  const titlePrefix = `Dense rail ${Date.now()}`;
+  const responses = await Promise.all(
+    Array.from({ length: 18 }, (_, index) =>
+      page.request.post(`${apiBaseUrl}/api/conversations`, {
+        data: { title: `${titlePrefix} item-${String(index + 1).padStart(2, "0")}` }
+      })
+    )
+  );
+  expect(responses.every((response) => response.ok())).toBe(true);
+
+  await page.goto("/");
+  const targetConversation = page
+    .getByTestId("conversation-row")
+    .filter({ hasText: `${titlePrefix} item-01` });
+  await expect(targetConversation).toHaveCount(1);
+  await expect
+    .poll(() => targetConversation.evaluate((element) => element.getBoundingClientRect().height))
+    .toBeGreaterThanOrEqual(60);
+
+  const conversationNavigation = page.getByRole("navigation");
+  await expect(conversationNavigation).toBeVisible();
+  const overflow = await conversationNavigation.evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight
+  }));
+  expect(overflow.scrollHeight).toBeGreaterThan(overflow.clientHeight);
 });
 
 test("composer grows for multiline input", async ({ page }) => {
@@ -170,7 +207,7 @@ test("new conversation action returns from a persisted conversation to a clean d
   const conversationId = currentConversationId(page);
   const createdConversation = page.getByTestId("conversation-row").filter({ hasText: messageText });
   await expect(createdConversation).toHaveCount(1);
-  await expect(createdConversation).toHaveClass(/border-primary/);
+  await expect(createdConversation).toHaveAttribute("data-selected", "true");
 
   await page.getByRole("button", { name: "New", exact: true }).click();
 
@@ -196,7 +233,7 @@ test("standalone conversation routes are addressable and follow rail navigation"
   const input = page.getByPlaceholder("Message");
   const targetConversation = page.getByTestId("conversation-row").filter({ hasText: title });
   await expect(input).toBeVisible();
-  await expect(targetConversation).toHaveClass(/border-primary/);
+  await expect(targetConversation).toHaveAttribute("data-selected", "true");
   await expect(page).toHaveURL(new RegExp(`${escapeRegExp(conversationPath(conversation.id))}$`));
 
   await page.getByRole("button", { name: "New", exact: true }).click();
@@ -237,7 +274,7 @@ test("first message from the root route moves to the persisted conversation rout
   await expect(page).toHaveURL(new RegExp(`${escapeRegExp(conversationPath(started.conversation.id))}$`, "u"));
   expect(legacyChatRequests).toBe(0);
   const createdConversation = page.getByTestId("conversation-row").filter({ hasText: messageText });
-  await expect(createdConversation).toHaveClass(/border-primary/);
+  await expect(createdConversation).toHaveAttribute("data-selected", "true");
 
   await page.getByRole("button", { name: "New", exact: true }).click();
   await expect(page).toHaveURL(/\/$/u);
@@ -512,7 +549,7 @@ test("direct conversation links resume a running stream from stored state", { ta
     has: page.getByTestId("conversation-running-indicator")
   });
   await expect(runningConversation).toHaveCount(1);
-  await expect(runningConversation).toHaveClass(/border-primary/);
+  await expect(runningConversation).toHaveAttribute("data-selected", "true");
   await expect.poll(() => eventRequests.length, { timeout: 10_000 }).toBeGreaterThan(0);
   await expect(chatRegion.locator('[data-role="assistant"]').filter({ hasText: uniqueToken }).first()).toBeVisible({
     timeout: 15_000
@@ -554,11 +591,11 @@ test("new conversation run completion does not steal the selected conversation",
 
   const targetConversation = page.getByTestId("conversation-row").filter({ hasText: targetTitle });
   await targetConversation.getByRole("button").first().click();
-  await expect(targetConversation).toHaveClass(/border-primary/);
+  await expect(targetConversation).toHaveAttribute("data-selected", "true");
   await expect(chatRegion.getByText(messageToken, { exact: false })).toHaveCount(0);
   await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
   await page.waitForTimeout(1_000);
-  await expect(targetConversation).toHaveClass(/border-primary/);
+  await expect(targetConversation).toHaveAttribute("data-selected", "true");
 });
 
 test("completed background turns are marked unread until viewed", { tag: "@chat-state" }, async ({ page }) => {
@@ -688,30 +725,201 @@ test("standalone auth gates superadmin views", async ({ page }) => {
 test("standalone settings and superadmin tabs are route-backed", async ({ page }) => {
   await signInViaApi(page, superadminUser);
 
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open administration panel" }).click();
+  await expect(page).toHaveURL(/\/admin\/users$/u);
+  await expect(
+    page.getByRole("region", { name: "Administration panel" }).getByRole("heading", { name: "Users" })
+  ).toBeVisible();
+
   await page.goto("/settings");
   await expect(page.getByRole("region", { name: "User settings" })).toBeVisible();
   await expect(page).toHaveURL(/\/settings$/u);
 
   await page.goto("/admin");
-  await expect(page).toHaveURL(/\/admin\/usage$/u);
-  await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
-  await expect(page.getByText("Billed this month")).toBeVisible();
-
-  await page.getByRole("button", { name: /^Users/ }).click();
   await expect(page).toHaveURL(/\/admin\/users$/u);
+  await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
   await expect(
     page.getByRole("region", { name: "Administration panel" }).getByRole("heading", { name: "Users" })
   ).toBeVisible();
+
+  await page.getByRole("button", { name: "Config" }).click();
+  await expect(page).toHaveURL(/\/admin\/config$/u);
+  await expect(page.getByRole("heading", { name: "Configuration" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Usage" }).click();
+  await expect(page).toHaveURL(/\/admin\/usage$/u);
+  await expect(page.getByRole("heading", { name: "Usage", exact: true })).toBeVisible();
+  await expect(page.getByText("Billed this month")).toBeVisible();
 
   await page.getByRole("button", { name: "Audit log" }).click();
   await expect(page).toHaveURL(/\/admin\/audit$/u);
+  await expect(page.getByRole("heading", { name: "Audit log", exact: true })).toBeVisible();
   await expect(page.getByText("Recent activity")).toBeVisible();
 
   await page.goBack();
-  await expect(page).toHaveURL(/\/admin\/users$/u);
-  await expect(
-    page.getByRole("region", { name: "Administration panel" }).getByRole("heading", { name: "Users" })
-  ).toBeVisible();
+  await expect(page).toHaveURL(/\/admin\/usage$/u);
+  await expect(page.getByText("Billed this month")).toBeVisible();
+});
+
+test("superadmin manages config assets with validation and conflict protection", async ({ page }) => {
+  test.setTimeout(60_000);
+  await signInViaApi(page, superadminUser);
+  const originalResponse = await page.request.get(`${apiBaseUrl}/api/admin/config/export`);
+  expect(originalResponse.ok()).toBe(true);
+  const original = (await originalResponse.json()) as {
+    version: number;
+    defaultAgentName?: string;
+    agents: Array<Record<string, unknown>>;
+    skills: Array<Record<string, unknown>>;
+  };
+  const originalResearchAgent = original.agents.find(
+    (agent) => agent.name === "research_assistant"
+  );
+  expect(originalResearchAgent).toBeDefined();
+
+  const versionLabel = (version: number) =>
+    page.getByText(`Version ${version}`, { exact: false });
+  const form = () => page.locator("form");
+  const fieldset = (name: string) => form().getByRole("group", { name, exact: true });
+  const fieldControl = (label: string, selector: string) =>
+    form()
+      .locator("label")
+      .filter({ hasText: new RegExp(`^${label}`) })
+      .locator(selector)
+      .first();
+  const clickAgent = async () => {
+    await page.getByRole("button", { name: "research_assistant", exact: true }).click();
+    await expect(form()).toBeVisible();
+  };
+  const clickSkill = async () => {
+    await page.getByRole("button", { name: "config_e2e_skill", exact: true }).click();
+    await expect(form()).toBeVisible();
+  };
+
+  try {
+    await page.goto("/admin/config");
+    await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
+    await expect(page).toHaveURL(/\/admin\/config$/u);
+    await expect(versionLabel(original.version)).toBeVisible();
+
+    await clickAgent();
+    await expect
+      .poll(() =>
+        form()
+          .getByRole("button", { name: "Save changes", exact: true })
+          .locator("..")
+          .evaluate((element) => getComputedStyle(element).position)
+      )
+      .toBe("static");
+    await expect(fieldset("Tools").getByLabel("read_skill", { exact: true })).toBeVisible();
+    await expect(fieldset("Tools").getByLabel("show_view", { exact: true })).toBeVisible();
+    await expect(fieldControl("Model", "select").locator("option")).toContainText([
+      "Instance default",
+      "deterministic-local"
+    ]);
+    await expect(fieldControl("Reasoning effort", "select").locator("option")).toContainText([
+      "Model default",
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+    ]);
+
+    await page.getByRole("button", { name: "New skill", exact: true }).click();
+    await page.locator('input[placeholder="generic_workflow_review"]').fill("config_e2e_skill");
+    await fieldControl("Title", "input").fill("Config E2E skill");
+    await fieldControl("Description", "input").fill("Verifies config asset editing");
+    await fieldControl("Content", "textarea").fill("# Verify config assets");
+    await form().getByRole("button", { name: "Create skill", exact: true }).click();
+    await expect(versionLabel(original.version + 1)).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Config E2E skill", exact: true })).toBeVisible();
+    await expect(fieldControl("Title", "input")).toHaveValue("Config E2E skill");
+    await expect(fieldControl("Description", "input")).toHaveValue(
+      "Verifies config asset editing"
+    );
+    await expect(fieldControl("Content", "textarea")).toHaveValue("# Verify config assets");
+
+    await clickAgent();
+    await fieldset("Skills").getByLabel("config_e2e_skill", { exact: true }).check();
+    await form().getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(
+      page.getByText(
+        "Agent 'research_assistant' references skills but does not allow 'read_skill'",
+        { exact: true }
+      )
+    ).toBeVisible();
+    await expect(versionLabel(original.version + 1)).toBeVisible();
+
+    await fieldset("Tools").getByLabel("read_skill", { exact: true }).check();
+    await form().getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(versionLabel(original.version + 2)).toBeVisible();
+
+    await clickSkill();
+    await form().getByRole("button", { name: "Delete", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "Delete skill 'config_e2e_skill'?", exact: true })
+      .getByRole("button", { name: "Delete", exact: true })
+      .click();
+    await expect(
+      page.getByText(
+        "Agent 'research_assistant' references missing skill 'config_e2e_skill'",
+        { exact: true }
+      )
+    ).toBeVisible();
+    await expect(versionLabel(original.version + 2)).toBeVisible();
+
+    await clickAgent();
+    await fieldset("Skills").getByLabel("config_e2e_skill", { exact: true }).uncheck();
+    await form().getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(versionLabel(original.version + 3)).toBeVisible();
+    await clickSkill();
+    await form().getByRole("button", { name: "Delete", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "Delete skill 'config_e2e_skill'?", exact: true })
+      .getByRole("button", { name: "Delete", exact: true })
+      .click();
+    await expect(versionLabel(original.version + 4)).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Skills" }).getByText("None yet.", { exact: true })
+    ).toBeVisible();
+
+    await clickAgent();
+    const instructions = fieldControl("Instructions", "textarea");
+    const serverInstructions = `${String(originalResearchAgent?.instructions)}\n\nServer change.`;
+    const serverChange = await page.request.put(
+      `${apiBaseUrl}/api/admin/config/assets/agent/research_assistant`,
+      {
+        data: {
+          baseVersion: original.version + 4,
+          config: { ...originalResearchAgent, instructions: serverInstructions }
+        }
+      }
+    );
+    expect(serverChange.ok()).toBe(true);
+    await instructions.fill(`${String(originalResearchAgent?.instructions)}\n\nUnsaved UI change.`);
+    await form().getByRole("button", { name: "Save changes", exact: true }).click();
+    const conflict = page.getByRole("dialog", {
+      name: "Configuration changed on the server",
+      exact: true
+    });
+    await expect(conflict).toBeVisible();
+    await conflict.getByRole("button", { name: "Reload latest", exact: true }).click();
+    await expect(conflict).toBeHidden();
+    await expect(versionLabel(original.version + 5)).toBeVisible();
+    await expect(fieldControl("Instructions", "textarea")).toHaveValue(serverInstructions);
+  } finally {
+    const restored = await page.request.post(`${apiBaseUrl}/api/admin/config/import`, {
+      data: {
+        baseVersion: null,
+        defaultAgentName: original.defaultAgentName,
+        agents: original.agents,
+        skills: original.skills
+      }
+    });
+    expect(restored.ok()).toBe(true);
+  }
 });
 
 test("normal users are redirected away from superadmin routes", async ({ page }) => {
@@ -766,13 +974,15 @@ test("admin sees billed usage and can manage users", async ({ page }) => {
   await signInViaUi(page, adminUser);
   await expect(page.getByRole("button", { name: "Open administration panel" })).toBeVisible();
   await page.getByRole("button", { name: "Open administration panel" }).click();
-  await expect(page).toHaveURL(/\/admin\/usage$/u);
+  await expect(page).toHaveURL(/\/admin\/users$/u);
   const adminPanel = page.getByRole("region", { name: "Administration panel" });
   await expect(adminPanel).toBeVisible();
   await expect(adminPanel.getByText("Admin", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: /^Usage/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Users/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Audit log" })).toBeVisible();
+  await page.getByRole("button", { name: /^Usage/ }).click();
+  await expect(page).toHaveURL(/\/admin\/usage$/u);
   await expect(page.getByText("Billed this month")).toBeVisible();
   await expect(page.getByTestId("monthly-usage")).toBeVisible();
 

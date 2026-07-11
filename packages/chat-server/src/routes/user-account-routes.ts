@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { apiOperations } from "@vivd-catalyst/api-contract";
-import { requireAuthScope } from "@vivd-catalyst/core";
+import { requireAuthScope, resolveEffectivePermissions } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "../types";
 import { authenticateRequest, parseBody } from "../request-context";
 import { UserAccountWorkflow } from "../user-account-workflow";
@@ -12,9 +12,13 @@ export function registerUserAccountRoutes(app: FastifyInstance, options: ChatSer
     const { user, context } = await authenticateRequest(options, request);
     requireAuthScope(user, "me:write");
     const body = parseBody(apiOperations.updateCurrentUser.requestSchema, request.body);
-    return userAccount.updateCurrentUser(user, context, {
+    const updated = await userAccount.updateCurrentUser(user, context, {
       displayLabel: body.displayLabel
     });
+    return {
+      ...updated,
+      permissions: [...resolveEffectivePermissions(updated)]
+    };
   });
 
   app.post(apiOperations.changeCurrentUserPassword.path, async (request) => {

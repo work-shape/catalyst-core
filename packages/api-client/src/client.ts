@@ -3,7 +3,7 @@ import { ApiError } from "./errors";
 import { createClient as createGeneratedClient } from "./generated/client";
 import * as generatedSdk from "./generated/sdk.gen";
 import { apiOperations, runObservationSchema } from "./schemas";
-import type { LocaleCode, RunObservation } from "./schemas";
+import type { ConfigAssetKind, LocaleCode, RunObservation } from "./schemas";
 
 export interface ApiClientOptions {
   baseUrl: string;
@@ -431,6 +431,99 @@ export function createApiClient(options: ApiClientOptions) {
       unwrapJson(
         generatedSdk.getUsageSummary({ client: generatedClient }),
         apiOperations.getUsageSummary.responseSchema
+      ),
+    configAssetsOverview: () =>
+      unwrapJson(
+        generatedSdk.getConfigAssetsOverview({ client: generatedClient }),
+        apiOperations.getConfigAssetsOverview.responseSchema
+      ),
+    configAsset: (kind: ConfigAssetKind, name: string) =>
+      unwrapJson(
+        generatedSdk.getConfigAsset({
+          client: generatedClient,
+          path: { kind, name }
+        }),
+        apiOperations.getConfigAsset.responseSchema
+      ),
+    putConfigAsset: (
+      kind: ConfigAssetKind,
+      name: string,
+      input: OperationRequestInput<typeof apiOperations.putConfigAsset>
+    ) =>
+      unwrapJson(
+        generatedSdk.putConfigAsset({
+          client: generatedClient,
+          path: { kind, name },
+          body: apiOperations.putConfigAsset.requestSchema.parse(input)
+        }),
+        apiOperations.putConfigAsset.responseSchema
+      ),
+    deleteConfigAsset: (
+      kind: ConfigAssetKind,
+      name: string,
+      input: OperationRequestInput<typeof apiOperations.deleteConfigAsset> = {}
+    ) =>
+      unwrapJson(
+        generatedSdk.deleteConfigAsset({
+          client: generatedClient,
+          path: { kind, name },
+          body: apiOperations.deleteConfigAsset.requestSchema.parse(input)
+        }),
+        apiOperations.deleteConfigAsset.responseSchema
+      ),
+    setDefaultConfigAgent: (
+      input: OperationRequestInput<typeof apiOperations.setDefaultConfigAgent>
+    ) =>
+      unwrapJson(
+        generatedSdk.setDefaultConfigAgent({
+          client: generatedClient,
+          body: apiOperations.setDefaultConfigAgent.requestSchema.parse(input)
+        }),
+        apiOperations.setDefaultConfigAgent.responseSchema
+      ),
+    configAssetRevisions: (kind: ConfigAssetKind, name: string) =>
+      unwrapJson(
+        generatedSdk.listConfigAssetRevisions({
+          client: generatedClient,
+          path: { kind, name }
+        }),
+        apiOperations.listConfigAssetRevisions.responseSchema
+      ),
+    revertConfigAsset: (
+      kind: ConfigAssetKind,
+      name: string,
+      input: OperationRequestInput<typeof apiOperations.revertConfigAsset>
+    ) =>
+      unwrapJson(
+        generatedSdk.revertConfigAsset({
+          client: generatedClient,
+          path: { kind, name },
+          body: apiOperations.revertConfigAsset.requestSchema.parse(input)
+        }),
+        apiOperations.revertConfigAsset.responseSchema
+      ),
+    exportConfigAssets: () =>
+      unwrapJson(
+        generatedSdk.exportConfigAssets({ client: generatedClient }),
+        apiOperations.exportConfigAssets.responseSchema
+      ),
+    replaceConfigAssets: (input: OperationRequestInput<typeof apiOperations.replaceConfigAssets>) =>
+      unwrapJson(
+        generatedSdk.replaceConfigAssets({
+          client: generatedClient,
+          body: apiOperations.replaceConfigAssets.requestSchema.parse(input)
+        }),
+        apiOperations.replaceConfigAssets.responseSchema
+      ),
+    validateConfigAssets: (
+      input: OperationRequestInput<typeof apiOperations.validateConfigAssets>
+    ) =>
+      unwrapJson(
+        generatedSdk.validateConfigAssets({
+          client: generatedClient,
+          body: apiOperations.validateConfigAssets.requestSchema.parse(input)
+        }),
+        apiOperations.validateConfigAssets.responseSchema
       ),
     users: () =>
       unwrapJson(

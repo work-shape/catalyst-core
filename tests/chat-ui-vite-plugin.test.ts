@@ -74,11 +74,6 @@ async function createClientFixture(): Promise<string> {
       "  id: test-client",
       "  displayName: Test Client",
       "  environment: development",
-      "defaultAgentName: support",
-      "agents:",
-      "  - name: support",
-      "    displayName: Support",
-      "    instructions: Help with support requests.",
       "uiFile: ./ui.yaml",
       ""
     ].join("\n"),

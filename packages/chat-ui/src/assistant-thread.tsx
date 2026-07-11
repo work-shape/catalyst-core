@@ -51,6 +51,17 @@ export function AssistantThread({
   const agent = getSelectedAgent(config, selectedAgentName);
   const initialPrompts = agent?.initialPrompts ?? [];
 
+  if (config && config.agents.length === 0) {
+    return (
+      <section className="grid h-full min-h-0 place-items-center bg-background px-5" aria-label="Chat">
+        <div className="inline-flex max-w-md items-center gap-2 rounded-md border px-4 py-3 text-sm text-muted-foreground">
+          <CircleAlert size={17} aria-hidden="true" />
+          <span>{t("instanceNotConfigured")}</span>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section
       className="grid h-full min-h-0 min-w-0 overflow-hidden bg-background"

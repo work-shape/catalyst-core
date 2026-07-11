@@ -11,6 +11,16 @@ pnpm dev
 
 The development stack starts Postgres, the API, and the UI. The API listens on `http://127.0.0.1:4100`, and the UI listens on `http://127.0.0.1:5173`.
 
+## Agent and skill configuration
+
+Agents and skills are loaded live from the database. The YAML and Markdown files under `agents/` and `skills/` are the CLI working copy, not runtime file config. On the first boot, start the API and then push that working copy from another terminal:
+
+```bash
+pnpm config:push
+```
+
+The script builds the config CLI before pushing. The API's `CHAT_SERVER_CREDENTIAL` and the CLI's `CATALYST_SERVER_CREDENTIAL` must have the same value. When the CLI credential is unset, this script uses the development Docker Compose default (`replace-with-a-server-to-server-secret`); that default applies only to the local Compose stack. Set `CATALYST_SERVER_CREDENTIAL` explicitly for any other server.
+
 For the production-style Compose stack, copy `.env.prod.example` to `.env.prod`, replace every placeholder secret, then run:
 
 ```bash

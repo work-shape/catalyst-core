@@ -4,6 +4,7 @@ import {
   Bot,
   ChevronRight,
   ScrollText,
+  Settings2,
   ShieldCheck,
   User as UserIcon,
   Users
@@ -25,6 +26,8 @@ import { Badge } from "./ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { cn } from "./ui/cn";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { ConfigAssetsPanel, type ConfigAssetsPanelInput } from "./config-assets-panel";
+import { ControlPlanePage } from "./control-plane/control-plane-page";
 import { UsageView } from "./usage-view";
 import { UserAdministrationPanel } from "./user-administration-panel";
 import type { SuperadminRouteTab } from "./workspace-route";
@@ -36,6 +39,11 @@ export function SuperadminPanel({
   loading,
   usersLoading,
   canViewUsageGovernance,
+  canManageUsers,
+  canViewAudit,
+  canManageSuperadminAccess,
+  canEditConfigAssets,
+  configAssets,
   error,
   usersError,
   usersMutating,
@@ -54,6 +62,11 @@ export function SuperadminPanel({
   loading: boolean;
   usersLoading: boolean;
   canViewUsageGovernance: boolean;
+  canManageUsers: boolean;
+  canViewAudit: boolean;
+  canManageSuperadminAccess: boolean;
+  canEditConfigAssets: boolean;
+  configAssets: ConfigAssetsPanelInput;
   error?: string;
   usersError?: string;
   usersMutating: boolean;
@@ -77,44 +90,58 @@ export function SuperadminPanel({
       <div className="grid gap-3 border-b px-5 pt-20">
         <div className="grid min-w-0 gap-1">
           <span className="text-xs text-muted-foreground">
-            {canViewUsageGovernance ? "Superadmin" : "Admin"}
+            {canManageSuperadminAccess ? "Superadmin" : "Admin"}
           </span>
           <h1 className="text-xl font-semibold tracking-normal">Administration</h1>
         </div>
 
         <nav className="flex items-end gap-1 overflow-x-auto" aria-label="Administration sections">
-          <TabButton
-            active={selectedTab === "usage"}
-            icon={<Activity size={15} aria-hidden="true" />}
-            label="Usage"
-            onClick={() => onSelectTab("usage")}
-          />
-          <TabButton
-            active={selectedTab === "users"}
-            icon={<Users size={15} aria-hidden="true" />}
-            label="Users"
-            badge={users.length > 0 ? users.length : undefined}
-            onClick={() => onSelectTab("users")}
-          />
-          <TabButton
-            active={selectedTab === "audit"}
-            icon={<ScrollText size={15} aria-hidden="true" />}
-            label="Audit log"
-            onClick={() => onSelectTab("audit")}
-          />
+          {canManageUsers ? (
+            <TabButton
+              active={selectedTab === "users"}
+              icon={<Users size={15} aria-hidden="true" />}
+              label="Users"
+              badge={users.length > 0 ? users.length : undefined}
+              onClick={() => onSelectTab("users")}
+            />
+          ) : null}
+          {canEditConfigAssets ? (
+            <TabButton
+              active={selectedTab === "config"}
+              icon={<Settings2 size={15} aria-hidden="true" />}
+              label="Config"
+              onClick={() => onSelectTab("config")}
+            />
+          ) : null}
+          {canViewUsageGovernance ? (
+            <TabButton
+              active={selectedTab === "usage"}
+              icon={<Activity size={15} aria-hidden="true" />}
+              label="Usage"
+              onClick={() => onSelectTab("usage")}
+            />
+          ) : null}
+          {canViewAudit ? (
+            <TabButton
+              active={selectedTab === "audit"}
+              icon={<ScrollText size={15} aria-hidden="true" />}
+              label="Audit log"
+              onClick={() => onSelectTab("audit")}
+            />
+          ) : null}
         </nav>
       </div>
 
       <div className="grid min-h-0 content-start gap-4 overflow-auto bg-background p-5">
         {selectedTab !== "users" && error ? <ErrorBanner message={error} /> : null}
 
-        {selectedTab === "usage" ? <UsageView usage={usage} /> : null}
-        {selectedTab === "users" ? (
+        {selectedTab === "usage" && canViewUsageGovernance ? <UsageView usage={usage} /> : null}
+        {selectedTab === "users" && canManageUsers ? (
           <UserAdministrationPanel
             users={users}
             loading={usersLoading}
             error={usersError}
-            canManageSuperadminAccess={canViewUsageGovernance}
+            canManageSuperadminAccess={canManageSuperadminAccess}
             mutating={usersMutating}
             onCreateUser={onCreateUser}
             onUpdateUser={onUpdateUser}
@@ -124,7 +151,12 @@ export function SuperadminPanel({
             onResetPassword={onResetUserPassword}
           />
         ) : null}
-        {selectedTab === "audit" ? <AuditView auditActivities={auditActivities} /> : null}
+        {selectedTab === "config" && canEditConfigAssets ? (
+          <ConfigAssetsPanel {...configAssets} />
+        ) : null}
+        {selectedTab === "audit" && canViewAudit ? (
+          <AuditView auditActivities={auditActivities} />
+        ) : null}
       </div>
     </section>
   );
@@ -175,26 +207,31 @@ function ErrorBanner({ message }: { message: string }) {
 
 function AuditView({ auditActivities }: { auditActivities: AuditActivity[] }) {
   return (
-    <Card>
-      <CardHeader className="p-4 pb-2">
-        <CardTitle className="text-base">Recent activity</CardTitle>
-        <p className="text-xs text-muted-foreground">
-          Governance and workflow events, plus anything that failed or was denied. Expand a row for
-          the underlying evidence.
-        </p>
-      </CardHeader>
-      <CardContent className="p-4 pt-1">
-        {auditActivities.length ? (
-          <ul className="divide-y">
-            {auditActivities.map((activity) => (
-              <AuditActivityRow key={activity.correlationId} activity={activity} />
-            ))}
-          </ul>
-        ) : (
-          <p className="pt-1 text-sm text-muted-foreground">No activity visible yet.</p>
-        )}
-      </CardContent>
-    </Card>
+    <ControlPlanePage
+      title="Audit log"
+      description={`${auditActivities.length.toLocaleString()} recent ${auditActivities.length === 1 ? "activity" : "activities"}`}
+    >
+      <Card>
+        <CardHeader className="p-4 pb-2">
+          <CardTitle className="text-base">Recent activity</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Governance and workflow events, plus anything that failed or was denied. Expand a row
+            for the underlying evidence.
+          </p>
+        </CardHeader>
+        <CardContent className="p-4 pt-1">
+          {auditActivities.length ? (
+            <ul className="divide-y">
+              {auditActivities.map((activity) => (
+                <AuditActivityRow key={activity.correlationId} activity={activity} />
+              ))}
+            </ul>
+          ) : (
+            <p className="pt-1 text-sm text-muted-foreground">No activity visible yet.</p>
+          )}
+        </CardContent>
+      </Card>
+    </ControlPlanePage>
   );
 }
 

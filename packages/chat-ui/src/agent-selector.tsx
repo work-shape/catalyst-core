@@ -6,10 +6,12 @@ import { cn } from "./ui/cn";
 
 export function AgentSelector({
   agents,
+  contextLabel,
   selectedAgentName,
   onSelectAgent
 }: {
   agents: SafeConfig["agents"];
+  contextLabel?: string;
   selectedAgentName: string | undefined;
   onSelectAgent: (agentName: string) => void;
 }) {
@@ -50,16 +52,27 @@ export function AgentSelector({
       <button
         type="button"
         className={cn(
-          "inline-flex h-10 max-w-[min(18rem,calc(100vw-8.5rem))] min-w-0 items-center gap-2 rounded-md bg-background/95 px-3 text-sm font-medium text-foreground shadow-sm backdrop-blur transition-colors outline-none",
-          "hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40"
+          "inline-flex h-11 max-w-[min(32rem,calc(100vw-8.5rem))] min-w-0 items-center gap-3 rounded-md px-2.5 text-left text-foreground transition-colors outline-none",
+          "hover:bg-accent/70 focus-visible:ring-[3px] focus-visible:ring-ring/40"
         )}
         aria-label={t("selectAgent")}
         aria-expanded={open}
         aria-haspopup="listbox"
         onClick={() => setOpen((currentOpen) => !currentOpen)}
       >
-        <Bot size={16} className="shrink-0 text-primary" aria-hidden="true" />
-        <span className="truncate">{selectedAgent?.displayName ?? t("agentFallback")}</span>
+        <span className="grid size-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+          <Bot size={17} aria-hidden="true" />
+        </span>
+        <span className="grid min-w-0 gap-0.5">
+          <span className="truncate text-sm font-semibold">
+            {selectedAgent?.displayName ?? t("agentFallback")}
+          </span>
+          {contextLabel ? (
+            <span className="hidden truncate text-xs font-normal text-muted-foreground sm:block">
+              {contextLabel}
+            </span>
+          ) : null}
+        </span>
         <ChevronDown
           size={15}
           className={cn("shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}

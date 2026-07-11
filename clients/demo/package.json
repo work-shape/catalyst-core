@@ -7,6 +7,7 @@
     "build": "tsup src/server.ts src/seed-auth.ts src/artifact-preview-worker.ts --format esm --out-dir dist && vite build",
     "build:server": "tsup src/server.ts src/seed-auth.ts src/artifact-preview-worker.ts --format esm --out-dir dist",
     "build:ui": "vite build",
+    "config:push": "pnpm --filter @vivd-catalyst/config-cli build && CATALYST_SERVER_CREDENTIAL=\"${CATALYST_SERVER_CREDENTIAL:-replace-with-a-server-to-server-secret}\" node ../../packages/config-cli/dist/index.js config push --dir . --force",
     "dev": "docker compose watch api ui artifact-preview-worker",
     "dev:down": "docker compose down",
     "dev:db": "docker compose up -d postgres",

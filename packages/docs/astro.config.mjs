@@ -22,6 +22,7 @@ export default defineConfig({
           items: [
             "configure/client-assembly",
             "configure/release-config",
+            "configure/config-assets",
             "configure/chat-experience",
           ],
         },
@@ -33,6 +34,7 @@ export default defineConfig({
           label: "Run And Govern",
           items: [
             "operate/deployment",
+            "operate/config-asset-migration",
             "operate/execution-workspaces",
             "operate/runner-security",
             "operate/auth-and-embedding",

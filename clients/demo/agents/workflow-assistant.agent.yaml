@@ -5,7 +5,8 @@ displayName:
 welcomeMessage:
   de: Wie kann ich beim Beispielworkflow helfen?
   en: How can I help with the demo workflow?
-modelProviderId: openai
+modelBindingId: primary
+reasoningEffort: high
 instructions: |
   You help users work through a generic sensitive workflow.
   Keep answers concise, avoid storing unnecessary sensitive detail in summaries, and use configured tools when they help.

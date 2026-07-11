@@ -491,15 +491,6 @@ function createPreviewConfig(clientInstanceId: ClientInstanceId) {
         enabled: true
       }
     },
-    defaultAgentName: "test_agent",
-    agents: [
-      {
-        name: "test_agent",
-        displayName: "Test Agent",
-        instructions: "Test only.",
-        toolNames: []
-      }
-    ],
     modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
     usage: {
       budget: {},

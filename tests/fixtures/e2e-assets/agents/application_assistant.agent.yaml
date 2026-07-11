@@ -1,0 +1,11 @@
+name: application_assistant
+displayName: Application Assistant
+modelProviderId: local
+instructions: |
+  You help users work through sensitive application and document review workflows.
+toolNames:
+  - demo.workflow_summary
+  - demo.weather_forecast
+initialPrompts:
+  - title: Find review risks
+    prompt: List the most important application or document review risks I should check first.

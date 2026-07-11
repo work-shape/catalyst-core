@@ -57,6 +57,8 @@ x-app-environment: &app-environment
   CLIENT_CONFIG_PATH: /app/clients/demo/config/app.yaml
   DATABASE_URL: postgres://agent_chat:agent_chat@postgres:5432/agent_chat
   EXECUTION_WORKSPACE_OBJECT_ROOT: /var/lib/vivd-catalyst/demo/execution-workspaces/objects
+  CHAT_SESSION_TOKEN_SECRET: ${CHAT_SESSION_TOKEN_SECRET:-replace-with-at-least-24-random-characters}
+  CHAT_SERVER_CREDENTIAL: ${CHAT_SERVER_CREDENTIAL:-replace-with-a-server-to-server-secret}
 
 x-artifact-preview-worker-environment: &artifact-preview-worker-environment
   CLIENT_CONFIG_PATH: /app/clients/demo/config/app.yaml
@@ -117,8 +119,6 @@ services:
       DEMO_SUPERADMIN_PASSWORD: ${DEMO_SUPERADMIN_PASSWORD:-demo-superadmin-password}
       DEMO_USER_EMAIL: ${DEMO_USER_EMAIL:-user@example.test}
       DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:-demo-user-password}
-      CHAT_SESSION_TOKEN_SECRET: ${CHAT_SESSION_TOKEN_SECRET:-replace-with-at-least-24-random-characters}
-      CHAT_SERVER_CREDENTIAL: ${CHAT_SERVER_CREDENTIAL:-replace-with-a-server-to-server-secret}
     ports:
       - "${API_HOST_PORT:-4100}:4100"
     volumes:

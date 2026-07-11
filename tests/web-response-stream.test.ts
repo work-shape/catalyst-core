@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createClientInstanceApp } from "@vivd-catalyst/client-assembly";
+import { createClientInstanceApp as createUnseededClientInstanceApp } from "@vivd-catalyst/client-assembly";
+import { asClientInstanceId } from "@vivd-catalyst/core";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 import { sendWebResponse } from "../packages/chat-server/src/routes/better-auth-routes";
@@ -202,7 +203,7 @@ function createTestConfig(input: {
   toolNames?: string[];
   tools?: Array<{ name: string; enabled?: boolean }>;
 } = {}) {
-  return parseClientInstanceConfig({
+  const config = parseClientInstanceConfig({
     version: 1,
     clientInstance: {
       id: "stream-test",
@@ -221,19 +222,41 @@ function createTestConfig(input: {
         }
       }
     },
-    defaultAgentName: "test_agent",
-    agents: [
-      {
-        name: "test_agent",
-        displayName: "Test Agent",
-        instructions: "Test.",
-        modelProviderId: "local",
-        toolNames: input.toolNames ?? []
-      }
-    ],
     modelProviders: [{ id: "local", type: "deterministic", model: "deterministic-local" }],
     tools: input.tools ?? []
   });
+  testAgentToolNamesByConfig.set(config, input.toolNames ?? []);
+  return config;
+}
+
+const testAgentToolNamesByConfig = new WeakMap<object, string[]>();
+
+async function createClientInstanceApp(
+  input: Parameters<typeof createUnseededClientInstanceApp>[0]
+): Promise<Awaited<ReturnType<typeof createUnseededClientInstanceApp>>> {
+  const app = await createUnseededClientInstanceApp(input);
+  const toolNames = testAgentToolNamesByConfig.get(app.config);
+  if (toolNames) {
+    await app.store.applyConfigAssetMutations({
+      clientInstanceId: asClientInstanceId(app.config.clientInstance.id),
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: "test_agent",
+          config: {
+            name: "test_agent",
+            displayName: "Test Agent",
+            instructions: "Test.",
+            modelProviderId: "local",
+            toolNames
+          }
+        },
+        { type: "setDefaultAgent", agentName: "test_agent" }
+      ]
+    });
+  }
+  return app;
 }
 
 async function openStreamAndReadFirstChunk(url: string): Promise<{

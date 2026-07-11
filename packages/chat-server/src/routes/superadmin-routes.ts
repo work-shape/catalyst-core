@@ -16,9 +16,9 @@ export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServ
       options,
       user,
       context,
-      requiredRole: "admin",
+      requiredPermission: "usage.view",
       auditType: "governance.usage_viewed",
-      deniedMessage: "Usage governance requires an admin role"
+      deniedMessage: "Usage governance requires 'usage.view' permission"
     });
 
     return options.usageGovernance.createSafeSummary({
@@ -42,6 +42,7 @@ export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServ
       email: body.email,
       roles: body.roles,
       permissionRefs: body.permissionRefs,
+      permissions: body.permissions,
       status: body.status,
       passwordSignIn: body.passwordSignIn
     });
@@ -58,6 +59,7 @@ export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServ
       email: body.email,
       roles: body.roles,
       permissionRefs: body.permissionRefs,
+      permissions: body.permissions,
       status: body.status
     });
   });

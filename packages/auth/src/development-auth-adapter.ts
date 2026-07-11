@@ -11,6 +11,7 @@ export interface DevelopmentAuthUser {
   emailVerified?: boolean;
   roles: string[];
   permissionRefs: string[];
+  permissions?: string[];
   authSource?: string;
 }
 
@@ -60,6 +61,7 @@ export class DevelopmentAuthAdapter implements AuthAdapter {
 
     const resolvedUser: AuthenticatedUser = {
       ...user,
+      permissions: user.permissions ?? [],
       authSource: user.authSource ?? this.id,
       clientInstanceId: request.clientInstanceId,
       correlationId: request.correlationId,

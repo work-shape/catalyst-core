@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   AdministeredUser,
+  ConfigAssetKind,
   AdministeredUserIdentity,
   ApiClient,
   ChangeCurrentUserPasswordRequest,
@@ -165,6 +166,69 @@ export function useDeleteCurrentUserMutation(
       void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.me(input.apiBaseUrl) });
     }
   });
+}
+
+export function useConfigAssetMutations(input: WorkspaceMutationInput) {
+  const queryClient = useQueryClient();
+
+  const invalidateConfigAssets = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: workspaceQueryKeys.configAssetsOverview(input.apiBaseUrl, input.authScope)
+      }),
+      queryClient.invalidateQueries({
+        queryKey: workspaceQueryKeys.auditEvents(input.apiBaseUrl, input.authScope)
+      })
+    ]);
+  };
+
+  const putAsset = useMutation({
+    mutationFn: (mutationInput: {
+      kind: ConfigAssetKind;
+      name: string;
+      config: Record<string, unknown>;
+      baseVersion?: number;
+    }) =>
+      input.client.putConfigAsset(mutationInput.kind, mutationInput.name, {
+        config: mutationInput.config,
+        baseVersion: mutationInput.baseVersion
+      }),
+    onSuccess: invalidateConfigAssets
+  });
+  const deleteAsset = useMutation({
+    mutationFn: (mutationInput: { kind: ConfigAssetKind; name: string; baseVersion?: number }) =>
+      input.client.deleteConfigAsset(mutationInput.kind, mutationInput.name, {
+        baseVersion: mutationInput.baseVersion
+      }),
+    onSuccess: invalidateConfigAssets
+  });
+  const setDefaultAgent = useMutation({
+    mutationFn: (mutationInput: { agentName?: string; baseVersion?: number }) =>
+      input.client.setDefaultConfigAgent(mutationInput),
+    onSuccess: () => invalidateConfigAssets()
+  });
+  const revertAsset = useMutation({
+    mutationFn: (mutationInput: {
+      kind: ConfigAssetKind;
+      name: string;
+      revision: number;
+      baseVersion?: number;
+    }) =>
+      input.client.revertConfigAsset(mutationInput.kind, mutationInput.name, {
+        revision: mutationInput.revision,
+        baseVersion: mutationInput.baseVersion
+      }),
+    onSuccess: invalidateConfigAssets
+  });
+
+  return {
+    putAsset,
+    deleteAsset,
+    setDefaultAgent,
+    revertAsset,
+    isPending:
+      putAsset.isPending || deleteAsset.isPending || setDefaultAgent.isPending || revertAsset.isPending
+  };
 }
 
 export function useSuperadminUserMutations(input: WorkspaceMutationInput) {

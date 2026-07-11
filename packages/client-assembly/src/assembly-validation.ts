@@ -1,14 +1,12 @@
-import { AppError } from "@vivd-catalyst/core";
 import { findModelToolMaterializationIssues } from "@vivd-catalyst/agent-runtime";
+import { AppError } from "@vivd-catalyst/core";
 import { WEB_SEARCH_MODEL_TOOL_NAME } from "@vivd-catalyst/model-provider";
-import type {
-  AgentConfig,
-  ClientInstanceConfig,
-  ModelProviderConfig
+import {
+  getModelSelectionForAgent,
+  type AgentConfig,
+  type ClientInstanceConfig
 } from "@vivd-catalyst/config-schema";
 import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
-
-const READ_SKILL_TOOL_NAME = "read_skill";
 
 export function assertClientAssemblyValid(input: {
   config: ClientInstanceConfig;
@@ -25,6 +23,27 @@ export function assertClientAssemblyValid(input: {
       issues: issues.map((message) => ({ message }))
     });
   }
+}
+
+export function findConfigAssetAgentValidationIssues(
+  config: ClientInstanceConfig,
+  agents: AgentConfig[]
+): string[] {
+  return agents.flatMap((agent) => {
+    if (!agent.toolNames.includes(WEB_SEARCH_MODEL_TOOL_NAME)) {
+      return [];
+    }
+    try {
+      return findModelToolMaterializationIssues({
+        agent,
+        modelProvider: getModelSelectionForAgent(config, agent).provider,
+        webAccess: config.webAccess
+      });
+    } catch {
+      // Unknown model references are rejected by config-asset validation first.
+      return [];
+    }
+  });
 }
 
 function findDuplicateToolImplementations(tools: AnyToolDefinition[]): string[] {
@@ -80,22 +99,6 @@ function findModelProviderReferenceIssues(config: ClientInstanceConfig): string[
     );
   }
 
-  for (const agent of config.agents) {
-    if (agent.modelProviderId && agent.modelBindingId) {
-      issues.push(`Agent '${agent.name}' must use either modelProviderId or modelBindingId, not both`);
-    }
-    if (agent.modelProviderId && !configuredProviderIds.has(agent.modelProviderId)) {
-      issues.push(
-        `Agent '${agent.name}' references model provider '${agent.modelProviderId}' that is missing from release config`
-      );
-    }
-    if (agent.modelBindingId && !configuredModelBindingIds.has(agent.modelBindingId)) {
-      issues.push(
-        `Agent '${agent.name}' references model binding '${agent.modelBindingId}' that is missing from release config`
-      );
-    }
-  }
-
   return issues;
 }
 
@@ -106,7 +109,6 @@ function findToolReferenceIssues(
   const issues: string[] = [];
   const providedTools = new Map(tools.map((tool) => [tool.name, tool]));
   const providedToolNames = new Set(providedTools.keys());
-  const configuredTools = new Map(config.tools.map((tool) => [tool.name, tool.enabled]));
 
   for (const tool of config.tools) {
     if (tool.name === WEB_SEARCH_MODEL_TOOL_NAME) {
@@ -122,57 +124,5 @@ function findToolReferenceIssues(
     }
   }
 
-  for (const agent of config.agents) {
-    const skillNames = agent.skillNames ?? [];
-    if (skillNames.length > 0 && !agent.toolNames.includes(READ_SKILL_TOOL_NAME)) {
-      issues.push(
-        `Agent '${agent.name}' references skills but does not allow '${READ_SKILL_TOOL_NAME}'`
-      );
-    }
-    for (const toolName of agent.toolNames) {
-      if (!configuredTools.has(toolName)) {
-        issues.push(`Agent '${agent.name}' references tool '${toolName}' that is missing from release config`);
-        continue;
-      }
-      if (!configuredTools.get(toolName)) {
-        issues.push(`Agent '${agent.name}' references disabled tool '${toolName}'`);
-      }
-      if (toolName === WEB_SEARCH_MODEL_TOOL_NAME) {
-        const modelProvider = getModelProviderForAgentValidation(config, agent);
-        if (modelProvider) {
-          issues.push(
-            ...findModelToolMaterializationIssues({
-              agent,
-              modelProvider,
-              webAccess: config.webAccess
-            })
-          );
-        }
-        continue;
-      }
-      if (!providedToolNames.has(toolName)) {
-        issues.push(`Agent '${agent.name}' references tool '${toolName}' with no registered implementation`);
-      }
-    }
-  }
-
   return issues;
-}
-
-function getModelProviderForAgentValidation(
-  config: ClientInstanceConfig,
-  agent: AgentConfig
-): ModelProviderConfig | undefined {
-  if (agent.modelProviderId && agent.modelBindingId) {
-    return undefined;
-  }
-  if (agent.modelBindingId) {
-    const binding = config.modelBindings.find((candidate) => candidate.id === agent.modelBindingId);
-    if (!binding) {
-      return undefined;
-    }
-    return config.modelProviders.find((provider) => provider.id === binding.providerId);
-  }
-  const providerId = agent.modelProviderId ?? config.modelProviders[0]?.id;
-  return config.modelProviders.find((provider) => provider.id === providerId);
 }

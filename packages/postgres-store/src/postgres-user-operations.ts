@@ -147,6 +147,7 @@ export async function resolveUserIdentity(
           email: input.email ?? null,
           roles: input.roles,
           permissionRefs: input.permissionRefs,
+          permissions: input.permissions,
           status: "active",
           createdAt: now,
           updatedAt: now,
@@ -281,6 +282,7 @@ export async function createUser(
       email: input.email ?? null,
       roles: input.roles ?? ["user"],
       permissionRefs: input.permissionRefs ?? [],
+      permissions: input.permissions ?? [],
       status: input.status ?? "active",
       createdAt: now,
       updatedAt: now
@@ -307,6 +309,9 @@ export async function updateUser(
   }
   if (input.permissionRefs !== undefined) {
     set.permissionRefs = input.permissionRefs;
+  }
+  if (input.permissions !== undefined) {
+    set.permissions = input.permissions;
   }
   if (input.status !== undefined) {
     set.status = input.status;

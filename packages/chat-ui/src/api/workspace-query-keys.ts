@@ -27,5 +27,7 @@ export const workspaceQueryKeys = {
   auditEvents: (apiBaseUrl: string, authScope: string) =>
     ["audit-events", apiBaseUrl, authScope] as const,
   superadminUsers: (apiBaseUrl: string, authScope: string) =>
-    ["superadmin-users", apiBaseUrl, authScope] as const
+    ["superadmin-users", apiBaseUrl, authScope] as const,
+  configAssetsOverview: (apiBaseUrl: string, authScope: string) =>
+    ["config-assets-overview", apiBaseUrl, authScope] as const
 };

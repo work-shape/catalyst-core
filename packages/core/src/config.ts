@@ -38,13 +38,30 @@ export type ModelProviderConfig =
   | OpenAiCompatibleModelProviderConfig;
 
 export type OpenAiCompatibleModelProviderApiConfig = "chat_completions" | "responses";
-export type ReasoningEffortConfig = "none" | "low" | "medium" | "high" | "xhigh";
+export const REASONING_EFFORTS = ["none", "low", "medium", "high", "xhigh"] as const;
+export type ReasoningEffortConfig = (typeof REASONING_EFFORTS)[number];
+
+export const AGENT_EDITABLE_FIELDS = [
+  "displayName",
+  "welcomeMessage",
+  "welcomeSubtitle",
+  "instructions",
+  "modelProviderId",
+  "modelBindingId",
+  "reasoningEffort",
+  "maxSteps",
+  "toolNames",
+  "skillNames",
+  "initialPrompts"
+] as const;
+export type AgentEditableField = (typeof AGENT_EDITABLE_FIELDS)[number];
 
 export interface ModelBindingConfig {
   id: string;
   providerId: string;
   model?: string;
   reasoningEffort?: ReasoningEffortConfig;
+  agentSelectable?: boolean;
 }
 
 export interface AgentConfig {
@@ -55,6 +72,7 @@ export interface AgentConfig {
   instructions: string;
   modelProviderId?: string;
   modelBindingId?: string;
+  reasoningEffort?: ReasoningEffortConfig;
   maxSteps?: number;
   toolNames: string[];
   skillNames: string[];

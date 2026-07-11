@@ -1,12 +1,12 @@
 import { timingSafeEqual } from "node:crypto";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { AppError, CHAT_SESSION_AUTH_SCOPES } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "../types";
 import { createCorrelationId, parseBody } from "../request-context";
 
 export function registerSessionTokenRoutes(app: FastifyInstance, options: ChatServerOptions): void {
-  app.post(apiOperations.issueSessionToken.path, async (request) => {
+  const issueSessionToken = async (request: FastifyRequest) => {
     if (!options.sessionToken) {
       throw new AppError("NOT_FOUND", "Session token issuing is not configured");
     }
@@ -24,6 +24,7 @@ export function registerSessionTokenRoutes(app: FastifyInstance, options: ChatSe
       metadata: {
         roles: body.roles ?? [],
         permissionRefs: body.permissionRefs ?? [],
+        permissions: body.permissions ?? [],
         scopes: body.scopes ?? [...CHAT_SESSION_AUTH_SCOPES],
         ...(body.delegatedActor
           ? {
@@ -38,7 +39,11 @@ export function registerSessionTokenRoutes(app: FastifyInstance, options: ChatSe
       }
     });
     return issued;
-  });
+  };
+
+  app.post(apiOperations.issueSessionToken.path, issueSessionToken);
+  // Legacy alias for deployed integrations.
+  app.post("/auth/session-token", issueSessionToken);
 }
 
 function safeEqual(left: string, right: string): boolean {

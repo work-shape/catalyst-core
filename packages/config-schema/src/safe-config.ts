@@ -1,3 +1,4 @@
+import type { RuntimeAssetSnapshot } from "@vivd-catalyst/core";
 import type { ClientInstanceConfig } from "./schemas";
 import { createClientBranding } from "./branding";
 import {
@@ -6,7 +7,11 @@ import {
   type ConfigLocaleInput
 } from "./localization";
 
-export function createSafeConfigView(config: ClientInstanceConfig, localeInput: ConfigLocaleInput = {}) {
+export function createSafeConfigView(
+  config: ClientInstanceConfig,
+  assets: RuntimeAssetSnapshot,
+  localeInput: ConfigLocaleInput = {}
+) {
   const locale = resolveConfigLocale(config.localization, localeInput);
   const { environment: _environment, ...ui } = createClientBranding(config, {
     requestedLocale: locale
@@ -31,10 +36,13 @@ export function createSafeConfigView(config: ClientInstanceConfig, localeInput: 
       attachments: {
         enabled: false,
         accept: ""
+      },
+      configAssets: {
+        ...config.administration.agentConfiguration
       }
     },
-    defaultAgentName: config.defaultAgentName,
-    agents: config.agents.map((agent) => ({
+    defaultAgentName: assets.defaultAgentName,
+    agents: assets.agents.map((agent) => ({
       name: agent.name,
       displayName: resolveLocalizedString(agent.displayName, locale, config.localization.defaultLocale),
       welcomeMessage: resolveLocalizedString(

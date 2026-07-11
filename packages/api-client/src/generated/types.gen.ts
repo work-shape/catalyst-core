@@ -41,6 +41,7 @@ export type GetCurrentUserResponses = {
         emailVerified?: boolean;
         roles: Array<string>;
         permissionRefs: Array<string>;
+        permissions: Array<string>;
         clientInstanceId: string;
         authSource: string;
         principal?: {
@@ -58,7 +59,7 @@ export type GetCurrentUserResponses = {
             displayLabel?: string;
             authSource: string;
         };
-        scopes?: Array<'*' | 'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write'>;
+        scopes?: Array<'*' | 'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
     };
 };
 
@@ -85,6 +86,7 @@ export type UpdateCurrentUserResponses = {
         emailVerified?: boolean;
         roles: Array<string>;
         permissionRefs: Array<string>;
+        permissions: Array<string>;
         clientInstanceId: string;
         authSource: string;
         principal?: {
@@ -102,7 +104,7 @@ export type UpdateCurrentUserResponses = {
             displayLabel?: string;
             authSource: string;
         };
-        scopes?: Array<'*' | 'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write'>;
+        scopes?: Array<'*' | 'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
     };
 };
 
@@ -222,8 +224,16 @@ export type GetConfigResponses = {
                 enabled: boolean;
                 accept: string;
             };
+            configAssets: {
+                enabled: boolean;
+                editableAgentFields: Array<'displayName' | 'welcomeMessage' | 'welcomeSubtitle' | 'instructions' | 'modelProviderId' | 'modelBindingId' | 'reasoningEffort' | 'maxSteps' | 'toolNames' | 'skillNames' | 'initialPrompts'>;
+                allowAgentCreation: boolean;
+                allowAgentDeletion: boolean;
+                allowDefaultAgentChange: boolean;
+                allowSkillEditing: boolean;
+            };
         };
-        defaultAgentName: string;
+        defaultAgentName?: string;
         agents: Array<{
             name: string;
             displayName: string;
@@ -2220,6 +2230,285 @@ export type GetUsageSummaryResponses = {
 
 export type GetUsageSummaryResponse = GetUsageSummaryResponses[keyof GetUsageSummaryResponses];
 
+export type GetConfigAssetsOverviewData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/config/assets';
+};
+
+export type GetConfigAssetsOverviewResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        version: number;
+        defaultAgentName?: string;
+        assets: Array<{
+            kind: 'agent' | 'skill';
+            name: string;
+            revision: number;
+            updatedAt: string;
+        }>;
+        references: {
+            modelProviderIds: Array<string>;
+            modelBindingIds: Array<string>;
+            modelBindings: Array<{
+                id: string;
+                model: string;
+            }>;
+            reasoningEfforts: Array<'none' | 'low' | 'medium' | 'high' | 'xhigh'>;
+            enabledToolNames: Array<string>;
+        };
+    };
+};
+
+export type GetConfigAssetsOverviewResponse = GetConfigAssetsOverviewResponses[keyof GetConfigAssetsOverviewResponses];
+
+export type GetConfigAssetData = {
+    body?: never;
+    path: {
+        kind: string;
+        name: string;
+    };
+    query?: never;
+    url: '/api/admin/config/assets/{kind}/{name}';
+};
+
+export type GetConfigAssetResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        kind: 'agent' | 'skill';
+        name: string;
+        revision: number;
+        config: {
+            [key: string]: unknown;
+        };
+        updatedAt: string;
+    };
+};
+
+export type GetConfigAssetResponse = GetConfigAssetResponses[keyof GetConfigAssetResponses];
+
+export type PutConfigAssetData = {
+    body: {
+        config: {
+            [key: string]: unknown;
+        };
+        baseVersion?: number;
+    };
+    path: {
+        kind: string;
+        name: string;
+    };
+    query?: never;
+    url: '/api/admin/config/assets/{kind}/{name}';
+};
+
+export type PutConfigAssetResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        version: number;
+        revision: number;
+    };
+};
+
+export type PutConfigAssetResponse = PutConfigAssetResponses[keyof PutConfigAssetResponses];
+
+export type DeleteConfigAssetData = {
+    body: {
+        baseVersion?: number;
+    };
+    path: {
+        kind: string;
+        name: string;
+    };
+    query?: never;
+    url: '/api/admin/config/assets/{kind}/{name}/delete';
+};
+
+export type DeleteConfigAssetResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        version: number;
+    };
+};
+
+export type DeleteConfigAssetResponse = DeleteConfigAssetResponses[keyof DeleteConfigAssetResponses];
+
+export type SetDefaultConfigAgentData = {
+    body: {
+        agentName?: string;
+        baseVersion?: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/admin/config/default-agent';
+};
+
+export type SetDefaultConfigAgentResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        version: number;
+    };
+};
+
+export type SetDefaultConfigAgentResponse = SetDefaultConfigAgentResponses[keyof SetDefaultConfigAgentResponses];
+
+export type ListConfigAssetRevisionsData = {
+    body?: never;
+    path: {
+        kind: string;
+        name: string;
+    };
+    query?: never;
+    url: '/api/admin/config/assets/{kind}/{name}/revisions';
+};
+
+export type ListConfigAssetRevisionsResponses = {
+    /**
+     * Successful response
+     */
+    200: Array<{
+        revision: number;
+        operation: 'create' | 'update' | 'delete' | 'revert';
+        config: {
+            [key: string]: unknown;
+        } | null;
+        actor: {
+            userId: string;
+            externalUserId: string;
+            displayLabel: string;
+            roles: Array<string>;
+            principalKind?: 'user' | 'service';
+            principalId?: string;
+            principalDisplayLabel?: string;
+            subjectUserId?: string;
+            delegatedActor?: {
+                kind: 'service_principal';
+                id: string;
+                displayLabel?: string;
+                authSource: string;
+            };
+        } | null;
+        globalVersion: number;
+        createdAt: string;
+    }>;
+};
+
+export type ListConfigAssetRevisionsResponse = ListConfigAssetRevisionsResponses[keyof ListConfigAssetRevisionsResponses];
+
+export type RevertConfigAssetData = {
+    body: {
+        revision: number;
+        baseVersion?: number;
+    };
+    path: {
+        kind: string;
+        name: string;
+    };
+    query?: never;
+    url: '/api/admin/config/assets/{kind}/{name}/revert';
+};
+
+export type RevertConfigAssetResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        version: number;
+        revision: number;
+    };
+};
+
+export type RevertConfigAssetResponse = RevertConfigAssetResponses[keyof RevertConfigAssetResponses];
+
+export type ExportConfigAssetsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/config/export';
+};
+
+export type ExportConfigAssetsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        defaultAgentName?: string;
+        agents: Array<{
+            [key: string]: unknown;
+        }>;
+        skills: Array<{
+            [key: string]: unknown;
+        }>;
+        version: number;
+    };
+};
+
+export type ExportConfigAssetsResponse = ExportConfigAssetsResponses[keyof ExportConfigAssetsResponses];
+
+export type ReplaceConfigAssetsData = {
+    body: {
+        defaultAgentName?: string;
+        agents: Array<{
+            [key: string]: unknown;
+        }>;
+        skills: Array<{
+            [key: string]: unknown;
+        }>;
+        baseVersion: number | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/admin/config/import';
+};
+
+export type ReplaceConfigAssetsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        version: number;
+    };
+};
+
+export type ReplaceConfigAssetsResponse = ReplaceConfigAssetsResponses[keyof ReplaceConfigAssetsResponses];
+
+export type ValidateConfigAssetsData = {
+    body: {
+        defaultAgentName?: string;
+        agents: Array<{
+            [key: string]: unknown;
+        }>;
+        skills: Array<{
+            [key: string]: unknown;
+        }>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/admin/config/validate';
+};
+
+export type ValidateConfigAssetsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        valid: true;
+    };
+};
+
+export type ValidateConfigAssetsResponse = ValidateConfigAssetsResponses[keyof ValidateConfigAssetsResponses];
+
 export type ListAdministeredUsersData = {
     body?: never;
     path?: never;
@@ -2238,6 +2527,7 @@ export type ListAdministeredUsersResponses = {
         email?: string;
         roles: Array<string>;
         permissionRefs: Array<string>;
+        permissions: Array<string>;
         status: 'active' | 'disabled';
         createdAt: string;
         updatedAt: string;
@@ -2265,6 +2555,7 @@ export type CreateAdministeredUserData = {
         email?: string;
         roles?: Array<string>;
         permissionRefs?: Array<string>;
+        permissions?: Array<string>;
         status?: 'active' | 'disabled';
         passwordSignIn?: {
             password: string;
@@ -2286,6 +2577,7 @@ export type CreateAdministeredUserResponses = {
         email?: string;
         roles: Array<string>;
         permissionRefs: Array<string>;
+        permissions: Array<string>;
         status: 'active' | 'disabled';
         createdAt: string;
         updatedAt: string;
@@ -2327,6 +2619,7 @@ export type DeleteAdministeredUserResponses = {
         email?: string;
         roles: Array<string>;
         permissionRefs: Array<string>;
+        permissions: Array<string>;
         status: 'active' | 'disabled';
         createdAt: string;
         updatedAt: string;
@@ -2354,6 +2647,7 @@ export type UpdateAdministeredUserData = {
         email?: string | null;
         roles?: Array<string>;
         permissionRefs?: Array<string>;
+        permissions?: Array<string>;
         status?: 'active' | 'disabled';
     };
     path: {
@@ -2374,6 +2668,7 @@ export type UpdateAdministeredUserResponses = {
         email?: string;
         roles: Array<string>;
         permissionRefs: Array<string>;
+        permissions: Array<string>;
         status: 'active' | 'disabled';
         createdAt: string;
         updatedAt: string;
@@ -2421,6 +2716,7 @@ export type UpsertAdministeredUserIdentityResponses = {
         email?: string;
         roles: Array<string>;
         permissionRefs: Array<string>;
+        permissions: Array<string>;
         status: 'active' | 'disabled';
         createdAt: string;
         updatedAt: string;
@@ -2486,6 +2782,7 @@ export type DeleteAdministeredUserIdentityResponses = {
         email?: string;
         roles: Array<string>;
         permissionRefs: Array<string>;
+        permissions: Array<string>;
         status: 'active' | 'disabled';
         createdAt: string;
         updatedAt: string;
@@ -2515,8 +2812,9 @@ export type IssueSessionTokenData = {
         emailVerified?: boolean;
         roles?: Array<string>;
         permissionRefs?: Array<string>;
+        permissions?: Array<string>;
         correlationId?: string;
-        scopes?: Array<'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command'>;
+        scopes?: Array<'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
         delegatedActor?: {
             kind: 'service_principal';
             id: string;
@@ -2526,7 +2824,7 @@ export type IssueSessionTokenData = {
     };
     path?: never;
     query?: never;
-    url: '/auth/session-token';
+    url: '/api/superadmin/session-tokens';
 };
 
 export type IssueSessionTokenResponses = {

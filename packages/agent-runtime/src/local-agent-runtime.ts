@@ -1,6 +1,7 @@
 import {
   AppError,
   type AgentConfig,
+  type ConfigAssetSource,
   type AgentRunHandle,
   type AgentRunId,
   type AgentRunStore,
@@ -17,6 +18,7 @@ import {
   type ReasoningEffortConfig,
   type RuntimeCallContext,
   type RunObservationStore,
+  type RuntimeAssetSnapshot,
   type SkillConfig,
   type StartAgentRunInput,
   type ToolExecution,
@@ -58,7 +60,7 @@ import {
 import { materializeModelTools } from "./model-tool-materialization";
 
 export interface LocalAgentRuntimeOptions {
-  agents: AgentConfig[];
+  assetSource: ConfigAssetSource;
   modelProviders: ModelProviderConfig[];
   modelBindings?: readonly ModelBindingConfig[];
   defaultModelProvider: ModelProviderConfig;
@@ -70,7 +72,6 @@ export interface LocalAgentRuntimeOptions {
   toolExecution: ToolExecution;
   usageGovernance: ModelUsageGovernance;
   webAccess?: WebAccessConfig;
-  skills?: readonly SkillConfig[];
   historyMessageLimit?: number;
   maxSteps?: number;
   repeatedToolCallLimit?: number;
@@ -255,7 +256,8 @@ export class LocalAgentRuntime implements AgentRuntime {
     context: RuntimeCallContext
   ): Promise<void> {
     const state = this.getRun(runId);
-    const agent = this.getAgentConfig(input.agentName);
+    const assets = await this.options.assetSource.getSnapshot();
+    const agent = getSnapshotAgentConfig(assets, input.agentName);
     const modelSelection = this.getModelSelectionForAgent(agent);
     const tools = materializeModelTools({
       agent,
@@ -274,7 +276,7 @@ export class LocalAgentRuntime implements AgentRuntime {
         role: "system",
         content: createSystemInstructions(agent.instructions, context.locale, {
           currentDate: this.options.clock?.now() ?? systemClock.now(),
-          skills: this.getSkillMetadataForAgent(agent)
+          skills: getSnapshotSkillMetadataForAgent(assets, agent)
         })
       },
       ...historyMessages,
@@ -475,14 +477,6 @@ export class LocalAgentRuntime implements AgentRuntime {
     return state;
   }
 
-  private getAgentConfig(agentName: string): AgentConfig {
-    const agent = this.options.agents.find((candidate) => candidate.name === agentName);
-    if (!agent) {
-      throw new AppError("NOT_FOUND", `Agent '${agentName}' is not defined`);
-    }
-    return agent;
-  }
-
   private getModelSelectionForAgent(agent: AgentConfig): {
     provider: ModelProviderConfig;
     model: string;
@@ -500,6 +494,7 @@ export class LocalAgentRuntime implements AgentRuntime {
         provider,
         model: binding.model ?? provider.model,
         reasoningEffort:
+          agent.reasoningEffort ??
           binding.reasoningEffort ??
           (provider.type === "openai-compatible" ? provider.reasoningEffort : undefined)
       };
@@ -509,7 +504,9 @@ export class LocalAgentRuntime implements AgentRuntime {
     return {
       provider,
       model: provider.model,
-      reasoningEffort: provider.type === "openai-compatible" ? provider.reasoningEffort : undefined
+      reasoningEffort:
+        agent.reasoningEffort ??
+        (provider.type === "openai-compatible" ? provider.reasoningEffort : undefined)
     };
   }
 
@@ -519,22 +516,6 @@ export class LocalAgentRuntime implements AgentRuntime {
       throw new AppError("NOT_FOUND", `Model provider '${providerId}' is not defined`);
     }
     return provider;
-  }
-
-  private getSkillMetadataForAgent(agent: AgentConfig) {
-    const skillNames = agent.skillNames ?? [];
-    if (skillNames.length === 0 || !this.options.skills || this.options.skills.length === 0) {
-      return [];
-    }
-    const skillsByName = new Map(this.options.skills.map((skill) => [skill.name, skill]));
-    return skillNames
-      .map((skillName) => skillsByName.get(skillName))
-      .filter((skill): skill is SkillConfig => Boolean(skill))
-      .map(({ name, title, description }) => ({
-        name,
-        title,
-        description
-      }));
   }
 
   private async loadModelHistory(
@@ -720,4 +701,28 @@ function getUnstreamedCompletionText(
 
 export function asRuntimeRunId(value: string): AgentRunId {
   return asAgentRunId(value);
+}
+
+function getSnapshotAgentConfig(assets: RuntimeAssetSnapshot, agentName: string): AgentConfig {
+  const agent = assets.agents.find((candidate) => candidate.name === agentName);
+  if (!agent) {
+    throw new AppError("NOT_FOUND", `Agent '${agentName}' is not defined`);
+  }
+  return agent;
+}
+
+function getSnapshotSkillMetadataForAgent(assets: RuntimeAssetSnapshot, agent: AgentConfig) {
+  const skillNames = agent.skillNames ?? [];
+  if (skillNames.length === 0 || assets.skills.length === 0) {
+    return [];
+  }
+  const skillsByName = new Map(assets.skills.map((skill) => [skill.name, skill]));
+  return skillNames
+    .map((skillName) => skillsByName.get(skillName))
+    .filter((skill): skill is SkillConfig => Boolean(skill))
+    .map(({ name, title, description }) => ({
+      name,
+      title,
+      description
+    }));
 }

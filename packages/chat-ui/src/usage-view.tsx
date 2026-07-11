@@ -5,6 +5,7 @@ import type {
   ModelUsageMonthlyBucket,
   UsageSummary
 } from "@vivd-catalyst/api-client";
+import { ControlPlanePage } from "./control-plane/control-plane-page";
 import { Badge } from "./ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { cn } from "./ui/cn";
@@ -14,10 +15,12 @@ export function UsageView({ usage }: { usage: UsageSummary | undefined }) {
   const recentEvents = usage?.recentEvents ?? [];
   const showWebSearchCosts = shouldShowWebSearchCosts(usage);
   return (
-    <>
+    <ControlPlanePage
+      title="Usage"
+      description={`${(usage?.currentMonth.modelCallCount ?? 0).toLocaleString()} model calls · ${(usage?.currentMonth.totalTokens ?? 0).toLocaleString()} tokens this month`}
+    >
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <UsageMetric
-          primary
           icon={<DollarSign size={15} />}
           label="Billed this month"
           value={formatBilledCost(usage?.currentMonth.cost)}
@@ -167,7 +170,7 @@ export function UsageView({ usage }: { usage: UsageSummary | undefined }) {
           )}
         </CardContent>
       </Card>
-    </>
+    </ControlPlanePage>
   );
 }
 
@@ -396,22 +399,20 @@ function UsageMetric({
   icon,
   label,
   value,
-  detail,
-  primary = false
+  detail
 }: {
   icon: ReactNode;
   label: string;
   value: ReactNode;
   detail?: string;
-  primary?: boolean;
 }) {
   return (
-    <Card className={cn("grid content-start gap-1.5 p-4", primary && "bg-accent/40 lg:col-span-2")}>
+    <Card className="grid content-start gap-1.5 p-4">
       <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
         <span className="grid size-6 place-items-center rounded-md bg-accent text-primary">{icon}</span>
         {label}
       </span>
-      <strong className={cn("break-words text-2xl font-semibold", primary && "text-3xl")}>{value}</strong>
+      <strong className="break-words text-2xl font-semibold">{value}</strong>
       {detail ? <small className="text-xs text-muted-foreground">{detail}</small> : null}
     </Card>
   );

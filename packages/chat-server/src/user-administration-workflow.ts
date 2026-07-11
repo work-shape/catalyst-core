@@ -17,6 +17,7 @@ interface CreateUserCommand {
   email?: string;
   roles?: UserRole[];
   permissionRefs?: string[];
+  permissions?: string[];
   status?: UserStatus;
   passwordSignIn?: {
     password: string;
@@ -29,6 +30,7 @@ interface UpdateUserCommand {
   email?: string | null;
   roles?: UserRole[];
   permissionRefs?: string[];
+  permissions?: string[];
   status?: UserStatus;
 }
 
@@ -77,6 +79,7 @@ export class UserAdministrationWorkflow {
   ): Promise<UserRecord> {
     await this.authorize(actor, context, "governance.user_create_authorized");
     this.requireAssignableRoles(actor, command.roles);
+    this.requireAssignablePermissions(command.permissions);
     if (command.passwordSignIn && !command.email) {
       throw new AppError("VALIDATION_FAILED", "Email is required to create a password sign-in");
     }
@@ -87,6 +90,7 @@ export class UserAdministrationWorkflow {
       email: command.email,
       roles: command.roles,
       permissionRefs: command.permissionRefs,
+      permissions: command.permissions,
       status: command.status
     });
     await this.recordUserMutation(actor, context, "user.created", created);
@@ -108,6 +112,7 @@ export class UserAdministrationWorkflow {
     const existing = await this.getUserOrThrow(command.userId);
     this.requireManageableUser(actor, existing);
     this.requireAssignableRoles(actor, command.roles);
+    this.requireAssignablePermissions(command.permissions);
     const updated = await this.options.userStore.updateUser({
       clientInstanceId: this.options.clientInstanceId,
       userId: command.userId,
@@ -115,6 +120,7 @@ export class UserAdministrationWorkflow {
       email: command.email,
       roles: command.roles,
       permissionRefs: command.permissionRefs,
+      permissions: command.permissions,
       status: command.status
     });
     await this.recordUserMutation(actor, context, "user.updated", updated);
@@ -126,13 +132,16 @@ export class UserAdministrationWorkflow {
     context: RuntimeCallContext,
     command: DeleteUserCommand
   ): Promise<UserRecord> {
+    if (!this.isSuperadmin(actor)) {
+      throw new AppError("FORBIDDEN", "User deletion requires a superadmin role");
+    }
     await authorizeGovernanceAction({
       options: this.options,
       user: actor,
       context,
-      requiredRole: "superadmin",
+      requiredPermission: "users.manage",
       auditType: "governance.user_delete_authorized",
-      deniedMessage: "User deletion requires a superadmin role"
+      deniedMessage: "User deletion requires 'users.manage' permission"
     });
     if (command.userId === actor.id) {
       throw new AppError("VALIDATION_FAILED", "Superadmins cannot delete their own user account");
@@ -277,6 +286,7 @@ export class UserAdministrationWorkflow {
       displayLabel: user.displayLabel,
       roles: user.roles,
       permissionRefs: user.permissionRefs,
+      permissions: user.permissions,
       password: input.password
     });
     await this.requireAvailablePasswordIdentity(user, signIn.externalUserId);
@@ -369,6 +379,15 @@ export class UserAdministrationWorkflow {
     }
   }
 
+  private requireAssignablePermissions(permissions: string[] | undefined): void {
+    if (permissions?.includes("config_assets.release")) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "Release permission can only be carried by service tokens"
+      );
+    }
+  }
+
   private requireManageableUser(actor: AuthenticatedUser, user: UserRecord): void {
     if (user.roles.includes("superadmin") && !this.isSuperadmin(actor)) {
       throw new AppError("FORBIDDEN", "Only superadmins can manage superadmin users");
@@ -421,9 +440,9 @@ export class UserAdministrationWorkflow {
       options: this.options,
       user,
       context,
-      requiredRole: "admin",
+      requiredPermission: "users.manage",
       auditType,
-      deniedMessage: "User administration requires an admin role"
+      deniedMessage: "User administration requires 'users.manage' permission"
     });
   }
 
@@ -442,7 +461,8 @@ export class UserAdministrationWorkflow {
       metadata: {
         status: user.status,
         roles: user.roles,
-        permissionRefs: user.permissionRefs
+        permissionRefs: user.permissionRefs,
+        permissions: user.permissions
       }
     });
   }

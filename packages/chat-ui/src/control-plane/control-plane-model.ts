@@ -4,21 +4,27 @@ import type {
   ApiUser,
   ChangeCurrentUserPasswordRequest,
   LocaleCode,
+  SafeConfig,
   UpdateCurrentUserRequest
 } from "@vivd-catalyst/api-client";
 import {
   useChangeCurrentUserPasswordMutation,
+  useConfigAssetMutations,
   useDeleteCurrentUserMutation,
   useSuperadminUserMutations,
   useUpdateCurrentUserMutation
 } from "../api/workspace-mutations";
 import {
+  useConfigAssetsExportQuery,
+  useConfigAssetsOverviewQuery,
   useWorkspaceAuditActivitiesQuery,
   useWorkspaceUsageQuery,
   useWorkspaceUsersQuery
 } from "../api/workspace-queries";
+import { useQueryClient } from "@tanstack/react-query";
+import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import type { ChatShellAdminPanel } from "../chat-shell";
-import { canViewUsageGovernance } from "../governance";
+import { canEditConfigAssets, canManageUsers, canViewAudit, canViewUsageGovernance } from "../governance";
 import type {
   SuperadminRouteTab,
   WorkspaceRoute,
@@ -33,6 +39,7 @@ export interface ControlPlaneModelInput {
   client: ApiClient;
   adminPanel: ChatShellAdminPanel | undefined;
   user: ApiUser | undefined;
+  configAssetManagement: SafeConfig["features"]["configAssets"] | undefined;
   isAuthenticated: boolean;
   route: WorkspaceRoute;
   view: WorkspaceRouteView;
@@ -78,6 +85,7 @@ export function useControlPlaneModel({
   client,
   adminPanel,
   user,
+  configAssetManagement,
   isAuthenticated,
   route,
   view,
@@ -88,12 +96,39 @@ export function useControlPlaneModel({
   onAccountDeleted,
   showSuperadmin
 }: ControlPlaneModelInput): ControlPlaneModel {
-  const canViewAdministration = adminPanel?.canView(user) ?? false;
-  const canViewOperationalUsage = canViewUsageGovernance(user);
-  const canViewUsage = canViewAdministration;
+  const canViewUsage = canViewUsageGovernance(user);
+  const userCanManageUsers = canManageUsers(user);
+  const userCanViewAudit = canViewAudit(user);
+  const userCanEditConfigAssets =
+    configAssetManagement?.enabled === true && canEditConfigAssets(user);
+  const requestedConfigPending =
+    route.kind === "superadmin" &&
+    route.tab === "config" &&
+    configAssetManagement === undefined &&
+    canEditConfigAssets(user);
+  const canViewAdministration =
+    (adminPanel?.canView(user) ?? false) &&
+    (canViewUsage || userCanManageUsers || userCanViewAudit || userCanEditConfigAssets);
+  const canManageSuperadminAccess = Boolean(user?.roles.includes("superadmin"));
   const administrationEnabled = canViewAdministration && view === "superadmin";
   const routeTab = route.kind === "superadmin" ? route.tab : undefined;
-  const selectedAdministrationTab = routeTab !== undefined ? routeTab : "usage";
+  const defaultAdministrationTab = firstAvailableAdministrationTab({
+    canViewUsage,
+    canManageUsers: userCanManageUsers,
+    canViewAudit: userCanViewAudit,
+    canEditConfigAssets: userCanEditConfigAssets
+  });
+  const selectedAdministrationTab = requestedConfigPending
+    ? "config"
+    : routeTab &&
+        canViewAdministrationTab(routeTab, {
+          canViewUsage,
+          canManageUsers: userCanManageUsers,
+          canViewAudit: userCanViewAudit,
+          canEditConfigAssets: userCanEditConfigAssets
+        })
+      ? routeTab
+      : defaultAdministrationTab;
   const usageQuery = useWorkspaceUsageQuery({
     apiBaseUrl,
     authScope,
@@ -104,13 +139,13 @@ export function useControlPlaneModel({
     apiBaseUrl,
     authScope,
     client,
-    enabled: administrationEnabled
+    enabled: administrationEnabled && userCanViewAudit
   });
   const usersQuery = useWorkspaceUsersQuery({
     apiBaseUrl,
     authScope,
     client,
-    enabled: administrationEnabled
+    enabled: administrationEnabled && userCanManageUsers
   });
   const updateCurrentUser = useUpdateCurrentUserMutation({
     apiBaseUrl,
@@ -133,12 +168,49 @@ export function useControlPlaneModel({
     authScope,
     client
   });
+  const queryClient = useQueryClient();
+  const configAssetsEnabled = administrationEnabled && userCanEditConfigAssets;
+  const configAssetsOverviewQuery = useConfigAssetsOverviewQuery({
+    apiBaseUrl,
+    authScope,
+    client,
+    enabled: configAssetsEnabled
+  });
+  const configAssetsExportQuery = useConfigAssetsExportQuery({
+    apiBaseUrl,
+    authScope,
+    client,
+    enabled: configAssetsEnabled
+  });
+  const configAssetMutations = useConfigAssetMutations({
+    apiBaseUrl,
+    authScope,
+    client
+  });
 
   useEffect(() => {
-    if (isAuthenticated && route.kind === "superadmin" && !canViewAdministration) {
-      goToDefaultChat({ replace: true });
+    if (!isAuthenticated || route.kind !== "superadmin") {
+      return;
     }
-  }, [canViewAdministration, goToDefaultChat, isAuthenticated, route.kind]);
+    if (requestedConfigPending) {
+      return;
+    }
+    if (!canViewAdministration) {
+      goToDefaultChat({ replace: true });
+      return;
+    }
+    if (selectedAdministrationTab && route.tab !== selectedAdministrationTab) {
+      showSuperadmin(selectedAdministrationTab, { replace: true });
+    }
+  }, [
+    canViewAdministration,
+    goToDefaultChat,
+    isAuthenticated,
+    route,
+    requestedConfigPending,
+    selectedAdministrationTab,
+    showSuperadmin
+  ]);
 
   return {
     canViewAdministration,
@@ -162,7 +234,10 @@ export function useControlPlaneModel({
         usage: usageQuery.data,
         auditActivities: auditQuery.data ?? [],
         users: usersQuery.data ?? [],
-        canViewUsageGovernance: canViewOperationalUsage,
+        canViewUsageGovernance: canViewUsage,
+        canManageUsers: userCanManageUsers,
+        canViewAudit: userCanViewAudit,
+        canManageSuperadminAccess,
         loading: usageQuery.isLoading || auditQuery.isLoading,
         usersLoading: usersQuery.isLoading,
         error: usageQuery.error
@@ -182,9 +257,87 @@ export function useControlPlaneModel({
           superadminUserMutations.deleteUserIdentity.mutateAsync({ userId, identity }),
         onResetUserPassword: (userId, password) =>
           superadminUserMutations.resetUserPassword.mutateAsync({ userId, password }),
-        selectedTab: selectedAdministrationTab,
+        canEditConfigAssets: userCanEditConfigAssets,
+        configAssets: {
+          editableAgentFields: configAssetManagement?.editableAgentFields ?? [],
+          allowAgentCreation: configAssetManagement?.allowAgentCreation ?? false,
+          allowAgentDeletion: configAssetManagement?.allowAgentDeletion ?? false,
+          allowDefaultAgentChange: configAssetManagement?.allowDefaultAgentChange ?? false,
+          allowSkillEditing: configAssetManagement?.allowSkillEditing ?? false,
+          overview: configAssetsOverviewQuery.data,
+          agents: namedBundleEntries(configAssetsExportQuery.data?.agents),
+          skills: namedBundleEntries(configAssetsExportQuery.data?.skills),
+          loading: configAssetsOverviewQuery.isLoading || configAssetsExportQuery.isLoading,
+          error:
+            configAssetsOverviewQuery.error || configAssetsExportQuery.error
+              ? apiErrorMessage(configAssetsOverviewQuery.error ?? configAssetsExportQuery.error, undefined)
+              : undefined,
+          mutating: configAssetMutations.isPending,
+          onSaveAsset: (saveInput) => configAssetMutations.putAsset.mutateAsync(saveInput),
+          onDeleteAsset: (deleteInput) => configAssetMutations.deleteAsset.mutateAsync(deleteInput),
+          onSetDefaultAgent: (defaultInput) =>
+            configAssetMutations.setDefaultAgent.mutateAsync(defaultInput),
+          onRevertAsset: (revertInput) => configAssetMutations.revertAsset.mutateAsync(revertInput),
+          onLoadRevisions: (kind, name) => client.configAssetRevisions(kind, name),
+          onReload: () =>
+            queryClient.invalidateQueries({
+              queryKey: workspaceQueryKeys.configAssetsOverview(apiBaseUrl, authScope)
+            })
+        },
+        selectedTab: selectedAdministrationTab ?? "users",
         onSelectTab: showSuperadmin
       }
     }
   };
+}
+
+function firstAvailableAdministrationTab(input: {
+  canViewUsage: boolean;
+  canManageUsers: boolean;
+  canViewAudit: boolean;
+  canEditConfigAssets: boolean;
+}): SuperadminRouteTab | undefined {
+  if (input.canManageUsers) {
+    return "users";
+  }
+  if (input.canEditConfigAssets) {
+    return "config";
+  }
+  if (input.canViewUsage) {
+    return "usage";
+  }
+  if (input.canViewAudit) {
+    return "audit";
+  }
+  return undefined;
+}
+
+function canViewAdministrationTab(
+  tab: SuperadminRouteTab,
+  input: {
+    canViewUsage: boolean;
+    canManageUsers: boolean;
+    canViewAudit: boolean;
+    canEditConfigAssets: boolean;
+  }
+): boolean {
+  if (tab === "usage") {
+    return input.canViewUsage;
+  }
+  if (tab === "users") {
+    return input.canManageUsers;
+  }
+  if (tab === "config") {
+    return input.canEditConfigAssets;
+  }
+  return input.canViewAudit;
+}
+
+function namedBundleEntries(
+  configs: Array<Record<string, unknown>> | undefined
+): Array<{ name: string; config: Record<string, unknown> }> {
+  return (configs ?? []).flatMap((config) => {
+    const name = config.name;
+    return typeof name === "string" ? [{ name, config }] : [];
+  });
 }

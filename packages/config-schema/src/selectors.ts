@@ -10,14 +10,6 @@ export function getClientInstanceId(config: ClientInstanceConfig) {
   return asClientInstanceId(config.clientInstance.id);
 }
 
-export function getAgentConfig(config: ClientInstanceConfig, agentName: string): AgentConfig {
-  const agent = config.agents.find((candidate) => candidate.name === agentName);
-  if (!agent) {
-    throw new AppError("NOT_FOUND", `Agent '${agentName}' is not defined`);
-  }
-  return agent;
-}
-
 export interface ResolvedModelSelection {
   provider: ModelProviderConfig;
   binding?: ModelBindingConfig;
@@ -41,13 +33,19 @@ export function getModelSelectionForAgent(
   agent: AgentConfig
 ): ResolvedModelSelection {
   if (agent.modelBindingId) {
-    return resolveModelBinding(config, agent.modelBindingId);
+    const selection = resolveModelBinding(config, agent.modelBindingId);
+    return {
+      ...selection,
+      reasoningEffort: agent.reasoningEffort ?? selection.reasoningEffort
+    };
   }
   const provider = resolveModelProvider(config, agent.modelProviderId ?? config.modelProviders[0]?.id);
   return {
     provider,
     model: provider.model,
-    reasoningEffort: provider.type === "openai-compatible" ? provider.reasoningEffort : undefined
+    reasoningEffort:
+      agent.reasoningEffort ??
+      (provider.type === "openai-compatible" ? provider.reasoningEffort : undefined)
   };
 }
 

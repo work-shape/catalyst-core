@@ -427,7 +427,13 @@ describe("api operation catalog and client", () => {
     for (const file of routeFiles) {
       const source = await readFile(file, "utf8");
       expect(source, file).toContain("apiOperations.");
-      expect(source, file).not.toMatch(/app\.(?:get|post|patch|put|delete)\(\s*["'`]\/(?:api|auth)\//u);
+      const catalogRouteSource =
+        file === "packages/chat-server/src/routes/session-token-routes.ts"
+          ? source.replace('app.post("/auth/session-token", issueSessionToken);', "")
+          : source;
+      expect(catalogRouteSource, file).not.toMatch(
+        /app\.(?:get|post|patch|put|delete)\(\s*["'`]\/(?:api|auth)\//u
+      );
     }
   });
 

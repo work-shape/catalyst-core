@@ -19,6 +19,8 @@ auth:
           - user
           - admin
           - superadmin
+        permissions:
+          - config_assets.release
         permissionRefs:
           - demo-tools
       - email: e2e-user@example.test
@@ -40,13 +42,39 @@ auth:
           - admin
         permissionRefs:
           - demo-tools
+  sessionToken:
+    issuer: demo-e2e-client-instance
+    ttlSeconds: 900
 retention:
   conversationDays: 1
   auditDays: 30
   allowUserDelete: true
+administration:
+  agentConfiguration:
+    enabled: true
+    editableAgentFields:
+      - displayName
+      - welcomeMessage
+      - welcomeSubtitle
+      - instructions
+      - modelProviderId
+      - modelBindingId
+      - reasoningEffort
+      - maxSteps
+      - toolNames
+      - skillNames
+      - initialPrompts
+    allowAgentCreation: true
+    allowAgentDeletion: true
+    allowDefaultAgentChange: true
+    allowSkillEditing: true
 modelProviders:
   - id: local
     type: deterministic
+    model: deterministic-local
+modelBindings:
+  - id: primary
+    providerId: local
     model: deterministic-local
 usage:
   budget:
@@ -62,29 +90,11 @@ usage:
         model: deterministic-local
         inputPricePerMillionTokens: 0
         outputPricePerMillionTokens: 0
-defaultAgentName: application_assistant
-agents:
-  - name: application_assistant
-    displayName: Application Assistant
-    modelProviderId: local
-    instructions: |
-      You help users work through sensitive application and document review workflows.
-    toolNames:
-      - demo.workflow_summary
-      - demo.weather_forecast
-    initialPrompts:
-      - title: Find review risks
-        prompt: List the most important application or document review risks I should check first.
-  - name: research_assistant
-    displayName: Research Assistant
-    modelProviderId: local
-    instructions: |
-      You help users summarize policy and research context for sensitive workflows.
-    toolNames: []
-    initialPrompts:
-      - title: Summarize policy
-        prompt: Summarize the policy context I should consider first.
 tools:
+  - name: read_skill
+    enabled: true
+  - name: show_view
+    enabled: true
   - name: demo.workflow_summary
     enabled: true
   - name: demo.weather_forecast

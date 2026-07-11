@@ -114,7 +114,8 @@ export async function createStandaloneAuthRuntimeForClientInstance(input: {
       displayLabel: seedUser.displayLabel,
       password: resolveSeedPassword(seedUser, input),
       roles: seedUser.roles,
-      permissionRefs: seedUser.permissionRefs
+      permissionRefs: seedUser.permissionRefs,
+      permissions: seedUser.permissions
     }))
   });
 }

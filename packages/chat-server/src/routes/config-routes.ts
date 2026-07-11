@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { createClientBranding, createSafeConfigView } from "@vivd-catalyst/config-schema";
-import { requireAuthScope } from "@vivd-catalyst/core";
+import { requireAuthScope, resolveEffectivePermissions } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "../types";
 import { authenticateRequest, resolveRequestLocale } from "../request-context";
 
@@ -9,7 +9,10 @@ export function registerConfigRoutes(app: FastifyInstance, options: ChatServerOp
   app.get(apiOperations.getCurrentUser.path, async (request) => {
     const { user } = await authenticateRequest(options, request);
     requireAuthScope(user, "me:read");
-    return user;
+    return {
+      ...user,
+      permissions: [...resolveEffectivePermissions(user)]
+    };
   });
 
   app.get(apiOperations.getBranding.path, async (request) =>
@@ -21,7 +24,8 @@ export function registerConfigRoutes(app: FastifyInstance, options: ChatServerOp
   app.get(apiOperations.getConfig.path, async (request) => {
     const { user } = await authenticateRequest(options, request);
     requireAuthScope(user, "config:read");
-    const config = createSafeConfigView(options.config, {
+    const assets = await options.configAssets.source.getSnapshot();
+    const config = createSafeConfigView(options.config, assets, {
       requestedLocale: resolveRequestLocale(options, request)
     });
     return {

@@ -21,6 +21,7 @@ const translations = {
     cancel: "Cancel",
     checkingSession: "Checking session",
     closeSidebar: "Close sidebar",
+    collapseSidebar: "Collapse sidebar",
     closeDisplayPanel: "Close display panel",
     collapseDisplay: "Collapse display",
     conversations: "Conversations",
@@ -60,6 +61,7 @@ const translations = {
     language: "Language",
     localeDe: "Deutsch",
     localeEn: "English",
+    instanceNotConfigured: "This instance isn't configured yet. No agents have been published.",
     loadingConversation: "Loading conversation",
     loadingUser: "Loading",
     messagePlaceholder: "Message",
@@ -68,6 +70,7 @@ const translations = {
     newPasswordsDoNotMatch: "New passwords do not match",
     newPasswordTooShort: "New password must be at least 8 characters",
     noConversations: "No conversations yet.",
+    noConversationMatches: "No matching conversations.",
     openArtifactPreview: "Open preview for {filename}",
     openSidebar: "Open sidebar",
     openSuperadminPanel: "Open administration panel",
@@ -88,6 +91,7 @@ const translations = {
     saveProfile: "Save profile",
     saving: "Saving",
     scrollToBottom: "Scroll to bottom",
+    searchConversations: "Search conversations",
     selectAgent: "Select agent",
     sendMessage: "Send message",
     sessionCheckingDescription: "Your account is being checked before the chat loads.",
@@ -122,7 +126,8 @@ const translations = {
     updating: "Updating",
     updatedRecently: "Updated recently",
     userFallback: "User",
-    userSettings: "User settings"
+    userSettings: "User settings",
+    workspace: "Workspace"
   },
   de: {
     account: "Konto",
@@ -141,6 +146,7 @@ const translations = {
     cancel: "Abbrechen",
     checkingSession: "Sitzung wird geprüft",
     closeSidebar: "Seitenleiste schließen",
+    collapseSidebar: "Seitenleiste einklappen",
     closeDisplayPanel: "Ansicht schließen",
     collapseDisplay: "Ansicht einklappen",
     conversations: "Unterhaltungen",
@@ -180,6 +186,7 @@ const translations = {
     language: "Sprache",
     localeDe: "Deutsch",
     localeEn: "English",
+    instanceNotConfigured: "Diese Instanz ist noch nicht konfiguriert. Es wurden noch keine Agenten veröffentlicht.",
     loadingConversation: "Unterhaltung wird geladen",
     loadingUser: "Lädt",
     messagePlaceholder: "Nachricht",
@@ -188,6 +195,7 @@ const translations = {
     newPasswordsDoNotMatch: "Neue Passwörter stimmen nicht überein",
     newPasswordTooShort: "Neues Passwort muss mindestens 8 Zeichen lang sein",
     noConversations: "Noch keine Unterhaltungen.",
+    noConversationMatches: "Keine passenden Unterhaltungen.",
     openArtifactPreview: "Vorschau für {filename} öffnen",
     openSidebar: "Seitenleiste öffnen",
     openSuperadminPanel: "Administrationsbereich öffnen",
@@ -208,6 +216,7 @@ const translations = {
     saveProfile: "Profil speichern",
     saving: "Speichert",
     scrollToBottom: "Zum Ende scrollen",
+    searchConversations: "Unterhaltungen suchen",
     selectAgent: "Agent auswählen",
     sendMessage: "Nachricht senden",
     sessionCheckingDescription: "Dein Konto wird geprüft, bevor der Chat geladen wird.",
@@ -242,7 +251,8 @@ const translations = {
     updating: "Aktualisiert",
     updatedRecently: "Gerade aktualisiert",
     userFallback: "Benutzer",
-    userSettings: "Benutzereinstellungen"
+    userSettings: "Benutzereinstellungen",
+    workspace: "Arbeitsbereich"
   }
 } satisfies Record<LocaleCode, Record<string, string>>;
 

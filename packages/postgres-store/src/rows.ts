@@ -6,6 +6,9 @@ import {
   type AuditEvent,
   type ChatMessage,
   type ClientInstanceId,
+  type ConfigAssetRecord,
+  type ConfigAssetRevisionRecord,
+  type ConfigAssetState,
   type Conversation,
   type ConversationAttachment,
   type ExecutionWorkspace,
@@ -36,6 +39,9 @@ import type {
   auditEvents,
   conversationAttachments,
   conversations,
+  configAssetRevisions,
+  configAssets,
+  configAssetState,
   executionWorkspaceFiles,
   executionWorkspaces,
   managedArtifacts,
@@ -63,6 +69,9 @@ export type AuditEventRow = typeof auditEvents.$inferSelect;
 export type ModelUsageEventRow = typeof modelUsageEvents.$inferSelect;
 export type ProductUserRow = typeof productUsers.$inferSelect;
 export type UserIdentityRow = typeof userIdentities.$inferSelect;
+export type ConfigAssetStateRow = typeof configAssetState.$inferSelect;
+export type ConfigAssetRow = typeof configAssets.$inferSelect;
+export type ConfigAssetRevisionRow = typeof configAssetRevisions.$inferSelect;
 
 export function mapConversation(row: ConversationRow | undefined): Conversation {
   if (!row) {
@@ -423,10 +432,61 @@ export function mapUserRecord(
     email: row.email ?? undefined,
     roles: row.roles,
     permissionRefs: row.permissionRefs,
+    permissions: row.permissions,
     status: row.status,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     lastAuthenticatedAt: row.lastAuthenticatedAt?.toISOString(),
     identities
+  };
+}
+
+export function mapConfigAssetState(row: ConfigAssetStateRow | undefined): ConfigAssetState {
+  if (!row) {
+    return { version: 0 };
+  }
+  return {
+    version: row.version,
+    defaultAgentName: row.defaultAgentName ?? undefined
+  };
+}
+
+export function mapConfigAsset(
+  row: ConfigAssetRow | undefined,
+  revision: ConfigAssetRevisionRow | undefined
+): ConfigAssetRecord {
+  if (!row || !revision || revision.id !== row.activeRevisionId) {
+    throw new AppError("INTERNAL", "Expected config asset with its active revision");
+  }
+  return {
+    id: row.id,
+    clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    kind: row.kind,
+    name: row.name,
+    status: row.status,
+    activeRevisionId: row.activeRevisionId,
+    revision: revision.revision,
+    config: revision.config,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString()
+  };
+}
+
+export function mapConfigAssetRevision(
+  row: ConfigAssetRevisionRow | undefined
+): ConfigAssetRevisionRecord {
+  if (!row) {
+    throw new AppError("INTERNAL", "Expected config asset revision row");
+  }
+  return {
+    id: row.id,
+    assetId: row.assetId,
+    clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    revision: row.revision,
+    operation: row.operation,
+    config: row.config,
+    actor: row.actor,
+    globalVersion: row.globalVersion,
+    createdAt: row.createdAt.toISOString()
   };
 }

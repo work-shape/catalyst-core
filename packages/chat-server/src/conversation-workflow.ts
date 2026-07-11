@@ -79,6 +79,17 @@ export class ConversationWorkflow {
     this.options = options;
   }
 
+  private async requireDefaultAgentName(): Promise<string> {
+    const assets = await this.options.configAssets.source.getSnapshot();
+    if (!assets.defaultAgentName) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "No default agent is configured for this client instance yet"
+      );
+    }
+    return assets.defaultAgentName;
+  }
+
   async listConversations(user: AuthenticatedUser): Promise<ConversationListItem[]> {
     const subjectUserId = getSubjectUserId(user);
     const conversations = await this.options.conversationStore.listConversationsForUser({
@@ -276,7 +287,7 @@ export class ConversationWorkflow {
           conversationId,
           ownerUserId: getSubjectUserId(user),
           inputMessageId: userMessageId,
-          agentName: command.agentName ?? this.options.config.defaultAgentName,
+          agentName: command.agentName ?? (await this.requireDefaultAgentName()),
           idempotencyKey: command.idempotencyKey,
           correlationId: context.correlationId,
           startedAt

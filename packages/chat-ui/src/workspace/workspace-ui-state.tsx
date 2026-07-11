@@ -152,7 +152,7 @@ export function WorkspaceUiStateProvider({
   }, [onRouteChange]);
 
   const showSuperadmin = useCallback(
-    (tab: SuperadminRouteTab = "usage", options?: WorkspaceRouteChangeOptions) => {
+    (tab: SuperadminRouteTab = "users", options?: WorkspaceRouteChangeOptions) => {
       onRouteChange({ kind: "superadmin", tab }, options);
     },
     [onRouteChange]
@@ -165,7 +165,7 @@ export function WorkspaceUiStateProvider({
         return;
       }
       if (nextView === "superadmin") {
-        showSuperadmin("usage");
+        showSuperadmin("users");
         return;
       }
       onRouteChange(lastChatRouteRef.current);

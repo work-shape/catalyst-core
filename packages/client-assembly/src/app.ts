@@ -1,16 +1,16 @@
 import type { FastifyInstance } from "fastify";
 import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
-import { StoreBackedAuditRecorder } from "@vivd-catalyst/core";
+import { REASONING_EFFORTS, StoreBackedAuditRecorder } from "@vivd-catalyst/core";
 import { createChatServer } from "@vivd-catalyst/chat-server";
 import type { ChatAttachmentService } from "@vivd-catalyst/chat-server";
 import { createManagedObjectAccess } from "@vivd-catalyst/capability-sdk";
-import { AppError } from "@vivd-catalyst/core";
+import { AppError, type PlatformStore } from "@vivd-catalyst/core";
 import {
   type ClientInstanceConfig,
-  getAgentConfig,
   getClientInstanceId,
   getEnabledToolNames,
-  loadClientInstanceConfigFromFile
+  loadClientInstanceConfigFromFile,
+  validateConfigAssetBundle
 } from "@vivd-catalyst/config-schema";
 import { createModelProviderRegistry } from "@vivd-catalyst/model-provider";
 import {
@@ -27,12 +27,15 @@ import {
   createWorkspaceToolDefinitions,
   InProcessToolExecution,
   LibreOfficeArtifactPreviewGenerator,
-  SkillCatalog,
   ToolRegistry
 } from "@vivd-catalyst/tool-execution";
 import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
-import { assertClientAssemblyValid } from "./assembly-validation";
+import {
+  assertClientAssemblyValid,
+  findConfigAssetAgentValidationIssues
+} from "./assembly-validation";
+import { createConfigAssetSource } from "./config-asset-source";
 import { createClientInstanceAuth } from "./auth";
 import type {
   ClientInstanceAttachmentHandler,
@@ -62,6 +65,7 @@ export interface CreateClientInstanceAppInput {
 export interface ClientInstanceApp {
   readonly config: ClientInstanceConfig;
   readonly server: FastifyInstance;
+  readonly store: PlatformStore;
   listen(input?: { host?: string; port?: number }): Promise<void>;
   close(): Promise<void>;
 }
@@ -133,8 +137,9 @@ export async function createClientInstanceApp(
     ...(workspaceManagedObjectReader ? [workspaceManagedObjectReader] : []),
     ...capabilityContributions.flatMap((contribution) => contribution.managedObjects ?? []),
   ]);
-  const skillCatalog = new SkillCatalog({
-    skills: config.skills
+  const assetSource = createConfigAssetSource({
+    store,
+    clientInstanceId
   });
   const workspaceTools = config.executionWorkspaces.enabled
     ? createWorkspaceToolDefinitions({
@@ -168,12 +173,7 @@ export async function createClientInstanceApp(
       ...workspaceTools,
       ...webAccessTools,
       ...createDataSourceQueryTools({ dataSources }),
-      createReadSkillTool({
-        catalog: skillCatalog,
-        getAgentSkillNames(agentName) {
-          return getAgentConfig(config, agentName).skillNames;
-        }
-      }),
+      createReadSkillTool({ assetSource }),
       ...capabilityContributions.flatMap((contribution) => contribution.tools ?? []),
       ...input.tools
     ]
@@ -194,8 +194,10 @@ export async function createClientInstanceApp(
   });
   const toolExecution = new InProcessToolExecution({
     registry: toolRegistry,
-    getAgentToolNames(agentName) {
-      return getAgentConfig(config, agentName).toolNames;
+    async getAgentToolNames(agentName) {
+      const assets = await assetSource.getSnapshot();
+      const agent = assets.agents.find((candidate) => candidate.name === agentName);
+      return agent?.toolNames ?? [];
     },
     auditRecorder
   });
@@ -208,7 +210,7 @@ export async function createClientInstanceApp(
     throw new AppError("VALIDATION_FAILED", "At least one model provider is required");
   }
   const agentRuntime = new LocalAgentRuntime({
-    agents: config.agents,
+    assetSource,
     modelProviders: config.modelProviders,
     modelBindings: config.modelBindings,
     defaultModelProvider,
@@ -223,7 +225,6 @@ export async function createClientInstanceApp(
     maxSteps: config.runtime.maxSteps,
     repeatedToolCallLimit: config.runtime.repeatedToolCallLimit,
     modelContext: config.modelContext,
-    skills: config.skills,
     runFailureReporter: createRuntimeFailureReporter(),
     artifactReader: managedObjects
       ? {
@@ -256,6 +257,27 @@ export async function createClientInstanceApp(
     userStore: store,
     usageGovernance,
     auditRecorder,
+    configAssets: {
+      store,
+      source: assetSource,
+      validationRefs: {
+        modelProviderIds: config.modelProviders.map((provider) => provider.id),
+        modelBindingIds: config.modelBindings
+          .filter((binding) => binding.agentSelectable !== false)
+          .map((binding) => binding.id),
+        modelBindings: config.modelBindings
+          .filter((binding) => binding.agentSelectable !== false)
+          .map((binding) => ({
+            id: binding.id,
+            model:
+              binding.model ??
+              config.modelProviders.find((provider) => provider.id === binding.providerId)!.model
+          })),
+        reasoningEfforts: [...REASONING_EFFORTS],
+        enabledToolNames: [...getEnabledToolNames(config)]
+      },
+      validateAgents: (agents) => findConfigAssetAgentValidationIssues(config, agents)
+    },
     agentRuntime,
     attachments,
     managedObjects,
@@ -279,9 +301,24 @@ export async function createClientInstanceApp(
     sessionToken
   });
 
+  const assets = await assetSource.getSnapshot();
+  validateConfigAssetBundle({
+    agents: assets.agents,
+    skills: assets.skills,
+    defaultAgentName: assets.defaultAgentName,
+    refs: {
+      modelProviderIds: config.modelProviders.map((provider) => provider.id),
+      modelBindingIds: config.modelBindings
+        .filter((binding) => binding.agentSelectable !== false)
+        .map((binding) => binding.id),
+      enabledToolNames: [...getEnabledToolNames(config)]
+    }
+  });
+
   return {
     config,
     server,
+    store,
     async listen(listenInput = {}) {
       await server.listen({
         host: listenInput.host ?? env.HOST ?? "127.0.0.1",
@@ -301,11 +338,38 @@ async function createCapabilityContributions(
   capabilities: readonly ClientInstanceCapability[],
   context: Parameters<ClientInstanceCapability["create"]>[0]
 ): Promise<ClientInstanceCapabilityContribution[]> {
+  assertCapabilityConfigKeys(capabilities, context.capabilitiesConfig);
   const contributions: ClientInstanceCapabilityContribution[] = [];
   for (const capability of capabilities) {
     contributions.push(await capability.create(context));
   }
   return contributions;
+}
+
+function assertCapabilityConfigKeys(
+  capabilities: readonly ClientInstanceCapability[],
+  config: Record<string, unknown>
+): void {
+  const registeredKeys = capabilities.flatMap((capability) =>
+    capability.configKey ? [capability.configKey] : []
+  );
+  const duplicateKeys = registeredKeys.filter(
+    (key, index) => registeredKeys.indexOf(key) !== index
+  );
+  if (duplicateKeys.length > 0) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Duplicate capability config registrations: ${[...new Set(duplicateKeys)].join(", ")}`
+    );
+  }
+  const registered = new Set(registeredKeys);
+  const unknown = Object.keys(config).filter((key) => !registered.has(key));
+  if (unknown.length > 0) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Capability config has no registered implementation: ${unknown.join(", ")}`
+    );
+  }
 }
 
 function resolveAttachmentHandlers(

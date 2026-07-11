@@ -1,4 +1,5 @@
 export * from "./identity";
+export * from "./permissions";
 export * from "./user";
 export * from "./files";
 export * from "./execution-workspace";
@@ -11,4 +12,5 @@ export * from "./audit-projection";
 export * from "./usage";
 export * from "./platform-store";
 export * from "./config";
+export * from "./config-assets";
 export * from "./web-source";

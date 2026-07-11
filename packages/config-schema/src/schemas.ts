@@ -15,6 +15,7 @@ import type {
   UsageSafeguardsConfig,
   WebAccessConfig
 } from "@vivd-catalyst/core";
+import { AGENT_EDITABLE_FIELDS, REASONING_EFFORTS } from "@vivd-catalyst/core";
 import { localizationConfigSchema, localizedStringSchema } from "./localization";
 
 const DEFAULT_EXECUTION_WORKSPACE_MEMORY_BYTES = 4 * 1024 * 1024 * 1024;
@@ -27,6 +28,7 @@ export const userIdentitySchema = z.object({
   emailVerified: z.boolean().optional(),
   roles: z.array(z.string().min(1)).default(["user", "admin"]),
   permissionRefs: z.array(z.string().min(1)).default(["demo-tools"]),
+  permissions: z.array(z.string().min(1)).default([]),
   authSource: z.string().min(1).default("development")
 });
 
@@ -36,6 +38,7 @@ const defaultDevelopmentUser = {
   displayLabel: "Development User",
   roles: ["user", "admin"],
   permissionRefs: ["demo-tools"],
+  permissions: [],
   authSource: "development"
 };
 
@@ -53,7 +56,8 @@ const standaloneSeedUserSchema = z.object({
   passwordEnvName: z.string().min(1),
   developmentPassword: z.string().min(8).optional(),
   roles: z.array(z.string().min(1)).default(["user"]),
-  permissionRefs: z.array(z.string().min(1)).default([])
+  permissionRefs: z.array(z.string().min(1)).default([]),
+  permissions: z.array(z.string().min(1)).default([])
 });
 
 const standaloneAuthConfigSchema = z.object({
@@ -84,7 +88,7 @@ const openAiCompatibleModelProviderSchema = z.object({
   apiKeyEnvName: z.string().min(1).default("OPENAI_API_KEY"),
   authMode: z.enum(["bearer", "api-key"]).default("bearer"),
   organizationEnvName: z.string().min(1).optional(),
-  reasoningEffort: z.enum(["none", "low", "medium", "high", "xhigh"]).optional(),
+  reasoningEffort: z.enum(REASONING_EFFORTS).optional(),
   compliance: modelProviderComplianceSchema.optional()
 });
 
@@ -156,7 +160,8 @@ export const modelBindingConfigSchema = z.object({
   id: z.string().min(1),
   providerId: z.string().min(1),
   model: z.string().min(1).optional(),
-  reasoningEffort: z.enum(["none", "low", "medium", "high", "xhigh"]).optional()
+  reasoningEffort: z.enum(REASONING_EFFORTS).optional(),
+  agentSelectable: z.boolean().default(true)
 });
 
 const welcomeSubtitleSchema = z.union([
@@ -180,6 +185,7 @@ export const agentConfigSchema = z.object({
   instructions: z.string().min(1),
   modelProviderId: z.string().min(1).optional(),
   modelBindingId: z.string().min(1).optional(),
+  reasoningEffort: z.enum(REASONING_EFFORTS).optional(),
   maxSteps: z.number().int().positive().optional(),
   toolNames: z.array(z.string().min(1)).default([]),
   skillNames: z.array(skillNameSchema).default([]),
@@ -523,6 +529,37 @@ export const uiConfigSchema = z
     defaultThemeMode: "system"
   });
 
+export const administrationConfigSchema = z
+  .object({
+    agentConfiguration: z
+      .object({
+        enabled: z.boolean().default(false),
+        editableAgentFields: z.array(z.enum(AGENT_EDITABLE_FIELDS)).default([]),
+        allowAgentCreation: z.boolean().default(false),
+        allowAgentDeletion: z.boolean().default(false),
+        allowDefaultAgentChange: z.boolean().default(false),
+        allowSkillEditing: z.boolean().default(false)
+      })
+      .default({
+        enabled: false,
+        editableAgentFields: [],
+        allowAgentCreation: false,
+        allowAgentDeletion: false,
+        allowDefaultAgentChange: false,
+        allowSkillEditing: false
+      })
+  })
+  .default({
+    agentConfiguration: {
+      enabled: false,
+      editableAgentFields: [],
+      allowAgentCreation: false,
+      allowAgentDeletion: false,
+      allowDefaultAgentChange: false,
+      allowSkillEditing: false
+    }
+  });
+
 export const clientInstanceConfigSchema = z.object({
   version: z.literal(1).default(1),
   clientInstance: z.object({
@@ -575,6 +612,7 @@ export const clientInstanceConfigSchema = z.object({
   modelContext: modelContextConfigSchema,
   webAccess: webAccessConfigSchema,
   executionWorkspaces: executionWorkspacesConfigSchema,
+  administration: administrationConfigSchema,
   capabilities: z.record(z.string(), z.unknown()).default({}),
   usage: z
     .object({
@@ -593,9 +631,6 @@ export const clientInstanceConfigSchema = z.object({
         webSearch: []
       }
     }),
-  defaultAgentName: z.string().min(1),
-  agents: z.array(agentConfigSchema).min(1),
-  skills: z.array(skillConfigSchema).default([]),
   tools: z
     .array(toolInstanceConfigSchema)
     .default([]),
@@ -603,19 +638,38 @@ export const clientInstanceConfigSchema = z.object({
   ui: uiConfigSchema
 });
 
-export const clientInstanceConfigFileSchema = clientInstanceConfigSchema
-  .omit({
-    agents: true,
-    ui: true
-  })
-  .extend({
-    agents: z.array(agentConfigSchema).default([]),
-    agentFiles: z.array(z.string().min(1)).default([]),
-    skills: z.array(skillConfigSchema).default([]),
-    skillFiles: z.array(z.string().min(1)).default([]),
-    ui: uiConfigSchema.optional(),
-    uiFile: z.string().min(1).optional()
-  });
+const MOVED_ASSET_CONFIG_KEYS = [
+  "agents",
+  "agentFiles",
+  "skills",
+  "skillFiles",
+  "defaultAgentName"
+] as const;
+
+export const clientInstanceConfigFileSchema = z.preprocess(
+  (raw, context) => {
+    if (typeof raw === "object" && raw !== null) {
+      for (const key of MOVED_ASSET_CONFIG_KEYS) {
+        if (key in raw) {
+          context.addIssue({
+            code: "custom",
+            path: [key],
+            message: `'${key}' moved to the platform asset store and is no longer read from config files - manage agents and skills with 'catalyst config push'`
+          });
+        }
+      }
+    }
+    return raw;
+  },
+  clientInstanceConfigSchema
+    .omit({
+      ui: true
+    })
+    .extend({
+      ui: uiConfigSchema.optional(),
+      uiFile: z.string().min(1).optional()
+    })
+);
 
 export type UserIdentityConfig = z.infer<typeof userIdentitySchema>;
 export type StandaloneSeedUserConfig = z.infer<typeof standaloneSeedUserSchema>;

@@ -93,7 +93,7 @@ function ChatWorkspaceContent({
       <main
         className={cn(
           "relative grid h-dvh w-full min-h-0 overflow-hidden bg-background text-foreground transition-colors md:grid-rows-[minmax(0,1fr)] max-md:grid-cols-1",
-          model.chrome.sidebarOpen ? "md:grid-cols-[18rem_minmax(0,1fr)]" : "md:grid-cols-[minmax(0,1fr)]",
+          model.chrome.sidebarOpen ? "md:grid-cols-[20rem_minmax(0,1fr)]" : "md:grid-cols-[minmax(0,1fr)]",
           isStaging && "pt-6",
           model.config.resolvedThemeMode === "dark" && "dark",
           className
@@ -112,7 +112,7 @@ function ChatWorkspaceContent({
         {model.chrome.sidebarOpen ? (
           <div
             className={cn(
-              "fixed bottom-0 left-0 z-40 w-[min(18rem,calc(100vw-2rem))] min-w-0 translate-x-0 transition-[top,transform] duration-200 md:static md:z-auto md:w-auto md:translate-x-0",
+              "fixed bottom-0 left-0 z-50 w-[min(20rem,calc(100vw-2rem))] min-w-0 translate-x-0 transition-[top,transform] duration-200 md:static md:z-50 md:w-auto md:translate-x-0",
               isStaging ? "top-6" : "top-0"
             )}
           >
@@ -136,6 +136,10 @@ function ChatWorkspaceContent({
 
         <WorkspaceChrome
           agents={model.config.config?.agents ?? []}
+          contextLabel={
+            model.config.config?.ui.clientName ??
+            model.config.config?.clientInstance.displayName
+          }
           displayPanelOpen={model.toolDisplay.open}
           environment={model.config.config?.clientInstance.environment}
           sidebarOpen={model.chrome.sidebarOpen}
