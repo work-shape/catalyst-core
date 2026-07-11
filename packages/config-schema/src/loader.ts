@@ -91,7 +91,16 @@ async function readConfigFileWithExtends(path: string, visited: Set<string>): Pr
       `Config file '${extendsValue}' extended from '${path}' must contain an object`
     );
   }
-  return mergeConfigObjects(base, overrides);
+  // ui and uiFile are mutually exclusive: overriding either one replaces the
+  // base's choice of UI source instead of colliding with it.
+  const effectiveBase = { ...base };
+  if ("ui" in overrides) {
+    delete effectiveBase.uiFile;
+  }
+  if ("uiFile" in overrides) {
+    delete effectiveBase.ui;
+  }
+  return mergeConfigObjects(effectiveBase, overrides);
 }
 
 function mergeConfigObjects(
@@ -100,6 +109,9 @@ function mergeConfigObjects(
 ): Record<string, unknown> {
   const result: Record<string, unknown> = { ...base };
   for (const [key, override] of Object.entries(overrides)) {
+    if (key === "__proto__") {
+      continue;
+    }
     const baseValue = result[key];
     result[key] =
       isPlainObject(baseValue) && isPlainObject(override)
@@ -110,7 +122,13 @@ function mergeConfigObjects(
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  // Exclude arrays and YAML-derived non-record objects such as Date: those
+  // replace the base value wholesale instead of merging into it.
+  const prototype: unknown = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
 export function parseSkillMarkdown(contents: string, skillFile: string, skillPath: string): unknown {
