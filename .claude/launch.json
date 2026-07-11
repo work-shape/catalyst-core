@@ -1,0 +1,20 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "config-assets-preview",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_CHAT_API_PORT=4310",
+        "VITE_CHAT_API_URL=http://127.0.0.1:4310",
+        "node_modules/.bin/vite",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "5310"
+      ],
+      "cwd": "clients/demo",
+      "port": 5310
+    }
+  ]
+}

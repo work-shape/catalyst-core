@@ -222,7 +222,7 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
           </div>
         ) : selection.kind === "agent" ? (
           <AgentEditor
-            key={`${resetToken}:${selectionKey(selection)}`}
+            key={`${resetToken}:${selectionKey(selection)}:${selectedEntry ? "loaded" : "pending"}`}
             initialForm={
               selection.mode === "existing" && selectedEntry
                 ? agentConfigToForm(selectedEntry.config)
@@ -297,7 +297,7 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
           />
         ) : (
           <SkillEditor
-            key={`${resetToken}:${selectionKey(selection)}`}
+            key={`${resetToken}:${selectionKey(selection)}:${selectedEntry ? "loaded" : "pending"}`}
             initialForm={
               selection.mode === "existing" && selectedEntry
                 ? skillConfigToForm(selectedEntry.config)
