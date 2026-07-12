@@ -98,24 +98,28 @@ export function WorkspaceRail({
 
       {logoUrl ? (
         <div className="flex h-16 min-w-0 items-start border-b border-sidebar-border pb-3 pr-11">
-          <div className="flex h-12 min-w-0 max-w-[11rem] items-center justify-start overflow-hidden text-primary">
+          <a
+            className="flex h-12 min-w-0 max-w-[11rem] items-center justify-start overflow-hidden rounded-sm text-primary outline-none focus-visible:ring-[3px] focus-visible:ring-sidebar-ring/30"
+            href="/"
+            aria-label={clientLabel}
+          >
+            <img
+              className={cn(
+                "max-h-11 w-full object-contain object-left",
+                logoUrlDark && "dark:hidden",
+                invertLogoOnDark && "dark:invert"
+              )}
+              src={logoUrl}
+              alt={clientLabel}
+            />
+            {logoUrlDark ? (
               <img
-                className={cn(
-                  "max-h-11 w-full object-contain object-left",
-                  logoUrlDark && "dark:hidden",
-                  invertLogoOnDark && "dark:invert"
-                )}
-                src={logoUrl}
+                className="hidden max-h-11 w-full object-contain object-left dark:block"
+                src={logoUrlDark}
                 alt={clientLabel}
               />
-              {logoUrlDark ? (
-                <img
-                  className="hidden max-h-11 w-full object-contain object-left dark:block"
-                  src={logoUrlDark}
-                  alt={clientLabel}
-                />
-              ) : null}
-          </div>
+            ) : null}
+          </a>
         </div>
       ) : (
         <div className="grid h-16 min-w-0 grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-2.5 border-b border-sidebar-border pb-3 pr-11">
