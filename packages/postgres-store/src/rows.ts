@@ -6,6 +6,7 @@ import {
   type AuditEvent,
   type ChatMessage,
   type ClientInstanceId,
+  type ApiCredentialRecord,
   type ConfigAssetRecord,
   type ConfigAssetRevisionRecord,
   type ConfigAssetState,
@@ -20,6 +21,7 @@ import {
   type WorkspaceFile,
   type UserIdentity,
   type UserRecord,
+  type ServicePrincipalRecord,
   asAgentRunId,
   asConversationAttachmentId,
   asConversationId,
@@ -29,6 +31,8 @@ import {
   asMessageId,
   asToolCallId,
   asUserId,
+  asApiCredentialId,
+  asServicePrincipalId,
   asWorkspaceCommandId
 } from "@vivd-catalyst/core";
 import type {
@@ -49,6 +53,8 @@ import type {
   messages,
   modelUsageEvents,
   productUsers,
+  apiCredentials,
+  servicePrincipals,
   userIdentities,
   workspaceCommands
 } from "./schema";
@@ -68,6 +74,8 @@ export type ConversationAttachmentRow = typeof conversationAttachments.$inferSel
 export type AuditEventRow = typeof auditEvents.$inferSelect;
 export type ModelUsageEventRow = typeof modelUsageEvents.$inferSelect;
 export type ProductUserRow = typeof productUsers.$inferSelect;
+export type ServicePrincipalRow = typeof servicePrincipals.$inferSelect;
+export type ApiCredentialRow = typeof apiCredentials.$inferSelect;
 export type UserIdentityRow = typeof userIdentities.$inferSelect;
 export type ConfigAssetStateRow = typeof configAssetState.$inferSelect;
 export type ConfigAssetRow = typeof configAssets.$inferSelect;
@@ -438,6 +446,45 @@ export function mapUserRecord(
     updatedAt: row.updatedAt.toISOString(),
     lastAuthenticatedAt: row.lastAuthenticatedAt?.toISOString(),
     identities
+  };
+}
+
+export function mapServicePrincipal(
+  row: ServicePrincipalRow | undefined
+): ServicePrincipalRecord {
+  if (!row) {
+    throw new AppError("INTERNAL", "Expected service principal row");
+  }
+  return {
+    id: asServicePrincipalId(row.id),
+    clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    displayLabel: row.displayLabel,
+    description: row.description ?? undefined,
+    status: row.status,
+    permissionRefs: row.permissionRefs,
+    permissions: row.permissions,
+    createdByUserId: row.createdByUserId ? asUserId(row.createdByUserId) : undefined,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    lastUsedAt: row.lastUsedAt?.toISOString()
+  };
+}
+
+export function mapApiCredential(row: ApiCredentialRow | undefined): ApiCredentialRecord {
+  if (!row) {
+    throw new AppError("INTERNAL", "Expected API credential row");
+  }
+  return {
+    id: asApiCredentialId(row.id),
+    clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    servicePrincipalId: asServicePrincipalId(row.servicePrincipalId),
+    name: row.name,
+    keyPrefix: row.keyPrefix,
+    scopes: row.scopes ?? undefined,
+    createdAt: row.createdAt.toISOString(),
+    expiresAt: row.expiresAt?.toISOString(),
+    revokedAt: row.revokedAt?.toISOString(),
+    lastUsedAt: row.lastUsedAt?.toISOString()
   };
 }
 

@@ -12,6 +12,8 @@ export type MessageId = Brand<string, "MessageId">;
 export type ManagedArtifactId = Brand<string, "ManagedArtifactId">;
 export type ManagedFileId = Brand<string, "ManagedFileId">;
 export type UserId = Brand<string, "UserId">;
+export type ServicePrincipalId = Brand<string, "ServicePrincipalId">;
+export type ApiCredentialId = Brand<string, "ApiCredentialId">;
 export type ToolCallId = Brand<string, "ToolCallId">;
 export type AuditEventId = Brand<string, "AuditEventId">;
 export type ModelUsageEventId = Brand<string, "ModelUsageEventId">;
@@ -61,6 +63,14 @@ export function asManagedFileId(value: string): ManagedFileId {
 
 export function asUserId(value: string): UserId {
   return value as UserId;
+}
+
+export function asServicePrincipalId(value: string): ServicePrincipalId {
+  return value as ServicePrincipalId;
+}
+
+export function asApiCredentialId(value: string): ApiCredentialId {
+  return value as ApiCredentialId;
 }
 
 export function asAgentRunId(value: string): AgentRunId {

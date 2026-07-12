@@ -11,6 +11,7 @@ import type {
 import type { PlatformFileStore } from "./files";
 import type { ModelUsageEventStore } from "./usage";
 import type { UserStore } from "./user";
+import type { ApiAccessStore } from "./api-access";
 
 export interface PlatformStore
   extends ConversationStore,
@@ -25,6 +26,7 @@ export interface PlatformStore
     AuditEventStore,
     ModelUsageEventStore,
     UserStore,
+    ApiAccessStore,
     ConfigAssetStore {
   close?: () => Promise<void>;
 }

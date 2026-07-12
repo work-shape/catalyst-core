@@ -7,6 +7,8 @@ import {
   type AuditEvent,
   type AuditEventInput,
   type AuditEventStore,
+  type ApiAccessStore,
+  type ApiCredentialRecord,
   type ChatMessage,
   type ClaimRunStartCommandInput,
   type ClaimRunStartCommandResult,
@@ -51,11 +53,13 @@ import {
   type UserIdentity,
   type UserRecord,
   type UserStore,
+  type ServicePrincipalRecord,
   type WorkspaceCommandStore,
   authenticatedUserFromRecord,
   createUserId,
   createPlatformId
 } from "./index";
+import { InMemoryApiAccessStore } from "./testing-in-memory-api-access-store";
 import type { AgentConfig, SkillConfig } from "./config";
 import { InMemoryConfigAssetStore } from "./testing-in-memory-config-asset-store";
 import {
@@ -81,6 +85,7 @@ export class InMemoryPlatformStore
     AuditEventStore,
     ModelUsageEventStore,
     UserStore,
+    ApiAccessStore,
     ConfigAssetStore
 {
   private readonly conversations = new Map<string, Conversation>();
@@ -107,6 +112,12 @@ export class InMemoryPlatformStore
   private readonly modelUsageEvents: ModelUsageEvent[] = [];
   private readonly users = new Map<string, UserRecord>();
   private readonly identities = new Map<string, UserIdentity>();
+  private readonly apiAccessStore = new InMemoryApiAccessStore({
+    isUserInClient: ({ clientInstanceId, userId }) => {
+      const user = this.users.get(userId);
+      return user?.clientInstanceId === clientInstanceId;
+    }
+  });
   private readonly configAssetStore = new InMemoryConfigAssetStore();
 
   async getConfigAssetState(
@@ -137,6 +148,50 @@ export class InMemoryPlatformStore
     input: Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0]
   ): Promise<{ version: number }> {
     return this.configAssetStore.applyConfigAssetMutations(input);
+  }
+
+  async listServicePrincipals(
+    input: Parameters<ApiAccessStore["listServicePrincipals"]>[0]
+  ): Promise<ServicePrincipalRecord[]> {
+    return this.apiAccessStore.listServicePrincipals(input);
+  }
+
+  async createServicePrincipal(
+    input: Parameters<ApiAccessStore["createServicePrincipal"]>[0]
+  ): Promise<ServicePrincipalRecord> {
+    return this.apiAccessStore.createServicePrincipal(input);
+  }
+
+  async updateServicePrincipal(
+    input: Parameters<ApiAccessStore["updateServicePrincipal"]>[0]
+  ): Promise<ServicePrincipalRecord> {
+    return this.apiAccessStore.updateServicePrincipal(input);
+  }
+
+  async listApiCredentials(
+    input: Parameters<ApiAccessStore["listApiCredentials"]>[0]
+  ): Promise<ApiCredentialRecord[]> {
+    return this.apiAccessStore.listApiCredentials(input);
+  }
+
+  async createApiCredential(input: Parameters<ApiAccessStore["createApiCredential"]>[0]) {
+    return this.apiAccessStore.createApiCredential(input);
+  }
+
+  async revokeApiCredential(
+    input: Parameters<ApiAccessStore["revokeApiCredential"]>[0]
+  ): Promise<ApiCredentialRecord> {
+    return this.apiAccessStore.revokeApiCredential(input);
+  }
+
+  async resolveApiCredential(input: Parameters<ApiAccessStore["resolveApiCredential"]>[0]) {
+    return this.apiAccessStore.resolveApiCredential(input);
+  }
+
+  async updateApiCredentialLastUsed(
+    input: Parameters<ApiAccessStore["updateApiCredentialLastUsed"]>[0]
+  ): Promise<ApiCredentialRecord> {
+    return this.apiAccessStore.updateApiCredentialLastUsed(input);
   }
 
   async createConversation(input: CreateConversationInput): Promise<Conversation> {

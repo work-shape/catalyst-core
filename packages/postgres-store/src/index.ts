@@ -5,6 +5,8 @@ import {
   type AuditEvent,
   type AuditEventInput,
   type AuditEventStore,
+  type ApiAccessStore,
+  type ApiCredentialRecord,
   type ChatMessage,
   type ClientInstanceId,
   type ConfigAssetRecord,
@@ -23,6 +25,8 @@ import {
   type ClaimRunStartCommandResult,
   type CompleteRunStartCommandInput,
   type CreateConversationInput,
+  type CreateApiCredentialInput,
+  type CreateServicePrincipalInput,
   type CreateMessageInput,
   type CreateUserInput,
   type DeleteUserInput,
@@ -46,11 +50,23 @@ import {
   type UpsertUserIdentityInput,
   type UserRecord,
   type UserStore,
+  type ServicePrincipalRecord,
+  type UpdateServicePrincipalInput,
   type WorkspaceCommand,
   type WorkspaceCommandId,
   type WorkspaceCommandStore,
   type WorkspaceFile
 } from "@vivd-catalyst/core";
+import {
+  createApiCredential as createPostgresApiCredential,
+  createServicePrincipal as createPostgresServicePrincipal,
+  listApiCredentials as listPostgresApiCredentials,
+  listServicePrincipals as listPostgresServicePrincipals,
+  resolveApiCredential as resolvePostgresApiCredential,
+  revokeApiCredential as revokePostgresApiCredential,
+  updateApiCredentialLastUsed as updatePostgresApiCredentialLastUsed,
+  updateServicePrincipal as updatePostgresServicePrincipal
+} from "./postgres-api-access-operations";
 import {
   appendRunObservation as appendPostgresRunObservation,
   claimRunStartCommand as claimPostgresRunStartCommand,
@@ -163,6 +179,7 @@ export class PostgresPlatformStore
     AuditEventStore,
     ModelUsageEventStore,
     UserStore,
+    ApiAccessStore,
     ConfigAssetStore
 {
   private readonly postgresClient: Sql;
@@ -257,6 +274,50 @@ export class PostgresPlatformStore
 
   async deleteUserIdentity(input: DeleteUserIdentityInput): Promise<UserRecord> {
     return deletePostgresUserIdentity(this.db, input);
+  }
+
+  async listServicePrincipals(
+    input: Parameters<ApiAccessStore["listServicePrincipals"]>[0]
+  ): Promise<ServicePrincipalRecord[]> {
+    return listPostgresServicePrincipals(this.db, input);
+  }
+
+  async createServicePrincipal(
+    input: CreateServicePrincipalInput
+  ): Promise<ServicePrincipalRecord> {
+    return createPostgresServicePrincipal(this.db, input);
+  }
+
+  async updateServicePrincipal(
+    input: UpdateServicePrincipalInput
+  ): Promise<ServicePrincipalRecord> {
+    return updatePostgresServicePrincipal(this.db, input);
+  }
+
+  async listApiCredentials(
+    input: Parameters<ApiAccessStore["listApiCredentials"]>[0]
+  ): Promise<ApiCredentialRecord[]> {
+    return listPostgresApiCredentials(this.db, input);
+  }
+
+  async createApiCredential(input: CreateApiCredentialInput) {
+    return createPostgresApiCredential(this.db, input);
+  }
+
+  async revokeApiCredential(
+    input: Parameters<ApiAccessStore["revokeApiCredential"]>[0]
+  ): Promise<ApiCredentialRecord> {
+    return revokePostgresApiCredential(this.db, input);
+  }
+
+  async resolveApiCredential(input: Parameters<ApiAccessStore["resolveApiCredential"]>[0]) {
+    return resolvePostgresApiCredential(this.db, input);
+  }
+
+  async updateApiCredentialLastUsed(
+    input: Parameters<ApiAccessStore["updateApiCredentialLastUsed"]>[0]
+  ): Promise<ApiCredentialRecord> {
+    return updatePostgresApiCredentialLastUsed(this.db, input);
   }
 
   async createConversation(input: CreateConversationInput): Promise<Conversation> {

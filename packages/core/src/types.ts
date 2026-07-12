@@ -1,6 +1,7 @@
 export * from "./identity";
 export * from "./permissions";
 export * from "./user";
+export * from "./api-access";
 export * from "./files";
 export * from "./execution-workspace";
 export * from "./conversation";
