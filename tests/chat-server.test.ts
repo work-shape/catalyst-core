@@ -2526,12 +2526,20 @@ describe("client instance app vertical slice", () => {
       url: "/api/me"
     });
     expect(defaultMe.statusCode).toBe(200);
-    expect(defaultMe.json()).toMatchObject({
+    const defaultMeBody = defaultMe.json() as {
+      displayLabel: string;
+      externalUserId: string;
+      roles: string[];
+      permissions: string[];
+    };
+    expect(defaultMeBody).toMatchObject({
       displayLabel: "Superadmin",
       externalUserId: "superadmin-1",
-      roles: ["user", "admin", "superadmin"],
-      permissions: PERMISSIONS.filter((permission) => permission !== "config_assets.release")
+      roles: ["user", "admin", "superadmin"]
     });
+    expect([...defaultMeBody.permissions].sort()).toEqual(
+      PERMISSIONS.filter((permission) => permission !== "config_assets.release").sort()
+    );
 
     const normalMe = await app.server.inject({
       method: "GET",
