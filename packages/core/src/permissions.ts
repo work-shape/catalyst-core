@@ -7,12 +7,18 @@ export const PERMISSIONS = [
   "config_assets.release",
   "usage.view",
   "users.manage",
+  "api_access.manage",
   "audit.view"
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
 
 const ADMIN_PERMISSIONS = PERMISSIONS.filter(
+  (permission) =>
+    permission !== "config_assets.release" && permission !== "api_access.manage"
+);
+
+const SUPERADMIN_PERMISSIONS = PERMISSIONS.filter(
   (permission) => permission !== "config_assets.release"
 );
 
@@ -22,7 +28,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<
 > = {
   user: [],
   admin: ADMIN_PERMISSIONS,
-  superadmin: ADMIN_PERMISSIONS
+  superadmin: SUPERADMIN_PERMISSIONS
 };
 
 export function resolveEffectivePermissions(
@@ -95,6 +101,7 @@ const PERMISSION_AUTH_SCOPES: Partial<Record<Permission, string>> = {
   "config_assets.release": "config_assets:release",
   "usage.view": "governance:read",
   "users.manage": "user_admin:write",
+  "api_access.manage": "api_access:write",
   "audit.view": "governance:read"
 };
 

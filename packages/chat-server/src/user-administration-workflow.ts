@@ -79,7 +79,7 @@ export class UserAdministrationWorkflow {
   ): Promise<UserRecord> {
     await this.authorize(actor, context, "governance.user_create_authorized");
     this.requireAssignableRoles(actor, command.roles);
-    this.requireAssignablePermissions(command.permissions);
+    this.requireAssignablePermissions(actor, command.permissions);
     if (command.passwordSignIn && !command.email) {
       throw new AppError("VALIDATION_FAILED", "Email is required to create a password sign-in");
     }
@@ -112,7 +112,7 @@ export class UserAdministrationWorkflow {
     const existing = await this.getUserOrThrow(command.userId);
     this.requireManageableUser(actor, existing);
     this.requireAssignableRoles(actor, command.roles);
-    this.requireAssignablePermissions(command.permissions);
+    this.requireAssignablePermissions(actor, command.permissions);
     const updated = await this.options.userStore.updateUser({
       clientInstanceId: this.options.clientInstanceId,
       userId: command.userId,
@@ -379,11 +379,20 @@ export class UserAdministrationWorkflow {
     }
   }
 
-  private requireAssignablePermissions(permissions: string[] | undefined): void {
+  private requireAssignablePermissions(
+    actor: AuthenticatedUser,
+    permissions: string[] | undefined
+  ): void {
     if (permissions?.includes("config_assets.release")) {
       throw new AppError(
         "VALIDATION_FAILED",
         "Release permission can only be carried by service tokens"
+      );
+    }
+    if (permissions?.includes("api_access.manage") && !this.isSuperadmin(actor)) {
+      throw new AppError(
+        "FORBIDDEN",
+        "Only superadmins can assign API Access administration permission"
       );
     }
   }

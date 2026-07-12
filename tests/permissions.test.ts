@@ -14,8 +14,8 @@ describe("permissions", () => {
       permissions: []
     });
 
-    expect([...effective]).toEqual(
-      PERMISSIONS.filter((permission) => permission !== "config_assets.release")
+    expect(effective).toEqual(
+      new Set(PERMISSIONS.filter((permission) => permission !== "config_assets.release"))
     );
   });
 
@@ -35,7 +35,8 @@ describe("permissions", () => {
     expect(effective.has("audit.view")).toBe(false);
     expect(effective.has("usage.view")).toBe(false);
     expect(effective.has("config_assets.release")).toBe(false);
-    expect(effective.size).toBe(PERMISSIONS.length - 3);
+    expect(effective.has("api_access.manage")).toBe(false);
+    expect(effective.size).toBe(PERMISSIONS.length - 4);
   });
 
   it("allows per-user grants for roles without defaults", () => {
@@ -54,6 +55,7 @@ describe("permissions", () => {
     });
 
     expect(effective.has("config_assets.release")).toBe(true);
+    expect(effective.has("api_access.manage")).toBe(true);
   });
 
   it("checks and requires permissions", () => {

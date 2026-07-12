@@ -7,6 +7,7 @@ import type {
   AgentConfig,
   AgentRuntime,
   AgentRunStore,
+  ApiAccessStore,
   AuditEventStore,
   ClientInstanceId,
   ConfigAssetSource,
@@ -40,6 +41,7 @@ export interface ChatServerOptions {
     RunObservationStore;
   auditEventStore: AuditEventStore;
   userStore: UserStore;
+  apiAccessStore: ApiAccessStore;
   usageGovernance: ModelUsageGovernance;
   auditRecorder: AuditRecorder;
   configAssets: {

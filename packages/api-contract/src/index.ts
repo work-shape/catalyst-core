@@ -29,6 +29,8 @@ export const authScopeSchema = z.enum([
   "governance:write",
   "user_admin:read",
   "user_admin:write",
+  "api_access:read",
+  "api_access:write",
   "config_assets:read",
   "config_assets:write",
   "config_assets:release"
@@ -814,6 +816,79 @@ export const resetAdministeredUserPasswordResponseSchema = z.object({
   ok: z.literal(true)
 });
 
+export const servicePrincipalStatusSchema = z.enum(["active", "disabled"]);
+
+export const servicePrincipalPermissionSchema = z.enum([
+  "config_assets.read",
+  "config_assets.release"
+]);
+
+export const apiCredentialScopeSchema = z.enum([
+  "config_assets:read",
+  "config_assets:release"
+]);
+
+export const apiCredentialSchema = z.object({
+  id: z.string(),
+  clientInstanceId: z.string(),
+  servicePrincipalId: z.string(),
+  name: z.string(),
+  keyPrefix: z.string(),
+  scopes: z.array(apiCredentialScopeSchema).optional(),
+  createdAt: z.string(),
+  expiresAt: z.string().optional(),
+  revokedAt: z.string().optional(),
+  lastUsedAt: z.string().optional()
+});
+
+export const servicePrincipalSchema = z.object({
+  id: z.string(),
+  clientInstanceId: z.string(),
+  displayLabel: z.string(),
+  description: z.string().optional(),
+  status: servicePrincipalStatusSchema,
+  permissionRefs: z.array(z.string()),
+  permissions: z.array(servicePrincipalPermissionSchema),
+  createdByUserId: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  lastUsedAt: z.string().optional()
+});
+
+export const servicePrincipalDetailSchema = z.object({
+  principal: servicePrincipalSchema,
+  credentials: z.array(apiCredentialSchema)
+});
+
+export const createServicePrincipalRequestSchema = z.object({
+  displayLabel: z.string().trim().min(1),
+  description: z.string().trim().min(1).optional(),
+  status: servicePrincipalStatusSchema.optional(),
+  permissions: z.array(servicePrincipalPermissionSchema).optional()
+});
+
+export const updateServicePrincipalRequestSchema = z
+  .object({
+    displayLabel: z.string().trim().min(1).optional(),
+    description: z.string().trim().min(1).nullable().optional(),
+    status: servicePrincipalStatusSchema.optional(),
+    permissions: z.array(servicePrincipalPermissionSchema).optional()
+  })
+  .refine((value) => Object.values(value).some((entry) => entry !== undefined), {
+    message: "At least one service principal field must be provided"
+  });
+
+export const createApiCredentialRequestSchema = z.object({
+  name: z.string().trim().min(1),
+  scopes: z.array(apiCredentialScopeSchema).optional(),
+  expiresAt: z.string().datetime({ offset: true }).optional()
+});
+
+export const createApiCredentialResponseSchema = z.object({
+  credential: apiCredentialSchema,
+  secret: z.string()
+});
+
 export const auditActorSchema = z.object({
   userId: z.string().optional(),
   externalUserId: z.string().optional(),
@@ -1324,6 +1399,39 @@ export const apiOperations = {
     requestSchema: resetAdministeredUserPasswordRequestSchema,
     responseSchema: resetAdministeredUserPasswordResponseSchema
   }),
+  listServicePrincipals: defineJsonApiOperation({
+    operationId: "listServicePrincipals",
+    method: "GET",
+    path: "/api/superadmin/api-access/service-principals",
+    responseSchema: z.array(servicePrincipalDetailSchema)
+  }),
+  createServicePrincipal: defineJsonApiOperation({
+    operationId: "createServicePrincipal",
+    method: "POST",
+    path: "/api/superadmin/api-access/service-principals",
+    requestSchema: createServicePrincipalRequestSchema,
+    responseSchema: servicePrincipalDetailSchema
+  }),
+  updateServicePrincipal: defineJsonApiOperation({
+    operationId: "updateServicePrincipal",
+    method: "PATCH",
+    path: "/api/superadmin/api-access/service-principals/:servicePrincipalId",
+    requestSchema: updateServicePrincipalRequestSchema,
+    responseSchema: servicePrincipalDetailSchema
+  }),
+  createApiCredential: defineJsonApiOperation({
+    operationId: "createApiCredential",
+    method: "POST",
+    path: "/api/superadmin/api-access/service-principals/:servicePrincipalId/credentials",
+    requestSchema: createApiCredentialRequestSchema,
+    responseSchema: createApiCredentialResponseSchema
+  }),
+  revokeApiCredential: defineJsonApiOperation({
+    operationId: "revokeApiCredential",
+    method: "POST",
+    path: "/api/superadmin/api-access/credentials/:credentialId/revoke",
+    responseSchema: apiCredentialSchema
+  }),
   deleteAdministeredUserIdentity: defineJsonApiOperation({
     operationId: "deleteAdministeredUserIdentity",
     method: "DELETE",
@@ -1382,6 +1490,15 @@ export type UpsertAdministeredUserIdentityRequest = z.infer<
 export type ResetAdministeredUserPasswordRequest = z.infer<
   typeof resetAdministeredUserPasswordRequestSchema
 >;
+export type ServicePrincipalPermission = z.infer<typeof servicePrincipalPermissionSchema>;
+export type ApiCredentialScope = z.infer<typeof apiCredentialScopeSchema>;
+export type ApiCredential = z.infer<typeof apiCredentialSchema>;
+export type ServicePrincipal = z.infer<typeof servicePrincipalSchema>;
+export type ServicePrincipalDetail = z.infer<typeof servicePrincipalDetailSchema>;
+export type CreateServicePrincipalRequest = z.infer<typeof createServicePrincipalRequestSchema>;
+export type UpdateServicePrincipalRequest = z.infer<typeof updateServicePrincipalRequestSchema>;
+export type CreateApiCredentialRequest = z.infer<typeof createApiCredentialRequestSchema>;
+export type CreateApiCredentialResponse = z.infer<typeof createApiCredentialResponseSchema>;
 export type AgentRuntimeEvent = z.infer<typeof agentRuntimeEventSchema>;
 export type AgentRun = z.infer<typeof agentRunSchema>;
 export type ActiveRunSummary = z.infer<typeof activeRunSummarySchema>;

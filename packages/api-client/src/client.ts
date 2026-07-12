@@ -525,6 +525,53 @@ export function createApiClient(options: ApiClientOptions) {
         }),
         apiOperations.validateConfigAssets.responseSchema
       ),
+    servicePrincipals: () =>
+      unwrapJson(
+        generatedSdk.listServicePrincipals({ client: generatedClient }),
+        apiOperations.listServicePrincipals.responseSchema
+      ),
+    createServicePrincipal: (
+      input: OperationRequestInput<typeof apiOperations.createServicePrincipal>
+    ) =>
+      unwrapJson(
+        generatedSdk.createServicePrincipal({
+          client: generatedClient,
+          body: apiOperations.createServicePrincipal.requestSchema.parse(input)
+        }),
+        apiOperations.createServicePrincipal.responseSchema
+      ),
+    updateServicePrincipal: (
+      servicePrincipalId: string,
+      input: OperationRequestInput<typeof apiOperations.updateServicePrincipal>
+    ) =>
+      unwrapJson(
+        generatedSdk.updateServicePrincipal({
+          client: generatedClient,
+          path: { servicePrincipalId },
+          body: apiOperations.updateServicePrincipal.requestSchema.parse(input)
+        }),
+        apiOperations.updateServicePrincipal.responseSchema
+      ),
+    createApiCredential: (
+      servicePrincipalId: string,
+      input: OperationRequestInput<typeof apiOperations.createApiCredential>
+    ) =>
+      unwrapJson(
+        generatedSdk.createApiCredential({
+          client: generatedClient,
+          path: { servicePrincipalId },
+          body: apiOperations.createApiCredential.requestSchema.parse(input)
+        }),
+        apiOperations.createApiCredential.responseSchema
+      ),
+    revokeApiCredential: (credentialId: string) =>
+      unwrapJson(
+        generatedSdk.revokeApiCredential({
+          client: generatedClient,
+          path: { credentialId }
+        }),
+        apiOperations.revokeApiCredential.responseSchema
+      ),
     users: () =>
       unwrapJson(
         generatedSdk.listAdministeredUsers({ client: generatedClient }),

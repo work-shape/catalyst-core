@@ -3,6 +3,7 @@ import multipart from "@fastify/multipart";
 import Fastify, { type FastifyInstance } from "fastify";
 import { installErrorHandler } from "./errors";
 import { registerAuditRoutes } from "./routes/audit-routes";
+import { registerApiAccessAdministrationRoutes } from "./routes/api-access-administration-routes";
 import { registerAgentRunRoutes } from "./routes/agent-run-routes";
 import { registerBetterAuthRoutes } from "./routes/better-auth-routes";
 import { registerConfigRoutes } from "./routes/config-routes";
@@ -92,6 +93,7 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
   registerConversationFileRoutes(app, options);
   registerDraftAttachmentRoutes(app, options);
   registerAuditRoutes(app, options);
+  registerApiAccessAdministrationRoutes(app, options);
   registerSuperadminRoutes(app, options);
 
   return app;

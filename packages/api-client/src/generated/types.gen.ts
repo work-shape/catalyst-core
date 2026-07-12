@@ -59,7 +59,7 @@ export type GetCurrentUserResponses = {
             displayLabel?: string;
             authSource: string;
         };
-        scopes?: Array<'*' | 'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
+        scopes?: Array<'*' | 'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'api_access:read' | 'api_access:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
     };
 };
 
@@ -104,7 +104,7 @@ export type UpdateCurrentUserResponses = {
             displayLabel?: string;
             authSource: string;
         };
-        scopes?: Array<'*' | 'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
+        scopes?: Array<'*' | 'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'api_access:read' | 'api_access:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
     };
 };
 
@@ -2768,6 +2768,209 @@ export type ResetAdministeredUserPasswordResponses = {
 
 export type ResetAdministeredUserPasswordResponse = ResetAdministeredUserPasswordResponses[keyof ResetAdministeredUserPasswordResponses];
 
+export type ListServicePrincipalsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/superadmin/api-access/service-principals';
+};
+
+export type ListServicePrincipalsResponses = {
+    /**
+     * Successful response
+     */
+    200: Array<{
+        principal: {
+            id: string;
+            clientInstanceId: string;
+            displayLabel: string;
+            description?: string;
+            status: 'active' | 'disabled';
+            permissionRefs: Array<string>;
+            permissions: Array<'config_assets.read' | 'config_assets.release'>;
+            createdByUserId?: string;
+            createdAt: string;
+            updatedAt: string;
+            lastUsedAt?: string;
+        };
+        credentials: Array<{
+            id: string;
+            clientInstanceId: string;
+            servicePrincipalId: string;
+            name: string;
+            keyPrefix: string;
+            scopes?: Array<'config_assets:read' | 'config_assets:release'>;
+            createdAt: string;
+            expiresAt?: string;
+            revokedAt?: string;
+            lastUsedAt?: string;
+        }>;
+    }>;
+};
+
+export type ListServicePrincipalsResponse = ListServicePrincipalsResponses[keyof ListServicePrincipalsResponses];
+
+export type CreateServicePrincipalData = {
+    body: {
+        displayLabel: string;
+        description?: string;
+        status?: 'active' | 'disabled';
+        permissions?: Array<'config_assets.read' | 'config_assets.release'>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/superadmin/api-access/service-principals';
+};
+
+export type CreateServicePrincipalResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        principal: {
+            id: string;
+            clientInstanceId: string;
+            displayLabel: string;
+            description?: string;
+            status: 'active' | 'disabled';
+            permissionRefs: Array<string>;
+            permissions: Array<'config_assets.read' | 'config_assets.release'>;
+            createdByUserId?: string;
+            createdAt: string;
+            updatedAt: string;
+            lastUsedAt?: string;
+        };
+        credentials: Array<{
+            id: string;
+            clientInstanceId: string;
+            servicePrincipalId: string;
+            name: string;
+            keyPrefix: string;
+            scopes?: Array<'config_assets:read' | 'config_assets:release'>;
+            createdAt: string;
+            expiresAt?: string;
+            revokedAt?: string;
+            lastUsedAt?: string;
+        }>;
+    };
+};
+
+export type CreateServicePrincipalResponse = CreateServicePrincipalResponses[keyof CreateServicePrincipalResponses];
+
+export type UpdateServicePrincipalData = {
+    body: {
+        displayLabel?: string;
+        description?: string | null;
+        status?: 'active' | 'disabled';
+        permissions?: Array<'config_assets.read' | 'config_assets.release'>;
+    };
+    path: {
+        servicePrincipalId: string;
+    };
+    query?: never;
+    url: '/api/superadmin/api-access/service-principals/{servicePrincipalId}';
+};
+
+export type UpdateServicePrincipalResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        principal: {
+            id: string;
+            clientInstanceId: string;
+            displayLabel: string;
+            description?: string;
+            status: 'active' | 'disabled';
+            permissionRefs: Array<string>;
+            permissions: Array<'config_assets.read' | 'config_assets.release'>;
+            createdByUserId?: string;
+            createdAt: string;
+            updatedAt: string;
+            lastUsedAt?: string;
+        };
+        credentials: Array<{
+            id: string;
+            clientInstanceId: string;
+            servicePrincipalId: string;
+            name: string;
+            keyPrefix: string;
+            scopes?: Array<'config_assets:read' | 'config_assets:release'>;
+            createdAt: string;
+            expiresAt?: string;
+            revokedAt?: string;
+            lastUsedAt?: string;
+        }>;
+    };
+};
+
+export type UpdateServicePrincipalResponse = UpdateServicePrincipalResponses[keyof UpdateServicePrincipalResponses];
+
+export type CreateApiCredentialData = {
+    body: {
+        name: string;
+        scopes?: Array<'config_assets:read' | 'config_assets:release'>;
+        expiresAt?: string;
+    };
+    path: {
+        servicePrincipalId: string;
+    };
+    query?: never;
+    url: '/api/superadmin/api-access/service-principals/{servicePrincipalId}/credentials';
+};
+
+export type CreateApiCredentialResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        credential: {
+            id: string;
+            clientInstanceId: string;
+            servicePrincipalId: string;
+            name: string;
+            keyPrefix: string;
+            scopes?: Array<'config_assets:read' | 'config_assets:release'>;
+            createdAt: string;
+            expiresAt?: string;
+            revokedAt?: string;
+            lastUsedAt?: string;
+        };
+        secret: string;
+    };
+};
+
+export type CreateApiCredentialResponse = CreateApiCredentialResponses[keyof CreateApiCredentialResponses];
+
+export type RevokeApiCredentialData = {
+    body?: never;
+    path: {
+        credentialId: string;
+    };
+    query?: never;
+    url: '/api/superadmin/api-access/credentials/{credentialId}/revoke';
+};
+
+export type RevokeApiCredentialResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        id: string;
+        clientInstanceId: string;
+        servicePrincipalId: string;
+        name: string;
+        keyPrefix: string;
+        scopes?: Array<'config_assets:read' | 'config_assets:release'>;
+        createdAt: string;
+        expiresAt?: string;
+        revokedAt?: string;
+        lastUsedAt?: string;
+    };
+};
+
+export type RevokeApiCredentialResponse = RevokeApiCredentialResponses[keyof RevokeApiCredentialResponses];
+
 export type DeleteAdministeredUserIdentityData = {
     body?: never;
     path: {
@@ -2822,7 +3025,7 @@ export type IssueSessionTokenData = {
         permissionRefs?: Array<string>;
         permissions?: Array<string>;
         correlationId?: string;
-        scopes?: Array<'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
+        scopes?: Array<'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'api_access:read' | 'api_access:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
         delegatedActor?: {
             kind: 'service_principal';
             id: string;

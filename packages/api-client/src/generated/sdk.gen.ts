@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { CancelConversationRunData, CancelConversationRunResponses, ChangeCurrentUserPasswordData, ChangeCurrentUserPasswordResponses, CommandConversationRunData, CommandConversationRunResponses, CreateAdministeredUserData, CreateAdministeredUserResponses, CreateConversationData, CreateConversationResponses, CreateConversationRunData, CreateConversationRunResponses, DeleteAdministeredUserData, DeleteAdministeredUserIdentityData, DeleteAdministeredUserIdentityResponses, DeleteAdministeredUserResponses, DeleteConfigAssetData, DeleteConfigAssetResponses, DeleteConversationData, DeleteConversationResponses, DeleteCurrentUserData, DeleteCurrentUserResponses, DeleteDraftAttachmentData, DeleteDraftAttachmentResponses, ExchangeApiKeyData, ExchangeApiKeyResponses, ExportConfigAssetsData, ExportConfigAssetsResponses, GenerateConversationTitleData, GenerateConversationTitleResponses, GetBrandingData, GetBrandingResponses, GetConfigAssetData, GetConfigAssetResponses, GetConfigAssetsOverviewData, GetConfigAssetsOverviewResponses, GetConfigData, GetConfigResponses, GetConversationArtifactContentData, GetConversationArtifactContentResponses, GetConversationArtifactPreviewData, GetConversationArtifactPreviewResponses, GetConversationFileContentData, GetConversationFileContentResponses, GetConversationThreadData, GetConversationThreadResponses, GetCurrentUserData, GetCurrentUserResponses, GetUsageSummaryData, GetUsageSummaryResponses, IssueSessionTokenData, IssueSessionTokenResponses, ListAdministeredUsersData, ListAdministeredUsersResponses, ListAuditActivitiesData, ListAuditActivitiesResponses, ListAuditEventsData, ListAuditEventsResponses, ListConfigAssetRevisionsData, ListConfigAssetRevisionsResponses, ListConversationMessagesData, ListConversationMessagesResponses, ListConversationsData, ListConversationsResponses, ListDraftAttachmentsData, ListDraftAttachmentsResponses, ObserveConversationRunData, ObserveConversationRunResponses, PutConfigAssetData, PutConfigAssetResponses, ReplaceConfigAssetsData, ReplaceConfigAssetsResponses, ResetAdministeredUserPasswordData, ResetAdministeredUserPasswordResponses, RetryConversationArtifactPreviewData, RetryConversationArtifactPreviewResponses, RetryDraftAttachmentData, RetryDraftAttachmentResponses, RevertConfigAssetData, RevertConfigAssetResponses, SetDefaultConfigAgentData, SetDefaultConfigAgentResponses, StartConversationRunData, StartConversationRunResponses, UpdateAdministeredUserData, UpdateAdministeredUserResponses, UpdateCurrentUserData, UpdateCurrentUserResponses, UploadDraftAttachmentData, UploadDraftAttachmentResponses, UpsertAdministeredUserIdentityData, UpsertAdministeredUserIdentityResponses, ValidateConfigAssetsData, ValidateConfigAssetsResponses } from './types.gen';
+import type { CancelConversationRunData, CancelConversationRunResponses, ChangeCurrentUserPasswordData, ChangeCurrentUserPasswordResponses, CommandConversationRunData, CommandConversationRunResponses, CreateAdministeredUserData, CreateAdministeredUserResponses, CreateApiCredentialData, CreateApiCredentialResponses, CreateConversationData, CreateConversationResponses, CreateConversationRunData, CreateConversationRunResponses, CreateServicePrincipalData, CreateServicePrincipalResponses, DeleteAdministeredUserData, DeleteAdministeredUserIdentityData, DeleteAdministeredUserIdentityResponses, DeleteAdministeredUserResponses, DeleteConfigAssetData, DeleteConfigAssetResponses, DeleteConversationData, DeleteConversationResponses, DeleteCurrentUserData, DeleteCurrentUserResponses, DeleteDraftAttachmentData, DeleteDraftAttachmentResponses, ExchangeApiKeyData, ExchangeApiKeyResponses, ExportConfigAssetsData, ExportConfigAssetsResponses, GenerateConversationTitleData, GenerateConversationTitleResponses, GetBrandingData, GetBrandingResponses, GetConfigAssetData, GetConfigAssetResponses, GetConfigAssetsOverviewData, GetConfigAssetsOverviewResponses, GetConfigData, GetConfigResponses, GetConversationArtifactContentData, GetConversationArtifactContentResponses, GetConversationArtifactPreviewData, GetConversationArtifactPreviewResponses, GetConversationFileContentData, GetConversationFileContentResponses, GetConversationThreadData, GetConversationThreadResponses, GetCurrentUserData, GetCurrentUserResponses, GetUsageSummaryData, GetUsageSummaryResponses, IssueSessionTokenData, IssueSessionTokenResponses, ListAdministeredUsersData, ListAdministeredUsersResponses, ListAuditActivitiesData, ListAuditActivitiesResponses, ListAuditEventsData, ListAuditEventsResponses, ListConfigAssetRevisionsData, ListConfigAssetRevisionsResponses, ListConversationMessagesData, ListConversationMessagesResponses, ListConversationsData, ListConversationsResponses, ListDraftAttachmentsData, ListDraftAttachmentsResponses, ListServicePrincipalsData, ListServicePrincipalsResponses, ObserveConversationRunData, ObserveConversationRunResponses, PutConfigAssetData, PutConfigAssetResponses, ReplaceConfigAssetsData, ReplaceConfigAssetsResponses, ResetAdministeredUserPasswordData, ResetAdministeredUserPasswordResponses, RetryConversationArtifactPreviewData, RetryConversationArtifactPreviewResponses, RetryDraftAttachmentData, RetryDraftAttachmentResponses, RevertConfigAssetData, RevertConfigAssetResponses, RevokeApiCredentialData, RevokeApiCredentialResponses, SetDefaultConfigAgentData, SetDefaultConfigAgentResponses, StartConversationRunData, StartConversationRunResponses, UpdateAdministeredUserData, UpdateAdministeredUserResponses, UpdateCurrentUserData, UpdateCurrentUserResponses, UpdateServicePrincipalData, UpdateServicePrincipalResponses, UploadDraftAttachmentData, UploadDraftAttachmentResponses, UpsertAdministeredUserIdentityData, UpsertAdministeredUserIdentityResponses, ValidateConfigAssetsData, ValidateConfigAssetsResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -232,6 +232,37 @@ export const resetAdministeredUserPassword = <ThrowOnError extends boolean = fal
         ...options.headers
     }
 });
+
+export const listServicePrincipals = <ThrowOnError extends boolean = false>(options?: Options<ListServicePrincipalsData, ThrowOnError>): RequestResult<ListServicePrincipalsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListServicePrincipalsResponses, unknown, ThrowOnError>({ url: '/api/superadmin/api-access/service-principals', ...options });
+
+export const createServicePrincipal = <ThrowOnError extends boolean = false>(options: Options<CreateServicePrincipalData, ThrowOnError>): RequestResult<CreateServicePrincipalResponses, unknown, ThrowOnError> => (options.client ?? client).post<CreateServicePrincipalResponses, unknown, ThrowOnError>({
+    url: '/api/superadmin/api-access/service-principals',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const updateServicePrincipal = <ThrowOnError extends boolean = false>(options: Options<UpdateServicePrincipalData, ThrowOnError>): RequestResult<UpdateServicePrincipalResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdateServicePrincipalResponses, unknown, ThrowOnError>({
+    url: '/api/superadmin/api-access/service-principals/{servicePrincipalId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const createApiCredential = <ThrowOnError extends boolean = false>(options: Options<CreateApiCredentialData, ThrowOnError>): RequestResult<CreateApiCredentialResponses, unknown, ThrowOnError> => (options.client ?? client).post<CreateApiCredentialResponses, unknown, ThrowOnError>({
+    url: '/api/superadmin/api-access/service-principals/{servicePrincipalId}/credentials',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const revokeApiCredential = <ThrowOnError extends boolean = false>(options: Options<RevokeApiCredentialData, ThrowOnError>): RequestResult<RevokeApiCredentialResponses, unknown, ThrowOnError> => (options.client ?? client).post<RevokeApiCredentialResponses, unknown, ThrowOnError>({ url: '/api/superadmin/api-access/credentials/{credentialId}/revoke', ...options });
 
 export const deleteAdministeredUserIdentity = <ThrowOnError extends boolean = false>(options: Options<DeleteAdministeredUserIdentityData, ThrowOnError>): RequestResult<DeleteAdministeredUserIdentityResponses, unknown, ThrowOnError> => (options.client ?? client).delete<DeleteAdministeredUserIdentityResponses, unknown, ThrowOnError>({ url: '/api/superadmin/users/{userId}/identities/{authSource}/{externalUserId}', ...options });
 

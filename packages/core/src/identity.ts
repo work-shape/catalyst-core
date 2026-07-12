@@ -26,6 +26,8 @@ export const FIRST_PARTY_AUTH_SCOPES = [
   "governance:write",
   "user_admin:read",
   "user_admin:write",
+  "api_access:read",
+  "api_access:write",
   "config_assets:read",
   "config_assets:write",
   "config_assets:release"

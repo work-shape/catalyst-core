@@ -256,6 +256,7 @@ export async function createClientInstanceApp(
     conversationStore: store,
     auditEventStore: store,
     userStore: store,
+    apiAccessStore: store,
     usageGovernance,
     auditRecorder,
     configAssets: {
