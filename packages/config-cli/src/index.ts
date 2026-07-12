@@ -31,6 +31,11 @@ Options:
   --dir <working-copy-dir>  Directory containing catalyst.yaml (default: .)
   --force                   Push without optimistic concurrency protection
   --help                    Show this help
+
+Environment:
+  CATALYST_API_KEY           API key exchanged for a short-lived access token (preferred)
+  CATALYST_SERVER_CREDENTIAL Legacy server credential (deprecated compatibility fallback)
+  CHAT_SERVER_CREDENTIAL     Legacy fallback when CATALYST_SERVER_CREDENTIAL is unset
 `;
 
 export async function runCli(

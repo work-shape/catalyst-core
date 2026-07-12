@@ -27,7 +27,24 @@ catalyst config push        # replace the live assets with the working copy
 
 A `catalyst.yaml` manifest in the working-copy root names instances and the asset file globs; `.catalyst-state.json` (gitignored) records the config version you last pulled. `push` sends that version and is rejected with a conflict when the live configuration moved — pull, re-apply, and push again, exactly like a rejected git push. `push --force` overwrites deliberately.
 
-The CLI authenticates with `CATALYST_SERVER_CREDENTIAL` (the instance's server-to-server secret) and mints a short-lived service token scoped to config assets. Note that a service principal's permissions are captured into its product-user record on first authentication and, like any user's permissions, do not refresh from later token claims — if a CLI upgrade needs new permissions on an existing instance, delete the stored `catalyst-cli` user (or update its permissions) so it is recreated with the current grants.
+The server URL can come from a named `catalyst.yaml` instance or directly from `--instance https://catalyst.example.com`. Authentication is environment-only for now:
+
+```sh
+export CATALYST_API_KEY='the-one-time-value-from-api-access'
+catalyst config diff --instance production
+```
+
+Create the credential once as a superadmin under **Administration → API Access**:
+
+1. Create a service principal such as `Catalyst CLI` with `config_assets.read` and `config_assets.release`.
+2. Create a key restricted to `config_assets:read` and `config_assets:release`.
+3. Copy the secret when it is shown once and expose it as `CATALYST_API_KEY` in the operator environment or CI secret store.
+
+The CLI sends the API key only to `POST /api/auth/access-token`, then uses the returned short-lived access token for config operations. It refuses to send an API key over plain HTTP except to `localhost`, `127.0.0.0/8`, or `::1`; remote instances must use HTTPS. A key belongs to a service principal but is independently named, audited, expirable, and revocable. Create separate keys for developer machines and CI jobs so they can be rotated without disrupting one another.
+
+Do not pass the key on the command line or put it in `catalyst.yaml` or `.catalyst-state.json`. Keychain-backed profiles are a future enhancement; the current CLI intentionally reads only environment variables.
+
+For one compatibility release, a CLI without `CATALYST_API_KEY` falls back to `CATALYST_SERVER_CREDENTIAL`, then `CHAT_SERVER_CREDENTIAL`, and prints a deprecation warning. `CATALYST_API_KEY` always takes precedence when both new and legacy values are present.
 
 ## Interactive editing and field ownership
 

@@ -244,15 +244,22 @@ export function canonicalBundleFiles(bundle: WorkingCopyBundle): Map<string, str
 
 async function connectApi(url: string, options: ConfigCommandOptions) {
   const env = options.env ?? process.env;
+  const apiKey = env.CATALYST_API_KEY;
   const serverCredential = env.CATALYST_SERVER_CREDENTIAL ?? env.CHAT_SERVER_CREDENTIAL;
-  if (!serverCredential) {
+  if (!apiKey && !serverCredential) {
     throw new Error(
-      "Missing server credential. Set CATALYST_SERVER_CREDENTIAL (or CHAT_SERVER_CREDENTIAL)."
+      "Missing CLI credentials. Set CATALYST_API_KEY. For one-release legacy compatibility, CATALYST_SERVER_CREDENTIAL or CHAT_SERVER_CREDENTIAL is also accepted."
+    );
+  }
+  if (!apiKey) {
+    writeError(
+      options,
+      "Deprecation warning: CLI authentication with CATALYST_SERVER_CREDENTIAL or CHAT_SERVER_CREDENTIAL will be removed after one compatibility release. Create a key in API Access and set CATALYST_API_KEY."
     );
   }
   return createConfigApi({
     baseUrl: url,
-    serverCredential,
+    ...(apiKey ? { apiKey } : { serverCredential }),
     ...(options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl })
   });
 }

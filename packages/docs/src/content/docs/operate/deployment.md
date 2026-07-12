@@ -51,6 +51,8 @@ Document these values per instance:
 - CORS or embed allowlist
 - retention and audit env overrides, if any
 
+For machine API access, configure a `SERVICE_ACCESS_TOKEN_SECRET` of at least 32 characters before starting the API. Treat it as a server signing secret: keep it stable across restarts and identical across replicas. API keys are separate database-backed credentials created in the API Access control plane and supplied only to callers as `CATALYST_API_KEY`; they do not belong in the server deployment environment.
+
 ## Database
 
 Postgres is the baseline application store.
