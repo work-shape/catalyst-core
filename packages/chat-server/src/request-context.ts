@@ -2,6 +2,8 @@ import type { FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
   AppError,
+  isAuthenticatedServicePrincipal,
+  type AuthenticatedIdentity,
   type AuthenticatedUser,
   type ConversationId,
   type LocaleCode,
@@ -19,11 +21,15 @@ export async function authenticateRequest(
   request: FastifyRequest
 ): Promise<{ user: AuthenticatedUser; context: RuntimeCallContext }> {
   const correlationId = createCorrelationId(request);
-  const user = normalizeAuthenticatedUser(await options.authAdapter.authenticate({
+  const identity = await options.authAdapter.authenticate({
     headers: request.headers,
     clientInstanceId: options.clientInstanceId,
     correlationId
-  }));
+  });
+  if (isAuthenticatedServicePrincipal(identity)) {
+    throw new AppError("FORBIDDEN", "Service principals cannot access user-scoped routes");
+  }
+  const user = normalizeAuthenticatedUser(identity);
 
   return {
     user,
@@ -32,6 +38,31 @@ export async function authenticateRequest(
       clientInstanceId: options.clientInstanceId,
       correlationId,
       ...authContextFromUser(user)
+    }
+  };
+}
+
+export async function authenticateConfigAssetRequest(
+  options: ChatServerOptions,
+  request: FastifyRequest
+): Promise<{
+  identity: AuthenticatedIdentity;
+  context: { clientInstanceId: ChatServerOptions["clientInstanceId"]; correlationId: string };
+}> {
+  const correlationId = createCorrelationId(request);
+  const authenticated = await options.authAdapter.authenticate({
+    headers: request.headers,
+    clientInstanceId: options.clientInstanceId,
+    correlationId
+  });
+  const identity = isAuthenticatedServicePrincipal(authenticated)
+    ? authenticated
+    : normalizeAuthenticatedUser(authenticated);
+  return {
+    identity,
+    context: {
+      clientInstanceId: options.clientInstanceId,
+      correlationId
     }
   };
 }

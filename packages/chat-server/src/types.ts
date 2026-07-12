@@ -1,4 +1,8 @@
-import type { HmacSessionTokenIssuer, StandaloneAuthRuntime } from "@vivd-catalyst/auth";
+import type {
+  ApiKeyAccessTokenExchange,
+  HmacSessionTokenIssuer,
+  StandaloneAuthRuntime
+} from "@vivd-catalyst/auth";
 import type {
   AgentConfig,
   AgentRuntime,
@@ -84,5 +88,8 @@ export interface ChatServerOptions {
   sessionToken?: {
     issuer: HmacSessionTokenIssuer;
     serverCredential: string;
+  };
+  serviceAccessToken?: {
+    exchange: ApiKeyAccessTokenExchange;
   };
 }

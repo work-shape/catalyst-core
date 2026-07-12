@@ -241,13 +241,14 @@ export async function createClientInstanceApp(
         }
       : undefined
   });
-  const { authAdapter, standaloneAuth, sessionToken } = await createClientInstanceAuth({
-    config,
-    env,
-    clientInstanceId,
-    userStore: store,
-    corsOrigin: input.corsOrigin
-  });
+  const { authAdapter, standaloneAuth, sessionToken, serviceAccessToken } =
+    await createClientInstanceAuth({
+      config,
+      env,
+      clientInstanceId,
+      userStore: store,
+      corsOrigin: input.corsOrigin
+    });
   const server = await createChatServer({
     config,
     clientInstanceId,
@@ -298,7 +299,8 @@ export async function createClientInstanceApp(
     modelProvider,
     corsOrigin: input.corsOrigin,
     standaloneAuth,
-    sessionToken
+    sessionToken,
+    serviceAccessToken
   });
 
   const assets = await assetSource.getSnapshot();

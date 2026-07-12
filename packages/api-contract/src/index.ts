@@ -723,6 +723,11 @@ export const issueSessionTokenResponseSchema = z.object({
   expiresAt: z.string()
 });
 
+export const exchangeApiKeyResponseSchema = z.object({
+  accessToken: z.string(),
+  expiresAt: z.string()
+});
+
 export const userStatusSchema = z.enum(["active", "disabled"]);
 
 export const administeredUserIdentitySchema = z.object({
@@ -810,13 +815,14 @@ export const resetAdministeredUserPasswordResponseSchema = z.object({
 });
 
 export const auditActorSchema = z.object({
-  userId: z.string(),
-  externalUserId: z.string(),
+  userId: z.string().optional(),
+  externalUserId: z.string().optional(),
   displayLabel: z.string(),
   roles: z.array(z.string()),
   principalKind: z.enum(["user", "service"]).optional(),
   principalId: z.string().optional(),
   principalDisplayLabel: z.string().optional(),
+  credentialId: z.string().optional(),
   subjectUserId: z.string().optional(),
   delegatedActor: delegatedActorSchema.optional()
 });
@@ -1330,6 +1336,12 @@ export const apiOperations = {
     path: "/api/superadmin/session-tokens",
     requestSchema: issueSessionTokenRequestSchema,
     responseSchema: issueSessionTokenResponseSchema
+  }),
+  exchangeApiKey: defineJsonApiOperation({
+    operationId: "exchangeApiKey",
+    method: "POST",
+    path: "/api/auth/access-token",
+    responseSchema: exchangeApiKeyResponseSchema
   })
 } as const;
 

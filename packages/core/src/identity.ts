@@ -1,5 +1,5 @@
 import { AppError } from "./errors";
-import type { ClientInstanceId } from "./ids";
+import type { ApiCredentialId, ClientInstanceId, ServicePrincipalId } from "./ids";
 import type { LocaleCode } from "./localization";
 
 export type UserRole = "user" | "admin" | "superadmin" | string;
@@ -71,6 +71,27 @@ export interface AuthenticatedUser {
   scopes?: AuthScope[];
 }
 
+export interface AuthenticatedServicePrincipal {
+  kind: "service";
+  id: ServicePrincipalId;
+  credentialId: ApiCredentialId;
+  displayLabel: string;
+  permissionRefs: string[];
+  permissions: string[];
+  clientInstanceId: ClientInstanceId;
+  authSource: string;
+  correlationId?: string;
+  scopes: AuthScope[];
+}
+
+export type AuthenticatedIdentity = AuthenticatedUser | AuthenticatedServicePrincipal;
+
+export function isAuthenticatedServicePrincipal(
+  identity: AuthenticatedIdentity
+): identity is AuthenticatedServicePrincipal {
+  return "kind" in identity && identity.kind === "service";
+}
+
 export interface RuntimeCallContext {
   user: AuthenticatedUser;
   clientInstanceId: ClientInstanceId;
@@ -138,16 +159,16 @@ export function getAuthPrincipal(user: AuthenticatedUser): AuthPrincipal {
   return normalizeAuthenticatedUser(user).principal ?? createUserPrincipal(user);
 }
 
-export function getAuthScopes(user: Pick<AuthenticatedUser, "scopes">): AuthScope[] {
+export function getAuthScopes(user: { scopes?: AuthScope[] }): AuthScope[] {
   return user.scopes ?? [AUTH_SCOPE_WILDCARD];
 }
 
-export function hasAuthScope(user: Pick<AuthenticatedUser, "scopes">, scope: AuthScope): boolean {
+export function hasAuthScope(user: { scopes?: AuthScope[] }, scope: AuthScope): boolean {
   const scopes = getAuthScopes(user);
   return scopes.includes(AUTH_SCOPE_WILDCARD) || scopes.includes(scope);
 }
 
-export function requireAuthScope(user: Pick<AuthenticatedUser, "scopes">, scope: AuthScope): void {
+export function requireAuthScope(user: { scopes?: AuthScope[] }, scope: AuthScope): void {
   if (!hasAuthScope(user, scope)) {
     throw new AppError("FORBIDDEN", `Missing auth scope '${scope}'`);
   }

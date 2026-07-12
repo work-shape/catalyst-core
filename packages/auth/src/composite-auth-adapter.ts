@@ -1,4 +1,4 @@
-import { AppError, type AuthenticatedUser } from "@vivd-catalyst/core";
+import { AppError, type AuthenticatedIdentity } from "@vivd-catalyst/core";
 import type { AuthAdapter, AuthRequest } from "./types";
 
 export class CompositeAuthAdapter implements AuthAdapter {
@@ -9,7 +9,7 @@ export class CompositeAuthAdapter implements AuthAdapter {
     this.adapters = adapters;
   }
 
-  async authenticate(request: AuthRequest): Promise<AuthenticatedUser> {
+  async authenticate(request: AuthRequest): Promise<AuthenticatedIdentity> {
     const failures: string[] = [];
     for (const adapter of this.adapters) {
       try {

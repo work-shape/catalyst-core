@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
-import { HmacSessionTokenAuthAdapter, HmacSessionTokenIssuer } from "@vivd-catalyst/auth";
+import {
+  ApiKeyAccessTokenExchange,
+  CompositeAuthAdapter,
+  HmacServiceAccessTokenAuthAdapter,
+  HmacSessionTokenAuthAdapter,
+  HmacSessionTokenIssuer,
+  IdentityResolvingAuthAdapter
+} from "@vivd-catalyst/auth";
 import { createChatServer } from "@vivd-catalyst/chat-server";
 import {
   AppError,
@@ -30,6 +37,69 @@ describe("config asset admin routes", () => {
     await expect(
       mintToken(fixture.server, { endpoint: "/auth/session-token" })
     ).resolves.toEqual(expect.any(String));
+  });
+
+  it("exchanges an API key for subjectless config access without creating a product user", async () => {
+    const fixture = await createFixture({ serviceAccess: true });
+    expect(await fixture.store.listUsers({ clientInstanceId: fixture.clientInstanceId })).toEqual([]);
+
+    const exchange = await fixture.server.inject({
+      method: "POST",
+      url: "/api/auth/access-token",
+      headers: { authorization: `Bearer ${fixture.apiKey}` }
+    });
+    expect(exchange.statusCode).toBe(200);
+    expect(exchange.json()).toMatchObject({
+      accessToken: expect.any(String),
+      expiresAt: expect.any(String)
+    });
+    const token = (exchange.json() as { accessToken: string }).accessToken;
+
+    const imported = await request(fixture.server, token, {
+      method: "POST",
+      url: "/api/admin/config/import",
+      payload: {
+        baseVersion: null,
+        defaultAgentName: "assistant",
+        agents: [agentConfig("Released by service principal")],
+        skills: []
+      }
+    });
+    expect(imported.statusCode).toBe(200);
+    const exported = await request(fixture.server, token, {
+      method: "GET",
+      url: "/api/admin/config/export"
+    });
+    expect(exported.statusCode).toBe(200);
+
+    const humanRoute = await request(fixture.server, token, {
+      method: "GET",
+      url: "/api/conversations"
+    });
+    expect(humanRoute.statusCode).toBe(403);
+    expect(await fixture.store.listUsers({ clientInstanceId: fixture.clientInstanceId })).toEqual([]);
+
+    const revisions = await request(fixture.server, token, {
+      method: "GET",
+      url: "/api/admin/config/assets/agent/assistant/revisions"
+    });
+    expect(revisions.json()).toMatchObject([
+      {
+        actor: {
+          principalKind: "service",
+          principalDisplayLabel: "Catalyst CLI",
+          credentialId: fixture.credentialId
+        }
+      }
+    ]);
+    const events = await fixture.store.listAuditEvents({
+      clientInstanceId: fixture.clientInstanceId,
+      limit: 100
+    });
+    expect(events.find((event) => event.type === "config_assets.replaced")?.actor).toMatchObject({
+      principalKind: "service",
+      credentialId: fixture.credentialId
+    });
   });
 
   it("mints a service token and supports CRUD, revisions, revert, and export/import", async () => {
@@ -495,6 +565,7 @@ async function createFixture(
     agentConfiguration?: Record<string, unknown>;
     pricingCoverage?: boolean;
     webSearch?: "disabled" | "enabled";
+    serviceAccess?: boolean;
   } = {}
 ) {
   const clientInstanceId = asClientInstanceId("config-routes-test");
@@ -589,6 +660,28 @@ async function createFixture(
     ttlSeconds: 900
   };
   const issuer = new HmacSessionTokenIssuer(authOptions);
+  const servicePrincipal = input.serviceAccess
+    ? await store.createServicePrincipal({
+        clientInstanceId,
+        displayLabel: "Catalyst CLI",
+        permissions: ["config_assets.read", "config_assets.release"]
+      })
+    : undefined;
+  const createdCredential = servicePrincipal
+    ? await store.createApiCredential({
+        clientInstanceId,
+        servicePrincipalId: servicePrincipal.id,
+        name: "test key",
+        scopes: ["config_assets:read", "config_assets:release"]
+      })
+    : undefined;
+  const serviceAccessOptions = input.serviceAccess
+    ? {
+        secret: "a-development-service-access-secret-with-enough-length",
+        clientInstanceId,
+        apiAccessStore: store
+      }
+    : undefined;
   const auditRecorder = new StoreBackedAuditRecorder({
     clientInstanceId,
     store
@@ -596,7 +689,15 @@ async function createFixture(
   const server = await createChatServer({
     config,
     clientInstanceId,
-    authAdapter: new HmacSessionTokenAuthAdapter(authOptions),
+    authAdapter: serviceAccessOptions
+      ? new IdentityResolvingAuthAdapter(
+          new CompositeAuthAdapter([
+            new HmacServiceAccessTokenAuthAdapter(serviceAccessOptions),
+            new HmacSessionTokenAuthAdapter(authOptions)
+          ]),
+          store
+        )
+      : new HmacSessionTokenAuthAdapter(authOptions),
     conversationStore: store,
     auditEventStore: store,
     userStore: store,
@@ -632,10 +733,23 @@ async function createFixture(
     sessionToken: {
       issuer,
       serverCredential: "server-credential"
-    }
+    },
+    ...(serviceAccessOptions
+      ? {
+          serviceAccessToken: {
+            exchange: new ApiKeyAccessTokenExchange(serviceAccessOptions)
+          }
+        }
+      : {})
   });
   servers.push(server);
-  return { clientInstanceId, server, store };
+  return {
+    clientInstanceId,
+    server,
+    store,
+    apiKey: createdCredential?.secret,
+    credentialId: createdCredential?.credential.id
+  };
 }
 
 async function mintToken(

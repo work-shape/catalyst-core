@@ -1,7 +1,8 @@
 import {
   createUserPrincipal,
+  isAuthenticatedServicePrincipal,
   normalizeAuthenticatedUser,
-  type AuthenticatedUser,
+  type AuthenticatedIdentity,
   type UserStore
 } from "@vivd-catalyst/core";
 import type { AuthAdapter, AuthRequest } from "./types";
@@ -21,8 +22,11 @@ export class IdentityResolvingAuthAdapter implements AuthAdapter {
     this.id = `${adapter.id}:identity-resolved`;
   }
 
-  async authenticate(request: AuthRequest): Promise<AuthenticatedUser> {
+  async authenticate(request: AuthRequest): Promise<AuthenticatedIdentity> {
     const claims = await this.adapter.authenticate(request);
+    if (isAuthenticatedServicePrincipal(claims)) {
+      return claims;
+    }
     const resolved = await this.userStore.resolveUserIdentity({
       clientInstanceId: request.clientInstanceId,
       sourceUserId: claims.id,

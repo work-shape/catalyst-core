@@ -1,14 +1,14 @@
 import {
   AGENT_EDITABLE_FIELDS,
   AppError,
-  auditActorFromUser,
+  auditActorFromIdentity,
   isJsonObject,
   requireAuthScope,
   requirePermission,
   unknownToJsonValue,
   type AgentConfig,
   type AgentEditableField,
-  type AuthenticatedUser,
+  type AuthenticatedIdentity,
   type ConfigAssetKind,
   type ConfigAssetMutation,
   type ConfigAssetRecord,
@@ -28,6 +28,8 @@ interface ConfigAssetBundleInput {
   agents: unknown[];
   skills: unknown[];
 }
+
+type ConfigAssetCallContext = Pick<RuntimeCallContext, "correlationId">;
 
 interface PutConfigAssetCommand {
   kind: ConfigAssetKind;
@@ -49,7 +51,7 @@ export class ConfigAssetWorkflow {
     this.options = input.options;
   }
 
-  async getOverview(user: AuthenticatedUser, context: RuntimeCallContext) {
+  async getOverview(user: AuthenticatedIdentity, context: ConfigAssetCallContext) {
     await this.authorizeAuditedRead(user, context);
     const [state, assets] = await Promise.all([
       this.options.configAssets.store.getConfigAssetState({
@@ -73,8 +75,8 @@ export class ConfigAssetWorkflow {
   }
 
   async getAsset(
-    user: AuthenticatedUser,
-    _context: RuntimeCallContext,
+    user: AuthenticatedIdentity,
+    _context: ConfigAssetCallContext,
     input: { kind: ConfigAssetKind; name: string }
   ) {
     this.authorizeRead(user);
@@ -83,8 +85,8 @@ export class ConfigAssetWorkflow {
   }
 
   async putAsset(
-    user: AuthenticatedUser,
-    context: RuntimeCallContext,
+    user: AuthenticatedIdentity,
+    context: ConfigAssetCallContext,
     command: PutConfigAssetCommand
   ) {
     await this.authorizeInteractiveWrite(user, context);
@@ -117,7 +119,7 @@ export class ConfigAssetWorkflow {
     const result = await this.options.configAssets.store.applyConfigAssetMutations({
       clientInstanceId: this.options.clientInstanceId,
       baseVersion: command.baseVersion,
-      actor: auditActorFromUser(user),
+      actor: auditActorFromIdentity(user),
       mutations
     });
     const updated = await this.getActiveAssetOrThrow(command);
@@ -131,8 +133,8 @@ export class ConfigAssetWorkflow {
   }
 
   async deleteAsset(
-    user: AuthenticatedUser,
-    context: RuntimeCallContext,
+    user: AuthenticatedIdentity,
+    context: ConfigAssetCallContext,
     command: AssetMutationCommand
   ) {
     await this.authorizeInteractiveWrite(user, context);
@@ -154,7 +156,7 @@ export class ConfigAssetWorkflow {
     const result = await this.options.configAssets.store.applyConfigAssetMutations({
       clientInstanceId: this.options.clientInstanceId,
       baseVersion: command.baseVersion,
-      actor: auditActorFromUser(user),
+      actor: auditActorFromIdentity(user),
       mutations
     });
     await this.recordMutation(user, context, "config_asset.deleted", {
@@ -167,8 +169,8 @@ export class ConfigAssetWorkflow {
   }
 
   async setDefaultAgent(
-    user: AuthenticatedUser,
-    context: RuntimeCallContext,
+    user: AuthenticatedIdentity,
+    context: ConfigAssetCallContext,
     command: { agentName?: string; baseVersion?: number }
   ) {
     await this.authorizeInteractiveWrite(user, context);
@@ -184,7 +186,7 @@ export class ConfigAssetWorkflow {
     const result = await this.options.configAssets.store.applyConfigAssetMutations({
       clientInstanceId: this.options.clientInstanceId,
       baseVersion: command.baseVersion,
-      actor: auditActorFromUser(user),
+      actor: auditActorFromIdentity(user),
       mutations: [{ type: "setDefaultAgent", agentName: command.agentName }]
     });
     await this.recordMutation(user, context, "config_asset.default_agent_set", {
@@ -195,8 +197,8 @@ export class ConfigAssetWorkflow {
   }
 
   async listRevisions(
-    user: AuthenticatedUser,
-    _context: RuntimeCallContext,
+    user: AuthenticatedIdentity,
+    _context: ConfigAssetCallContext,
     input: { kind: ConfigAssetKind; name: string }
   ) {
     this.authorizeRead(user);
@@ -215,8 +217,8 @@ export class ConfigAssetWorkflow {
   }
 
   async revertAsset(
-    user: AuthenticatedUser,
-    context: RuntimeCallContext,
+    user: AuthenticatedIdentity,
+    context: ConfigAssetCallContext,
     command: AssetMutationCommand & { revision: number }
   ) {
     await this.authorizeInteractiveWrite(user, context);
@@ -266,7 +268,7 @@ export class ConfigAssetWorkflow {
     const result = await this.options.configAssets.store.applyConfigAssetMutations({
       clientInstanceId: this.options.clientInstanceId,
       baseVersion: command.baseVersion,
-      actor: auditActorFromUser(user),
+      actor: auditActorFromIdentity(user),
       mutations
     });
     const updated = await this.getActiveAssetOrThrow(command);
@@ -279,7 +281,7 @@ export class ConfigAssetWorkflow {
     return { version: result.version, revision: updated.revision };
   }
 
-  async exportAssets(user: AuthenticatedUser, context: RuntimeCallContext) {
+  async exportAssets(user: AuthenticatedIdentity, context: ConfigAssetCallContext) {
     await this.authorizeAuditedRead(user, context);
     const [state, assets] = await Promise.all([
       this.options.configAssets.store.getConfigAssetState({
@@ -298,8 +300,8 @@ export class ConfigAssetWorkflow {
   }
 
   async replaceAssets(
-    user: AuthenticatedUser,
-    context: RuntimeCallContext,
+    user: AuthenticatedIdentity,
+    context: ConfigAssetCallContext,
     command: ConfigAssetBundleInput & { baseVersion: number | null }
   ) {
     await this.authorizeReleaseWrite(user, context);
@@ -332,7 +334,7 @@ export class ConfigAssetWorkflow {
     const result = await this.options.configAssets.store.applyConfigAssetMutations({
       clientInstanceId: this.options.clientInstanceId,
       ...(command.baseVersion === null ? {} : { baseVersion: command.baseVersion }),
-      actor: auditActorFromUser(user),
+      actor: auditActorFromIdentity(user),
       mutations
     });
     await this.recordMutation(user, context, "config_assets.replaced", {
@@ -342,8 +344,8 @@ export class ConfigAssetWorkflow {
   }
 
   async validateAssets(
-    user: AuthenticatedUser,
-    context: RuntimeCallContext,
+    user: AuthenticatedIdentity,
+    context: ConfigAssetCallContext,
     command: ConfigAssetBundleInput
   ): Promise<{ valid: true }> {
     await this.authorizeReleaseWrite(user, context);
@@ -351,14 +353,14 @@ export class ConfigAssetWorkflow {
     return { valid: true };
   }
 
-  private authorizeRead(user: AuthenticatedUser): void {
+  private authorizeRead(user: AuthenticatedIdentity): void {
     requireAuthScope(user, "config_assets:read");
     requirePermission(user, "config_assets.read");
   }
 
   private async authorizeAuditedRead(
-    user: AuthenticatedUser,
-    context: RuntimeCallContext
+    user: AuthenticatedIdentity,
+    context: ConfigAssetCallContext
   ): Promise<void> {
     requireAuthScope(user, "config_assets:read");
     await authorizeGovernanceAction({
@@ -372,8 +374,8 @@ export class ConfigAssetWorkflow {
   }
 
   private async authorizeInteractiveWrite(
-    user: AuthenticatedUser,
-    context: RuntimeCallContext
+    user: AuthenticatedIdentity,
+    context: ConfigAssetCallContext
   ): Promise<void> {
     requireAuthScope(user, "config_assets:write");
     await authorizeGovernanceAction({
@@ -390,8 +392,8 @@ export class ConfigAssetWorkflow {
   }
 
   private async authorizeReleaseWrite(
-    user: AuthenticatedUser,
-    context: RuntimeCallContext
+    user: AuthenticatedIdentity,
+    context: ConfigAssetCallContext
   ): Promise<void> {
     requireAuthScope(user, "config_assets:release");
     await authorizeGovernanceAction({
@@ -495,15 +497,15 @@ export class ConfigAssetWorkflow {
   }
 
   private async recordMutation(
-    user: AuthenticatedUser,
-    context: RuntimeCallContext,
+    user: AuthenticatedIdentity,
+    context: ConfigAssetCallContext,
     type: string,
     metadata: JsonObject
   ): Promise<void> {
     await this.options.auditRecorder.record({
       type,
       status: "success",
-      actor: auditActorFromUser(user),
+      actor: auditActorFromIdentity(user),
       correlationId: context.correlationId,
       metadata
     });

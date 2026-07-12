@@ -11,6 +11,7 @@ import { registerConversationFileRoutes } from "./routes/conversation-file-route
 import { registerConversationRoutes } from "./routes/conversation-routes";
 import { registerDraftAttachmentRoutes } from "./routes/draft-attachment-routes";
 import { registerSessionTokenRoutes } from "./routes/session-token-routes";
+import { registerServiceAccessTokenRoutes } from "./routes/service-access-token-routes";
 import { registerSuperadminRoutes } from "./routes/superadmin-routes";
 import { registerUserAccountRoutes } from "./routes/user-account-routes";
 import { createConversationRetentionJob } from "./retention";
@@ -82,6 +83,7 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
 
   registerBetterAuthRoutes(app, options);
   registerSessionTokenRoutes(app, options);
+  registerServiceAccessTokenRoutes(app, options);
   registerAgentRunRoutes(app, options);
   registerConfigRoutes(app, options);
   registerConfigAssetRoutes(app, options);

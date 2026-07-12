@@ -1,13 +1,20 @@
 import {
   CompositeAuthAdapter,
+  ApiKeyAccessTokenExchange,
   DevelopmentAuthAdapter,
   HmacSessionTokenAuthAdapter,
   HmacSessionTokenIssuer,
+  HmacServiceAccessTokenAuthAdapter,
   IdentityResolvingAuthAdapter,
   createStandaloneAuthRuntime,
   type AuthAdapter
 } from "@vivd-catalyst/auth";
-import { AppError, type ClientInstanceId, type UserStore } from "@vivd-catalyst/core";
+import {
+  AppError,
+  type ApiAccessStore,
+  type ClientInstanceId,
+  type UserStore
+} from "@vivd-catalyst/core";
 import { getDevelopmentAuthUsers, type ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { ClientInstanceEnv } from "./env";
 
@@ -18,13 +25,16 @@ export interface ClientInstanceAuth {
     issuer: HmacSessionTokenIssuer;
     serverCredential: string;
   };
+  serviceAccessToken?: {
+    exchange: ApiKeyAccessTokenExchange;
+  };
 }
 
 export interface CreateClientInstanceAuthInput {
   config: ClientInstanceConfig;
   env: ClientInstanceEnv;
   clientInstanceId: ClientInstanceId;
-  userStore: UserStore;
+  userStore: UserStore & ApiAccessStore;
   corsOrigin?: string | string[];
 }
 
@@ -32,6 +42,20 @@ export async function createClientInstanceAuth(input: CreateClientInstanceAuthIn
   const adapters: AuthAdapter[] = [];
   let standaloneAuth: ClientInstanceAuth["standaloneAuth"];
   let sessionToken: ClientInstanceAuth["sessionToken"];
+  let serviceAccessToken: ClientInstanceAuth["serviceAccessToken"];
+
+  const serviceAccessTokenSecret = input.env.SERVICE_ACCESS_TOKEN_SECRET;
+  if (serviceAccessTokenSecret) {
+    const serviceAccessOptions = {
+      secret: serviceAccessTokenSecret,
+      clientInstanceId: input.clientInstanceId,
+      apiAccessStore: input.userStore
+    };
+    adapters.push(new HmacServiceAccessTokenAuthAdapter(serviceAccessOptions));
+    serviceAccessToken = {
+      exchange: new ApiKeyAccessTokenExchange(serviceAccessOptions)
+    };
+  }
 
   if (input.config.auth.standalone?.enabled) {
     standaloneAuth = await createStandaloneAuthRuntimeForClientInstance(input);
@@ -74,7 +98,8 @@ export async function createClientInstanceAuth(input: CreateClientInstanceAuthIn
       linkByVerifiedEmail: input.config.auth.identityLinking.byVerifiedEmail
     }),
     standaloneAuth,
-    sessionToken
+    sessionToken,
+    serviceAccessToken
   };
 }
 

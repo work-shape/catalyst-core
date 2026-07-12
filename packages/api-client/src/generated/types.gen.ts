@@ -1972,13 +1972,14 @@ export type ListAuditEventsResponses = {
         type: string;
         status: string;
         actor?: {
-            userId: string;
-            externalUserId: string;
+            userId?: string;
+            externalUserId?: string;
             displayLabel: string;
             roles: Array<string>;
             principalKind?: 'user' | 'service';
             principalId?: string;
             principalDisplayLabel?: string;
+            credentialId?: string;
             subjectUserId?: string;
             delegatedActor?: {
                 kind: 'service_principal';
@@ -2036,13 +2037,14 @@ export type ListAuditActivitiesResponses = {
             type: string;
             status: string;
             actor?: {
-                userId: string;
-                externalUserId: string;
+                userId?: string;
+                externalUserId?: string;
                 displayLabel: string;
                 roles: Array<string>;
                 principalKind?: 'user' | 'service';
                 principalId?: string;
                 principalDisplayLabel?: string;
+                credentialId?: string;
                 subjectUserId?: string;
                 delegatedActor?: {
                     kind: 'service_principal';
@@ -2389,13 +2391,14 @@ export type ListConfigAssetRevisionsResponses = {
             [key: string]: unknown;
         } | null;
         actor: {
-            userId: string;
-            externalUserId: string;
+            userId?: string;
+            externalUserId?: string;
             displayLabel: string;
             roles: Array<string>;
             principalKind?: 'user' | 'service';
             principalId?: string;
             principalDisplayLabel?: string;
+            credentialId?: string;
             subjectUserId?: string;
             delegatedActor?: {
                 kind: 'service_principal';
@@ -2843,3 +2846,22 @@ export type IssueSessionTokenResponses = {
 };
 
 export type IssueSessionTokenResponse = IssueSessionTokenResponses[keyof IssueSessionTokenResponses];
+
+export type ExchangeApiKeyData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/auth/access-token';
+};
+
+export type ExchangeApiKeyResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        accessToken: string;
+        expiresAt: string;
+    };
+};
+
+export type ExchangeApiKeyResponse = ExchangeApiKeyResponses[keyof ExchangeApiKeyResponses];

@@ -1,22 +1,26 @@
 import {
   getAuthPrincipal,
   getSubjectUserId,
+  isAuthenticatedServicePrincipal,
+  type AuthenticatedIdentity,
+  type AuthenticatedServicePrincipal,
   type AuthenticatedUser,
   type DelegatedActor,
   type UserRole
 } from "./identity";
-import type { AuditEventId, ClientInstanceId } from "./ids";
+import type { ApiCredentialId, AuditEventId, ClientInstanceId } from "./ids";
 import type { JsonObject } from "./json";
 import type { ISODateString } from "./time";
 
 export interface AuditActor {
-  userId: string;
-  externalUserId: string;
+  userId?: string;
+  externalUserId?: string;
   displayLabel: string;
   roles: UserRole[];
   principalKind?: "user" | "service";
   principalId?: string;
   principalDisplayLabel?: string;
+  credentialId?: ApiCredentialId;
   subjectUserId?: string;
   delegatedActor?: DelegatedActor;
 }
@@ -106,5 +110,25 @@ export function auditActorFromUser(user: AuthenticatedUser): AuditActor {
     principalDisplayLabel: principal.displayLabel,
     subjectUserId: getSubjectUserId(user),
     delegatedActor: user.delegatedActor
+  };
+}
+
+export function auditActorFromIdentity(identity: AuthenticatedIdentity): AuditActor {
+  if (isAuthenticatedServicePrincipal(identity)) {
+    return auditActorFromServicePrincipal(identity);
+  }
+  return auditActorFromUser(identity);
+}
+
+export function auditActorFromServicePrincipal(
+  principal: AuthenticatedServicePrincipal
+): AuditActor {
+  return {
+    displayLabel: principal.displayLabel,
+    roles: [],
+    principalKind: "service",
+    principalId: principal.id,
+    principalDisplayLabel: principal.displayLabel,
+    credentialId: principal.credentialId
   };
 }

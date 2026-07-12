@@ -7712,6 +7712,9 @@
                           "principalDisplayLabel": {
                             "type": "string"
                           },
+                          "credentialId": {
+                            "type": "string"
+                          },
                           "subjectUserId": {
                             "type": "string"
                           },
@@ -7742,8 +7745,6 @@
                           }
                         },
                         "required": [
-                          "userId",
-                          "externalUserId",
                           "displayLabel",
                           "roles"
                         ],
@@ -7938,6 +7939,9 @@
                                 "principalDisplayLabel": {
                                   "type": "string"
                                 },
+                                "credentialId": {
+                                  "type": "string"
+                                },
                                 "subjectUserId": {
                                   "type": "string"
                                 },
@@ -7968,8 +7972,6 @@
                                 }
                               },
                               "required": [
-                                "userId",
-                                "externalUserId",
                                 "displayLabel",
                                 "roles"
                               ],
@@ -9248,6 +9250,9 @@
                               "principalDisplayLabel": {
                                 "type": "string"
                               },
+                              "credentialId": {
+                                "type": "string"
+                              },
                               "subjectUserId": {
                                 "type": "string"
                               },
@@ -9278,8 +9283,6 @@
                               }
                             },
                             "required": [
-                              "userId",
-                              "externalUserId",
                               "displayLabel",
                               "roles"
                             ],
@@ -10750,6 +10753,37 @@
                   },
                   "required": [
                     "chatSessionToken",
+                    "expiresAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/access-token": {
+      "post": {
+        "operationId": "exchangeApiKey",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accessToken": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "accessToken",
                     "expiresAt"
                   ],
                   "additionalProperties": false

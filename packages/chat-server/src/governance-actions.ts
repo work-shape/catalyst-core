@@ -1,8 +1,8 @@
 import {
   AppError,
-  auditActorFromUser,
+  auditActorFromIdentity,
   hasPermission,
-  type AuthenticatedUser,
+  type AuthenticatedIdentity,
   type Permission,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
@@ -10,8 +10,8 @@ import type { ChatServerOptions } from "./types";
 
 export async function authorizeGovernanceAction(input: {
   options: ChatServerOptions;
-  user: AuthenticatedUser;
-  context: RuntimeCallContext;
+  user: AuthenticatedIdentity;
+  context: Pick<RuntimeCallContext, "correlationId">;
   requiredPermission: Permission;
   auditType: string;
   deniedMessage: string;
@@ -20,13 +20,13 @@ export async function authorizeGovernanceAction(input: {
   await input.options.auditRecorder.record({
     type: input.auditType,
     status: "success",
-    actor: auditActorFromUser(input.user),
+    actor: auditActorFromIdentity(input.user),
     correlationId: input.context.correlationId
   });
 }
 
 function assertGovernancePermission(
-  user: AuthenticatedUser,
+  user: AuthenticatedIdentity,
   requiredPermission: Permission,
   deniedMessage: string
 ): void {

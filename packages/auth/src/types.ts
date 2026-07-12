@@ -1,4 +1,7 @@
-import type { AuthenticatedUser, ClientInstanceId } from "@vivd-catalyst/core";
+import type {
+  AuthenticatedIdentity,
+  ClientInstanceId
+} from "@vivd-catalyst/core";
 
 export type AuthRequestHeaders = Record<string, string | string[] | undefined>;
 
@@ -10,5 +13,5 @@ export interface AuthRequest {
 
 export interface AuthAdapter {
   readonly id: string;
-  authenticate(request: AuthRequest): Promise<AuthenticatedUser>;
+  authenticate(request: AuthRequest): Promise<AuthenticatedIdentity>;
 }
