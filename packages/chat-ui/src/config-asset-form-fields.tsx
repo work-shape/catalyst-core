@@ -1,5 +1,6 @@
 import { Plus } from "lucide-react";
 import type { AgentFormState, LocalizedPair } from "./config-assets-model";
+import { useTranslation } from "./i18n";
 import { Button } from "./ui/button";
 import { cn } from "./ui/cn";
 import { Dialog } from "./ui/dialog";
@@ -36,13 +37,15 @@ export function LocalizedField({
   value: LocalizedPair;
   onChange(value: LocalizedPair): void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <div className="grid gap-1.5">
       <span className="text-sm font-medium">{label}</span>
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="grid gap-1.5">
           <span className="text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase">
-            EN · English
+            EN · {t("configEnglishLanguage")}
           </span>
           <Input
             value={value.en}
@@ -53,7 +56,7 @@ export function LocalizedField({
         </label>
         <label className="grid gap-1.5">
           <span className="text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase">
-            DE · Deutsch
+            DE · {t("configGermanLanguage")}
           </span>
           <Input
             value={value.de}
@@ -83,6 +86,8 @@ export function CheckboxGroup({
   disabled?: boolean;
   onChange(selected: string[]): void;
 }) {
+  const { locale, t } = useTranslation();
+
   return (
     <fieldset className="grid min-w-0 gap-2">
       <legend className="sr-only">{label}</legend>
@@ -90,7 +95,7 @@ export function CheckboxGroup({
         <div className="flex items-center justify-between gap-3 border-b bg-muted/20 px-3 py-2">
           <span className="text-sm font-medium">{label}</span>
           <span className="text-xs tabular-nums text-muted-foreground">
-            {selected.length.toLocaleString()} selected
+            {t("configSelectedCount", { count: selected.length.toLocaleString(locale) })}
           </span>
         </div>
         {options.length === 0 ? (
@@ -145,10 +150,12 @@ export function InitialPromptsEditor({
   disabled?: boolean;
   onChange(prompts: AgentFormState["initialPrompts"]): void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <section className="grid gap-3">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">Prompts</span>
+        <span className="text-sm font-medium">{t("configPrompts")}</span>
         <Button
           type="button"
           variant="outline"
@@ -162,29 +169,31 @@ export function InitialPromptsEditor({
           }
         >
           <Plus size={14} aria-hidden="true" />
-          Add prompt
+          {t("configAddPrompt")}
         </Button>
       </div>
       {prompts.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          Optional suggestion cards shown on the empty conversation screen.
+          {t("configOptionalPrompts")}
         </p>
       ) : null}
       {prompts.map((prompt, index) => (
         <div key={index} className="grid gap-3 rounded-lg border bg-muted/10 p-3 sm:p-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Prompt {index + 1}</span>
+            <span className="text-xs font-medium text-muted-foreground">
+              {t("configPromptNumber", { number: index + 1 })}
+            </span>
             <button
               type="button"
               className="text-xs text-muted-foreground transition-colors hover:text-destructive"
               disabled={disabled}
               onClick={() => onChange(prompts.filter((_, promptIndex) => promptIndex !== index))}
             >
-              Remove
+              {t("configRemove")}
             </button>
           </div>
           <LocalizedField
-            label="Title"
+            label={t("configTitle")}
             value={prompt.title}
             disabled={disabled}
             onChange={(title) =>
@@ -196,7 +205,7 @@ export function InitialPromptsEditor({
             }
           />
           <LocalizedField
-            label="Prompt"
+            label={t("configPrompt")}
             value={prompt.prompt}
             disabled={disabled}
             onChange={(promptValue) =>
@@ -216,27 +225,34 @@ export function InitialPromptsEditor({
 export function DeleteDialog({
   open,
   onOpenChange,
-  subject,
+  kind,
+  name,
   onConfirm
 }: {
   open: boolean;
   onOpenChange(open: boolean): void;
-  subject: string;
+  kind: "agent" | "skill";
+  name: string;
   onConfirm(): void;
 }) {
+  const { t } = useTranslation();
+  const title = t(kind === "agent" ? "configDeleteAgentTitle" : "configDeleteSkillTitle", {
+    name
+  });
+  const description = t(
+    kind === "agent" ? "configDeleteAgentDescription" : "configDeleteSkillDescription"
+  );
+
   return (
-    <Dialog open={open} title={`Delete ${subject}?`} onClose={() => onOpenChange(false)}>
+    <Dialog open={open} title={title} onClose={() => onOpenChange(false)}>
       <div className="grid gap-4 p-5">
-        <p className="text-sm text-muted-foreground">
-          The {subject} stops being available for new conversations right away. Its revision history
-          is kept, so it can be restored later.
-        </p>
+        <p className="text-sm text-muted-foreground">{description}</p>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("cancel")}
           </Button>
           <Button type="button" variant="danger" onClick={onConfirm}>
-            Delete
+            {t("configDelete")}
           </Button>
         </div>
       </div>

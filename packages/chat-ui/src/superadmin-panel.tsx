@@ -28,6 +28,7 @@ import { cn } from "./ui/cn";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { ConfigAssetsPanel, type ConfigAssetsPanelInput } from "./config-assets-panel";
 import { ControlPlanePage } from "./control-plane/control-plane-page";
+import { useTranslation } from "./i18n";
 import { UsageView } from "./usage-view";
 import { UserAdministrationPanel } from "./user-administration-panel";
 import type { SuperadminRouteTab } from "./workspace-route";
@@ -82,25 +83,30 @@ export function SuperadminPanel({
   selectedTab: SuperadminRouteTab;
   onSelectTab(tab: SuperadminRouteTab): void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <section
       className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background"
-      aria-label="Administration panel"
+      aria-label={t("administrationPanel")}
     >
       <div className="grid gap-3 border-b px-5 pt-20">
         <div className="grid min-w-0 gap-1">
           <span className="text-xs text-muted-foreground">
             {canManageSuperadminAccess ? "Superadmin" : "Admin"}
           </span>
-          <h1 className="text-xl font-semibold tracking-normal">Administration</h1>
+          <h1 className="text-xl font-semibold tracking-normal">{t("administration")}</h1>
         </div>
 
-        <nav className="flex items-end gap-1 overflow-x-auto" aria-label="Administration sections">
+        <nav
+          className="flex items-end gap-1 overflow-x-auto"
+          aria-label={t("administrationSections")}
+        >
           {canManageUsers ? (
             <TabButton
               active={selectedTab === "users"}
               icon={<Users size={15} aria-hidden="true" />}
-              label="Users"
+              label={t("administrationUsers")}
               badge={users.length > 0 ? users.length : undefined}
               onClick={() => onSelectTab("users")}
             />
@@ -109,7 +115,7 @@ export function SuperadminPanel({
             <TabButton
               active={selectedTab === "config"}
               icon={<Settings2 size={15} aria-hidden="true" />}
-              label="Config"
+              label={t("administrationConfig")}
               onClick={() => onSelectTab("config")}
             />
           ) : null}
@@ -117,7 +123,7 @@ export function SuperadminPanel({
             <TabButton
               active={selectedTab === "usage"}
               icon={<Activity size={15} aria-hidden="true" />}
-              label="Usage"
+              label={t("administrationUsage")}
               onClick={() => onSelectTab("usage")}
             />
           ) : null}
@@ -125,7 +131,7 @@ export function SuperadminPanel({
             <TabButton
               active={selectedTab === "audit"}
               icon={<ScrollText size={15} aria-hidden="true" />}
-              label="Audit log"
+              label={t("administrationAuditLog")}
               onClick={() => onSelectTab("audit")}
             />
           ) : null}

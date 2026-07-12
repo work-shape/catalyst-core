@@ -762,6 +762,42 @@ test("standalone settings and superadmin tabs are route-backed", async ({ page }
   await expect(page.getByText("Billed this month")).toBeVisible();
 });
 
+test("superadmin config follows the German locale", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("vivd-catalyst:locale", "de");
+  });
+  await signInViaApi(page, superadminUser);
+
+  await page.goto("/admin/config");
+
+  await expect(page.getByRole("region", { name: "Administrationsbereich" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Administrationsbereiche" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Benutzer/u })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Konfiguration", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Nutzung", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Auditprotokoll", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Konfiguration", exact: true })).toBeVisible();
+  await expect(page.getByText("Agenten", { exact: true })).toBeVisible();
+  await expect(page.getByText("Fähigkeiten", { exact: true }).first()).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Agenten oder Fähigkeit auswählen", exact: true })
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "research_assistant", exact: true }).click();
+
+  const form = page.locator("form");
+  await expect(form.getByText("Identität und Begrüßung", { exact: true })).toBeVisible();
+  await expect(form.getByText("Verhalten", { exact: true })).toBeVisible();
+  await expect(form.getByText("Denkaufwand", { exact: true })).toBeVisible();
+  await expect(form.getByRole("group", { name: "Werkzeuge", exact: true })).toBeVisible();
+  await expect(form.getByRole("group", { name: "Fähigkeiten", exact: true })).toBeVisible();
+  await expect(form.getByText("Einstiegsvorschläge", { exact: true })).toBeVisible();
+  await expect(
+    form.getByRole("button", { name: "Änderungen speichern", exact: true })
+  ).toBeVisible();
+  await expect(form.getByText("Gilt sofort für neue Unterhaltungen.", { exact: true })).toBeVisible();
+});
+
 test("superadmin manages config assets with validation and conflict protection", async ({ page }) => {
   test.setTimeout(60_000);
   await signInViaApi(page, superadminUser);

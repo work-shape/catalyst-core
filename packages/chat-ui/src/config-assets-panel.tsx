@@ -24,6 +24,7 @@ import {
   LocalizedField
 } from "./config-asset-form-fields";
 import { ControlPlanePage } from "./control-plane/control-plane-page";
+import { useTranslation } from "./i18n";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { cn } from "./ui/cn";
@@ -78,6 +79,7 @@ type PanelSelection =
   | { mode: "new"; kind: ConfigAssetKind };
 
 export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
+  const { locale, t } = useTranslation();
   const [selection, setSelection] = useState<PanelSelection | undefined>(undefined);
   const [conflictOpen, setConflictOpen] = useState(false);
   const [resetToken, setResetToken] = useState(0);
@@ -88,10 +90,14 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
   const skillNames = input.skills.map((skill) => skill.name);
   const pageDescription = (
     <>
-      {agentNames.length.toLocaleString()} {agentNames.length === 1 ? "agent" : "agents"}
+      {t(agentNames.length === 1 ? "configAgentCount" : "configAgentCountPlural", {
+        count: agentNames.length.toLocaleString(locale)
+      })}
       {" · "}
-      {skillNames.length.toLocaleString()} {skillNames.length === 1 ? "skill" : "skills"}
-      {version !== undefined ? ` · Version ${version}` : ""}
+      {t(skillNames.length === 1 ? "configSkillCount" : "configSkillCountPlural", {
+        count: skillNames.length.toLocaleString(locale)
+      })}
+      {version !== undefined ? ` · ${t("configVersion", { version })}` : ""}
     </>
   );
 
@@ -111,7 +117,10 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
         setConflictOpen(true);
         return { ok: false };
       }
-      return { ok: false, error: configAssetMutationErrorMessage(error) };
+      return {
+        ok: false,
+        error: configAssetMutationErrorMessage(error, t("configChangeSaveFailed"))
+      };
     }
   };
 
@@ -123,10 +132,10 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
 
   if (input.loading) {
     return (
-      <ControlPlanePage title="Configuration" description={pageDescription}>
+      <ControlPlanePage title={t("configuration")} description={pageDescription}>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Spinner className="size-4" />
-          Loading configuration…
+          {t("configLoading")}
         </div>
       </ControlPlanePage>
     );
@@ -134,7 +143,7 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
 
   return (
     <ControlPlanePage
-      title="Configuration"
+      title={t("configuration")}
       description={pageDescription}
       actions={
         <>
@@ -145,13 +154,13 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
               onClick={() => setSelection({ mode: "new", kind: "skill" })}
             >
               <Plus size={16} aria-hidden="true" />
-              New skill
+              {t("configNewSkill")}
             </Button>
           ) : null}
           {input.allowAgentCreation ? (
             <Button type="button" onClick={() => setSelection({ mode: "new", kind: "agent" })}>
               <Plus size={16} aria-hidden="true" />
-              New agent
+              {t("configNewAgent")}
             </Button>
           ) : null}
         </>
@@ -162,15 +171,17 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
       <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
         <aside className="grid min-w-0 content-start gap-4 overflow-hidden rounded-lg border bg-card p-3 shadow-xs sm:grid-cols-2 lg:sticky lg:top-0 lg:grid-cols-1">
           <AssetList
-            label="Agents"
+            label={t("configAgents")}
+            creatingLabel={t("configCreatingAgent")}
+            emptyLabel={t("configNoneYet")}
             icon={<Bot size={14} aria-hidden="true" />}
             names={agentNames}
             decorate={(name) =>
               name === defaultAgentName ? (
                 <span
                   className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-primary"
-                  title="Default agent"
-                  aria-label="Default agent"
+                  title={t("configDefaultAgent")}
+                  aria-label={t("configDefaultAgent")}
                 >
                   <Star size={13} aria-hidden="true" />
                 </span>
@@ -185,7 +196,9 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
             onSelect={(name) => setSelection({ mode: "existing", kind: "agent", name })}
           />
           <AssetList
-            label="Skills"
+            label={t("configSkills")}
+            creatingLabel={t("configCreatingSkill")}
+            emptyLabel={t("configNoneYet")}
             icon={<BookOpen size={14} aria-hidden="true" />}
             names={skillNames}
             decorate={() => null}
@@ -199,7 +212,7 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
           />
           {version !== undefined ? (
             <p className="border-t px-1 pt-3 text-xs leading-5 text-muted-foreground sm:col-span-2 lg:col-span-1">
-              Also editable with the <code>catalyst</code> CLI.
+              {t("configCliHint")}
             </p>
           ) : null}
         </aside>
@@ -212,10 +225,9 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
                 <Bot size={18} aria-hidden="true" />
               </span>
               <div className="grid gap-1">
-                <h2 className="text-base font-semibold">Select an agent or skill</h2>
+                <h2 className="text-base font-semibold">{t("configSelectItemTitle")}</h2>
                 <p className="text-sm leading-6 text-muted-foreground">
-                  Choose an item from the navigation to edit it. Changes apply to new conversations
-                  immediately, without a deployment.
+                  {t("configSelectItemDescription")}
                 </p>
               </div>
             </div>
@@ -363,19 +375,18 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
 
       <Dialog
         open={conflictOpen}
-        title="Configuration changed on the server"
+        title={t("configChangedTitle")}
         onClose={() => setConflictOpen(false)}
       >
         <div className="grid gap-4 p-5">
           <p className="text-sm text-muted-foreground">
-            Someone else — or a CLI push — modified the configuration since you loaded it. Reload to
-            continue from the latest version. Unsaved edits in this editor will be lost.
+            {t("configChangedDescription")}
           </p>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setConflictOpen(false)}>
-              Keep editing
+              {t("configKeepEditing")}
             </Button>
-            <Button onClick={() => void reloadAfterConflict()}>Reload latest</Button>
+            <Button onClick={() => void reloadAfterConflict()}>{t("configReloadLatest")}</Button>
           </div>
         </div>
       </Dialog>
@@ -389,6 +400,8 @@ function selectionKey(selection: PanelSelection): string {
 
 function AssetList({
   label,
+  creatingLabel,
+  emptyLabel,
   icon,
   names,
   decorate,
@@ -397,6 +410,8 @@ function AssetList({
   onSelect
 }: {
   label: string;
+  creatingLabel: string;
+  emptyLabel: string;
   icon: React.ReactNode;
   names: string[];
   decorate(name: string): React.ReactNode;
@@ -434,11 +449,11 @@ function AssetList({
         ))}
         {creating ? (
           <li className="rounded-md bg-muted px-2 py-1.5 text-xs font-medium text-muted-foreground">
-            New {label.toLowerCase().replace(/s$/u, "")}…
+            {creatingLabel}
           </li>
         ) : null}
         {names.length === 0 && !creating ? (
-          <li className="px-2 py-1 text-xs text-muted-foreground">None yet.</li>
+          <li className="px-2 py-1 text-xs text-muted-foreground">{emptyLabel}</li>
         ) : null}
       </ul>
     </section>
@@ -470,6 +485,7 @@ function AgentEditor({
   onMakeDefault?: () => Promise<MutationOutcome>;
   revisions: React.ReactNode;
 }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState(initialForm);
   const [error, setError] = useState<string | undefined>(undefined);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -492,14 +508,14 @@ function AgentEditor({
   return (
     <form className="grid min-w-0 content-start" onSubmit={submit}>
       <EditorHeader
-        eyebrow="Agent"
+        eyebrow={t("configAgent")}
         title={
           isNew
-            ? "New agent"
+            ? t("configNewAgent")
             : form.displayName.en.trim() || form.displayName.de.trim() || form.name
         }
         identifier={isNew ? undefined : form.name}
-        badges={isDefault ? <Badge variant="secondary">Default agent</Badge> : null}
+        badges={isDefault ? <Badge variant="secondary">{t("configDefaultAgent")}</Badge> : null}
         actions={
           <>
             {onMakeDefault ? (
@@ -511,7 +527,7 @@ function AgentEditor({
                 onClick={async () => setError((await onMakeDefault()).error)}
               >
                 <Star size={14} aria-hidden="true" />
-                Make default
+                {t("configMakeDefault")}
               </Button>
             ) : null}
             {onDelete ? (
@@ -524,7 +540,7 @@ function AgentEditor({
                 onClick={() => setDeleteOpen(true)}
               >
                 <Trash2 size={14} aria-hidden="true" />
-                Delete
+                {t("configDelete")}
               </Button>
             ) : null}
           </>
@@ -532,11 +548,11 @@ function AgentEditor({
       />
 
       <EditorSection
-        title="Identity and welcome"
-        description="Names and messages shown to people when they start a conversation."
+        title={t("configIdentityWelcome")}
+        description={t("configIdentityDescription")}
       >
         {isNew ? (
-          <Field label="Name" hint="Stable identifier, letters/digits/underscores. Cannot be renamed later.">
+          <Field label={t("configName")} hint={t("configAgentNameHint")}>
             <Input
               value={form.name}
               required
@@ -546,20 +562,20 @@ function AgentEditor({
           </Field>
         ) : null}
         <LocalizedField
-          label="Display name"
+          label={t("configDisplayName")}
           required
           disabled={!canEdit("displayName")}
           value={form.displayName}
           onChange={(displayName) => update({ displayName })}
         />
         <LocalizedField
-          label="Welcome message"
+          label={t("configWelcomeMessage")}
           disabled={!canEdit("welcomeMessage")}
           value={form.welcomeMessage}
           onChange={(welcomeMessage) => update({ welcomeMessage })}
         />
         <LocalizedField
-          label="Welcome subtitle"
+          label={t("configWelcomeSubtitle")}
           disabled={!canEdit("welcomeSubtitle")}
           value={form.welcomeSubtitle}
           onChange={(welcomeSubtitle) => update({ welcomeSubtitle })}
@@ -567,16 +583,16 @@ function AgentEditor({
       </EditorSection>
 
       <EditorSection
-        title="Behavior"
+        title={t("configBehavior")}
         description={
           canEditModel || canEditReasoningEffort || canEditMaxSteps
-            ? "Core instructions and permitted runtime controls for this agent."
-            : "Core instructions for this agent."
+            ? t("configBehaviorDescriptionWithControls")
+            : t("configBehaviorDescription")
         }
       >
-        <Field label="Instructions" hint="The agent's system prompt.">
+        <Field label={t("configInstructions")} hint={t("configSystemPromptHint")}>
           <EditorTextarea
-            label="System prompt"
+            label={t("configSystemPrompt")}
             value={form.instructions}
             required
             disabled={!canEdit("instructions")}
@@ -594,8 +610,8 @@ function AgentEditor({
           >
             {canEditModel ? (
               <Field
-                label="Model"
-                hint="Selects one of the model bindings approved in instance config."
+                label={t("configModel")}
+                hint={t("configModelHint")}
               >
                 <Select
                   value={form.modelBindingId}
@@ -603,9 +619,9 @@ function AgentEditor({
                     update({ modelBindingId: event.target.value, modelProviderId: "" })
                   }
                 >
-                  <option value="">Instance default</option>
+                  <option value="">{t("configInstanceDefault")}</option>
                   {modelBindings.length ? (
-                    <optgroup label="Configured bindings">
+                    <optgroup label={t("configConfiguredBindings")}>
                       {modelBindings.map((binding) => (
                         <option key={binding.id} value={binding.id}>
                           {modelBindingLabel(binding, modelBindings)}
@@ -617,12 +633,15 @@ function AgentEditor({
               </Field>
             ) : null}
             {canEditReasoningEffort ? (
-              <Field label="Reasoning effort" hint="Overrides the selected binding's default effort.">
+              <Field
+                label={t("configReasoningEffort")}
+                hint={t("configReasoningEffortHint")}
+              >
                 <Select
                   value={form.reasoningEffort}
                   onChange={(event) => update({ reasoningEffort: event.target.value })}
                 >
-                  <option value="">Model default</option>
+                  <option value="">{t("configModelDefault")}</option>
                   {(references?.reasoningEfforts ?? []).map((effort) => (
                     <option key={effort} value={effort}>
                       {effort}
@@ -633,8 +652,8 @@ function AgentEditor({
             ) : null}
             {canEditMaxSteps ? (
               <Field
-                label="Max steps"
-                hint="Maximum model and tool turns for one response. Empty uses release config."
+                label={t("configMaxSteps")}
+                hint={t("configMaxStepsHint")}
               >
                 <Input
                   type="number"
@@ -649,26 +668,26 @@ function AgentEditor({
       </EditorSection>
 
       <EditorSection
-        title="Capabilities"
-        description="Only tools enabled for this deployment can be assigned here."
+        title={t("configCapabilities")}
+        description={t("configCapabilitiesDescription")}
       >
         <CheckboxGroup
-          label="Tools"
+          label={t("configTools")}
           options={references?.enabledToolNames ?? []}
           selected={form.toolNames}
           disabled={!canEdit("toolNames")}
-          emptyHint="No tools are enabled for this instance."
+          emptyHint={t("configNoTools")}
           onChange={(toolNames) => update({ toolNames })}
         />
         <CheckboxGroup
-          label="Skills"
+          label={t("configSkills")}
           options={skillNames}
           selected={form.skillNames}
           disabled={!canEdit("skillNames")}
-          emptyHint="No skills defined yet."
+          emptyHint={t("configNoSkills")}
           hint={
             form.skillNames.length > 0 && !form.toolNames.includes("read_skill")
-              ? "Skills require the read_skill tool to be selected above."
+              ? t("configSkillsRequireReadSkill")
               : undefined
           }
           onChange={(selected) => update({ skillNames: selected })}
@@ -676,8 +695,8 @@ function AgentEditor({
       </EditorSection>
 
       <EditorSection
-        title="Starter prompts"
-        description="Suggestion cards shown before the first message is sent."
+        title={t("configStarterPrompts")}
+        description={t("configStarterPromptsDescription")}
       >
         <InitialPromptsEditor
           prompts={form.initialPrompts}
@@ -691,7 +710,7 @@ function AgentEditor({
       {revisions}
 
       <SaveBar
-        label={isNew ? "Create agent" : "Save changes"}
+        label={isNew ? t("configCreateAgent") : t("configSaveChanges")}
         mutating={mutating}
         disabled={editableAgentFields.length === 0}
       />
@@ -700,7 +719,8 @@ function AgentEditor({
         <DeleteDialog
           open={deleteOpen}
           onOpenChange={setDeleteOpen}
-          subject={`agent '${form.name}'`}
+          kind="agent"
+          name={form.name}
           onConfirm={async () => {
             setDeleteOpen(false);
             setError((await onDelete()).error);
@@ -738,6 +758,7 @@ function SkillEditor({
   onDelete?: () => Promise<MutationOutcome>;
   revisions: React.ReactNode;
 }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState(initialForm);
   const [error, setError] = useState<string | undefined>(undefined);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -752,8 +773,8 @@ function SkillEditor({
   return (
     <form className="grid min-w-0 content-start" onSubmit={submit}>
       <EditorHeader
-        eyebrow="Skill"
-        title={isNew ? "New skill" : form.title.trim() || form.name}
+        eyebrow={t("configSkill")}
+        title={isNew ? t("configNewSkill") : form.title.trim() || form.name}
         identifier={isNew ? undefined : form.name}
         badges={null}
         actions={
@@ -767,18 +788,18 @@ function SkillEditor({
               onClick={() => setDeleteOpen(true)}
             >
               <Trash2 size={14} aria-hidden="true" />
-              Delete
+              {t("configDelete")}
             </Button>
           ) : null
         }
       />
 
       <EditorSection
-        title="Skill details"
-        description="Metadata used to decide when this skill is relevant."
+        title={t("configSkillDetails")}
+        description={t("configSkillDetailsDescription")}
       >
         {isNew ? (
-          <Field label="Name" hint="Stable identifier. Cannot be renamed later.">
+          <Field label={t("configName")} hint={t("configSkillNameHint")}>
             <Input
               value={form.name}
               disabled={!editable}
@@ -788,7 +809,7 @@ function SkillEditor({
             />
           </Field>
         ) : null}
-        <Field label="Title" hint="Shown to the model in the skill list.">
+        <Field label={t("configTitle")} hint={t("configSkillTitleHint")}>
           <Input
             value={form.title}
             required
@@ -796,7 +817,7 @@ function SkillEditor({
             onChange={(event) => update({ title: event.target.value })}
           />
         </Field>
-        <Field label="Description" hint="Tells the model when to read this skill.">
+        <Field label={t("configDescription")} hint={t("configSkillDescriptionHint")}>
           <Input
             value={form.description}
             required
@@ -807,12 +828,12 @@ function SkillEditor({
       </EditorSection>
 
       <EditorSection
-        title="Instructions"
-        description="Markdown content loaded when the agent reads this skill."
+        title={t("configInstructions")}
+        description={t("configSkillInstructionsDescription")}
       >
-        <Field label="Content" hint="Keep instructions focused on this skill's workflow.">
+        <Field label={t("configContent")} hint={t("configSkillContentHint")}>
           <EditorTextarea
-            label="Markdown"
+            label={t("configMarkdown")}
             value={form.content}
             required
             disabled={!editable}
@@ -827,7 +848,7 @@ function SkillEditor({
       {revisions}
 
       <SaveBar
-        label={isNew ? "Create skill" : "Save changes"}
+        label={isNew ? t("configCreateSkill") : t("configSaveChanges")}
         mutating={mutating}
         disabled={!editable}
       />
@@ -836,7 +857,8 @@ function SkillEditor({
         <DeleteDialog
           open={deleteOpen}
           onOpenChange={setDeleteOpen}
-          subject={`skill '${form.name}'`}
+          kind="skill"
+          name={form.name}
           onConfirm={async () => {
             setDeleteOpen(false);
             setError((await onDelete()).error);
@@ -860,6 +882,7 @@ function RevisionHistory({
   onLoadRevisions(kind: ConfigAssetKind, name: string): Promise<ConfigAssetRevision[]>;
   onRevert(revision: number): Promise<MutationOutcome>;
 }) {
+  const { locale, t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [revisions, setRevisions] = useState<ConfigAssetRevision[] | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
@@ -871,7 +894,7 @@ function RevisionHistory({
       try {
         setRevisions(await onLoadRevisions(kind, name));
       } catch (loadError) {
-        setError(apiErrorMessage(loadError, "Could not load the revision history."));
+        setError(apiErrorMessage(loadError, t("configRevisionLoadFailed")));
       }
     }
   };
@@ -890,7 +913,7 @@ function RevisionHistory({
         onClick={toggle}
       >
         <History size={14} aria-hidden="true" />
-        Revision history
+        {t("configRevisionHistory")}
         <ChevronDown
           size={15}
           aria-hidden="true"
@@ -904,7 +927,7 @@ function RevisionHistory({
           ) : revisions === undefined ? (
             <Spinner className="size-4" />
           ) : revisions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No revisions yet.</p>
+            <p className="text-sm text-muted-foreground">{t("configNoRevisions")}</p>
           ) : (
             <ul className="divide-y overflow-hidden rounded-lg border bg-background">
               {[...revisions].reverse().map((revision) => (
@@ -914,10 +937,18 @@ function RevisionHistory({
                 >
                   <span className="font-mono font-medium">#{revision.revision}</span>
                   <Badge variant="outline" className="w-fit capitalize">
-                    {revision.operation}
+                    {t(
+                      revision.operation === "create"
+                        ? "configRevisionCreate"
+                        : revision.operation === "update"
+                          ? "configRevisionUpdate"
+                          : revision.operation === "delete"
+                            ? "configRevisionDelete"
+                            : "configRevisionRevert"
+                    )}
                   </Badge>
                   <span className="min-w-0 text-muted-foreground">
-                    {new Date(revision.createdAt).toLocaleString()}
+                    {new Date(revision.createdAt).toLocaleString(locale)}
                     {revision.actor ? ` · ${revision.actor.displayLabel}` : ""}
                   </span>
                   {revision.revision !== currentRevision && revision.config !== null ? (
@@ -937,10 +968,10 @@ function RevisionHistory({
                         }
                       }}
                     >
-                      Restore
+                      {t("configRestore")}
                     </Button>
                   ) : (
-                    <span className="text-right text-muted-foreground">Current</span>
+                    <span className="text-right text-muted-foreground">{t("configCurrent")}</span>
                   )}
                 </li>
               ))}
@@ -1036,6 +1067,8 @@ function SaveBar({
   mutating: boolean;
   disabled?: boolean;
 }) {
+  const { t } = useTranslation();
+
   return (
     <div className="flex flex-wrap items-center gap-3 bg-muted/10 px-5 py-4">
       <Button type="submit" className="w-full sm:w-auto" disabled={mutating || disabled}>
@@ -1043,7 +1076,7 @@ function SaveBar({
         {label}
       </Button>
       <span className="text-xs text-muted-foreground">
-        Applies to new conversations immediately.
+        {t("configAppliesImmediately")}
       </span>
     </div>
   );
