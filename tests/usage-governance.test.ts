@@ -310,6 +310,7 @@ describe("model usage governance", () => {
     const governance = new ModelUsageGovernance({
       store,
       budget: {
+        dailySpendLimit: 50,
         monthlySpendLimit: 200,
         costSafetyMultiplier: 1.5
       },
@@ -421,6 +422,7 @@ describe("model usage governance", () => {
       ]
     });
     expect(summary.today.cost).not.toHaveProperty("webSearchBilledCostMicros");
+    expect(JSON.stringify(summary)).not.toContain("dailySpendLimit");
     expect(JSON.stringify(summary)).not.toContain("monthlySpendLimit");
     expect(JSON.stringify(summary)).not.toContain("costSafetyMultiplier");
     expect(JSON.stringify(summary)).not.toContain("inputPricePerMillionTokens");
@@ -641,6 +643,52 @@ describe("model usage governance", () => {
     await expect(governance.runModelCall(clientInstanceId, async () => "blocked")).rejects.toMatchObject({
       code: "FORBIDDEN",
       message: "Monthly model spend limit has been reached"
+    });
+  });
+
+  it("blocks new model calls after the daily spend budget is reached", async () => {
+    const clientInstanceId = asClientInstanceId("client-daily-spend-limit-test");
+    const store = new InMemoryPlatformStore();
+    const governance = new ModelUsageGovernance({
+      store,
+      budget: {
+        dailySpendLimit: 0.01,
+        monthlySpendLimit: 1,
+        costSafetyMultiplier: 1
+      },
+      safeguards: {},
+      pricing: {
+        currency: "EUR",
+        models: [
+          {
+            providerId: "openai",
+            model: "gpt-4.1",
+            inputPricePerMillionTokens: 2,
+            outputPricePerMillionTokens: 8
+          }
+        ]
+      }
+    });
+
+    await governance.appendModelUsageEvent({
+      clientInstanceId,
+      conversationId: asConversationId("conv_daily_spend_limit"),
+      agentRunId: asAgentRunId("run_daily_spend_limit"),
+      agentName: "agent",
+      providerId: "openai",
+      model: "gpt-4.1",
+      inputTokens: 1000,
+      outputTokens: 1000,
+      totalTokens: 2000,
+      source: "provider_reported",
+      correlationId: "corr_daily_spend_limit"
+    });
+
+    await expect(
+      governance.runModelCall(clientInstanceId, async () => "blocked")
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "Daily model spend limit has been reached"
     });
   });
 

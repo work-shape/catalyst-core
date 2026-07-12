@@ -133,7 +133,7 @@ export function assertSpendBudgetPricingCoverage(
   config: ClientInstanceConfig,
   agents: readonly AgentConfig[]
 ): void {
-  if (!config.usage.budget.monthlySpendLimit) {
+  if (!config.usage.budget.dailySpendLimit && !config.usage.budget.monthlySpendLimit) {
     return;
   }
 
@@ -163,7 +163,7 @@ export function assertSpendBudgetPricingCoverage(
 
   throw new AppError(
     "VALIDATION_FAILED",
-    `Monthly spend budget requires configured pricing for model ${missingPrices.join(", ")}`
+    `Spend budget requires configured pricing for model ${missingPrices.join(", ")}`
   );
 }
 

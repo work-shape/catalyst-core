@@ -3909,7 +3909,7 @@ describe("client instance app vertical slice", () => {
           models: []
         }
       })
-    ).toThrow("Monthly spend budget requires configured pricing for model openai/gpt-4.1");
+    ).toThrow("Spend budget requires configured pricing for model openai/gpt-4.1");
   });
 
 });

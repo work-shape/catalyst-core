@@ -89,6 +89,7 @@ export interface SkillConfig {
 export type { LocalizationConfig, LocalizedStringConfig };
 
 export interface UsageBudgetConfig {
+  dailySpendLimit?: number;
   monthlySpendLimit?: number;
   costSafetyMultiplier: number;
 }

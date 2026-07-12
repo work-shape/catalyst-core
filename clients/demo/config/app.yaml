@@ -81,7 +81,8 @@ conversationTitles:
   model: gpt-5-nano
 usage:
   budget:
-    monthlySpendLimit: 200
+    dailySpendLimit: 50
+    monthlySpendLimit: 400
     costSafetyMultiplier: 1.3
   safeguards:
     modelCallsPerDay: 1000

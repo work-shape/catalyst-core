@@ -67,12 +67,15 @@ retention:
 
 usage:
   budget:
-    monthlySpendLimit: 200
+    dailySpendLimit: 50
+    monthlySpendLimit: 400
     costSafetyMultiplier: 1.3
   safeguards:
     modelCallsPerDay: 1000
     tokensPerDay: 2500000
 ```
+
+Daily and monthly spend limits use `usage.pricing.currency`. Set it to an ISO 4217 code such as `USD` or `EUR`, and express every configured model and web-search price in that same currency. Spend limits are conservative local controls after the safety multiplier, not exact provider invoices.
 
 Usage pricing uses exact `providerId` and `model` rows. Keep historical model ids in this list when old usage should remain priced after a model rename or provider migration.
 

@@ -223,6 +223,7 @@ export class ModelUsageGovernance implements ModelUsageEventStore {
       !this.safeguards.modelCallsPerDay &&
       !this.safeguards.tokensPerDay &&
       !this.safeguards.tokensPerMonth &&
+      !this.budget.dailySpendLimit &&
       !this.budget.monthlySpendLimit
     ) {
       return;
@@ -234,6 +235,21 @@ export class ModelUsageGovernance implements ModelUsageEventStore {
       start: todayStart
     });
     assertDailySafeguards(today, this.safeguards, this.countInFlightModelCalls(clientInstanceId));
+
+    if (this.budget.dailySpendLimit) {
+      const todayEvents = await this.store.listModelUsageEvents({
+        clientInstanceId,
+        start: todayStart
+      });
+      const pricingCatalog = new UsagePricingCatalog(this.pricing, this.budget);
+      const costedToday = summarizeCostedEvents(
+        todayEvents,
+        todayStart,
+        undefined,
+        pricingCatalog
+      );
+      assertSpendBudget(costedToday.cost, this.budget.dailySpendLimit, "Daily");
+    }
 
     if (this.safeguards.tokensPerMonth || this.budget.monthlySpendLimit) {
       const currentMonth = await this.store.summarizeModelUsageEvents({
@@ -259,7 +275,7 @@ export class ModelUsageGovernance implements ModelUsageEventStore {
           undefined,
           pricingCatalog
         );
-        assertMonthlySpendBudget(costedMonth.cost, this.budget);
+        assertSpendBudget(costedMonth.cost, this.budget.monthlySpendLimit, "Monthly");
       }
     }
   }
@@ -342,20 +358,20 @@ function assertDailySafeguards(
   }
 }
 
-function assertMonthlySpendBudget(cost: ModelUsageCostSummary, budget: UsageBudgetConfig): void {
-  if (!budget.monthlySpendLimit) {
-    return;
-  }
-
+function assertSpendBudget(
+  cost: ModelUsageCostSummary,
+  spendLimit: number,
+  period: "Daily" | "Monthly"
+): void {
   if (!cost.pricingConfigured) {
     throw new AppError(
       "FORBIDDEN",
-      "Monthly model spend limit cannot be enforced because model pricing is missing"
+      `${period} model spend limit cannot be enforced because model pricing is missing`
     );
   }
 
-  if (cost.budgetedCostMicros >= toMicros(budget.monthlySpendLimit)) {
-    throw new AppError("FORBIDDEN", "Monthly model spend limit has been reached");
+  if (cost.budgetedCostMicros >= toMicros(spendLimit)) {
+    throw new AppError("FORBIDDEN", `${period} model spend limit has been reached`);
   }
 }
 

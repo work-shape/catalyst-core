@@ -201,6 +201,7 @@ export const agentConfigSchema = z.object({
 
 export const usageBudgetConfigSchema = z
   .object({
+    dailySpendLimit: z.number().positive().optional(),
     monthlySpendLimit: z.number().positive().optional(),
     costSafetyMultiplier: z.number().min(1).default(1)
   })
