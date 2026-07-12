@@ -4,6 +4,7 @@ import { SuperadminPanel } from "./superadmin-panel";
 
 export {
   canEditConfigAssets,
+  canManageApiAccess,
   canManageUsers,
   canViewAudit,
   canViewAdministrationPanel,

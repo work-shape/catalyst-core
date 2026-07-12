@@ -90,6 +90,10 @@ function createStandaloneChatRouter(options: StandaloneChatRouterOptions) {
     getParentRoute: () => rootRoute,
     path: "admin/audit"
   });
+  const adminApiAccessRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "admin/api-access"
+  });
   const adminConfigRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "admin/config"
@@ -101,6 +105,7 @@ function createStandaloneChatRouter(options: StandaloneChatRouterOptions) {
     adminIndexRoute,
     adminUsageRoute,
     adminUsersRoute,
+    adminApiAccessRoute,
     adminAuditRoute,
     adminConfigRoute
   ]);
@@ -134,7 +139,7 @@ function StandaloneChatRouteBridge({ options }: { options: StandaloneChatRouterO
   );
 }
 
-function workspaceRouteNavigation(route: WorkspaceRoute) {
+export function workspaceRouteNavigation(route: WorkspaceRoute) {
   if (route.kind === "conversation") {
     return {
       to: "/c/$conversationId",
@@ -150,7 +155,7 @@ function workspaceRouteNavigation(route: WorkspaceRoute) {
   return { to: "/" };
 }
 
-function workspaceRouteFromPath(pathname: string): WorkspaceRoute {
+export function workspaceRouteFromPath(pathname: string): WorkspaceRoute {
   const normalizedPathname = normalizePathname(pathname);
   if (normalizedPathname.startsWith("/c/")) {
     const encodedConversationId = normalizedPathname.slice("/c/".length);
@@ -189,7 +194,7 @@ function decodePathSegment(value: string): string {
 }
 
 function isSuperadminRouteTab(value: string): value is SuperadminRouteTab {
-  return value === "usage" || value === "users" || value === "audit" || value === "config";
+  return value === "usage" || value === "users" || value === "api-access" || value === "audit" || value === "config";
 }
 
 function resolveApiBaseUrl(apiBaseUrl: string | undefined, defaultApiPort: string | number | undefined): string {

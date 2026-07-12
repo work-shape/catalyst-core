@@ -101,6 +101,18 @@ export function useWorkspaceUsersQuery(
   });
 }
 
+export function useServicePrincipalsQuery(
+  input: WorkspaceQueryInput & {
+    enabled: boolean;
+  }
+) {
+  return useQuery({
+    queryKey: workspaceQueryKeys.servicePrincipals(input.apiBaseUrl, input.authScope),
+    queryFn: input.client.servicePrincipals,
+    enabled: input.enabled
+  });
+}
+
 export function useConfigAssetsOverviewQuery(
   input: WorkspaceQueryInput & {
     enabled: boolean;

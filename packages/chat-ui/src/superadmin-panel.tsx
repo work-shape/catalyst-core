@@ -2,6 +2,7 @@ import {
   Activity,
   AlertCircle,
   Bot,
+  KeyRound,
   ChevronRight,
   ScrollText,
   Settings2,
@@ -27,6 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { cn } from "./ui/cn";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { ConfigAssetsPanel, type ConfigAssetsPanelInput } from "./config-assets-panel";
+import { ApiAccessPanel, type ApiAccessPanelInput } from "./api-access-panel";
 import { ControlPlanePage } from "./control-plane/control-plane-page";
 import { useTranslation } from "./i18n";
 import { UsageView } from "./usage-view";
@@ -37,10 +39,12 @@ export function SuperadminPanel({
   usage,
   auditActivities,
   users,
+  apiAccess,
   loading,
   usersLoading,
   canViewUsageGovernance,
   canManageUsers,
+  canManageApiAccess,
   canViewAudit,
   canManageSuperadminAccess,
   canEditConfigAssets,
@@ -60,10 +64,12 @@ export function SuperadminPanel({
   usage: UsageSummary | undefined;
   auditActivities: AuditActivity[];
   users: AdministeredUser[];
+  apiAccess: ApiAccessPanelInput;
   loading: boolean;
   usersLoading: boolean;
   canViewUsageGovernance: boolean;
   canManageUsers: boolean;
+  canManageApiAccess: boolean;
   canViewAudit: boolean;
   canManageSuperadminAccess: boolean;
   canEditConfigAssets: boolean;
@@ -111,6 +117,15 @@ export function SuperadminPanel({
               onClick={() => onSelectTab("users")}
             />
           ) : null}
+          {canManageApiAccess ? (
+            <TabButton
+              active={selectedTab === "api-access"}
+              icon={<KeyRound size={15} aria-hidden="true" />}
+              label={t("administrationApiAccess")}
+              badge={apiAccess.principals.length > 0 ? apiAccess.principals.length : undefined}
+              onClick={() => onSelectTab("api-access")}
+            />
+          ) : null}
           {canEditConfigAssets ? (
             <TabButton
               active={selectedTab === "config"}
@@ -156,6 +171,9 @@ export function SuperadminPanel({
             onDeleteIdentity={onDeleteUserIdentity}
             onResetPassword={onResetUserPassword}
           />
+        ) : null}
+        {selectedTab === "api-access" && canManageApiAccess ? (
+          <ApiAccessPanel {...apiAccess} />
         ) : null}
         {selectedTab === "config" && canEditConfigAssets ? (
           <ConfigAssetsPanel {...configAssets} />

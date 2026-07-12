@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   AdministeredUser,
   ConfigAssetKind,
@@ -7,19 +8,111 @@ import type {
   ChangeCurrentUserPasswordRequest,
   ConversationListItem,
   ConversationThreadSnapshot,
+  CreateApiCredentialRequest,
   CreateAdministeredUserRequest,
+  CreateServicePrincipalRequest,
   UpdateAdministeredUserRequest,
+  UpdateServicePrincipalRequest,
   UpdateCurrentUserRequest,
   UpsertAdministeredUserIdentityRequest
 } from "@vivd-catalyst/api-client";
 import { signOut } from "../auth-client";
 import { apiErrorMessage } from "../workspace-utils";
 import { workspaceQueryKeys } from "./workspace-query-keys";
+import {
+  createApiAccessRevealController,
+  type RevealedApiCredential
+} from "../api-access-reveal-controller";
 
 interface WorkspaceMutationInput {
   apiBaseUrl: string;
   authScope: string;
   client: ApiClient;
+}
+
+export function useApiAccessMutations(
+  input: WorkspaceMutationInput & { authorityKey: string | undefined }
+) {
+  const queryClient = useQueryClient();
+  const [credentialCreationPending, setCredentialCreationPending] = useState(false);
+  const [revealedCredential, setRevealedCredential] = useState<RevealedApiCredential>();
+  const revealControllerRef = useRef(createApiAccessRevealController(input.authorityKey));
+  revealControllerRef.current.updateAuthority(input.authorityKey);
+  const clearRevealedCredential = useCallback(() => setRevealedCredential(undefined), []);
+
+  useEffect(() => {
+    setRevealedCredential((current) =>
+      current?.authorityKey === input.authorityKey ? current : undefined
+    );
+  }, [input.authorityKey]);
+
+  const invalidateApiAccess = () => {
+    void queryClient.invalidateQueries({
+      queryKey: workspaceQueryKeys.servicePrincipals(input.apiBaseUrl, input.authScope)
+    });
+    void queryClient.invalidateQueries({
+      queryKey: workspaceQueryKeys.auditEvents(input.apiBaseUrl, input.authScope)
+    });
+  };
+
+  const createPrincipal = useMutation({
+    mutationFn: (mutationInput: CreateServicePrincipalRequest) =>
+      input.client.createServicePrincipal(mutationInput),
+    onSuccess: invalidateApiAccess
+  });
+  const updatePrincipal = useMutation({
+    mutationFn: (mutationInput: {
+      principalId: string;
+      update: UpdateServicePrincipalRequest;
+    }) => input.client.updateServicePrincipal(mutationInput.principalId, mutationInput.update),
+    onSuccess: invalidateApiAccess
+  });
+  const createCredential = {
+    mutateAsync: async (mutationInput: {
+      principalId: string;
+      credential: CreateApiCredentialRequest;
+    }) => {
+      const originAuthority = revealControllerRef.current.captureAuthority();
+      setCredentialCreationPending(true);
+      try {
+        const response = await input.client.createApiCredential(
+          mutationInput.principalId,
+          mutationInput.credential
+        );
+        const acceptedReveal = revealControllerRef.current.accept(originAuthority, {
+          secret: response.secret,
+          credentialName: response.credential.name,
+          serverUrl: input.apiBaseUrl
+        });
+        if (acceptedReveal) {
+          setRevealedCredential(acceptedReveal);
+        }
+        invalidateApiAccess();
+        return response;
+      } finally {
+        setCredentialCreationPending(false);
+      }
+    }
+  };
+  const revokeCredential = useMutation({
+    mutationFn: (credentialId: string) => input.client.revokeApiCredential(credentialId),
+    onSuccess: invalidateApiAccess
+  });
+
+  return {
+    createPrincipal,
+    updatePrincipal,
+    createCredential,
+    revealedCredential:
+      revealedCredential?.authorityKey === input.authorityKey ? revealedCredential : undefined,
+    clearRevealedCredential,
+    revokeCredential,
+    isPending:
+      createPrincipal.isPending ||
+      updatePrincipal.isPending ||
+      credentialCreationPending ||
+      revokeCredential.isPending
+  };
 }
 
 export function useDeleteConversationMutation(

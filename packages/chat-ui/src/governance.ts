@@ -4,6 +4,7 @@ export function canViewAdministrationPanel(user: ApiUser | undefined): boolean {
   return (
     canViewUsageGovernance(user) ||
     canManageUsers(user) ||
+    canManageApiAccess(user) ||
     canViewAudit(user) ||
     canEditConfigAssets(user)
   );
@@ -19,6 +20,10 @@ export function canViewUsageGovernance(user: ApiUser | undefined): boolean {
 
 export function canManageUsers(user: ApiUser | undefined): boolean {
   return hasPermission(user, "users.manage");
+}
+
+export function canManageApiAccess(user: ApiUser | undefined): boolean {
+  return hasPermission(user, "api_access.manage");
 }
 
 export function canViewAudit(user: ApiUser | undefined): boolean {

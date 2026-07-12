@@ -8,6 +8,7 @@ import type {
   UpdateCurrentUserRequest
 } from "@vivd-catalyst/api-client";
 import {
+  useApiAccessMutations,
   useChangeCurrentUserPasswordMutation,
   useConfigAssetMutations,
   useDeleteCurrentUserMutation,
@@ -17,6 +18,7 @@ import {
 import {
   useConfigAssetsExportQuery,
   useConfigAssetsOverviewQuery,
+  useServicePrincipalsQuery,
   useWorkspaceAuditActivitiesQuery,
   useWorkspaceUsageQuery,
   useWorkspaceUsersQuery
@@ -24,7 +26,13 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import type { ChatShellAdminPanel } from "../chat-shell";
-import { canEditConfigAssets, canManageUsers, canViewAudit, canViewUsageGovernance } from "../governance";
+import {
+  canEditConfigAssets,
+  canManageApiAccess,
+  canManageUsers,
+  canViewAudit,
+  canViewUsageGovernance
+} from "../governance";
 import type {
   SuperadminRouteTab,
   WorkspaceRoute,
@@ -32,6 +40,7 @@ import type {
   WorkspaceRouteView
 } from "../workspace-route";
 import { apiErrorMessage, STANDALONE_AUTH_SOURCE } from "../workspace-utils";
+import { createApiAccessAuthorityKey } from "../api-access-reveal-controller";
 
 export interface ControlPlaneModelInput {
   apiBaseUrl: string;
@@ -98,6 +107,7 @@ export function useControlPlaneModel({
 }: ControlPlaneModelInput): ControlPlaneModel {
   const canViewUsage = canViewUsageGovernance(user);
   const userCanManageUsers = canManageUsers(user);
+  const userCanManageApiAccess = canManageApiAccess(user);
   const userCanViewAudit = canViewAudit(user);
   const userCanEditConfigAssets =
     configAssetManagement?.enabled === true && canEditConfigAssets(user);
@@ -108,13 +118,14 @@ export function useControlPlaneModel({
     canEditConfigAssets(user);
   const canViewAdministration =
     (adminPanel?.canView(user) ?? false) &&
-    (canViewUsage || userCanManageUsers || userCanViewAudit || userCanEditConfigAssets);
+    (canViewUsage || userCanManageUsers || userCanManageApiAccess || userCanViewAudit || userCanEditConfigAssets);
   const canManageSuperadminAccess = Boolean(user?.roles.includes("superadmin"));
   const administrationEnabled = canViewAdministration && view === "superadmin";
   const routeTab = route.kind === "superadmin" ? route.tab : undefined;
   const defaultAdministrationTab = firstAvailableAdministrationTab({
     canViewUsage,
     canManageUsers: userCanManageUsers,
+    canManageApiAccess: userCanManageApiAccess,
     canViewAudit: userCanViewAudit,
     canEditConfigAssets: userCanEditConfigAssets
   });
@@ -124,6 +135,7 @@ export function useControlPlaneModel({
         canViewAdministrationTab(routeTab, {
           canViewUsage,
           canManageUsers: userCanManageUsers,
+          canManageApiAccess: userCanManageApiAccess,
           canViewAudit: userCanViewAudit,
           canEditConfigAssets: userCanEditConfigAssets
         })
@@ -147,6 +159,12 @@ export function useControlPlaneModel({
     client,
     enabled: administrationEnabled && userCanManageUsers
   });
+  const servicePrincipalsQuery = useServicePrincipalsQuery({
+    apiBaseUrl,
+    authScope,
+    client,
+    enabled: administrationEnabled && userCanManageApiAccess
+  });
   const updateCurrentUser = useUpdateCurrentUserMutation({
     apiBaseUrl,
     authScope,
@@ -168,6 +186,16 @@ export function useControlPlaneModel({
     authScope,
     client
   });
+  const apiAccessMutations = useApiAccessMutations({
+    apiBaseUrl,
+    authScope,
+    client,
+    authorityKey: createApiAccessAuthorityKey({
+      apiBaseUrl,
+      principalId: user?.id,
+      canManageSuperadminAccess
+    })
+  });
   const queryClient = useQueryClient();
   const configAssetsEnabled = administrationEnabled && userCanEditConfigAssets;
   const configAssetsOverviewQuery = useConfigAssetsOverviewQuery({
@@ -187,6 +215,12 @@ export function useControlPlaneModel({
     authScope,
     client
   });
+
+  useEffect(() => {
+    if (!canManageSuperadminAccess) {
+      apiAccessMutations.clearRevealedCredential();
+    }
+  }, [apiAccessMutations.clearRevealedCredential, canManageSuperadminAccess]);
 
   useEffect(() => {
     if (!isAuthenticated || route.kind !== "superadmin") {
@@ -234,8 +268,27 @@ export function useControlPlaneModel({
         usage: usageQuery.data,
         auditActivities: auditQuery.data ?? [],
         users: usersQuery.data ?? [],
+        apiAccess: {
+          canMutate: canManageSuperadminAccess,
+          principals: servicePrincipalsQuery.data ?? [],
+          revealedCredential: apiAccessMutations.revealedCredential,
+          loading: servicePrincipalsQuery.isLoading,
+          error: servicePrincipalsQuery.error
+            ? apiErrorMessage(servicePrincipalsQuery.error, undefined)
+            : undefined,
+          mutating: apiAccessMutations.isPending,
+          onCreatePrincipal: (input) => apiAccessMutations.createPrincipal.mutateAsync(input),
+          onUpdatePrincipal: (principalId, update) =>
+            apiAccessMutations.updatePrincipal.mutateAsync({ principalId, update }),
+          onCreateCredential: (principalId, credential) =>
+            apiAccessMutations.createCredential.mutateAsync({ principalId, credential }),
+          onRevokeCredential: (credentialId) =>
+            apiAccessMutations.revokeCredential.mutateAsync(credentialId),
+          onClearRevealedCredential: apiAccessMutations.clearRevealedCredential
+        },
         canViewUsageGovernance: canViewUsage,
         canManageUsers: userCanManageUsers,
+        canManageApiAccess: userCanManageApiAccess,
         canViewAudit: userCanViewAudit,
         canManageSuperadminAccess,
         loading: usageQuery.isLoading || auditQuery.isLoading,
@@ -294,11 +347,15 @@ export function useControlPlaneModel({
 function firstAvailableAdministrationTab(input: {
   canViewUsage: boolean;
   canManageUsers: boolean;
+  canManageApiAccess: boolean;
   canViewAudit: boolean;
   canEditConfigAssets: boolean;
 }): SuperadminRouteTab | undefined {
   if (input.canManageUsers) {
     return "users";
+  }
+  if (input.canManageApiAccess) {
+    return "api-access";
   }
   if (input.canEditConfigAssets) {
     return "config";
@@ -317,6 +374,7 @@ function canViewAdministrationTab(
   input: {
     canViewUsage: boolean;
     canManageUsers: boolean;
+    canManageApiAccess: boolean;
     canViewAudit: boolean;
     canEditConfigAssets: boolean;
   }
@@ -326,6 +384,9 @@ function canViewAdministrationTab(
   }
   if (tab === "users") {
     return input.canManageUsers;
+  }
+  if (tab === "api-access") {
+    return input.canManageApiAccess;
   }
   if (tab === "config") {
     return input.canEditConfigAssets;
