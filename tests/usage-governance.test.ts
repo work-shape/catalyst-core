@@ -357,6 +357,7 @@ describe("model usage governance", () => {
     const governance = new ModelUsageGovernance({
       store,
       budget: {
+        dailySpendLimit: 50,
         monthlySpendLimit: 200,
         costSafetyMultiplier: 1.5
       },
@@ -393,6 +394,11 @@ describe("model usage governance", () => {
     const summary = await governance.createSafeSummary({ clientInstanceId });
 
     expect(summary).toMatchObject({
+      spendBudget: {
+        currency: "USD",
+        dailyLimitMicros: 50000000,
+        monthlyLimitMicros: 200000000
+      },
       safeguards: {
         tokensPerMonth: 1000000
       },

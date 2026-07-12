@@ -80,6 +80,12 @@ export interface SafeCostedModelUsageEvent extends ModelUsageEvent {
   cost: SafeModelUsageCost;
 }
 
+export interface SafeUsageSpendBudget {
+  currency: string;
+  dailyLimitMicros?: number;
+  monthlyLimitMicros?: number;
+}
+
 export interface UsageSummary {
   generatedAt: string;
   budget: UsageBudgetConfig;
@@ -93,6 +99,7 @@ export interface UsageSummary {
 
 export interface SafeUsageSummary {
   generatedAt: string;
+  spendBudget: SafeUsageSpendBudget;
   safeguards: UsageSafeguardsConfig;
   today: SafeCostedModelUsageWindowSummary;
   currentMonth: SafeCostedModelUsageWindowSummary;
@@ -197,6 +204,15 @@ export class ModelUsageGovernance implements ModelUsageEventStore {
 
     return {
       generatedAt: now.toISOString(),
+      spendBudget: {
+        currency: this.pricing.currency,
+        ...(this.budget.dailySpendLimit === undefined
+          ? {}
+          : { dailyLimitMicros: toMicros(this.budget.dailySpendLimit) }),
+        ...(this.budget.monthlySpendLimit === undefined
+          ? {}
+          : { monthlyLimitMicros: toMicros(this.budget.monthlySpendLimit) })
+      },
       safeguards: this.safeguards,
       today: toSafeWindowSummary(
         summarizeCostedEvents(todayEvents, todayStart, undefined, pricingCatalog),

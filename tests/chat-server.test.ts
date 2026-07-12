@@ -191,6 +191,10 @@ describe("client instance app vertical slice", () => {
     expect(adminUsage.statusCode).toBe(200);
     const adminUsageBody = adminUsage.json() as Record<string, unknown>;
     expect(adminUsageBody).toMatchObject({
+      spendBudget: {
+        currency: "USD",
+        monthlyLimitMicros: 200000000
+      },
       safeguards: {
         tokensPerMonth: 50000000
       },
@@ -234,6 +238,10 @@ describe("client instance app vertical slice", () => {
     });
     expect(superadminUsage.statusCode).toBe(200);
     expect(superadminUsage.json()).toMatchObject({
+      spendBudget: {
+        currency: "USD",
+        monthlyLimitMicros: 200000000
+      },
       safeguards: {
         tokensPerMonth: 50000000
       },

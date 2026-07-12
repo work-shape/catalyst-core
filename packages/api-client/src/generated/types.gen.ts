@@ -2077,6 +2077,11 @@ export type GetUsageSummaryResponses = {
      */
     200: {
         generatedAt: string;
+        spendBudget: {
+            currency: string;
+            dailyLimitMicros?: number;
+            monthlyLimitMicros?: number;
+        };
         safeguards: {
             modelCallsPerDay?: number;
             tokensPerDay?: number;

@@ -54,6 +54,8 @@ export function UsageView({ usage }: { usage: UsageSummary | undefined }) {
         />
       </div>
 
+      <SpendBudgetCard usage={usage} />
+
       <DailyUsageCard
         days={usage?.dailyUsage ?? []}
         defaultMetric={usage?.allTime.cost.pricingConfigured ? "cost" : "tokens"}
@@ -175,6 +177,104 @@ export function UsageView({ usage }: { usage: UsageSummary | undefined }) {
 }
 
 type DailyUsageMetric = "cost" | "tokens";
+
+function SpendBudgetCard({ usage }: { usage: UsageSummary | undefined }) {
+  const currency = usage?.spendBudget.currency ?? usage?.today.cost.currency ?? "USD";
+  const budgets = [
+    {
+      label: "Daily budget",
+      period: "today",
+      spentMicros: usage?.today.cost.billedCostMicros ?? 0,
+      limitMicros: usage?.spendBudget.dailyLimitMicros
+    },
+    {
+      label: "Monthly budget",
+      period: "this month",
+      spentMicros: usage?.currentMonth.cost.billedCostMicros ?? 0,
+      limitMicros: usage?.spendBudget.monthlyLimitMicros
+    }
+  ].filter((budget): budget is SpendBudgetProgressInput => budget.limitMicros !== undefined);
+
+  return (
+    <Card data-testid="spend-budget-progress">
+      <CardHeader className="p-4 pb-2">
+        <CardTitle className="text-base">Spend budgets</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Estimated provider spend, including the configured safety margin.
+        </p>
+      </CardHeader>
+      <CardContent className="p-4 pt-2">
+        {budgets.length ? (
+          <div className="grid gap-5 md:grid-cols-2">
+            {budgets.map((budget) => (
+              <SpendBudgetProgress key={budget.label} {...budget} currency={currency} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No spend budgets configured.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+interface SpendBudgetProgressInput {
+  label: string;
+  period: string;
+  spentMicros: number;
+  limitMicros: number;
+}
+
+function SpendBudgetProgress({
+  label,
+  period,
+  spentMicros,
+  limitMicros,
+  currency
+}: SpendBudgetProgressInput & { currency: string }) {
+  const percentage = limitMicros > 0 ? (spentMicros / limitMicros) * 100 : 100;
+  const displayedPercentage = Math.round(percentage);
+  const barPercentage = Math.min(Math.max(percentage, 0), 100);
+  const remainingMicros = Math.max(limitMicros - spentMicros, 0);
+  const reached = spentMicros >= limitMicros;
+
+  return (
+    <div className="grid gap-2">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium">{label}</p>
+          <p className="text-xs text-muted-foreground">
+            {formatMicrosCost(spentMicros, currency)} of {formatMicrosCost(limitMicros, currency)}
+          </p>
+        </div>
+        <Badge variant={reached ? "default" : "secondary"}>
+          {reached ? "Limit reached" : `${displayedPercentage}% used`}
+        </Badge>
+      </div>
+      <div
+        className="h-2.5 overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-label={`${label} used`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.min(displayedPercentage, 100)}
+      >
+        <div
+          className={cn(
+            "h-full rounded-full transition-[width]",
+            reached ? "bg-destructive" : percentage >= 80 ? "bg-amber-500" : "bg-primary"
+          )}
+          style={{ width: `${barPercentage}%` }}
+        />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {reached
+          ? `New model calls are blocked for the rest of ${period}.`
+          : `${formatMicrosCost(remainingMicros, currency)} remaining ${period}.`}
+      </p>
+    </div>
+  );
+}
 
 function DailyUsageCard({
   days,

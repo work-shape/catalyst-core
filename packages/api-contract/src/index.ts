@@ -1016,8 +1016,15 @@ export const modelUsageMonthlyBucketSchema = modelUsageWindowSummarySchema.exten
   month: z.string()
 });
 
+export const usageSpendBudgetSchema = z.object({
+  currency: z.string(),
+  dailyLimitMicros: z.number().int().nonnegative().optional(),
+  monthlyLimitMicros: z.number().int().nonnegative().optional()
+});
+
 export const usageSummarySchema = z.object({
   generatedAt: z.string(),
+  spendBudget: usageSpendBudgetSchema,
   safeguards: usageSafeguardsSchema,
   today: modelUsageWindowSummarySchema,
   currentMonth: modelUsageWindowSummarySchema,
