@@ -49,6 +49,7 @@ export interface ArtifactFileType {
 export type ArtifactPreviewKind =
   | "pdf"
   | "image"
+  | "markdown"
   | "text"
   | "spreadsheet"
   | "image-pages"
@@ -156,10 +157,15 @@ export function getArtifactFileType(artifact: ToolArtifactDownloadRef): Artifact
     return { badge: "ZIP", label: "Archive", className: "bg-stone-700", extension: "zip" };
   }
   if (
-    value.includes("text/") ||
     value.includes("markdown") ||
+    hasExtension(value, ["md", "mdx"])
+  ) {
+    return { badge: "MD", label: "Markdown", className: "bg-slate-700", extension: "md" };
+  }
+  if (
+    value.includes("text/") ||
     value.includes("json") ||
-    hasExtension(value, ["txt", "md", "rtf", "html", "json"])
+    hasExtension(value, ["txt", "rtf", "html", "json"])
   ) {
     return { badge: "DOC", label: "Document", className: "bg-slate-700", extension: "txt" };
   }
@@ -183,6 +189,9 @@ export function getArtifactPreviewKind(artifact: ToolArtifactDownloadRef): Artif
   }
   if (fileType.label === "Image") {
     return "image";
+  }
+  if (fileType.extension === "md") {
+    return "markdown";
   }
   if (fileType.extension === "txt" || fileType.extension === "csv") {
     return "text";

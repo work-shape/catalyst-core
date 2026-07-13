@@ -426,6 +426,7 @@ describe("chat UI artifact download cards", () => {
     expectBadge("table.csv", "text/csv", "CSV");
     expectBadge("plot.webp", "image/webp", "IMG");
     expectBadge("exports.zip", "application/zip", "ZIP");
+    expectBadge("notes.md", "text/markdown", "MD");
     expectBadge("notes.txt", "text/plain", "DOC");
     expectBadge("unknown.bin", "application/octet-stream", "FILE");
   });
@@ -433,6 +434,7 @@ describe("chat UI artifact download cards", () => {
   it("marks first-pass previewable artifact types", () => {
     expectPreviewKind("report.pdf", "application/pdf", "pdf");
     expectPreviewKind("chart.png", "image/png", "image");
+    expectPreviewKind("notes.md", "text/markdown", "markdown");
     expectPreviewKind("notes.txt", "text/plain", "text");
     expectPreviewKind("table.csv", "text/csv", "text");
     expectPreviewKind(

@@ -105,7 +105,13 @@ export function useToolDisplayPanel(): ToolDisplayPanelContextValue {
   return value;
 }
 
-export function ToolDisplayPanel({ className }: { className?: string }) {
+export function ToolDisplayPanel({
+  className,
+  headerAction
+}: {
+  className?: string;
+  headerAction?: ReactNode;
+}) {
   const { close, entry, open } = useToolDisplayPanel();
   const { t } = useTranslation();
   const panelRef = useRef<HTMLElement | null>(null);
@@ -188,6 +194,19 @@ export function ToolDisplayPanel({ className }: { className?: string }) {
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    if (!visible) {
+      return undefined;
+    }
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        close();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [close, visible]);
+
   return (
     <>
       <aside
@@ -222,7 +241,12 @@ export function ToolDisplayPanel({ className }: { className?: string }) {
             onKeyDown={onResizeKeyDown}
           />
         ) : null}
-        <ToolDisplayPanelFrame entry={entry} onClose={close} style={innerWidthStyle} />
+        <ToolDisplayPanelFrame
+          entry={entry}
+          headerAction={headerAction}
+          onClose={close}
+          style={innerWidthStyle}
+        />
       </aside>
 
       <button
@@ -244,7 +268,7 @@ export function ToolDisplayPanel({ className }: { className?: string }) {
           visible ? "translate-x-0" : "pointer-events-none translate-x-full"
         )}
       >
-        <ToolDisplayPanelFrame entry={entry} onClose={close} />
+        <ToolDisplayPanelFrame entry={entry} headerAction={headerAction} onClose={close} />
       </aside>
     </>
   );
@@ -252,17 +276,22 @@ export function ToolDisplayPanel({ className }: { className?: string }) {
 
 function ToolDisplayPanelFrame({
   entry,
+  headerAction,
   onClose,
   style
 }: {
   entry: ToolDisplayPanelEntry | undefined;
+  headerAction?: ReactNode;
   onClose: () => void;
   style?: CSSProperties;
 }) {
   const { t } = useTranslation();
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-card text-card-foreground" style={style}>
+    <div
+      className="flex h-full min-h-0 flex-col bg-card text-card-foreground lg:pt-16"
+      style={style}
+    >
       <div className="flex min-h-14 items-start gap-3 border-b px-4 py-3">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{entry?.title ?? t("displayPanelFallbackTitle")}</p>
@@ -270,18 +299,21 @@ function ToolDisplayPanelFrame({
             <p className="mt-0.5 truncate text-xs text-muted-foreground">{entry.subtitle}</p>
           ) : null}
         </div>
-        <button
-          type="button"
-          aria-label={t("closeDisplayPanel")}
-          title={t("closeDisplayPanel")}
-          className={cn(
-            "inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors",
-            "hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
-          )}
-          onClick={onClose}
-        >
-          <X size={16} aria-hidden="true" />
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          {headerAction}
+          <button
+            type="button"
+            aria-label={t("closeDisplayPanel")}
+            title={t("closeDisplayPanel")}
+            className={cn(
+              "inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors",
+              "hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
+            )}
+            onClick={onClose}
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        </div>
       </div>
       <div className="chat-scrollbar min-h-0 flex-1 overflow-y-auto bg-background p-4 lg:p-5">
         {entry?.node}

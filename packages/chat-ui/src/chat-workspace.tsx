@@ -5,6 +5,7 @@ import { ControlPlaneRoutes } from "./control-plane/control-plane-routes";
 import { TranslationProvider } from "./i18n";
 import { LoginPanel } from "./login-panel";
 import { ToolDisplayPanel } from "./tool-display-panel";
+import { ThemeToggle } from "./theme-toggle";
 import { cn } from "./ui/cn";
 import { UserMenu } from "./user-menu";
 import { ConfigCheckPanel, SessionCheckPanel, WorkspaceChrome } from "./workspace-chrome";
@@ -171,7 +172,14 @@ function ChatWorkspaceContent({
                 <AssistantChatPanel chat={chat} />
                 {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
               </div>
-              <ToolDisplayPanel />
+              <ToolDisplayPanel
+                headerAction={
+                  <ThemeToggle
+                    mode={model.config.resolvedThemeMode}
+                    onToggle={model.config.toggleTheme}
+                  />
+                }
+              />
             </div>
           </section>
         </ControlPlaneRoutes>

@@ -4,6 +4,9 @@
 
 @source "./**/*.{ts,tsx}";
 @source "../../chat-standalone/src/**/*.{ts,tsx}";
+@source "../node_modules/streamdown/dist/*.js";
+@source "../node_modules/@streamdown/code/dist/*.js";
+@source "../node_modules/@streamdown/mermaid/dist/*.js";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -113,6 +116,10 @@
 @layer components {
   .chat-markdown {
     @apply min-w-0 text-sm leading-6 text-inherit;
+  }
+
+  .artifact-markdown {
+    @apply mx-auto w-full max-w-4xl;
   }
 
   .chat-scrollbar {
@@ -298,69 +305,44 @@
     animation: chat-cursor-pulse 1.2s ease-in-out infinite;
   }
 
-  .chat-markdown p,
-  .chat-markdown ul,
-  .chat-markdown ol,
-  .chat-markdown pre,
-  .chat-markdown table,
-  .chat-markdown blockquote {
-    margin: 0.75rem 0;
-  }
+}
 
-  .chat-markdown ul,
-  .chat-markdown ol {
-    padding-left: 1.25rem;
-  }
+.chat-markdown [data-streamdown="code-block"] {
+  margin: 0.75rem 0;
+  overflow: hidden;
+  border-radius: 0.625rem;
+  padding: 0;
+  background: color-mix(in srgb, var(--muted) 42%, var(--background));
+  box-shadow: none;
+}
 
-  .chat-markdown ul {
-    list-style: disc;
-  }
+.chat-markdown [data-streamdown="code-block-header"] {
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
 
-  .chat-markdown ol {
-    list-style: decimal;
-  }
+.chat-markdown [data-streamdown="code-block-actions"] {
+  border: 0;
+  background: transparent;
+  padding: 0.25rem 0.5rem;
+  backdrop-filter: none;
+}
 
-  .chat-markdown li + li {
-    margin-top: 0.25rem;
-  }
+.chat-markdown [data-streamdown="code-block-body"] {
+  border: 0;
+  border-radius: 0;
+  padding: 0.875rem 1rem;
+  background: var(--background);
+}
 
-  .chat-markdown a {
-    @apply font-medium text-primary underline underline-offset-4;
-  }
+.chat-markdown [data-streamdown="code-block-body"] pre {
+  margin: 0;
+}
 
-  .chat-markdown strong {
-    @apply font-semibold;
-  }
-
-  .chat-markdown code:not(pre code) {
-    @apply rounded bg-muted px-1.5 py-0.5 font-mono text-[0.8125rem] text-foreground;
-  }
-
-  .chat-markdown pre {
-    @apply overflow-hidden rounded-md border bg-muted/40;
-  }
-
-  .chat-markdown pre code {
-    @apply font-mono;
-  }
-
-  .chat-markdown blockquote {
-    @apply border-l-2 pl-3 text-muted-foreground;
-  }
-
-  .chat-markdown table {
-    @apply block max-w-full overflow-auto rounded-md border text-left text-sm;
-    border-collapse: collapse;
-  }
-
-  .chat-markdown th,
-  .chat-markdown td {
-    @apply border-b border-r px-3 py-2 align-top;
-  }
-
-  .chat-markdown th {
-    @apply bg-muted font-semibold;
-  }
+.chat-markdown [data-streamdown="code-block-body"] pre code > span {
+  display: block;
+  min-height: 1.5em;
 }
 
 @keyframes chat-shimmer {

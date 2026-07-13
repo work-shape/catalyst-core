@@ -23,6 +23,7 @@ import {
 } from "./artifact-preview-live";
 import { ArtifactPreviewFrame, ArtifactPreviewMessage } from "./artifact-preview-shell";
 import { useTranslation } from "./i18n";
+import { MarkdownArtifact } from "./markdown-text";
 import { Spinner } from "./ui/spinner";
 import {
   artifactDisplayFilename,
@@ -171,6 +172,7 @@ function BlobArtifactPreview({
           />
         </div>
       ) : null}
+      {previewKind === "markdown" ? <MarkdownArtifactPreview blob={state.blob} /> : null}
       {previewKind === "text" ? <TextArtifactPreview blob={state.blob} /> : null}
       {previewKind === "spreadsheet" ? <SpreadsheetArtifactPreview blob={state.blob} /> : null}
       {previewKind === "document" ? <DocumentArtifactPreview blob={state.blob} fileType={fileType} /> : null}
@@ -469,10 +471,32 @@ function fitElementToViewport(element: HTMLElement, viewport: HTMLElement | null
 
 function TextArtifactPreview({ blob }: { blob: Blob }) {
   const { t } = useTranslation();
+  const text = useBlobText(blob);
+
+  return (
+    <pre className="chat-scrollbar h-full overflow-auto bg-background p-4 font-mono text-xs leading-5 text-foreground">
+      {text ?? t("artifactPreviewLoading")}
+    </pre>
+  );
+}
+
+function MarkdownArtifactPreview({ blob }: { blob: Blob }) {
+  const { t } = useTranslation();
+  const text = useBlobText(blob);
+
+  return (
+    <div className="chat-scrollbar h-full overflow-auto bg-background px-5 py-6 text-foreground lg:px-7">
+      {text === undefined ? t("artifactPreviewLoading") : <MarkdownArtifact>{text}</MarkdownArtifact>}
+    </div>
+  );
+}
+
+function useBlobText(blob: Blob): string | undefined {
   const [text, setText] = useState<string | undefined>();
 
   useEffect(() => {
     let cancelled = false;
+    setText(undefined);
     void blob.text().then((value) => {
       if (!cancelled) {
         setText(value);
@@ -483,11 +507,7 @@ function TextArtifactPreview({ blob }: { blob: Blob }) {
     };
   }, [blob]);
 
-  return (
-    <pre className="chat-scrollbar h-full overflow-auto bg-background p-4 font-mono text-xs leading-5 text-foreground">
-      {text ?? t("artifactPreviewLoading")}
-    </pre>
-  );
+  return text;
 }
 
 function SpreadsheetArtifactPreview({ blob }: { blob: Blob }) {
