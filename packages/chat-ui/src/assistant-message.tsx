@@ -491,7 +491,7 @@ function UserMessage() {
       data-role="user"
     >
       <MessagePrimitive.Attachments>{() => <AttachmentPreview removable={false} />}</MessagePrimitive.Attachments>
-      <div className="max-w-[min(42rem,88%)] rounded-2xl rounded-tr-md bg-primary px-4 py-2.5 text-sm leading-6 text-primary-foreground shadow-xs [overflow-wrap:anywhere]">
+      <div className="chat-user-message-bubble max-w-[min(42rem,88%)] rounded-2xl rounded-tr-md bg-primary px-4 py-2.5 text-sm leading-6 text-primary-foreground shadow-xs [overflow-wrap:anywhere]">
         <MessagePrimitive.Parts components={{ Text: UserTextPart, File: FilePart, Image: ImagePart }} />
       </div>
       <div className="flex min-h-8 items-center gap-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">

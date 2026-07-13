@@ -163,6 +163,29 @@ test("composer sends on Enter and inserts a newline on Shift+Enter", async ({ pa
   await expect(input).toHaveValue("");
 });
 
+test("links in user messages keep the bubble foreground contrast", async ({ page }) => {
+  await signInViaApi(page, normalUser);
+  await page.goto("/");
+
+  const input = page.getByPlaceholder("Message");
+  await input.fill("[Visible link](https://example.com)");
+  await input.press("Enter");
+
+  const userMessage = page.getByRole("region", { name: "Chat" }).locator('[data-role="user"]');
+  const bubble = userMessage.locator(".chat-user-message-bubble");
+  const link = userMessage.locator('[data-streamdown="link"]', { hasText: "Visible link" });
+  await expect(link).toBeVisible();
+
+  const colors = await link.evaluate((element) => ({
+    link: getComputedStyle(element).color,
+    bubble: getComputedStyle(element.closest(".chat-user-message-bubble") as Element).color,
+    decoration: getComputedStyle(element).textDecorationLine
+  }));
+  expect(colors.link).toBe(colors.bubble);
+  expect(colors.decoration).toContain("underline");
+  await expect(bubble).toBeVisible();
+});
+
 test("new conversation action opens an unsaved draft screen", async ({ page }) => {
   await signInViaUi(page, normalUser);
   let createConversationRequests = 0;

@@ -307,6 +307,22 @@
 
 }
 
+.chat-user-message-bubble .chat-markdown [data-streamdown="link"] {
+  color: inherit;
+  text-decoration-color: color-mix(in srgb, currentColor 72%, transparent);
+  text-underline-offset: 0.15em;
+}
+
+.chat-user-message-bubble .chat-markdown [data-streamdown="link"]:hover {
+  text-decoration-thickness: 2px;
+}
+
+.chat-user-message-bubble .chat-markdown [data-streamdown="link"]:focus-visible {
+  border-radius: 0.125rem;
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
 .chat-markdown [data-streamdown="code-block-body"] pre code > span {
   display: block;
   min-height: 1.5em;
