@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { AssistantChatPanel } from "./assistant-chat-panel";
 import { ChatDropOverlay } from "./chat-file-dropzone";
 import type { ChatShellProps } from "./chat-shell";
@@ -5,7 +6,6 @@ import { ControlPlaneRoutes } from "./control-plane/control-plane-routes";
 import { TranslationProvider } from "./i18n";
 import { LoginPanel } from "./login-panel";
 import { ToolDisplayPanel } from "./tool-display-panel";
-import { ThemeToggle } from "./theme-toggle";
 import { cn } from "./ui/cn";
 import { UserMenu } from "./user-menu";
 import { ConfigCheckPanel, SessionCheckPanel, WorkspaceChrome } from "./workspace-chrome";
@@ -52,6 +52,7 @@ function ChatWorkspaceContent({
   className
 }: Pick<ChatWorkspaceProps, "adminPanel" | "manageDocumentTitle" | "className">) {
   const model = useWorkspaceChatModel({ adminPanel, manageDocumentTitle });
+  const [displayPanelWidth, setDisplayPanelWidth] = useState(0);
 
   if (model.auth.loginRequired) {
     return (
@@ -150,6 +151,7 @@ function ChatWorkspaceContent({
             model.config.config.clientInstance.displayName
           }
           displayPanelOpen={model.toolDisplay.open}
+          displayPanelWidth={displayPanelWidth}
           environment={model.config.config.clientInstance.environment}
           sidebarOpen={model.chrome.sidebarOpen}
           selectedAgentName={model.config.activeAgentName}
@@ -172,14 +174,7 @@ function ChatWorkspaceContent({
                 <AssistantChatPanel chat={chat} />
                 {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
               </div>
-              <ToolDisplayPanel
-                headerAction={
-                  <ThemeToggle
-                    mode={model.config.resolvedThemeMode}
-                    onToggle={model.config.toggleTheme}
-                  />
-                }
-              />
+              <ToolDisplayPanel onWidthChange={setDisplayPanelWidth} />
             </div>
           </section>
         </ControlPlaneRoutes>

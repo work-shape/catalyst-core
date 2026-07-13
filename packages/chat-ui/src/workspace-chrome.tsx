@@ -1,5 +1,6 @@
 import { PanelLeft } from "lucide-react";
 import { type SafeConfig } from "@vivd-catalyst/api-client";
+import type { CSSProperties } from "react";
 import { AgentSelector } from "./agent-selector";
 import { useTranslation } from "./i18n";
 import { type ResolvedThemeMode } from "./theme";
@@ -73,6 +74,7 @@ export function WorkspaceChrome({
   agents,
   contextLabel,
   displayPanelOpen,
+  displayPanelWidth,
   environment,
   sidebarOpen,
   selectedAgentName,
@@ -84,6 +86,7 @@ export function WorkspaceChrome({
   agents: SafeConfig["agents"];
   contextLabel?: string;
   displayPanelOpen: boolean;
+  displayPanelWidth: number;
   environment: SafeConfig["clientInstance"]["environment"] | undefined;
   sidebarOpen: boolean;
   selectedAgentName: string | undefined;
@@ -108,10 +111,15 @@ export function WorkspaceChrome({
 
       <header
         className={cn(
-          "pointer-events-auto absolute inset-x-0 z-40 flex h-16 min-w-0 items-center justify-between gap-3 border-b bg-background/95 px-4 backdrop-blur transition-[left,top] duration-200",
+          "pointer-events-auto absolute inset-x-0 z-40 flex h-16 min-w-0 items-center justify-between gap-3 border-b bg-background/95 px-4 backdrop-blur transition-[left,right,top] duration-200 lg:right-[var(--display-panel-width)]",
           isStaging ? "top-6" : "top-0",
           sidebarOpen && "max-md:hidden md:left-80"
         )}
+        style={
+          {
+            "--display-panel-width": displayPanelOpen ? `${displayPanelWidth}px` : "0px"
+          } as CSSProperties
+        }
       >
         <div className="flex min-w-0 items-center gap-2">
           {!sidebarOpen ? (
@@ -138,7 +146,7 @@ export function WorkspaceChrome({
             />
           ) : null}
         </div>
-        <div className={cn("flex shrink-0 items-center gap-2", displayPanelOpen && "lg:hidden")}>
+        <div className="flex shrink-0 items-center gap-2">
           <ThemeToggle mode={themeMode} onToggle={onToggleTheme} />
         </div>
       </header>

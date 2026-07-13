@@ -107,10 +107,10 @@ export function useToolDisplayPanel(): ToolDisplayPanelContextValue {
 
 export function ToolDisplayPanel({
   className,
-  headerAction
+  onWidthChange
 }: {
   className?: string;
-  headerAction?: ReactNode;
+  onWidthChange?: (width: number) => void;
 }) {
   const { close, entry, open } = useToolDisplayPanel();
   const { t } = useTranslation();
@@ -207,6 +207,10 @@ export function ToolDisplayPanel({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [close, visible]);
 
+  useEffect(() => {
+    onWidthChange?.(clampedPanelWidth);
+  }, [clampedPanelWidth, onWidthChange]);
+
   return (
     <>
       <aside
@@ -214,7 +218,7 @@ export function ToolDisplayPanel({
         aria-hidden={!visible}
         inert={!visible ? true : undefined}
         className={cn(
-          "relative hidden h-full min-h-0 shrink-0 overflow-hidden border-l bg-card opacity-0 lg:block",
+          "relative z-50 hidden h-full min-h-0 shrink-0 overflow-hidden border-l bg-card opacity-0 lg:block",
           resizing
             ? "transition-[opacity,border-color] duration-150"
             : "transition-[width,opacity,border-color] duration-300 ease-out",
@@ -243,7 +247,6 @@ export function ToolDisplayPanel({
         ) : null}
         <ToolDisplayPanelFrame
           entry={entry}
-          headerAction={headerAction}
           onClose={close}
           style={innerWidthStyle}
         />
@@ -268,7 +271,7 @@ export function ToolDisplayPanel({
           visible ? "translate-x-0" : "pointer-events-none translate-x-full"
         )}
       >
-        <ToolDisplayPanelFrame entry={entry} headerAction={headerAction} onClose={close} />
+        <ToolDisplayPanelFrame entry={entry} onClose={close} />
       </aside>
     </>
   );
@@ -276,44 +279,36 @@ export function ToolDisplayPanel({
 
 function ToolDisplayPanelFrame({
   entry,
-  headerAction,
   onClose,
   style
 }: {
   entry: ToolDisplayPanelEntry | undefined;
-  headerAction?: ReactNode;
   onClose: () => void;
   style?: CSSProperties;
 }) {
   const { t } = useTranslation();
 
   return (
-    <div
-      className="flex h-full min-h-0 flex-col bg-card text-card-foreground lg:pt-16"
-      style={style}
-    >
-      <div className="flex min-h-14 items-start gap-3 border-b px-4 py-3">
+    <div className="flex h-full min-h-0 flex-col bg-card text-card-foreground" style={style}>
+      <div className="flex h-16 min-h-16 items-start gap-3 border-b px-4 py-3">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{entry?.title ?? t("displayPanelFallbackTitle")}</p>
           {entry?.subtitle ? (
             <p className="mt-0.5 truncate text-xs text-muted-foreground">{entry.subtitle}</p>
           ) : null}
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {headerAction}
-          <button
-            type="button"
-            aria-label={t("closeDisplayPanel")}
-            title={t("closeDisplayPanel")}
-            className={cn(
-              "inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors",
-              "hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
-            )}
-            onClick={onClose}
-          >
-            <X size={16} aria-hidden="true" />
-          </button>
-        </div>
+        <button
+          type="button"
+          aria-label={t("closeDisplayPanel")}
+          title={t("closeDisplayPanel")}
+          className={cn(
+            "inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors",
+            "hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
+          )}
+          onClick={onClose}
+        >
+          <X size={16} aria-hidden="true" />
+        </button>
       </div>
       <div className="chat-scrollbar min-h-0 flex-1 overflow-y-auto bg-background p-4 lg:p-5">
         {entry?.node}

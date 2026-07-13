@@ -7,14 +7,19 @@ import { createEnvironmentDocumentTitle } from "../packages/chat-ui/src/workspac
 
 const noop = () => undefined;
 
-function renderWorkspaceChrome(environment: string, locale: "de" | "en" = "de") {
+function renderWorkspaceChrome(
+  environment: string,
+  locale: "de" | "en" = "de",
+  displayPanelOpen = false
+) {
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
       { locale },
       createElement(WorkspaceChrome, {
         agents: [],
-        displayPanelOpen: false,
+        displayPanelOpen,
+        displayPanelWidth: 560,
         environment,
         sidebarOpen: false,
         selectedAgentName: undefined,
@@ -26,6 +31,15 @@ function renderWorkspaceChrome(environment: string, locale: "de" | "en" = "de") 
     )
   );
 }
+
+describe("workspace header with display panel", () => {
+  it("keeps the theme control in the workspace header and shifts it beside the panel", () => {
+    const markup = renderWorkspaceChrome("production", "en", true);
+
+    expect(markup).toContain("--display-panel-width:560px");
+    expect(markup).toContain('aria-label="Switch to dark theme"');
+  });
+});
 
 describe("staging environment banner", () => {
   it("shows only the localized test-environment label in staging", () => {
