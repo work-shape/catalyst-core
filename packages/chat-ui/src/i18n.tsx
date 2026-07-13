@@ -77,6 +77,7 @@ const translations = {
     attachmentsUnavailable: "Attachments will be available when file acquisition is implemented",
     cancel: "Cancel",
     checkingSession: "Checking session",
+    couldNotLoadWorkspace: "Could not load workspace",
     configAddPrompt: "Add prompt",
     configAgent: "Agent",
     configAgentCount: "{count} agent",
@@ -289,7 +290,9 @@ const translations = {
     updatedRecently: "Updated recently",
     userFallback: "User",
     userSettings: "User settings",
-    workspace: "Workspace"
+    workspace: "Workspace",
+    workspaceLoadFailedDescription: "Please refresh the page and try again.",
+    workspaceLoadingDescription: "Your workspace is being prepared."
   },
   de: {
     account: "Konto",
@@ -364,6 +367,7 @@ const translations = {
     attachmentsUnavailable: "Anhänge sind verfügbar, sobald die Dateierfassung implementiert ist",
     cancel: "Abbrechen",
     checkingSession: "Sitzung wird geprüft",
+    couldNotLoadWorkspace: "Arbeitsbereich konnte nicht geladen werden",
     configAddPrompt: "Vorschlag hinzufügen",
     configAgent: "Agent",
     configAgentCount: "{count} Agent",
@@ -581,7 +585,9 @@ const translations = {
     updatedRecently: "Gerade aktualisiert",
     userFallback: "Benutzer",
     userSettings: "Benutzereinstellungen",
-    workspace: "Arbeitsbereich"
+    workspace: "Arbeitsbereich",
+    workspaceLoadFailedDescription: "Bitte lade die Seite neu und versuche es noch einmal.",
+    workspaceLoadingDescription: "Dein Arbeitsbereich wird vorbereitet."
   }
 } satisfies Record<LocaleCode, Record<string, string>>;
 

@@ -88,6 +88,7 @@ export interface WorkspaceAuthModel {
 
 export interface WorkspaceConfigModel {
   config: SafeConfig | undefined;
+  error: string | undefined;
   activeLocale: LocaleCode;
   localePreference: LocaleCode | undefined;
   supportedLocales: LocaleCode[];
@@ -383,7 +384,9 @@ export function useWorkspaceChatModel({
     if (!manageDocumentTitle) {
       return;
     }
-    applyFavicon(config?.ui.faviconUrl ?? "/favicon.svg");
+    if (config?.ui.faviconUrl) {
+      applyFavicon(config.ui.faviconUrl);
+    }
   }, [config?.ui.faviconUrl, manageDocumentTitle]);
 
   const deleteConversationMutation = useDeleteConversationMutation({
@@ -481,6 +484,7 @@ export function useWorkspaceChatModel({
     },
     config: {
       config,
+      error: configQuery.error ? (apiErrorMessage(configQuery.error, undefined) ?? "") : undefined,
       activeLocale,
       localePreference: preferences.localePreference,
       supportedLocales,

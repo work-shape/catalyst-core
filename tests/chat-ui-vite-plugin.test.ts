@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -59,6 +59,23 @@ describe("vivdCatalystChatUiPlugin", () => {
     });
 
     await expect(plugin.transformIndexHtml?.()).resolves.toBeUndefined();
+  });
+
+  it("does not add a platform favicon unless a fallback is explicitly configured", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vivd-catalyst-no-favicon-client-"));
+    cleanupDirectories.push(root);
+    const plugin = vivdCatalystChatUiPlugin();
+    plugin.configResolved({
+      root,
+      publicDir: false,
+      build: {
+        outDir: "dist/client"
+      }
+    });
+
+    plugin.closeBundle();
+
+    await expect(access(join(root, "dist/client/favicon.svg"))).rejects.toThrow();
   });
 });
 

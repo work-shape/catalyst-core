@@ -23,7 +23,7 @@ export function WorkspaceRail({
   onSelectConversation,
   onDeleteConversation
 }: {
-  config: SafeConfig | undefined;
+  config: SafeConfig;
   conversations: ConversationListItem[];
   selectedConversationId: string | undefined;
   canViewAdministration: boolean;
@@ -39,10 +39,11 @@ export function WorkspaceRail({
 }) {
   const { t } = useTranslation();
   const [conversationQuery, setConversationQuery] = useState("");
-  const clientLabel = config?.ui.clientName ?? config?.ui.title ?? "Vivd Catalyst";
-  const logoUrl = config?.ui.logoUrl;
-  const logoUrlDark = config?.ui.logoUrlDark;
-  const invertLogoOnDark = Boolean(config?.ui.logoInvertOnDark && !logoUrlDark);
+  const clientLabel = config.ui.clientName ?? config.ui.title;
+  const clientInitial = clientLabel.trim().charAt(0).toLocaleUpperCase();
+  const logoUrl = config.ui.logoUrl;
+  const logoUrlDark = config.ui.logoUrlDark;
+  const invertLogoOnDark = Boolean(config.ui.logoInvertOnDark && !logoUrlDark);
   const filteredConversations = useMemo(() => {
     const query = conversationQuery.trim().toLocaleLowerCase();
     if (!query) {
@@ -98,10 +99,11 @@ export function WorkspaceRail({
 
       {logoUrl ? (
         <div className="flex h-16 min-w-0 items-start border-b border-sidebar-border pb-3 pr-11">
-          <a
-            className="flex h-12 min-w-0 max-w-[11rem] items-center justify-start overflow-hidden rounded-sm text-primary outline-none focus-visible:ring-[3px] focus-visible:ring-sidebar-ring/30"
-            href="/"
+          <button
+            type="button"
+            className="flex h-12 min-w-0 max-w-[11rem] cursor-pointer items-center justify-start overflow-hidden rounded-sm border-0 bg-transparent p-0 text-primary outline-none focus-visible:ring-[3px] focus-visible:ring-sidebar-ring/30"
             aria-label={clientLabel}
+            onClick={onCreateConversation}
           >
             <img
               className={cn(
@@ -119,12 +121,14 @@ export function WorkspaceRail({
                 alt={clientLabel}
               />
             ) : null}
-          </a>
+          </button>
         </div>
       ) : (
         <div className="grid h-16 min-w-0 grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-2.5 border-b border-sidebar-border pb-3 pr-11">
           <div className="grid size-9 place-items-center overflow-hidden rounded-md border border-sidebar-border bg-sidebar-accent/50 text-primary">
-            <Shield size={18} aria-hidden="true" />
+            <span className="text-sm font-semibold" aria-hidden="true">
+              {clientInitial}
+            </span>
           </div>
           <div className="grid min-w-0 gap-1 pt-0.5">
             <strong className="truncate text-sm font-semibold">{clientLabel}</strong>

@@ -16,6 +16,45 @@ export function SessionCheckPanel({
   const { t } = useTranslation();
 
   return (
+    <StatusPanel
+      className={className}
+      title={error ? t("couldNotVerifySession") : t("checkingSession")}
+      description={error ?? t("sessionCheckingDescription")}
+    />
+  );
+}
+
+export function ConfigCheckPanel({
+  className,
+  error
+}: {
+  className: string | undefined;
+  error: string | undefined;
+}) {
+  const { t } = useTranslation();
+  const failed = error !== undefined;
+
+  return (
+    <StatusPanel
+      className={className}
+      title={failed ? t("couldNotLoadWorkspace") : t("configLoading")}
+      description={
+        failed ? error || t("workspaceLoadFailedDescription") : t("workspaceLoadingDescription")
+      }
+    />
+  );
+}
+
+function StatusPanel({
+  className,
+  title,
+  description
+}: {
+  className: string | undefined;
+  title: string;
+  description: string;
+}) {
+  return (
     <main
       className={cn(
         "grid h-dvh w-full place-items-center overflow-hidden bg-sidebar p-5 text-foreground",
@@ -23,10 +62,8 @@ export function SessionCheckPanel({
       )}
     >
       <div className="grid w-full max-w-[380px] gap-2 rounded-lg border bg-card p-5 text-card-foreground shadow-xs">
-        <strong className="text-sm font-semibold">
-          {error ? t("couldNotVerifySession") : t("checkingSession")}
-        </strong>
-        <p className="text-sm text-muted-foreground">{error ?? t("sessionCheckingDescription")}</p>
+        <strong className="text-sm font-semibold">{title}</strong>
+        <p className="text-sm text-muted-foreground">{description}</p>
       </div>
     </main>
   );

@@ -1,6 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ShieldCheck } from "lucide-react";
 import { createApiClient, type LocaleCode } from "@vivd-catalyst/api-client";
 import { workspaceQueryKeys } from "./api/workspace-query-keys";
 import { signInWithEmail } from "./auth-client";
@@ -48,7 +47,8 @@ export function LoginPanel({
     retry: false
   });
   const branding = brandingQuery.data;
-  const clientName = branding?.clientName ?? "Vivd Catalyst";
+  const clientName = branding?.clientName;
+  const clientInitial = clientName?.trim().charAt(0).toLocaleUpperCase();
   const logoUrl = branding?.logoUrl;
   const logoUrlDark = branding?.logoUrlDark;
   const invertLogoOnDark = Boolean(branding?.logoInvertOnDark && !logoUrlDark);
@@ -142,12 +142,16 @@ export function LoginPanel({
                 />
               ) : null}
             </div>
-          ) : (
+          ) : clientInitial ? (
             <div className="grid size-11 place-items-center rounded-lg border bg-card text-primary">
-              <ShieldCheck size={22} aria-hidden="true" />
+              <span className="text-base font-semibold" aria-hidden="true">
+                {clientInitial}
+              </span>
             </div>
-          )}
-          <CardTitle className="leading-tight">{t("signInTo", { clientName })}</CardTitle>
+          ) : null}
+          <CardTitle className="leading-tight">
+            {clientName ? t("signInTo", { clientName }) : t("signIn")}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <form className="grid gap-4" onSubmit={onSubmit}>

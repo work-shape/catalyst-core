@@ -8,7 +8,7 @@ import { WorkspaceRail } from "../packages/chat-ui/src/workspace-rail";
 const noop = () => undefined;
 
 describe("workspace rail branding", () => {
-  it("links the client logo to the application root", () => {
+  it("uses in-app navigation for the client logo", () => {
     const config = {
       ui: {
         clientName: "Musterfinanz",
@@ -38,9 +38,44 @@ describe("workspace rail branding", () => {
       )
     );
 
-    expect(markup).toContain('<a class="');
-    expect(markup).toContain('href="/"');
+    expect(markup).toContain('<button type="button"');
+    expect(markup).not.toContain('href="/"');
     expect(markup).toContain('aria-label="Musterfinanz"');
     expect(markup).toContain('src="/assets/musterfinanz.svg"');
+  });
+
+  it("uses the customer initial when no logo is configured", () => {
+    const config = {
+      ui: {
+        clientName: "Musterfinanz",
+        title: "Musterfinanz Chat"
+      }
+    } as SafeConfig;
+
+    const markup = renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { locale: "de" },
+        createElement(WorkspaceRail, {
+          config,
+          conversations: [],
+          selectedConversationId: undefined,
+          canViewAdministration: false,
+          view: "chat",
+          creatingConversation: false,
+          deletingConversation: false,
+          userMenu: null,
+          onToggleSidebar: noop,
+          onViewChange: noop,
+          onCreateConversation: noop,
+          onSelectConversation: noop,
+          onDeleteConversation: noop
+        })
+      )
+    );
+
+    expect(markup).toContain('>F</span>');
+    expect(markup).not.toContain("Vivd Catalyst");
+    expect(markup).not.toContain("lucide-shield");
   });
 });

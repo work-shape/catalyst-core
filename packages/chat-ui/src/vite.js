@@ -6,13 +6,12 @@ import {
   loadClientInstanceConfigFromFile
 } from "@vivd-catalyst/config-schema";
 
-const DEFAULT_FAVICON_PATH = fileURLToPath(new URL("../assets/favicon.svg", import.meta.url));
 const DEFAULT_FAVICON_PUBLIC_PATH = "/favicon.svg";
 const DEFAULT_CLIENT_CONFIG_PATH = "config/app.yaml";
 const THEME_STORAGE_KEY = "vivd-catalyst:theme";
 
 export function vivdCatalystChatUiPlugin(options = {}) {
-  const faviconPath = toPath(options.faviconPath ?? DEFAULT_FAVICON_PATH);
+  const faviconPath = options.faviconPath ? toPath(options.faviconPath) : undefined;
   const faviconPublicPath = normalizePublicPath(
     options.faviconPublicPath ?? DEFAULT_FAVICON_PUBLIC_PATH
   );
@@ -54,6 +53,7 @@ export function vivdCatalystChatUiPlugin(options = {}) {
       server.middlewares.use((request, response, next) => {
         if (
           !config ||
+          !faviconPath ||
           requestPath(request.url) !== faviconPublicPath ||
           clientAssetExists(config, faviconRelativePath)
         ) {
@@ -67,7 +67,7 @@ export function vivdCatalystChatUiPlugin(options = {}) {
       });
     },
     closeBundle() {
-      if (!config || clientAssetExists(config, faviconRelativePath)) {
+      if (!config || !faviconPath || clientAssetExists(config, faviconRelativePath)) {
         return;
       }
 

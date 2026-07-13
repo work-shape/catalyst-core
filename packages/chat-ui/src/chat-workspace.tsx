@@ -7,7 +7,7 @@ import { LoginPanel } from "./login-panel";
 import { ToolDisplayPanel } from "./tool-display-panel";
 import { cn } from "./ui/cn";
 import { UserMenu } from "./user-menu";
-import { SessionCheckPanel, WorkspaceChrome } from "./workspace-chrome";
+import { ConfigCheckPanel, SessionCheckPanel, WorkspaceChrome } from "./workspace-chrome";
 import { WorkspaceRail } from "./workspace-rail";
 import { type WorkspaceRoute, type WorkspaceRouteChangeOptions } from "./workspace-route";
 import { useWorkspaceChatModel } from "./workspace/workspace-chat-model";
@@ -75,6 +75,14 @@ function ChatWorkspaceContent({
     );
   }
 
+  if (!model.config.config) {
+    return (
+      <TranslationProvider locale={model.config.activeLocale}>
+        <ConfigCheckPanel className={className} error={model.config.error} />
+      </TranslationProvider>
+    );
+  }
+
   const userMenu = (
     <UserMenu
       user={model.auth.user}
@@ -86,7 +94,7 @@ function ChatWorkspaceContent({
     />
   );
   const chat = model.selectedChat;
-  const isStaging = model.config.config?.clientInstance.environment === "staging";
+  const isStaging = model.config.config.clientInstance.environment === "staging";
 
   return (
     <TranslationProvider locale={model.config.activeLocale}>
@@ -135,13 +143,13 @@ function ChatWorkspaceContent({
         ) : null}
 
         <WorkspaceChrome
-          agents={model.config.config?.agents ?? []}
+          agents={model.config.config.agents}
           contextLabel={
-            model.config.config?.ui.clientName ??
-            model.config.config?.clientInstance.displayName
+            model.config.config.ui.clientName ??
+            model.config.config.clientInstance.displayName
           }
           displayPanelOpen={model.toolDisplay.open}
-          environment={model.config.config?.clientInstance.environment}
+          environment={model.config.config.clientInstance.environment}
           sidebarOpen={model.chrome.sidebarOpen}
           selectedAgentName={model.config.activeAgentName}
           themeMode={model.config.resolvedThemeMode}
