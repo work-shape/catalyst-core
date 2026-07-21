@@ -352,6 +352,37 @@ export type CreateConversationResponses = {
 
 export type CreateConversationResponse = CreateConversationResponses[keyof CreateConversationResponses];
 
+export type RenameConversationData = {
+    body: {
+        title: string;
+    };
+    path: {
+        conversationId: string;
+    };
+    query?: never;
+    url: '/api/conversations/{conversationId}/title';
+};
+
+export type RenameConversationResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        id: string;
+        clientInstanceId: string;
+        ownerUserId: string;
+        ownerExternalUserId: string;
+        title: string;
+        status: string;
+        createdAt: string;
+        updatedAt: string;
+        retainedUntil: string;
+        deletedAt?: string;
+    };
+};
+
+export type RenameConversationResponse = RenameConversationResponses[keyof RenameConversationResponses];
+
 export type GenerateConversationTitleData = {
     body?: never;
     path: {

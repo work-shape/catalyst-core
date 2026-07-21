@@ -400,6 +400,10 @@ export const createConversationRequestSchema = z.object({
   locale: localeCodeSchema.optional()
 });
 
+export const renameConversationRequestSchema = z.object({
+  title: z.string().trim().min(1).max(120)
+});
+
 export const agentRunStatusSchema = z.enum([
   "queued",
   "running",
@@ -1175,6 +1179,13 @@ export const apiOperations = {
     path: "/api/conversations/:conversationId/title",
     responseSchema: conversationSchema
   }),
+  renameConversation: defineJsonApiOperation({
+    operationId: "renameConversation",
+    method: "PATCH",
+    path: "/api/conversations/:conversationId/title",
+    requestSchema: renameConversationRequestSchema,
+    responseSchema: conversationSchema
+  }),
   getConversationThread: defineJsonApiOperation({
     operationId: "getConversationThread",
     method: "GET",
@@ -1466,6 +1477,7 @@ export type AuthPrincipal = z.infer<typeof authPrincipalSchema>;
 export type DelegatedActor = z.infer<typeof delegatedActorSchema>;
 export type Conversation = z.infer<typeof conversationSchema>;
 export type ConversationListItem = z.infer<typeof conversationListItemSchema>;
+export type RenameConversationRequest = z.infer<typeof renameConversationRequestSchema>;
 export type Message = z.infer<typeof messageSchema>;
 export type MessageMetadata = z.infer<typeof messageMetadataSchema>;
 export type AgentRuntimeMessageMetadata = z.infer<typeof agentRuntimeMessageMetadataSchema>;

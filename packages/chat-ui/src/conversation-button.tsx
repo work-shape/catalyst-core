@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ThreadListItemMorePrimitive } from "@assistant-ui/react";
-import { MessageSquare, MoreHorizontal, Trash2 } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import type { ConversationListItem } from "@vivd-catalyst/api-client";
 import { useTranslation } from "./i18n";
 import { Button } from "./ui/button";
@@ -12,19 +12,77 @@ export function ConversationButton({
   conversation,
   selected,
   onSelect,
+  onRename,
   onDelete,
   deleting
 }: {
   conversation: ConversationListItem;
   selected: boolean;
   onSelect: () => void;
+  onRename: (title: string) => Promise<void>;
   onDelete: () => void;
   deleting: boolean;
 }) {
   const { locale, t } = useTranslation();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draftTitle, setDraftTitle] = useState(conversation.title);
+  const [saving, setSaving] = useState(false);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
   const running = Boolean(conversation.activeRun);
   const unread = Boolean(conversation.unread && !selected);
+
+  useEffect(() => {
+    if (!editing) {
+      return;
+    }
+    const focusInput = () => {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    };
+    focusInput();
+    const frame = window.requestAnimationFrame(focusInput);
+    const timeout = window.setTimeout(focusInput, 50);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timeout);
+    };
+  }, [editing]);
+
+  function startEditing() {
+    setDraftTitle(conversation.title);
+    setEditing(true);
+  }
+
+  function cancelEditing() {
+    if (saving) {
+      return;
+    }
+    setDraftTitle(conversation.title);
+    setEditing(false);
+  }
+
+  async function saveTitle() {
+    const title = draftTitle.trim();
+    if (!title || saving) {
+      titleInputRef.current?.focus();
+      return;
+    }
+    if (title === conversation.title) {
+      setEditing(false);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await onRename(title);
+      setEditing(false);
+    } catch {
+      titleInputRef.current?.focus();
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <>
@@ -40,55 +98,85 @@ export function ConversationButton({
         {selected ? (
           <span className="absolute inset-y-2 left-0 w-0.5 rounded-r-full bg-primary" aria-hidden="true" />
         ) : null}
-        <Button
-          className="h-auto min-w-0 justify-start gap-2.5 px-3 py-3 text-left text-foreground hover:bg-transparent"
-          type="button"
-          variant="ghost"
-          onClick={onSelect}
-        >
-          {running ? (
-            <Spinner
-              size="sm"
-              className="mt-0.5 text-primary"
-              data-testid="conversation-running-icon"
+        {editing ? (
+          <form
+            className="grid min-w-0 gap-0.5 px-3 py-2.5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveTitle();
+            }}
+          >
+            <input
+              ref={titleInputRef}
+              type="text"
+              value={draftTitle}
+              maxLength={120}
+              disabled={saving}
+              aria-label={t("renameConversationField")}
+              className="h-7 min-w-0 rounded-md border border-input bg-background px-2 text-sm font-medium text-foreground outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:opacity-60"
+              onChange={(event) => setDraftTitle(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  cancelEditing();
+                }
+              }}
             />
-          ) : (
-            <MessageSquare
-              size={16}
-              className={cn(
-                "mt-0.5 shrink-0 text-muted-foreground",
-                unread && "text-primary"
-              )}
-              aria-hidden="true"
-            />
-          )}
-          <span className="grid min-w-0 gap-0.5">
-            <span className="inline-flex min-w-0 items-center gap-1.5">
-              <AnimatedConversationTitle title={conversation.title} />
-              {unread ? (
-                <span
-                  className="size-1.5 shrink-0 rounded-full bg-primary"
-                  data-testid="conversation-unread-indicator"
-                  aria-label={t("conversationUnread")}
-                  title={t("conversationUnread")}
-                />
-              ) : null}
-            </span>
             <span className="truncate text-[0.8125rem] text-muted-foreground">
-              {running ? (
-                <span className="inline-flex min-w-0 items-center gap-1 text-primary" data-testid="conversation-running-indicator">
-                  {t("conversationRunning")}
-                </span>
-              ) : unread ? (
-                <span className="text-primary" data-testid="conversation-unread-label">
-                  {t("conversationUnread")}
-                </span>
-              ) : (
-                formatConversationDate(conversation.updatedAt, locale, t("updatedRecently"))
-              )}
+              {saving ? t("saving") : formatConversationDate(conversation.updatedAt, locale, t("updatedRecently"))}
             </span>
-          </span>
-        </Button>
+          </form>
+        ) : (
+          <Button
+            className="h-auto min-w-0 justify-start px-3 py-3 text-left text-foreground hover:bg-transparent"
+            type="button"
+            variant="ghost"
+            onClick={onSelect}
+          >
+            <span className="grid min-w-0 gap-0.5">
+              <span className="inline-flex min-w-0 items-center gap-1.5">
+                {running ? (
+                  <Spinner
+                    size="sm"
+                    className="shrink-0 text-primary"
+                    data-testid="conversation-running-icon"
+                  />
+                ) : null}
+                <span
+                  className="min-w-0"
+                  onDoubleClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    startEditing();
+                  }}
+                >
+                  <AnimatedConversationTitle title={conversation.title} />
+                </span>
+                {unread ? (
+                  <span
+                    className="size-1.5 shrink-0 rounded-full bg-primary"
+                    data-testid="conversation-unread-indicator"
+                    aria-label={t("conversationUnread")}
+                    title={t("conversationUnread")}
+                  />
+                ) : null}
+              </span>
+              <span className="truncate text-[0.8125rem] text-muted-foreground">
+                {running ? (
+                  <span className="inline-flex min-w-0 items-center gap-1 text-primary" data-testid="conversation-running-indicator">
+                    {t("conversationRunning")}
+                  </span>
+                ) : unread ? (
+                  <span className="text-primary" data-testid="conversation-unread-label">
+                    {t("conversationUnread")}
+                  </span>
+                ) : (
+                  formatConversationDate(conversation.updatedAt, locale, t("updatedRecently"))
+                )}
+              </span>
+            </span>
+          </Button>
+        )}
 
         <ThreadListItemMorePrimitive.Root>
           <ThreadListItemMorePrimitive.Trigger
@@ -99,7 +187,7 @@ export function ConversationButton({
               "data-[state=open]:bg-accent data-[state=open]:text-accent-foreground data-[state=open]:opacity-100"
             )}
             type="button"
-            disabled={deleting}
+            disabled={deleting || saving}
             aria-label={t("conversationOptions", { title: conversation.title })}
             title={t("conversationOptions", { title: conversation.title })}
           >
@@ -113,9 +201,20 @@ export function ConversationButton({
             <ThreadListItemMorePrimitive.Item
               className={cn(
                 "flex min-h-9 cursor-default select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none transition-colors",
+                "focus:bg-accent data-[highlighted]:bg-accent data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+              )}
+              disabled={deleting || saving}
+              onSelect={startEditing}
+            >
+              <Pencil size={15} aria-hidden="true" />
+              <span>{t("renameConversationMenuItem")}</span>
+            </ThreadListItemMorePrimitive.Item>
+            <ThreadListItemMorePrimitive.Item
+              className={cn(
+                "flex min-h-9 cursor-default select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none transition-colors",
                 "text-destructive focus:bg-destructive/10 data-[highlighted]:bg-destructive/10 data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
               )}
-              disabled={deleting}
+              disabled={deleting || saving}
               onSelect={() => setConfirmDeleteOpen(true)}
             >
               <Trash2 size={15} aria-hidden="true" />

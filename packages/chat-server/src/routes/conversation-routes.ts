@@ -37,6 +37,13 @@ export function registerConversationRoutes(app: FastifyInstance, options: ChatSe
     return conversations.getThreadSnapshot(getConversationId(request), user);
   });
 
+  app.patch(apiOperations.renameConversation.path, async (request) => {
+    const { user, context } = await authenticateRequest(options, request);
+    requireAuthScope(user, "conversation:write");
+    const body = parseBody(apiOperations.renameConversation.requestSchema, request.body);
+    return conversations.renameConversation(getConversationId(request), body.title, user, context);
+  });
+
   app.delete(apiOperations.deleteConversation.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
     requireAuthScope(user, "conversation:write");

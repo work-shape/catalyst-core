@@ -139,6 +139,7 @@ function ChatWorkspaceContent({
               onViewChange={model.conversationRail.selectWorkspaceView}
               onCreateConversation={model.conversationRail.startNewConversation}
               onSelectConversation={model.conversationRail.selectConversation}
+              onRenameConversation={model.conversationRail.renameConversation}
               onDeleteConversation={model.conversationRail.deleteConversation}
             />
           </div>

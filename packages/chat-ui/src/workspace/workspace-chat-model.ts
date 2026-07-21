@@ -13,6 +13,7 @@ import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import {
   useCancelRunMutation,
   useDeleteConversationMutation,
+  useRenameConversationMutation,
   useWorkspaceSignOutMutation
 } from "../api/workspace-mutations";
 import {
@@ -125,6 +126,7 @@ export interface ConversationRailModel {
   deletingConversation: boolean;
   startNewConversation(): void;
   selectConversation(conversationId: string): void;
+  renameConversation(conversationId: string, title: string): Promise<void>;
   deleteConversation(conversationId: string): void;
   selectWorkspaceView(view: WorkspaceView): void;
 }
@@ -405,6 +407,12 @@ export function useWorkspaceChatModel({
     onDeletedConversation: () => setNotice(undefined),
     onErrorMessage: setNotice
   });
+  const renameConversationMutation = useRenameConversationMutation({
+    apiBaseUrl,
+    authScope: WORKSPACE_AUTH_SCOPE,
+    client,
+    onErrorMessage: setNotice
+  });
   const signOutMutation = useWorkspaceSignOutMutation({
     apiBaseUrl,
     onSignedOut: () => {
@@ -518,6 +526,9 @@ export function useWorkspaceChatModel({
       deletingConversation: deleteConversationMutation.isPending,
       startNewConversation,
       selectConversation,
+      renameConversation: async (conversationId, title) => {
+        await renameConversationMutation.mutateAsync({ conversationId, title });
+      },
       deleteConversation: (conversationId) => deleteConversationMutation.mutate(conversationId),
       selectWorkspaceView: routeState.selectWorkspaceView
     },

@@ -33,6 +33,7 @@ describe("workspace rail branding", () => {
           onViewChange: noop,
           onCreateConversation: noop,
           onSelectConversation: noop,
+          onRenameConversation: async () => undefined,
           onDeleteConversation: noop
         })
       )
@@ -69,6 +70,7 @@ describe("workspace rail branding", () => {
           onViewChange: noop,
           onCreateConversation: noop,
           onSelectConversation: noop,
+          onRenameConversation: async () => undefined,
           onDeleteConversation: noop
         })
       )

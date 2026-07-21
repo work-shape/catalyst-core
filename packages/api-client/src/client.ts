@@ -342,6 +342,15 @@ export function createApiClient(options: ApiClientOptions) {
         }),
         apiOperations.generateConversationTitle.responseSchema
       ),
+    renameConversation: (conversationId: string, title: string) =>
+      unwrapJson(
+        generatedSdk.renameConversation({
+          client: generatedClient,
+          path: { conversationId },
+          body: apiOperations.renameConversation.requestSchema.parse({ title })
+        }),
+        apiOperations.renameConversation.responseSchema
+      ),
     thread: getConversationThread,
     messages: listConversationMessages,
     runs,

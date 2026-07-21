@@ -218,6 +218,7 @@ describe("api operation catalog and client", () => {
     });
 
     expect(() => client.createConversation({ title: "" })).toThrow();
+    expect(() => client.renameConversation("conv_1", "   ")).toThrow();
   });
 
   it("exposes resource-oriented Agent Runs client helpers", async () => {

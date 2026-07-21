@@ -206,3 +206,14 @@ describe("reasonForEvent", () => {
     expect(reasonForEvent(evt({ type: "tool.completed" }))).toBeUndefined();
   });
 });
+
+describe("conversation audit labels", () => {
+  it("describes a manual conversation rename", () => {
+    const [activity] = projectAuditActivities([
+      evt({ type: "conversation.renamed", correlationId: "rename", actor: human, subject: "conv_1" })
+    ]);
+
+    expect(activity!.label).toBe("Renamed a conversation");
+    expect(activity!.target).toEqual({ kind: "conversation", id: "conv_1" });
+  });
+});

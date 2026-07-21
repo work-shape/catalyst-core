@@ -733,6 +733,54 @@ test("conversation rail deletes a conversation", async ({ page }) => {
   await expect(conversations).toHaveCount(conversationCountBefore - 1);
 });
 
+test("conversation rail renames from the menu and title double click", async ({ page }) => {
+  await signInViaApi(page, normalUser);
+  const initialTitle = `Rename target ${Date.now()}`;
+  const menuTitle = `${initialTitle} menu`;
+  const finalTitle = `${initialTitle} double click`;
+  const created = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    data: { title: initialTitle }
+  });
+  expect(created.ok()).toBe(true);
+
+  await page.goto("/");
+  const initialRow = page.getByTestId("conversation-row").filter({ hasText: initialTitle });
+  await expect(initialRow).toHaveCount(1);
+  await expect(initialRow.locator(".lucide-message-square")).toHaveCount(0);
+
+  await initialRow.getByRole("button", { name: `Conversation options for ${initialTitle}` }).click();
+  await page.getByRole("menuitem", { name: "Rename conversation", exact: true }).click();
+  const titleInput = page.getByRole("textbox", { name: "Conversation title", exact: true });
+  await expect(titleInput).toBeFocused();
+  await expect(titleInput).toHaveValue(initialTitle);
+  await titleInput.fill(menuTitle);
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === "PATCH" &&
+        /\/api\/conversations\/[^/]+\/title$/u.test(new URL(response.url()).pathname)
+    ),
+    titleInput.press("Enter")
+  ]);
+
+  const renamedRow = page.getByTestId("conversation-row").filter({ hasText: menuTitle });
+  await expect(renamedRow).toHaveCount(1);
+  await renamedRow.getByText(menuTitle, { exact: true }).dblclick();
+  await expect(titleInput).toBeFocused();
+  await expect(titleInput).toHaveValue(menuTitle);
+  await titleInput.fill(finalTitle);
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === "PATCH" &&
+        /\/api\/conversations\/[^/]+\/title$/u.test(new URL(response.url()).pathname)
+    ),
+    titleInput.press("Enter")
+  ]);
+
+  await expect(page.getByTestId("conversation-row").filter({ hasText: finalTitle })).toHaveCount(1);
+});
+
 test("standalone auth gates superadmin views", async ({ page }) => {
   await signInViaUi(page, superadminUser);
   await expect(page.getByRole("button", { name: "Usage" })).toHaveCount(0);

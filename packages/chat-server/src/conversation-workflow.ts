@@ -198,6 +198,37 @@ export class ConversationWorkflow {
     };
   }
 
+  async renameConversation(
+    conversationId: ConversationId,
+    title: string,
+    user: AuthenticatedUser,
+    context: RuntimeCallContext
+  ): Promise<Conversation> {
+    const conversation = await this.requireOwnedActiveConversation(conversationId, user);
+    if (conversation.title === title) {
+      return conversation;
+    }
+
+    const updated = await this.options.conversationStore.updateConversationTitle({
+      clientInstanceId: this.options.clientInstanceId,
+      conversationId,
+      title,
+      updatedAt: new Date().toISOString()
+    });
+    await this.options.auditRecorder.record({
+      type: "conversation.renamed",
+      status: "success",
+      actor: auditActorFromUser(user),
+      subject: conversationId,
+      correlationId: context.correlationId,
+      metadata: {
+        previousTitleLength: conversation.title.length,
+        titleLength: title.length
+      }
+    });
+    return updated;
+  }
+
   private async createCompletedRunProjections(
     conversationId: ConversationId,
     messages: ChatMessage[],

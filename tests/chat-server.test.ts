@@ -2152,6 +2152,57 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
+  it("lets a user rename an owned conversation", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig(),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      payload: { title: "Temporary title" }
+    });
+    const conversation = created.json() as { id: string };
+
+    const renamed = await app.server.inject({
+      method: "PATCH",
+      url: `/api/conversations/${conversation.id}/title`,
+      payload: { title: "  Lars Schmitt – Finanzierung  " }
+    });
+
+    expect(renamed.statusCode).toBe(200);
+    expect(renamed.json()).toMatchObject({
+      id: conversation.id,
+      title: "Lars Schmitt – Finanzierung"
+    });
+
+    const invalid = await app.server.inject({
+      method: "PATCH",
+      url: `/api/conversations/${conversation.id}/title`,
+      payload: { title: "   " }
+    });
+    expect(invalid.statusCode).toBe(422);
+
+    const audit = await app.server.inject({
+      method: "GET",
+      url: "/api/audit-events"
+    });
+    expect(audit.json()).toContainEqual(
+      expect.objectContaining({
+        type: "conversation.renamed",
+        subject: conversation.id,
+        metadata: {
+          previousTitleLength: "Temporary title".length,
+          titleLength: "Lars Schmitt – Finanzierung".length
+        }
+      })
+    );
+
+    await app.close();
+  });
+
   it("replaces a file-drop placeholder title from the first user message", async () => {
     const app = await createClientInstanceApp({
       config: createTestConfig(),

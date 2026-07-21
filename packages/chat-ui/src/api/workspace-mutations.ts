@@ -165,6 +165,50 @@ export function useDeleteConversationMutation(
   });
 }
 
+export function useRenameConversationMutation(
+  input: WorkspaceMutationInput & {
+    onErrorMessage(message: string | undefined): void;
+  }
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ conversationId, title }: { conversationId: string; title: string }) =>
+      input.client.renameConversation(conversationId, title),
+    onSuccess: (updatedConversation) => {
+      queryClient.setQueryData<ConversationListItem[]>(
+        workspaceQueryKeys.conversations(input.apiBaseUrl, input.authScope),
+        (currentConversations = []) =>
+          currentConversations.map((conversation) =>
+            conversation.id === updatedConversation.id
+              ? { ...conversation, ...updatedConversation }
+              : conversation
+          )
+      );
+      queryClient.setQueryData<ConversationThreadSnapshot>(
+        workspaceQueryKeys.thread(input.apiBaseUrl, input.authScope, updatedConversation.id),
+        (current) =>
+          current
+            ? {
+                ...current,
+                conversation: updatedConversation
+              }
+            : current
+      );
+      input.onErrorMessage(undefined);
+      void queryClient.invalidateQueries({
+        queryKey: workspaceQueryKeys.conversations(input.apiBaseUrl, input.authScope)
+      });
+      void queryClient.invalidateQueries({
+        queryKey: workspaceQueryKeys.auditEvents(input.apiBaseUrl, input.authScope)
+      });
+    },
+    onError: (error) => {
+      input.onErrorMessage(apiErrorMessage(error, "Rename failed"));
+    }
+  });
+}
+
 export function useWorkspaceSignOutMutation(input: {
   apiBaseUrl: string;
   onSignedOut(): void;

@@ -21,6 +21,7 @@ export function WorkspaceRail({
   onViewChange,
   onCreateConversation,
   onSelectConversation,
+  onRenameConversation,
   onDeleteConversation
 }: {
   config: SafeConfig;
@@ -35,6 +36,7 @@ export function WorkspaceRail({
   onViewChange: (view: WorkspaceView) => void;
   onCreateConversation: () => void;
   onSelectConversation: (conversationId: string) => void;
+  onRenameConversation: (conversationId: string, title: string) => Promise<void>;
   onDeleteConversation: (conversationId: string) => void;
 }) {
   const { t } = useTranslation();
@@ -186,6 +188,7 @@ export function WorkspaceRail({
               conversation={conversation}
               selected={conversation.id === selectedConversationId}
               onSelect={() => onSelectConversation(conversation.id)}
+              onRename={(title) => onRenameConversation(conversation.id, title)}
               onDelete={() => onDeleteConversation(conversation.id)}
               deleting={deletingConversation}
             />
