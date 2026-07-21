@@ -29,8 +29,18 @@ export function ConversationButton({
   const [draftTitle, setDraftTitle] = useState(conversation.title);
   const [saving, setSaving] = useState(false);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const wasSelectedRef = useRef(selected);
   const running = Boolean(conversation.activeRun);
   const unread = Boolean(conversation.unread && !selected);
+
+  useEffect(() => {
+    const movedToAnotherConversation = wasSelectedRef.current && !selected;
+    wasSelectedRef.current = selected;
+    if (movedToAnotherConversation) {
+      setDraftTitle(conversation.title);
+      setEditing(false);
+    }
+  }, [conversation.title, selected]);
 
   useEffect(() => {
     if (!editing) {

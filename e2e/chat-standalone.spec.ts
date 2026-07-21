@@ -738,10 +738,15 @@ test("conversation rail renames from the menu and title double click", async ({ 
   const initialTitle = `Rename target ${Date.now()}`;
   const menuTitle = `${initialTitle} menu`;
   const finalTitle = `${initialTitle} double click`;
+  const otherTitle = `Rename navigation target ${Date.now()}`;
   const created = await page.request.post(`${apiBaseUrl}/api/conversations`, {
     data: { title: initialTitle }
   });
   expect(created.ok()).toBe(true);
+  const otherCreated = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    data: { title: otherTitle }
+  });
+  expect(otherCreated.ok()).toBe(true);
   await page.route("**/api/conversations/*/title", async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 300));
     await route.continue();
@@ -781,7 +786,19 @@ test("conversation rail renames from the menu and title double click", async ({ 
   await titleInput.press("Enter");
   expect(await titleInput.count()).toBe(0);
   await doubleClickRenameResponse;
-  await expect(page.getByTestId("conversation-row").filter({ hasText: finalTitle })).toHaveCount(1);
+  const finalRow = page.getByTestId("conversation-row").filter({ hasText: finalTitle });
+  await expect(finalRow).toHaveCount(1);
+
+  await finalRow.getByText(finalTitle, { exact: true }).dblclick();
+  await titleInput.fill(`${finalTitle} unfinished`);
+  await page
+    .getByTestId("conversation-row")
+    .filter({ hasText: otherTitle })
+    .getByRole("button")
+    .first()
+    .click();
+  expect(await titleInput.count()).toBe(0);
+  await expect(finalRow.getByText(finalTitle, { exact: true })).toBeVisible();
 });
 
 test("standalone auth gates superadmin views", async ({ page }) => {
