@@ -742,6 +742,10 @@ test("conversation rail renames from the menu and title double click", async ({ 
     data: { title: initialTitle }
   });
   expect(created.ok()).toBe(true);
+  await page.route("**/api/conversations/*/title", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await route.continue();
+  });
 
   await page.goto("/");
   const initialRow = page.getByTestId("conversation-row").filter({ hasText: initialTitle });
@@ -754,14 +758,14 @@ test("conversation rail renames from the menu and title double click", async ({ 
   await expect(titleInput).toBeFocused();
   await expect(titleInput).toHaveValue(initialTitle);
   await titleInput.fill(menuTitle);
-  await Promise.all([
-    page.waitForResponse(
-      (response) =>
-        response.request().method() === "PATCH" &&
-        /\/api\/conversations\/[^/]+\/title$/u.test(new URL(response.url()).pathname)
-    ),
-    titleInput.press("Enter")
-  ]);
+  const menuRenameResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "PATCH" &&
+      /\/api\/conversations\/[^/]+\/title$/u.test(new URL(response.url()).pathname)
+  );
+  await titleInput.press("Enter");
+  expect(await titleInput.count()).toBe(0);
+  await menuRenameResponse;
 
   const renamedRow = page.getByTestId("conversation-row").filter({ hasText: menuTitle });
   await expect(renamedRow).toHaveCount(1);
@@ -769,15 +773,14 @@ test("conversation rail renames from the menu and title double click", async ({ 
   await expect(titleInput).toBeFocused();
   await expect(titleInput).toHaveValue(menuTitle);
   await titleInput.fill(finalTitle);
-  await Promise.all([
-    page.waitForResponse(
-      (response) =>
-        response.request().method() === "PATCH" &&
-        /\/api\/conversations\/[^/]+\/title$/u.test(new URL(response.url()).pathname)
-    ),
-    titleInput.press("Enter")
-  ]);
-
+  const doubleClickRenameResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "PATCH" &&
+      /\/api\/conversations\/[^/]+\/title$/u.test(new URL(response.url()).pathname)
+  );
+  await titleInput.press("Enter");
+  expect(await titleInput.count()).toBe(0);
+  await doubleClickRenameResponse;
   await expect(page.getByTestId("conversation-row").filter({ hasText: finalTitle })).toHaveCount(1);
 });
 

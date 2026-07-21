@@ -73,12 +73,12 @@ export function ConversationButton({
       return;
     }
 
+    setEditing(false);
     setSaving(true);
     try {
       await onRename(title);
-      setEditing(false);
     } catch {
-      titleInputRef.current?.focus();
+      // The mutation surfaces the error and the persisted title remains unchanged.
     } finally {
       setSaving(false);
     }
