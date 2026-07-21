@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ThreadListItemMorePrimitive } from "@assistant-ui/react";
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import type { ConversationListItem } from "@vivd-catalyst/api-client";
@@ -28,48 +28,56 @@ export function ConversationButton({
   const [editing, setEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(conversation.title);
   const [saving, setSaving] = useState(false);
+  const editorFormRef = useRef<HTMLFormElement | null>(null);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const renamingFromMenuRef = useRef(false);
   const wasSelectedRef = useRef(selected);
   const running = Boolean(conversation.activeRun);
   const unread = Boolean(conversation.unread && !selected);
 
-  useEffect(() => {
-    const movedToAnotherConversation = wasSelectedRef.current && !selected;
-    wasSelectedRef.current = selected;
-    if (movedToAnotherConversation) {
-      setDraftTitle(conversation.title);
-      setEditing(false);
-    }
-  }, [conversation.title, selected]);
-
-  useEffect(() => {
-    if (!editing) {
-      return;
-    }
-    const focusInput = () => {
-      titleInputRef.current?.focus();
-      titleInputRef.current?.select();
-    };
-    focusInput();
-    const frame = window.requestAnimationFrame(focusInput);
-    const timeout = window.setTimeout(focusInput, 50);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.clearTimeout(timeout);
-    };
-  }, [editing]);
-
-  function startEditing() {
-    setDraftTitle(conversation.title);
-    setEditing(true);
-  }
-
-  function cancelEditing() {
+  const exitEditing = useCallback(() => {
     if (saving) {
       return;
     }
     setDraftTitle(conversation.title);
     setEditing(false);
+  }, [conversation.title, saving]);
+
+  useEffect(() => {
+    const movedToAnotherConversation = wasSelectedRef.current && !selected;
+    wasSelectedRef.current = selected;
+    if (movedToAnotherConversation) {
+      exitEditing();
+    }
+  }, [exitEditing, selected]);
+
+  useEffect(() => {
+    if (!editing) {
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [editing]);
+
+  useEffect(() => {
+    if (!editing) {
+      return;
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!editorFormRef.current?.contains(event.target as Node)) {
+        exitEditing();
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () => document.removeEventListener("pointerdown", handlePointerDown, true);
+  }, [editing, exitEditing]);
+
+  function startEditing() {
+    setDraftTitle(conversation.title);
+    setEditing(true);
   }
 
   async function saveTitle() {
@@ -79,11 +87,11 @@ export function ConversationButton({
       return;
     }
     if (title === conversation.title) {
-      setEditing(false);
+      exitEditing();
       return;
     }
 
-    setEditing(false);
+    exitEditing();
     setSaving(true);
     try {
       await onRename(title);
@@ -110,7 +118,13 @@ export function ConversationButton({
         ) : null}
         {editing ? (
           <form
+            ref={editorFormRef}
             className="grid min-w-0 gap-0.5 px-3 py-2.5"
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                exitEditing();
+              }
+            }}
             onSubmit={(event) => {
               event.preventDefault();
               void saveTitle();
@@ -128,7 +142,7 @@ export function ConversationButton({
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
                   event.preventDefault();
-                  cancelEditing();
+                  exitEditing();
                 }
               }}
             />
@@ -210,6 +224,12 @@ export function ConversationButton({
             align="end"
             sideOffset={6}
             className="z-50 min-w-44 rounded-md border bg-popover p-1.5 text-popover-foreground shadow-lg"
+            onCloseAutoFocus={(event) => {
+              if (renamingFromMenuRef.current) {
+                event.preventDefault();
+                renamingFromMenuRef.current = false;
+              }
+            }}
           >
             <ThreadListItemMorePrimitive.Item
               className={cn(
@@ -217,7 +237,10 @@ export function ConversationButton({
                 "focus:bg-accent data-[highlighted]:bg-accent data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
               )}
               disabled={deleting || saving}
-              onSelect={startEditing}
+              onSelect={() => {
+                renamingFromMenuRef.current = true;
+                startEditing();
+              }}
             >
               <Pencil size={15} aria-hidden="true" />
               <span>{t("renameConversationMenuItem")}</span>

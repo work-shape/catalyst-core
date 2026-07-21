@@ -794,6 +794,14 @@ test("conversation rail renames from the menu and a later selected-title click",
 
   await finalRow.getByText(finalTitle, { exact: true }).click();
   await titleInput.fill(`${finalTitle} unfinished`);
+  const chatBounds = await page.getByRole("region", { name: "Chat", exact: true }).boundingBox();
+  expect(chatBounds).not.toBeNull();
+  await page.mouse.click(chatBounds!.x + 20, chatBounds!.y + 100);
+  expect(await titleInput.count()).toBe(0);
+  await expect(finalRow.getByText(finalTitle, { exact: true })).toBeVisible();
+
+  await finalRow.getByText(finalTitle, { exact: true }).click();
+  await titleInput.fill(`${finalTitle} unfinished again`);
   await page
     .getByTestId("conversation-row")
     .filter({ hasText: otherTitle })
