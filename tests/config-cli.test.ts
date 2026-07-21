@@ -344,6 +344,230 @@ skills:
     );
   });
 
+  it("prints merge and mirror push plans and names remote-only assets", async () => {
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    await mkdir(resolve(directory, "agents"), { recursive: true });
+    await writeFile(
+      resolve(directory, "agents", "assistant.agent.yaml"),
+      serializeAgentYaml(agentConfig("Local update")),
+      "utf8"
+    );
+    await writeFile(
+      resolve(directory, "agents", "new.agent.yaml"),
+      serializeAgentYaml(agentConfig("New", { name: "new" })),
+      "utf8"
+    );
+    await writeStateFile(resolve(directory, STATE_FILENAME), {
+      instances: { local: { lastPulledVersion: 4 } }
+    });
+    const remote = {
+      version: 4,
+      defaultAgentName: "assistant",
+      agents: [
+        agentConfig("Remote", { name: "assistant" }),
+        agentConfig("Remote only", { name: "remote-only" })
+      ],
+      skills: []
+    };
+    const mergeRequests: unknown[] = [];
+    const mergeStdout: string[] = [];
+    expect(
+      await runConfigCommand("push", {
+        cwd: directory,
+        env: { CATALYST_API_KEY: "cat_plan" },
+        fetchImpl: configApiFetch(remote, mergeRequests, 5),
+        stdout: (text) => mergeStdout.push(text)
+      })
+    ).toBe(0);
+    expect(mergeStdout.join("")).toContain(
+      "Push plan (merge):\n  Added: 1\n  Updated: 1\n  Unchanged: 0"
+    );
+    expect(mergeStdout.join("")).toContain("- agent:remote-only");
+    expect(mergeStdout.join("")).toContain("Use --prune to delete them.");
+    expect(mergeRequests.at(-1)).toMatchObject({ mode: "merge", baseVersion: 4 });
+
+    await writeStateFile(resolve(directory, STATE_FILENAME), {
+      instances: { local: { lastPulledVersion: 4 } }
+    });
+    const pruneRequests: unknown[] = [];
+    const pruneStdout: string[] = [];
+    expect(
+      await runConfigCommand("push", {
+        cwd: directory,
+        prune: true,
+        env: { CATALYST_API_KEY: "cat_plan" },
+        fetchImpl: configApiFetch(remote, pruneRequests, 5),
+        stdout: (text) => pruneStdout.push(text)
+      })
+    ).toBe(0);
+    expect(pruneStdout.join("")).toContain("Push plan (mirror):");
+    expect(pruneStdout.join("")).toContain("Deleted: 1");
+    expect(pruneStdout.join("")).toContain("Assets to delete:\n- agent:remote-only");
+    expect(pruneRequests.at(-1)).toMatchObject({ mode: "mirror", baseVersion: 4 });
+  });
+
+  it("sends only selected assets on push and rejects --prune with --only", async () => {
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    await mkdir(resolve(directory, "agents"), { recursive: true });
+    await mkdir(resolve(directory, "skills", "review"), { recursive: true });
+    await writeFile(
+      resolve(directory, "agents", "assistant.agent.yaml"),
+      serializeAgentYaml(agentConfig("Selected")),
+      "utf8"
+    );
+    await writeFile(
+      resolve(directory, "agents", "other.agent.yaml"),
+      serializeAgentYaml(agentConfig("Other", { name: "other" })),
+      "utf8"
+    );
+    await writeFile(
+      resolve(directory, "skills", "review", "SKILL.md"),
+      serializeSkillMarkdown(skillConfig("review", "Review")),
+      "utf8"
+    );
+    await writeStateFile(resolve(directory, STATE_FILENAME), {
+      instances: { local: { lastPulledVersion: 3 } }
+    });
+    const requests: unknown[] = [];
+    expect(
+      await runCli(
+        [
+          "config",
+          "push",
+          "--only",
+          "agent:assistant",
+          "--only",
+          "skill:review"
+        ],
+        {
+          cwd: directory,
+          env: { CATALYST_API_KEY: "cat_scoped" },
+          fetchImpl: configApiFetch(
+            { version: 3, agents: [agentConfig("Remote")], skills: [] },
+            requests,
+            4
+          )
+        }
+      )
+    ).toBe(0);
+    expect(requests.at(-1)).toEqual({
+      agents: [canonicalizeAgentConfig(agentConfig("Selected"))],
+      skills: [skillConfig("review", "Review")],
+      baseVersion: 3,
+      mode: "merge"
+    });
+
+    const stderr: string[] = [];
+    expect(
+      await runCli(
+        ["config", "push", "--prune", "--only", "agent:assistant"],
+        { cwd: directory, stderr: (text) => stderr.push(text) }
+      )
+    ).toBe(2);
+    expect(stderr.join("")).toContain("--prune cannot be combined with --only");
+  });
+
+  it("rewrites only selected pull files without changing the recorded version", async () => {
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    await mkdir(resolve(directory, "agents"), { recursive: true });
+    const selectedPath = resolve(directory, "agents", "assistant.agent.yaml");
+    const otherPath = resolve(directory, "agents", "other.agent.yaml");
+    await writeFile(selectedPath, serializeAgentYaml(agentConfig("Old selected")), "utf8");
+    await writeFile(
+      otherPath,
+      serializeAgentYaml(agentConfig("Old other", { name: "other" })),
+      "utf8"
+    );
+    await writeStateFile(resolve(directory, STATE_FILENAME), {
+      instances: { local: { lastPulledVersion: 5 } }
+    });
+    const stdout: string[] = [];
+    expect(
+      await runConfigCommand("pull", {
+        cwd: directory,
+        only: ["agent:assistant"],
+        env: { CATALYST_API_KEY: "cat_pull" },
+        fetchImpl: configApiFetch({
+          version: 9,
+          agents: [
+            agentConfig("New selected"),
+            agentConfig("New other", { name: "other" })
+          ],
+          skills: []
+        }),
+        stdout: (text) => stdout.push(text)
+      })
+    ).toBe(0);
+    expect(parseAgentYaml(await readFile(selectedPath, "utf8")).instructions).toBe("New selected");
+    expect(parseAgentYaml(await readFile(otherPath, "utf8")).instructions).toBe("Old other");
+    expect(await readStateFile(resolve(directory, STATE_FILENAME))).toEqual({
+      instances: { local: { lastPulledVersion: 5 } }
+    });
+    expect(stdout.join("")).toContain("recorded version unchanged");
+  });
+
+  it("lists sync status and shows round-trippable remote assets", async () => {
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    await mkdir(resolve(directory, "agents"), { recursive: true });
+    await mkdir(resolve(directory, "skills", "local-only"), { recursive: true });
+    await writeFile(
+      resolve(directory, "agents", "assistant.agent.yaml"),
+      serializeAgentYaml(agentConfig("Local")),
+      "utf8"
+    );
+    await writeFile(
+      resolve(directory, "skills", "local-only", "SKILL.md"),
+      serializeSkillMarkdown(skillConfig("local-only", "Local only")),
+      "utf8"
+    );
+    const remoteSkill = skillConfig("review", "Remote review");
+    const remote = {
+      version: 7,
+      agents: [agentConfig("Remote")],
+      skills: [remoteSkill]
+    };
+    const listOutput: string[] = [];
+    expect(
+      await runCli(["config", "list"], {
+        cwd: directory,
+        env: { CATALYST_API_KEY: "cat_list" },
+        fetchImpl: configApiFetch(remote),
+        stdout: (text) => listOutput.push(text)
+      })
+    ).toBe(0);
+    expect(listOutput.join("")).toContain("agent\tassistant\t7\t-");
+    expect(listOutput.join("")).toContain("skill\treview\t7\tmissing locally");
+    expect(listOutput.join("")).toContain("skill\tlocal-only\t-\tmissing remotely");
+
+    const agentOutput: string[] = [];
+    expect(
+      await runCli(["config", "show", "agent", "assistant"], {
+        cwd: directory,
+        env: { CATALYST_API_KEY: "cat_show" },
+        fetchImpl: configApiFetch(remote),
+        stdout: (text) => agentOutput.push(text)
+      })
+    ).toBe(0);
+    expect(parseAgentYaml(agentOutput.join(""))).toEqual(
+      canonicalizeAgentConfig(agentConfig("Remote"))
+    );
+
+    const skillOutput: string[] = [];
+    expect(
+      await runCli(["config", "show", "skill", "review"], {
+        cwd: directory,
+        env: { CATALYST_API_KEY: "cat_show" },
+        fetchImpl: configApiFetch(remote),
+        stdout: (text) => skillOutput.push(text)
+      })
+    ).toBe(0);
+    expect(parseSkillFile(skillOutput.join(""))).toEqual(remoteSkill);
+  });
+
   it("reports missing credentials separately from exchange and API failures", async () => {
     const directory = await createTemporaryDirectory();
     await writeMinimalManifest(directory, "https://catalyst.test");
@@ -522,6 +746,10 @@ describe("config CLI help", () => {
     expect(help).toContain("preferred");
     expect(help).toContain("CATALYST_SERVER_CREDENTIAL");
     expect(help).toContain("deprecated compatibility fallback");
+    expect(help).toContain("list");
+    expect(help).toContain("show <agent|skill> <name>");
+    expect(help).toContain("--prune");
+    expect(help).toContain("--only <agent:name|skill:name>");
   });
 });
 
@@ -625,6 +853,35 @@ function jsonResponse(status: number, payload: unknown): Response {
   });
 }
 
+function configApiFetch(
+  remote: {
+    version: number;
+    defaultAgentName?: string;
+    agents: unknown[];
+    skills: unknown[];
+  },
+  requests: unknown[] = [],
+  pushedVersion = remote.version + 1
+): typeof fetch {
+  return async (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (url.pathname.endsWith("/api/auth/access-token")) {
+      return jsonResponse(200, {
+        accessToken: "short-lived-access-token",
+        expiresAt: "2030-01-01T00:00:00.000Z"
+      });
+    }
+    if (url.pathname.endsWith("/api/admin/config/export")) {
+      return jsonResponse(200, remote);
+    }
+    if (url.pathname.endsWith("/api/admin/config/import")) {
+      requests.push(JSON.parse(String(init?.body)));
+      return jsonResponse(200, { version: pushedVersion });
+    }
+    return jsonResponse(404, { error: { code: "NOT_FOUND", message: "Not found" } });
+  };
+}
+
 function recordFetch(
   fetchImpl: typeof fetch,
   requests: Array<{ url: string; init?: RequestInit }>
@@ -648,6 +905,15 @@ function agentConfig(
     toolNames: [],
     skillNames: [],
     initialPrompts: []
+  };
+}
+
+function skillConfig(name: string, content: string) {
+  return {
+    name,
+    title: name,
+    description: `${name} skill`,
+    content: `# ${content}`
   };
 }
 

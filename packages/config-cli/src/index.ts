@@ -21,15 +21,20 @@ const helpText = `Usage: catalyst config <command> [options]
 Sync local config assets with a live Catalyst instance.
 
 Commands:
-  pull       Replace the local working copy with remote config assets
-  push       Replace remote config assets with the local working copy
+  pull       Sync remote config assets into the local working copy
+  push       Merge local config assets into the remote instance
   diff       Compare canonical remote and local config assets
   validate   Validate local assets and remote references
+  list       List local and remote config assets and their sync status
+  show       Print a remote asset: show <agent|skill> <name>
 
 Options:
   --instance <name-or-url>  Manifest instance name or direct URL
   --dir <working-copy-dir>  Directory containing catalyst.yaml (default: .)
   --force                   Push without optimistic concurrency protection
+  --prune                   Mirror on push, deleting remote-only assets
+  --only <agent:name|skill:name>
+                            Sync selected assets; repeatable on push/pull
   --help                    Show this help
 
 Environment:
@@ -69,9 +74,11 @@ export async function runCli(
         instance: { type: "string" },
         dir: { type: "string" },
         force: { type: "boolean", default: false },
+        prune: { type: "boolean", default: false },
+        only: { type: "string", multiple: true },
         help: { type: "boolean", short: "h", default: false }
       },
-      allowPositionals: false,
+      allowPositionals: true,
       strict: true
     });
     if (parsed.values.help) {
@@ -82,11 +89,43 @@ export async function runCli(
       stderr("--force is only valid with 'catalyst config push'.\n");
       return 2;
     }
+    if (parsed.values.prune && command !== "push") {
+      stderr("--prune is only valid with 'catalyst config push'.\n");
+      return 2;
+    }
+    if (parsed.values.only && command !== "push" && command !== "pull") {
+      stderr("--only is only valid with 'catalyst config push' or 'catalyst config pull'.\n");
+      return 2;
+    }
+    if (parsed.values.prune && parsed.values.only) {
+      stderr("--prune cannot be combined with --only.\n");
+      return 2;
+    }
+    if (command === "show") {
+      if (
+        parsed.positionals.length !== 2 ||
+        (parsed.positionals[0] !== "agent" && parsed.positionals[0] !== "skill")
+      ) {
+        stderr("Usage: catalyst config show <agent|skill> <name>\n");
+        return 2;
+      }
+    } else if (parsed.positionals.length > 0) {
+      stderr(`Unexpected argument '${parsed.positionals[0]}'.\n`);
+      return 2;
+    }
     const options: ConfigCommandOptions = {
       cwd: runtime.cwd ?? process.cwd(),
       ...(parsed.values.dir === undefined ? {} : { dir: parsed.values.dir }),
       ...(parsed.values.instance === undefined ? {} : { instance: parsed.values.instance }),
       ...(parsed.values.force ? { force: true } : {}),
+      ...(parsed.values.prune ? { prune: true } : {}),
+      ...(parsed.values.only === undefined ? {} : { only: parsed.values.only }),
+      ...(command === "show"
+        ? {
+            assetKind: parsed.positionals[0] as "agent" | "skill",
+            assetName: parsed.positionals[1]!
+          }
+        : {}),
       ...(runtime.fetchImpl === undefined ? {} : { fetchImpl: runtime.fetchImpl }),
       ...(runtime.env === undefined ? {} : { env: runtime.env }),
       stdout,
@@ -100,7 +139,14 @@ export async function runCli(
 }
 
 function isConfigCommand(value: string): value is ConfigCommandName {
-  return value === "pull" || value === "push" || value === "diff" || value === "validate";
+  return (
+    value === "pull" ||
+    value === "push" ||
+    value === "diff" ||
+    value === "validate" ||
+    value === "list" ||
+    value === "show"
+  );
 }
 
 const entryPath = process.argv[1];

@@ -993,7 +993,8 @@ export const revertConfigAssetRequestSchema = z.object({
 });
 
 export const replaceConfigAssetsRequestSchema = configAssetBundleSchema.extend({
-  baseVersion: z.number().int().nonnegative().nullable()
+  baseVersion: z.number().int().nonnegative().nullable(),
+  mode: z.enum(["mirror", "merge"]).optional()
 });
 
 export const validateConfigAssetsResponseSchema = z.object({

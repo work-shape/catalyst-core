@@ -9592,6 +9592,13 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "mirror",
+                      "merge"
+                    ]
                   }
                 },
                 "required": [

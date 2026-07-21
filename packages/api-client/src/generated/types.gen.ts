@@ -2505,6 +2505,7 @@ export type ReplaceConfigAssetsData = {
             [key: string]: unknown;
         }>;
         baseVersion: number | null;
+        mode?: 'mirror' | 'merge';
     };
     path?: never;
     query?: never;

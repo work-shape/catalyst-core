@@ -26,13 +26,17 @@ import {
   type WorkingCopyBundle
 } from "./working-copy";
 
-export type ConfigCommandName = "pull" | "push" | "diff" | "validate";
+export type ConfigCommandName = "pull" | "push" | "diff" | "validate" | "list" | "show";
 
 export interface ConfigCommandOptions {
   cwd: string;
   dir?: string;
   instance?: string;
   force?: boolean;
+  prune?: boolean;
+  only?: string[];
+  assetKind?: "agent" | "skill";
+  assetName?: string;
   fetchImpl?: typeof fetch;
   env?: Readonly<Record<string, string | undefined>>;
   stdout?: (text: string) => void;
@@ -53,6 +57,10 @@ export async function runConfigCommand(
         return await diffConfig(options);
       case "validate":
         return await validateConfig(options);
+      case "list":
+        return await listConfig(options);
+      case "show":
+        return await showConfig(options);
     }
   } catch (error) {
     writeError(options, formatCommandError(error));
@@ -66,8 +74,11 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
   const instance = resolveInstance(manifest, options.instance);
   const api = await connectApi(instance.url, options);
   const exported = await api.exportAssets();
-  const agents = exported.agents.map((agent) => agentConfigSchema.parse(agent)).sort(byName);
-  const skills = exported.skills.map((skill) => skillConfigSchema.parse(skill)).sort(byName);
+  const remote = parseExportBundle(exported);
+  const selectors = parseOnlySelectors(options.only);
+  const selected = selectBundle(remote, selectors, true);
+  const agents = selected.agents.sort(byName);
+  const skills = selected.skills.sort(byName);
   const provenance = { instance: instance.key, version: exported.version };
   const agentTargets = agents.map((agent) => ({
     agent,
@@ -91,15 +102,17 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, serializeSkillMarkdown(skill, provenance), "utf8");
   }
-  await removeStaleManifestAssets(workingDir, manifest, desiredPaths);
-  await updateManifestDefaultAgent(
-    resolve(workingDir, MANIFEST_FILENAME),
-    exported.defaultAgentName
-  );
-  await updateStateVersion(workingDir, instance.key, exported.version);
+  if (selectors.length === 0) {
+    await removeStaleManifestAssets(workingDir, manifest, desiredPaths);
+    await updateManifestDefaultAgent(
+      resolve(workingDir, MANIFEST_FILENAME),
+      exported.defaultAgentName
+    );
+    await updateStateVersion(workingDir, instance.key, exported.version);
+  }
   writeOutput(
     options,
-    `Pulled ${formatCount(agents.length, "agent")}, ${formatCount(skills.length, "skill")}, version ${exported.version}.`
+    `Pulled ${formatCount(agents.length, "agent")}, ${formatCount(skills.length, "skill")}, version ${exported.version}.${selectors.length === 0 ? "" : " Scoped pull; recorded version unchanged."}`
   );
   return 0;
 }
@@ -129,7 +142,12 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
   const workingDir = resolveWorkingDir(options);
   const manifest = await readManifest(workingDir);
   const instance = resolveInstance(manifest, options.instance);
-  const bundle = await readWorkingCopy(workingDir, manifest);
+  const local = await readWorkingCopy(workingDir, manifest);
+  const selectors = parseOnlySelectors(options.only);
+  if (options.prune && selectors.length > 0) {
+    throw new Error("--prune cannot be combined with --only.");
+  }
+  const bundle = selectBundle(local, selectors, true);
   const state = await readStateFile(resolve(workingDir, STATE_FILENAME));
   const lastPulledVersion = state.instances[instance.key]?.lastPulledVersion;
   if (!options.force && lastPulledVersion === undefined) {
@@ -138,10 +156,14 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
     );
   }
   const api = await connectApi(instance.url, options);
+  const remote = parseExportBundle(await api.exportAssets());
+  const plannedRemote = selectBundle(remote, selectors, false);
+  writeOutput(options, formatPushPlan(createPushPlan(bundle, plannedRemote), options.prune === true));
   try {
     const result = await api.replaceAssets({
       ...bundle,
-      baseVersion: options.force ? null : lastPulledVersion
+      baseVersion: options.force ? null : lastPulledVersion,
+      mode: options.prune ? "mirror" : "merge"
     });
     await updateStateVersion(workingDir, instance.key, result.version);
     writeOutput(
@@ -177,13 +199,7 @@ export async function diffConfig(options: ConfigCommandOptions): Promise<number>
   const local = await readWorkingCopy(workingDir, manifest);
   const api = await connectApi(instance.url, options);
   const remoteExport = await api.exportAssets();
-  const remote: WorkingCopyBundle = {
-    ...(remoteExport.defaultAgentName === undefined
-      ? {}
-      : { defaultAgentName: remoteExport.defaultAgentName }),
-    agents: remoteExport.agents.map((agent) => agentConfigSchema.parse(agent)),
-    skills: remoteExport.skills.map((skill) => skillConfigSchema.parse(skill))
-  };
+  const remote = parseExportBundle(remoteExport);
   const remoteFiles = canonicalBundleFiles(remote);
   const localFiles = canonicalBundleFiles(local);
   const paths = [...new Set([...remoteFiles.keys(), ...localFiles.keys()])].sort();
@@ -225,6 +241,61 @@ export async function validateConfig(options: ConfigCommandOptions): Promise<num
   }
 }
 
+export async function listConfig(options: ConfigCommandOptions): Promise<number> {
+  const workingDir = resolveWorkingDir(options);
+  const manifest = await readManifest(workingDir);
+  const instance = resolveInstance(manifest, options.instance);
+  const local = await readWorkingCopy(workingDir, manifest);
+  const api = await connectApi(instance.url, options);
+  const exported = await api.exportAssets();
+  const remote = parseExportBundle(exported);
+  const localKeys = new Set(assetEntries(local).map((asset) => asset.key));
+  const remoteKeys = new Set(assetEntries(remote).map((asset) => asset.key));
+  const rows = [
+    ...assetEntries(remote).map((asset) => ({
+      ...asset,
+      version: String(exported.version),
+      status: localKeys.has(asset.key) ? "-" : "missing locally"
+    })),
+    ...assetEntries(local)
+      .filter((asset) => !remoteKeys.has(asset.key))
+      .map((asset) => ({ ...asset, version: "-", status: "missing remotely" }))
+  ].sort((left, right) => left.key.localeCompare(right.key));
+  writeOutput(
+    options,
+    [
+      "KIND\tNAME\tREMOTE VERSION\tSTATUS",
+      ...rows.map((row) => `${row.kind}\t${row.name}\t${row.version}\t${row.status}`)
+    ].join("\n")
+  );
+  return 0;
+}
+
+export async function showConfig(options: ConfigCommandOptions): Promise<number> {
+  if (!options.assetKind || !options.assetName) {
+    throw new Error("Usage: catalyst config show <agent|skill> <name>");
+  }
+  const workingDir = resolveWorkingDir(options);
+  const manifest = await readManifest(workingDir);
+  const instance = resolveInstance(manifest, options.instance);
+  const api = await connectApi(instance.url, options);
+  const remote = parseExportBundle(await api.exportAssets());
+  const config = (options.assetKind === "agent" ? remote.agents : remote.skills).find(
+    (asset) => asset.name === options.assetName
+  );
+  if (!config) {
+    throw new Error(`Remote ${options.assetKind} '${options.assetName}' was not found.`);
+  }
+  writeOutput(
+    options,
+    (options.assetKind === "agent"
+      ? serializeAgentYaml(config)
+      : serializeSkillMarkdown(config)
+    ).trimEnd()
+  );
+  return 0;
+}
+
 export function canonicalBundleFiles(bundle: WorkingCopyBundle): Map<string, string> {
   const files = new Map<string, string>();
   files.set(
@@ -240,6 +311,147 @@ export function canonicalBundleFiles(bundle: WorkingCopyBundle): Map<string, str
     setUnique(files, `skills/${skill.name}/SKILL.md`, serializeSkillMarkdown(skill));
   }
   return files;
+}
+
+interface ConfigAssetSelector {
+  kind: "agent" | "skill";
+  name: string;
+  key: string;
+}
+
+interface PushPlan {
+  added: number;
+  updated: number;
+  unchanged: number;
+  remoteOnly: string[];
+}
+
+function parseExportBundle(exported: {
+  defaultAgentName?: string;
+  agents: unknown[];
+  skills: unknown[];
+}): WorkingCopyBundle {
+  return {
+    ...(exported.defaultAgentName === undefined
+      ? {}
+      : { defaultAgentName: exported.defaultAgentName }),
+    agents: exported.agents.map((agent) => agentConfigSchema.parse(agent)),
+    skills: exported.skills.map((skill) => skillConfigSchema.parse(skill))
+  };
+}
+
+function parseOnlySelectors(values: string[] | undefined): ConfigAssetSelector[] {
+  const selectors = new Map<string, ConfigAssetSelector>();
+  for (const value of values ?? []) {
+    const match = /^(agent|skill):(.+)$/u.exec(value);
+    if (!match) {
+      throw new Error(`Invalid --only value '${value}'. Use agent:<name> or skill:<name>.`);
+    }
+    const kind = match[1] as ConfigAssetSelector["kind"];
+    const name = match[2]!;
+    const key = `${kind}:${name}`;
+    selectors.set(key, { kind, name, key });
+  }
+  return [...selectors.values()];
+}
+
+function selectBundle(
+  bundle: WorkingCopyBundle,
+  selectors: ConfigAssetSelector[],
+  requireMatches: boolean
+): WorkingCopyBundle {
+  if (selectors.length === 0) {
+    return bundle;
+  }
+  const selectedAgents = new Set(
+    selectors.filter((selector) => selector.kind === "agent").map((selector) => selector.name)
+  );
+  const selectedSkills = new Set(
+    selectors.filter((selector) => selector.kind === "skill").map((selector) => selector.name)
+  );
+  const agents = bundle.agents.filter((agent) => selectedAgents.has(agent.name));
+  const skills = bundle.skills.filter((skill) => selectedSkills.has(skill.name));
+  if (requireMatches) {
+    const matched = new Set([
+      ...agents.map((agent) => `agent:${agent.name}`),
+      ...skills.map((skill) => `skill:${skill.name}`)
+    ]);
+    const missing = selectors.filter((selector) => !matched.has(selector.key));
+    if (missing.length > 0) {
+      throw new Error(
+        `Selected config ${missing.length === 1 ? "asset does" : "assets do"} not exist: ${missing.map((selector) => selector.key).join(", ")}.`
+      );
+    }
+  }
+  return { agents, skills };
+}
+
+function assetEntries(bundle: WorkingCopyBundle): Array<{
+  key: string;
+  kind: "agent" | "skill";
+  name: string;
+  contents: string;
+}> {
+  return [
+    ...bundle.agents.map((agent) => ({
+      key: `agent:${agent.name}`,
+      kind: "agent" as const,
+      name: agent.name,
+      contents: serializeAgentYaml(agent)
+    })),
+    ...bundle.skills.map((skill) => ({
+      key: `skill:${skill.name}`,
+      kind: "skill" as const,
+      name: skill.name,
+      contents: serializeSkillMarkdown(skill)
+    }))
+  ];
+}
+
+function createPushPlan(local: WorkingCopyBundle, remote: WorkingCopyBundle): PushPlan {
+  const localAssets = new Map(assetEntries(local).map((asset) => [asset.key, asset]));
+  const remoteAssets = new Map(assetEntries(remote).map((asset) => [asset.key, asset]));
+  let added = 0;
+  let updated = 0;
+  let unchanged = 0;
+  for (const [key, asset] of localAssets) {
+    const remoteAsset = remoteAssets.get(key);
+    if (!remoteAsset) {
+      added += 1;
+    } else if (remoteAsset.contents === asset.contents) {
+      unchanged += 1;
+    } else {
+      updated += 1;
+    }
+  }
+  return {
+    added,
+    updated,
+    unchanged,
+    remoteOnly: [...remoteAssets.keys()].filter((key) => !localAssets.has(key)).sort()
+  };
+}
+
+function formatPushPlan(plan: PushPlan, prune: boolean): string {
+  const lines = [
+    `Push plan (${prune ? "mirror" : "merge"}):`,
+    `  Added: ${plan.added}`,
+    `  Updated: ${plan.updated}`,
+    `  Unchanged: ${plan.unchanged}`
+  ];
+  if (prune) {
+    lines.push(`  Deleted: ${plan.remoteOnly.length}`);
+    if (plan.remoteOnly.length > 0) {
+      lines.push("Assets to delete:", ...plan.remoteOnly.map((key) => `- ${key}`));
+    }
+  } else if (plan.remoteOnly.length > 0) {
+    lines.push(
+      "Warning: these assets exist only on the instance and will be kept:",
+      ...plan.remoteOnly.map((key) => `- ${key}`),
+      "Use --prune to delete them."
+    );
+  }
+  return lines.join("\n");
 }
 
 async function connectApi(url: string, options: ConfigCommandOptions) {

@@ -302,35 +302,53 @@ export class ConfigAssetWorkflow {
   async replaceAssets(
     user: AuthenticatedIdentity,
     context: ConfigAssetCallContext,
-    command: ConfigAssetBundleInput & { baseVersion: number | null }
+    command: ConfigAssetBundleInput & {
+      baseVersion: number | null;
+      mode?: "mirror" | "merge";
+    }
   ) {
     await this.authorizeReleaseWrite(user, context);
-    const validated = this.validateBundle(command);
-    const currentAssets = await this.options.configAssets.store.listActiveConfigAssets({
-      clientInstanceId: this.options.clientInstanceId
-    });
+    const [currentState, currentAssets] = await Promise.all([
+      this.options.configAssets.store.getConfigAssetState({
+        clientInstanceId: this.options.clientInstanceId
+      }),
+      this.options.configAssets.store.listActiveConfigAssets({
+        clientInstanceId: this.options.clientInstanceId
+      })
+    ]);
+    const merge = command.mode === "merge";
+    const candidate = merge
+      ? mergeBundle(assetBundle(currentAssets, currentState.defaultAgentName), command)
+      : command;
+    const validated = this.validateBundle(candidate);
+    const providedAgentNames = new Set(command.agents.map(readConfigName));
+    const providedSkillNames = new Set(command.skills.map(readConfigName));
     const desiredKeys = new Set([
       ...validated.agents.map((agent) => assetKey("agent", agent.name)),
       ...validated.skills.map((skill) => assetKey("skill", skill.name))
     ]);
-    const mutations: ConfigAssetMutation[] = currentAssets
-      .filter((asset) => !desiredKeys.has(assetKey(asset.kind, asset.name)))
-      .map((asset) => ({ type: "delete", kind: asset.kind, name: asset.name }));
+    const mutations: ConfigAssetMutation[] = merge
+      ? []
+      : currentAssets
+          .filter((asset) => !desiredKeys.has(assetKey(asset.kind, asset.name)))
+          .map((asset) => ({ type: "delete", kind: asset.kind, name: asset.name }));
     mutations.push(
-      ...validated.agents.map((agent) => ({
+      ...validated.agents.filter((agent) => providedAgentNames.has(agent.name)).map((agent) => ({
         type: "upsert" as const,
         kind: "agent" as const,
         name: agent.name,
         config: toJsonObject(agent)
       })),
-      ...validated.skills.map((skill) => ({
+      ...validated.skills.filter((skill) => providedSkillNames.has(skill.name)).map((skill) => ({
         type: "upsert" as const,
         kind: "skill" as const,
         name: skill.name,
         config: toJsonObject(skill)
-      })),
-      { type: "setDefaultAgent", agentName: command.defaultAgentName }
+      }))
     );
+    if (!merge || command.defaultAgentName !== undefined) {
+      mutations.push({ type: "setDefaultAgent", agentName: command.defaultAgentName });
+    }
     const result = await this.options.configAssets.store.applyConfigAssetMutations({
       clientInstanceId: this.options.clientInstanceId,
       ...(command.baseVersion === null ? {} : { baseVersion: command.baseVersion }),
@@ -529,6 +547,40 @@ function assetConfigs(assets: ConfigAssetRecord[], kind: ConfigAssetKind): JsonO
   return assets.flatMap((asset) =>
     asset.kind === kind && asset.config !== null ? [asset.config] : []
   );
+}
+
+function assetBundle(
+  assets: ConfigAssetRecord[],
+  defaultAgentName?: string
+): ConfigAssetBundleInput {
+  return {
+    ...(defaultAgentName === undefined ? {} : { defaultAgentName }),
+    agents: assetConfigs(assets, "agent"),
+    skills: assetConfigs(assets, "skill")
+  };
+}
+
+function mergeBundle(
+  current: ConfigAssetBundleInput,
+  incoming: ConfigAssetBundleInput
+): ConfigAssetBundleInput {
+  const incomingAgentNames = new Set(incoming.agents.map(readConfigName));
+  const incomingSkillNames = new Set(incoming.skills.map(readConfigName));
+  return {
+    ...(incoming.defaultAgentName === undefined
+      ? current.defaultAgentName === undefined
+        ? {}
+        : { defaultAgentName: current.defaultAgentName }
+      : { defaultAgentName: incoming.defaultAgentName }),
+    agents: [
+      ...current.agents.filter((config) => !incomingAgentNames.has(readConfigName(config))),
+      ...incoming.agents
+    ],
+    skills: [
+      ...current.skills.filter((config) => !incomingSkillNames.has(readConfigName(config))),
+      ...incoming.skills
+    ]
+  };
 }
 
 function replaceBundleAsset(

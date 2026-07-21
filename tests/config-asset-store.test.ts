@@ -70,6 +70,31 @@ function runConfigAssetStoreSuite(
       ]);
     });
 
+    it("leaves unlisted assets active and increments once for a merge-style upsert", async () => {
+      const clientInstanceId = createClientInstanceId();
+      await store.applyConfigAssetMutations({
+        clientInstanceId,
+        mutations: [
+          { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") },
+          { type: "upsert", kind: "skill", name: "research", config: skillConfig("v1") }
+        ]
+      });
+
+      const result = await store.applyConfigAssetMutations({
+        clientInstanceId,
+        baseVersion: 1,
+        mutations: [
+          { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v2") }
+        ]
+      });
+
+      expect(result).toEqual({ version: 2 });
+      await expect(store.listActiveConfigAssets({ clientInstanceId })).resolves.toMatchObject([
+        { kind: "agent", name: "assistant", config: agentConfig("v2") },
+        { kind: "skill", name: "research", config: skillConfig("v1") }
+      ]);
+    });
+
     it("rejects a stale base version without committing mutations", async () => {
       const clientInstanceId = createClientInstanceId();
       await store.applyConfigAssetMutations({

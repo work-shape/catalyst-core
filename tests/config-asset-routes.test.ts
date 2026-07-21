@@ -249,6 +249,69 @@ describe("config asset admin routes", () => {
     );
   });
 
+  it("merges provided assets when requested and defaults old clients to mirror mode", async () => {
+    const fixture = await createFixture();
+    const token = await mintToken(fixture.server);
+    const initial = await request(fixture.server, token, {
+      method: "POST",
+      url: "/api/admin/config/import",
+      payload: {
+        baseVersion: null,
+        defaultAgentName: "assistant",
+        agents: [
+          agentConfig("Initial", { name: "assistant" }),
+          agentConfig("Remote only", { name: "remote-only" })
+        ],
+        skills: []
+      }
+    });
+    expect(initial.json()).toEqual({ version: 1 });
+
+    const merged = await request(fixture.server, token, {
+      method: "POST",
+      url: "/api/admin/config/import",
+      payload: {
+        baseVersion: 1,
+        mode: "merge",
+        agents: [agentConfig("Merged", { name: "assistant" })],
+        skills: []
+      }
+    });
+    expect(merged.json()).toEqual({ version: 2 });
+    const afterMerge = await request(fixture.server, token, {
+      method: "GET",
+      url: "/api/admin/config/export"
+    });
+    expect(afterMerge.json()).toMatchObject({
+      version: 2,
+      defaultAgentName: "assistant",
+      agents: [
+        { name: "assistant", instructions: "Merged" },
+        { name: "remote-only", instructions: "Remote only" }
+      ]
+    });
+
+    const mirrored = await request(fixture.server, token, {
+      method: "POST",
+      url: "/api/admin/config/import",
+      payload: {
+        baseVersion: 2,
+        defaultAgentName: "assistant",
+        agents: [agentConfig("Mirrored", { name: "assistant" })],
+        skills: []
+      }
+    });
+    expect(mirrored.json()).toEqual({ version: 3 });
+    const afterMirror = await request(fixture.server, token, {
+      method: "GET",
+      url: "/api/admin/config/export"
+    });
+    expect(afterMirror.json()).toMatchObject({
+      version: 3,
+      agents: [{ name: "assistant", instructions: "Mirrored" }]
+    });
+  });
+
   it("returns 409 for a stale base version", async () => {
     const fixture = await createFixture();
     const token = await mintToken(fixture.server);
