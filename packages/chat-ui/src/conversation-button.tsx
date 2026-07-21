@@ -154,7 +154,10 @@ export function ConversationButton({
                 ) : null}
                 <span
                   className="min-w-0"
-                  onDoubleClick={(event) => {
+                  onClick={(event) => {
+                    if (!selected) {
+                      return;
+                    }
                     event.preventDefault();
                     event.stopPropagation();
                     startEditing();

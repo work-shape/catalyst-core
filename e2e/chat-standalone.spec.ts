@@ -733,7 +733,7 @@ test("conversation rail deletes a conversation", async ({ page }) => {
   await expect(conversations).toHaveCount(conversationCountBefore - 1);
 });
 
-test("conversation rail renames from the menu and title double click", async ({ page }) => {
+test("conversation rail renames from the menu and a later selected-title click", async ({ page }) => {
   await signInViaApi(page, normalUser);
   const initialTitle = `Rename target ${Date.now()}`;
   const menuTitle = `${initialTitle} menu`;
@@ -774,7 +774,10 @@ test("conversation rail renames from the menu and title double click", async ({ 
 
   const renamedRow = page.getByTestId("conversation-row").filter({ hasText: menuTitle });
   await expect(renamedRow).toHaveCount(1);
-  await renamedRow.getByText(menuTitle, { exact: true }).dblclick();
+  await renamedRow.getByRole("button").first().click();
+  await expect(renamedRow).toHaveAttribute("data-selected", "true");
+  await page.waitForTimeout(750);
+  await renamedRow.getByText(menuTitle, { exact: true }).click();
   await expect(titleInput).toBeFocused();
   await expect(titleInput).toHaveValue(menuTitle);
   await titleInput.fill(finalTitle);
@@ -789,7 +792,7 @@ test("conversation rail renames from the menu and title double click", async ({ 
   const finalRow = page.getByTestId("conversation-row").filter({ hasText: finalTitle });
   await expect(finalRow).toHaveCount(1);
 
-  await finalRow.getByText(finalTitle, { exact: true }).dblclick();
+  await finalRow.getByText(finalTitle, { exact: true }).click();
   await titleInput.fill(`${finalTitle} unfinished`);
   await page
     .getByTestId("conversation-row")
