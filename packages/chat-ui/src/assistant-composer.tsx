@@ -2,7 +2,7 @@ import { ComposerPrimitive, useAuiState, useComposer } from "@assistant-ui/react
 import { CheckCircle2, FileText, ImageIcon, Paperclip, RotateCcw, Send, Square, X } from "lucide-react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { useCallback, useLayoutEffect, useRef } from "react";
-import type { DraftAttachment } from "@vivd-catalyst/api-client";
+import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
 import { AttachmentPreview } from "./attachment-preview";
 import { useTranslation } from "./i18n";
 import { isComposerBlockedByBackgroundRun, shouldShowCancelAction } from "./thread-activity";
@@ -25,8 +25,11 @@ export function AssistantComposer({
   conversationRunning,
   attachmentsEnabled,
   attachmentAccept,
+  selectableModels,
+  selectedModelBindingId,
   focusRequestId,
   onCancelRun,
+  onSelectModelBinding,
   onFilesSelected,
   onRemoveAttachment,
   onRetryAttachment,
@@ -38,8 +41,11 @@ export function AssistantComposer({
   conversationRunning?: boolean;
   attachmentsEnabled: boolean;
   attachmentAccept: string;
+  selectableModels: SafeConfig["selectableModels"];
+  selectedModelBindingId: string | undefined;
   focusRequestId: number;
   onCancelRun: () => void;
+  onSelectModelBinding: (modelBindingId: string) => void;
   onFilesSelected: (files: File[]) => void;
   onRemoveAttachment: (attachmentId: string) => void;
   onRetryAttachment: (attachmentId: string) => void;
@@ -145,8 +151,9 @@ export function AssistantComposer({
             onKeyDown={handleKeyDown}
           />
           <div className="flex items-center justify-between gap-2">
-            {attachmentsEnabled ? (
-              <>
+            <div className="flex min-w-0 items-center gap-1">
+              {attachmentsEnabled ? (
+                <>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -172,8 +179,27 @@ export function AssistantComposer({
                 >
                   <Paperclip size={16} aria-hidden="true" />
                 </Button>
-              </>
-            ) : null}
+                </>
+              ) : null}
+              {selectableModels.length > 1 ? (
+                <label className="min-w-0">
+                  <span className="sr-only">{t("selectModel")}</span>
+                  <select
+                    className="h-8 max-w-44 truncate rounded-md bg-transparent px-2 text-xs font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50"
+                    aria-label={t("selectModel")}
+                    value={selectedModelBindingId ?? ""}
+                    disabled={conversationRunning}
+                    onChange={(event) => onSelectModelBinding(event.target.value)}
+                  >
+                    {selectableModels.map((model) => (
+                      <option key={model.bindingId} value={model.bindingId}>
+                        {formatModelLabel(model.model)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+            </div>
             <ComposerAction
               disabled={Boolean(sendBlockedReason)}
               disabledReason={sendBlockedReason}
@@ -428,4 +454,12 @@ function formatFileSize(byteSize: number): string {
 
 function isImageMimeType(mimeType: string | undefined): boolean {
   return mimeType === "image/png" || mimeType === "image/jpeg" || mimeType === "image/webp" || mimeType === "image/gif";
+}
+
+export function formatModelLabel(model: string): string {
+  return model
+    .replace(/^gpt-/iu, "GPT-")
+    .replace(/-(sol|terra|luna)$/iu, (_, tier: string) => {
+      return ` ${tier.charAt(0).toUpperCase()}${tier.slice(1).toLowerCase()}`;
+    });
 }

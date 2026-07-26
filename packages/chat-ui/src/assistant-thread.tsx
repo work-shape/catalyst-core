@@ -11,6 +11,7 @@ import { cn } from "./ui/cn";
 export function AssistantThread({
   config,
   selectedAgentName,
+  selectedModelBindingId,
   notice,
   draftAttachments,
   localUploadingAttachments,
@@ -23,6 +24,7 @@ export function AssistantThread({
   messagesEnabled,
   composerFocusRequestId,
   onCancelRun,
+  onSelectModelBinding,
   onFilesSelected,
   onRemoveDraftAttachment,
   onRetryDraftAttachment,
@@ -30,6 +32,7 @@ export function AssistantThread({
 }: {
   config: SafeConfig | undefined;
   selectedAgentName: string | undefined;
+  selectedModelBindingId: string | undefined;
   notice: string | undefined;
   draftAttachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
@@ -42,6 +45,7 @@ export function AssistantThread({
   messagesEnabled: boolean;
   composerFocusRequestId: number;
   onCancelRun: () => void;
+  onSelectModelBinding: (modelBindingId: string) => void;
   onFilesSelected: (files: File[]) => void;
   onRemoveDraftAttachment: (attachmentId: string) => void;
   onRetryDraftAttachment: (attachmentId: string) => void;
@@ -121,8 +125,11 @@ export function AssistantThread({
                   conversationRunning={conversationRunning}
                   attachmentsEnabled={attachmentsEnabled}
                   attachmentAccept={attachmentAccept}
+                  selectableModels={config?.selectableModels ?? []}
+                  selectedModelBindingId={selectedModelBindingId}
                   focusRequestId={composerFocusRequestId}
                   onCancelRun={onCancelRun}
+                  onSelectModelBinding={onSelectModelBinding}
                   onFilesSelected={onFilesSelected}
                   onRemoveAttachment={onRemoveDraftAttachment}
                   onRetryAttachment={onRetryDraftAttachment}

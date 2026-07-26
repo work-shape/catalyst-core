@@ -143,6 +143,8 @@ export interface SelectedChatModel {
   composerFocusRequestId: number;
   locale: LocaleCode;
   selectedAgentName: string | undefined;
+  selectedModelBindingId: string | undefined;
+  selectModelBindingId(modelBindingId: string): void;
   draftAttachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
   conversationRunning: boolean;
@@ -172,6 +174,7 @@ export function useWorkspaceChatModel({
 }: WorkspaceChatModelInput): WorkspaceChatModel {
   const [notice, setNotice] = useState<string | undefined>();
   const [selectedAgentName, setSelectedAgentName] = useState<string | undefined>();
+  const [selectedModelBindingId, setSelectedModelBindingId] = useState<string | undefined>();
   const { apiBaseUrl, client } = useWorkspaceApiClient();
   const routeState = useWorkspaceRouteState();
   const chrome = useWorkspaceChromeState();
@@ -365,6 +368,20 @@ export function useWorkspaceChatModel({
     });
   }, [config]);
 
+  useEffect(() => {
+    const selectableModels = config?.selectableModels ?? [];
+    setSelectedModelBindingId((currentBindingId) => {
+      if (
+        currentBindingId &&
+        selectableModels.some((model) => model.bindingId === currentBindingId)
+      ) {
+        return currentBindingId;
+      }
+      const agent = config?.agents.find((candidate) => candidate.name === activeAgentName);
+      return agent?.defaultModelBindingId ?? selectableModels[0]?.bindingId;
+    });
+  }, [activeAgentName, config]);
+
   const documentTitle = config?.ui.title
     ? createEnvironmentDocumentTitle(config.ui.title, config.clientInstance.environment)
     : undefined;
@@ -544,6 +561,8 @@ export function useWorkspaceChatModel({
       composerFocusRequestId: chrome.composerFocusRequestId,
       locale: activeLocale,
       selectedAgentName: activeAgentName,
+      selectedModelBindingId,
+      selectModelBindingId: setSelectedModelBindingId,
       draftAttachments: draftAttachmentController.draftAttachments,
       localUploadingAttachments: draftAttachmentController.visibleUploadingAttachments,
       conversationRunning: selectedConversationRunning,

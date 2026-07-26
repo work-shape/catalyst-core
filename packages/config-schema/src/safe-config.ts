@@ -16,6 +16,17 @@ export function createSafeConfigView(
   const { environment: _environment, ...ui } = createClientBranding(config, {
     requestedLocale: locale
   });
+  const selectableModels = config.modelBindings
+    .filter((binding) => binding.userSelectable)
+    .map((binding) => ({
+      bindingId: binding.id,
+      model:
+        binding.model ??
+        config.modelProviders.find((provider) => provider.id === binding.providerId)!.model
+    }));
+  const selectableModelBindingIds = new Set(
+    selectableModels.map((model) => model.bindingId)
+  );
 
   return {
     clientInstance: {
@@ -42,9 +53,13 @@ export function createSafeConfigView(
       }
     },
     defaultAgentName: assets.defaultAgentName,
+    selectableModels,
     agents: assets.agents.map((agent) => ({
       name: agent.name,
       displayName: resolveLocalizedString(agent.displayName, locale, config.localization.defaultLocale),
+      ...(agent.modelBindingId && selectableModelBindingIds.has(agent.modelBindingId)
+        ? { defaultModelBindingId: agent.modelBindingId }
+        : {}),
       welcomeMessage: resolveLocalizedString(
         agent.welcomeMessage,
         locale,

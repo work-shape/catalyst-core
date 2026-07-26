@@ -7,6 +7,7 @@ export interface ProductRunTransportOptions {
   selectedConversationId?: string;
   locale: LocaleCode;
   selectedAgentName?: string;
+  selectedModelBindingId?: string;
   isSendDisabled?: () => string | undefined;
   createIdempotencyKey?: () => string;
   onMessageSubmitted?: (conversationId: string) => void;
@@ -41,6 +42,7 @@ export class ProductConversationRunTransport implements ChatTransport<UIMessage>
     const idempotencyKey = this.getIdempotencyKey(messageId ?? submittedUserMessage?.id);
     const response = await startProductConversationRun({
       agentName: this.options.selectedAgentName,
+      modelBindingId: this.options.selectedModelBindingId,
       client: this.options.client,
       conversationId: this.options.selectedConversationId,
       idempotencyKey,
@@ -77,6 +79,7 @@ export class ProductConversationRunTransport implements ChatTransport<UIMessage>
 
 export async function startProductConversationRun({
   agentName,
+  modelBindingId,
   client,
   conversationId,
   idempotencyKey,
@@ -84,6 +87,7 @@ export async function startProductConversationRun({
   text
 }: {
   agentName?: string;
+  modelBindingId?: string;
   client: Pick<ApiClient, "createConversationRun" | "startConversationRun">;
   conversationId?: string;
   idempotencyKey: string;
@@ -93,6 +97,7 @@ export async function startProductConversationRun({
   const request = {
     idempotencyKey,
     ...(agentName ? { agentName } : {}),
+    ...(modelBindingId ? { modelBindingId } : {}),
     locale,
     message: {
       text

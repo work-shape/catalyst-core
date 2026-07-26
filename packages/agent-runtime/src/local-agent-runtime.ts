@@ -258,7 +258,7 @@ export class LocalAgentRuntime implements AgentRuntime {
     const state = this.getRun(runId);
     const assets = await this.options.assetSource.getSnapshot();
     const agent = getSnapshotAgentConfig(assets, input.agentName);
-    const modelSelection = this.getModelSelectionForAgent(agent);
+    const modelSelection = this.getModelSelectionForAgent(agent, input.modelBindingId);
     const tools = materializeModelTools({
       agent,
       modelProvider: modelSelection.provider,
@@ -477,17 +477,24 @@ export class LocalAgentRuntime implements AgentRuntime {
     return state;
   }
 
-  private getModelSelectionForAgent(agent: AgentConfig): {
+  private getModelSelectionForAgent(agent: AgentConfig, userSelectedBindingId?: string): {
     provider: ModelProviderConfig;
     model: string;
     reasoningEffort?: ReasoningEffortConfig;
   } {
-    if (agent.modelBindingId) {
+    const bindingId = userSelectedBindingId ?? agent.modelBindingId;
+    if (bindingId) {
       const binding = this.options.modelBindings?.find(
-        (candidate) => candidate.id === agent.modelBindingId
+        (candidate) => candidate.id === bindingId
       );
       if (!binding) {
-        throw new AppError("NOT_FOUND", `Model binding '${agent.modelBindingId}' is not defined`);
+        throw new AppError("NOT_FOUND", `Model binding '${bindingId}' is not defined`);
+      }
+      if (userSelectedBindingId && !binding.userSelectable) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `Model binding '${bindingId}' is not available for user selection`
+        );
       }
       const provider = this.getModelProvider(binding.providerId);
       return {

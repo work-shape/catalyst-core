@@ -69,7 +69,19 @@ modelBindings:
   - id: primary
     providerId: openai
     model: gpt-5.5
-    reasoningEffort: high
+    userSelectable: true
+  - id: gpt56Sol
+    providerId: openai
+    model: gpt-5.6-sol
+    userSelectable: true
+  - id: gpt56Terra
+    providerId: openai
+    model: gpt-5.6-terra
+    userSelectable: true
+  - id: gpt56Luna
+    providerId: openai
+    model: gpt-5.6-luna
+    userSelectable: true
 localization:
   defaultLocale: en
   supportedLocales:

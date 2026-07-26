@@ -642,7 +642,7 @@ describe("local agent runtime", () => {
     });
   });
 
-  it("resolves the configured model binding and per-agent reasoning effort for a run", async () => {
+  it("uses a user-selected model binding while preserving the agent reasoning effort", async () => {
     const clientInstanceId = asClientInstanceId("binding-client");
     const context: RuntimeCallContext = {
       clientInstanceId,
@@ -698,6 +698,12 @@ describe("local agent runtime", () => {
           providerId: "test-provider",
           model: "bound-model",
           reasoningEffort: "high"
+        },
+        {
+          id: "alternate",
+          providerId: "test-provider",
+          model: "user-selected-model",
+          userSelectable: true
         }
       ],
       defaultModelProvider: providerConfig,
@@ -717,6 +723,7 @@ describe("local agent runtime", () => {
     const run = await runtime.start(
       {
         agentName: "binding_agent",
+        modelBindingId: "alternate",
         conversationId,
         message: {
           text: "Use the bound model."
@@ -733,7 +740,7 @@ describe("local agent runtime", () => {
 
     expect(providerRequest).toMatchObject({
       providerId: "test-provider",
-      model: "bound-model",
+      model: "user-selected-model",
       reasoningEffort: "xhigh"
     });
   });

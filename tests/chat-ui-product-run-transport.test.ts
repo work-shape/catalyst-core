@@ -29,7 +29,8 @@ describe("chat UI product run transport", () => {
       idempotencyKey: "idem-new",
       locale: "en",
       text: "Create this conversation",
-      agentName: "agent_a"
+      agentName: "agent_a",
+      modelBindingId: "gpt56Sol"
     });
 
     expect(response.conversation.id).toBe("conv_new");
@@ -37,6 +38,7 @@ describe("chat UI product run transport", () => {
       {
         idempotencyKey: "idem-new",
         agentName: "agent_a",
+        modelBindingId: "gpt56Sol",
         locale: "en",
         message: {
           text: "Create this conversation"

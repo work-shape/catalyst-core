@@ -161,7 +161,8 @@ export const modelBindingConfigSchema = z.object({
   providerId: z.string().min(1),
   model: z.string().min(1).optional(),
   reasoningEffort: z.enum(REASONING_EFFORTS).optional(),
-  agentSelectable: z.boolean().default(true)
+  agentSelectable: z.boolean().default(true),
+  userSelectable: z.boolean().default(false)
 });
 
 const welcomeSubtitleSchema = z.union([

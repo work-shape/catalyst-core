@@ -809,6 +809,25 @@
                     "defaultAgentName": {
                       "type": "string"
                     },
+                    "selectableModels": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "bindingId": {
+                            "type": "string"
+                          },
+                          "model": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "bindingId",
+                          "model"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
                     "agents": {
                       "type": "array",
                       "items": {
@@ -818,6 +837,9 @@
                             "type": "string"
                           },
                           "displayName": {
+                            "type": "string"
+                          },
+                          "defaultModelBindingId": {
                             "type": "string"
                           },
                           "welcomeMessage": {
@@ -1017,6 +1039,7 @@
                     "retention",
                     "usage",
                     "features",
+                    "selectableModels",
                     "agents",
                     "ui"
                   ],
@@ -2877,6 +2900,10 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "modelBindingId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
                   "locale": {
                     "type": "string",
                     "enum": [
@@ -4342,6 +4369,10 @@
                     "minLength": 1
                   },
                   "agentName": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "modelBindingId": {
                     "type": "string",
                     "minLength": 1
                   },

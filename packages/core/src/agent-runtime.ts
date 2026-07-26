@@ -9,6 +9,7 @@ import type { ChatMessage } from "./conversation";
 
 export interface StartAgentRunInput {
   agentName: string;
+  modelBindingId?: string;
   conversationId: ConversationId;
   idempotencyKey?: string;
   inputMessageId?: MessageId;

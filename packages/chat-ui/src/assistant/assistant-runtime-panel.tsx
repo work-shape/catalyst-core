@@ -64,6 +64,8 @@ function AssistantRuntimePane({
     composerFocusRequestId,
     locale,
     selectedAgentName,
+    selectedModelBindingId,
+    selectModelBindingId,
     draftAttachments,
     localUploadingAttachments,
     conversationRunning,
@@ -125,6 +127,7 @@ function AssistantRuntimePane({
       setRootSubmitError(undefined);
       void startProductConversationRun({
         agentName: selectedAgentName,
+        modelBindingId: selectedModelBindingId,
         client,
         conversationId: undefined,
         idempotencyKey: createRunIdempotencyKey(),
@@ -157,6 +160,7 @@ function AssistantRuntimePane({
       onMessageSubmitted,
       onRunStarted,
       selectedAgentName,
+      selectedModelBindingId,
       selectedConversationId,
       setRootSubmitPendingIfActive
     ]
@@ -193,6 +197,7 @@ function AssistantRuntimePane({
         selectedConversationId,
         locale,
         selectedAgentName,
+        selectedModelBindingId,
         isSendDisabled: () => sendDisabledReason,
         onMessageSubmitted,
         onRunStarted
@@ -203,6 +208,7 @@ function AssistantRuntimePane({
       onMessageSubmitted,
       onRunStarted,
       selectedAgentName,
+      selectedModelBindingId,
       selectedConversationId,
       sendDisabledReason
     ]
@@ -239,6 +245,7 @@ function AssistantRuntimePane({
           <AssistantThread
             config={config}
             selectedAgentName={selectedAgentName}
+            selectedModelBindingId={selectedModelBindingId}
             notice={visibleNotice}
             draftAttachments={draftAttachments}
             localUploadingAttachments={localUploadingAttachments}
@@ -251,6 +258,7 @@ function AssistantRuntimePane({
             messagesEnabled={Boolean(selectedConversationId)}
             composerFocusRequestId={composerFocusRequestId}
             onCancelRun={onCancelRun}
+            onSelectModelBinding={selectModelBindingId}
             onFilesSelected={onFilesSelected}
             onRemoveDraftAttachment={onRemoveDraftAttachment}
             onRetryDraftAttachment={onRetryDraftAttachment}

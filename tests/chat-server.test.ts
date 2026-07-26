@@ -58,6 +58,55 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
+  it("rejects model bindings that are not available for user selection", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        agentModelBindingId: "selectable",
+        modelBindings: [
+          {
+            id: "selectable",
+            providerId: "local",
+            model: "selectable-model",
+            userSelectable: true
+          },
+          {
+            id: "internal",
+            providerId: "local",
+            model: "internal-model",
+            agentSelectable: false
+          }
+        ]
+      }),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      payload: { title: "Model selection" }
+    });
+    const conversation = created.json() as { id: string };
+
+    const rejected = await app.server.inject({
+      method: "POST",
+      url: `/api/conversations/${conversation.id}/runs`,
+      payload: {
+        idempotencyKey: "reject-internal-model",
+        modelBindingId: "internal",
+        message: { text: "Do not persist this" }
+      }
+    });
+
+    expect(rejected.statusCode).toBe(422);
+    const messages = await app.server.inject({
+      method: "GET",
+      url: `/api/conversations/${conversation.id}/messages`
+    });
+    expect(messages.json()).toEqual([]);
+    await app.close();
+  });
+
   it("creates a user-scoped conversation and runs a configured tool", async () => {
     const config = createTestConfig({
       tools: [{ name: "demo.echo", enabled: true }],
@@ -4208,6 +4257,15 @@ function createTestConfig(input: {
         apiKeyEnvName: string;
       }
   >;
+  modelBindings?: Array<{
+    id: string;
+    providerId: string;
+    model?: string;
+    reasoningEffort?: "none" | "low" | "medium" | "high" | "xhigh";
+    agentSelectable?: boolean;
+    userSelectable?: boolean;
+  }>;
+  agentModelBindingId?: string;
   usageBudget?: {
     monthlySpendLimit?: number;
     costSafetyMultiplier?: number;
@@ -4253,6 +4311,7 @@ function createTestConfig(input: {
       ...(input.sessionToken ? { sessionToken: input.sessionToken } : {})
     },
     modelProviders: input.modelProviders ?? [{ id: "local", type: "deterministic", model: "local" }],
+    modelBindings: input.modelBindings,
     usage: {
       budget: input.usageBudget ?? {},
       safeguards: input.usageSafeguards ?? {},
@@ -4269,7 +4328,9 @@ function createTestConfig(input: {
       displayName: input.displayName ?? "Test Agent",
       ...(input.welcomeMessage ? { welcomeMessage: input.welcomeMessage } : {}),
       instructions: "Use configured tools only.",
-      modelProviderId: input.modelProviders?.[0]?.id ?? "local",
+      ...(input.agentModelBindingId
+        ? { modelBindingId: input.agentModelBindingId }
+        : { modelProviderId: input.modelProviders?.[0]?.id ?? "local" }),
       toolNames: input.toolNames ?? [],
       initialPrompts: input.initialPrompts ?? []
     })

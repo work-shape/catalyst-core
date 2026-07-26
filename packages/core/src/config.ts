@@ -62,6 +62,7 @@ export interface ModelBindingConfig {
   model?: string;
   reasoningEffort?: ReasoningEffortConfig;
   agentSelectable?: boolean;
+  userSelectable?: boolean;
 }
 
 export interface AgentConfig {

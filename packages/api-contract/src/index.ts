@@ -378,10 +378,17 @@ export const safeConfigSchema = z.object({
     })
   }),
   defaultAgentName: z.string().optional(),
+  selectableModels: z.array(
+    z.object({
+      bindingId: z.string(),
+      model: z.string()
+    })
+  ),
   agents: z.array(
     z.object({
       name: z.string(),
       displayName: z.string(),
+      defaultModelBindingId: z.string().optional(),
       welcomeMessage: z.string().optional(),
       welcomeSubtitle: z.string().optional(),
       initialPrompts: z.array(
@@ -628,6 +635,7 @@ export const runObservationSchema = z.object({
 export const startConversationRunRequestSchema = z.object({
   idempotencyKey: z.string().min(1),
   agentName: z.string().min(1).optional(),
+  modelBindingId: z.string().min(1).optional(),
   locale: localeCodeSchema.optional(),
   message: z.object({
     text: z.string().min(1)

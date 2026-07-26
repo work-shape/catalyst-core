@@ -201,11 +201,17 @@ modelBindings:
   - id: primary
     providerId: openai
     model: gpt-5.5
-    reasoningEffort: high
     agentSelectable: true
+    userSelectable: true
 ```
 
 Agent configuration may override a binding's default with one of Catalyst's product-owned reasoning efforts: `none`, `low`, `medium`, `high`, or `xhigh`. Only bindings with `agentSelectable: true` are valid agent choices; set it to `false` for internal bindings such as conversation-title generation. Interactive selection is available only when `modelBindingId` and/or `reasoningEffort` appear in `editableAgentFields`. The server validates model-binding references and reasoning values; the UI does not accept arbitrary model identifiers.
+
+Set `userSelectable: true` only for bindings normal chat users may choose in
+the composer. It defaults to `false`. The run API accepts the approved binding
+id rather than an arbitrary provider or model name, and an omitted choice keeps
+the agent's configured binding. Put shared reasoning defaults on the provider
+or agent; add one to a binding only when that model needs a different fallback.
 
 ## Config Is Not A Secret Store
 

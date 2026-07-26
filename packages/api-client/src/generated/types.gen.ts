@@ -234,9 +234,14 @@ export type GetConfigResponses = {
             };
         };
         defaultAgentName?: string;
+        selectableModels: Array<{
+            bindingId: string;
+            model: string;
+        }>;
         agents: Array<{
             name: string;
             displayName: string;
+            defaultModelBindingId?: string;
             welcomeMessage?: string;
             welcomeSubtitle?: string;
             initialPrompts: Array<{
@@ -765,6 +770,7 @@ export type StartConversationRunData = {
     body: {
         idempotencyKey: string;
         agentName?: string;
+        modelBindingId?: string;
         locale?: 'en' | 'de';
         message: {
             text: string;
@@ -1097,6 +1103,7 @@ export type CreateConversationRunData = {
     body: {
         idempotencyKey: string;
         agentName?: string;
+        modelBindingId?: string;
         locale?: 'en' | 'de';
         message: {
             text: string;

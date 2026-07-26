@@ -99,6 +99,7 @@ export function registerAgentRunRoutes(app: FastifyInstance, options: ChatServer
     const localizedContext = withRequestLocale(context, options, request, body.locale);
     const started = await conversations.startMessageRun(conversationId, user, localizedContext, {
       agentName: body.agentName,
+      modelBindingId: body.modelBindingId,
       idempotencyKey: body.idempotencyKey,
       text: body.message.text
     });
@@ -136,6 +137,7 @@ export function registerAgentRunRoutes(app: FastifyInstance, options: ChatServer
       localizedContext,
       {
         agentName: body.agentName,
+        modelBindingId: body.modelBindingId,
         idempotencyKey: body.idempotencyKey,
         text: body.message.text,
         title: body.conversation?.title

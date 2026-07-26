@@ -56,6 +56,7 @@ export interface CreateConversationCommand {
 
 export interface SendConversationMessageCommand {
   agentName?: string;
+  modelBindingId?: string;
   idempotencyKey?: string;
   text: string;
 }
@@ -275,6 +276,7 @@ export class ConversationWorkflow {
     command: SendConversationMessageCommand
   ): Promise<StartedConversationMessageRun> {
     await this.requireOwnedActiveConversation(conversationId, user);
+    this.assertUserSelectableModelBinding(command.modelBindingId);
     let runStartCommand: RunStartCommand | undefined;
     if (command.idempotencyKey) {
       const claim = await this.claimOrResolveRunStartCommand({
@@ -338,6 +340,7 @@ export class ConversationWorkflow {
       const run = await this.options.agentRuntime.start(
         {
           agentName: prepared.run.agentName,
+          modelBindingId: command.modelBindingId,
           conversationId,
           idempotencyKey: command.idempotencyKey,
           inputMessageId: prepared.userMessage.id,
@@ -387,11 +390,27 @@ export class ConversationWorkflow {
     }
   }
 
+  private assertUserSelectableModelBinding(modelBindingId: string | undefined): void {
+    if (!modelBindingId) {
+      return;
+    }
+    const binding = this.options.config.modelBindings.find(
+      (candidate) => candidate.id === modelBindingId
+    );
+    if (!binding?.userSelectable) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `Model binding '${modelBindingId}' is not available for user selection`
+      );
+    }
+  }
+
   async createConversationAndStartMessageRun(
     user: AuthenticatedUser,
     context: RuntimeCallContext,
     command: SendConversationMessageCommand & CreateConversationCommand
   ): Promise<{ conversation: Conversation; userMessage: ChatMessage; run: AgentRun; runId: AgentRunId }> {
+    this.assertUserSelectableModelBinding(command.modelBindingId);
     let runStartCommand: RunStartCommand | undefined;
     if (command.idempotencyKey) {
       const claim = await this.claimOrResolveRunStartCommand({
