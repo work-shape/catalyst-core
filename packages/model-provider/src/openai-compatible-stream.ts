@@ -1,8 +1,12 @@
 import { AppError } from "@vivd-catalyst/core";
-import type { ModelCompletionStreamEvent } from "./types";
+import type {
+  ModelCompletionStreamEvent,
+  ModelProviderContinuation
+} from "./types";
 import { WEB_SEARCH_MODEL_TOOL_NAME } from "./types";
 import {
   noReportedUsage,
+  createOpenAiResponsesContinuation,
   readOpenAiResponsesText,
   readOpenAiResponsesWebMetadata,
   readOpenAiResponsesWebSearchCallCount,
@@ -137,7 +141,9 @@ export async function* streamOpenAiCompatibleCompletion(
 
 export async function* streamOpenAiResponsesCompletion(
   body: ReadableStream<Uint8Array>,
-  toolNameMap: Map<string, string>
+  toolNameMap: Map<string, string>,
+  providerId: string,
+  previousContinuation: ModelProviderContinuation | undefined
 ): AsyncIterable<ModelCompletionStreamEvent> {
   let text = "";
   let usage = noReportedUsage();
@@ -258,6 +264,9 @@ export async function* streamOpenAiResponsesCompletion(
       })),
       sources: webMetadata.sources,
       citations: webMetadata.citations,
+      continuation: finalResponse
+        ? createOpenAiResponsesContinuation(providerId, finalResponse, previousContinuation)
+        : previousContinuation,
       usage: {
         ...usage,
         webSearchCallCount

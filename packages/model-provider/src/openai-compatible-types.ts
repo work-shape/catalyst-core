@@ -85,6 +85,12 @@ export type OpenAiResponsesInputContent =
         }
     >;
 
+export interface OpenAiResponsesReasoningItem {
+  type: "reasoning";
+  encrypted_content: string;
+  [key: string]: unknown;
+}
+
 export type OpenAiResponseInputItem =
   | {
       role: "system" | "user";
@@ -104,7 +110,8 @@ export type OpenAiResponseInputItem =
       type: "function_call_output";
       call_id: string;
       output: string;
-    };
+    }
+  | OpenAiResponsesReasoningItem;
 
 export interface OpenAiResponsesResponse {
   output?: OpenAiResponsesOutputItem[];
@@ -136,6 +143,11 @@ export type OpenAiResponsesOutputItem =
       call_id: string;
       name: string;
       arguments: string;
+    }
+  | {
+      type: "reasoning";
+      encrypted_content?: string;
+      [key: string]: unknown;
     }
   | {
       type: string;

@@ -1471,6 +1471,11 @@ describe("local agent runtime", () => {
     let modelStep = 0;
     let invalidToolResult = "";
     let validToolExecutions = 0;
+    const providerContinuation = {
+      providerId: "test-provider",
+      state: { encrypted: "opaque-provider-state" }
+    };
+    let receivedProviderContinuation: unknown;
     const modelProvider: ModelProvider = {
       id: "test-provider",
       async complete() {
@@ -1483,6 +1488,7 @@ describe("local agent runtime", () => {
             type: "completed",
             completion: {
               text: "I will inspect the page.",
+              continuation: providerContinuation,
               toolCalls: [
                 {
                   toolCallId: "call_bad_json",
@@ -1502,6 +1508,7 @@ describe("local agent runtime", () => {
         }
 
         if (modelStep === 2) {
+          receivedProviderContinuation = request.continuation;
           const toolMessage = request.messages.find(
             (message) => message.role === "tool" && message.toolCallId === "call_bad_json"
           );
@@ -1622,6 +1629,7 @@ describe("local agent runtime", () => {
     ]);
     expect(invalidToolResult).toContain("Tool input must be valid JSON");
     expect(invalidToolResult).toContain("invalid_json");
+    expect(receivedProviderContinuation).toBe(providerContinuation);
     expect(validToolExecutions).toBe(1);
     expect(completedMessages).toEqual(["The valid retry worked."]);
   });

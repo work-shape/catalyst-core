@@ -285,6 +285,7 @@ export class LocalAgentRuntime implements AgentRuntime {
 
     const repeatedToolCalls = new Map<string, number>();
     const maxSteps = agent.maxSteps ?? this.options.maxSteps ?? DEFAULT_MAX_STEPS;
+    let providerContinuation: ModelCompletion["continuation"];
 
     for (let step = 0; step < maxSteps; step += 1) {
       const { completion, emittedDeltas, reasoning } = await this.options.usageGovernance.runModelCall(
@@ -295,6 +296,7 @@ export class LocalAgentRuntime implements AgentRuntime {
               providerId: modelSelection.provider.id,
               model: modelSelection.model,
               reasoningEffort: modelSelection.reasoningEffort,
+              continuation: providerContinuation,
               messages,
               tools
             },
@@ -314,6 +316,7 @@ export class LocalAgentRuntime implements AgentRuntime {
           return modelResult;
         }
       );
+      providerContinuation = completion.continuation;
 
       if (completion.toolCalls.length === 0) {
         if (isCancellationRequested(state.getStatus())) {

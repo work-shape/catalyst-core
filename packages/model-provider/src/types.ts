@@ -80,13 +80,20 @@ export interface ModelCompletionRequest {
   providerId: string;
   model: string;
   reasoningEffort?: ReasoningEffortConfig;
+  continuation?: ModelProviderContinuation;
   messages: ModelMessage[];
   tools: ModelTool[];
+}
+
+export interface ModelProviderContinuation {
+  providerId: string;
+  state: unknown;
 }
 
 export interface ModelCompletion {
   text: string;
   toolCalls: ModelToolCall[];
+  continuation?: ModelProviderContinuation;
   sources?: WebSource[];
   citations?: MessageCitation[];
   usage: ModelTokenUsage & {

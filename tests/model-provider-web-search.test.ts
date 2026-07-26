@@ -52,7 +52,10 @@ describe("OpenAI provider-native web search", () => {
     );
 
     expect(requestBody).toMatchObject({
-      include: ["web_search_call.action.sources"],
+      include: [
+        "reasoning.encrypted_content",
+        "web_search_call.action.sources"
+      ],
       tools: [{ type: "web_search" }]
     });
     expect(requestBody?.tools?.[0]).not.toHaveProperty("name");
@@ -278,7 +281,10 @@ describe("OpenAI provider-native web search", () => {
     }
 
     expect(requestBody).toMatchObject({
-      include: ["web_search_call.action.sources"],
+      include: [
+        "reasoning.encrypted_content",
+        "web_search_call.action.sources"
+      ],
       stream: true,
       tools: [{ type: "web_search" }]
     });

@@ -15,6 +15,7 @@ import {
   type ModelContentPart,
   type ModelFunctionTool,
   type ModelMessage,
+  type ModelProviderContinuation,
   type ModelProviderNativeTool,
   type ModelTool
 } from "./types";
@@ -25,6 +26,8 @@ import type {
   OpenAiResponseInput,
   OpenAiResponseInputItem,
   OpenAiResponsesInputContent,
+  OpenAiResponsesOutputItem,
+  OpenAiResponsesReasoningItem,
   OpenAiResponsesResponse,
   OpenAiResponsesTool,
   OpenAiResponsesUsage
@@ -33,6 +36,14 @@ import type {
 export interface OpenAiCompatibleProviderTool {
   tool: ModelFunctionTool;
   providerName: string;
+}
+
+interface OpenAiResponsesContinuationState {
+  kind: "openai_responses";
+  encryptedReasoningItems: Array<{
+    beforeToolCallId: string;
+    item: OpenAiResponsesReasoningItem;
+  }>;
 }
 
 type OpenAiChatTextImageContent =
@@ -193,9 +204,18 @@ function toOpenAiChatMessagesForOne(
   ];
 }
 
-export function toOpenAiResponsesInput(messages: ModelMessage[]): OpenAiResponseInput {
+export function toOpenAiResponsesInput(
+  messages: ModelMessage[],
+  encryptedReasoningItems: OpenAiResponsesContinuationState["encryptedReasoningItems"] = []
+): OpenAiResponseInput {
   const input: OpenAiResponseInput = [];
   const pendingVisualMessages: OpenAiResponseInputItem[] = [];
+  const reasoningByToolCallId = new Map<string, OpenAiResponsesReasoningItem[]>();
+  for (const entry of encryptedReasoningItems) {
+    const items = reasoningByToolCallId.get(entry.beforeToolCallId) ?? [];
+    items.push(entry.item);
+    reasoningByToolCallId.set(entry.beforeToolCallId, items);
+  }
   messages.forEach((message, index) => {
     if (message.role !== "tool") {
       flushPendingVisualMessages(input, pendingVisualMessages);
@@ -208,6 +228,7 @@ export function toOpenAiResponsesInput(messages: ModelMessage[]): OpenAiResponse
         });
       }
       for (const toolCall of message.toolCalls) {
+        input.push(...(reasoningByToolCallId.get(toolCall.toolCallId) ?? []));
         input.push({
           type: "function_call",
           call_id: toolCall.toolCallId,
@@ -264,6 +285,81 @@ export function toOpenAiResponsesInput(messages: ModelMessage[]): OpenAiResponse
   });
   flushPendingVisualMessages(input, pendingVisualMessages);
   return input;
+}
+
+export function readOpenAiResponsesContinuationItems(
+  providerId: string,
+  continuation: ModelProviderContinuation | undefined
+): OpenAiResponsesContinuationState["encryptedReasoningItems"] {
+  if (
+    continuation?.providerId !== providerId ||
+    !isUnknownRecord(continuation.state) ||
+    continuation.state.kind !== "openai_responses" ||
+    !Array.isArray(continuation.state.encryptedReasoningItems)
+  ) {
+    return [];
+  }
+
+  return continuation.state.encryptedReasoningItems.filter(
+    (entry): entry is OpenAiResponsesContinuationState["encryptedReasoningItems"][number] =>
+      isUnknownRecord(entry) &&
+      typeof entry.beforeToolCallId === "string" &&
+      isOpenAiResponsesReasoningItem(entry.item)
+  );
+}
+
+export function createOpenAiResponsesContinuation(
+  providerId: string,
+  payload: OpenAiResponsesResponse,
+  previous: ModelProviderContinuation | undefined
+): ModelProviderContinuation | undefined {
+  const encryptedReasoningItems = [
+    ...readOpenAiResponsesContinuationItems(providerId, previous),
+    ...readEncryptedReasoningItems(payload.output ?? [])
+  ];
+  return encryptedReasoningItems.length > 0
+    ? {
+        providerId,
+        state: {
+          kind: "openai_responses",
+          encryptedReasoningItems
+        } satisfies OpenAiResponsesContinuationState
+      }
+    : undefined;
+}
+
+function readEncryptedReasoningItems(
+  output: OpenAiResponsesOutputItem[]
+): OpenAiResponsesContinuationState["encryptedReasoningItems"] {
+  const entries: OpenAiResponsesContinuationState["encryptedReasoningItems"] = [];
+  output.forEach((item, index) => {
+    if (!isOpenAiResponsesReasoningItem(item)) {
+      return;
+    }
+    const nextToolCall = output
+      .slice(index + 1)
+      .find(
+        (candidate): candidate is Extract<OpenAiResponsesOutputItem, { type: "function_call" }> =>
+          candidate.type === "function_call" && typeof candidate.call_id === "string"
+      );
+    if (nextToolCall) {
+      entries.push({
+        beforeToolCallId: nextToolCall.call_id,
+        item
+      });
+    }
+  });
+  return entries;
+}
+
+function isOpenAiResponsesReasoningItem(
+  value: unknown
+): value is OpenAiResponsesReasoningItem {
+  return (
+    isUnknownRecord(value) &&
+    value.type === "reasoning" &&
+    typeof value.encrypted_content === "string"
+  );
 }
 
 export function toOpenAiResponsesTools(

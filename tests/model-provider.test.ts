@@ -248,6 +248,56 @@ describe("OpenAI-compatible model provider", () => {
     });
   });
 
+  it("preserves explicit none reasoning effort for both OpenAI-compatible APIs", async () => {
+    const requestBodies: Array<Record<string, unknown>> = [];
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      requestBodies.push(JSON.parse(String(init?.body)));
+      return String(url).endsWith("/responses")
+        ? new Response(JSON.stringify({ output_text: "done" }), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          })
+        : new Response(
+            JSON.stringify({
+              choices: [{ message: { content: "done" } }]
+            }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" }
+            }
+          );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const context = createModelProviderTestContext();
+    for (const api of [undefined, "responses"] as const) {
+      const provider = new OpenAiCompatibleChatProvider({
+        id: "openai",
+        api,
+        model: "gpt-5.6-sol",
+        baseUrl: "https://example.test/v1",
+        apiKey: "test",
+        reasoningEffort: "high"
+      });
+      await provider.complete(
+        {
+          providerId: "openai",
+          model: "gpt-5.6-sol",
+          reasoningEffort: "none",
+          messages: [{ role: "user", content: "answer directly" }],
+          tools: []
+        },
+        context
+      );
+    }
+
+    expect(requestBodies[0]).toMatchObject({ reasoning_effort: "none" });
+    expect(requestBodies[1]).toMatchObject({
+      reasoning: { effort: "none" }
+    });
+    expect(requestBodies[1]?.reasoning).not.toHaveProperty("summary");
+  });
+
   it("maps provider-neutral requests to the OpenAI Responses API", async () => {
     let requestUrl: string | undefined;
     let requestBody:
@@ -338,6 +388,7 @@ describe("OpenAI-compatible model provider", () => {
     expect(requestUrl).toBe("https://example.test/v1/responses");
     expect(requestBody).toMatchObject({
       reasoning: { effort: "high", summary: "auto" },
+      include: ["reasoning.encrypted_content"],
       store: false,
       tools: [{ type: "function", strict: false }]
     });
@@ -369,6 +420,104 @@ describe("OpenAI-compatible model provider", () => {
         totalTokens: 16,
         source: "provider_reported"
       }
+    });
+  });
+
+  it("round-trips encrypted Responses reasoning through a stateless tool loop", async () => {
+    const requestBodies: Array<{
+      input?: Array<Record<string, unknown>>;
+      include?: string[];
+    }> = [];
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      requestBodies.push(JSON.parse(String(init?.body)));
+      if (requestBodies.length === 1) {
+        return new Response(
+          JSON.stringify({
+            output: [
+              {
+                type: "reasoning",
+                id: "rs_1",
+                summary: [],
+                encrypted_content: "encrypted-reasoning"
+              },
+              {
+                type: "function_call",
+                call_id: "call_lookup",
+                name: "lookup",
+                arguments: "{\"id\":42}"
+              }
+            ]
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      return new Response(JSON.stringify({ output_text: "The result is ready." }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = new OpenAiCompatibleChatProvider({
+      id: "azure-eu",
+      api: "responses",
+      model: "gpt-5.6-sol",
+      baseUrl: "https://example.test/openai/v1",
+      apiKey: "test",
+      reasoningEffort: "high"
+    });
+    const context = createModelProviderTestContext();
+    const first = await provider.complete(
+      {
+        providerId: "azure-eu",
+        model: "gpt-5.6-sol",
+        messages: [{ role: "user", content: "look this up" }],
+        tools: [{ name: "lookup", description: "Look up a record" }]
+      },
+      context
+    );
+    await provider.complete(
+      {
+        providerId: "azure-eu",
+        model: "gpt-5.6-sol",
+        continuation: first.continuation,
+        messages: [
+          { role: "user", content: "look this up" },
+          {
+            role: "assistant",
+            content: "",
+            toolCalls: [
+              {
+                toolCallId: "call_lookup",
+                toolName: "lookup",
+                input: { id: 42 }
+              }
+            ]
+          },
+          {
+            role: "tool",
+            toolCallId: "call_lookup",
+            content: "{\"name\":\"Record\"}"
+          }
+        ],
+        tools: [{ name: "lookup", description: "Look up a record" }]
+      },
+      context
+    );
+
+    expect(requestBodies[0]?.include).toContain("reasoning.encrypted_content");
+    expect(requestBodies[1]?.input?.map((item) => item.type ?? item.role)).toEqual([
+      "user",
+      "reasoning",
+      "function_call",
+      "function_call_output"
+    ]);
+    expect(requestBodies[1]?.input?.[1]).toMatchObject({
+      type: "reasoning",
+      encrypted_content: "encrypted-reasoning"
     });
   });
 
@@ -611,6 +760,19 @@ describe("OpenAI-compatible model provider", () => {
           {
             type: "response.completed",
             response: {
+              output: [
+                {
+                  type: "reasoning",
+                  id: "rs_1",
+                  encrypted_content: "encrypted-stream-reasoning"
+                },
+                {
+                  type: "function_call",
+                  call_id: "call_1",
+                  name: toolName,
+                  arguments: "{\"html\":\"<p>Hello</p>\"}"
+                }
+              ],
               usage: {
                 input_tokens: 7,
                 output_tokens: 3,
@@ -689,6 +851,9 @@ describe("OpenAI-compatible model provider", () => {
       usage: {
         totalTokens: 10,
         source: "provider_reported"
+      },
+      continuation: {
+        providerId: "openai"
       }
     });
   });
@@ -803,4 +968,21 @@ function createSseStream(chunks: unknown[]): ReadableStream<Uint8Array> {
       controller.close();
     }
   });
+}
+
+function createModelProviderTestContext() {
+  const clientInstanceId = asClientInstanceId("client-test");
+  return {
+    clientInstanceId,
+    correlationId: "corr-test",
+    user: {
+      id: "user-test",
+      externalUserId: "user-test",
+      displayLabel: "User",
+      roles: ["user" as const],
+      permissionRefs: [],
+      clientInstanceId,
+      authSource: "test"
+    }
+  };
 }

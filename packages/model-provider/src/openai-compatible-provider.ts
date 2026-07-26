@@ -13,9 +13,11 @@ import type {
 } from "./types";
 import {
   createProviderToolMetadata,
+  createOpenAiResponsesContinuation,
   readOpenAiResponsesWebMetadata,
   readOpenAiResponsesWebSearchCallCount,
   readOpenAiResponsesText,
+  readOpenAiResponsesContinuationItems,
   toModelUsage,
   toOpenAiChatMessages,
   toOpenAiResponsesInput,
@@ -160,6 +162,7 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     return {
       text: readOpenAiResponsesText(payload),
       toolCalls: readOpenAiResponsesToolCalls(payload, toolNameMap),
+      continuation: createOpenAiResponsesContinuation(this.id, payload, request.continuation),
       sources: webMetadata.sources,
       citations: webMetadata.citations,
       usage: toResponsesModelUsage(payload.usage, readOpenAiResponsesWebSearchCallCount(payload))
@@ -188,7 +191,12 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
       });
     }
 
-    yield* streamOpenAiResponsesCompletion(response.body, toolNameMap);
+    yield* streamOpenAiResponsesCompletion(
+      response.body,
+      toolNameMap,
+      this.id,
+      request.continuation
+    );
   }
 
   private postChatCompletion(input: {
@@ -236,8 +244,7 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
   }
 
   private resolveReasoningEffort(request: ModelCompletionRequest): ReasoningEffortConfig | undefined {
-    const reasoningEffort = request.reasoningEffort ?? this.options.reasoningEffort;
-    return reasoningEffort === "none" ? undefined : reasoningEffort;
+    return request.reasoningEffort ?? this.options.reasoningEffort;
   }
 
   private createChatCompletionsRequestBody(
@@ -272,17 +279,25 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     const reasoningEffort = this.resolveReasoningEffort(request);
     return {
       model,
-      input: toOpenAiResponsesInput(request.messages),
+      input: toOpenAiResponsesInput(
+        request.messages,
+        readOpenAiResponsesContinuationItems(this.id, request.continuation)
+      ),
       ...(reasoningEffort
         ? {
             reasoning: {
               effort: reasoningEffort,
-              ...(shouldRequestReasoningSummary(model) ? { summary: "auto" as const } : {})
+              ...(reasoningEffort !== "none" && shouldRequestReasoningSummary(model)
+                ? { summary: "auto" as const }
+                : {})
             }
           }
         : {}),
       tools: toOpenAiResponsesTools(providerTools, providerNativeTools),
-      ...(providerNativeTools.length > 0 ? { include: ["web_search_call.action.sources"] } : {}),
+      include: [
+        "reasoning.encrypted_content",
+        ...(providerNativeTools.length > 0 ? ["web_search_call.action.sources"] : [])
+      ],
       tool_choice: request.tools.length > 0 ? "auto" : undefined,
       store: false
     };
