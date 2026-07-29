@@ -4,7 +4,7 @@ import {
   type AuditEventInput,
   type ClientInstanceId,
   type ModelUsageEvent,
-  type ModelUsageEventInput,
+  type ModelUsageEventRecordInput,
   type ModelUsageWindowSummary,
   createPlatformId
 } from "@vivd-catalyst/core";
@@ -58,7 +58,7 @@ export async function listAuditEvents(
 
 export async function appendModelUsageEvent(
   db: PostgresDatabase,
-  input: ModelUsageEventInput
+  input: ModelUsageEventRecordInput
 ): Promise<ModelUsageEvent> {
   const id = createPlatformId<"ModelUsageEventId">("usage");
   const [row] = await db
@@ -72,10 +72,12 @@ export async function appendModelUsageEvent(
       providerId: input.providerId,
       model: input.model,
       inputTokens: input.inputTokens,
+      cachedInputTokens: input.cachedInputTokens ?? null,
       outputTokens: input.outputTokens,
       totalTokens: input.totalTokens,
       webSearchCallCount: input.webSearchCallCount ?? 0,
       source: input.source,
+      customerBillableCost: input.customerBillableCost,
       correlationId: input.correlationId,
       createdAt: new Date()
     })
@@ -95,6 +97,7 @@ export async function summarizeModelUsageEvents(
     .select({
       modelCallCount: drizzleSql<number>`count(*)::int`,
       inputTokens: drizzleSql<number>`coalesce(sum(${modelUsageEvents.inputTokens}), 0)::int`,
+      cachedInputTokens: drizzleSql<number>`coalesce(sum(${modelUsageEvents.cachedInputTokens}), 0)::int`,
       outputTokens: drizzleSql<number>`coalesce(sum(${modelUsageEvents.outputTokens}), 0)::int`,
       totalTokens: drizzleSql<number>`coalesce(sum(${modelUsageEvents.totalTokens}), 0)::int`,
       webSearchCallCount: drizzleSql<number>`coalesce(sum(${modelUsageEvents.webSearchCallCount}), 0)::int`
@@ -107,6 +110,7 @@ export async function summarizeModelUsageEvents(
     end: input.end,
     modelCallCount: row?.modelCallCount ?? 0,
     inputTokens: row?.inputTokens ?? 0,
+    cachedInputTokens: row?.cachedInputTokens ?? 0,
     outputTokens: row?.outputTokens ?? 0,
     totalTokens: row?.totalTokens ?? 0,
     webSearchCallCount: row?.webSearchCallCount ?? 0

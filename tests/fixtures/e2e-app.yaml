@@ -77,19 +77,22 @@ modelBindings:
     providerId: local
     model: deterministic-local
 usage:
-  budget:
-    costSafetyMultiplier: 1
+  budget: {}
   safeguards:
     modelCallsPerDay: 12
     tokensPerDay: 25000
     tokensPerMonth: 250000
-  pricing:
-    currency: USD
-    models:
-      - providerId: local
-        model: deterministic-local
-        inputPricePerMillionTokens: 0
-        outputPricePerMillionTokens: 0
+  costs:
+    customer:
+      id: e2e-customer
+      version: "1"
+      currency: EUR
+      models:
+        - providerId: local
+          model: deterministic-local
+          uncachedInputPricePerMillionTokens: 0
+          cachedInputPricePerMillionTokens: 0
+          outputPricePerMillionTokens: 0
 tools:
   - name: read_skill
     enabled: true

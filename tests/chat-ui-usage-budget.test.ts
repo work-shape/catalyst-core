@@ -20,6 +20,26 @@ describe("usage spend budget progress", () => {
     expect(markup).toContain(formatEuro(40));
     expect(markup).toContain(formatEuro(300));
   });
+
+  it("labels amounts as billable and renders incomplete cost explicitly", () => {
+    const usage = createUsageSummary();
+    usage.today.cost = {
+      status: "incomplete",
+      currency: "EUR",
+      complete: false,
+      webSearchCostVisible: false,
+      settledModelCallCount: 0,
+      incompleteModelCallCount: 1,
+      settledWebSearchCallCount: 0,
+      incompleteWebSearchCallCount: 0
+    };
+
+    const markup = renderToStaticMarkup(createElement(UsageView, { usage }));
+
+    expect(markup).toContain("Billable today");
+    expect(markup).toContain("Incomplete");
+    expect(markup).not.toContain("Billed");
+  });
 });
 
 function createUsageSummary(): UsageSummary {
@@ -51,25 +71,27 @@ function formatEuro(amount: number): string {
   }).format(amount);
 }
 
-function createWindowSummary(billedCostMicros: number): UsageSummary["today"] {
+function createWindowSummary(billableCostMicros: number): UsageSummary["today"] {
   return {
     modelCallCount: 0,
     inputTokens: 0,
+    cachedInputTokens: 0,
     outputTokens: 0,
     totalTokens: 0,
     webSearchCallCount: 0,
     cost: {
+      status: "settled",
       currency: "EUR",
-      modelBilledCostMicros: billedCostMicros,
-      billedCostMicros,
+      uncachedInputBillableCostMicros: billableCostMicros,
+      cachedInputBillableCostMicros: 0,
+      outputBillableCostMicros: 0,
+      billableCostMicros,
+      complete: true,
       webSearchCostVisible: false,
-      pricingConfigured: true,
-      modelPricingConfigured: true,
-      webSearchPricingConfigured: true,
-      pricedModelCallCount: 0,
-      unpricedModelCallCount: 0,
-      pricedWebSearchCallCount: 0,
-      unpricedWebSearchCallCount: 0
+      settledModelCallCount: 0,
+      incompleteModelCallCount: 0,
+      settledWebSearchCallCount: 0,
+      incompleteWebSearchCallCount: 0
     }
   };
 }

@@ -4,12 +4,18 @@ export interface OpenAiCompatibleUsage {
   prompt_tokens: number;
   completion_tokens: number;
   total_tokens: number;
+  prompt_tokens_details?: {
+    cached_tokens?: number | null;
+  };
 }
 
 export interface OpenAiResponsesUsage {
   input_tokens: number;
   output_tokens: number;
   total_tokens: number;
+  input_tokens_details?: {
+    cached_tokens?: number | null;
+  };
 }
 
 export interface OpenAiCompatibleResponse {

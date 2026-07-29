@@ -399,10 +399,19 @@ export function mapModelUsageEvent(row: ModelUsageEventRow | undefined): ModelUs
     providerId: row.providerId,
     model: row.model,
     inputTokens: row.inputTokens,
+    cachedInputTokens: row.cachedInputTokens ?? undefined,
     outputTokens: row.outputTokens,
     totalTokens: row.totalTokens,
     webSearchCallCount: row.webSearchCallCount,
     source: row.source,
+    customerBillableCost:
+      row.customerBillableCost ??
+      ({
+        status: "unpriced",
+        source: "backfilled",
+        calculationVersion: 1,
+        missingMeters: ["model_rate"]
+      } satisfies ModelUsageEvent["customerBillableCost"]),
     correlationId: row.correlationId,
     createdAt: row.createdAt.toISOString()
   };

@@ -186,7 +186,7 @@ export async function createClientInstanceApp(
     store,
     budget: config.usage.budget,
     safeguards: config.usage.safeguards,
-    pricing: config.usage.pricing
+    costs: config.usage.costs
   });
   const toolRegistry = new ToolRegistry({
     tools,

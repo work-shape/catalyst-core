@@ -11,7 +11,8 @@ import type {
   ModelProviderConfig,
   SkillConfig,
   UsageBudgetConfig,
-  UsagePricingConfig,
+  UsageCostConfig,
+  UsageRateCardConfig,
   UsageSafeguardsConfig,
   WebAccessConfig
 } from "@vivd-catalyst/core";
@@ -203,12 +204,9 @@ export const agentConfigSchema = z.object({
 export const usageBudgetConfigSchema = z
   .object({
     dailySpendLimit: z.number().positive().optional(),
-    monthlySpendLimit: z.number().positive().optional(),
-    costSafetyMultiplier: z.number().min(1).default(1)
+    monthlySpendLimit: z.number().positive().optional()
   })
-  .default({
-    costSafetyMultiplier: 1
-  });
+  .default({});
 
 export const usageSafeguardsConfigSchema = z
   .object({
@@ -218,15 +216,18 @@ export const usageSafeguardsConfigSchema = z
   })
   .default({});
 
-export const usagePricingConfigSchema = z
+export const usageRateCardConfigSchema = z
   .object({
+    id: z.string().min(1),
+    version: z.string().min(1),
     currency: z.string().regex(/^[A-Z]{3}$/u).default("USD"),
     models: z
       .array(
         z.object({
           providerId: z.string().min(1),
           model: z.string().min(1),
-          inputPricePerMillionTokens: z.number().nonnegative(),
+          uncachedInputPricePerMillionTokens: z.number().nonnegative(),
+          cachedInputPricePerMillionTokens: z.number().nonnegative(),
           outputPricePerMillionTokens: z.number().nonnegative()
         })
       )
@@ -240,12 +241,13 @@ export const usagePricingConfigSchema = z
         })
       )
       .default([])
-  })
-  .default({
-    currency: "USD",
-    models: [],
-    webSearch: []
   });
+
+export const usageCostConfigSchema = z
+  .object({
+    customer: usageRateCardConfigSchema.optional()
+  })
+  .default({});
 
 export const conversationTitleConfigSchema = z
   .object({
@@ -620,18 +622,12 @@ export const clientInstanceConfigSchema = z.object({
     .object({
       budget: usageBudgetConfigSchema,
       safeguards: usageSafeguardsConfigSchema,
-      pricing: usagePricingConfigSchema
+      costs: usageCostConfigSchema
     })
     .default({
-      budget: {
-        costSafetyMultiplier: 1
-      },
+      budget: {},
       safeguards: {},
-      pricing: {
-        currency: "USD",
-        models: [],
-        webSearch: []
-      }
+      costs: {}
     }),
   tools: z
     .array(toolInstanceConfigSchema)
@@ -688,7 +684,8 @@ export type {
   UsageBudgetConfig,
   AgentRuntimeConfig,
   ModelContextConfig,
-  UsagePricingConfig,
+  UsageCostConfig,
+  UsageRateCardConfig,
   UsageSafeguardsConfig,
   WebAccessConfig
 };

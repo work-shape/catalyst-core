@@ -95,25 +95,29 @@ usage:
   budget:
     dailySpendLimit: 50
     monthlySpendLimit: 400
-    costSafetyMultiplier: 1.3
   safeguards:
     modelCallsPerDay: 1000
     tokensPerDay: 2500000
     tokensPerMonth: 50000000
-  pricing:
-    currency: USD
-    models:
-      - providerId: openai
-        model: gpt-5.5
-        inputPricePerMillionTokens: 5
-        outputPricePerMillionTokens: 30
-      - providerId: openai
-        model: gpt-5-nano
-        inputPricePerMillionTokens: 0.05
-        outputPricePerMillionTokens: 0.4
-    webSearch:
-      - providerId: openai
-        pricePerCall: 0.01
+  costs:
+    customer:
+      id: demo-customer
+      version: "2026-07"
+      currency: EUR
+      models:
+        - providerId: openai
+          model: gpt-5.5
+          uncachedInputPricePerMillionTokens: 5
+          cachedInputPricePerMillionTokens: 0.5
+          outputPricePerMillionTokens: 30
+        - providerId: openai
+          model: gpt-5-nano
+          uncachedInputPricePerMillionTokens: 0.05
+          cachedInputPricePerMillionTokens: 0.005
+          outputPricePerMillionTokens: 0.4
+      webSearch:
+        - providerId: openai
+          pricePerCall: 0.01
 runtime:
   maxSteps: 64
   repeatedToolCallLimit: 3

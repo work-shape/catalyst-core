@@ -153,7 +153,7 @@ describe("local agent runtime", () => {
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
         store,
-        budget: { costSafetyMultiplier: 1 },
+        budget: {},
         safeguards: {}
       })
     });
@@ -241,9 +241,7 @@ describe("local agent runtime", () => {
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
         store,
-        budget: {
-          costSafetyMultiplier: 1
-        },
+        budget: {},
         safeguards: {}
       })
     });
@@ -358,9 +356,7 @@ describe("local agent runtime", () => {
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
         store,
-        budget: {
-          costSafetyMultiplier: 1
-        },
+        budget: {},
         safeguards: {}
       })
     });
@@ -501,9 +497,7 @@ describe("local agent runtime", () => {
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
         store,
-        budget: {
-          costSafetyMultiplier: 1
-        },
+        budget: {},
         safeguards: {}
       })
     });
@@ -604,9 +598,7 @@ describe("local agent runtime", () => {
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
         store,
-        budget: {
-          costSafetyMultiplier: 1
-        },
+        budget: {},
         safeguards: {}
       })
     });
@@ -713,9 +705,7 @@ describe("local agent runtime", () => {
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
         store,
-        budget: {
-          costSafetyMultiplier: 1
-        },
+        budget: {},
         safeguards: {}
       })
     });
@@ -839,9 +829,7 @@ describe("local agent runtime", () => {
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
         store,
-        budget: {
-          costSafetyMultiplier: 1
-        },
+        budget: {},
         safeguards: {}
       })
     });
@@ -938,9 +926,7 @@ describe("local agent runtime", () => {
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
         store,
-        budget: {
-          costSafetyMultiplier: 1
-        },
+        budget: {},
         safeguards: {}
       }),
       clock: {
@@ -1087,9 +1073,7 @@ describe("local agent runtime", () => {
       },
       usageGovernance: new ModelUsageGovernance({
         store,
-        budget: {
-          costSafetyMultiplier: 1
-        },
+        budget: {},
         safeguards: {}
       })
     });
@@ -1227,9 +1211,7 @@ describe("local agent runtime", () => {
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
         store,
-        budget: {
-          costSafetyMultiplier: 1
-        },
+        budget: {},
         safeguards: {}
       })
     });
@@ -1394,9 +1376,7 @@ describe("local agent runtime", () => {
       },
       usageGovernance: new ModelUsageGovernance({
         store,
-        budget: {
-          costSafetyMultiplier: 1
-        },
+        budget: {},
         safeguards: {}
       })
     });
@@ -1583,9 +1563,7 @@ describe("local agent runtime", () => {
       },
       usageGovernance: new ModelUsageGovernance({
         store,
-        budget: {
-          costSafetyMultiplier: 1
-        },
+        budget: {},
         safeguards: {}
       })
     });
@@ -1686,9 +1664,7 @@ describe("local agent runtime", () => {
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
         store,
-        budget: {
-          costSafetyMultiplier: 1
-        },
+        budget: {},
         safeguards: {}
       }),
       runFailureReporter(report) {
@@ -1769,9 +1745,7 @@ describe("local agent runtime", () => {
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
         store,
-        budget: {
-          costSafetyMultiplier: 1
-        },
+        budget: {},
         safeguards: {}
       })
     });

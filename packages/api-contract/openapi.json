@@ -8186,9 +8186,6 @@
                           "maximum": 9007199254740991
                         }
                       },
-                      "required": [
-                        "currency"
-                      ],
                       "additionalProperties": false
                     },
                     "safeguards": {
@@ -8221,6 +8218,9 @@
                         "inputTokens": {
                           "type": "number"
                         },
+                        "cachedInputTokens": {
+                          "type": "number"
+                        },
                         "outputTokens": {
                           "type": "number"
                         },
@@ -8235,69 +8235,77 @@
                         "cost": {
                           "type": "object",
                           "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "settled",
+                                "incomplete",
+                                "unpriced"
+                              ]
+                            },
                             "currency": {
                               "type": "string"
                             },
-                            "modelBilledCostMicros": {
+                            "uncachedInputBillableCostMicros": {
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
                             },
-                            "webSearchBilledCostMicros": {
+                            "cachedInputBillableCostMicros": {
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
                             },
-                            "billedCostMicros": {
+                            "outputBillableCostMicros": {
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
+                            },
+                            "webSearchBillableCostMicros": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "billableCostMicros": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "complete": {
+                              "type": "boolean"
                             },
                             "webSearchCostVisible": {
                               "type": "boolean"
                             },
-                            "pricingConfigured": {
-                              "type": "boolean"
-                            },
-                            "modelPricingConfigured": {
-                              "type": "boolean"
-                            },
-                            "webSearchPricingConfigured": {
-                              "type": "boolean"
-                            },
-                            "pricedModelCallCount": {
+                            "settledModelCallCount": {
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
                             },
-                            "unpricedModelCallCount": {
+                            "incompleteModelCallCount": {
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
                             },
-                            "pricedWebSearchCallCount": {
+                            "settledWebSearchCallCount": {
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
                             },
-                            "unpricedWebSearchCallCount": {
+                            "incompleteWebSearchCallCount": {
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
                             }
                           },
                           "required": [
-                            "currency",
-                            "modelBilledCostMicros",
-                            "billedCostMicros",
+                            "status",
+                            "complete",
                             "webSearchCostVisible",
-                            "pricingConfigured",
-                            "modelPricingConfigured",
-                            "webSearchPricingConfigured",
-                            "pricedModelCallCount",
-                            "unpricedModelCallCount",
-                            "pricedWebSearchCallCount",
-                            "unpricedWebSearchCallCount"
+                            "settledModelCallCount",
+                            "incompleteModelCallCount",
+                            "settledWebSearchCallCount",
+                            "incompleteWebSearchCallCount"
                           ],
                           "additionalProperties": false
                         }
@@ -8305,6 +8313,7 @@
                       "required": [
                         "modelCallCount",
                         "inputTokens",
+                        "cachedInputTokens",
                         "outputTokens",
                         "totalTokens",
                         "webSearchCallCount",
@@ -8327,6 +8336,9 @@
                         "inputTokens": {
                           "type": "number"
                         },
+                        "cachedInputTokens": {
+                          "type": "number"
+                        },
                         "outputTokens": {
                           "type": "number"
                         },
@@ -8341,69 +8353,77 @@
                         "cost": {
                           "type": "object",
                           "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "settled",
+                                "incomplete",
+                                "unpriced"
+                              ]
+                            },
                             "currency": {
                               "type": "string"
                             },
-                            "modelBilledCostMicros": {
+                            "uncachedInputBillableCostMicros": {
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
                             },
-                            "webSearchBilledCostMicros": {
+                            "cachedInputBillableCostMicros": {
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
                             },
-                            "billedCostMicros": {
+                            "outputBillableCostMicros": {
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
+                            },
+                            "webSearchBillableCostMicros": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "billableCostMicros": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "complete": {
+                              "type": "boolean"
                             },
                             "webSearchCostVisible": {
                               "type": "boolean"
                             },
-                            "pricingConfigured": {
-                              "type": "boolean"
-                            },
-                            "modelPricingConfigured": {
-                              "type": "boolean"
-                            },
-                            "webSearchPricingConfigured": {
-                              "type": "boolean"
-                            },
-                            "pricedModelCallCount": {
+                            "settledModelCallCount": {
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
                             },
-                            "unpricedModelCallCount": {
+                            "incompleteModelCallCount": {
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
                             },
-                            "pricedWebSearchCallCount": {
+                            "settledWebSearchCallCount": {
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
                             },
-                            "unpricedWebSearchCallCount": {
+                            "incompleteWebSearchCallCount": {
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
                             }
                           },
                           "required": [
-                            "currency",
-                            "modelBilledCostMicros",
-                            "billedCostMicros",
+                            "status",
+                            "complete",
                             "webSearchCostVisible",
-                            "pricingConfigured",
-                            "modelPricingConfigured",
-                            "webSearchPricingConfigured",
-                            "pricedModelCallCount",
-                            "unpricedModelCallCount",
-                            "pricedWebSearchCallCount",
-                            "unpricedWebSearchCallCount"
+                            "settledModelCallCount",
+                            "incompleteModelCallCount",
+                            "settledWebSearchCallCount",
+                            "incompleteWebSearchCallCount"
                           ],
                           "additionalProperties": false
                         }
@@ -8411,6 +8431,7 @@
                       "required": [
                         "modelCallCount",
                         "inputTokens",
+                        "cachedInputTokens",
                         "outputTokens",
                         "totalTokens",
                         "webSearchCallCount",
@@ -8433,6 +8454,9 @@
                         "inputTokens": {
                           "type": "number"
                         },
+                        "cachedInputTokens": {
+                          "type": "number"
+                        },
                         "outputTokens": {
                           "type": "number"
                         },
@@ -8447,69 +8471,77 @@
                         "cost": {
                           "type": "object",
                           "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "settled",
+                                "incomplete",
+                                "unpriced"
+                              ]
+                            },
                             "currency": {
                               "type": "string"
                             },
-                            "modelBilledCostMicros": {
+                            "uncachedInputBillableCostMicros": {
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
                             },
-                            "webSearchBilledCostMicros": {
+                            "cachedInputBillableCostMicros": {
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
                             },
-                            "billedCostMicros": {
+                            "outputBillableCostMicros": {
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
+                            },
+                            "webSearchBillableCostMicros": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "billableCostMicros": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "complete": {
+                              "type": "boolean"
                             },
                             "webSearchCostVisible": {
                               "type": "boolean"
                             },
-                            "pricingConfigured": {
-                              "type": "boolean"
-                            },
-                            "modelPricingConfigured": {
-                              "type": "boolean"
-                            },
-                            "webSearchPricingConfigured": {
-                              "type": "boolean"
-                            },
-                            "pricedModelCallCount": {
+                            "settledModelCallCount": {
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
                             },
-                            "unpricedModelCallCount": {
+                            "incompleteModelCallCount": {
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
                             },
-                            "pricedWebSearchCallCount": {
+                            "settledWebSearchCallCount": {
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
                             },
-                            "unpricedWebSearchCallCount": {
+                            "incompleteWebSearchCallCount": {
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
                             }
                           },
                           "required": [
-                            "currency",
-                            "modelBilledCostMicros",
-                            "billedCostMicros",
+                            "status",
+                            "complete",
                             "webSearchCostVisible",
-                            "pricingConfigured",
-                            "modelPricingConfigured",
-                            "webSearchPricingConfigured",
-                            "pricedModelCallCount",
-                            "unpricedModelCallCount",
-                            "pricedWebSearchCallCount",
-                            "unpricedWebSearchCallCount"
+                            "settledModelCallCount",
+                            "incompleteModelCallCount",
+                            "settledWebSearchCallCount",
+                            "incompleteWebSearchCallCount"
                           ],
                           "additionalProperties": false
                         }
@@ -8517,6 +8549,7 @@
                       "required": [
                         "modelCallCount",
                         "inputTokens",
+                        "cachedInputTokens",
                         "outputTokens",
                         "totalTokens",
                         "webSearchCallCount",
@@ -8541,6 +8574,9 @@
                           "inputTokens": {
                             "type": "number"
                           },
+                          "cachedInputTokens": {
+                            "type": "number"
+                          },
                           "outputTokens": {
                             "type": "number"
                           },
@@ -8555,69 +8591,77 @@
                           "cost": {
                             "type": "object",
                             "properties": {
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "settled",
+                                  "incomplete",
+                                  "unpriced"
+                                ]
+                              },
                               "currency": {
                                 "type": "string"
                               },
-                              "modelBilledCostMicros": {
+                              "uncachedInputBillableCostMicros": {
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
                               },
-                              "webSearchBilledCostMicros": {
+                              "cachedInputBillableCostMicros": {
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
                               },
-                              "billedCostMicros": {
+                              "outputBillableCostMicros": {
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
+                              },
+                              "webSearchBillableCostMicros": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "billableCostMicros": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "complete": {
+                                "type": "boolean"
                               },
                               "webSearchCostVisible": {
                                 "type": "boolean"
                               },
-                              "pricingConfigured": {
-                                "type": "boolean"
-                              },
-                              "modelPricingConfigured": {
-                                "type": "boolean"
-                              },
-                              "webSearchPricingConfigured": {
-                                "type": "boolean"
-                              },
-                              "pricedModelCallCount": {
+                              "settledModelCallCount": {
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
                               },
-                              "unpricedModelCallCount": {
+                              "incompleteModelCallCount": {
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
                               },
-                              "pricedWebSearchCallCount": {
+                              "settledWebSearchCallCount": {
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
                               },
-                              "unpricedWebSearchCallCount": {
+                              "incompleteWebSearchCallCount": {
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
                               }
                             },
                             "required": [
-                              "currency",
-                              "modelBilledCostMicros",
-                              "billedCostMicros",
+                              "status",
+                              "complete",
                               "webSearchCostVisible",
-                              "pricingConfigured",
-                              "modelPricingConfigured",
-                              "webSearchPricingConfigured",
-                              "pricedModelCallCount",
-                              "unpricedModelCallCount",
-                              "pricedWebSearchCallCount",
-                              "unpricedWebSearchCallCount"
+                              "settledModelCallCount",
+                              "incompleteModelCallCount",
+                              "settledWebSearchCallCount",
+                              "incompleteWebSearchCallCount"
                             ],
                             "additionalProperties": false
                           },
@@ -8628,6 +8672,7 @@
                         "required": [
                           "modelCallCount",
                           "inputTokens",
+                          "cachedInputTokens",
                           "outputTokens",
                           "totalTokens",
                           "webSearchCallCount",
@@ -8654,6 +8699,9 @@
                           "inputTokens": {
                             "type": "number"
                           },
+                          "cachedInputTokens": {
+                            "type": "number"
+                          },
                           "outputTokens": {
                             "type": "number"
                           },
@@ -8668,69 +8716,77 @@
                           "cost": {
                             "type": "object",
                             "properties": {
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "settled",
+                                  "incomplete",
+                                  "unpriced"
+                                ]
+                              },
                               "currency": {
                                 "type": "string"
                               },
-                              "modelBilledCostMicros": {
+                              "uncachedInputBillableCostMicros": {
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
                               },
-                              "webSearchBilledCostMicros": {
+                              "cachedInputBillableCostMicros": {
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
                               },
-                              "billedCostMicros": {
+                              "outputBillableCostMicros": {
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
+                              },
+                              "webSearchBillableCostMicros": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "billableCostMicros": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "complete": {
+                                "type": "boolean"
                               },
                               "webSearchCostVisible": {
                                 "type": "boolean"
                               },
-                              "pricingConfigured": {
-                                "type": "boolean"
-                              },
-                              "modelPricingConfigured": {
-                                "type": "boolean"
-                              },
-                              "webSearchPricingConfigured": {
-                                "type": "boolean"
-                              },
-                              "pricedModelCallCount": {
+                              "settledModelCallCount": {
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
                               },
-                              "unpricedModelCallCount": {
+                              "incompleteModelCallCount": {
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
                               },
-                              "pricedWebSearchCallCount": {
+                              "settledWebSearchCallCount": {
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
                               },
-                              "unpricedWebSearchCallCount": {
+                              "incompleteWebSearchCallCount": {
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
                               }
                             },
                             "required": [
-                              "currency",
-                              "modelBilledCostMicros",
-                              "billedCostMicros",
+                              "status",
+                              "complete",
                               "webSearchCostVisible",
-                              "pricingConfigured",
-                              "modelPricingConfigured",
-                              "webSearchPricingConfigured",
-                              "pricedModelCallCount",
-                              "unpricedModelCallCount",
-                              "pricedWebSearchCallCount",
-                              "unpricedWebSearchCallCount"
+                              "settledModelCallCount",
+                              "incompleteModelCallCount",
+                              "settledWebSearchCallCount",
+                              "incompleteWebSearchCallCount"
                             ],
                             "additionalProperties": false
                           },
@@ -8741,6 +8797,7 @@
                         "required": [
                           "modelCallCount",
                           "inputTokens",
+                          "cachedInputTokens",
                           "outputTokens",
                           "totalTokens",
                           "webSearchCallCount",
@@ -8779,6 +8836,9 @@
                           "inputTokens": {
                             "type": "number"
                           },
+                          "cachedInputTokens": {
+                            "type": "number"
+                          },
                           "outputTokens": {
                             "type": "number"
                           },
@@ -8807,45 +8867,53 @@
                           "cost": {
                             "type": "object",
                             "properties": {
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "settled",
+                                  "incomplete",
+                                  "unpriced"
+                                ]
+                              },
                               "currency": {
                                 "type": "string"
                               },
-                              "modelBilledCostMicros": {
+                              "uncachedInputBillableCostMicros": {
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
                               },
-                              "webSearchBilledCostMicros": {
+                              "cachedInputBillableCostMicros": {
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
                               },
-                              "billedCostMicros": {
+                              "outputBillableCostMicros": {
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
+                              },
+                              "webSearchBillableCostMicros": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "billableCostMicros": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "complete": {
+                                "type": "boolean"
                               },
                               "webSearchCostVisible": {
-                                "type": "boolean"
-                              },
-                              "pricingConfigured": {
-                                "type": "boolean"
-                              },
-                              "modelPricingConfigured": {
-                                "type": "boolean"
-                              },
-                              "webSearchPricingConfigured": {
                                 "type": "boolean"
                               }
                             },
                             "required": [
-                              "currency",
-                              "modelBilledCostMicros",
-                              "billedCostMicros",
-                              "webSearchCostVisible",
-                              "pricingConfigured",
-                              "modelPricingConfigured",
-                              "webSearchPricingConfigured"
+                              "status",
+                              "complete",
+                              "webSearchCostVisible"
                             ],
                             "additionalProperties": false
                           }

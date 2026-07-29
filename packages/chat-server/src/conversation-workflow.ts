@@ -730,7 +730,7 @@ export class ConversationWorkflow {
             },
             context
           );
-          await this.options.usageGovernance.appendModelUsageEvent({
+          await this.options.usageGovernance.recordModelUsage({
             clientInstanceId: this.options.clientInstanceId,
             conversationId,
             agentRunId: runId,

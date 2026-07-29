@@ -183,7 +183,7 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
-  it("shows admins billed usage without internal cost policy", async () => {
+  it("shows admins billable usage without internal rate-card policy", async () => {
     const app = await createClientInstanceApp({
       config: createTestConfig({
         developmentAuth: {
@@ -207,8 +207,7 @@ describe("client instance app vertical slice", () => {
           ]
         },
         usageBudget: {
-          monthlySpendLimit: 200,
-          costSafetyMultiplier: 1.3
+          monthlySpendLimit: 200
         },
         usageSafeguards: {
           tokensPerMonth: 50000000
@@ -251,15 +250,19 @@ describe("client instance app vertical slice", () => {
         modelCallCount: 0,
         totalTokens: 0,
         cost: {
+          status: "settled",
           currency: "USD",
-          modelBilledCostMicros: 0,
-          billedCostMicros: 0,
+          uncachedInputBillableCostMicros: 0,
+          cachedInputBillableCostMicros: 0,
+          outputBillableCostMicros: 0,
+          billableCostMicros: 0,
+          complete: true,
           webSearchCostVisible: false
         }
       }
     });
     expect((adminUsageBody.today as { cost: Record<string, unknown> }).cost).not.toHaveProperty(
-      "webSearchBilledCostMicros"
+      "webSearchBillableCostMicros"
     );
     expect(JSON.stringify(adminUsageBody)).not.toContain("monthlySpendLimit");
     expect(JSON.stringify(adminUsageBody)).not.toContain("costSafetyMultiplier");
@@ -298,9 +301,13 @@ describe("client instance app vertical slice", () => {
         modelCallCount: 0,
         totalTokens: 0,
         cost: {
+          status: "settled",
           currency: "USD",
-          modelBilledCostMicros: 0,
-          billedCostMicros: 0,
+          uncachedInputBillableCostMicros: 0,
+          cachedInputBillableCostMicros: 0,
+          outputBillableCostMicros: 0,
+          billableCostMicros: 0,
+          complete: true,
           webSearchCostVisible: false
         }
       }
@@ -368,7 +375,7 @@ describe("client instance app vertical slice", () => {
       today: {
         cost: {
           webSearchCostVisible: true,
-          webSearchBilledCostMicros: 0
+          webSearchBillableCostMicros: 0
         }
       }
     });
@@ -462,7 +469,7 @@ describe("client instance app vertical slice", () => {
       store,
       budget: config.usage.budget,
       safeguards: config.usage.safeguards,
-      pricing: config.usage.pricing
+      costs: config.usage.costs
     });
     const conversation = await store.createConversation({
       clientInstanceId,
@@ -814,7 +821,7 @@ describe("client instance app vertical slice", () => {
       store,
       budget: config.usage.budget,
       safeguards: config.usage.safeguards,
-      pricing: config.usage.pricing
+      costs: config.usage.costs
     });
     const conversation = await store.createConversation({
       clientInstanceId,
@@ -2368,7 +2375,7 @@ describe("client instance app vertical slice", () => {
       store,
       budget: config.usage.budget,
       safeguards: config.usage.safeguards,
-      pricing: config.usage.pricing
+      costs: config.usage.costs
     });
     const readArtifacts: Array<{ clientInstanceId: string; artifactId: string }> = [];
     const server = await createChatServer({
@@ -2782,7 +2789,7 @@ describe("client instance app vertical slice", () => {
       store,
       budget: config.usage.budget,
       safeguards: config.usage.safeguards,
-      pricing: config.usage.pricing
+      costs: config.usage.costs
     });
     const user = await store.resolveUserIdentity({
       clientInstanceId,
@@ -3697,7 +3704,7 @@ describe("client instance app vertical slice", () => {
       store,
       budget: config.usage.budget,
       safeguards: config.usage.safeguards,
-      pricing: config.usage.pricing
+      costs: config.usage.costs
     });
     const createdPasswordSignIns: Array<{
       email: string;
@@ -4017,15 +4024,14 @@ describe("client instance app vertical slice", () => {
           }
         ],
         usageBudget: {
-          monthlySpendLimit: 200,
-          costSafetyMultiplier: 1.3
+          monthlySpendLimit: 200
         },
         usagePricing: {
           currency: "USD",
           models: []
         }
       })
-    ).toThrow("Spend budget requires configured pricing for model openai/gpt-4.1");
+    ).toThrow("Spend budget requires configured customer pricing for model openai/gpt-4.1");
   });
 
 });
@@ -4050,7 +4056,7 @@ async function createStaleRunRecoveryFixture(
     store,
     budget: config.usage.budget,
     safeguards: config.usage.safeguards,
-    pricing: config.usage.pricing
+    costs: config.usage.costs
   });
   const options: ChatServerOptions = {
     config,
@@ -4268,7 +4274,6 @@ function createTestConfig(input: {
   agentModelBindingId?: string;
   usageBudget?: {
     monthlySpendLimit?: number;
-    costSafetyMultiplier?: number;
   };
   usageSafeguards?: UsageSafeguardsConfig;
   executionWorkspaces?: unknown;
@@ -4315,7 +4320,26 @@ function createTestConfig(input: {
     usage: {
       budget: input.usageBudget ?? {},
       safeguards: input.usageSafeguards ?? {},
-      pricing: input.usagePricing
+      costs: input.usagePricing
+        ? {
+            customer: {
+              id: "test-customer",
+              version: "1",
+              currency: input.usagePricing.currency,
+              models: input.usagePricing.models.map((price) => ({
+                providerId: price.providerId,
+                model: price.model,
+                uncachedInputPricePerMillionTokens:
+                  price.inputPricePerMillionTokens,
+                cachedInputPricePerMillionTokens:
+                  price.inputPricePerMillionTokens,
+                outputPricePerMillionTokens:
+                  price.outputPricePerMillionTokens
+              })),
+              webSearch: input.usagePricing.webSearch ?? []
+            }
+          }
+        : {}
     },
     ...(input.webAccess ? { webAccess: input.webAccess } : {}),
     ...(input.executionWorkspaces ? { executionWorkspaces: input.executionWorkspaces } : {}),

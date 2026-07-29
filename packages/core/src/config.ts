@@ -92,7 +92,6 @@ export type { LocalizationConfig, LocalizedStringConfig };
 export interface UsageBudgetConfig {
   dailySpendLimit?: number;
   monthlySpendLimit?: number;
-  costSafetyMultiplier: number;
 }
 
 export interface UsageSafeguardsConfig {
@@ -101,23 +100,30 @@ export interface UsageSafeguardsConfig {
   tokensPerMonth?: number;
 }
 
-export interface UsagePricingModelConfig {
+export interface UsageRateCardModelConfig {
   providerId: string;
   model: string;
-  inputPricePerMillionTokens: number;
+  uncachedInputPricePerMillionTokens: number;
+  cachedInputPricePerMillionTokens: number;
   outputPricePerMillionTokens: number;
 }
 
-export interface UsagePricingWebSearchConfig {
+export interface UsageRateCardWebSearchConfig {
   providerId: string;
   model?: string;
   pricePerCall: number;
 }
 
-export interface UsagePricingConfig {
+export interface UsageRateCardConfig {
+  id: string;
+  version: string;
   currency: string;
-  models: UsagePricingModelConfig[];
-  webSearch?: UsagePricingWebSearchConfig[];
+  models: UsageRateCardModelConfig[];
+  webSearch?: UsageRateCardWebSearchConfig[];
+}
+
+export interface UsageCostConfig {
+  customer?: UsageRateCardConfig;
 }
 
 export interface ModelContextToolOutputBoundsConfig {

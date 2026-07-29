@@ -40,7 +40,7 @@ import {
   type RunObservationStore,
   type RunStartCommand,
   type ModelUsageEvent,
-  type ModelUsageEventInput,
+  type ModelUsageEventRecordInput,
   type ModelUsageEventStore,
   type ModelUsageWindowSummary,
   type CreateUserInput,
@@ -1032,10 +1032,9 @@ export class InMemoryPlatformStore
       .slice(0, limit);
   }
 
-  async appendModelUsageEvent(input: ModelUsageEventInput): Promise<ModelUsageEvent> {
+  async appendModelUsageEvent(input: ModelUsageEventRecordInput): Promise<ModelUsageEvent> {
     const event: ModelUsageEvent = {
       ...input,
-      webSearchCallCount: input.webSearchCallCount ?? 0,
       id: createPlatformId("usage"),
       createdAt: new Date().toISOString()
     };
@@ -1476,6 +1475,7 @@ function summarizeEvents(
       ...summary,
       modelCallCount: summary.modelCallCount + 1,
       inputTokens: summary.inputTokens + event.inputTokens,
+      cachedInputTokens: summary.cachedInputTokens + (event.cachedInputTokens ?? 0),
       outputTokens: summary.outputTokens + event.outputTokens,
       totalTokens: summary.totalTokens + event.totalTokens,
       webSearchCallCount: summary.webSearchCallCount + event.webSearchCallCount
@@ -1485,6 +1485,7 @@ function summarizeEvents(
       end,
       modelCallCount: 0,
       inputTokens: 0,
+      cachedInputTokens: 0,
       outputTokens: 0,
       totalTokens: 0,
       webSearchCallCount: 0

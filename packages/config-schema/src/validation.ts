@@ -137,8 +137,18 @@ export function assertSpendBudgetPricingCoverage(
     return;
   }
 
+  const customerRateCard = config.usage.costs.customer;
+  if (!customerRateCard) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "Spend budget requires an explicit customer rate card"
+    );
+  }
+
   const priceKeys = new Set(
-    config.usage.pricing.models.map((price) => createPricingKey(price.providerId, price.model))
+    customerRateCard.models.map((price) =>
+      createPricingKey(price.providerId, price.model)
+    )
   );
   const requiredPrices = new Set<string>();
 
@@ -163,7 +173,7 @@ export function assertSpendBudgetPricingCoverage(
 
   throw new AppError(
     "VALIDATION_FAILED",
-    `Spend budget requires configured pricing for model ${missingPrices.join(", ")}`
+    `Spend budget requires configured customer pricing for model ${missingPrices.join(", ")}`
   );
 }
 

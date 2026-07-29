@@ -43,6 +43,9 @@ describe("OpenAI-compatible model provider", () => {
           ],
           usage: {
             prompt_tokens: 10,
+            prompt_tokens_details: {
+              cached_tokens: 8
+            },
             completion_tokens: 2,
             total_tokens: 12
           }
@@ -91,6 +94,7 @@ describe("OpenAI-compatible model provider", () => {
     expect(new Set(providerToolNames).size).toBe(2);
     expect(completion.toolCalls[0]?.toolName).toBe("a__dot__b");
     expect(completion.usage).toMatchObject({
+      cachedInputTokens: 8,
       totalTokens: 12,
       source: "provider_reported"
     });
@@ -334,6 +338,9 @@ describe("OpenAI-compatible model provider", () => {
           ],
           usage: {
             input_tokens: 12,
+            input_tokens_details: {
+              cached_tokens: 8
+            },
             output_tokens: 4,
             total_tokens: 16
           }
@@ -417,6 +424,7 @@ describe("OpenAI-compatible model provider", () => {
         }
       ],
       usage: {
+        cachedInputTokens: 8,
         totalTokens: 16,
         source: "provider_reported"
       }

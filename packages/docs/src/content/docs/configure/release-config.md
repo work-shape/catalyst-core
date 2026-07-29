@@ -69,15 +69,25 @@ usage:
   budget:
     dailySpendLimit: 50
     monthlySpendLimit: 400
-    costSafetyMultiplier: 1.3
   safeguards:
     modelCallsPerDay: 1000
     tokensPerDay: 2500000
+  costs:
+    customer:
+      id: example-customer
+      version: "2026-07"
+      currency: EUR
+      models:
+        - providerId: openai
+          model: gpt-5.5
+          uncachedInputPricePerMillionTokens: 5
+          cachedInputPricePerMillionTokens: 0.5
+          outputPricePerMillionTokens: 30
 ```
 
-Daily and monthly spend limits use `usage.pricing.currency`. Set it to an ISO 4217 code such as `USD` or `EUR`, and express every configured model and web-search price in that same currency. Spend limits are conservative local controls after the safety multiplier, not exact provider invoices.
+Daily and monthly spend limits use `usage.costs.customer.currency`. Set it to the invoice currency and express every configured model and web-search price in that same currency.
 
-Usage pricing uses exact `providerId` and `model` rows. Keep historical model ids in this list when old usage should remain priced after a model rename or provider migration.
+The customer rate card uses exact `providerId` and `model` rows and prices uncached and cached input separately. Its `version` must change when any rate changes. Usage Governance persists the applied rates and billable amount with every new usage event, so changing the active card affects only future usage.
 
 ## Sharing Config Across Environments With `extends`
 

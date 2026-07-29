@@ -456,7 +456,7 @@ async function createPreviewServer(input: {
     store,
     budget: config.usage.budget,
     safeguards: config.usage.safeguards,
-    pricing: config.usage.pricing
+    costs: config.usage.costs
   });
   const server = await createChatServer({
     config,

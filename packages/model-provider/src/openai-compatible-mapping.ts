@@ -86,6 +86,10 @@ export function toModelUsage(usage: OpenAiCompatibleResponse["usage"]): ModelTok
 
   return {
     inputTokens: usage.prompt_tokens,
+    cachedInputTokens: normalizeCachedInputTokens(
+      usage.prompt_tokens_details?.cached_tokens,
+      usage.prompt_tokens
+    ),
     outputTokens: usage.completion_tokens,
     totalTokens: usage.total_tokens,
     source: "provider_reported",
@@ -108,6 +112,10 @@ export function toResponsesModelUsage(
 
   return {
     inputTokens: usage.input_tokens,
+    cachedInputTokens: normalizeCachedInputTokens(
+      usage.input_tokens_details?.cached_tokens,
+      usage.input_tokens
+    ),
     outputTokens: usage.output_tokens,
     totalTokens: usage.total_tokens,
     source: "provider_reported",
@@ -125,6 +133,16 @@ export function noReportedUsage(): ModelTokenUsage & {
     source: "not_reported",
     webSearchCallCount: 0
   };
+}
+
+function normalizeCachedInputTokens(
+  value: number | null | undefined,
+  inputTokens: number
+): number | undefined {
+  if (!Number.isFinite(value) || value === undefined || value === null) {
+    return undefined;
+  }
+  return Math.min(Math.max(Math.trunc(value), 0), inputTokens);
 }
 
 export function toOpenAiChatMessages(messages: ModelMessage[]): OpenAiCompatibleMessage[] {

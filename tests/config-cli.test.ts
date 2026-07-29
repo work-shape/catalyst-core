@@ -814,7 +814,7 @@ async function createFixture() {
       store,
       budget: config.usage.budget,
       safeguards: config.usage.safeguards,
-      pricing: config.usage.pricing
+      costs: config.usage.costs
     }),
     auditRecorder,
     configAssets: {

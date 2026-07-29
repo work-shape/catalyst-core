@@ -49,7 +49,7 @@ Audit events should not store:
 
 Model usage is governance metadata, not provider billing truth.
 
-Admin-facing usage views should expose consumption volume and client-billed cost totals: model calls, token counts, configured non-financial safeguards, recent model usage metadata, and the already-multiplied cost that the client should expect to be charged. This includes per-day and per-calendar-month billed summaries so admins can review historical consumption for billing. They should not expose provider pricing tables, raw provider cost, monthly spend limits, or cost safety multipliers. Web-search costs should only be displayed when web search is enabled for the instance.
+Admin-facing usage views expose consumption volume and customer billable totals: model calls, total and cached input tokens, configured non-financial safeguards, recent model usage metadata, and the persisted rate-card amount the customer should expect to be invoiced. Per-day and per-calendar-month summaries use “Billable” until an invoice is issued. They do not expose applied rates or internal pricing provenance. Web-search costs are displayed only when web search is enabled for the instance.
 
 Record:
 
@@ -59,7 +59,7 @@ Record:
 - conversation id
 - agent run id
 - correlation id
-- derived cost from release-config pricing where available
+- persisted customer billable cost and completeness state
 
 Use provider-side billing alerts or budgets as an external backstop.
 

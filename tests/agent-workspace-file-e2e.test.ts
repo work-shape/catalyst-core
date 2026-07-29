@@ -199,7 +199,7 @@ describe("agent workspace file e2e", () => {
         toolExecution,
         usageGovernance: new ModelUsageGovernance({
           store,
-          budget: { costSafetyMultiplier: 1 },
+          budget: {},
           safeguards: {}
         })
       });

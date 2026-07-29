@@ -689,15 +689,21 @@ async function createFixture(
       ? {
           usage: {
             budget: { monthlySpendLimit: 100 },
-            pricing: {
-              models: [
-                {
-                  providerId: "provider-a",
-                  model: "model-a",
-                  inputPricePerMillionTokens: 1,
-                  outputPricePerMillionTokens: 2
-                }
-              ]
+            costs: {
+              customer: {
+                id: "test-customer",
+                version: "1",
+                currency: "EUR",
+                models: [
+                  {
+                    providerId: "provider-a",
+                    model: "model-a",
+                    uncachedInputPricePerMillionTokens: 1,
+                    cachedInputPricePerMillionTokens: 1,
+                    outputPricePerMillionTokens: 2
+                  }
+                ]
+              }
             }
           }
         }
@@ -768,7 +774,7 @@ async function createFixture(
       store,
       budget: config.usage.budget,
       safeguards: config.usage.safeguards,
-      pricing: config.usage.pricing
+      costs: config.usage.costs
     }),
     auditRecorder,
     configAssets: {

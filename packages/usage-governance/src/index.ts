@@ -4,9 +4,16 @@ import {
   type ModelUsageEvent,
   type ModelUsageEventInput,
   type ModelUsageEventStore,
+  type ModelUsageRecorder,
   type ModelUsageWindowSummary,
+  type SettledUsageCostRecord,
   type UsageBudgetConfig,
-  type UsagePricingConfig,
+  type UsageCostComponents,
+  type UsageCostConfig,
+  type UsageCostMissingMeter,
+  type UsageCostRecord,
+  type UsageRateCardConfig,
+  type UsageRateCardModelConfig,
   type UsageSafeguardsConfig,
   createModelUsageWindowBounds
 } from "@vivd-catalyst/core";
@@ -15,57 +22,30 @@ export interface ModelUsageGovernanceOptions {
   store: ModelUsageEventStore;
   budget: UsageBudgetConfig;
   safeguards: UsageSafeguardsConfig;
-  pricing?: UsagePricingConfig;
+  costs?: UsageCostConfig;
 }
 
-export interface ModelUsageCost {
-  currency: string;
-  inputCostMicros: number;
-  outputCostMicros: number;
-  webSearchCostMicros: number;
-  totalCostMicros: number;
-  budgetedCostMicros: number;
-  costSafetyMultiplier: number;
-  pricingConfigured: boolean;
-  modelPricingConfigured: boolean;
-  webSearchPricingConfigured: boolean;
-}
-
-export interface ModelUsageCostSummary extends ModelUsageCost {
-  pricedModelCallCount: number;
-  unpricedModelCallCount: number;
-  pricedWebSearchCallCount: number;
-  unpricedWebSearchCallCount: number;
-}
-
-export interface CostedModelUsageWindowSummary extends ModelUsageWindowSummary {
-  cost: ModelUsageCostSummary;
-}
-
-export interface CostedModelUsageEvent extends ModelUsageEvent {
-  cost: ModelUsageCost;
-}
-
-export interface SafeModelUsageCost {
-  currency: string;
-  modelBilledCostMicros: number;
-  webSearchBilledCostMicros?: number;
-  billedCostMicros: number;
+export interface SafeModelUsageBillableCost {
+  status: UsageCostRecord["status"];
+  currency?: string;
+  uncachedInputBillableCostMicros?: number;
+  cachedInputBillableCostMicros?: number;
+  outputBillableCostMicros?: number;
+  webSearchBillableCostMicros?: number;
+  billableCostMicros?: number;
+  complete: boolean;
   webSearchCostVisible: boolean;
-  pricingConfigured: boolean;
-  modelPricingConfigured: boolean;
-  webSearchPricingConfigured: boolean;
 }
 
-export interface SafeModelUsageCostSummary extends SafeModelUsageCost {
-  pricedModelCallCount: number;
-  unpricedModelCallCount: number;
-  pricedWebSearchCallCount: number;
-  unpricedWebSearchCallCount: number;
+export interface SafeModelUsageBillableCostSummary extends SafeModelUsageBillableCost {
+  settledModelCallCount: number;
+  incompleteModelCallCount: number;
+  settledWebSearchCallCount: number;
+  incompleteWebSearchCallCount: number;
 }
 
 export interface SafeCostedModelUsageWindowSummary extends ModelUsageWindowSummary {
-  cost: SafeModelUsageCostSummary;
+  cost: SafeModelUsageBillableCostSummary;
 }
 
 export interface SafeCostedModelUsageDailyBucket extends SafeCostedModelUsageWindowSummary {
@@ -76,12 +56,31 @@ export interface SafeCostedModelUsageMonthlyBucket extends SafeCostedModelUsageW
   month: string;
 }
 
-export interface SafeCostedModelUsageEvent extends ModelUsageEvent {
-  cost: SafeModelUsageCost;
+export type SafeModelUsageEvent = Pick<
+  ModelUsageEvent,
+  | "id"
+  | "clientInstanceId"
+  | "conversationId"
+  | "agentRunId"
+  | "agentName"
+  | "providerId"
+  | "model"
+  | "inputTokens"
+  | "cachedInputTokens"
+  | "outputTokens"
+  | "totalTokens"
+  | "source"
+  | "webSearchCallCount"
+  | "correlationId"
+  | "createdAt"
+>;
+
+export interface SafeCostedModelUsageEvent extends SafeModelUsageEvent {
+  cost: SafeModelUsageBillableCost;
 }
 
 export interface SafeUsageSpendBudget {
-  currency: string;
+  currency?: string;
   dailyLimitMicros?: number;
   monthlyLimitMicros?: number;
 }
@@ -90,11 +89,11 @@ export interface UsageSummary {
   generatedAt: string;
   budget: UsageBudgetConfig;
   safeguards: UsageSafeguardsConfig;
-  pricing: UsagePricingConfig;
-  today: CostedModelUsageWindowSummary;
-  currentMonth: CostedModelUsageWindowSummary;
-  allTime: CostedModelUsageWindowSummary;
-  recentEvents: CostedModelUsageEvent[];
+  costs: UsageCostConfig;
+  today: ModelUsageWindowSummary;
+  currentMonth: ModelUsageWindowSummary;
+  allTime: ModelUsageWindowSummary;
+  recentEvents: ModelUsageEvent[];
 }
 
 export interface SafeUsageSummary {
@@ -109,11 +108,11 @@ export interface SafeUsageSummary {
   recentEvents: SafeCostedModelUsageEvent[];
 }
 
-export class ModelUsageGovernance implements ModelUsageEventStore {
+export class ModelUsageGovernance implements ModelUsageRecorder {
   private readonly store: ModelUsageEventStore;
   private readonly budget: UsageBudgetConfig;
   private readonly safeguards: UsageSafeguardsConfig;
-  private readonly pricing: UsagePricingConfig;
+  private readonly costs: UsageCostConfig;
   private readonly clientLocks = new Map<string, Promise<void>>();
   private readonly inFlightModelCalls = new Map<string, number>();
 
@@ -121,7 +120,7 @@ export class ModelUsageGovernance implements ModelUsageEventStore {
     this.store = options.store;
     this.budget = options.budget;
     this.safeguards = options.safeguards;
-    this.pricing = normalizeUsagePricing(options.pricing);
+    this.costs = options.costs ?? {};
   }
 
   async runModelCall<T>(
@@ -136,8 +135,22 @@ export class ModelUsageGovernance implements ModelUsageEventStore {
     }
   }
 
-  appendModelUsageEvent(input: ModelUsageEventInput): Promise<ModelUsageEvent> {
-    return this.store.appendModelUsageEvent(input);
+  recordModelUsage(input: ModelUsageEventInput): Promise<ModelUsageEvent> {
+    const normalizedInput: ModelUsageEventInput = {
+      ...input,
+      inputTokens: normalizeCount(input.inputTokens),
+      ...(input.cachedInputTokens === undefined
+        ? {}
+        : { cachedInputTokens: normalizeCachedInputTokens(input.cachedInputTokens, input.inputTokens) }),
+      outputTokens: normalizeCount(input.outputTokens),
+      totalTokens: normalizeCount(input.totalTokens),
+      webSearchCallCount: normalizeCount(input.webSearchCallCount ?? 0)
+    };
+    return this.store.appendModelUsageEvent({
+      ...normalizedInput,
+      webSearchCallCount: normalizedInput.webSearchCallCount ?? 0,
+      customerBillableCost: calculateUsageCost(normalizedInput, this.costs.customer)
+    });
   }
 
   summarizeModelUsageEvents(input: {
@@ -166,22 +179,18 @@ export class ModelUsageGovernance implements ModelUsageEventStore {
     const allEvents = await this.store.listModelUsageEvents({
       clientInstanceId: input.clientInstanceId
     });
-    const todayEvents = filterEventsByWindow(allEvents, todayStart);
-    const currentMonthEvents = filterEventsByWindow(allEvents, currentMonthStart);
-    const pricingCatalog = new UsagePricingCatalog(this.pricing, this.budget);
-
     return {
       generatedAt: now.toISOString(),
       budget: this.budget,
       safeguards: this.safeguards,
-      pricing: this.pricing,
-      today: summarizeCostedEvents(todayEvents, todayStart, undefined, pricingCatalog),
-      currentMonth: summarizeCostedEvents(currentMonthEvents, currentMonthStart, undefined, pricingCatalog),
-      allTime: summarizeCostedEvents(allEvents, undefined, undefined, pricingCatalog),
-      recentEvents: allEvents.slice(0, 25).map((event) => ({
-        ...event,
-        cost: pricingCatalog.calculateEventCost(event)
-      }))
+      costs: this.costs,
+      today: summarizeEvents(filterEventsByWindow(allEvents, todayStart), todayStart),
+      currentMonth: summarizeEvents(
+        filterEventsByWindow(allEvents, currentMonthStart),
+        currentMonthStart
+      ),
+      allTime: summarizeEvents(allEvents),
+      recentEvents: allEvents.slice(0, 25)
     };
   }
 
@@ -197,15 +206,19 @@ export class ModelUsageGovernance implements ModelUsageEventStore {
     });
     const todayEvents = filterEventsByWindow(allEvents, todayStart);
     const currentMonthEvents = filterEventsByWindow(allEvents, currentMonthStart);
-    const pricingCatalog = new UsagePricingCatalog(this.pricing, this.budget);
-    const inferredWebSearchCostVisibility =
-      pricingCatalog.hasWebSearchPricing() || allEvents.some((event) => event.webSearchCallCount > 0);
-    const showWebSearchCost = input.webSearchEnabled ?? inferredWebSearchCostVisibility;
+    const showWebSearchCost =
+      input.webSearchEnabled ??
+      Boolean(
+        this.costs.customer?.webSearch?.length ||
+          allEvents.some((event) => event.webSearchCallCount > 0)
+      );
 
     return {
       generatedAt: now.toISOString(),
       spendBudget: {
-        currency: this.pricing.currency,
+        ...(this.costs.customer?.currency
+          ? { currency: this.costs.customer.currency }
+          : {}),
         ...(this.budget.dailySpendLimit === undefined
           ? {}
           : { dailyLimitMicros: toMicros(this.budget.dailySpendLimit) }),
@@ -214,23 +227,40 @@ export class ModelUsageGovernance implements ModelUsageEventStore {
           : { monthlyLimitMicros: toMicros(this.budget.monthlySpendLimit) })
       },
       safeguards: this.safeguards,
-      today: toSafeWindowSummary(
-        summarizeCostedEvents(todayEvents, todayStart, undefined, pricingCatalog),
+      today: summarizeSafeEvents(
+        todayEvents,
+        todayStart,
+        undefined,
+        this.costs.customer,
         showWebSearchCost
       ),
-      currentMonth: toSafeWindowSummary(
-        summarizeCostedEvents(currentMonthEvents, currentMonthStart, undefined, pricingCatalog),
+      currentMonth: summarizeSafeEvents(
+        currentMonthEvents,
+        currentMonthStart,
+        undefined,
+        this.costs.customer,
         showWebSearchCost
       ),
-      allTime: toSafeWindowSummary(
-        summarizeCostedEvents(allEvents, undefined, undefined, pricingCatalog),
+      allTime: summarizeSafeEvents(
+        allEvents,
+        undefined,
+        undefined,
+        this.costs.customer,
         showWebSearchCost
       ),
-      dailyUsage: summarizeSafeDailyBuckets(allEvents, now, pricingCatalog, showWebSearchCost),
-      monthlyUsage: summarizeSafeMonthlyBuckets(allEvents, now, pricingCatalog, showWebSearchCost),
-      recentEvents: allEvents
-        .slice(0, 25)
-        .map((event) => toSafeEvent(event, pricingCatalog.calculateEventCost(event), showWebSearchCost))
+      dailyUsage: summarizeSafeDailyBuckets(
+        allEvents,
+        now,
+        this.costs.customer,
+        showWebSearchCost
+      ),
+      monthlyUsage: summarizeSafeMonthlyBuckets(
+        allEvents,
+        now,
+        this.costs.customer,
+        showWebSearchCost
+      ),
+      recentEvents: allEvents.slice(0, 25).map((event) => toSafeEvent(event, showWebSearchCost))
     };
   }
 
@@ -257,14 +287,7 @@ export class ModelUsageGovernance implements ModelUsageEventStore {
         clientInstanceId,
         start: todayStart
       });
-      const pricingCatalog = new UsagePricingCatalog(this.pricing, this.budget);
-      const costedToday = summarizeCostedEvents(
-        todayEvents,
-        todayStart,
-        undefined,
-        pricingCatalog
-      );
-      assertSpendBudget(costedToday.cost, this.budget.dailySpendLimit, "Daily");
+      assertSpendBudget(todayEvents, this.budget.dailySpendLimit, "Daily");
     }
 
     if (this.safeguards.tokensPerMonth || this.budget.monthlySpendLimit) {
@@ -284,14 +307,7 @@ export class ModelUsageGovernance implements ModelUsageEventStore {
           clientInstanceId,
           start: currentMonthStart
         });
-        const pricingCatalog = new UsagePricingCatalog(this.pricing, this.budget);
-        const costedMonth = summarizeCostedEvents(
-          currentMonthEvents,
-          currentMonthStart,
-          undefined,
-          pricingCatalog
-        );
-        assertSpendBudget(costedMonth.cost, this.budget.monthlySpendLimit, "Monthly");
+        assertSpendBudget(currentMonthEvents, this.budget.monthlySpendLimit, "Monthly");
       }
     }
   }
@@ -324,133 +340,302 @@ export class ModelUsageGovernance implements ModelUsageEventStore {
     return this.inFlightModelCalls.get(clientInstanceId) ?? 0;
   }
 
-  private async withClientLock<T>(
+  private withClientLock<T>(
     clientInstanceId: ClientInstanceId,
-    work: () => Promise<T>
+    execute: () => Promise<T>
   ): Promise<T> {
-    const key = clientInstanceId;
-    const previous = this.clientLocks.get(key) ?? Promise.resolve();
-    let release!: () => void;
+    const previous = this.clientLocks.get(clientInstanceId) ?? Promise.resolve();
+    let release: (() => void) | undefined;
     const current = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const next = previous.then(() => current);
-    this.clientLocks.set(key, next);
-
-    await previous;
-    try {
-      return await work();
-    } finally {
-      release();
-      if (this.clientLocks.get(key) === next) {
-        this.clientLocks.delete(key);
-      }
-    }
+    this.clientLocks.set(clientInstanceId, current);
+    return previous
+      .then(execute)
+      .finally(() => {
+        release?.();
+        if (this.clientLocks.get(clientInstanceId) === current) {
+          this.clientLocks.delete(clientInstanceId);
+        }
+      });
   }
 }
 
-function normalizeUsagePricing(pricing: UsagePricingConfig | undefined): UsagePricingConfig {
+export function calculateUsageCost(
+  event: ModelUsageEventInput,
+  rateCard: UsageRateCardConfig | undefined,
+  source: UsageCostRecord["source"] = "rate_card"
+): UsageCostRecord {
+  if (!rateCard) {
+    return incompleteCost("unpriced", source, ["model_rate"]);
+  }
+  if (event.source === "not_reported") {
+    return incompleteCost("incomplete", source, ["token_usage"], rateCard);
+  }
+
+  const modelRate = rateCard.models.find(
+    (candidate) => candidate.providerId === event.providerId && candidate.model === event.model
+  );
+  if (!modelRate) {
+    return incompleteCost("unpriced", source, ["model_rate"], rateCard);
+  }
+
+  const webSearchRate = findWebSearchRate(rateCard, event);
+  const missingMeters: UsageCostMissingMeter[] = [];
+  const cachedInputTokens = event.cachedInputTokens;
+  const cachePriceDiffers =
+    modelRate.cachedInputPricePerMillionTokens !==
+    modelRate.uncachedInputPricePerMillionTokens;
+  if (cachedInputTokens === undefined && cachePriceDiffers) {
+    missingMeters.push("cached_input_tokens");
+  }
+  if ((event.webSearchCallCount ?? 0) > 0 && !webSearchRate) {
+    missingMeters.push("web_search_rate");
+  }
+
+  const components = calculateKnownComponents(event, modelRate, webSearchRate);
+  const provenance = {
+    source,
+    calculationVersion: 1 as const,
+    rateCardId: rateCard.id,
+    rateCardVersion: rateCard.version,
+    currency: rateCard.currency,
+    appliedRates: {
+      uncachedInputPricePerMillionTokens: modelRate.uncachedInputPricePerMillionTokens,
+      cachedInputPricePerMillionTokens: modelRate.cachedInputPricePerMillionTokens,
+      outputPricePerMillionTokens: modelRate.outputPricePerMillionTokens,
+      ...(webSearchRate ? { webSearchPricePerCall: webSearchRate.pricePerCall } : {})
+    }
+  };
+
+  if (missingMeters.length > 0) {
+    return {
+      status: "incomplete",
+      ...provenance,
+      knownComponents: components,
+      knownCostMicros: totalComponents(components),
+      missingMeters
+    };
+  }
+
   return {
-    currency: pricing?.currency ?? "USD",
-    models: pricing?.models ?? [],
-    webSearch: pricing?.webSearch ?? []
+    status: "settled",
+    ...provenance,
+    components,
+    totalCostMicros: totalComponents(components)
   };
 }
 
-function assertDailySafeguards(
-  summary: ModelUsageWindowSummary,
-  safeguards: UsageSafeguardsConfig,
-  inFlightModelCallCount: number
-): void {
-  if (
-    safeguards.modelCallsPerDay &&
-    summary.modelCallCount + inFlightModelCallCount >= safeguards.modelCallsPerDay
-  ) {
-    throw new AppError("FORBIDDEN", "Daily model call safeguard has been reached");
-  }
-
-  if (safeguards.tokensPerDay && summary.totalTokens >= safeguards.tokensPerDay) {
-    throw new AppError("FORBIDDEN", "Daily model token safeguard has been reached");
-  }
+function calculateKnownComponents(
+  event: ModelUsageEventInput,
+  modelRate: UsageRateCardModelConfig,
+  webSearchRate: { pricePerCall: number } | undefined
+): UsageCostComponents {
+  const cachedInputTokens =
+    event.cachedInputTokens ??
+    (modelRate.cachedInputPricePerMillionTokens ===
+    modelRate.uncachedInputPricePerMillionTokens
+      ? 0
+      : undefined);
+  const inputKnown = cachedInputTokens !== undefined;
+  const uncachedInputTokens = inputKnown
+    ? Math.max(0, normalizeCount(event.inputTokens) - cachedInputTokens)
+    : 0;
+  return {
+    uncachedInputCostMicros: inputKnown
+      ? priceTokens(uncachedInputTokens, modelRate.uncachedInputPricePerMillionTokens)
+      : 0,
+    cachedInputCostMicros: inputKnown
+      ? priceTokens(cachedInputTokens, modelRate.cachedInputPricePerMillionTokens)
+      : 0,
+    outputCostMicros: priceTokens(
+      normalizeCount(event.outputTokens),
+      modelRate.outputPricePerMillionTokens
+    ),
+    webSearchCostMicros: webSearchRate
+      ? Math.round((event.webSearchCallCount ?? 0) * webSearchRate.pricePerCall * 1_000_000)
+      : 0
+  };
 }
 
-function assertSpendBudget(
-  cost: ModelUsageCostSummary,
-  spendLimit: number,
-  period: "Daily" | "Monthly"
-): void {
-  if (!cost.pricingConfigured) {
-    throw new AppError(
-      "FORBIDDEN",
-      `${period} model spend limit cannot be enforced because model pricing is missing`
-    );
-  }
-
-  if (cost.budgetedCostMicros >= toMicros(spendLimit)) {
-    throw new AppError("FORBIDDEN", `${period} model spend limit has been reached`);
-  }
+function incompleteCost(
+  status: "incomplete" | "unpriced",
+  source: UsageCostRecord["source"],
+  missingMeters: UsageCostMissingMeter[],
+  rateCard?: UsageRateCardConfig
+): UsageCostRecord {
+  return {
+    status,
+    source,
+    calculationVersion: 1,
+    ...(rateCard
+      ? {
+          rateCardId: rateCard.id,
+          rateCardVersion: rateCard.version,
+          currency: rateCard.currency
+        }
+      : {}),
+    missingMeters
+  };
 }
 
-function filterEventsByWindow(
-  events: ModelUsageEvent[],
-  start: string | undefined,
-  end?: string
-): ModelUsageEvent[] {
-  return events.filter(
-    (event) => (!start || event.createdAt >= start) && (!end || event.createdAt < end)
+function findWebSearchRate(
+  rateCard: UsageRateCardConfig,
+  event: ModelUsageEventInput
+): { pricePerCall: number } | undefined {
+  const rates = rateCard.webSearch ?? [];
+  return (
+    rates.find(
+      (candidate) =>
+        candidate.providerId === event.providerId && candidate.model === event.model
+    ) ??
+    rates.find(
+      (candidate) =>
+        candidate.providerId === event.providerId && candidate.model === undefined
+    )
   );
 }
 
-function summarizeCostedEvents(
+function summarizeEvents(
   events: ModelUsageEvent[],
-  start: string | undefined,
-  end: string | undefined,
-  pricingCatalog: UsagePricingCatalog
-): CostedModelUsageWindowSummary {
-  return events.reduce<CostedModelUsageWindowSummary>(
-    (summary, event) => {
-      const cost = pricingCatalog.calculateEventCost(event);
-      return {
-        ...summary,
-        modelCallCount: summary.modelCallCount + 1,
-        inputTokens: summary.inputTokens + event.inputTokens,
-        outputTokens: summary.outputTokens + event.outputTokens,
-        totalTokens: summary.totalTokens + event.totalTokens,
-        webSearchCallCount: summary.webSearchCallCount + event.webSearchCallCount,
-        cost: {
-          ...summary.cost,
-          inputCostMicros: summary.cost.inputCostMicros + cost.inputCostMicros,
-          outputCostMicros: summary.cost.outputCostMicros + cost.outputCostMicros,
-          webSearchCostMicros: summary.cost.webSearchCostMicros + cost.webSearchCostMicros,
-          totalCostMicros: summary.cost.totalCostMicros + cost.totalCostMicros,
-          budgetedCostMicros: summary.cost.budgetedCostMicros + cost.budgetedCostMicros,
-          pricingConfigured: summary.cost.pricingConfigured || cost.pricingConfigured,
-          webSearchPricingConfigured:
-            summary.cost.webSearchPricingConfigured && cost.webSearchPricingConfigured,
-          pricedModelCallCount:
-            summary.cost.pricedModelCallCount + (cost.modelPricingConfigured ? 1 : 0),
-          unpricedModelCallCount:
-            summary.cost.unpricedModelCallCount + (cost.modelPricingConfigured ? 0 : 1),
-          pricedWebSearchCallCount:
-            summary.cost.pricedWebSearchCallCount +
-            (cost.webSearchPricingConfigured ? event.webSearchCallCount : 0),
-          unpricedWebSearchCallCount:
-            summary.cost.unpricedWebSearchCallCount +
-            (cost.webSearchPricingConfigured ? 0 : event.webSearchCallCount)
-        }
-      };
-    },
+  start?: string,
+  end?: string
+): ModelUsageWindowSummary {
+  return events.reduce<ModelUsageWindowSummary>(
+    (summary, event) => ({
+      ...summary,
+      modelCallCount: summary.modelCallCount + 1,
+      inputTokens: summary.inputTokens + event.inputTokens,
+      cachedInputTokens: summary.cachedInputTokens + (event.cachedInputTokens ?? 0),
+      outputTokens: summary.outputTokens + event.outputTokens,
+      totalTokens: summary.totalTokens + event.totalTokens,
+      webSearchCallCount: summary.webSearchCallCount + event.webSearchCallCount
+    }),
     {
       start,
       end,
       modelCallCount: 0,
       inputTokens: 0,
+      cachedInputTokens: 0,
       outputTokens: 0,
       totalTokens: 0,
-      webSearchCallCount: 0,
-      cost: pricingCatalog.createEmptySummary()
+      webSearchCallCount: 0
     }
   );
+}
+
+function summarizeSafeEvents(
+  events: ModelUsageEvent[],
+  start: string | undefined,
+  end: string | undefined,
+  customerRateCard: UsageRateCardConfig | undefined,
+  showWebSearchCost: boolean
+): SafeCostedModelUsageWindowSummary {
+  const usage = summarizeEvents(events, start, end);
+  const settled = events.filter(
+    (
+      event
+    ): event is ModelUsageEvent & {
+      customerBillableCost: SettledUsageCostRecord;
+    } => event.customerBillableCost.status === "settled"
+  );
+  const incomplete = events.length - settled.length;
+  const currencies = new Set(
+    settled.map((event) => event.customerBillableCost.currency)
+  );
+  const complete =
+    incomplete === 0 &&
+    currencies.size <= 1 &&
+    (events.length > 0 || customerRateCard !== undefined);
+  const components = settled.reduce<UsageCostComponents>(
+    (total, event) => addComponents(total, event.customerBillableCost.components),
+    emptyComponents()
+  );
+  const currency =
+    currencies.values().next().value ??
+    (events.length === 0 ? customerRateCard?.currency : undefined);
+  const modelBillableCostMicros =
+    components.uncachedInputCostMicros +
+    components.cachedInputCostMicros +
+    components.outputCostMicros;
+  return {
+    ...usage,
+    cost: {
+      status:
+        complete
+          ? "settled"
+          : events.length === 0 && customerRateCard === undefined
+            ? "unpriced"
+            : "incomplete",
+      ...(currency ? { currency } : {}),
+      ...(complete
+        ? {
+            uncachedInputBillableCostMicros: components.uncachedInputCostMicros,
+            cachedInputBillableCostMicros: components.cachedInputCostMicros,
+            outputBillableCostMicros: components.outputCostMicros,
+            ...(showWebSearchCost
+              ? { webSearchBillableCostMicros: components.webSearchCostMicros }
+              : {}),
+            billableCostMicros: modelBillableCostMicros + components.webSearchCostMicros
+          }
+        : {}),
+      complete,
+      webSearchCostVisible: showWebSearchCost,
+      settledModelCallCount: settled.length,
+      incompleteModelCallCount: incomplete,
+      settledWebSearchCallCount: settled.reduce(
+        (count, event) => count + event.webSearchCallCount,
+        0
+      ),
+      incompleteWebSearchCallCount: events
+        .filter((event) => event.customerBillableCost.status !== "settled")
+        .reduce((count, event) => count + event.webSearchCallCount, 0)
+    }
+  };
+}
+
+function toSafeEvent(
+  event: ModelUsageEvent,
+  showWebSearchCost: boolean
+): SafeCostedModelUsageEvent {
+  const cost = event.customerBillableCost;
+  const settled = cost.status === "settled";
+  return {
+    id: event.id,
+    clientInstanceId: event.clientInstanceId,
+    conversationId: event.conversationId,
+    agentRunId: event.agentRunId,
+    agentName: event.agentName,
+    providerId: event.providerId,
+    model: event.model,
+    inputTokens: event.inputTokens,
+    ...(event.cachedInputTokens === undefined
+      ? {}
+      : { cachedInputTokens: event.cachedInputTokens }),
+    outputTokens: event.outputTokens,
+    totalTokens: event.totalTokens,
+    source: event.source,
+    webSearchCallCount: event.webSearchCallCount,
+    correlationId: event.correlationId,
+    createdAt: event.createdAt,
+    cost: {
+      status: cost.status,
+      ...(cost.currency ? { currency: cost.currency } : {}),
+      ...(settled
+        ? {
+            uncachedInputBillableCostMicros: cost.components.uncachedInputCostMicros,
+            cachedInputBillableCostMicros: cost.components.cachedInputCostMicros,
+            outputBillableCostMicros: cost.components.outputCostMicros,
+            ...(showWebSearchCost
+              ? { webSearchBillableCostMicros: cost.components.webSearchCostMicros }
+              : {}),
+            billableCostMicros: cost.totalCostMicros
+          }
+        : {}),
+      complete: settled,
+      webSearchCostVisible: showWebSearchCost
+    }
+  };
 }
 
 const DAILY_USAGE_BUCKET_COUNT = 30;
@@ -458,18 +643,20 @@ const DAILY_USAGE_BUCKET_COUNT = 30;
 function summarizeSafeDailyBuckets(
   events: ModelUsageEvent[],
   now: Date,
-  pricingCatalog: UsagePricingCatalog,
+  customerRateCard: UsageRateCardConfig | undefined,
   showWebSearchCost: boolean
 ): SafeCostedModelUsageDailyBucket[] {
   const buckets: SafeCostedModelUsageDailyBucket[] = [];
   for (let offset = DAILY_USAGE_BUCKET_COUNT - 1; offset >= 0; offset -= 1) {
     const start = utcDayStart(now, -offset).toISOString();
     const end = utcDayStart(now, -offset + 1).toISOString();
-    const dayEvents = filterEventsByWindow(events, start, end);
     buckets.push({
       date: start.slice(0, 10),
-      ...toSafeWindowSummary(
-        summarizeCostedEvents(dayEvents, start, end, pricingCatalog),
+      ...summarizeSafeEvents(
+        filterEventsByWindow(events, start, end),
+        start,
+        end,
+        customerRateCard,
         showWebSearchCost
       )
     });
@@ -480,7 +667,7 @@ function summarizeSafeDailyBuckets(
 function summarizeSafeMonthlyBuckets(
   events: ModelUsageEvent[],
   now: Date,
-  pricingCatalog: UsagePricingCatalog,
+  customerRateCard: UsageRateCardConfig | undefined,
   showWebSearchCost: boolean
 ): SafeCostedModelUsageMonthlyBucket[] {
   const earliestCreatedAt = events.reduce<string | undefined>(
@@ -490,25 +677,124 @@ function summarizeSafeMonthlyBuckets(
   const firstMonthStart = earliestCreatedAt
     ? utcMonthStart(new Date(earliestCreatedAt), 0)
     : utcMonthStart(now, 0);
-
   const buckets: SafeCostedModelUsageMonthlyBucket[] = [];
   for (let offset = 0; ; offset += 1) {
-    const monthStart = utcMonthStart(firstMonthStart, offset);
-    if (monthStart > now) {
+    const startDate = utcMonthStart(firstMonthStart, offset);
+    if (startDate > now) {
       break;
     }
-    const start = monthStart.toISOString();
+    const start = startDate.toISOString();
     const end = utcMonthStart(firstMonthStart, offset + 1).toISOString();
-    const monthEvents = filterEventsByWindow(events, start, end);
     buckets.push({
       month: start.slice(0, 7),
-      ...toSafeWindowSummary(
-        summarizeCostedEvents(monthEvents, start, end, pricingCatalog),
+      ...summarizeSafeEvents(
+        filterEventsByWindow(events, start, end),
+        start,
+        end,
+        customerRateCard,
         showWebSearchCost
       )
     });
   }
   return buckets;
+}
+
+function assertDailySafeguards(
+  summary: ModelUsageWindowSummary,
+  safeguards: UsageSafeguardsConfig,
+  inFlightCalls: number
+): void {
+  if (
+    safeguards.modelCallsPerDay &&
+    summary.modelCallCount + inFlightCalls >= safeguards.modelCallsPerDay
+  ) {
+    throw new AppError("FORBIDDEN", "Daily model call safeguard has been reached");
+  }
+  if (safeguards.tokensPerDay && summary.totalTokens >= safeguards.tokensPerDay) {
+    throw new AppError("FORBIDDEN", "Daily model token safeguard has been reached");
+  }
+}
+
+function assertSpendBudget(
+  events: ModelUsageEvent[],
+  limit: number,
+  label: "Daily" | "Monthly"
+): void {
+  const incomplete = events.find((event) => event.customerBillableCost.status !== "settled");
+  if (incomplete) {
+    throw new AppError(
+      "FORBIDDEN",
+      `${label} customer billable cost is incomplete; spend budget cannot be evaluated safely`
+    );
+  }
+  const total = events.reduce(
+    (sum, event) =>
+      sum +
+      (event.customerBillableCost.status === "settled"
+        ? event.customerBillableCost.totalCostMicros
+        : 0),
+    0
+  );
+  if (total >= toMicros(limit)) {
+    throw new AppError("FORBIDDEN", `${label} model spend budget has been reached`);
+  }
+}
+
+function filterEventsByWindow(
+  events: ModelUsageEvent[],
+  start?: string,
+  end?: string
+): ModelUsageEvent[] {
+  return events.filter(
+    (event) => (!start || event.createdAt >= start) && (!end || event.createdAt < end)
+  );
+}
+
+function addComponents(
+  left: UsageCostComponents,
+  right: UsageCostComponents
+): UsageCostComponents {
+  return {
+    uncachedInputCostMicros:
+      left.uncachedInputCostMicros + right.uncachedInputCostMicros,
+    cachedInputCostMicros: left.cachedInputCostMicros + right.cachedInputCostMicros,
+    outputCostMicros: left.outputCostMicros + right.outputCostMicros,
+    webSearchCostMicros: left.webSearchCostMicros + right.webSearchCostMicros
+  };
+}
+
+function emptyComponents(): UsageCostComponents {
+  return {
+    uncachedInputCostMicros: 0,
+    cachedInputCostMicros: 0,
+    outputCostMicros: 0,
+    webSearchCostMicros: 0
+  };
+}
+
+function totalComponents(components: UsageCostComponents): number {
+  return (
+    components.uncachedInputCostMicros +
+    components.cachedInputCostMicros +
+    components.outputCostMicros +
+    components.webSearchCostMicros
+  );
+}
+
+function normalizeCount(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
+}
+
+function normalizeCachedInputTokens(cached: number, input: number): number {
+  return Math.min(normalizeCount(cached), normalizeCount(input));
+}
+
+function priceTokens(tokens: number, pricePerMillionTokens: number): number {
+  return Math.round(normalizeCount(tokens) * pricePerMillionTokens);
+}
+
+function toMicros(value: number): number {
+  return Math.round(value * 1_000_000);
 }
 
 function utcDayStart(reference: Date, dayOffset: number): Date {
@@ -523,146 +809,4 @@ function utcDayStart(reference: Date, dayOffset: number): Date {
 
 function utcMonthStart(reference: Date, monthOffset: number): Date {
   return new Date(Date.UTC(reference.getUTCFullYear(), reference.getUTCMonth() + monthOffset, 1));
-}
-
-function toSafeWindowSummary(
-  summary: CostedModelUsageWindowSummary,
-  showWebSearchCost: boolean
-): SafeCostedModelUsageWindowSummary {
-  return {
-    start: summary.start,
-    end: summary.end,
-    modelCallCount: summary.modelCallCount,
-    inputTokens: summary.inputTokens,
-    outputTokens: summary.outputTokens,
-    totalTokens: summary.totalTokens,
-    webSearchCallCount: summary.webSearchCallCount,
-    cost: {
-      ...toSafeCost(summary.cost, showWebSearchCost),
-      pricedModelCallCount: summary.cost.pricedModelCallCount,
-      unpricedModelCallCount: summary.cost.unpricedModelCallCount,
-      pricedWebSearchCallCount: summary.cost.pricedWebSearchCallCount,
-      unpricedWebSearchCallCount: summary.cost.unpricedWebSearchCallCount
-    }
-  };
-}
-
-function toSafeEvent(
-  event: ModelUsageEvent,
-  cost: ModelUsageCost,
-  showWebSearchCost: boolean
-): SafeCostedModelUsageEvent {
-  return {
-    ...event,
-    cost: toSafeCost(cost, showWebSearchCost)
-  };
-}
-
-function toSafeCost(cost: ModelUsageCost, showWebSearchCost: boolean): SafeModelUsageCost {
-  const webSearchBilledCostMicros = Math.ceil(
-    cost.webSearchCostMicros * cost.costSafetyMultiplier
-  );
-  const modelBilledCostMicros = Math.max(0, cost.budgetedCostMicros - webSearchBilledCostMicros);
-  return {
-    currency: cost.currency,
-    modelBilledCostMicros,
-    ...(showWebSearchCost ? { webSearchBilledCostMicros } : {}),
-    billedCostMicros: cost.budgetedCostMicros,
-    webSearchCostVisible: showWebSearchCost,
-    pricingConfigured: cost.pricingConfigured,
-    modelPricingConfigured: cost.modelPricingConfigured,
-    webSearchPricingConfigured: cost.webSearchPricingConfigured
-  };
-}
-
-class UsagePricingCatalog {
-  private readonly modelPrices: UsagePricingConfig["models"];
-  private readonly webSearchPrices: NonNullable<UsagePricingConfig["webSearch"]>;
-
-  constructor(
-    private readonly pricing: UsagePricingConfig,
-    private readonly budget: UsageBudgetConfig
-  ) {
-    this.modelPrices = pricing.models;
-    this.webSearchPrices = pricing.webSearch ?? [];
-  }
-
-  hasWebSearchPricing(): boolean {
-    return this.webSearchPrices.length > 0;
-  }
-
-  createEmptySummary(): ModelUsageCostSummary {
-    return {
-      ...this.createEmptyCost(
-        this.modelPrices.length > 0 || this.webSearchPrices.length > 0,
-        this.modelPrices.length > 0
-      ),
-      pricedModelCallCount: 0,
-      unpricedModelCallCount: 0,
-      pricedWebSearchCallCount: 0,
-      unpricedWebSearchCallCount: 0
-    };
-  }
-
-  calculateEventCost(event: ModelUsageEvent): ModelUsageCost {
-    const modelPrice = this.modelPrices.find(
-      (candidate) => candidate.providerId === event.providerId && candidate.model === event.model
-    );
-    const webSearchPrice = this.findWebSearchPrice(event);
-
-    const inputCostMicros = modelPrice
-      ? Math.ceil(event.inputTokens * modelPrice.inputPricePerMillionTokens)
-      : 0;
-    const outputCostMicros = modelPrice
-      ? Math.ceil(event.outputTokens * modelPrice.outputPricePerMillionTokens)
-      : 0;
-    const webSearchCostMicros = webSearchPrice
-      ? Math.ceil(event.webSearchCallCount * webSearchPrice.pricePerCall * 1_000_000)
-      : 0;
-    const totalCostMicros = inputCostMicros + outputCostMicros + webSearchCostMicros;
-    const webSearchPricingConfigured = event.webSearchCallCount === 0 || Boolean(webSearchPrice);
-    return {
-      currency: this.pricing.currency,
-      inputCostMicros,
-      outputCostMicros,
-      webSearchCostMicros,
-      totalCostMicros,
-      budgetedCostMicros: Math.ceil(totalCostMicros * this.budget.costSafetyMultiplier),
-      costSafetyMultiplier: this.budget.costSafetyMultiplier,
-      pricingConfigured:
-        Boolean(modelPrice) || (event.webSearchCallCount > 0 && Boolean(webSearchPrice)),
-      modelPricingConfigured: Boolean(modelPrice),
-      webSearchPricingConfigured
-    };
-  }
-
-  private findWebSearchPrice(event: ModelUsageEvent): NonNullable<UsagePricingConfig["webSearch"]>[number] | undefined {
-    return (
-      this.webSearchPrices.find(
-        (candidate) => candidate.providerId === event.providerId && candidate.model === event.model
-      ) ??
-      this.webSearchPrices.find(
-        (candidate) => candidate.providerId === event.providerId && candidate.model === undefined
-      )
-    );
-  }
-
-  private createEmptyCost(pricingConfigured: boolean, modelPricingConfigured = pricingConfigured): ModelUsageCost {
-    return {
-      currency: this.pricing.currency,
-      inputCostMicros: 0,
-      outputCostMicros: 0,
-      webSearchCostMicros: 0,
-      totalCostMicros: 0,
-      budgetedCostMicros: 0,
-      costSafetyMultiplier: this.budget.costSafetyMultiplier,
-      pricingConfigured,
-      modelPricingConfigured,
-      webSearchPricingConfigured: true
-    };
-  }
-}
-
-function toMicros(value: number): number {
-  return Math.floor(value * 1_000_000);
 }

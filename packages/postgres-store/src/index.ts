@@ -37,7 +37,7 @@ import {
   type ExecutionWorkspaceMetadataStore,
   type ExecutionWorkspaceId,
   type ModelUsageEvent,
-  type ModelUsageEventInput,
+  type ModelUsageEventRecordInput,
   type ModelUsageEventStore,
   type ModelUsageWindowSummary,
   type PlatformFileStore,
@@ -729,7 +729,7 @@ export class PostgresPlatformStore
     return listPostgresAuditEvents(this.db, input);
   }
 
-  async appendModelUsageEvent(input: ModelUsageEventInput): Promise<ModelUsageEvent> {
+  async appendModelUsageEvent(input: ModelUsageEventRecordInput): Promise<ModelUsageEvent> {
     return appendPostgresModelUsageEvent(this.db, input);
   }
 

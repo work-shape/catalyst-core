@@ -1,14 +1,14 @@
 import {
   type AgentRunId,
   type ModelProviderConfig,
-  type ModelUsageEventStore,
+  type ModelUsageRecorder,
   type RuntimeCallContext,
   type StartAgentRunInput
 } from "@vivd-catalyst/core";
 import type { ModelCompletion } from "@vivd-catalyst/model-provider";
 
 export async function recordModelUsage(input: {
-  usageStore: ModelUsageEventStore;
+  usageStore: ModelUsageRecorder;
   runId: AgentRunId;
   startInput: StartAgentRunInput;
   context: RuntimeCallContext;
@@ -16,7 +16,7 @@ export async function recordModelUsage(input: {
   model: string;
   completion: ModelCompletion;
 }): Promise<void> {
-  await input.usageStore.appendModelUsageEvent({
+  await input.usageStore.recordModelUsage({
     clientInstanceId: input.context.clientInstanceId,
     conversationId: input.startInput.conversationId,
     agentRunId: input.runId,
