@@ -28,13 +28,31 @@ import ExcelJS, {
   type Style,
   type Worksheet
 } from "exceljs";
+import {
+  extractSpreadsheetVisuals,
+  type SpreadsheetVisual
+} from "./spreadsheet-visuals";
 
 export async function workbookToUniverSnapshot(buffer: ArrayBuffer): Promise<IWorkbookData> {
+  return (await workbookToUniverPreview(buffer)).workbookData;
+}
+
+export interface SpreadsheetWorkbookPreview {
+  workbookData: IWorkbookData;
+  visuals: SpreadsheetVisual[];
+}
+
+export async function workbookToUniverPreview(
+  buffer: ArrayBuffer
+): Promise<SpreadsheetWorkbookPreview> {
   const workbook = new ExcelJS.Workbook();
   try {
     await workbook.xlsx.load(buffer);
   } catch {
-    return legacyWorkbookToUniverSnapshot(buffer);
+    return {
+      workbookData: await legacyWorkbookToUniverSnapshot(buffer),
+      visuals: []
+    };
   }
 
   const styleRegistry = new StyleRegistry();
@@ -49,7 +67,7 @@ export async function workbookToUniverSnapshot(buffer: ArrayBuffer): Promise<IWo
     );
   });
 
-  return {
+  const workbookData: IWorkbookData = {
     id: `workbook-${randomId()}`,
     name: workbook.title || "Workbook",
     appVersion: "3.0.0-alpha",
@@ -58,6 +76,15 @@ export async function workbookToUniverSnapshot(buffer: ArrayBuffer): Promise<IWo
     sheetOrder,
     sheets
   };
+  const visuals = await extractSpreadsheetVisuals(buffer, workbook);
+  for (const visual of visuals) {
+    const sheet = Object.values(workbookData.sheets).find((item) => item.name === visual.sheetName);
+    if (sheet) {
+      sheet.rowCount = Math.max(sheet.rowCount ?? 0, visual.anchor.endRow + 2);
+      sheet.columnCount = Math.max(sheet.columnCount ?? 0, visual.anchor.endColumn + 2);
+    }
+  }
+  return { workbookData, visuals };
 }
 
 class StyleRegistry {

@@ -1,12 +1,19 @@
 import {
+  BooleanNumber,
   LocaleType,
   LogLevel,
   Univer,
   UniverInstanceType,
   type IWorkbookData
 } from "@univerjs/core";
+import { FUniver } from "@univerjs/core/facade";
 import { UniverSheetsCorePreset } from "@univerjs/preset-sheets-core";
 import enUS from "@univerjs/preset-sheets-core/locales/en-US";
+import { UniverSheetsDrawingPlugin } from "@univerjs/sheets-drawing";
+import { UniverSheetsDrawingUIPlugin } from "@univerjs/sheets-drawing-ui";
+import "@univerjs/sheets-drawing-ui/facade";
+import "@univerjs/sheets-drawing-ui/lib/index.css";
+import "@univerjs/ui/facade";
 import { PptxViewer, RECOMMENDED_ZIP_LIMITS } from "@aiden0z/pptx-renderer";
 import type { ApiClient } from "@vivd-catalyst/api-client";
 import { renderAsync as renderDocxAsync } from "docx-preview";
@@ -18,7 +25,15 @@ import {
 import { ArtifactPreviewFrame, ArtifactPreviewMessage } from "./artifact-preview-shell";
 import { useTranslation } from "./i18n";
 import { MarkdownArtifact } from "./markdown-text";
-import { workbookToUniverSnapshot } from "./spreadsheet-preview";
+import {
+  workbookToUniverPreview,
+  type SpreadsheetWorkbookPreview
+} from "./spreadsheet-preview";
+import {
+  SPREADSHEET_VISUAL_COMPONENT,
+  SpreadsheetVisualLayer
+} from "./spreadsheet-visual-layer";
+import type { SpreadsheetVisual, SpreadsheetVisualAnchor } from "./spreadsheet-visuals";
 import { Spinner } from "./ui/spinner";
 import {
   artifactDisplayFilename,
@@ -507,19 +522,19 @@ function useBlobText(blob: Blob): string | undefined {
 
 function SpreadsheetArtifactPreview({ blob }: { blob: Blob }) {
   const { t } = useTranslation();
-  const [workbookData, setWorkbookData] = useState<IWorkbookData | undefined>();
+  const [preview, setPreview] = useState<SpreadsheetWorkbookPreview | undefined>();
   const [error, setError] = useState<string | undefined>();
 
   useEffect(() => {
     let cancelled = false;
-    setWorkbookData(undefined);
+    setPreview(undefined);
     setError(undefined);
     void blob
       .arrayBuffer()
-      .then((buffer) => workbookToUniverSnapshot(buffer))
-      .then((snapshot) => {
+      .then((buffer) => workbookToUniverPreview(buffer))
+      .then((nextPreview) => {
         if (!cancelled) {
-          setWorkbookData(snapshot);
+          setPreview(nextPreview);
         }
       })
       .catch((value: unknown) => {
@@ -543,7 +558,7 @@ function SpreadsheetArtifactPreview({ blob }: { blob: Blob }) {
     );
   }
 
-  if (!workbookData) {
+  if (!preview) {
     return (
       <ArtifactPreviewMessage
         fileType={{ badge: "XLS", label: "Spreadsheet", className: "bg-emerald-700", extension: "xlsx" }}
@@ -552,10 +567,21 @@ function SpreadsheetArtifactPreview({ blob }: { blob: Blob }) {
     );
   }
 
-  return <UniverReadOnlyWorkbook workbookData={workbookData} />;
+  return (
+    <UniverReadOnlyWorkbook
+      visuals={preview.visuals}
+      workbookData={preview.workbookData}
+    />
+  );
 }
 
-function UniverReadOnlyWorkbook({ workbookData }: { workbookData: IWorkbookData }) {
+function UniverReadOnlyWorkbook({
+  workbookData,
+  visuals
+}: {
+  workbookData: IWorkbookData;
+  visuals: SpreadsheetVisual[];
+}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -590,12 +616,47 @@ function UniverReadOnlyWorkbook({ workbookData }: { workbookData: IWorkbookData 
       const [plugin, options] = Array.isArray(pluginEntry) ? pluginEntry : [pluginEntry, undefined];
       univer.registerPlugin(plugin, options as never);
     }
+    univer.registerPlugin(UniverSheetsDrawingPlugin);
+    univer.registerPlugin(UniverSheetsDrawingUIPlugin);
+    const univerAPI = FUniver.newAPI(univer);
+    const componentDisposable = univerAPI.registerComponent(
+      SPREADSHEET_VISUAL_COMPONENT,
+      SpreadsheetVisualLayer
+    );
+    const visualDisposables: Array<{ dispose: () => void }> = [];
     univer.createUnit<IWorkbookData, never>(UniverInstanceType.UNIVER_SHEET, workbookData);
+    const visualTimer = window.setTimeout(() => {
+      const workbook = univerAPI.getActiveWorkbook();
+      for (const visual of visuals) {
+        const worksheet = workbook?.getSheetByName(visual.sheetName);
+        const sheetData = Object.values(workbookData.sheets).find(
+          (sheet) => sheet.name === visual.sheetName
+        );
+        if (!worksheet || !sheetData) {
+          continue;
+        }
+        const disposable = worksheet.addFloatDomToPosition(
+          {
+            allowTransform: false,
+            componentKey: SPREADSHEET_VISUAL_COMPONENT,
+            data: visual as never,
+            initPosition: visualPosition(visual.anchor, sheetData)
+          },
+          visual.id
+        );
+        if (disposable) {
+          visualDisposables.push(disposable);
+        }
+      }
+    }, 100);
 
     return () => {
+      window.clearTimeout(visualTimer);
+      visualDisposables.forEach((disposable) => disposable.dispose());
+      componentDisposable.dispose();
       univer.dispose();
     };
-  }, [workbookData]);
+  }, [visuals, workbookData]);
 
   return (
     <div
@@ -607,6 +668,48 @@ function UniverReadOnlyWorkbook({ workbookData }: { workbookData: IWorkbookData 
       ref={containerRef}
     />
   );
+}
+
+function visualPosition(
+  anchor: SpreadsheetVisualAnchor,
+  sheet: Partial<NonNullable<IWorkbookData["sheets"]>[string]>
+) {
+  const startX = sheetSpan(sheet.columnData, sheet.defaultColumnWidth ?? 88, 0, anchor.startColumn);
+  const startY = sheetSpan(sheet.rowData, sheet.defaultRowHeight ?? 24, 0, anchor.startRow);
+  const width = anchor.width
+    ?? sheetSpan(
+      sheet.columnData,
+      sheet.defaultColumnWidth ?? 88,
+      anchor.startColumn,
+      anchor.endColumn + 1
+    );
+  const height = anchor.height
+    ?? sheetSpan(
+      sheet.rowData,
+      sheet.defaultRowHeight ?? 24,
+      anchor.startRow,
+      anchor.endRow + 1
+    );
+  return {
+    startX,
+    startY,
+    endX: startX + width,
+    endY: startY + height
+  };
+}
+
+function sheetSpan(
+  data: Record<number, { hd?: BooleanNumber; h?: number; w?: number }> | undefined,
+  defaultSize: number,
+  start: number,
+  end: number
+): number {
+  let size = 0;
+  for (let index = start; index < end; index += 1) {
+    const item = data?.[index];
+    size += item?.hd === BooleanNumber.TRUE ? 0 : item?.h ?? item?.w ?? defaultSize;
+  }
+  return size;
 }
 
 function blockSpreadsheetEditingKeys(event: KeyboardEvent<HTMLDivElement>) {
