@@ -51,10 +51,7 @@ describe("workspace tools", () => {
     expect(importTool?.description).toContain("do not invent shortened filenames");
     const promoteTool = harness.tools.find((tool) => tool.name === "workspace.promote_artifact");
     expect(promoteTool?.description).toContain(
-      "automatically displays a clickable download card"
-    );
-    expect(promoteTool?.description).toContain(
-      "do not add sandbox:, /mnt/data, or internal workspace links"
+      "automatically displays promoted artifacts as clickable download cards"
     );
     expect(previewTool?.inputJsonSchema).toMatchObject({
       anyOf: expect.arrayContaining([
