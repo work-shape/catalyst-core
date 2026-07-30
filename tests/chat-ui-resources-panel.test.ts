@@ -12,7 +12,10 @@ import {
   resolveResourcesPanelOpen,
   structuredDataToTsv
 } from "../packages/chat-ui/src/resources-panel-model";
-import { ResourcesPanel } from "../packages/chat-ui/src/resources-panel";
+import {
+  ResourcesPanel,
+  SourceImagePreview
+} from "../packages/chat-ui/src/resources-panel";
 import { StructuredDataView } from "../packages/chat-ui/src/structured-data-view";
 import { ToolDisplayPanelProvider } from "../packages/chat-ui/src/tool-display-panel";
 
@@ -207,6 +210,28 @@ describe("Resources panel rendering", () => {
     expect(markup).toContain("Umsatz");
     expect(markup).toContain("1.234,5");
     expect(markup).toContain("Ja");
+  });
+
+  it("renders cookie-authenticated source images through the browser-managed URL", () => {
+    const client = createApiClient({ baseUrl: "https://example.test" });
+    const markup = renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { locale: "de" },
+        createElement(SourceImagePreview, {
+          client,
+          conversationId: "conversation/1",
+          fileId: "file 1",
+          filename: "Screenshot.png"
+        })
+      )
+    );
+
+    expect(markup).toContain(
+      'src="https://example.test/api/conversations/conversation%2F1/files/file%201/content"'
+    );
+    expect(markup).toContain('alt="Screenshot.png"');
+    expect(markup).not.toContain("Inhalte konnten nicht geladen werden.");
   });
 });
 

@@ -509,7 +509,7 @@ function ResourceDownloadButton({
   );
 }
 
-function SourceImagePreview({
+export function SourceImagePreview({
   client,
   conversationId,
   fileId,
@@ -521,12 +521,22 @@ function SourceImagePreview({
   filename: string;
 }) {
   const { t } = useTranslation();
-  const [url, setUrl] = useState<string>();
+  const directUrl = client.browserManagedDownloads
+    ? client.conversationFileContentUrl(conversationId, fileId)
+    : undefined;
+  const [url, setUrl] = useState<string | undefined>(directUrl);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
+    if (directUrl) {
+      setUrl(directUrl);
+      setFailed(false);
+      return undefined;
+    }
+
     let active = true;
     let objectUrl: string | undefined;
+    setUrl(undefined);
     setFailed(false);
     void client
       .conversationFileContent(conversationId, fileId)
@@ -547,7 +557,7 @@ function SourceImagePreview({
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [client, conversationId, fileId]);
+  }, [client, conversationId, directUrl, fileId]);
 
   if (failed) {
     return (
@@ -558,7 +568,12 @@ function SourceImagePreview({
   }
   return url ? (
     <div className="flex h-full min-h-64 items-center justify-center bg-muted/20 p-4">
-      <img src={url} alt={filename} className="max-h-full max-w-full object-contain" />
+      <img
+        src={url}
+        alt={filename}
+        className="max-h-full max-w-full object-contain"
+        onError={() => setFailed(true)}
+      />
     </div>
   ) : (
     <div className="flex min-h-64 items-center justify-center">

@@ -127,7 +127,7 @@ describe("api operation catalog and client", () => {
 
     expect(await blob.text()).toBe("artifact-bytes");
     expect(blob.type).toBe("application/pdf");
-    expect(client.browserManagedArtifactDownloads).toBe(false);
+    expect(client.browserManagedDownloads).toBe(false);
     expect(client.conversationArtifactContentUrl("conv 1", "art/final")).toBe(
       `https://chat.example${apiOperations.getConversationArtifactContent.buildPath({
         params: { conversationId: "conv 1", artifactId: "art/final" }
@@ -143,6 +143,18 @@ describe("api operation catalog and client", () => {
     expect(request?.method).toBe("GET");
     expect(request?.credentials).toBe("include");
     expect(request?.headers.get("authorization")).toBe("Bearer test-token");
+  });
+
+  it("builds browser-managed inline file URLs with encoded identifiers", () => {
+    const client = createApiClient({
+      baseUrl: "https://chat.example/"
+    });
+
+    expect(client.conversationFileContentUrl("conv 1", "file/image")).toBe(
+      `https://chat.example${apiOperations.getConversationFileContent.buildPath({
+        params: { conversationId: "conv 1", fileId: "file/image" }
+      })}`
+    );
   });
 
   it("fetches promoted managed artifact preview state through the API client", async () => {
@@ -202,7 +214,7 @@ describe("api operation catalog and client", () => {
       baseUrl: "https://chat.example/"
     });
 
-    expect(client.browserManagedArtifactDownloads).toBe(true);
+    expect(client.browserManagedDownloads).toBe(true);
     expect(client.conversationArtifactContentUrl("conversation/with space", "art/final")).toBe(
       "https://chat.example/api/conversations/conversation%2Fwith%20space/artifacts/art%2Ffinal/content"
     );

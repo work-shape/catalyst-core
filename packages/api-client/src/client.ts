@@ -40,7 +40,7 @@ type GeneratedResult<T> =
 
 export function createApiClient(options: ApiClientOptions) {
   const baseUrl = options.baseUrl.replace(/\/$/u, "");
-  const browserManagedArtifactDownloads = options.browserManagedDownloads ?? !options.getToken;
+  const browserManagedDownloads = options.browserManagedDownloads ?? !options.getToken;
   const generatedClient = createGeneratedClient({
     baseUrl,
     credentials: "include",
@@ -306,7 +306,7 @@ export function createApiClient(options: ApiClientOptions) {
   };
 
   return {
-    browserManagedArtifactDownloads,
+    browserManagedDownloads,
     me: () =>
       unwrapJson(
         generatedSdk.getCurrentUser({ client: generatedClient }),
@@ -421,6 +421,12 @@ export function createApiClient(options: ApiClientOptions) {
           client: generatedClient,
           path: { conversationId, fileId },
           query: download ? { download: "true" } : {}
+        })
+      ),
+    conversationFileContentUrl: (conversationId: string, fileId: string) =>
+      buildUrl(
+        apiOperations.getConversationFileContent.buildPath({
+          params: { conversationId, fileId }
         })
       ),
     conversationArtifactContentUrl: (conversationId: string, artifactId: string) =>

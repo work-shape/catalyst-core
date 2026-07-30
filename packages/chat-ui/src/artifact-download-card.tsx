@@ -186,7 +186,7 @@ export function ArtifactDownloadButton({
   const downloadAvailable = Boolean(client && conversationId);
   const large = variant === "deliverable";
   const nativeDownloadUrl =
-    downloadAvailable && client?.browserManagedArtifactDownloads && conversationId
+    downloadAvailable && client?.browserManagedDownloads && conversationId
       ? client.conversationArtifactContentUrl(conversationId, artifact.artifactId)
       : undefined;
   const className = cn(

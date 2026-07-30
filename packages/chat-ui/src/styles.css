@@ -153,9 +153,11 @@
   }
 
   /* Reserves room for the floating Resources panel by shifting the thread
-     column left; the scrollbar stays at the viewport edge. */
+     column left; the scrollbar stays at the viewport edge. Symmetric gutters
+     keep the column centered even when a classic scrollbar takes up space. */
   .chat-thread-inset {
     padding-right: var(--resources-inset, 0px);
+    scrollbar-gutter: stable both-edges;
     transition: padding-right 300ms ease-out;
   }
 
