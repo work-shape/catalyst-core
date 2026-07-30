@@ -152,6 +152,17 @@
     background: transparent;
   }
 
+  /* Shifts the thread column left of the floating Resources panel: no shift
+     while the panel fits in the natural centering margin, otherwise only as
+     far as needed to keep a constant clearance. */
+  .chat-thread-inset {
+    padding-right: min(
+      var(--resources-inset, 0px),
+      max(0px, calc(var(--thread-max-width, 52rem) + 2 * var(--resources-inset, 0px) - 100%))
+    );
+    transition: padding-right 300ms ease-out;
+  }
+
   .chat-markdown > :first-child {
     margin-top: 0;
   }
