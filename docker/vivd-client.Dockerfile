@@ -5,12 +5,15 @@ FROM node:24-bookworm-slim AS base
 WORKDIR /app
 RUN corepack enable
 
-FROM base AS workspace-artifact-runtime
+FROM node:24-trixie-slim AS workspace-artifact-runtime
 
 WORKDIR /workspace
 ENV NODE_ENV=production
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV SAL_USE_VCLPLUGIN=svp
 
 RUN --mount=type=cache,id=vivd-apt-lists,target=/var/lib/apt/lists,sharing=locked \
   --mount=type=cache,id=vivd-apt-cache,target=/var/cache/apt,sharing=locked \
@@ -21,8 +24,19 @@ RUN --mount=type=cache,id=vivd-apt-lists,target=/var/lib/apt/lists,sharing=locke
     curl \
     file \
     fontconfig \
+    fonts-crosextra-caladea \
+    fonts-crosextra-carlito \
     fonts-dejavu \
+    fonts-inter-variable \
+    fonts-lato \
     fonts-liberation \
+    fonts-montserrat \
+    fonts-noto-cjk \
+    fonts-noto-color-emoji \
+    fonts-noto-core \
+    fonts-open-sans \
+    fonts-roboto \
+    fonts-urw-base35 \
     imagemagick \
     jq \
     libreoffice-calc-nogui \
@@ -43,6 +57,10 @@ RUN --mount=type=cache,id=vivd-apt-lists,target=/var/lib/apt/lists,sharing=locke
     python-pptx==0.6.23 \
     reportlab==4.2.2 \
   && /bin/bash --version \
+  && fc-match Carlito | grep -qi Carlito \
+  && fc-match Caladea | grep -qi Caladea \
+  && fc-match "Noto Sans" | grep -qi "Noto Sans" \
+  && fc-match Montserrat | grep -qi Montserrat \
   && python3 -c "import docx, openpyxl, pdfplumber, pptx, pypdf, reportlab, xlsxwriter; from PIL import Image" \
   && node --version \
   && soffice --headless --version \

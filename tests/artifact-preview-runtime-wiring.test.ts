@@ -8,8 +8,19 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const nativeArtifactRuntimePackages = [
   "bash",
   "fontconfig",
+  "fonts-crosextra-caladea",
+  "fonts-crosextra-carlito",
   "fonts-dejavu",
+  "fonts-inter-variable",
+  "fonts-lato",
   "fonts-liberation",
+  "fonts-montserrat",
+  "fonts-noto-cjk",
+  "fonts-noto-color-emoji",
+  "fonts-noto-core",
+  "fonts-open-sans",
+  "fonts-roboto",
+  "fonts-urw-base35",
   "imagemagick",
   "jq",
   "libreoffice-calc-nogui",
@@ -162,7 +173,10 @@ describe("artifact preview runtime wiring", () => {
     expect(previewRuntime).toContain("FROM workspace-artifact-runtime AS artifact-preview-runtime");
     expect(artifactWorker).toContain("FROM artifact-preview-runtime AS artifact-preview-worker");
     expect(artifactWorker).toContain("ARTIFACT_PREVIEW_WORKER_ENTRY");
-    expect(artifactRuntime).toContain("FROM base AS workspace-artifact-runtime");
+    expect(artifactRuntime).toContain("FROM node:24-trixie-slim AS workspace-artifact-runtime");
+    expect(artifactRuntime).toContain("SAL_USE_VCLPLUGIN=svp");
+    expect(artifactRuntime).toContain("fc-match Carlito");
+    expect(artifactRuntime).toContain("fc-match Caladea");
     expect(artifactRuntime).toContain("PIP_DISABLE_PIP_VERSION_CHECK=1");
     expect(artifactRuntime).toContain("PYTHONDONTWRITEBYTECODE=1");
     expect(artifactRuntime).toContain("python3 -m pip install --no-cache-dir --break-system-packages");
