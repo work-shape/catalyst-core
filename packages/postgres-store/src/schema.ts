@@ -35,6 +35,7 @@ import type {
   RunStartCommand,
   ApiCredentialRecord,
   ServicePrincipalRecord,
+  StructuredDataResourceRecord,
   UserRecord,
   WorkspaceCommand,
   WorkspaceFile
@@ -509,6 +510,30 @@ export const conversationAttachments = pgTable(
   ]
 );
 
+export const structuredDataResources = pgTable(
+  "structured_data_resources",
+  {
+    id: text("id").primaryKey(),
+    clientInstanceId: text("client_instance_id").notNull(),
+    conversationId: text("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    resourceKey: text("resource_key").notNull(),
+    title: text("title").notNull(),
+    state: jsonb("state").$type<StructuredDataResourceRecord["state"]>().notNull(),
+    revision: integer("revision").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    uniqueIndex("structured_data_resources_conversation_key_idx").on(
+      table.clientInstanceId,
+      table.conversationId,
+      table.resourceKey
+    )
+  ]
+);
+
 export const managedArtifacts = pgTable(
   "managed_artifacts",
   {
@@ -754,6 +779,7 @@ export const schema = {
   artifactPreviewJobs,
   artifactPreviewManifests,
   conversationAttachments,
+  structuredDataResources,
   auditEvents,
   modelUsageEvents,
   configAssetState,

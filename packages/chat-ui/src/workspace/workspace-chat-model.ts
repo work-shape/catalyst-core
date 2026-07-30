@@ -232,6 +232,7 @@ export function useWorkspaceChatModel({
     snapshotLoading: threadQuery.isLoading,
     snapshotError: threadQuery.error,
     refreshSnapshot: workspaceCache.refreshThreadSnapshot,
+    onToolCallCompleted: workspaceCache.invalidateConversationResources,
     onTerminalObservation: workspaceCache.invalidateTerminalRunObservation
   });
   const serverConversations = conversationsQuery.data ?? [];
@@ -484,6 +485,7 @@ export function useWorkspaceChatModel({
     draftController.clearDraft({ authScope: WORKSPACE_AUTH_SCOPE, conversationId });
     workspaceCache.clearDraftAttachments(conversationId);
     draftAttachmentController.clearConversationUploads(conversationId);
+    workspaceCache.invalidateConversationResources(conversationId);
   }
 
   function runStarted(response: StartConversationRunResponse) {

@@ -54,6 +54,9 @@ export function createSafeConfigView(
         enabled: false,
         accept: ""
       },
+      resources: {
+        enabled: config.ui.resources.enabled
+      },
       configAssets: {
         ...config.administration.agentConfiguration
       }

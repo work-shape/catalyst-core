@@ -16,6 +16,7 @@ instructions: |
 toolNames:
   - read_skill
   - show_view
+  - structured_data.publish
   - demo.workflow_summary
   - demo.weather_forecast
 skillNames:

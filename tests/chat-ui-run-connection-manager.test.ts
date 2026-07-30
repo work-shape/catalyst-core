@@ -151,6 +151,49 @@ describe("chat UI run connection manager", () => {
       }
     ]);
   });
+
+  it("reports every completed tool call for resource invalidation", async () => {
+    const invalidatedConversationIds: string[] = [];
+    await new Promise<void>((resolve, reject) => {
+      startRunConnectionManager({
+        client: {
+          async *observeRunEvents() {
+            yield createObservation({
+              sequence: 4,
+              type: "tool_call_completed",
+              payload: {
+                toolCallId: "call_1",
+                toolName: "publish",
+                result: { status: "success" },
+                modelOutput: "{}"
+              }
+            });
+          }
+        },
+        connection: {
+          conversationId: "conv_1",
+          runId: "run_1",
+          afterSequence: 3
+        },
+        markConnecting() {},
+        applyObservation() {
+          return { refreshRequired: false };
+        },
+        completeStream() {
+          resolve();
+        },
+        failStream(error) {
+          reject(toError(error));
+        },
+        async refreshSnapshot() {},
+        onToolCallCompleted(conversationId) {
+          invalidatedConversationIds.push(conversationId);
+        }
+      });
+    });
+
+    expect(invalidatedConversationIds).toEqual(["conv_1"]);
+  });
 });
 
 function createCursorStorage(

@@ -216,6 +216,27 @@ export function createApiClient(options: ApiClientOptions) {
       apiOperations.listConversationMessages.responseSchema
     );
 
+  const conversationResources = (conversationId: string) =>
+    unwrapJson(
+      generatedSdk.listConversationResources({
+        client: generatedClient,
+        path: { conversationId }
+      }),
+      apiOperations.listConversationResources.responseSchema
+    );
+
+  const structuredDataResource = (
+    conversationId: string,
+    structuredDataResourceId: string
+  ) =>
+    unwrapJson(
+      generatedSdk.getStructuredDataResource({
+        client: generatedClient,
+        path: { conversationId, structuredDataResourceId }
+      }),
+      apiOperations.getStructuredDataResource.responseSchema
+    );
+
   const startConversationRun = (
     conversationId: string,
     input: OperationRequestInput<typeof apiOperations.startConversationRun>
@@ -353,6 +374,8 @@ export function createApiClient(options: ApiClientOptions) {
       ),
     thread: getConversationThread,
     messages: listConversationMessages,
+    conversationResources,
+    structuredDataResource,
     runs,
     startConversationRun,
     createConversationRun,
@@ -392,11 +415,12 @@ export function createApiClient(options: ApiClientOptions) {
         }),
         apiOperations.deleteDraftAttachment.responseSchema
       ),
-    conversationFileContent: (conversationId: string, fileId: string) =>
+    conversationFileContent: (conversationId: string, fileId: string, download = false) =>
       unwrapBlob(
         generatedSdk.getConversationFileContent({
           client: generatedClient,
-          path: { conversationId, fileId }
+          path: { conversationId, fileId },
+          query: download ? { download: "true" } : {}
         })
       ),
     conversationArtifactContentUrl: (conversationId: string, artifactId: string) =>

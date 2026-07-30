@@ -24,6 +24,7 @@ import {
   createConsoleWorkspaceCommandTelemetry,
   createLocalWorkspaceFileByteStore,
   createReadSkillTool,
+  createStructuredDataToolDefinitions,
   createWorkspaceToolDefinitions,
   InProcessToolExecution,
   LibreOfficeArtifactPreviewGenerator,
@@ -171,6 +172,7 @@ export async function createClientInstanceApp(
     tools: [
       ...createBuiltInToolDefinitions(),
       ...workspaceTools,
+      ...createStructuredDataToolDefinitions({ store }),
       ...webAccessTools,
       ...createDataSourceQueryTools({ dataSources }),
       createReadSkillTool({ assetSource }),

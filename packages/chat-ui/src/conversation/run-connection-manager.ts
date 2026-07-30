@@ -32,6 +32,7 @@ export interface StartRunConnectionManagerInput {
   failStream(error: unknown): void;
   refreshSnapshot(conversationId: string): Promise<unknown>;
   onTerminalObservation?: (observation: RunObservation) => void;
+  onToolCallCompleted?: (conversationId: string) => void;
   cursorStorage?: RunCursorStorage;
 }
 
@@ -69,6 +70,9 @@ export function startRunConnectionManager(
           observation.sequence
         );
         const applied = input.applyObservation(observation);
+        if (observation.payload.type === "tool_call_completed") {
+          input.onToolCallCompleted?.(observation.conversationId);
+        }
         if (isTerminalObservation(observation)) {
           input.onTerminalObservation?.(observation);
         }

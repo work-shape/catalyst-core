@@ -11,7 +11,12 @@ import {
 } from "@vivd-catalyst/core";
 import type { PostgresDatabase } from "./postgres-database";
 import { mapConversation, mapMessage } from "./rows";
-import { conversationAttachments, conversations, messages } from "./schema";
+import {
+  conversationAttachments,
+  conversations,
+  messages,
+  structuredDataResources
+} from "./schema";
 
 export async function createConversation(
   db: PostgresDatabase,
@@ -270,6 +275,14 @@ async function markConversationDeleted(
         and(
           eq(messages.clientInstanceId, input.clientInstanceId),
           eq(messages.conversationId, input.conversationId)
+        )
+      );
+    await tx
+      .delete(structuredDataResources)
+      .where(
+        and(
+          eq(structuredDataResources.clientInstanceId, input.clientInstanceId),
+          eq(structuredDataResources.conversationId, input.conversationId)
         )
       );
     const [row] = await tx

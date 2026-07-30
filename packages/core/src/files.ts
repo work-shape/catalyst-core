@@ -196,6 +196,10 @@ export type ToolDisplayOutput = JsonObject & {
   displayId?: string;
   title?: string;
   data?: JsonObject;
+  resource?: {
+    category: "analysis";
+    key: string;
+  };
 };
 
 export interface AuditSafeSummary {
@@ -209,6 +213,12 @@ export type ManagedArtifactStatus = "available" | "deleted";
 
 export type ImageFileFormat = "png" | "jpeg" | "webp" | "gif";
 export type FileAttachmentFormat = string;
+
+export function isImageFileFormat(
+  format: FileAttachmentFormat | undefined
+): format is ImageFileFormat {
+  return format === "png" || format === "jpeg" || format === "webp" || format === "gif";
+}
 
 export type ConversationAttachmentStatus =
   | "queued"
@@ -492,6 +502,10 @@ export interface ManagedArtifactStore {
     fileId: ManagedFileId;
     kind?: ManagedArtifactKind;
   }): Promise<ManagedArtifactRecord[]>;
+  listConversationManagedArtifacts(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+  }): Promise<ManagedArtifactRecord[]>;
 }
 
 export interface ArtifactPreviewStore {
@@ -542,9 +556,24 @@ export interface ConversationAttachmentStore {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
   }): Promise<DraftAttachment[]>;
+  listSentConversationAttachments(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+  }): Promise<ConversationAttachment[]>;
+  findConversationAttachmentByChecksum(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    checksum: string;
+  }): Promise<ConversationAttachment | undefined>;
   updateConversationAttachment(
     input: UpdateConversationAttachmentInput
   ): Promise<ConversationAttachment>;
+  reactivateDraftAttachment(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    attachmentId: ConversationAttachmentId;
+    status: "queued" | "ready" | "unsupported";
+  }): Promise<ConversationAttachment>;
   deleteDraftAttachment(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;

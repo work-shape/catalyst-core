@@ -5,7 +5,12 @@ import type { ChatShellProps } from "./chat-shell";
 import { ControlPlaneRoutes } from "./control-plane/control-plane-routes";
 import { TranslationProvider } from "./i18n";
 import { LoginPanel } from "./login-panel";
-import { ToolDisplayPanel } from "./tool-display-panel";
+import {
+  ResourcesPanel,
+  ResourcesPanelToggle,
+  useResourcesPanelState
+} from "./resources-panel";
+import { ToolDisplayPanel, useToolDisplayPanel } from "./tool-display-panel";
 import { cn } from "./ui/cn";
 import { UserMenu } from "./user-menu";
 import { ConfigCheckPanel, SessionCheckPanel, WorkspaceChrome } from "./workspace-chrome";
@@ -53,6 +58,14 @@ function ChatWorkspaceContent({
 }: Pick<ChatWorkspaceProps, "adminPanel" | "manageDocumentTitle" | "className">) {
   const model = useWorkspaceChatModel({ adminPanel, manageDocumentTitle });
   const [displayPanelWidth, setDisplayPanelWidth] = useState(0);
+  const resourcesEnabled =
+    model.config.config?.features.resources.enabled ?? false;
+  const resourcesPanel = useResourcesPanelState({
+    conversationId: model.route.selectedConversationId,
+    enabled: resourcesEnabled
+  });
+  const displayPanel = useToolDisplayPanel();
+  const resourcesVisible = resourcesPanel.open && !displayPanel.open;
 
   if (model.auth.loginRequired) {
     return (
@@ -166,7 +179,10 @@ function ChatWorkspaceContent({
           <section className="relative h-full min-h-0 min-w-0">
             <div className="flex h-full min-h-0 min-w-0">
               <div
-                className="relative h-full min-h-0 min-w-0 flex-1 transition-[width] duration-300 ease-out"
+                className={cn(
+                  "relative h-full min-h-0 min-w-0 flex-1 transition-[width,padding] duration-300 ease-out",
+                  resourcesVisible && "xl:pr-[23rem]"
+                )}
                 onDragEnter={chat.fileDropzone.onChatDragEnter}
                 onDragOver={chat.fileDropzone.onChatDragOver}
                 onDragLeave={chat.fileDropzone.onChatDragLeave}
@@ -174,6 +190,26 @@ function ChatWorkspaceContent({
               >
                 <AssistantChatPanel chat={chat} />
                 {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
+                {resourcesEnabled && chat.selectedConversationId ? (
+                  resourcesVisible ? (
+                    <ResourcesPanel
+                      client={resourcesPanel.client}
+                      conversationId={chat.selectedConversationId}
+                      error={resourcesPanel.error}
+                      loading={resourcesPanel.loading}
+                      onClose={resourcesPanel.close}
+                      open
+                      resources={resourcesPanel.resources}
+                    />
+                  ) : (
+                    <ResourcesPanelToggle
+                      onOpen={() => {
+                        displayPanel.close();
+                        resourcesPanel.openExplicitly();
+                      }}
+                    />
+                  )
+                ) : null}
               </div>
               <ToolDisplayPanel onWidthChange={setDisplayPanelWidth} />
             </div>

@@ -224,6 +224,9 @@ export type GetConfigResponses = {
                 enabled: boolean;
                 accept: string;
             };
+            resources: {
+                enabled: boolean;
+            };
             configAssets: {
                 enabled: boolean;
                 editableAgentFields: Array<'displayName' | 'welcomeMessage' | 'welcomeSubtitle' | 'instructions' | 'modelProviderId' | 'modelBindingId' | 'reasoningEffort' | 'maxSteps' | 'toolNames' | 'skillNames' | 'initialPrompts'>;
@@ -740,6 +743,128 @@ export type ListConversationMessagesResponses = {
 };
 
 export type ListConversationMessagesResponse = ListConversationMessagesResponses[keyof ListConversationMessagesResponses];
+
+export type ListConversationResourcesData = {
+    body?: never;
+    path: {
+        conversationId: string;
+    };
+    query?: never;
+    url: '/api/conversations/{conversationId}/resources';
+};
+
+export type ListConversationResourcesResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        resources: Array<{
+            resourceId: string;
+            title: string;
+            subtitle?: string;
+            createdAt: string;
+            updatedAt: string;
+            resourceType: 'source_file';
+            attachmentId: string;
+            mimeType?: string;
+            preview: {
+                kind: 'source_file';
+                fileId: string;
+            } | {
+                kind: 'artifact';
+                artifactId: string;
+                mimeType?: string;
+            };
+            download: {
+                kind: 'source_file';
+                fileId: string;
+                filename: string;
+            };
+        } | {
+            resourceId: string;
+            title: string;
+            subtitle?: string;
+            createdAt: string;
+            updatedAt: string;
+            resourceType: 'generated_file';
+            preview: {
+                kind: 'artifact';
+                artifactId: string;
+            };
+            download: {
+                kind: 'artifact';
+                artifactId: string;
+                filename: string;
+            };
+        } | {
+            resourceId: string;
+            title: string;
+            subtitle?: string;
+            createdAt: string;
+            updatedAt: string;
+            resourceType: 'analysis';
+            preview: {
+                kind: 'typed_display';
+                display: {
+                    [key: string]: unknown;
+                };
+            };
+        } | {
+            resourceId: string;
+            title: string;
+            subtitle?: string;
+            createdAt: string;
+            updatedAt: string;
+            resourceType: 'structured_data';
+            preview: {
+                kind: 'structured_data';
+                structuredDataResourceId: string;
+            };
+        }>;
+    };
+};
+
+export type ListConversationResourcesResponse = ListConversationResourcesResponses[keyof ListConversationResourcesResponses];
+
+export type GetStructuredDataResourceData = {
+    body?: never;
+    path: {
+        conversationId: string;
+        structuredDataResourceId: string;
+    };
+    query?: never;
+    url: '/api/conversations/{conversationId}/structured-data/{structuredDataResourceId}';
+};
+
+export type GetStructuredDataResourceResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        id: string;
+        resourceKey: string;
+        title: string;
+        revision: number;
+        createdAt: string;
+        updatedAt: string;
+        sections: Array<{
+            key: string;
+            label: string;
+            fields: Array<{
+                key: string;
+                label: string;
+                value: string | number | boolean | null;
+                sources?: Array<{
+                    attachmentId: string;
+                    page?: number;
+                    filename: string;
+                }>;
+            }>;
+        }>;
+    };
+};
+
+export type GetStructuredDataResourceResponse = GetStructuredDataResourceResponses[keyof GetStructuredDataResourceResponses];
 
 export type CancelConversationRunData = {
     body: {
@@ -1807,6 +1932,7 @@ export type UploadDraftAttachmentResponses = {
             createdAt: string;
             updatedAt: string;
         }>;
+        outcome?: 'created' | 'already_available';
     };
 };
 
@@ -1877,6 +2003,7 @@ export type RetryDraftAttachmentResponses = {
             createdAt: string;
             updatedAt: string;
         }>;
+        outcome?: 'created' | 'already_available';
     };
 };
 
@@ -1931,7 +2058,9 @@ export type GetConversationFileContentData = {
         conversationId: string;
         fileId: string;
     };
-    query?: never;
+    query?: {
+        download?: string;
+    };
     url: '/api/conversations/{conversationId}/files/{fileId}/content';
 };
 

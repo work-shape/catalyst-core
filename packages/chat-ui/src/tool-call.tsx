@@ -537,6 +537,7 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
   en: {
     read_skill: "Read instructions",
     show_view: "Show view",
+    "structured_data.publish": "Save structured data",
     "workspace.exec": "Run command",
     "workspace.list_files": "List files",
     "workspace.import_files": "Import files",
@@ -547,6 +548,7 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
   de: {
     read_skill: "Anleitung lesen",
     show_view: "Ansicht anzeigen",
+    "structured_data.publish": "Strukturierte Daten speichern",
     "workspace.exec": "Befehl starten",
     "workspace.list_files": "Dateien auflisten",
     "workspace.import_files": "Dateien importieren",

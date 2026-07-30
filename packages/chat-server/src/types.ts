@@ -18,6 +18,7 @@ import type {
   ManagedArtifactId,
   PlatformFileStore,
   RunObservationStore,
+  StructuredDataStore,
   UserStore
 } from "@vivd-catalyst/core";
 import type { AuditRecorder } from "@vivd-catalyst/core";
@@ -38,7 +39,8 @@ export interface ChatServerOptions {
     ConversationRetentionStore &
     PlatformFileStore &
     AgentRunStore &
-    RunObservationStore;
+    RunObservationStore &
+    StructuredDataStore;
   auditEventStore: AuditEventStore;
   userStore: UserStore;
   apiAccessStore: ApiAccessStore;

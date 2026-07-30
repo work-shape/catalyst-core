@@ -27,6 +27,7 @@ export interface UseConversationControllerInput {
   snapshotError: unknown;
   refreshSnapshot: (conversationId: string) => Promise<unknown>;
   onTerminalObservation?: (observation: RunObservation) => void;
+  onToolCallCompleted?: (conversationId: string) => void;
 }
 
 export function useConversationController({
@@ -37,7 +38,8 @@ export function useConversationController({
   snapshotLoading,
   snapshotError,
   refreshSnapshot,
-  onTerminalObservation
+  onTerminalObservation,
+  onToolCallCompleted
 }: UseConversationControllerInput): ConversationControllerState {
   const [state, setState] = useState<ConversationControllerState>(() =>
     createInitialControllerState()
@@ -148,13 +150,20 @@ export function useConversationController({
         }));
       },
       refreshSnapshot,
-      onTerminalObservation
+      onTerminalObservation,
+      onToolCallCompleted
     });
 
     return () => {
       manager.stop();
     };
-  }, [activeRunConnection, client, onTerminalObservation, refreshSnapshot]);
+  }, [
+    activeRunConnection,
+    client,
+    onTerminalObservation,
+    onToolCallCompleted,
+    refreshSnapshot
+  ]);
 
   return state;
 }

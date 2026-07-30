@@ -58,7 +58,9 @@ export type ClientInstanceCapabilityFiles = Pick<
   | "createConversationAttachment"
   | "getConversationAttachment"
   | "listDraftAttachments"
+  | "findConversationAttachmentByChecksum"
   | "updateConversationAttachment"
+  | "reactivateDraftAttachment"
   | "deleteDraftAttachment"
   | "claimReadyDraftAttachmentsForMessage"
   | "claimNextQueuedConversationAttachment"
@@ -86,6 +88,11 @@ export interface UploadDraftAttachmentInput {
   bytes: Uint8Array;
 }
 
+export interface UploadDraftAttachmentResult {
+  attachment: ConversationAttachment;
+  outcome: "created" | "already_available";
+}
+
 export interface ReadConversationFileInput {
   conversationId: ConversationId;
   fileId: string;
@@ -105,7 +112,7 @@ export interface ClientInstanceAttachmentHandler {
   acceptedFileTypes: string[];
   acceptsFile(input: Pick<UploadDraftAttachmentInput, "filename" | "mimeType" | "bytes">): boolean;
   listDraftAttachments(conversationId: ConversationId): Promise<DraftAttachment[]>;
-  uploadDraftAttachment(input: UploadDraftAttachmentInput): Promise<DraftAttachment>;
+  uploadDraftAttachment(input: UploadDraftAttachmentInput): Promise<UploadDraftAttachmentResult>;
   retryDraftAttachment(input: {
     conversationId: ConversationId;
     attachmentId: string;

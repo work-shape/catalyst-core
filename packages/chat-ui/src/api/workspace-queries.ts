@@ -63,6 +63,44 @@ export function useWorkspaceThreadQuery(
   });
 }
 
+export function useConversationResourcesQuery(
+  input: WorkspaceQueryInput & {
+    conversationId: string | undefined;
+    enabled: boolean;
+  }
+) {
+  return useQuery({
+    queryKey: workspaceQueryKeys.conversationResources(
+      input.apiBaseUrl,
+      input.authScope,
+      input.conversationId
+    ),
+    queryFn: () => input.client.conversationResources(input.conversationId ?? ""),
+    enabled: input.enabled
+  });
+}
+
+export function useStructuredDataResourceQuery(
+  input: WorkspaceQueryInput & {
+    conversationId: string;
+    structuredDataResourceId: string;
+  }
+) {
+  return useQuery({
+    queryKey: workspaceQueryKeys.structuredDataResource(
+      input.apiBaseUrl,
+      input.authScope,
+      input.conversationId,
+      input.structuredDataResourceId
+    ),
+    queryFn: () =>
+      input.client.structuredDataResource(
+        input.conversationId,
+        input.structuredDataResourceId
+      )
+  });
+}
+
 export function useWorkspaceUsageQuery(
   input: WorkspaceQueryInput & {
     enabled: boolean;
@@ -146,6 +184,7 @@ export interface WorkspaceCacheActions {
   invalidateConversations(): void;
   removeThreadSnapshot(conversationId: string): void;
   invalidateConversationStarted(conversationId: string): void;
+  invalidateConversationResources(conversationId: string): void;
   invalidateTerminalRunObservation(observation: RunObservation): void;
   clearDraftAttachments(conversationId: string): void;
   cacheRunStarted(response: StartConversationRunResponse): void;
@@ -182,6 +221,26 @@ export function useWorkspaceCacheActions(
     (conversationId: string) => {
       void queryClient.invalidateQueries({
         queryKey: workspaceQueryKeys.thread(apiBaseUrl, authScope, conversationId)
+      });
+    },
+    [apiBaseUrl, authScope, queryClient]
+  );
+
+  const invalidateConversationResources = useCallback(
+    (conversationId: string) => {
+      void queryClient.invalidateQueries({
+        queryKey: workspaceQueryKeys.conversationResources(
+          apiBaseUrl,
+          authScope,
+          conversationId
+        )
+      });
+      void queryClient.invalidateQueries({
+        queryKey: workspaceQueryKeys.structuredDataResourcesScope(
+          apiBaseUrl,
+          authScope,
+          conversationId
+        )
       });
     },
     [apiBaseUrl, authScope, queryClient]
@@ -228,6 +287,7 @@ export function useWorkspaceCacheActions(
     ) => {
       invalidateConversations();
       invalidateThread(conversationId);
+      invalidateConversationResources(conversationId);
       if (options.draftAttachmentsChanged) {
         invalidateDraftAttachmentsScope();
       }
@@ -237,6 +297,7 @@ export function useWorkspaceCacheActions(
     [
       invalidateAuditEvents,
       invalidateConversations,
+      invalidateConversationResources,
       invalidateDraftAttachmentsScope,
       invalidateThread,
       invalidateUsage
@@ -329,6 +390,7 @@ export function useWorkspaceCacheActions(
       invalidateConversations,
       removeThreadSnapshot,
       invalidateConversationStarted,
+      invalidateConversationResources,
       invalidateTerminalRunObservation,
       clearDraftAttachments,
       cacheRunStarted,
@@ -340,6 +402,7 @@ export function useWorkspaceCacheActions(
       clearDraftAttachments,
       handleRunRequestAccepted,
       invalidateConversationStarted,
+      invalidateConversationResources,
       invalidateConversations,
       invalidateCurrentUser,
       removeThreadSnapshot,

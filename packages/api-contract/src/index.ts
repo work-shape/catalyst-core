@@ -262,13 +262,112 @@ export const draftAttachmentSchema = z.object({
 
 export const draftAttachmentUploadResponseSchema = z.object({
   attachment: draftAttachmentSchema,
-  attachments: z.array(draftAttachmentSchema)
+  attachments: z.array(draftAttachmentSchema),
+  outcome: z.enum(["created", "already_available"]).optional()
 });
 
 export const retryDraftAttachmentResponseSchema = draftAttachmentUploadResponseSchema;
 
 export type DraftAttachment = z.infer<typeof draftAttachmentSchema>;
 export type DraftAttachmentUploadResponse = z.infer<typeof draftAttachmentUploadResponseSchema>;
+
+export const conversationResourceBaseSchema = z.object({
+  resourceId: z.string(),
+  title: z.string(),
+  subtitle: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string()
+});
+
+export const conversationResourceListItemSchema = z.discriminatedUnion("resourceType", [
+  conversationResourceBaseSchema.extend({
+    resourceType: z.literal("source_file"),
+    attachmentId: z.string(),
+    mimeType: z.string().optional(),
+    preview: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("source_file"), fileId: z.string() }),
+      z.object({
+        kind: z.literal("artifact"),
+        artifactId: z.string(),
+        mimeType: z.string().optional()
+      })
+    ]),
+    download: z.object({
+      kind: z.literal("source_file"),
+      fileId: z.string(),
+      filename: z.string()
+    })
+  }),
+  conversationResourceBaseSchema.extend({
+    resourceType: z.literal("generated_file"),
+    preview: z.object({ kind: z.literal("artifact"), artifactId: z.string() }),
+    download: z.object({
+      kind: z.literal("artifact"),
+      artifactId: z.string(),
+      filename: z.string()
+    })
+  }),
+  conversationResourceBaseSchema.extend({
+    resourceType: z.literal("analysis"),
+    preview: z.object({
+      kind: z.literal("typed_display"),
+      display: z.record(z.string(), z.unknown())
+    })
+  }),
+  conversationResourceBaseSchema.extend({
+    resourceType: z.literal("structured_data"),
+    preview: z.object({
+      kind: z.literal("structured_data"),
+      structuredDataResourceId: z.string()
+    })
+  })
+]);
+
+export const conversationResourceListResponseSchema = z.object({
+  resources: z.array(conversationResourceListItemSchema)
+});
+
+const structuredDataValueSchema = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null()
+]);
+
+export const structuredDataResourceResponseSchema = z.object({
+  id: z.string(),
+  resourceKey: z.string(),
+  title: z.string(),
+  revision: z.number().int().positive(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  sections: z.array(
+    z.object({
+      key: z.string(),
+      label: z.string(),
+      fields: z.array(
+        z.object({
+          key: z.string(),
+          label: z.string(),
+          value: structuredDataValueSchema,
+          sources: z
+            .array(
+              z.object({
+                attachmentId: z.string(),
+                page: z.number().int().positive().optional(),
+                filename: z.string()
+              })
+            )
+            .optional()
+        })
+      )
+    })
+  )
+});
+
+export type StructuredDataResourceResponse = z.infer<
+  typeof structuredDataResourceResponseSchema
+>;
 
 export const artifactPreviewImagePageSchema = z.object({
   artifactId: z.string(),
@@ -375,6 +474,9 @@ export const safeConfigSchema = z.object({
     attachments: z.object({
       enabled: z.boolean(),
       accept: z.string()
+    }),
+    resources: z.object({
+      enabled: z.boolean()
     }),
     configAssets: z.object({
       enabled: z.boolean(),
@@ -1220,6 +1322,18 @@ export const apiOperations = {
     path: "/api/conversations/:conversationId/messages",
     responseSchema: z.array(messageSchema)
   }),
+  listConversationResources: defineJsonApiOperation({
+    operationId: "listConversationResources",
+    method: "GET",
+    path: "/api/conversations/:conversationId/resources",
+    responseSchema: conversationResourceListResponseSchema
+  }),
+  getStructuredDataResource: defineJsonApiOperation({
+    operationId: "getStructuredDataResource",
+    method: "GET",
+    path: "/api/conversations/:conversationId/structured-data/:structuredDataResourceId",
+    responseSchema: structuredDataResourceResponseSchema
+  }),
   cancelConversationRun: defineJsonApiOperation({
     operationId: "cancelConversationRun",
     method: "POST",
@@ -1289,7 +1403,8 @@ export const apiOperations = {
   getConversationFileContent: defineBlobApiOperation({
     operationId: "getConversationFileContent",
     method: "GET",
-    path: "/api/conversations/:conversationId/files/:fileId/content"
+    path: "/api/conversations/:conversationId/files/:fileId/content",
+    queryParams: ["download"]
   }),
   getConversationArtifactContent: defineBlobApiOperation({
     operationId: "getConversationArtifactContent",
@@ -1502,6 +1617,11 @@ export type ConversationListItem = z.infer<typeof conversationListItemSchema>;
 export type RenameConversationRequest = z.infer<typeof renameConversationRequestSchema>;
 export type Message = z.infer<typeof messageSchema>;
 export type MessageMetadata = z.infer<typeof messageMetadataSchema>;
+export type ConversationResourceBase = z.infer<typeof conversationResourceBaseSchema>;
+export type ConversationResourceListItem = z.infer<typeof conversationResourceListItemSchema>;
+export type ConversationResourceListResponse = z.infer<
+  typeof conversationResourceListResponseSchema
+>;
 export type AgentRuntimeMessageMetadata = z.infer<typeof agentRuntimeMessageMetadataSchema>;
 export type UserMessageMetadata = z.infer<typeof userMessageMetadataSchema>;
 export type AssistantToolCallsMessageMetadata = z.infer<typeof assistantToolCallsMessageMetadataSchema>;

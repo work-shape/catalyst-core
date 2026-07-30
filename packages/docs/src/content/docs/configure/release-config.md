@@ -51,6 +51,8 @@ ui:
   faviconUrl: /favicon.svg
   defaultLocale: en
   supportedLocales: [en, de]
+  resources:
+    enabled: false
   welcomeMessage:
     en: How can I help with your support case?
     de: Wie kann ich bei deinem Supportfall helfen?

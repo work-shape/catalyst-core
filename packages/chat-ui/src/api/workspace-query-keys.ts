@@ -16,6 +16,29 @@ export const workspaceQueryKeys = {
     authScope: string,
     conversationId: string | undefined
   ) => ["thread", apiBaseUrl, authScope, conversationId] as const,
+  conversationResources: (
+    apiBaseUrl: string,
+    authScope: string,
+    conversationId: string | undefined
+  ) => ["conversation-resources", apiBaseUrl, authScope, conversationId] as const,
+  structuredDataResourcesScope: (
+    apiBaseUrl: string,
+    authScope: string,
+    conversationId: string
+  ) => ["structured-data-resource", apiBaseUrl, authScope, conversationId] as const,
+  structuredDataResource: (
+    apiBaseUrl: string,
+    authScope: string,
+    conversationId: string,
+    structuredDataResourceId: string
+  ) =>
+    [
+      "structured-data-resource",
+      apiBaseUrl,
+      authScope,
+      conversationId,
+      structuredDataResourceId
+    ] as const,
   draftAttachmentsScope: (apiBaseUrl: string, authScope: string) =>
     ["draft-attachments", apiBaseUrl, authScope] as const,
   draftAttachments: (

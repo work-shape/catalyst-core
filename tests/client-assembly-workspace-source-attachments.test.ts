@@ -50,7 +50,7 @@ describe("execution workspace source attachments", () => {
     const fixture = await createSourceAttachmentFixture();
     try {
       const bytes = new TextEncoder().encode("name,total\nAda,42\n");
-      const attachment = await fixture.handler.uploadDraftAttachment({
+      const { attachment } = await fixture.handler.uploadDraftAttachment({
         conversationId: fixture.conversation.id,
         ownerUserId: "user-1",
         filename: "analysis.xlsx",
@@ -616,7 +616,7 @@ function createWorkspaceArtifactSeedingCapability(root: string): ClientInstanceC
                   workspacePath: "scratch/final.csv"
                 }
               });
-              return context.files.createConversationAttachment({
+              const attachment = await context.files.createConversationAttachment({
                 clientInstanceId: context.clientInstanceId,
                 conversationId: input.conversationId,
                 fileId: file.id,
@@ -632,7 +632,8 @@ function createWorkspaceArtifactSeedingCapability(root: string): ClientInstanceC
                   source: "workspace_artifact_seeding"
                 },
                 warnings: []
-              }) as Promise<DraftAttachment>;
+              });
+              return { attachment, outcome: "created" };
             },
             async retryDraftAttachment() {
               throw new AppError("NOT_FOUND", "Attachment is not available");
@@ -725,7 +726,7 @@ function createWorkspacePreviewArtifactSeedingCapability(root: string): ClientIn
                   rendererVersion: "test"
                 }
               });
-              return context.files.createConversationAttachment({
+              const attachment = await context.files.createConversationAttachment({
                 clientInstanceId: context.clientInstanceId,
                 conversationId: input.conversationId,
                 fileId: file.id,
@@ -742,7 +743,8 @@ function createWorkspacePreviewArtifactSeedingCapability(root: string): ClientIn
                   source: "workspace_preview_artifact_seeding"
                 },
                 warnings: []
-              }) as Promise<DraftAttachment>;
+              });
+              return { attachment, outcome: "created" };
             },
             async retryDraftAttachment() {
               throw new AppError("NOT_FOUND", "Attachment is not available");
@@ -994,7 +996,7 @@ function createStrictUploadCapability(): ClientInstanceCapability {
                 attachmentsByConversation.get(input.conversationId) ?? [];
               conversationAttachments.push(attachment);
               attachmentsByConversation.set(input.conversationId, conversationAttachments);
-              return attachment;
+              return { attachment, outcome: "created" };
             },
             async retryDraftAttachment() {
               throw new AppError("NOT_FOUND", "Attachment is not available");

@@ -15,3 +15,5 @@ export * from "./docker-workspace-command-runner";
 export * from "./workspace-command-worker";
 export * from "./artifact-preview-settings";
 export * from "./artifact-preview-worker";
+export * from "./structured-data-tools";
+export * from "./structured-data-tool-schemas";

@@ -51,6 +51,8 @@ import {
   type UserRecord,
   type UserStore,
   type ServicePrincipalRecord,
+  type StructuredDataResourceRecord,
+  type StructuredDataStore,
   type UpdateServicePrincipalInput,
   type WorkspaceCommand,
   type WorkspaceCommandId,
@@ -133,6 +135,11 @@ import {
   requestWorkspaceCommandCancellation as requestPostgresWorkspaceCommandCancellation,
   upsertWorkspaceFile as upsertPostgresWorkspaceFile
 } from "./postgres-execution-workspace-operations";
+import {
+  getStructuredDataResource as getPostgresStructuredDataResource,
+  listStructuredDataResources as listPostgresStructuredDataResources,
+  publishStructuredDataResource as publishPostgresStructuredDataResource
+} from "./postgres-structured-data-operations";
 import { runPostgresMigrations } from "./migrations";
 import {
   createUser as createPostgresUser,
@@ -180,7 +187,8 @@ export class PostgresPlatformStore
     ModelUsageEventStore,
     UserStore,
     ApiAccessStore,
-    ConfigAssetStore
+    ConfigAssetStore,
+    StructuredDataStore
 {
   private readonly postgresClient: Sql;
   private readonly db: PostgresDatabase;
@@ -372,6 +380,24 @@ export class PostgresPlatformStore
     limit: number;
   }): Promise<ChatMessage[]> {
     return listPostgresRecentMessages(this.db, input);
+  }
+
+  async getStructuredDataResource(
+    input: Parameters<StructuredDataStore["getStructuredDataResource"]>[0]
+  ): Promise<StructuredDataResourceRecord | undefined> {
+    return getPostgresStructuredDataResource(this.db, input);
+  }
+
+  async listStructuredDataResources(
+    input: Parameters<StructuredDataStore["listStructuredDataResources"]>[0]
+  ): Promise<StructuredDataResourceRecord[]> {
+    return listPostgresStructuredDataResources(this.db, input);
+  }
+
+  async publishStructuredDataResource(
+    input: Parameters<StructuredDataStore["publishStructuredDataResource"]>[0]
+  ): Promise<StructuredDataResourceRecord> {
+    return publishPostgresStructuredDataResource(this.db, input);
   }
 
   async claimRunStartCommand(input: ClaimRunStartCommandInput): Promise<ClaimRunStartCommandResult> {
@@ -575,6 +601,12 @@ export class PostgresPlatformStore
     return this.fileStore.listManagedArtifactsForFile(input);
   }
 
+  async listConversationManagedArtifacts(
+    input: Parameters<PlatformFileStore["listConversationManagedArtifacts"]>[0]
+  ) {
+    return this.fileStore.listConversationManagedArtifacts(input);
+  }
+
   async enqueueArtifactPreviewJob(
     input: Parameters<PlatformFileStore["enqueueArtifactPreviewJob"]>[0]
   ) {
@@ -643,10 +675,28 @@ export class PostgresPlatformStore
     return this.fileStore.listDraftAttachments(input);
   }
 
+  async listSentConversationAttachments(
+    input: Parameters<PlatformFileStore["listSentConversationAttachments"]>[0]
+  ) {
+    return this.fileStore.listSentConversationAttachments(input);
+  }
+
+  async findConversationAttachmentByChecksum(
+    input: Parameters<PlatformFileStore["findConversationAttachmentByChecksum"]>[0]
+  ) {
+    return this.fileStore.findConversationAttachmentByChecksum(input);
+  }
+
   async updateConversationAttachment(
     input: Parameters<PlatformFileStore["updateConversationAttachment"]>[0]
   ) {
     return this.fileStore.updateConversationAttachment(input);
+  }
+
+  async reactivateDraftAttachment(
+    input: Parameters<PlatformFileStore["reactivateDraftAttachment"]>[0]
+  ) {
+    return this.fileStore.reactivateDraftAttachment(input);
   }
 
   async deleteDraftAttachment(input: Parameters<PlatformFileStore["deleteDraftAttachment"]>[0]) {

@@ -7,6 +7,9 @@ export const DEFAULT_LOCALES: LocaleCode[] = ["en", "de"];
 const THEME_STORAGE_KEY = "vivd-catalyst:theme";
 const LOCALE_STORAGE_KEY = "vivd-catalyst:locale";
 const CONTEXT_INDICATOR_STORAGE_KEY = "vivd-catalyst:show-context-indicator";
+const RESOURCES_PANEL_STORAGE_KEY = "vivd-catalyst:resources-panel";
+
+export type ResourcesPanelPreference = "open" | "closed";
 
 export function createDraftKey(authScope: string, conversationId: string | undefined): string {
   return `${authScope}:${conversationId ?? "new"}`;
@@ -64,6 +67,17 @@ export function readStoredContextIndicatorPreference(): boolean {
 
 export function writeStoredContextIndicatorPreference(visible: boolean): void {
   window.localStorage.setItem(CONTEXT_INDICATOR_STORAGE_KEY, String(visible));
+}
+
+export function readStoredResourcesPanelPreference(): ResourcesPanelPreference | undefined {
+  const preference = window.localStorage.getItem(RESOURCES_PANEL_STORAGE_KEY);
+  return preference === "open" || preference === "closed" ? preference : undefined;
+}
+
+export function writeStoredResourcesPanelPreference(
+  preference: ResourcesPanelPreference
+): void {
+  window.localStorage.setItem(RESOURCES_PANEL_STORAGE_KEY, preference);
 }
 
 export function applyFavicon(href: string): void {

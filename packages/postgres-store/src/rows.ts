@@ -22,6 +22,7 @@ import {
   type UserIdentity,
   type UserRecord,
   type ServicePrincipalRecord,
+  type StructuredDataResourceRecord,
   asAgentRunId,
   asConversationAttachmentId,
   asConversationId,
@@ -33,6 +34,7 @@ import {
   asUserId,
   asApiCredentialId,
   asServicePrincipalId,
+  asStructuredDataResourceId,
   asWorkspaceCommandId
 } from "@vivd-catalyst/core";
 import type {
@@ -55,6 +57,7 @@ import type {
   productUsers,
   apiCredentials,
   servicePrincipals,
+  structuredDataResources,
   userIdentities,
   workspaceCommands
 } from "./schema";
@@ -80,6 +83,7 @@ export type UserIdentityRow = typeof userIdentities.$inferSelect;
 export type ConfigAssetStateRow = typeof configAssetState.$inferSelect;
 export type ConfigAssetRow = typeof configAssets.$inferSelect;
 export type ConfigAssetRevisionRow = typeof configAssetRevisions.$inferSelect;
+export type StructuredDataResourceRow = typeof structuredDataResources.$inferSelect;
 
 export function mapConversation(row: ConversationRow | undefined): Conversation {
   if (!row) {
@@ -365,6 +369,25 @@ export function mapConversationAttachment(
     preprocessingStartedAt: row.preprocessingStartedAt?.toISOString(),
     preprocessingCompletedAt: row.preprocessingCompletedAt?.toISOString(),
     deletedAt: row.deletedAt?.toISOString()
+  };
+}
+
+export function mapStructuredDataResource(
+  row: StructuredDataResourceRow | undefined
+): StructuredDataResourceRecord {
+  if (!row) {
+    throw new AppError("INTERNAL", "Expected structured data resource row");
+  }
+  return {
+    id: asStructuredDataResourceId(row.id),
+    clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    conversationId: asConversationId(row.conversationId),
+    resourceKey: row.resourceKey,
+    title: row.title,
+    state: row.state,
+    revision: row.revision,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString()
   };
 }
 

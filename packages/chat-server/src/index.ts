@@ -9,6 +9,7 @@ import { registerBetterAuthRoutes } from "./routes/better-auth-routes";
 import { registerConfigRoutes } from "./routes/config-routes";
 import { registerConfigAssetRoutes } from "./routes/config-asset-routes";
 import { registerConversationFileRoutes } from "./routes/conversation-file-routes";
+import { registerConversationResourceRoutes } from "./routes/conversation-resource-routes";
 import { registerConversationRoutes } from "./routes/conversation-routes";
 import { registerDraftAttachmentRoutes } from "./routes/draft-attachment-routes";
 import { registerSessionTokenRoutes } from "./routes/session-token-routes";
@@ -20,7 +21,11 @@ import { RunRecoveryWatchdog } from "./run-recovery";
 import type { ChatServerOptions } from "./types";
 import { createExecutionWorkspaceCleanupJob } from "./workspace-cleanup";
 
-export type { ChatAttachmentService, UploadDraftAttachmentInput } from "./attachments";
+export type {
+  ChatAttachmentService,
+  UploadDraftAttachmentInput,
+  UploadDraftAttachmentResult
+} from "./attachments";
 export type {
   ConversationRetentionJobOptions,
   ConversationRetentionRunSummary
@@ -90,6 +95,7 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
   registerConfigAssetRoutes(app, options);
   registerUserAccountRoutes(app, options);
   registerConversationRoutes(app, options);
+  registerConversationResourceRoutes(app, options);
   registerConversationFileRoutes(app, options);
   registerDraftAttachmentRoutes(app, options);
   registerAuditRoutes(app, options);

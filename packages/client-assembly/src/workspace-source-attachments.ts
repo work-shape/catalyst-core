@@ -124,8 +124,11 @@ export function createExecutionWorkspaceSourceAttachmentHandler(
     listDraftAttachments(conversationId) {
       return service.listDraftAttachments(conversationId);
     },
-    uploadDraftAttachment(file) {
-      return service.uploadDraftAttachment(file);
+    async uploadDraftAttachment(file) {
+      return {
+        attachment: await service.uploadDraftAttachment(file),
+        outcome: "created"
+      };
     },
     retryDraftAttachment(file) {
       return service.retryDraftAttachment(file);

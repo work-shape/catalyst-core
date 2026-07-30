@@ -28,11 +28,16 @@ export interface ReadConversationFileResult {
   bytes: Uint8Array;
 }
 
+export interface UploadDraftAttachmentResult {
+  attachment: ConversationAttachment;
+  outcome: "created" | "already_available";
+}
+
 export interface ChatAttachmentService {
   maxFileBytes: number;
   acceptedFileTypes: string[];
   listDraftAttachments(conversationId: ConversationId): Promise<DraftAttachment[]>;
-  uploadDraftAttachment(input: UploadDraftAttachmentInput): Promise<DraftAttachment>;
+  uploadDraftAttachment(input: UploadDraftAttachmentInput): Promise<UploadDraftAttachmentResult>;
   retryDraftAttachment(input: {
     conversationId: ConversationId;
     attachmentId: string;

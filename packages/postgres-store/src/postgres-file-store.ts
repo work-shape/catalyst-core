@@ -1,4 +1,14 @@
-import { and, asc, desc, eq, inArray, isNull, ne, sql as drizzleSql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  ne,
+  sql as drizzleSql
+} from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import {
   AppError,
@@ -180,6 +190,24 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     return rows.map(mapManagedArtifact);
   }
 
+  async listConversationManagedArtifacts(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+  }): Promise<ManagedArtifactRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(managedArtifacts)
+      .where(
+        and(
+          eq(managedArtifacts.clientInstanceId, input.clientInstanceId),
+          eq(managedArtifacts.conversationId, input.conversationId),
+          eq(managedArtifacts.status, "available")
+        )
+      )
+      .orderBy(desc(managedArtifacts.createdAt));
+    return rows.map(mapManagedArtifact);
+  }
+
   async enqueueArtifactPreviewJob(
     input: EnqueueArtifactPreviewJobInput
   ): Promise<ArtifactPreviewJobRecord> {
@@ -310,6 +338,45 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     return rows.map(mapConversationAttachment) as DraftAttachment[];
   }
 
+  async listSentConversationAttachments(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+  }): Promise<ConversationAttachment[]> {
+    const rows = await this.db
+      .select()
+      .from(conversationAttachments)
+      .where(
+        and(
+          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
+          eq(conversationAttachments.conversationId, input.conversationId),
+          isNotNull(conversationAttachments.messageId),
+          ne(conversationAttachments.status, "deleted")
+        )
+      )
+      .orderBy(desc(conversationAttachments.createdAt));
+    return rows.map(mapConversationAttachment);
+  }
+
+  async findConversationAttachmentByChecksum(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    checksum: string;
+  }): Promise<ConversationAttachment | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(conversationAttachments)
+      .where(
+        and(
+          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
+          eq(conversationAttachments.conversationId, input.conversationId),
+          eq(conversationAttachments.checksum, input.checksum)
+        )
+      )
+      .orderBy(desc(conversationAttachments.createdAt))
+      .limit(1);
+    return row ? mapConversationAttachment(row) : undefined;
+  }
+
   async updateConversationAttachment(
     input: UpdateConversationAttachmentInput
   ): Promise<ConversationAttachment> {
@@ -375,6 +442,51 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     if (!row) {
       throw new AppError("NOT_FOUND", "Attachment is not available");
     }
+    return mapConversationAttachment(row);
+  }
+
+  async reactivateDraftAttachment(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    attachmentId: ConversationAttachmentId;
+    status: "queued" | "ready" | "unsupported";
+  }): Promise<ConversationAttachment> {
+    const row = await this.db.transaction(async (tx) => {
+      const [attachment] = await tx
+        .update(conversationAttachments)
+        .set({
+          status: input.status,
+          deletedAt: null,
+          updatedAt: new Date()
+        })
+        .where(
+          and(
+            eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
+            eq(conversationAttachments.conversationId, input.conversationId),
+            eq(conversationAttachments.id, input.attachmentId),
+            isNull(conversationAttachments.messageId),
+            eq(conversationAttachments.status, "deleted")
+          )
+        )
+        .returning();
+      if (!attachment) {
+        throw new AppError("NOT_FOUND", "Draft attachment is not available");
+      }
+      await tx
+        .update(managedFiles)
+        .set({
+          status: "available",
+          deletedAt: null
+        })
+        .where(
+          and(
+            eq(managedFiles.clientInstanceId, input.clientInstanceId),
+            eq(managedFiles.id, attachment.fileId)
+          )
+        );
+      return attachment;
+    });
+    await this.callbacks.touchConversation(input.clientInstanceId, input.conversationId, row.updatedAt);
     return mapConversationAttachment(row);
   }
 
@@ -758,8 +870,7 @@ async function collectConversationManagedObjectsForDeletion(
     .where(
       and(
         eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-        eq(conversationAttachments.conversationId, input.conversationId),
-        ne(conversationAttachments.status, "deleted")
+        eq(conversationAttachments.conversationId, input.conversationId)
       )
     );
   const fileIds = [...new Set(attachments.map((attachment) => attachment.fileId))];

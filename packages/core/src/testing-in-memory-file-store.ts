@@ -140,6 +140,20 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   }
 
+  async listConversationManagedArtifacts(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+  }): Promise<ManagedArtifactRecord[]> {
+    return [...this.managedArtifacts.values()]
+      .filter(
+        (artifact) =>
+          artifact.clientInstanceId === input.clientInstanceId &&
+          artifact.conversationId === input.conversationId &&
+          artifact.status === "available"
+      )
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  }
+
   async enqueueArtifactPreviewJob(
     input: EnqueueArtifactPreviewJobInput
   ): Promise<ArtifactPreviewJobRecord> {
@@ -262,6 +276,36 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt)) as DraftAttachment[];
   }
 
+  async listSentConversationAttachments(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+  }): Promise<ConversationAttachment[]> {
+    return [...this.conversationAttachments.values()]
+      .filter(
+        (attachment) =>
+          attachment.clientInstanceId === input.clientInstanceId &&
+          attachment.conversationId === input.conversationId &&
+          attachment.messageId !== undefined &&
+          attachment.status !== "deleted"
+      )
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  }
+
+  async findConversationAttachmentByChecksum(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    checksum: string;
+  }): Promise<ConversationAttachment | undefined> {
+    return [...this.conversationAttachments.values()]
+      .filter(
+        (attachment) =>
+          attachment.clientInstanceId === input.clientInstanceId &&
+          attachment.conversationId === input.conversationId &&
+          attachment.checksum === input.checksum
+      )
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+  }
+
   async updateConversationAttachment(
     input: UpdateConversationAttachmentInput
   ): Promise<ConversationAttachment> {
@@ -304,6 +348,42 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
     };
     this.conversationAttachments.set(updated.id, updated);
     return updated;
+  }
+
+  async reactivateDraftAttachment(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    attachmentId: ConversationAttachmentId;
+    status: "queued" | "ready" | "unsupported";
+  }): Promise<ConversationAttachment> {
+    const existing = this.conversationAttachments.get(input.attachmentId);
+    if (
+      !existing ||
+      existing.clientInstanceId !== input.clientInstanceId ||
+      existing.conversationId !== input.conversationId ||
+      existing.messageId !== undefined ||
+      existing.status !== "deleted"
+    ) {
+      throw new AppError("NOT_FOUND", "Draft attachment is not available");
+    }
+    const updatedAt = new Date().toISOString();
+    const attachment: ConversationAttachment = {
+      ...existing,
+      status: input.status,
+      deletedAt: undefined,
+      updatedAt
+    };
+    const file = this.managedFiles.get(existing.fileId);
+    if (file?.clientInstanceId === input.clientInstanceId) {
+      this.managedFiles.set(file.id, {
+        ...file,
+        status: "available",
+        deletedAt: undefined
+      });
+    }
+    this.conversationAttachments.set(attachment.id, attachment);
+    this.callbacks.touchConversation(input.conversationId, updatedAt);
+    return attachment;
   }
 
   async deleteDraftAttachment(input: {
@@ -552,8 +632,7 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
     const attachments = [...this.conversationAttachments.values()].filter(
       (attachment) =>
         attachment.clientInstanceId === input.clientInstanceId &&
-        attachment.conversationId === input.conversationId &&
-        attachment.status !== "deleted"
+        attachment.conversationId === input.conversationId
     );
     const fileIds = [...new Set(attachments.map((attachment) => attachment.fileId))];
     const sharedFileIds = new Set(

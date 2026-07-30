@@ -747,6 +747,18 @@
                           ],
                           "additionalProperties": false
                         },
+                        "resources": {
+                          "type": "object",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "enabled"
+                          ],
+                          "additionalProperties": false
+                        },
                         "configAssets": {
                           "type": "object",
                           "properties": {
@@ -802,6 +814,7 @@
                       },
                       "required": [
                         "attachments",
+                        "resources",
                         "configAssets"
                       ],
                       "additionalProperties": false
@@ -2781,6 +2794,472 @@
                     ],
                     "additionalProperties": false
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/conversations/{conversationId}/resources": {
+      "get": {
+        "operationId": "listConversationResources",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "resources": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "resourceId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "subtitle": {
+                                "type": "string"
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              },
+                              "updatedAt": {
+                                "type": "string"
+                              },
+                              "resourceType": {
+                                "type": "string",
+                                "const": "source_file"
+                              },
+                              "attachmentId": {
+                                "type": "string"
+                              },
+                              "mimeType": {
+                                "type": "string"
+                              },
+                              "preview": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "source_file"
+                                      },
+                                      "fileId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "fileId"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "artifact"
+                                      },
+                                      "artifactId": {
+                                        "type": "string"
+                                      },
+                                      "mimeType": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "artifactId"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ]
+                              },
+                              "download": {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "source_file"
+                                  },
+                                  "fileId": {
+                                    "type": "string"
+                                  },
+                                  "filename": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "fileId",
+                                  "filename"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "resourceId",
+                              "title",
+                              "createdAt",
+                              "updatedAt",
+                              "resourceType",
+                              "attachmentId",
+                              "preview",
+                              "download"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "resourceId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "subtitle": {
+                                "type": "string"
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              },
+                              "updatedAt": {
+                                "type": "string"
+                              },
+                              "resourceType": {
+                                "type": "string",
+                                "const": "generated_file"
+                              },
+                              "preview": {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "artifact"
+                                  },
+                                  "artifactId": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "artifactId"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "download": {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "artifact"
+                                  },
+                                  "artifactId": {
+                                    "type": "string"
+                                  },
+                                  "filename": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "artifactId",
+                                  "filename"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "resourceId",
+                              "title",
+                              "createdAt",
+                              "updatedAt",
+                              "resourceType",
+                              "preview",
+                              "download"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "resourceId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "subtitle": {
+                                "type": "string"
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              },
+                              "updatedAt": {
+                                "type": "string"
+                              },
+                              "resourceType": {
+                                "type": "string",
+                                "const": "analysis"
+                              },
+                              "preview": {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "typed_display"
+                                  },
+                                  "display": {
+                                    "type": "object",
+                                    "propertyNames": {
+                                      "type": "string"
+                                    },
+                                    "additionalProperties": {}
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "display"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "resourceId",
+                              "title",
+                              "createdAt",
+                              "updatedAt",
+                              "resourceType",
+                              "preview"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "resourceId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "subtitle": {
+                                "type": "string"
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              },
+                              "updatedAt": {
+                                "type": "string"
+                              },
+                              "resourceType": {
+                                "type": "string",
+                                "const": "structured_data"
+                              },
+                              "preview": {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "structured_data"
+                                  },
+                                  "structuredDataResourceId": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "structuredDataResourceId"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "resourceId",
+                              "title",
+                              "createdAt",
+                              "updatedAt",
+                              "resourceType",
+                              "preview"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "resources"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/conversations/{conversationId}/structured-data/{structuredDataResourceId}": {
+      "get": {
+        "operationId": "getStructuredDataResource",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "structuredDataResourceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "resourceKey": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "sections": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "fields": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "boolean"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "sources": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "attachmentId": {
+                                        "type": "string"
+                                      },
+                                      "page": {
+                                        "type": "integer",
+                                        "exclusiveMinimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "filename": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "attachmentId",
+                                      "filename"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "value"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "label",
+                          "fields"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "resourceKey",
+                    "title",
+                    "revision",
+                    "createdAt",
+                    "updatedAt",
+                    "sections"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }
@@ -7210,6 +7689,13 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "outcome": {
+                      "type": "string",
+                      "enum": [
+                        "created",
+                        "already_available"
+                      ]
                     }
                   },
                   "required": [
@@ -7453,6 +7939,13 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "outcome": {
+                      "type": "string",
+                      "enum": [
+                        "created",
+                        "already_available"
+                      ]
                     }
                   },
                   "required": [
@@ -7614,6 +8107,14 @@
             "name": "fileId",
             "in": "path",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "download",
+            "in": "query",
+            "required": false,
             "schema": {
               "type": "string"
             }

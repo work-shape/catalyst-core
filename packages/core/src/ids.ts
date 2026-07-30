@@ -17,6 +17,7 @@ export type ApiCredentialId = Brand<string, "ApiCredentialId">;
 export type ToolCallId = Brand<string, "ToolCallId">;
 export type AuditEventId = Brand<string, "AuditEventId">;
 export type ModelUsageEventId = Brand<string, "ModelUsageEventId">;
+export type StructuredDataResourceId = Brand<string, "StructuredDataResourceId">;
 
 export function createPlatformId<TBrand extends string>(
   prefix: string
@@ -39,6 +40,10 @@ export function asConversationId(value: string): ConversationId {
 
 export function asConversationAttachmentId(value: string): ConversationAttachmentId {
   return value as ConversationAttachmentId;
+}
+
+export function asStructuredDataResourceId(value: string): StructuredDataResourceId {
+  return value as StructuredDataResourceId;
 }
 
 export function asExecutionWorkspaceId(value: string): ExecutionWorkspaceId {

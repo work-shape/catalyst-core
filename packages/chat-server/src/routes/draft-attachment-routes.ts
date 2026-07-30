@@ -27,7 +27,7 @@ export function registerDraftAttachmentRoutes(app: FastifyInstance, options: Cha
     }
     const bytes = await readMultipartFile(file.file);
     const service = attachments(options);
-    const attachment = await service.uploadDraftAttachment({
+    const { attachment, outcome } = await service.uploadDraftAttachment({
       conversationId,
       ownerUserId: getSubjectUserId(user),
       filename: file.filename,
@@ -36,7 +36,8 @@ export function registerDraftAttachmentRoutes(app: FastifyInstance, options: Cha
     });
     return {
       attachment,
-      attachments: await service.listDraftAttachments(conversationId)
+      attachments: await service.listDraftAttachments(conversationId),
+      outcome
     };
   });
 

@@ -135,6 +135,8 @@ tools:
     config:
       allowedScriptSrc:
         - "*"
+  - name: structured_data.publish
+    enabled: true
   - name: demo.workflow_summary
     enabled: true
     config:

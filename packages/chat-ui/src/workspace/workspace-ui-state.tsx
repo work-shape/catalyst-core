@@ -23,11 +23,14 @@ import {
   DEFAULT_LOCALES,
   readStoredLocale,
   readStoredContextIndicatorPreference,
+  readStoredResourcesPanelPreference,
   readStoredThemeMode,
   writeStoredContextIndicatorPreference,
   writeStoredLocale,
+  writeStoredResourcesPanelPreference,
   writeStoredThemeMode
 } from "../workspace-utils";
+import type { ResourcesPanelPreference } from "../workspace-utils";
 import {
   defaultWorkspaceRoute,
   workspaceRouteView,
@@ -65,6 +68,8 @@ interface WorkspacePreferencesContextValue {
   selectLocale(locale: LocaleCode): void;
   showContextIndicator: boolean;
   setShowContextIndicator(visible: boolean): void;
+  resourcesPanelPreference: ResourcesPanelPreference | undefined;
+  setResourcesPanelPreference(preference: ResourcesPanelPreference): void;
   themeOverride: ResolvedThemeMode | undefined;
   systemThemeMode: ResolvedThemeMode;
   selectThemeMode(themeMode: ResolvedThemeMode): void;
@@ -112,6 +117,9 @@ export function WorkspaceUiStateProvider({
   const [showContextIndicator, setShowContextIndicatorState] = useState(
     () => readStoredContextIndicatorPreference()
   );
+  const [resourcesPanelPreference, setResourcesPanelPreferenceState] = useState<
+    ResourcesPanelPreference | undefined
+  >(() => readStoredResourcesPanelPreference());
   const [themeOverride, setThemeOverride] = useState<ResolvedThemeMode | undefined>(() =>
     readStoredThemeMode()
   );
@@ -274,6 +282,14 @@ export function WorkspaceUiStateProvider({
     writeStoredContextIndicatorPreference(visible);
   }, []);
 
+  const setResourcesPanelPreference = useCallback(
+    (preference: ResourcesPanelPreference) => {
+      setResourcesPanelPreferenceState(preference);
+      writeStoredResourcesPanelPreference(preference);
+    },
+    []
+  );
+
   const routeValue = useMemo<WorkspaceRouteContextValue>(
     () => ({
       route,
@@ -318,6 +334,8 @@ export function WorkspaceUiStateProvider({
       localePreference,
       supportedFallbackLocales: DEFAULT_LOCALES,
       selectLocale,
+      resourcesPanelPreference,
+      setResourcesPanelPreference,
       showContextIndicator,
       setShowContextIndicator,
       themeOverride,
@@ -328,6 +346,8 @@ export function WorkspaceUiStateProvider({
       browserLocale,
       localePreference,
       selectLocale,
+      resourcesPanelPreference,
+      setResourcesPanelPreference,
       selectThemeMode,
       setShowContextIndicator,
       showContextIndicator,

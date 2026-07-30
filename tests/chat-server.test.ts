@@ -16,6 +16,7 @@ import {
   NoopAuditRecorder,
   PERMISSIONS,
   StoreBackedAuditRecorder,
+  asConversationId,
   asToolCallId,
   asClientInstanceId,
   createAssistantFinalMetadata,
@@ -2485,6 +2486,13 @@ describe("client instance app vertical slice", () => {
     });
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
+    const structuredData = await app.store.publishStructuredDataResource({
+      clientInstanceId: asClientInstanceId("demo-local"),
+      conversationId: asConversationId(conversation.id),
+      resourceKey: "retention_data",
+      title: "Retention data",
+      state: { title: "Retention data", sections: [] }
+    });
     const upload = createMultipartFilePayload({
       fieldName: "file",
       filename: "retention.gif",
@@ -2511,6 +2519,13 @@ describe("client instance app vertical slice", () => {
       url: `/api/conversations/${conversation.id}`
     });
     expect(deleted.statusCode).toBe(200);
+    await expect(
+      app.store.getStructuredDataResource({
+        clientInstanceId: asClientInstanceId("demo-local"),
+        conversationId: asConversationId(conversation.id),
+        structuredDataResourceId: structuredData.id
+      })
+    ).resolves.toBeUndefined();
     const audit = await app.server.inject({
       method: "GET",
       url: "/api/audit-events"
@@ -2533,6 +2548,69 @@ describe("client instance app vertical slice", () => {
     });
     expect(contentAfterDelete.statusCode).toBe(404);
 
+    await app.close();
+  });
+
+  it("deletes composer-removed draft bytes when deleting a conversation", async () => {
+    const fixture = createManagedObjectTestAttachmentCapability();
+    const app = await createClientInstanceApp({
+      config: createTestConfig(),
+      env: {},
+      storeMode: "memory",
+      capabilities: [fixture.capability],
+      tools: []
+    });
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      payload: { title: "Removed attachment retention" }
+    });
+    const conversation = created.json() as { id: string };
+    const upload = createMultipartFilePayload({
+      fieldName: "file",
+      filename: "removed.txt",
+      contentType: "text/plain",
+      content: "delete these bytes"
+    });
+    const uploaded = await app.server.inject({
+      method: "POST",
+      url: `/api/conversations/${conversation.id}/draft-attachments`,
+      headers: upload.headers,
+      payload: upload.payload
+    });
+    expect(uploaded.statusCode).toBe(200);
+    const attachment = (uploaded.json() as { attachment: { id: string } }).attachment;
+    const [objectKey] = [...fixture.objects.keys()];
+    expect(objectKey).toBeDefined();
+
+    const removed = await app.server.inject({
+      method: "DELETE",
+      url: `/api/conversations/${conversation.id}/draft-attachments/${attachment.id}`
+    });
+    expect(removed.statusCode).toBe(200);
+    expect(fixture.objects.has(objectKey!)).toBe(true);
+
+    const deleted = await app.server.inject({
+      method: "DELETE",
+      url: `/api/conversations/${conversation.id}`
+    });
+    expect(deleted.statusCode).toBe(200);
+    expect(fixture.objects.has(objectKey!)).toBe(false);
+    expect(fixture.deletedObjectKeys).toContain(objectKey);
+
+    const audit = await app.server.inject({
+      method: "GET",
+      url: "/api/audit-events"
+    });
+    expect(audit.json()).toContainEqual(
+      expect.objectContaining({
+        type: "conversation.deleted",
+        metadata: expect.objectContaining({
+          attachmentCount: 1,
+          fileCount: 1
+        })
+      })
+    );
     await app.close();
   });
 
@@ -4558,6 +4636,121 @@ function createMultipartFilePayload(input: {
   };
 }
 
+function createManagedObjectTestAttachmentCapability(): {
+  capability: ClientInstanceCapability;
+  objects: Map<string, Uint8Array>;
+  deletedObjectKeys: string[];
+} {
+  const objects = new Map<string, Uint8Array>();
+  const deletedObjectKeys: string[] = [];
+  return {
+    objects,
+    deletedObjectKeys,
+    capability: {
+      name: "managed-object-test-attachments",
+      create(context) {
+        const managedObjects = context.managedObjectAccess.createAccess({
+          byteStore: {
+            async putObject(input) {
+              objects.set(input.key, input.body);
+            },
+            async getObject(key) {
+              const bytes = objects.get(key);
+              if (!bytes) {
+                throw new Error("Object is not available");
+              }
+              return bytes;
+            },
+            async deleteObject(key) {
+              deletedObjectKeys.push(key);
+              objects.delete(key);
+            }
+          },
+          keyFactory: {
+            createFileObjectKey(input) {
+              return `test-files/${input.conversationId}/${input.checksum}`;
+            },
+            createArtifactObjectKey(input) {
+              return `test-artifacts/${input.conversationId}/${input.checksum}`;
+            }
+          }
+        });
+        return {
+          attachments: [{
+            name: "managed-object-test-attachments",
+            maxFileBytes: 1024 * 1024,
+            acceptedFileTypes: ["text/plain"],
+            acceptsFile() {
+              return true;
+            },
+            listDraftAttachments(conversationId) {
+              return context.files.listDraftAttachments({
+                clientInstanceId: context.clientInstanceId,
+                conversationId
+              });
+            },
+            async uploadDraftAttachment(input) {
+              const file = await managedObjects.createFile({
+                ownerUserId: input.ownerUserId,
+                conversationId: input.conversationId,
+                filename: input.filename,
+                mimeType: input.mimeType,
+                bytes: input.bytes
+              });
+              const attachment = await context.files.createConversationAttachment({
+                clientInstanceId: context.clientInstanceId,
+                conversationId: input.conversationId,
+                fileId: file.id,
+                filename: input.filename,
+                mimeType: input.mimeType,
+                byteSize: input.bytes.byteLength,
+                checksum: file.checksum,
+                status: "ready"
+              });
+              return { attachment, outcome: "created" };
+            },
+            async retryDraftAttachment() {
+              throw new Error("Retry is not used by this test");
+            },
+            deleteDraftAttachment(input) {
+              return context.files.deleteDraftAttachment({
+                clientInstanceId: context.clientInstanceId,
+                conversationId: input.conversationId,
+                attachmentId: input.attachmentId as DraftAttachment["id"],
+                deletedAt: new Date().toISOString()
+              });
+            },
+            deleteConversationAttachments(input) {
+              return managedObjects.deleteConversationObjects(input);
+            },
+            async readConversationFile(input) {
+              const file = await managedObjects.readFile({
+                fileId: input.fileId as ManagedFileId
+              });
+              return {
+                fileId: file.record.id,
+                filename: file.record.filename,
+                mimeType: file.record.mimeType,
+                byteSize: file.record.byteSize,
+                bytes: file.bytes
+              };
+            },
+            blockingDraftAttachmentMessage() {
+              return undefined;
+            },
+            createAttachmentManifest() {
+              return { version: 1, attachments: [] };
+            },
+            isInlineDisplayMimeType() {
+              return false;
+            }
+          }]
+        };
+      }
+    }
+  };
+}
+
 function createTestAttachmentCapability(options: {
   onConversationAttachmentsDeleted?(deletion: {
     attachmentCount: number;
@@ -4619,7 +4812,10 @@ function createTestAttachmentCapability(options: {
               attachmentsByConversation.get(input.conversationId) ?? [];
             conversationAttachments.push(attachment);
             attachmentsByConversation.set(input.conversationId, conversationAttachments);
-            return attachment;
+            return {
+              attachment,
+              outcome: "created"
+            };
           },
           async retryDraftAttachment() {
             throw new Error("Retry is not implemented by the test attachment capability");

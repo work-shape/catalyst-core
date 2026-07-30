@@ -6,6 +6,8 @@ title:
   en: Demo Chat
 accentColor: "#0f766e"
 defaultThemeMode: system
+resources:
+  enabled: true
 theme:
   accentColor: "#0f766e"
   accentStrongColor: "#155e75"

@@ -54,6 +54,8 @@ import {
   type UserRecord,
   type UserStore,
   type ServicePrincipalRecord,
+  type StructuredDataResourceRecord,
+  type StructuredDataStore,
   type WorkspaceCommandStore,
   authenticatedUserFromRecord,
   createUserId,
@@ -86,10 +88,12 @@ export class InMemoryPlatformStore
     ModelUsageEventStore,
     UserStore,
     ApiAccessStore,
-    ConfigAssetStore
+    ConfigAssetStore,
+    StructuredDataStore
 {
   private readonly conversations = new Map<string, Conversation>();
   private readonly messages = new Map<string, ChatMessage[]>();
+  private readonly structuredDataResources = new Map<string, StructuredDataResourceRecord>();
   private readonly fileStore: InMemoryPlatformFileStore =
     createInMemoryPlatformFileStore({
       requireActiveConversation: (clientInstanceId, conversationId) =>
@@ -119,6 +123,53 @@ export class InMemoryPlatformStore
     }
   });
   private readonly configAssetStore = new InMemoryConfigAssetStore();
+
+  async getStructuredDataResource(
+    input: Parameters<StructuredDataStore["getStructuredDataResource"]>[0]
+  ): Promise<StructuredDataResourceRecord | undefined> {
+    const resource = this.structuredDataResources.get(input.structuredDataResourceId);
+    return resource?.clientInstanceId === input.clientInstanceId &&
+      resource.conversationId === input.conversationId
+      ? resource
+      : undefined;
+  }
+
+  async listStructuredDataResources(
+    input: Parameters<StructuredDataStore["listStructuredDataResources"]>[0]
+  ): Promise<StructuredDataResourceRecord[]> {
+    return [...this.structuredDataResources.values()]
+      .filter(
+        (resource) =>
+          resource.clientInstanceId === input.clientInstanceId &&
+          resource.conversationId === input.conversationId
+      )
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  }
+
+  async publishStructuredDataResource(
+    input: Parameters<StructuredDataStore["publishStructuredDataResource"]>[0]
+  ): Promise<StructuredDataResourceRecord> {
+    const existing = [...this.structuredDataResources.values()].find(
+      (resource) =>
+        resource.clientInstanceId === input.clientInstanceId &&
+        resource.conversationId === input.conversationId &&
+        resource.resourceKey === input.resourceKey
+    );
+    const now = new Date().toISOString();
+    const resource: StructuredDataResourceRecord = {
+      id: existing?.id ?? createPlatformId("sdr"),
+      clientInstanceId: input.clientInstanceId,
+      conversationId: input.conversationId,
+      resourceKey: input.resourceKey,
+      title: input.title,
+      state: input.state,
+      revision: (existing?.revision ?? 0) + 1,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now
+    };
+    this.structuredDataResources.set(resource.id, resource);
+    return resource;
+  }
 
   async getConfigAssetState(
     input: Parameters<ConfigAssetStore["getConfigAssetState"]>[0]
@@ -827,6 +878,12 @@ export class InMemoryPlatformStore
     return this.fileStore.listManagedArtifactsForFile(input);
   }
 
+  async listConversationManagedArtifacts(
+    input: Parameters<PlatformFileStore["listConversationManagedArtifacts"]>[0]
+  ) {
+    return this.fileStore.listConversationManagedArtifacts(input);
+  }
+
   async enqueueArtifactPreviewJob(
     input: Parameters<PlatformFileStore["enqueueArtifactPreviewJob"]>[0]
   ) {
@@ -895,10 +952,28 @@ export class InMemoryPlatformStore
     return this.fileStore.listDraftAttachments(input);
   }
 
+  async listSentConversationAttachments(
+    input: Parameters<PlatformFileStore["listSentConversationAttachments"]>[0]
+  ) {
+    return this.fileStore.listSentConversationAttachments(input);
+  }
+
+  async findConversationAttachmentByChecksum(
+    input: Parameters<PlatformFileStore["findConversationAttachmentByChecksum"]>[0]
+  ) {
+    return this.fileStore.findConversationAttachmentByChecksum(input);
+  }
+
   async updateConversationAttachment(
     input: Parameters<PlatformFileStore["updateConversationAttachment"]>[0]
   ) {
     return this.fileStore.updateConversationAttachment(input);
+  }
+
+  async reactivateDraftAttachment(
+    input: Parameters<PlatformFileStore["reactivateDraftAttachment"]>[0]
+  ) {
+    return this.fileStore.reactivateDraftAttachment(input);
   }
 
   async deleteDraftAttachment(input: Parameters<PlatformFileStore["deleteDraftAttachment"]>[0]) {
@@ -996,6 +1071,14 @@ export class InMemoryPlatformStore
     };
     this.conversations.set(input.conversationId, deleted);
     this.messages.set(input.conversationId, []);
+    for (const resource of this.structuredDataResources.values()) {
+      if (
+        resource.clientInstanceId === input.clientInstanceId &&
+        resource.conversationId === input.conversationId
+      ) {
+        this.structuredDataResources.delete(resource.id);
+      }
+    }
     for (const run of this.agentRuns.values()) {
       if (run.clientInstanceId === input.clientInstanceId && run.conversationId === input.conversationId) {
         this.agentRuns.delete(run.id);

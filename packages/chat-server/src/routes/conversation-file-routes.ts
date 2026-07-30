@@ -28,18 +28,33 @@ export function registerConversationFileRoutes(app: FastifyInstance, options: Ch
     const conversationId = getConversationId(request);
     await conversations.requireOwnedActiveConversation(conversationId, user);
     const service = attachments(options);
+    const download = (request.query as { download?: string }).download === "true";
+    const sentAttachment = download
+      ? (
+          await options.conversationStore.listSentConversationAttachments({
+            clientInstanceId: options.clientInstanceId,
+            conversationId
+          })
+        ).find((attachment) => attachment.fileId === getFileId(request))
+      : undefined;
+    if (download && !sentAttachment) {
+      throw new AppError("NOT_FOUND", "Attachment is not available in this conversation");
+    }
     const file = await service.readConversationFile({
       conversationId,
       fileId: getFileId(request)
     });
-    if (!file.mimeType || !service.isInlineDisplayMimeType(file.mimeType)) {
+    if (!download && (!file.mimeType || !service.isInlineDisplayMimeType(file.mimeType))) {
       throw new AppError("VALIDATION_FAILED", "Only image attachments can be displayed inline");
     }
     return reply
-      .header("content-type", file.mimeType)
+      .header("content-type", file.mimeType ?? "application/octet-stream")
       .header("content-length", String(file.bytes.byteLength))
       .header("cache-control", "private, max-age=60")
-      .header("content-disposition", contentDisposition("inline", file.filename))
+      .header(
+        "content-disposition",
+        contentDisposition(download ? "attachment" : "inline", sentAttachment?.filename ?? file.filename)
+      )
       .send(Buffer.from(file.bytes));
   });
 
