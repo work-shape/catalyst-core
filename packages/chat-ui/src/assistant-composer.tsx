@@ -6,7 +6,7 @@ import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
 import { AttachmentPreview } from "./attachment-preview";
 import { ContextIndicator } from "./context-indicator";
 import { useTranslation } from "./i18n";
-import { isComposerBlockedByBackgroundRun, shouldShowCancelAction } from "./thread-activity";
+import { isComposerBlockedByActiveRun, shouldShowCancelAction } from "./thread-activity";
 import { Button } from "./ui/button";
 import { cn } from "./ui/cn";
 import { Spinner } from "./ui/spinner";
@@ -24,6 +24,7 @@ export function AssistantComposer({
   localUploadingAttachments,
   sendBlockedReason,
   conversationRunning,
+  optimisticPending,
   attachmentsEnabled,
   attachmentAccept,
   selectableModels,
@@ -42,6 +43,7 @@ export function AssistantComposer({
   localUploadingAttachments: LocalUploadingAttachment[];
   sendBlockedReason?: string;
   conversationRunning?: boolean;
+  optimisticPending?: boolean;
   attachmentsEnabled: boolean;
   attachmentAccept: string;
   selectableModels: SafeConfig["selectableModels"];
@@ -66,19 +68,24 @@ export function AssistantComposer({
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const hasAttachments = attachments.length > 0 || localUploadingAttachments.length > 0;
+  const submitBlocked = Boolean(sendBlockedReason);
   const handleSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
+      if (submitBlocked) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       if (onSubmitMessage?.(currentText)) {
         event.preventDefault();
         event.stopPropagation();
       }
     },
-    [currentText, onSubmitMessage]
+    [currentText, onSubmitMessage, submitBlocked]
   );
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>) => {
       if (
-        !onSubmitMessage ||
         event.key !== "Enter" ||
         event.shiftKey ||
         event.altKey ||
@@ -89,10 +96,18 @@ export function AssistantComposer({
         return;
       }
 
+      if (submitBlocked) {
+        event.preventDefault();
+        return;
+      }
+      if (!onSubmitMessage) {
+        return;
+      }
+
       event.preventDefault();
       onSubmitMessage(currentText);
     },
-    [currentText, onSubmitMessage]
+    [currentText, onSubmitMessage, submitBlocked]
   );
 
   useLayoutEffect(() => {
@@ -221,6 +236,7 @@ export function AssistantComposer({
                 disabled={Boolean(sendBlockedReason)}
                 disabledReason={sendBlockedReason}
                 conversationRunning={conversationRunning}
+                optimisticPending={optimisticPending}
                 currentText={currentText}
                 onCancelRun={onCancelRun}
                 onSubmitMessage={onSubmitMessage}
@@ -379,6 +395,7 @@ function ComposerAction({
   disabled,
   disabledReason,
   conversationRunning,
+  optimisticPending,
   currentText,
   onCancelRun,
   onSubmitMessage
@@ -386,22 +403,21 @@ function ComposerAction({
   disabled: boolean;
   disabledReason?: string;
   conversationRunning?: boolean;
+  optimisticPending?: boolean;
   currentText: string;
   onCancelRun: () => void;
   onSubmitMessage?: (text: string) => boolean;
 }) {
   const { t } = useTranslation();
   const threadRunning = useAuiState((state) => state.thread.isRunning);
-  const backgroundRunBlocked = isComposerBlockedByBackgroundRun({
-    conversationRunning,
-    threadRunning
-  });
+  const activeRunBlocked = isComposerBlockedByActiveRun({ conversationRunning });
   const showCancelAction = shouldShowCancelAction({
     conversationRunning,
+    optimisticPending,
     threadRunning
   });
-  const effectiveDisabledReason = disabledReason ?? (backgroundRunBlocked ? t("conversationStillRunning") : undefined);
-  const sendDisabled = disabled || backgroundRunBlocked || Boolean(onSubmitMessage && currentText.trim().length === 0);
+  const effectiveDisabledReason = disabledReason ?? (activeRunBlocked ? t("conversationStillRunning") : undefined);
+  const sendDisabled = disabled || activeRunBlocked || Boolean(onSubmitMessage && currentText.trim().length === 0);
   const handleSendClick = useCallback(
     () => {
       onSubmitMessage?.(currentText);

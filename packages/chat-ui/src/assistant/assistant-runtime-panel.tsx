@@ -89,7 +89,9 @@ function AssistantRuntimePane({
   const [optimisticPending, setOptimisticPending] = useState(false);
   const [rootSubmitPending, setRootSubmitPending] = useState(false);
   const [rootSubmitError, setRootSubmitError] = useState<string | undefined>(undefined);
-  const baseSendDisabledReason = sendBlockedReason ?? (!messagesLoaded ? t("loadingConversation") : undefined);
+  const baseSendDisabledReason = conversationRunning
+    ? t("conversationStillRunning")
+    : sendBlockedReason ?? (!messagesLoaded ? t("loadingConversation") : undefined);
   const sendDisabledReason = rootSubmitPending ? t("loadingConversation") : baseSendDisabledReason;
   const visibleNotice = rootSubmitError ?? notice;
 

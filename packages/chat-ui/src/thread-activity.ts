@@ -56,18 +56,18 @@ export function pendingAssistantPresentation(input: ThreadActivityInput): Pendin
   return "block-cursor";
 }
 
-export function isComposerBlockedByBackgroundRun({
-  conversationRunning,
-  threadRunning
-}: Pick<ThreadActivityInput, "conversationRunning" | "threadRunning">): boolean {
-  return Boolean(conversationRunning && !threadRunning);
+export function isComposerBlockedByActiveRun({
+  conversationRunning
+}: Pick<ThreadActivityInput, "conversationRunning">): boolean {
+  return Boolean(conversationRunning);
 }
 
 export function shouldShowCancelAction({
   conversationRunning,
+  optimisticPending,
   threadRunning
-}: Pick<ThreadActivityInput, "conversationRunning" | "threadRunning">): boolean {
-  return Boolean(conversationRunning || threadRunning);
+}: Pick<ThreadActivityInput, "conversationRunning" | "optimisticPending" | "threadRunning">): boolean {
+  return Boolean(conversationRunning || (optimisticPending && threadRunning));
 }
 
 function lastAssistantPartShowsOwnActivity(message: ThreadActivityMessage | undefined): boolean {

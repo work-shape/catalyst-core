@@ -132,6 +132,7 @@ export function AssistantThread({
                   localUploadingAttachments={localUploadingAttachments}
                   sendBlockedReason={sendBlockedReason}
                   conversationRunning={conversationRunning}
+                  optimisticPending={optimisticPending}
                   attachmentsEnabled={attachmentsEnabled}
                   attachmentAccept={attachmentAccept}
                   selectableModels={config?.selectableModels ?? []}

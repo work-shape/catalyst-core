@@ -163,6 +163,43 @@ test("composer sends on Enter and inserts a newline on Shift+Enter", async ({ pa
   await expect(input).toHaveValue("");
 });
 
+test("active runs block Enter without clearing the draft", { tag: "@chat-state" }, async ({ page }) => {
+  await signInViaUi(page, normalUser);
+  await page.goto("/");
+
+  const input = page.getByPlaceholder("Message");
+  const suffix = Date.now();
+  const longMessage = Array.from(
+    { length: 240 },
+    (_, index) => `active-run-guard-${suffix}-${index}`
+  ).join(" ");
+  await input.fill(longMessage);
+  await input.press("Enter");
+  await expect(page).toHaveURL(/\/c\/[^/]+$/u);
+  await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
+
+  const conversationId = currentConversationId(page);
+  const runPath = `/api/conversations/${conversationId}/runs`;
+  let followUpRunRequests = 0;
+  page.on("request", (request) => {
+    if (request.method() === "POST" && new URL(request.url()).pathname === runPath) {
+      followUpRunRequests += 1;
+    }
+  });
+
+  const followUpDraft = `Keep this draft ${suffix}`;
+  await input.fill(followUpDraft);
+  await input.press("Enter");
+  await page.waitForTimeout(250);
+
+  expect(followUpRunRequests).toBe(0);
+  await expect(input).toHaveValue(followUpDraft);
+  await expect(page.getByText("Conversation already has an active agent run")).toHaveCount(0);
+
+  await stopActiveRun(page);
+  await expect(input).toHaveValue(followUpDraft);
+});
+
 test("links in user messages keep the bubble foreground contrast", async ({ page }) => {
   await signInViaApi(page, normalUser);
   await page.goto("/");

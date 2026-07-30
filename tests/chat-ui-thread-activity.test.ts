@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  isComposerBlockedByBackgroundRun,
+  isComposerBlockedByActiveRun,
   isThreadBusy,
   pendingAssistantPresentation,
   shouldShowCancelAction,
@@ -111,16 +111,27 @@ describe("chat UI thread activity", () => {
     ).toBe("hidden");
   });
 
-  it("blocks sending only when the conversation is running outside the local assistant stream", () => {
-    expect(isComposerBlockedByBackgroundRun({ conversationRunning: true, threadRunning: false })).toBe(true);
-    expect(isComposerBlockedByBackgroundRun({ conversationRunning: true, threadRunning: true })).toBe(false);
-    expect(isComposerBlockedByBackgroundRun({ conversationRunning: false, threadRunning: false })).toBe(false);
+  it("blocks sending whenever the durable conversation run is active", () => {
+    expect(isComposerBlockedByActiveRun({ conversationRunning: true })).toBe(true);
+    expect(isComposerBlockedByActiveRun({ conversationRunning: false })).toBe(false);
   });
 
-  it("shows cancel for resumed background runs without a local assistant stream", () => {
-    expect(shouldShowCancelAction({ conversationRunning: true, threadRunning: false })).toBe(true);
-    expect(shouldShowCancelAction({ conversationRunning: false, threadRunning: true })).toBe(true);
-    expect(shouldShowCancelAction({ conversationRunning: false, threadRunning: false })).toBe(false);
+  it("shows cancel for durable runs and pending starts, but not stale local state", () => {
+    expect(shouldShowCancelAction({ conversationRunning: true })).toBe(true);
+    expect(
+      shouldShowCancelAction({
+        conversationRunning: false,
+        optimisticPending: true,
+        threadRunning: true
+      })
+    ).toBe(true);
+    expect(
+      shouldShowCancelAction({
+        conversationRunning: false,
+        optimisticPending: false,
+        threadRunning: true
+      })
+    ).toBe(false);
   });
 
   it("combines local stream, optimistic send, and persisted conversation activity as one busy signal", () => {

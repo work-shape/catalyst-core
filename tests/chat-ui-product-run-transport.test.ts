@@ -163,6 +163,38 @@ describe("chat UI product run transport", () => {
     expect(startedRuns).toEqual([response]);
     expect(chunks).toEqual([]);
   });
+
+  it("rejects an active-run submission before calling the API", async () => {
+    let apiCalls = 0;
+    const client = {
+      async createConversationRun() {
+        apiCalls += 1;
+        return createStartResponse({ conversationId: "conv_new" });
+      },
+      async startConversationRun() {
+        apiCalls += 1;
+        return createStartResponse({ conversationId: "conv_existing" });
+      }
+    };
+    const transport = new ProductConversationRunTransport({
+      client,
+      conversationId: "conv_existing",
+      locale: "en",
+      isSendDisabled: () => "Conversation is still running"
+    });
+    const message = createUserMessage("user_msg_blocked", "Do not send this yet");
+
+    await expect(
+      transport.sendMessages({
+        trigger: "submit-message",
+        chatId: "chat",
+        messageId: message.id,
+        messages: [message],
+        abortSignal: undefined
+      })
+    ).rejects.toThrow("Conversation is still running");
+    expect(apiCalls).toBe(0);
+  });
 });
 
 async function drainStream(stream: ReadableStream<ProductUiMessageChunk>): Promise<ProductUiMessageChunk[]> {
