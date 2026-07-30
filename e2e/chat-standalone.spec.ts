@@ -1342,8 +1342,17 @@ test("superadmin deletes a user from the users panel", async ({ page }) => {
   await expect(page.getByText(createdUser.displayLabel, { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Delete user" }).click();
-  await expect(page.getByRole("button", { name: "Cancel" })).toBeVisible();
-  await page.getByRole("button", { name: "Delete user" }).click();
+  const deleteDialog = page.getByRole("dialog", { name: `Delete ${createdUser.displayLabel}?` });
+  await expect(deleteDialog).toBeVisible();
+  const confirmDeleteButton = deleteDialog.getByRole("button", {
+    name: "Permanently delete user"
+  });
+  await expect(confirmDeleteButton).toBeDisabled();
+  await deleteDialog.getByLabel("Confirmation").fill("wrong user");
+  await expect(confirmDeleteButton).toBeDisabled();
+  await deleteDialog.getByLabel("Confirmation").fill(createdUser.email);
+  await expect(confirmDeleteButton).toBeEnabled();
+  await confirmDeleteButton.click();
   await expect(page.getByRole("heading", { name: "Users" })).toBeVisible();
   await expect(page.getByText(createdUser.displayLabel, { exact: true })).toHaveCount(0);
 
@@ -1392,7 +1401,11 @@ async function signInViaUi(
     ),
     page.getByRole("button", { name: "Sign in", exact: true }).click()
   ]);
-  await expect(page.getByText("E2E Customer")).toBeVisible();
+  await expect(
+    page
+      .getByRole("complementary", { name: "Conversations" })
+      .getByText("E2E Customer", { exact: true })
+  ).toBeVisible();
 }
 
 async function signInViaApi(page: Page, user: { email: string; password: string }): Promise<void> {

@@ -1001,11 +1001,14 @@ function DeleteUserCard({
   onDeleteUser(userId: string): Promise<AdministeredUser>;
   onDeleted(): void;
 }) {
-  const [confirming, setConfirming] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [confirmation, setConfirmation] = useState("");
   const [notice, setNotice] = useState<FormNoticeState>();
+  const confirmationTarget = user.email ?? user.id;
 
   useEffect(() => {
-    setConfirming(false);
+    setDeleteOpen(false);
+    setConfirmation("");
     setNotice(undefined);
   }, [user.id]);
 
@@ -1032,34 +1035,77 @@ function DeleteUserCard({
         <p className="text-sm text-muted-foreground">
           Removes the user profile, sign-in identities, and standalone password access.
         </p>
-        {confirming ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="danger"
-              disabled={mutating}
-              onClick={() => void deleteUser()}
-            >
-              <Trash2 size={16} aria-hidden="true" />
-              Delete user
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setConfirming(false)}>
-              Cancel
-            </Button>
-          </div>
-        ) : (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-fit text-destructive hover:text-destructive"
-            disabled={mutating}
-            onClick={() => setConfirming(true)}
+        <Button
+          type="button"
+          variant="outline"
+          className="w-fit text-destructive hover:text-destructive"
+          disabled={mutating}
+          onClick={() => {
+            setConfirmation("");
+            setNotice(undefined);
+            setDeleteOpen(true);
+          }}
+        >
+          <Trash2 size={16} aria-hidden="true" />
+          Delete user
+        </Button>
+        <Dialog
+          open={deleteOpen}
+          title={`Delete ${user.displayLabel}?`}
+          onClose={() => {
+            if (!mutating) {
+              setDeleteOpen(false);
+            }
+          }}
+        >
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (confirmation === confirmationTarget && !mutating) {
+                void deleteUser();
+              }
+            }}
           >
-            <Trash2 size={16} aria-hidden="true" />
-            Delete user
-          </Button>
-        )}
-        <FormNotice notice={notice} />
+            <div className="grid gap-2 text-sm text-muted-foreground">
+              <p>
+                This permanently removes the user profile, sign-in identities, and standalone
+                password access. This cannot be undone.
+              </p>
+              <p>
+                Type <strong className="font-mono text-foreground">{confirmationTarget}</strong> to
+                confirm you are deleting the intended user.
+              </p>
+            </div>
+            <Field label="Confirmation">
+              <Input
+                autoComplete="off"
+                spellCheck={false}
+                value={confirmation}
+                onChange={(event) => setConfirmation(event.target.value)}
+              />
+            </Field>
+            <FormNotice notice={notice} />
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={mutating}
+                onClick={() => setDeleteOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="danger"
+                disabled={mutating || confirmation !== confirmationTarget}
+              >
+                <Trash2 size={16} aria-hidden="true" />
+                {mutating ? "Deleting…" : "Permanently delete user"}
+              </Button>
+            </div>
+          </form>
+        </Dialog>
       </CardContent>
     </Card>
   );
