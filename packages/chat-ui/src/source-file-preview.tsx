@@ -10,7 +10,6 @@ import type {
   ApiClient,
   ConversationResourceListItem
 } from "@vivd-catalyst/api-client";
-import { ArtifactPreviewFrame } from "./artifact-preview-shell";
 import { useTranslation } from "./i18n";
 import { ResourceDownloadButton } from "./resource-download-button";
 import type { ToolDisplayPanelEntry } from "./tool-display-panel";
@@ -179,9 +178,7 @@ export function SourceFilePreview({
     );
   }
   return pdf ? (
-    <ArtifactPreviewFrame>
-      <iframe title={filename} src={url} className="h-full w-full border-0" />
-    </ArtifactPreviewFrame>
+    <iframe title={filename} src={url} className="h-full min-h-64 w-full border-0" />
   ) : (
     <div className="flex h-full min-h-64 items-center justify-center bg-muted/20 p-4">
       <img
