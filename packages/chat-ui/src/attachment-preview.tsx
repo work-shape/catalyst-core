@@ -1,12 +1,97 @@
 import { AttachmentPrimitive, useAuiState } from "@assistant-ui/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ImageIcon, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useWorkspaceApiClient } from "./api/workspace-api-client";
+import { workspaceQueryKeys } from "./api/workspace-query-keys";
 import { managedFileIdFromUrl, useAttachmentContentContext } from "./attachment-content";
+import { useTranslation } from "./i18n";
+import {
+  createSourceFilePreviewEntry,
+  findSourceFileResource
+} from "./source-file-preview";
+import { useToolDisplayPanel } from "./tool-display-panel";
 import { cn } from "./ui/cn";
+import { Spinner } from "./ui/spinner";
+
+const AUTH_SCOPE = "standalone";
 
 export function AttachmentPreview({ removable }: { removable: boolean }) {
   const attachment = useAuiState((state) => state.attachment as AttachmentSnapshot);
   const imageUrl = useAttachmentImageUrl(attachment);
+  const managedFileId = managedFileIdFromAttachmentContent(attachment.content);
+  const attachmentContent = useAttachmentContentContext();
+  const { apiBaseUrl } = useWorkspaceApiClient();
+  const displayPanel = useToolDisplayPanel();
+  const queryClient = useQueryClient();
+  const { t } = useTranslation();
+  const [opening, setOpening] = useState(false);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  const conversationId = attachmentContent?.selectedConversationId;
+  const client = attachmentContent?.client;
+  const filename = attachment.name || "Attached file";
+  const previewAvailable = Boolean(!removable && managedFileId && client && conversationId);
+
+  async function openPreview() {
+    if (!managedFileId || !client || !conversationId || opening) {
+      return;
+    }
+    setOpening(true);
+    displayPanel.show({
+      key: `source-file-loading:${managedFileId}`,
+      title: filename,
+      node: (
+        <div className="flex min-h-64 items-center justify-center">
+          <Spinner size="sm" />
+        </div>
+      )
+    });
+    try {
+      const response = await queryClient.fetchQuery({
+        queryKey: workspaceQueryKeys.conversationResources(
+          apiBaseUrl,
+          AUTH_SCOPE,
+          conversationId
+        ),
+        queryFn: () => client.conversationResources(conversationId)
+      });
+      if (!mounted.current) {
+        return;
+      }
+      const resource = findSourceFileResource(response.resources, managedFileId);
+      if (!resource) {
+        throw new Error("Attachment preview resource was not found");
+      }
+      displayPanel.show(
+        createSourceFilePreviewEntry({ client, conversationId, resource })
+      );
+    } catch {
+      if (!mounted.current) {
+        return;
+      }
+      displayPanel.show({
+        key: `source-file-error:${managedFileId}`,
+        title: filename,
+        node: (
+          <div className="flex min-h-64 items-center justify-center text-sm text-muted-foreground">
+            {t("resourcesLoadFailed")}
+          </div>
+        )
+      });
+    } finally {
+      if (mounted.current) {
+        setOpening(false);
+      }
+    }
+  }
 
   if (isImageAttachment(attachment)) {
     return (
@@ -39,12 +124,36 @@ export function AttachmentPreview({ removable }: { removable: boolean }) {
 
   return (
     <AttachmentPrimitive.Root className="group/attachment relative max-w-72">
-      <div className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-muted/45 px-2 py-1 text-xs text-muted-foreground">
-        <AttachmentPrimitive.unstable_Thumb className="shrink-0 font-mono text-[0.65rem] uppercase leading-none text-muted-foreground" />
-        <span className="min-w-0 truncate">
-          <AttachmentPrimitive.Name />
-        </span>
-      </div>
+      {previewAvailable ? (
+        <button
+          type="button"
+          className={cn(
+            "inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-md bg-muted/45 px-2 py-1 text-xs text-muted-foreground transition-colors",
+            "hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
+          )}
+          title={t("openArtifactPreview", { filename })}
+          aria-label={t("openArtifactPreview", { filename })}
+          aria-busy={opening}
+          disabled={opening}
+          onClick={() => void openPreview()}
+        >
+          {opening ? (
+            <Spinner size="sm" />
+          ) : (
+            <AttachmentPrimitive.unstable_Thumb className="shrink-0 font-mono text-[0.65rem] uppercase leading-none text-muted-foreground" />
+          )}
+          <span className="min-w-0 truncate">
+            <AttachmentPrimitive.Name />
+          </span>
+        </button>
+      ) : (
+        <div className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-muted/45 px-2 py-1 text-xs text-muted-foreground">
+          <AttachmentPrimitive.unstable_Thumb className="shrink-0 font-mono text-[0.65rem] uppercase leading-none text-muted-foreground" />
+          <span className="min-w-0 truncate">
+            <AttachmentPrimitive.Name />
+          </span>
+        </div>
+      )}
       <RemoveAttachmentButton removable={removable} />
     </AttachmentPrimitive.Root>
   );
@@ -82,6 +191,24 @@ type AttachmentContentPart = {
   data?: unknown;
   mimeType?: string;
 };
+
+export function managedFileIdFromAttachmentContent(
+  content: AttachmentContentPart[] | undefined
+): string | undefined {
+  for (const part of content ?? []) {
+    const url =
+      typeof part.data === "string"
+        ? part.data
+        : typeof part.image === "string"
+          ? part.image
+          : undefined;
+    const fileId = managedFileIdFromUrl(url);
+    if (fileId) {
+      return fileId;
+    }
+  }
+  return undefined;
+}
 
 type AttachmentImageSource =
   | {

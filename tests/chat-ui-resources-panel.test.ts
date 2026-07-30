@@ -13,9 +13,12 @@ import {
   structuredDataToTsv
 } from "../packages/chat-ui/src/resources-panel-model";
 import {
-  ResourcesPanel,
-  SourceFilePreview
+  ResourcesPanel
 } from "../packages/chat-ui/src/resources-panel";
+import {
+  findSourceFileResource,
+  SourceFilePreview
+} from "../packages/chat-ui/src/source-file-preview";
 import { StructuredDataView } from "../packages/chat-ui/src/structured-data-view";
 import { ToolDisplayPanelProvider } from "../packages/chat-ui/src/tool-display-panel";
 
@@ -104,6 +107,11 @@ const structuredData: StructuredDataResourceResponse = {
 };
 
 describe("Resources panel model", () => {
+  it("resolves a committed attachment to its source-file preview resource", () => {
+    expect(findSourceFileResource(resources, "file_1")?.resourceId).toBe("source");
+    expect(findSourceFileResource(resources, "missing")).toBeUndefined();
+  });
+
   it("groups in product order, hides empty sections, and preserves server order", () => {
     const grouped = groupConversationResources(
       resources.filter((resource) => resource.resourceType !== "generated_file")

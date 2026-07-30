@@ -3,8 +3,6 @@ import {
   BarChart3,
   ChevronDown,
   Database,
-  Download,
-  FileText,
   Library,
   X
 } from "lucide-react";
@@ -13,8 +11,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
-  useState,
-  type ReactNode
+  useState
 } from "react";
 import type {
   ApiClient,
@@ -36,6 +33,11 @@ import {
   resolveResourcesPanelOpen,
   type ResourceSectionType
 } from "./resources-panel-model";
+import { ResourceDownloadButton } from "./resource-download-button";
+import {
+  createSourceFilePreviewEntry,
+  type SourceFileResource
+} from "./source-file-preview";
 import {
   StructuredDataCopyAllButton,
   StructuredDataView
@@ -50,7 +52,6 @@ import {
 } from "./tool-display-panel";
 import { getArtifactFileType, type ToolArtifactDownloadRef } from "./tool-artifacts";
 import { TooltipIconButton } from "./tooltip-icon-button";
-import { Button } from "./ui/button";
 import { Spinner } from "./ui/spinner";
 import { useWorkspacePreferences } from "./workspace/workspace-ui-state";
 
@@ -193,79 +194,8 @@ export function ResourcesPanel({
   );
 
   const sourceEntry = useCallback(
-    (
-      resource: Extract<
-        ConversationResourceListItem,
-        { resourceType: "source_file" }
-      >
-    ): ToolDisplayPanelEntry => {
-      if (resource.preview.kind === "artifact") {
-        const preview: ToolArtifactDownloadRef = {
-          artifactId: resource.preview.artifactId,
-          mimeType: resource.preview.mimeType
-        };
-        return {
-          key: `resource:${resource.resourceId}`,
-          title: resource.title,
-          subtitle: resource.subtitle,
-          headerActions: (
-            <ResourceDownloadButton
-              client={client}
-              conversationId={conversationId}
-              resource={resource}
-            />
-          ),
-          node: (
-            <Suspense
-              fallback={
-                <div className="flex min-h-64 items-center justify-center">
-                  <Spinner size="sm" />
-                </div>
-              }
-            >
-              <ArtifactPreview
-                artifact={preview}
-                client={client}
-                conversationId={conversationId}
-              />
-            </Suspense>
-          )
-        };
-      }
-      const inline =
-        (resource.mimeType?.startsWith("image/") ?? false) ||
-        resource.mimeType === "application/pdf";
-      return {
-        key: `resource:${resource.resourceId}`,
-        title: resource.title,
-        subtitle: resource.subtitle,
-        headerActions: (
-          <ResourceDownloadButton
-            client={client}
-            conversationId={conversationId}
-            resource={resource}
-          />
-        ),
-        node: inline ? (
-          <SourceFilePreview
-            client={client}
-            conversationId={conversationId}
-            fileId={resource.preview.fileId}
-            filename={resource.download.filename}
-            mimeType={resource.mimeType}
-          />
-        ) : (
-          <FileDetails resource={resource}>
-            <ResourceDownloadButton
-              client={client}
-              conversationId={conversationId}
-              resource={resource}
-              labelled
-            />
-          </FileDetails>
-        )
-      };
-    },
+    (resource: SourceFileResource): ToolDisplayPanelEntry =>
+      createSourceFilePreviewEntry({ client, conversationId, resource }),
     [client, conversationId]
   );
 
@@ -443,176 +373,6 @@ function ResourceRow({
           resource={resource}
         />
       ) : null}
-    </div>
-  );
-}
-
-function ResourceDownloadButton({
-  client,
-  conversationId,
-  labelled = false,
-  resource
-}: {
-  client: ApiClient;
-  conversationId: string;
-  labelled?: boolean;
-  resource: Extract<
-    ConversationResourceListItem,
-    { resourceType: "source_file" | "generated_file" }
-  >;
-}) {
-  const { t } = useTranslation();
-  const [downloading, setDownloading] = useState(false);
-  const filename = resource.download.filename;
-
-  async function download() {
-    setDownloading(true);
-    try {
-      const blob =
-        resource.download.kind === "artifact"
-          ? await client.conversationArtifactContent(
-              conversationId,
-              resource.download.artifactId
-            )
-          : await client.conversationFileContent(
-              conversationId,
-              resource.download.fileId,
-              true
-            );
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = filename;
-      document.body.append(anchor);
-      anchor.click();
-      anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
-    } finally {
-      setDownloading(false);
-    }
-  }
-
-  return (
-    <Button
-      type="button"
-      variant={labelled ? "outline" : "ghost"}
-      size={labelled ? "sm" : "icon"}
-      className={labelled ? "h-8 text-xs" : "size-7 shrink-0 opacity-70 group-hover:opacity-100"}
-      title={t("downloadArtifact", { filename })}
-      aria-label={t("downloadArtifact", { filename })}
-      disabled={downloading}
-      onClick={(event) => {
-        event.stopPropagation();
-        void download();
-      }}
-    >
-      {downloading ? <Spinner size="sm" /> : <Download size={14} aria-hidden="true" />}
-      {labelled ? <span>{t("downloadArtifactButton")}</span> : null}
-    </Button>
-  );
-}
-
-export function SourceFilePreview({
-  client,
-  conversationId,
-  fileId,
-  filename,
-  mimeType
-}: {
-  client: ApiClient;
-  conversationId: string;
-  fileId: string;
-  filename: string;
-  mimeType?: string;
-}) {
-  const { t } = useTranslation();
-  const pdf = mimeType === "application/pdf";
-  const directUrl = client.browserManagedDownloads && !pdf
-    ? client.conversationFileContentUrl(conversationId, fileId)
-    : undefined;
-  const [url, setUrl] = useState<string | undefined>(directUrl);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    if (directUrl) {
-      setUrl(directUrl);
-      setFailed(false);
-      return undefined;
-    }
-
-    let active = true;
-    let objectUrl: string | undefined;
-    setUrl(undefined);
-    setFailed(false);
-    void client
-      .conversationFileContent(conversationId, fileId, pdf)
-      .then((blob) => {
-        if (active) {
-          objectUrl = URL.createObjectURL(blob);
-          setUrl(objectUrl);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setFailed(true);
-        }
-      });
-    return () => {
-      active = false;
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
-    };
-  }, [client, conversationId, directUrl, fileId, pdf]);
-
-  if (failed) {
-    return (
-      <div className="flex min-h-64 items-center justify-center text-sm text-muted-foreground">
-        {t("resourcesLoadFailed")}
-      </div>
-    );
-  }
-  if (!url) {
-    return (
-      <div className="flex min-h-64 items-center justify-center">
-        <Spinner size="sm" />
-      </div>
-    );
-  }
-  return pdf ? (
-    <iframe title={filename} src={url} className="h-full min-h-64 w-full border-0" />
-  ) : (
-    <div className="flex h-full min-h-64 items-center justify-center bg-muted/20 p-4">
-      <img
-        src={url}
-        alt={filename}
-        className="max-h-full max-w-full object-contain"
-        onError={() => setFailed(true)}
-      />
-    </div>
-  );
-}
-
-function FileDetails({
-  children,
-  resource
-}: {
-  children: ReactNode;
-  resource: Extract<ConversationResourceListItem, { resourceType: "source_file" }>;
-}) {
-  const { t } = useTranslation();
-  return (
-    <div className="grid min-h-64 place-items-center p-6">
-      <div className="grid max-w-sm justify-items-center gap-3 text-center">
-        <FileText size={32} className="text-muted-foreground" aria-hidden="true" />
-        <div>
-          <p className="font-medium">{resource.download.filename}</p>
-          <p className="text-sm text-muted-foreground">
-            {resource.mimeType ?? t("resourcesUnknownFileType")}
-          </p>
-        </div>
-        {children}
-      </div>
     </div>
   );
 }
