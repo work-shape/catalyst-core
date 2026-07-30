@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   asExecutionWorkspaceId,
   asManagedArtifactId,
@@ -355,75 +355,22 @@ describe("workspace tools", () => {
     );
   });
 
-  it("checks per-conversation, per-user, and global workspace command concurrency", async () => {
-    const conversationScoped = await createWorkspaceHarness({
-      limits: {
-        perConversationActiveCommands: 1,
-        perUserActiveCommands: 10,
-        globalActiveCommands: 10
-      }
-    });
-    await conversationScoped.runTool("workspace.exec", { command: "sleep 1" });
-    const sameConversation = await conversationScoped.runTool("workspace.exec", { command: "sleep 2" });
-    expect(sameConversation.status).toBe("failed");
-    if (sameConversation.status === "failed") {
-      expect(sameConversation.error.message).toMatch(/conversation/u);
-    }
-
-    const userScoped = await createWorkspaceHarness({
-      limits: {
-        perConversationActiveCommands: 10,
-        perUserActiveCommands: 1,
-        globalActiveCommands: 10
-      }
-    });
-    await userScoped.seedActiveCommand({ ownerUserId: userScoped.ownerUserId });
-    const sameUser = await userScoped.runTool("workspace.exec", { command: "sleep 1" });
-    expect(sameUser.status).toBe("failed");
-    if (sameUser.status === "failed") {
-      expect(sameUser.error.message).toMatch(/user/u);
-    }
-
-    const globalScoped = await createWorkspaceHarness({
-      limits: {
-        perConversationActiveCommands: 10,
-        perUserActiveCommands: 10,
-        globalActiveCommands: 1
-      }
-    });
-    await globalScoped.seedActiveCommand({ ownerUserId: "other-user" });
-    const globallyBlocked = await globalScoped.runTool("workspace.exec", { command: "sleep 1" });
-    expect(globallyBlocked.status).toBe("failed");
-    if (globallyBlocked.status === "failed") {
-      expect(globallyBlocked.error.message).toMatch(/global/u);
-    }
-  });
-
-  it("does not let concurrent workspace.exec calls both pass when conversation capacity is one", async () => {
-    const harness = await createWorkspaceHarness({
-      limits: {
-        perConversationActiveCommands: 1,
-        perUserActiveCommands: 10,
-        globalActiveCommands: 10
-      }
-    });
+  it("queues concurrent workspace.exec calls without admission limits", async () => {
+    const harness = await createWorkspaceHarness();
 
     const results = await Promise.all([
       harness.runTool("workspace.exec", { command: "sleep 1" }),
       harness.runTool("workspace.exec", { command: "sleep 2" })
     ]);
 
-    expect(results.filter((result) => result.status === "success")).toHaveLength(1);
-    const failed = results.find((result) => result.status === "failed");
-    expect(failed?.status).toBe("failed");
-    if (failed?.status === "failed") {
-      expect(failed.error.message).toMatch(/conversation/u);
-      expect(failed.error.details).toMatchObject({
-        scope: "conversation",
-        activeCommands: 1,
-        limit: 1
-      });
-    }
+    expect(results).toHaveLength(2);
+    expect(results.every((result) => result.status === "success")).toBe(true);
+    await expect(
+      harness.store.countActiveWorkspaceCommands({
+        clientInstanceId: harness.clientInstanceId,
+        conversationId: harness.conversation.id
+      })
+    ).resolves.toMatchObject({ queued: 2, total: 2 });
   });
 
   it("waits for a worker-backed workspace.exec result before returning to the model", async () => {
@@ -514,6 +461,78 @@ describe("workspace tools", () => {
       await worker.stop({ cancelActive: true, reason: "test complete" });
       await workerLoop;
       await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("does not consume the execution timeout while a command is queued", async () => {
+    vi.useFakeTimers({ now: new Date("2026-06-29T12:00:00.000Z") });
+    try {
+      let reads = 0;
+      const leaseToken = "queued-wait-lease";
+      const harness = await createWorkspaceHarness({
+        execResultWaitMs: null,
+        execResultPollIntervalMs: 1000,
+        serviceStore(store) {
+          return new Proxy(store, {
+            get(target, property, receiver) {
+              if (property === "getWorkspaceCommand") {
+                return async (input: Parameters<typeof store.getWorkspaceCommand>[0]) => {
+                  reads += 1;
+                  const current = await store.getWorkspaceCommand(input);
+                  if (!current || reads < 8) {
+                    return current;
+                  }
+                  const claimed = await store.claimNextWorkspaceCommand({
+                    clientInstanceId: input.clientInstanceId,
+                    workerId: "queued-wait-worker",
+                    leaseToken,
+                    now: "2026-06-29T12:00:07.000Z",
+                    leaseExpiresAt: "2026-06-29T12:05:07.000Z"
+                  });
+                  if (!claimed) {
+                    throw new Error("Expected queued command to be claimable");
+                  }
+                  return store.completeWorkspaceCommand({
+                    clientInstanceId: input.clientInstanceId,
+                    commandId: input.commandId,
+                    leaseToken,
+                    output: shapeWorkspaceCommandOutput(
+                      {
+                        exitCode: 0,
+                        stdout: "started after queue wait",
+                        stderr: "",
+                        durationMs: 17
+                      },
+                      claimed.limits
+                    ),
+                    completedAt: "2026-06-29T12:00:08.000Z"
+                  });
+                };
+              }
+              const value = Reflect.get(target, property, receiver);
+              return typeof value === "function" ? value.bind(target) : value;
+            }
+          });
+        }
+      });
+
+      const resultPromise = harness.runTool("workspace.exec", {
+        command: "printf 'started after queue wait'",
+        timeoutSeconds: 1
+      });
+      await vi.advanceTimersByTimeAsync(8000);
+      const result = await resultPromise;
+
+      expect(result.status).toBe("success");
+      if (result.status !== "success") {
+        throw new Error("Expected queued command to complete");
+      }
+      expect(result.output).toMatchObject({
+        status: "completed",
+        stdoutPreview: "started after queue wait"
+      });
+    } finally {
+      vi.useRealTimers();
     }
   });
 

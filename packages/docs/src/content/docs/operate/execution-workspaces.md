@@ -15,6 +15,8 @@ The production-shaped deployment has these roles:
 - object storage: stores workspace file bytes and promoted artifact bytes
 - Postgres: stores workspace, file manifest, command queue, leases, audit events, and managed artifact records
 
+Commands wait in the durable Postgres queue until worker capacity is available. `executionWorkspaces.worker.concurrency` is the deployment control for simultaneous runner containers; queued commands are not rejected through separate per-user or global admission caps. Size worker concurrency for the host, and use queue wait time as the signal to add execution capacity.
+
 ## Runner Image
 
 The platform Dockerfile exposes a `workspace-command-runner` target for the `executionWorkspaces.runner.image` container. It includes `/bin/bash`, Node, Python artifact libraries, LibreOffice, Poppler, fonts, ImageMagick, and common shell utilities so `workspace.exec` can run ordinary script-first DOCX, XLSX, PPTX, PDF, and image workflows without package installs at command time.
@@ -45,7 +47,9 @@ Conversation deletion and retention expiration call execution workspace cleanup 
 
 A periodic cleanup job also scans for active workspace metadata attached to already deleted or retention-expired conversations. This catches interrupted delete/retention paths.
 
-The workspace command worker periodically removes orphaned local temp directories with the `catalyst-workspace-` prefix after the configured max age. The durable source of truth is object storage plus the workspace manifest, not temp directories or runner containers.
+The worker keeps a hydrated local workspace directory after each command and reuses it until `executionWorkspaces.cleanup.hydratedWorkspaceIdleTtlMs` expires. Set the value to `0` to disable reuse. Before every command, the worker reconciles the directory with the durable workspace manifest, and after every command it syncs changed files back to durable storage. Runner containers remain short-lived.
+
+The same periodic cleanup removes expired or orphaned directories with the `catalyst-workspace-` prefix. The durable source of truth is object storage plus the workspace manifest, not hydrated directories or runner containers.
 
 ## Promoted Artifacts
 

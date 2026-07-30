@@ -338,22 +338,16 @@ describePostgres("Postgres execution workspace store", () => {
     });
   });
 
-  it("atomically enforces command capacity during concurrent enqueue attempts", async () => {
+  it("accepts concurrent enqueue attempts into the durable queue", async () => {
     const fixture = await createWorkspaceFixture(store);
-    const capacity = {
-      perConversationActiveCommands: 1,
-      perUserActiveCommands: 10,
-      globalActiveCommands: 10
-    };
 
-    const attempts = await Promise.allSettled([
+    await Promise.all([
       store.enqueueWorkspaceCommand({
         clientInstanceId: fixture.clientInstanceId,
         workspaceId: fixture.workspace.id,
         ownerUserId: fixture.ownerUserId,
         command: "sleep 1",
         limits: { timeoutSeconds: 60 },
-        capacity,
         queuedAt: "2026-06-29T10:25:00.000Z"
       }),
       secondStore.enqueueWorkspaceCommand({
@@ -362,24 +356,9 @@ describePostgres("Postgres execution workspace store", () => {
         ownerUserId: fixture.ownerUserId,
         command: "sleep 2",
         limits: { timeoutSeconds: 60 },
-        capacity,
         queuedAt: "2026-06-29T10:25:00.000Z"
       })
     ]);
-
-    expect(attempts.filter((result) => result.status === "fulfilled")).toHaveLength(1);
-    const rejected = attempts.find((result) => result.status === "rejected");
-    expect(rejected?.status).toBe("rejected");
-    if (rejected?.status === "rejected") {
-      expect(rejected.reason).toMatchObject({
-        code: "CONFLICT",
-        details: {
-          scope: "conversation",
-          activeCommands: 1,
-          limit: 1
-        }
-      });
-    }
 
     await expect(
       store.countActiveWorkspaceCommands({
@@ -387,10 +366,10 @@ describePostgres("Postgres execution workspace store", () => {
         conversationId: fixture.conversation.id
       })
     ).resolves.toEqual({
-      queued: 1,
+      queued: 2,
       running: 0,
       cancelling: 0,
-      total: 1
+      total: 2
     });
   });
 

@@ -179,7 +179,7 @@ describe("workspace command worker", () => {
     });
   });
 
-  it("removes orphaned temporary workspace state before claiming work", async () => {
+  it("removes expired hydrated workspace state before claiming work", async () => {
     const harness = await createWorkerHarness();
     const orphan = join(harness.commandRootDirectory, "catalyst-workspace-orphaned");
     await mkdir(orphan, { recursive: true });

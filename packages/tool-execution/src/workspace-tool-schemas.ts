@@ -15,9 +15,6 @@ export interface WorkspaceCommandServiceLimits {
   maxExpectedOutputs: number;
   maxPreviewImages: number;
   maxPathLength: number;
-  perConversationActiveCommands: number;
-  perUserActiveCommands: number;
-  globalActiveCommands: number;
 }
 
 export const DEFAULT_LIMITS: WorkspaceCommandServiceLimits = {
@@ -33,10 +30,7 @@ export const DEFAULT_LIMITS: WorkspaceCommandServiceLimits = {
   maxCommandLength: 64 * 1024,
   maxExpectedOutputs: 32,
   maxPreviewImages: 12,
-  maxPathLength: 512,
-  perConversationActiveCommands: 1,
-  perUserActiveCommands: 1,
-  globalActiveCommands: 4
+  maxPathLength: 512
 };
 
 const workspacePathSchema = z.string().min(1).max(DEFAULT_LIMITS.maxPathLength);
@@ -88,7 +82,7 @@ export const workspaceExecInputSchema = z
   .object({
     command: z.string().min(1).max(DEFAULT_LIMITS.maxCommandLength).describe(workspaceCommandDescription),
     cwd: workspacePathSchema.describe(workspaceCwdDescription).optional(),
-    timeoutSeconds: z.number().int().min(1).max(86_400).optional(),
+    timeoutSeconds: z.number().int().min(1).optional(),
     expectedOutputs: z
       .array(expectedOutputInputSchema)
       .max(DEFAULT_LIMITS.maxExpectedOutputs)
@@ -324,7 +318,7 @@ export const workspaceExecInputJsonSchema: JsonObject = {
       maxLength: DEFAULT_LIMITS.maxPathLength,
       description: workspaceCwdDescription
     },
-    timeoutSeconds: { type: "integer", minimum: 1, maximum: DEFAULT_LIMITS.maxTimeoutSeconds },
+    timeoutSeconds: { type: "integer", minimum: 1 },
     expectedOutputs: {
       type: "array",
       maxItems: DEFAULT_LIMITS.maxExpectedOutputs,

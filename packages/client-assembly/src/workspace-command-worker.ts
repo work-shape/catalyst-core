@@ -63,6 +63,7 @@ export async function createClientInstanceWorkspaceCommandWorker(
     byteStore,
     tempRootDirectory: env.WORKSPACE_COMMAND_TEMP_ROOT ?? tmpdir(),
     leaseDurationMs: config.executionWorkspaces.worker.leaseDurationMs,
+    reuseWorkspaceDirectories: config.executionWorkspaces.cleanup.hydratedWorkspaceIdleTtlMs > 0,
     processExecutor,
     artifactPreviewGenerator: new LibreOfficeArtifactPreviewGenerator({
       tempRootDirectory: env.WORKSPACE_COMMAND_TEMP_ROOT ?? tmpdir()
@@ -77,7 +78,7 @@ export async function createClientInstanceWorkspaceCommandWorker(
     workerId: env.WORKSPACE_COMMAND_WORKER_ID,
     ...config.executionWorkspaces.worker,
     tempStateCleanupIntervalMs: config.executionWorkspaces.cleanup.tempStateCleanupIntervalMs,
-    orphanedTempStateMaxAgeMs: config.executionWorkspaces.cleanup.orphanedTempStateMaxAgeMs,
+    hydratedWorkspaceIdleTtlMs: config.executionWorkspaces.cleanup.hydratedWorkspaceIdleTtlMs,
     auditRecorder,
     telemetry
   });

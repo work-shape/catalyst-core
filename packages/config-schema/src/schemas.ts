@@ -363,15 +363,12 @@ export const executionWorkspacesConfigSchema = z
       }),
     command: z
       .object({
-        defaultTimeoutSeconds: z.number().int().positive().max(300).default(60),
-        maxTimeoutSeconds: z.number().int().positive().max(300).default(300),
-        idleTimeoutSeconds: z.number().int().positive().max(300).default(30),
-        maxStdoutBytes: z.number().int().positive().max(1024 * 1024).default(64 * 1024),
-        maxStderrBytes: z.number().int().positive().max(1024 * 1024).default(64 * 1024),
-        maxWorkspaceBytes: z.number().int().positive().default(100 * 1024 * 1024),
-        perConversationActiveCommands: z.number().int().positive().default(1),
-        perUserActiveCommands: z.number().int().positive().default(1),
-        globalActiveCommands: z.number().int().positive().default(4)
+        defaultTimeoutSeconds: z.number().int().positive().default(60),
+        maxTimeoutSeconds: z.number().int().positive().default(300),
+        idleTimeoutSeconds: z.number().int().positive().default(30),
+        maxStdoutBytes: z.number().int().positive().default(64 * 1024),
+        maxStderrBytes: z.number().int().positive().default(64 * 1024),
+        maxWorkspaceBytes: z.number().int().positive().default(100 * 1024 * 1024)
       })
       .default({
         defaultTimeoutSeconds: 60,
@@ -379,10 +376,7 @@ export const executionWorkspacesConfigSchema = z
         idleTimeoutSeconds: 30,
         maxStdoutBytes: 64 * 1024,
         maxStderrBytes: 64 * 1024,
-        maxWorkspaceBytes: 100 * 1024 * 1024,
-        perConversationActiveCommands: 1,
-        perUserActiveCommands: 1,
-        globalActiveCommands: 4
+        maxWorkspaceBytes: 100 * 1024 * 1024
       }),
     worker: z
       .object({
@@ -408,13 +402,13 @@ export const executionWorkspacesConfigSchema = z
         deletedWorkspaceCleanupIntervalMs: z.number().int().positive().default(60 * 60 * 1000),
         deletedWorkspaceCleanupBatchSize: z.number().int().positive().default(100),
         tempStateCleanupIntervalMs: z.number().int().positive().default(10 * 60 * 1000),
-        orphanedTempStateMaxAgeMs: z.number().int().positive().default(60 * 60 * 1000)
+        hydratedWorkspaceIdleTtlMs: z.number().int().nonnegative().default(60 * 60 * 1000)
       })
       .default({
         deletedWorkspaceCleanupIntervalMs: 60 * 60 * 1000,
         deletedWorkspaceCleanupBatchSize: 100,
         tempStateCleanupIntervalMs: 10 * 60 * 1000,
-        orphanedTempStateMaxAgeMs: 60 * 60 * 1000
+        hydratedWorkspaceIdleTtlMs: 60 * 60 * 1000
       })
   })
   .superRefine((config, context) => {
@@ -450,10 +444,7 @@ export const executionWorkspacesConfigSchema = z
       idleTimeoutSeconds: 30,
       maxStdoutBytes: 64 * 1024,
       maxStderrBytes: 64 * 1024,
-      maxWorkspaceBytes: 100 * 1024 * 1024,
-      perConversationActiveCommands: 1,
-      perUserActiveCommands: 1,
-      globalActiveCommands: 4
+      maxWorkspaceBytes: 100 * 1024 * 1024
     },
     worker: {
       concurrency: 1,
@@ -468,7 +459,7 @@ export const executionWorkspacesConfigSchema = z
       deletedWorkspaceCleanupIntervalMs: 60 * 60 * 1000,
       deletedWorkspaceCleanupBatchSize: 100,
       tempStateCleanupIntervalMs: 10 * 60 * 1000,
-      orphanedTempStateMaxAgeMs: 60 * 60 * 1000
+      hydratedWorkspaceIdleTtlMs: 60 * 60 * 1000
     }
   });
 

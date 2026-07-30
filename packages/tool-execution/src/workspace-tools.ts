@@ -14,7 +14,6 @@ import {
   type ToolExecutionContext,
   type ToolHandlerResult,
   type WorkspaceCommand,
-  type WorkspaceCommandCapacityLimits,
   type WorkspaceCommandLimits,
   type WorkspaceExpectedOutput,
   type WorkspaceFile,
@@ -824,7 +823,6 @@ export class WorkspaceCommandService {
           cwd: command.cwd,
           limits: command.limits,
           expectedOutputs: command.expectedOutputs,
-          capacity: this.commandCapacityLimits(),
           queuedAt: this.now()
         })
       };
@@ -837,14 +835,6 @@ export class WorkspaceCommandService {
       }
       throw error;
     }
-  }
-
-  private commandCapacityLimits(): WorkspaceCommandCapacityLimits {
-    return {
-      perConversationActiveCommands: this.limits.perConversationActiveCommands,
-      perUserActiveCommands: this.limits.perUserActiveCommands,
-      globalActiveCommands: this.limits.globalActiveCommands
-    };
   }
 
   private async recordQueuedCommand(
@@ -880,15 +870,22 @@ export class WorkspaceCommandService {
       return { status: "success", value: command };
     }
 
-    const waitMs = this.execResultWaitMs ?? ((command.limits.timeoutSeconds * 1000) + 5000);
-    if (waitMs <= 0) {
+    if (this.execResultWaitMs !== undefined && this.execResultWaitMs <= 0) {
       return { status: "success", value: command };
     }
 
-    const deadlineMs = Date.now() + waitMs;
+    const explicitDeadlineMs =
+      this.execResultWaitMs === undefined ? undefined : Date.now() + this.execResultWaitMs;
     let current = command;
-    while (Date.now() < deadlineMs) {
-      await sleep(Math.min(this.execResultPollIntervalMs, Math.max(1, deadlineMs - Date.now())));
+    while (true) {
+      if (explicitDeadlineMs !== undefined && Date.now() >= explicitDeadlineMs) {
+        break;
+      }
+      await sleep(
+        explicitDeadlineMs === undefined
+          ? this.execResultPollIntervalMs
+          : Math.min(this.execResultPollIntervalMs, Math.max(1, explicitDeadlineMs - Date.now()))
+      );
       const latest = await this.store.getWorkspaceCommand({
         clientInstanceId: command.clientInstanceId,
         commandId: command.id
@@ -927,7 +924,7 @@ export class WorkspaceCommandService {
     return failedValidationResult("Workspace command did not complete before the tool wait limit", {
       commandId: command.id,
       status: cancelled.status,
-      waitMs
+      ...(this.execResultWaitMs !== undefined ? { waitMs: this.execResultWaitMs } : {})
     });
   }
 

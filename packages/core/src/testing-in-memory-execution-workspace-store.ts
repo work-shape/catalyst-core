@@ -24,7 +24,6 @@ import {
   type RecoverStaleWorkspaceCommandsInput,
   type RequestWorkspaceCommandCancellationInput,
   type WorkspaceCommand,
-  type WorkspaceCommandCapacityLimits,
   type WorkspaceCommandId,
   type WorkspaceCommandStore,
   type WorkspaceFile,
@@ -205,9 +204,6 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
       input.workspaceId,
       input.ownerUserId
     );
-    if (input.capacity) {
-      this.assertWorkspaceCommandCapacity(input, workspace.conversationId, input.capacity);
-    }
     const queuedAt = input.queuedAt ?? new Date().toISOString();
     const command: WorkspaceCommand = {
       id: createPlatformId("wcmd"),
@@ -260,36 +256,6 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
       counts.total += 1;
     }
     return counts;
-  }
-
-  private assertWorkspaceCommandCapacity(
-    input: EnqueueWorkspaceCommandInput,
-    conversationId: ConversationId,
-    capacity: WorkspaceCommandCapacityLimits
-  ): void {
-    assertWorkspaceCommandScopeCapacity(
-      "conversation",
-      this.countActiveWorkspaceCommandsSync({
-        clientInstanceId: input.clientInstanceId,
-        conversationId
-      }).total,
-      capacity.perConversationActiveCommands
-    );
-    assertWorkspaceCommandScopeCapacity(
-      "user",
-      this.countActiveWorkspaceCommandsSync({
-        clientInstanceId: input.clientInstanceId,
-        ownerUserId: input.ownerUserId
-      }).total,
-      capacity.perUserActiveCommands
-    );
-    assertWorkspaceCommandScopeCapacity(
-      "global",
-      this.countActiveWorkspaceCommandsSync({
-        clientInstanceId: input.clientInstanceId
-      }).total,
-      capacity.globalActiveCommands
-    );
   }
 
   async getWorkspaceCommand(input: {
@@ -668,20 +634,6 @@ function isActiveWorkspaceCommand(
   command: WorkspaceCommand
 ): command is WorkspaceCommand & { status: "queued" | "running" | "cancelling" } {
   return command.status === "queued" || command.status === "running" || command.status === "cancelling";
-}
-
-function assertWorkspaceCommandScopeCapacity(
-  scope: "conversation" | "user" | "global",
-  activeCommands: number,
-  limit: number
-): void {
-  if (activeCommands >= limit) {
-    throw new AppError("CONFLICT", `Workspace ${scope} command capacity exceeded`, {
-      scope,
-      activeCommands,
-      limit
-    });
-  }
 }
 
 function uniqueStrings(values: string[]): string[] {

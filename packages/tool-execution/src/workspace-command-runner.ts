@@ -7,6 +7,7 @@ import {
   readFile,
   rm,
   stat,
+  utimes,
   writeFile
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -77,6 +78,7 @@ export interface LocalWorkspaceCommandRunnerOptions {
   tempRootDirectory?: string;
   leaseDurationMs?: number;
   maxPathLength?: number;
+  reuseWorkspaceDirectories?: boolean;
   shellPath?: string;
   processExecutor?: WorkspaceCommandProcessExecutor;
   artifactPreviewGenerator?: WorkspaceArtifactPreviewGenerator;
@@ -120,11 +122,13 @@ export class LocalWorkspaceCommandRunner {
   private readonly tempRootDirectory: string;
   private readonly leaseDurationMs: number;
   private readonly maxPathLength: number;
+  private readonly reuseWorkspaceDirectories: boolean;
   private readonly processExecutor: WorkspaceCommandProcessExecutor;
   private readonly artifactPreviewGenerator?: WorkspaceArtifactPreviewGenerator;
   private readonly auditRecorder?: AuditRecorder;
   private readonly telemetry?: WorkspaceCommandTelemetry;
   private readonly now: () => string;
+  private readonly activeExecutionDirectories = new Set<string>();
 
   constructor(options: LocalWorkspaceCommandRunnerOptions) {
     this.store = options.store;
@@ -133,6 +137,7 @@ export class LocalWorkspaceCommandRunner {
     this.tempRootDirectory = options.tempRootDirectory ?? tmpdir();
     this.leaseDurationMs = options.leaseDurationMs ?? DEFAULT_LEASE_DURATION_MS;
     this.maxPathLength = options.maxPathLength ?? DEFAULT_MAX_PATH_LENGTH;
+    this.reuseWorkspaceDirectories = options.reuseWorkspaceDirectories ?? false;
     this.processExecutor =
       options.processExecutor ?? new LocalWorkspaceCommandProcessExecutor({ shellPath: options.shellPath });
     this.artifactPreviewGenerator = options.artifactPreviewGenerator;
@@ -219,7 +224,7 @@ export class LocalWorkspaceCommandRunner {
     return terminal;
   }
 
-  async cleanupOrphanedTempState(input: {
+  async cleanupIdleWorkspaceDirectories(input: {
     olderThanMs: number;
     now?: Date;
   }): Promise<{ removedCount: number; failedCount: number }> {
@@ -238,6 +243,9 @@ export class LocalWorkspaceCommandRunner {
         continue;
       }
       const directory = join(this.tempRootDirectory, entry.name);
+      if (this.activeExecutionDirectories.has(directory)) {
+        continue;
+      }
       try {
         const info = await stat(directory);
         if (info.mtimeMs > cutoffMs) {
@@ -296,9 +304,11 @@ export class LocalWorkspaceCommandRunner {
     let processResult: ProcessResult | undefined;
     let changedFiles: WorkspaceCommandChangedFile[] = [];
     let promotedArtifacts: WorkspaceCommandPromotedArtifact[] = [];
+    let cacheReusable = false;
     try {
       const workspace = await this.requireWorkspace(command);
       hydrated = await this.hydrateWorkspace(workspace, command);
+      this.activeExecutionDirectories.add(hydrated.executionDirectory);
       processResult = await this.runProcess(
         command,
         hydrated.workspaceDirectory,
@@ -312,6 +322,7 @@ export class LocalWorkspaceCommandRunner {
         hydrated.baselineFiles,
         scannedFiles
       );
+      cacheReusable = true;
       promotedArtifacts = await this.promoteExpectedOutputs(
         workspace,
         command,
@@ -334,7 +345,16 @@ export class LocalWorkspaceCommandRunner {
       };
     } finally {
       if (hydrated) {
-        await rm(hydrated.executionDirectory, { recursive: true, force: true });
+        this.activeExecutionDirectories.delete(hydrated.executionDirectory);
+        if (this.reuseWorkspaceDirectories && cacheReusable) {
+          const executionDirectory = hydrated.executionDirectory;
+          const accessedAt = new Date();
+          await utimes(executionDirectory, accessedAt, accessedAt).catch(async () => {
+            await rm(executionDirectory, { recursive: true, force: true });
+          });
+        } else {
+          await rm(hydrated.executionDirectory, { recursive: true, force: true });
+        }
       }
     }
   }
@@ -359,14 +379,41 @@ export class LocalWorkspaceCommandRunner {
     command: WorkspaceCommand
   ): Promise<HydratedWorkspace> {
     await mkdir(this.tempRootDirectory, { recursive: true });
-    const executionDirectory = await mkdtemp(join(this.tempRootDirectory, "catalyst-workspace-"));
+    const executionDirectory = this.reuseWorkspaceDirectories
+      ? join(this.tempRootDirectory, cachedWorkspaceDirectoryName(this.workerId, workspace.id))
+      : await mkdtemp(join(this.tempRootDirectory, "catalyst-workspace-"));
     const workspaceDirectory = join(executionDirectory, "workspace");
+    let cachedFiles: ScannedWorkspaceFile[] = [];
+    if (this.reuseWorkspaceDirectories) {
+      try {
+        await mkdir(workspaceDirectory, { recursive: true });
+        const accessedAt = new Date();
+        await utimes(executionDirectory, accessedAt, accessedAt);
+        await this.ensureStandardWorkspaceDirectories(workspaceDirectory);
+        cachedFiles = await this.scanWorkspaceFiles(workspaceDirectory, command);
+      } catch {
+        await rm(executionDirectory, { recursive: true, force: true });
+      }
+    }
     await mkdir(workspaceDirectory, { recursive: true });
     await this.ensureStandardWorkspaceDirectories(workspaceDirectory);
     const files = await this.store.listWorkspaceFiles({
       clientInstanceId: command.clientInstanceId,
       workspaceId: workspace.id
     });
+    const cachedByPath = new Map(cachedFiles.map((file) => [file.path, file]));
+    const durablePaths = new Set(files.map((file) => file.path));
+    for (const cached of cachedFiles) {
+      if (durablePaths.has(cached.path)) {
+        continue;
+      }
+      const stalePath = resolveWorkspaceFilesystemPath(workspaceDirectory, cached.path, {
+        maxPathLength: this.maxPathLength
+      });
+      if (stalePath.status === "success") {
+        await rm(stalePath.value, { force: true });
+      }
+    }
     const baselineFiles = new Map<string, WorkspaceFile>();
     for (const file of files) {
       const normalized = normalizeWorkspaceFilePath(file.path, {
@@ -391,9 +438,12 @@ export class LocalWorkspaceCommandRunner {
           target.details
         );
       }
-      const bytes = await this.byteStore.getObject(file.objectKey);
-      await mkdir(dirname(target.value), { recursive: true });
-      await writeFile(target.value, bytes);
+      const cached = cachedByPath.get(normalized.value);
+      if (cached?.checksum !== file.checksum || cached.byteSize !== file.byteSize) {
+        const bytes = await this.byteStore.getObject(file.objectKey);
+        await mkdir(dirname(target.value), { recursive: true });
+        await writeFile(target.value, bytes);
+      }
       baselineFiles.set(normalized.value, {
         ...file,
         path: normalized.value
@@ -781,6 +831,11 @@ function workspaceCommandError(
     category,
     details
   };
+}
+
+function cachedWorkspaceDirectoryName(workerId: string, workspaceId: string): string {
+  const key = createHash("sha256").update(`${workerId}:${workspaceId}`).digest("hex").slice(0, 32);
+  return `catalyst-workspace-${key}`;
 }
 
 function commandOutputFromProcess(

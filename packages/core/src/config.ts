@@ -182,9 +182,6 @@ export interface ExecutionWorkspaceCommandConfig {
   maxStdoutBytes: number;
   maxStderrBytes: number;
   maxWorkspaceBytes: number;
-  perConversationActiveCommands: number;
-  perUserActiveCommands: number;
-  globalActiveCommands: number;
 }
 
 export interface ExecutionWorkspaceWorkerConfig {
@@ -201,7 +198,7 @@ export interface ExecutionWorkspaceCleanupConfig {
   deletedWorkspaceCleanupIntervalMs: number;
   deletedWorkspaceCleanupBatchSize: number;
   tempStateCleanupIntervalMs: number;
-  orphanedTempStateMaxAgeMs: number;
+  hydratedWorkspaceIdleTtlMs: number;
 }
 
 export interface ExecutionWorkspacesConfig {

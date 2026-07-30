@@ -22,7 +22,7 @@ const DEFAULT_CANCELLATION_POLL_INTERVAL_MS = 1000;
 const DEFAULT_STALE_RECOVERY_INTERVAL_MS = 30000;
 const DEFAULT_STALE_RECOVERY_LIMIT = 50;
 const DEFAULT_TEMP_STATE_CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
-const DEFAULT_ORPHANED_TEMP_STATE_MAX_AGE_MS = 60 * 60 * 1000;
+const DEFAULT_HYDRATED_WORKSPACE_IDLE_TTL_MS = 60 * 60 * 1000;
 
 export type WorkspaceCommandWorkerStore = Pick<
   PlatformStore,
@@ -46,7 +46,7 @@ export interface WorkspaceCommandWorkerOptions {
   staleRecoveryIntervalMs?: number;
   staleRecoveryLimit?: number;
   tempStateCleanupIntervalMs?: number;
-  orphanedTempStateMaxAgeMs?: number;
+  hydratedWorkspaceIdleTtlMs?: number;
   auditRecorder?: AuditRecorder;
   telemetry?: WorkspaceCommandTelemetry;
   now?: () => string;
@@ -70,7 +70,7 @@ export class WorkspaceCommandWorker {
   private readonly staleRecoveryIntervalMs: number;
   private readonly staleRecoveryLimit: number;
   private readonly tempStateCleanupIntervalMs: number;
-  private readonly orphanedTempStateMaxAgeMs: number;
+  private readonly hydratedWorkspaceIdleTtlMs: number;
   private readonly auditRecorder?: AuditRecorder;
   private readonly telemetry?: WorkspaceCommandTelemetry;
   private readonly now: () => string;
@@ -96,8 +96,8 @@ export class WorkspaceCommandWorker {
     this.staleRecoveryLimit = options.staleRecoveryLimit ?? DEFAULT_STALE_RECOVERY_LIMIT;
     this.tempStateCleanupIntervalMs =
       options.tempStateCleanupIntervalMs ?? DEFAULT_TEMP_STATE_CLEANUP_INTERVAL_MS;
-    this.orphanedTempStateMaxAgeMs =
-      options.orphanedTempStateMaxAgeMs ?? DEFAULT_ORPHANED_TEMP_STATE_MAX_AGE_MS;
+    this.hydratedWorkspaceIdleTtlMs =
+      options.hydratedWorkspaceIdleTtlMs ?? DEFAULT_HYDRATED_WORKSPACE_IDLE_TTL_MS;
     this.auditRecorder = options.auditRecorder;
     this.telemetry = options.telemetry;
     this.now = options.now ?? (() => new Date().toISOString());
@@ -107,7 +107,7 @@ export class WorkspaceCommandWorker {
     if (input.recoverStale ?? true) {
       await this.recoverStaleCommands();
     }
-    await this.maybeCleanupOrphanedTempState();
+    await this.maybeCleanupIdleWorkspaceDirectories();
     const now = this.now();
     const claimed = await this.store.claimNextWorkspaceCommand({
       clientInstanceId: this.clientInstanceId,
@@ -188,7 +188,7 @@ export class WorkspaceCommandWorker {
   private async runLoop(index: number): Promise<void> {
     while (!this.stopping) {
       await this.maybeRecoverStaleCommands();
-      await this.maybeCleanupOrphanedTempState();
+      await this.maybeCleanupIdleWorkspaceDirectories();
       const result = await this.runOnce({ recoverStale: false });
       if (result.status === "idle") {
         await sleep(this.pollIntervalMs);
@@ -204,13 +204,13 @@ export class WorkspaceCommandWorker {
     await this.recoverStaleCommands();
   }
 
-  private async maybeCleanupOrphanedTempState(): Promise<void> {
+  private async maybeCleanupIdleWorkspaceDirectories(): Promise<void> {
     if (Date.now() - this.lastTempStateCleanupMs < this.tempStateCleanupIntervalMs) {
       return;
     }
     this.lastTempStateCleanupMs = Date.now();
-    const result = await this.runner.cleanupOrphanedTempState({
-      olderThanMs: this.orphanedTempStateMaxAgeMs
+    const result = await this.runner.cleanupIdleWorkspaceDirectories({
+      olderThanMs: this.hydratedWorkspaceIdleTtlMs
     });
     if (result.removedCount > 0 || result.failedCount > 0) {
       await emitWorkspaceCommandTelemetry(this.telemetry, {

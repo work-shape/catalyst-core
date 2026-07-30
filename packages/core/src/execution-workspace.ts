@@ -181,7 +181,6 @@ export interface EnqueueWorkspaceCommandInput {
   cwd?: string;
   limits: WorkspaceCommandLimits;
   expectedOutputs?: WorkspaceExpectedOutput[];
-  capacity?: WorkspaceCommandCapacityLimits;
   queuedAt?: ISODateString;
 }
 
@@ -281,12 +280,6 @@ export interface MarkExecutionWorkspaceDeletedInput {
   clientInstanceId: ClientInstanceId;
   conversationId: ConversationId;
   deletedAt: ISODateString;
-}
-
-export interface WorkspaceCommandCapacityLimits {
-  perConversationActiveCommands: number;
-  perUserActiveCommands: number;
-  globalActiveCommands: number;
 }
 
 export interface ExecutionWorkspaceMetadataStore {

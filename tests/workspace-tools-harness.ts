@@ -24,7 +24,7 @@ export async function createWorkspaceHarness(input: {
   agentToolNames?: string[];
   artifactPreviewGenerator?: WorkspaceArtifactPreviewGenerator;
   commandResults?: ConstructorParameters<typeof WorkspaceCommandService>[0]["commandResults"];
-  execResultWaitMs?: ConstructorParameters<typeof WorkspaceCommandService>[0]["execResultWaitMs"];
+  execResultWaitMs?: ConstructorParameters<typeof WorkspaceCommandService>[0]["execResultWaitMs"] | null;
   execResultPollIntervalMs?: ConstructorParameters<typeof WorkspaceCommandService>[0]["execResultPollIntervalMs"];
   limits?: ConstructorParameters<typeof WorkspaceCommandService>[0]["limits"];
   serviceStore?: (
@@ -85,7 +85,9 @@ export async function createWorkspaceHarness(input: {
     ...(auditRecorder ? { auditRecorder } : {}),
     ...(input.telemetry ? { telemetry: input.telemetry } : {}),
     limits: input.limits,
-    execResultWaitMs: input.execResultWaitMs ?? 0,
+    ...(input.execResultWaitMs === null
+      ? {}
+      : { execResultWaitMs: input.execResultWaitMs ?? 0 }),
     execResultPollIntervalMs: input.execResultPollIntervalMs,
     now: () => "2026-06-29T12:00:00.000Z"
   });
@@ -146,29 +148,6 @@ export async function createWorkspaceHarness(input: {
         checksum: `sha256:${file.path}`,
         mimeType: file.mimeType,
         updatedAt: "2026-06-29T12:01:00.000Z"
-      });
-    },
-    async seedActiveCommand(seed: { ownerUserId: string }) {
-      const seededConversation = await store.createConversation({
-        clientInstanceId,
-        ownerUserId: seed.ownerUserId,
-        ownerExternalUserId: seed.ownerUserId,
-        title: "Seeded active command",
-        retainedUntil: "2026-07-29T00:00:00.000Z"
-      });
-      const workspace = await store.ensureExecutionWorkspace({
-        clientInstanceId,
-        conversationId: seededConversation.id,
-        ownerUserId: seed.ownerUserId,
-        now: "2026-06-29T12:00:00.000Z"
-      });
-      return store.enqueueWorkspaceCommand({
-        clientInstanceId,
-        workspaceId: workspace.id,
-        ownerUserId: seed.ownerUserId,
-        command: "sleep 60",
-        limits: { timeoutSeconds: 60 },
-        queuedAt: "2026-06-29T12:02:00.000Z"
       });
     }
   };

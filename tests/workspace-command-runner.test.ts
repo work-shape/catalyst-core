@@ -232,6 +232,63 @@ describe("local workspace command runner", () => {
     expect(notes.output?.contentPreview).toBe("alpha-beta");
   });
 
+  it("reuses a hydrated workspace, reconciles durable changes, and expires the local copy", async () => {
+    const harness = await createRunnerHarness({ reuseWorkspaceDirectories: true });
+
+    const created = await harness.exec({
+      command: "printf 'alpha' > notes.txt"
+    });
+    expect(created.status).toBe("success");
+    const firstDirectories = await harness.commandExecutionDirectories();
+    expect(firstDirectories).toHaveLength(1);
+
+    const workspace = await harness.workspace();
+    const updatedBytes = encode("durable update");
+    const updatedChecksum = checksum(updatedBytes);
+    const stored = await harness.byteStore.putWorkspaceFile({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      workspaceId: workspace.id,
+      commandId: asWorkspaceCommandId("wcmd_external_update"),
+      path: "notes.txt",
+      bytes: updatedBytes,
+      checksum: updatedChecksum,
+      mimeType: "text/plain"
+    });
+    await harness.store.upsertWorkspaceFile({
+      clientInstanceId: harness.clientInstanceId,
+      workspaceId: workspace.id,
+      path: "notes.txt",
+      objectKey: stored.objectKey,
+      byteSize: updatedBytes.byteLength,
+      checksum: updatedChecksum,
+      mimeType: "text/plain",
+      updatedAt: "2026-06-29T12:05:00.000Z"
+    });
+
+    const reconciled = await harness.exec({
+      command: "cat notes.txt > reconciled.txt"
+    });
+    expect(reconciled.status).toBe("success");
+    const reconciledFile = await harness.service.readFile(
+      { path: "reconciled.txt" },
+      harness.context
+    );
+    expect(reconciledFile.status).toBe("success");
+    if (reconciledFile.status !== "success") {
+      throw new Error("Expected reconciled file");
+    }
+    expect(reconciledFile.output?.contentPreview).toBe("durable update");
+    await expect(harness.commandExecutionDirectories()).resolves.toEqual(firstDirectories);
+
+    const cleanup = await harness.runner.cleanupIdleWorkspaceDirectories({
+      olderThanMs: 60 * 60 * 1000,
+      now: new Date(Date.now() + 2 * 60 * 60 * 1000)
+    });
+    expect(cleanup).toEqual({ removedCount: 1, failedCount: 0 });
+    await expect(harness.commandExecutionDirectories()).resolves.toEqual([]);
+  });
+
   it("persists file deletion across later workspace hydrations", async () => {
     const harness = await createRunnerHarness();
 
@@ -892,6 +949,7 @@ describe("local workspace command runner", () => {
 async function createRunnerHarness(input: {
   artifactPreviewGenerator?: WorkspaceArtifactPreviewGenerator;
   limits?: ConstructorParameters<typeof WorkspaceCommandService>[0]["limits"];
+  reuseWorkspaceDirectories?: boolean;
   telemetry?: WorkspaceCommandTelemetry;
   useResultSource?: boolean;
   withAuditRecorder?: boolean;
@@ -919,6 +977,9 @@ async function createRunnerHarness(input: {
     store,
     byteStore,
     tempRootDirectory: commandRootDirectory,
+    ...(input.reuseWorkspaceDirectories !== undefined
+      ? { reuseWorkspaceDirectories: input.reuseWorkspaceDirectories }
+      : {}),
     ...(input.artifactPreviewGenerator ? { artifactPreviewGenerator: input.artifactPreviewGenerator } : {}),
     ...(auditRecorder ? { auditRecorder } : {}),
     ...(input.telemetry ? { telemetry: input.telemetry } : {}),

@@ -22,10 +22,7 @@ describe("execution workspaces config", () => {
         idleTimeoutSeconds: 30,
         maxStdoutBytes: 65536,
         maxStderrBytes: 65536,
-        maxWorkspaceBytes: 104857600,
-        perConversationActiveCommands: 1,
-        perUserActiveCommands: 1,
-        globalActiveCommands: 4
+        maxWorkspaceBytes: 104857600
       },
       worker: {
         concurrency: 1,
@@ -36,7 +33,7 @@ describe("execution workspaces config", () => {
         deletedWorkspaceCleanupIntervalMs: 3600000,
         deletedWorkspaceCleanupBatchSize: 100,
         tempStateCleanupIntervalMs: 600000,
-        orphanedTempStateMaxAgeMs: 3600000
+        hydratedWorkspaceIdleTtlMs: 3600000
       }
     });
   });
@@ -55,9 +52,11 @@ describe("execution workspaces config", () => {
             pidsLimit: 256
           },
           command: {
-            defaultTimeoutSeconds: 90,
-            maxTimeoutSeconds: 180,
-            globalActiveCommands: 8
+            defaultTimeoutSeconds: 600,
+            maxTimeoutSeconds: 900,
+            idleTimeoutSeconds: 600,
+            maxStdoutBytes: 2 * 1024 * 1024,
+            maxStderrBytes: 2 * 1024 * 1024
           },
           worker: {
             concurrency: 4,
@@ -68,7 +67,7 @@ describe("execution workspaces config", () => {
             deletedWorkspaceCleanupIntervalMs: 300000,
             deletedWorkspaceCleanupBatchSize: 25,
             tempStateCleanupIntervalMs: 60000,
-            orphanedTempStateMaxAgeMs: 120000
+            hydratedWorkspaceIdleTtlMs: 0
           }
         }
       })
@@ -84,9 +83,11 @@ describe("execution workspaces config", () => {
         pidsLimit: 256
       },
       command: {
-        defaultTimeoutSeconds: 90,
-        maxTimeoutSeconds: 180,
-        globalActiveCommands: 8
+        defaultTimeoutSeconds: 600,
+        maxTimeoutSeconds: 900,
+        idleTimeoutSeconds: 600,
+        maxStdoutBytes: 2 * 1024 * 1024,
+        maxStderrBytes: 2 * 1024 * 1024
       },
       worker: {
         concurrency: 4,
@@ -97,7 +98,7 @@ describe("execution workspaces config", () => {
         deletedWorkspaceCleanupIntervalMs: 300000,
         deletedWorkspaceCleanupBatchSize: 25,
         tempStateCleanupIntervalMs: 60000,
-        orphanedTempStateMaxAgeMs: 120000
+        hydratedWorkspaceIdleTtlMs: 0
       }
     });
   });
