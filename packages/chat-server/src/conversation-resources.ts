@@ -4,7 +4,6 @@ import type {
   ConversationResourceListResponse
 } from "@vivd-catalyst/api-contract";
 import {
-  detectArtifactPreviewSourceKind,
   isImageFileFormat,
   isJsonObject,
   readToolResultMetadata,
@@ -110,10 +109,7 @@ function userViewableArtifact(
     const artifact = artifactsById.get(id);
     return artifact ? [artifact] : [];
   });
-  return (
-    referenced.find((artifact) => artifact.kind === "document.canonical_pdf") ??
-    referenced.find((artifact) => detectArtifactPreviewSourceKind(artifact) !== undefined)
-  );
+  return referenced.find((artifact) => artifact.kind === "document.canonical_pdf");
 }
 
 function generatedFileResources(

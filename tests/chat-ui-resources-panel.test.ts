@@ -14,7 +14,7 @@ import {
 } from "../packages/chat-ui/src/resources-panel-model";
 import {
   ResourcesPanel,
-  SourceImagePreview
+  SourceFilePreview
 } from "../packages/chat-ui/src/resources-panel";
 import { StructuredDataView } from "../packages/chat-ui/src/structured-data-view";
 import { ToolDisplayPanelProvider } from "../packages/chat-ui/src/tool-display-panel";
@@ -218,11 +218,12 @@ describe("Resources panel rendering", () => {
       createElement(
         TranslationProvider,
         { locale: "de" },
-        createElement(SourceImagePreview, {
+        createElement(SourceFilePreview, {
           client,
           conversationId: "conversation/1",
           fileId: "file 1",
-          filename: "Screenshot.png"
+          filename: "Screenshot.png",
+          mimeType: "image/png"
         })
       )
     );
@@ -232,6 +233,28 @@ describe("Resources panel rendering", () => {
     );
     expect(markup).toContain('alt="Screenshot.png"');
     expect(markup).not.toContain("Inhalte konnten nicht geladen werden.");
+  });
+
+  it("renders cookie-authenticated source PDFs inline", () => {
+    const client = createApiClient({ baseUrl: "https://example.test" });
+    const markup = renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { locale: "de" },
+        createElement(SourceFilePreview, {
+          client,
+          conversationId: "conversation/1",
+          fileId: "file 1",
+          filename: "Input.pdf",
+          mimeType: "application/pdf"
+        })
+      )
+    );
+
+    expect(markup).toContain('<iframe title="Input.pdf"');
+    expect(markup).toContain(
+      'src="https://example.test/api/conversations/conversation%2F1/files/file%201/content"'
+    );
   });
 });
 

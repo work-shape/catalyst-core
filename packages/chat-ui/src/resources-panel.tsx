@@ -232,7 +232,9 @@ export function ResourcesPanel({
           )
         };
       }
-      const image = resource.mimeType?.startsWith("image/") ?? false;
+      const inline =
+        (resource.mimeType?.startsWith("image/") ?? false) ||
+        resource.mimeType === "application/pdf";
       return {
         key: `resource:${resource.resourceId}`,
         title: resource.title,
@@ -244,12 +246,13 @@ export function ResourcesPanel({
             resource={resource}
           />
         ),
-        node: image ? (
-          <SourceImagePreview
+        node: inline ? (
+          <SourceFilePreview
             client={client}
             conversationId={conversationId}
             fileId={resource.preview.fileId}
             filename={resource.download.filename}
+            mimeType={resource.mimeType}
           />
         ) : (
           <FileDetails resource={resource}>
@@ -509,16 +512,18 @@ function ResourceDownloadButton({
   );
 }
 
-export function SourceImagePreview({
+export function SourceFilePreview({
   client,
   conversationId,
   fileId,
-  filename
+  filename,
+  mimeType
 }: {
   client: ApiClient;
   conversationId: string;
   fileId: string;
   filename: string;
+  mimeType?: string;
 }) {
   const { t } = useTranslation();
   const directUrl = client.browserManagedDownloads
@@ -566,7 +571,16 @@ export function SourceImagePreview({
       </div>
     );
   }
-  return url ? (
+  if (!url) {
+    return (
+      <div className="flex min-h-64 items-center justify-center">
+        <Spinner size="sm" />
+      </div>
+    );
+  }
+  return mimeType === "application/pdf" ? (
+    <iframe title={filename} src={url} className="h-full min-h-64 w-full border-0" />
+  ) : (
     <div className="flex h-full min-h-64 items-center justify-center bg-muted/20 p-4">
       <img
         src={url}
@@ -574,10 +588,6 @@ export function SourceImagePreview({
         className="max-h-full max-w-full object-contain"
         onError={() => setFailed(true)}
       />
-    </div>
-  ) : (
-    <div className="flex min-h-64 items-center justify-center">
-      <Spinner size="sm" />
     </div>
   );
 }

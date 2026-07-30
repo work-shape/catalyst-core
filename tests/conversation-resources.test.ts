@@ -276,6 +276,74 @@ describe("conversation resource routes", () => {
     }
   });
 
+  it("previews an uploaded PDF from its source instead of internal preprocessing JSON", async () => {
+    const fixture = await createFixture();
+    try {
+      const ownerId = `${fixture.clientInstanceId}:owner`;
+      const conversation = await createConversation(
+        fixture.store,
+        fixture.clientInstanceId,
+        ownerId
+      );
+      const file = await fixture.store.createManagedFile({
+        clientInstanceId: fixture.clientInstanceId,
+        ownerUserId: ownerId,
+        filename: "input.pdf",
+        mimeType: "application/pdf",
+        byteSize: 10,
+        checksum: "sha256:input-pdf",
+        objectKey: "private/source/input.pdf"
+      });
+      const pagesJson = await fixture.store.createManagedArtifact({
+        clientInstanceId: fixture.clientInstanceId,
+        conversationId: conversation.id,
+        sourceFileId: file.id,
+        kind: "document.pages_json",
+        objectKey: "private/prepared/input.pages.json",
+        filename: "input.pdf.pages.json",
+        mimeType: "application/json",
+        byteSize: 10,
+        checksum: "sha256:input-pages"
+      });
+      const sent = await fixture.store.createConversationAttachment({
+        clientInstanceId: fixture.clientInstanceId,
+        conversationId: conversation.id,
+        fileId: file.id,
+        filename: file.filename,
+        mimeType: file.mimeType,
+        byteSize: file.byteSize,
+        checksum: file.checksum,
+        status: "ready",
+        format: "pdf",
+        artifactRefs: { "document.pages_json": pagesJson.id }
+      });
+      await fixture.store.claimReadyDraftAttachmentsForMessage({
+        clientInstanceId: fixture.clientInstanceId,
+        conversationId: conversation.id,
+        messageId: asMessageId("msg_pdf"),
+        claimedAt: new Date().toISOString()
+      });
+
+      const response = await request(
+        fixture.server,
+        fixture.ownerToken,
+        `/api/conversations/${conversation.id}/resources`
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        resources: [
+          expect.objectContaining({
+            resourceId: `source_file:${sent.id}`,
+            preview: { kind: "source_file", fileId: file.id }
+          })
+        ]
+      });
+    } finally {
+      await fixture.server.close();
+    }
+  });
+
   it("projects owned sent files and deduplicated promoted artifacts without leaking internals", async () => {
     const fixture = await createFixture();
     try {
