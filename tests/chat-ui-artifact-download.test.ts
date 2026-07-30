@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "../packages/chat-ui/node_modules/react";
 import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
-import type { Message } from "@vivd-catalyst/api-client";
+import { createApiClient, type Message } from "@vivd-catalyst/api-client";
 import {
   asManagedArtifactId,
   createAssistantFinalMetadata,
@@ -19,8 +19,12 @@ import {
   readSurfacedToolArtifactRefs,
   readToolArtifactRefs
 } from "../packages/chat-ui/src/tool-artifacts";
+import { ArtifactDownloadButton } from "../packages/chat-ui/src/artifact-download-card";
 import { ToolCallPart } from "../packages/chat-ui/src/tool-call";
-import { ToolDisplayPanelProvider } from "../packages/chat-ui/src/tool-display-panel";
+import {
+  ToolDisplayPanelFrame,
+  ToolDisplayPanelProvider
+} from "../packages/chat-ui/src/tool-display-panel";
 
 describe("chat UI artifact download cards", () => {
   it("surfaces promoted final artifacts on the final assistant message for common formats", () => {
@@ -474,6 +478,43 @@ describe("chat UI artifact download cards", () => {
       "application/vnd.ms-powerpoint",
       undefined
     );
+  });
+
+  it("renders a download action in a file-backed preview header", () => {
+    const client = createApiClient({
+      baseUrl: "https://catalyst.example",
+      browserManagedDownloads: true
+    });
+    const artifact = {
+      artifactId: "art_workbook",
+      kind: "spreadsheet.workbook",
+      filename: "Cosmic_Cafe_Surprise.xlsx",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    };
+    const markup = renderToStaticMarkup(
+      createElement(ToolDisplayPanelFrame, {
+        entry: {
+          key: "artifact-preview:art_workbook",
+          title: artifact.filename,
+          subtitle: "Spreadsheet · spreadsheet.workbook",
+          headerActions: createElement(ArtifactDownloadButton, {
+            artifact,
+            client,
+            conversationId: "conv_test",
+            variant: "panel"
+          }),
+          node: createElement("div")
+        },
+        onClose() {}
+      })
+    );
+
+    expect(markup).toContain("Cosmic_Cafe_Surprise.xlsx");
+    expect(markup).toContain("Download Cosmic_Cafe_Surprise.xlsx");
+    expect(markup).toContain(
+      'href="https://catalyst.example/api/conversations/conv_test/artifacts/art_workbook/content"'
+    );
+    expect(markup).toContain(">Download</span>");
   });
 });
 

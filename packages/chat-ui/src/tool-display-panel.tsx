@@ -27,6 +27,7 @@ export interface ToolDisplayPanelEntry {
   key: string;
   title: string;
   subtitle?: string;
+  headerActions?: ReactNode;
   node: ReactNode;
 }
 
@@ -277,7 +278,7 @@ export function ToolDisplayPanel({
   );
 }
 
-function ToolDisplayPanelFrame({
+export function ToolDisplayPanelFrame({
   entry,
   onClose,
   style
@@ -297,6 +298,9 @@ function ToolDisplayPanelFrame({
             <p className="mt-0.5 truncate text-xs text-muted-foreground">{entry.subtitle}</p>
           ) : null}
         </div>
+        {entry?.headerActions ? (
+          <div className="flex shrink-0 items-center gap-2">{entry.headerActions}</div>
+        ) : null}
         <button
           type="button"
           aria-label={t("closeDisplayPanel")}
