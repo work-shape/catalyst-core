@@ -307,6 +307,7 @@ export function createApiClient(options: ApiClientOptions) {
 
   return {
     browserManagedDownloads,
+    browserManagedArtifactDownloads: browserManagedDownloads,
     me: () =>
       unwrapJson(
         generatedSdk.getCurrentUser({ client: generatedClient }),

@@ -128,6 +128,7 @@ describe("api operation catalog and client", () => {
     expect(await blob.text()).toBe("artifact-bytes");
     expect(blob.type).toBe("application/pdf");
     expect(client.browserManagedDownloads).toBe(false);
+    expect(client.browserManagedArtifactDownloads).toBe(false);
     expect(client.conversationArtifactContentUrl("conv 1", "art/final")).toBe(
       `https://chat.example${apiOperations.getConversationArtifactContent.buildPath({
         params: { conversationId: "conv 1", artifactId: "art/final" }
@@ -215,6 +216,7 @@ describe("api operation catalog and client", () => {
     });
 
     expect(client.browserManagedDownloads).toBe(true);
+    expect(client.browserManagedArtifactDownloads).toBe(true);
     expect(client.conversationArtifactContentUrl("conversation/with space", "art/final")).toBe(
       "https://chat.example/api/conversations/conversation%2Fwith%20space/artifacts/art%2Ffinal/content"
     );
