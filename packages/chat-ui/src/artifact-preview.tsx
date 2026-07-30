@@ -1,14 +1,9 @@
 import {
-  BooleanNumber,
-  CellValueType,
   LocaleType,
   LogLevel,
   Univer,
   UniverInstanceType,
-  type ICellData,
-  type IObjectMatrixPrimitiveType,
-  type IWorkbookData,
-  type IWorksheetData
+  type IWorkbookData
 } from "@univerjs/core";
 import { UniverSheetsCorePreset } from "@univerjs/preset-sheets-core";
 import enUS from "@univerjs/preset-sheets-core/locales/en-US";
@@ -16,7 +11,6 @@ import { PptxViewer, RECOMMENDED_ZIP_LIMITS } from "@aiden0z/pptx-renderer";
 import type { ApiClient } from "@vivd-catalyst/api-client";
 import { renderAsync as renderDocxAsync } from "docx-preview";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import * as XLSX from "xlsx";
 import {
   LiveArtifactPreview,
   shouldUseLiveArtifactPreviewState as shouldUseLiveArtifactPreviewStateValue
@@ -24,6 +18,7 @@ import {
 import { ArtifactPreviewFrame, ArtifactPreviewMessage } from "./artifact-preview-shell";
 import { useTranslation } from "./i18n";
 import { MarkdownArtifact } from "./markdown-text";
+import { workbookToUniverSnapshot } from "./spreadsheet-preview";
 import { Spinner } from "./ui/spinner";
 import {
   artifactDisplayFilename,
@@ -624,163 +619,4 @@ function blockSpreadsheetEditingKeys(event: KeyboardEvent<HTMLDivElement>) {
   ) {
     event.preventDefault();
   }
-}
-
-function workbookToUniverSnapshot(buffer: ArrayBuffer): IWorkbookData {
-  const workbook = XLSX.read(buffer, {
-    cellFormula: true,
-    cellStyles: true,
-    cellText: true,
-    type: "array"
-  });
-  const sheetNames = workbook.SheetNames.length > 0 ? workbook.SheetNames : ["Sheet1"];
-  const sheetOrder = sheetNames.map((sheetName, index) => sheetId(sheetName, index));
-  const sheets: IWorkbookData["sheets"] = {};
-  sheetNames.forEach((sheetName, index) => {
-    sheets[sheetOrder[index]!] = worksheetToUniverSnapshot(
-      workbook.Sheets[sheetName] ?? {},
-      sheetName,
-      sheetOrder[index]!
-    );
-  });
-
-  return {
-    id: `workbook-${randomId()}`,
-    name: workbook.Props?.Title || "Workbook",
-    appVersion: "3.0.0-alpha",
-    locale: LocaleType.EN_US,
-    styles: {},
-    sheetOrder,
-    sheets
-  };
-}
-
-function worksheetToUniverSnapshot(
-  worksheet: XLSX.WorkSheet,
-  sheetName: string,
-  id: string
-): Partial<IWorksheetData> {
-  const range = safeDecodeRange(worksheet["!ref"]);
-  const rowCount = Math.max((range?.e.r ?? 0) + 24, 100);
-  const columnCount = Math.max((range?.e.c ?? 0) + 12, 26);
-  return {
-    id,
-    name: sheetName,
-    tabColor: "",
-    hidden: BooleanNumber.FALSE,
-    freeze: { xSplit: 0, ySplit: 0, startRow: 0, startColumn: 0 },
-    rowCount,
-    columnCount,
-    zoomRatio: 1,
-    scrollTop: 0,
-    scrollLeft: 0,
-    defaultColumnWidth: 88,
-    defaultRowHeight: 24,
-    mergeData: (worksheet["!merges"] ?? []).map((mergeRange) => ({
-      startRow: mergeRange.s.r,
-      endRow: mergeRange.e.r,
-      startColumn: mergeRange.s.c,
-      endColumn: mergeRange.e.c
-    })),
-    cellData: worksheetCellData(worksheet, range),
-    rowData: rowData(worksheet),
-    columnData: columnData(worksheet),
-    rowHeader: { width: 44 },
-    columnHeader: { height: 24 },
-    showGridlines: BooleanNumber.TRUE,
-    rightToLeft: BooleanNumber.FALSE
-  };
-}
-
-function worksheetCellData(
-  worksheet: XLSX.WorkSheet,
-  range: XLSX.Range | undefined
-): IObjectMatrixPrimitiveType<ICellData> {
-  const cells: IObjectMatrixPrimitiveType<ICellData> = {};
-  if (!range) {
-    return cells;
-  }
-  for (let rowIndex = range.s.r; rowIndex <= range.e.r; rowIndex += 1) {
-    for (let columnIndex = range.s.c; columnIndex <= range.e.c; columnIndex += 1) {
-      const address = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
-      const rawCell = worksheet[address];
-      const cell = toUniverCell(rawCell);
-      if (!cell) {
-        continue;
-      }
-      cells[rowIndex] ??= {};
-      cells[rowIndex]![columnIndex] = cell;
-    }
-  }
-  return cells;
-}
-
-function toUniverCell(cell: XLSX.CellObject | undefined): ICellData | undefined {
-  if (!cell) {
-    return undefined;
-  }
-  const converted: ICellData = {};
-  if (cell.f) {
-    converted.f = cell.f.startsWith("=") ? cell.f : `=${cell.f}`;
-  }
-  if (typeof cell.v === "number") {
-    converted.v = cell.v;
-    converted.t = CellValueType.NUMBER;
-  } else if (typeof cell.v === "boolean") {
-    converted.v = cell.v;
-    converted.t = CellValueType.BOOLEAN;
-  } else if (cell.v !== undefined && cell.v !== null) {
-    converted.v = String(cell.v);
-    converted.t = CellValueType.STRING;
-  } else if (typeof cell.w === "string") {
-    converted.v = cell.w;
-    converted.t = CellValueType.STRING;
-  }
-  return converted.v !== undefined || converted.f ? converted : undefined;
-}
-
-function rowData(worksheet: XLSX.WorkSheet): IWorksheetData["rowData"] {
-  const rows: IWorksheetData["rowData"] = {};
-  worksheet["!rows"]?.forEach((row, index) => {
-    if (row?.hpx || row?.hidden) {
-      rows[index] = {
-        h: row.hpx,
-        hd: row.hidden ? BooleanNumber.TRUE : BooleanNumber.FALSE
-      };
-    }
-  });
-  return rows;
-}
-
-function columnData(worksheet: XLSX.WorkSheet): IWorksheetData["columnData"] {
-  const columns: IWorksheetData["columnData"] = {};
-  worksheet["!cols"]?.forEach((column, index) => {
-    if (column?.wpx || column?.hidden) {
-      columns[index] = {
-        w: column.wpx,
-        hd: column.hidden ? BooleanNumber.TRUE : BooleanNumber.FALSE
-      };
-    }
-  });
-  return columns;
-}
-
-function safeDecodeRange(ref: string | undefined): XLSX.Range | undefined {
-  if (!ref) {
-    return undefined;
-  }
-  try {
-    return XLSX.utils.decode_range(ref);
-  } catch {
-    return undefined;
-  }
-}
-
-function sheetId(sheetName: string, index: number): string {
-  const cleaned = sheetName.toLowerCase().replaceAll(/[^a-z0-9]+/gu, "-").replaceAll(/^-|-$/gu, "");
-  return `sheet-${cleaned || index + 1}`;
-}
-
-function randomId(): string {
-  return Math.random().toString(36).slice(2, 10);
 }
