@@ -11,6 +11,7 @@ import { toUiMessages } from "../packages/chat-ui/src/assistant-ui-adapter";
 import { AssistantSourcePart } from "../packages/chat-ui/src/assistant-source-part";
 import { ToolDisplayPanelProvider } from "../packages/chat-ui/src/tool-display-panel";
 import { ToolSurfaceList } from "../packages/chat-ui/src/tool-surface-card";
+import { dedupeToolSurfaceRefs } from "../packages/chat-ui/src/tool-surfaces";
 import {
   readToolActionLabel,
   readToolDetailSections,
@@ -19,6 +20,106 @@ import {
 import { readToolArtifactRefs } from "../packages/chat-ui/src/tool-artifacts";
 
 describe("chat UI message history projection", () => {
+  it("surfaces side-panel displays while a completed run is still active", () => {
+    const projected = toUiMessages([], {
+      run: {
+        id: "run_active",
+        status: "completed"
+      },
+      projection: {
+        runId: "run_active",
+        lastSequence: 4,
+        status: "completed",
+        text: "The review is ready.",
+        reasoning: [],
+        activeToolCalls: [],
+        parts: [
+          {
+            type: "tool_call",
+            toolCallId: "call_review",
+            toolName: "submit_review",
+            input: {},
+            state: "output_available",
+            output: {
+              status: "success",
+              display: {
+                kind: "review.result",
+                version: 1,
+                mode: "side_panel",
+                title: "Review",
+                data: {}
+              }
+            }
+          },
+          {
+            type: "text",
+            text: "The review is ready."
+          }
+        ]
+      }
+    });
+
+    expect(projected[0]?.parts).toContainEqual({
+      type: "data-workspace-promoted-surfaces",
+      data: {
+        kind: "workspace.promoted_surfaces",
+        surfaces: [
+          {
+            surfaceId: "tool:call_review",
+            toolCallId: "call_review",
+            toolName: "submit_review",
+            title: "Review",
+            display: {
+              kind: "review.result",
+              version: 1,
+              mode: "side_panel",
+              title: "Review",
+              data: {}
+            }
+          }
+        ]
+      }
+    });
+  });
+
+  it("keeps the latest revision for repeated promoted surface ids", () => {
+    expect(
+      dedupeToolSurfaceRefs([
+        {
+          surfaceId: "structured-data:resource_1",
+          title: "Customer data",
+          display: {
+            kind: "structured_data.resource",
+            version: 1,
+            data: {
+              structuredDataResourceId: "resource_1",
+              revision: 1
+            }
+          }
+        },
+        {
+          surfaceId: "structured-data:resource_1",
+          title: "Updated customer data",
+          display: {
+            kind: "structured_data.resource",
+            version: 1,
+            data: {
+              structuredDataResourceId: "resource_1",
+              revision: 2
+            }
+          }
+        }
+      ])
+    ).toEqual([
+      expect.objectContaining({
+        title: "Updated customer data",
+        display: expect.objectContaining({
+          data: expect.objectContaining({ revision: 2 })
+        })
+      })
+    ]);
+  });
+
   it("replays persisted user document manifests as file attachments", () => {
     const messages: Message[] = [
       {
@@ -386,6 +487,38 @@ describe("chat UI message history projection", () => {
     expect(markup).toContain('tabindex="0"');
     expect(markup).toContain('aria-label="Open in side panel"');
     expect(markup).toContain("Dashboard");
+  });
+
+  it("renders structured data references as matching side-panel cards", () => {
+    const markup = renderToStaticMarkup(
+      createElement(
+        ToolDisplayPanelProvider,
+        null,
+        createElement(ToolSurfaceList, {
+          surfaces: [
+            {
+              surfaceId: "structured-data:resource_1",
+              title: "Customer data",
+              toolName: "structured_data.publish",
+              display: {
+                kind: "structured_data.resource",
+                version: 1,
+                mode: "side_panel",
+                data: {
+                  structuredDataResourceId: "resource_1",
+                  resourceKey: "customer_data",
+                  revision: 1
+                }
+              }
+            }
+          ]
+        })
+      )
+    );
+
+    expect(markup).toContain('role="button"');
+    expect(markup).toContain("Customer data");
+    expect(markup).toContain("structured_data.publish");
   });
 
   it("projects persisted assistant web sources as assistant-ui source parts", () => {

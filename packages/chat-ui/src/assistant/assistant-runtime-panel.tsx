@@ -14,7 +14,6 @@ import {
   toUiMessages
 } from "../assistant-ui-adapter";
 import { AssistantThread } from "../assistant-thread";
-import { AttachmentContentProvider } from "../attachment-content";
 import { AssistantToolRegistry } from "../assistant-tool-registry";
 import { useTranslation } from "../i18n";
 import {
@@ -243,32 +242,30 @@ function AssistantRuntimePane({
       />
       <AssistantToolRegistry>
         <DraftBridge draftKey={selectedConversationId ?? "new"} draft={draft} onDraftChange={onDraftChange} />
-        <AttachmentContentProvider client={client} selectedConversationId={selectedConversationId}>
-          <AssistantThread
-            config={config}
-            selectedAgentName={selectedAgentName}
-            selectedModelBindingId={selectedModelBindingId}
-            showContextIndicator={showContextIndicator}
-            contextSnapshot={contextSnapshot}
-            notice={visibleNotice}
-            draftAttachments={draftAttachments}
-            localUploadingAttachments={localUploadingAttachments}
-            sendBlockedReason={sendDisabledReason}
-            attachmentsEnabled={attachmentsEnabled}
-            attachmentAccept={attachmentAccept}
-            conversationRunning={conversationRunning}
-            activeRunId={activeRun?.run.id}
-            optimisticPending={optimisticPending}
-            messagesEnabled={Boolean(selectedConversationId)}
-            composerFocusRequestId={composerFocusRequestId}
-            onCancelRun={onCancelRun}
-            onSelectModelBinding={selectModelBindingId}
-            onFilesSelected={onFilesSelected}
-            onRemoveDraftAttachment={onRemoveDraftAttachment}
-            onRetryDraftAttachment={onRetryDraftAttachment}
-            onSubmitMessage={selectedConversationId ? undefined : submitRootDraftMessage}
-          />
-        </AttachmentContentProvider>
+        <AssistantThread
+          config={config}
+          selectedAgentName={selectedAgentName}
+          selectedModelBindingId={selectedModelBindingId}
+          showContextIndicator={showContextIndicator}
+          contextSnapshot={contextSnapshot}
+          notice={visibleNotice}
+          draftAttachments={draftAttachments}
+          localUploadingAttachments={localUploadingAttachments}
+          sendBlockedReason={sendDisabledReason}
+          attachmentsEnabled={attachmentsEnabled}
+          attachmentAccept={attachmentAccept}
+          conversationRunning={conversationRunning}
+          activeRunId={activeRun?.run.id}
+          optimisticPending={optimisticPending}
+          messagesEnabled={Boolean(selectedConversationId)}
+          composerFocusRequestId={composerFocusRequestId}
+          onCancelRun={onCancelRun}
+          onSelectModelBinding={selectModelBindingId}
+          onFilesSelected={onFilesSelected}
+          onRemoveDraftAttachment={onRemoveDraftAttachment}
+          onRetryDraftAttachment={onRetryDraftAttachment}
+          onSubmitMessage={selectedConversationId ? undefined : submitRootDraftMessage}
+        />
       </AssistantToolRegistry>
     </AssistantRuntimeProvider>
   );

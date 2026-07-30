@@ -1,5 +1,6 @@
-import { LayoutDashboard, PanelRightOpen } from "lucide-react";
+import { Database, LayoutDashboard, PanelRightOpen } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
+import { STRUCTURED_DATA_RESOURCE_DISPLAY_KIND } from "@vivd-catalyst/core";
 import {
   isToolDisplayPayload,
   useToolDisplayWidget
@@ -93,6 +94,8 @@ function ToolSurfaceCard({
 
   const panelActive = panel.open && panel.entry?.key === panelEntry.key;
   const openPanel = () => panel.show(panelEntry);
+  const SurfaceIcon =
+    display.kind === STRUCTURED_DATA_RESOURCE_DISPLAY_KIND ? Database : LayoutDashboard;
 
   return (
     <div
@@ -116,7 +119,7 @@ function ToolSurfaceCard({
         className="grid size-10 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"
         aria-hidden="true"
       >
-        <LayoutDashboard size={19} />
+        <SurfaceIcon size={19} />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate font-medium">{title}</span>

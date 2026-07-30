@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { renderStructuredDataResourceDisplay } from "./structured-data-resource-display";
 
 const DISPLAY_HEIGHT_MESSAGE_TYPE = "vivd-catalyst:display-height";
 const RUNTIME_THEME_STYLE_ID = "vivd-catalyst-runtime-theme";
@@ -86,6 +87,10 @@ export function displayPanelTitle(
 }
 
 export function renderBuiltInDisplay(display: { kind?: unknown; mode?: unknown; data?: unknown }): ReactNode {
+  const structuredDataDisplay = renderStructuredDataResourceDisplay(display);
+  if (structuredDataDisplay) {
+    return structuredDataDisplay;
+  }
   if (
     (display.kind !== "html.rendered" && display.kind !== "private_hydrated_view") ||
     !isRecord(display.data) ||

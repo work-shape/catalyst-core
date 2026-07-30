@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { AssistantChatPanel } from "./assistant-chat-panel";
+import { AttachmentContentProvider } from "./attachment-content";
 import { ChatDropOverlay } from "./chat-file-dropzone";
 import type { ChatShellProps } from "./chat-shell";
 import { ControlPlaneRoutes } from "./control-plane/control-plane-routes";
@@ -177,44 +178,49 @@ function ChatWorkspaceContent({
 
         <ControlPlaneRoutes adminPanel={adminPanel} controlPlane={model.controlPlane}>
           <section className="relative h-full min-h-0 min-w-0">
-            <div className="flex h-full min-h-0 min-w-0">
-              <div
-                className={cn(
-                  "relative h-full min-h-0 min-w-0 flex-1 transition-[width] duration-300 ease-out",
-                  // 23.5rem = panel width (22rem) + its right-6 offset, so the
-                  // thread centers with equal gaps to sidebar and panel edge
-                  resourcesVisible && "lg:[--resources-inset:23.5rem]"
-                )}
-                onDragEnter={chat.fileDropzone.onChatDragEnter}
-                onDragOver={chat.fileDropzone.onChatDragOver}
-                onDragLeave={chat.fileDropzone.onChatDragLeave}
-                onDrop={chat.fileDropzone.onChatDrop}
-              >
-                <AssistantChatPanel chat={chat} />
-                {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
-                {resourcesEnabled && chat.selectedConversationId ? (
-                  resourcesVisible ? (
-                    <ResourcesPanel
-                      client={resourcesPanel.client}
-                      conversationId={chat.selectedConversationId}
-                      error={resourcesPanel.error}
-                      loading={resourcesPanel.loading}
-                      onClose={resourcesPanel.close}
-                      open
-                      resources={resourcesPanel.resources}
-                    />
-                  ) : (
-                    <ResourcesPanelToggle
-                      onOpen={() => {
-                        displayPanel.close();
-                        resourcesPanel.openExplicitly();
-                      }}
-                    />
-                  )
-                ) : null}
+            <AttachmentContentProvider
+              client={chat.client}
+              selectedConversationId={chat.selectedConversationId}
+            >
+              <div className="flex h-full min-h-0 min-w-0">
+                <div
+                  className={cn(
+                    "relative h-full min-h-0 min-w-0 flex-1 transition-[width] duration-300 ease-out",
+                    // 23.5rem = panel width (22rem) + its right-6 offset, so the
+                    // thread centers with equal gaps to sidebar and panel edge
+                    resourcesVisible && "lg:[--resources-inset:23.5rem]"
+                  )}
+                  onDragEnter={chat.fileDropzone.onChatDragEnter}
+                  onDragOver={chat.fileDropzone.onChatDragOver}
+                  onDragLeave={chat.fileDropzone.onChatDragLeave}
+                  onDrop={chat.fileDropzone.onChatDrop}
+                >
+                  <AssistantChatPanel chat={chat} />
+                  {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
+                  {resourcesEnabled && chat.selectedConversationId ? (
+                    resourcesVisible ? (
+                      <ResourcesPanel
+                        client={resourcesPanel.client}
+                        conversationId={chat.selectedConversationId}
+                        error={resourcesPanel.error}
+                        loading={resourcesPanel.loading}
+                        onClose={resourcesPanel.close}
+                        open
+                        resources={resourcesPanel.resources}
+                      />
+                    ) : (
+                      <ResourcesPanelToggle
+                        onOpen={() => {
+                          displayPanel.close();
+                          resourcesPanel.openExplicitly();
+                        }}
+                      />
+                    )
+                  ) : null}
+                </div>
+                <ToolDisplayPanel onWidthChange={setDisplayPanelWidth} />
               </div>
-              <ToolDisplayPanel onWidthChange={setDisplayPanelWidth} />
-            </div>
+            </AttachmentContentProvider>
           </section>
         </ControlPlaneRoutes>
       </main>

@@ -31,6 +31,18 @@ describe("structured_data.publish", () => {
     expect(first).toMatchObject({
       status: "success",
       output: { resourceKey: "claim_data", revision: 1, operation: "replace" },
+      display: {
+        kind: "structured_data.resource",
+        version: 1,
+        mode: "side_panel",
+        displayId: expect.stringMatching(/^structured-data:/u),
+        title: "Claim data",
+        data: {
+          structuredDataResourceId: expect.any(String),
+          resourceKey: "claim_data",
+          revision: 1
+        }
+      },
       auditSummary: {
         action: "structured_data.published",
         subject: "claim_data",
@@ -57,7 +69,15 @@ describe("structured_data.publish", () => {
     });
     expect(second).toMatchObject({
       status: "success",
-      output: { revision: 2, operation: "replace" }
+      output: { revision: 2, operation: "replace" },
+      display: {
+        displayId: first.status === "success" ? first.display?.displayId : undefined,
+        title: "Updated claim",
+        data: {
+          resourceKey: "claim_data",
+          revision: 2
+        }
+      }
     });
     await expect(harness.resources()).resolves.toEqual([
       expect.objectContaining({
@@ -108,7 +128,14 @@ describe("structured_data.publish", () => {
     });
     expect(result).toMatchObject({
       status: "success",
-      output: { revision: 2, operation: "patch" }
+      output: { revision: 2, operation: "patch" },
+      display: {
+        title: "Claim data",
+        data: {
+          resourceKey: "claim_data",
+          revision: 2
+        }
+      }
     });
     const [resource] = await harness.resources();
     expect(resource?.state.sections).toEqual([

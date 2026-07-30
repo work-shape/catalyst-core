@@ -6,6 +6,8 @@ import type {
 } from "./ids";
 import type { ISODateString } from "./time";
 
+export const STRUCTURED_DATA_RESOURCE_DISPLAY_KIND = "structured_data.resource";
+
 export type StructuredDataFieldSource = {
   attachmentId: ConversationAttachmentId;
   page?: number;

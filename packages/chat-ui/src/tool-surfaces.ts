@@ -72,14 +72,19 @@ export function readToolSurfaceRefs(
 }
 
 export function dedupeToolSurfaceRefs(surfaces: ToolSurfaceRef[]): ToolSurfaceRef[] {
-  const seen = new Set<string>();
+  const indices = new Map<string, number>();
   const unique: ToolSurfaceRef[] = [];
   for (const surface of surfaces) {
     const sanitized = sanitizeToolSurfaceRef(surface);
-    if (!sanitized || seen.has(sanitized.surfaceId)) {
+    if (!sanitized) {
       continue;
     }
-    seen.add(sanitized.surfaceId);
+    const existingIndex = indices.get(sanitized.surfaceId);
+    if (existingIndex !== undefined) {
+      unique[existingIndex] = sanitized;
+      continue;
+    }
+    indices.set(sanitized.surfaceId, unique.length);
     unique.push(sanitized);
   }
   return unique;

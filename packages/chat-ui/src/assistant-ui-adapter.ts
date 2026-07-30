@@ -432,6 +432,17 @@ function createPersistedUiMessageMetadata(
 
 function toActiveRunUiMessage(activeRun: AssistantUiActiveRun): UIMessage {
   const parts = toProjectionUiMessageParts(activeRun.projection, activeRun);
+  appendWorkspacePromotedSurfacesPart(
+    parts,
+    activeRun.projection.parts.flatMap((part): ToolSurfaceRef[] =>
+      part.type === "tool_call"
+        ? readToolSurfaceRefs(part.output, {
+            toolCallId: part.toolCallId,
+            toolName: part.toolName
+          })
+        : []
+    )
+  );
   appendWorkspacePromotedArtifactsPart(
     parts,
     activeRun.projection.parts.flatMap((part): ToolArtifactDownloadRef[] =>

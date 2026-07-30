@@ -113,6 +113,17 @@ function StructuredDataFieldRow({
                   page: source.page
                 })
               : source.filename;
+            if (!onSourceOpen) {
+              return (
+                <span
+                  key={`${source.attachmentId}:${source.page ?? ""}`}
+                  className="mt-0.5 shrink-0 text-muted-foreground"
+                  title={sourceLabel}
+                >
+                  <FileSearch size={14} aria-hidden="true" />
+                </span>
+              );
+            }
             return (
               <button
                 key={`${source.attachmentId}:${source.page ?? ""}`}
@@ -120,7 +131,7 @@ function StructuredDataFieldRow({
                 className="mt-0.5 shrink-0 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
                 title={sourceLabel}
                 aria-label={sourceLabel}
-                onClick={() => onSourceOpen?.(source)}
+                onClick={() => onSourceOpen(source)}
               >
                 <FileSearch size={14} aria-hidden="true" />
               </button>

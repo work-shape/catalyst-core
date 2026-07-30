@@ -1,5 +1,6 @@
 import {
   asConversationAttachmentId,
+  STRUCTURED_DATA_RESOURCE_DISPLAY_KIND,
   type PlatformStore,
   type StructuredDataFieldSource,
   type StructuredDataState
@@ -184,6 +185,18 @@ export function createStructuredDataToolDefinitions(input: {
             message: `Published structured data resource '${resource.resourceKey}' revision ${resource.revision}.`
           },
           {
+            display: {
+              kind: STRUCTURED_DATA_RESOURCE_DISPLAY_KIND,
+              version: 1,
+              mode: "side_panel",
+              displayId: `structured-data:${resource.id}`,
+              title: resource.title,
+              data: {
+                structuredDataResourceId: resource.id,
+                resourceKey: resource.resourceKey,
+                revision: resource.revision
+              }
+            },
             auditSummary: {
               action: "structured_data.published",
               subject: resource.resourceKey,
