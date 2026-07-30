@@ -224,6 +224,16 @@ describe("artifact preview runtime wiring", () => {
     }
   });
 
+  it("keeps documentation changes out of client image cache inputs", () => {
+    const ignorePatterns = readDockerIgnorePatterns(
+      "docker/vivd-client.Dockerfile.dockerignore"
+    );
+
+    for (const pattern of ["README.md", "**/README.md", "docs", "**/docs"]) {
+      expect(ignorePatterns).toContain(pattern);
+    }
+  });
+
   it.each(["clients/demo/docker-compose.yml", "clients/demo/docker-compose.prod.yml"])(
     "runs artifact-preview-worker from the dedicated image target in %s",
     (composePath) => {

@@ -16,6 +16,11 @@
 node_modules
 **/node_modules
 
+README.md
+**/README.md
+docs
+**/docs
+
 .venv
 **/.venv
 .turbo
