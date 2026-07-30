@@ -526,7 +526,8 @@ export function SourceFilePreview({
   mimeType?: string;
 }) {
   const { t } = useTranslation();
-  const directUrl = client.browserManagedDownloads
+  const pdf = mimeType === "application/pdf";
+  const directUrl = client.browserManagedDownloads && !pdf
     ? client.conversationFileContentUrl(conversationId, fileId)
     : undefined;
   const [url, setUrl] = useState<string | undefined>(directUrl);
@@ -544,7 +545,7 @@ export function SourceFilePreview({
     setUrl(undefined);
     setFailed(false);
     void client
-      .conversationFileContent(conversationId, fileId)
+      .conversationFileContent(conversationId, fileId, pdf)
       .then((blob) => {
         if (active) {
           objectUrl = URL.createObjectURL(blob);
@@ -562,7 +563,7 @@ export function SourceFilePreview({
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [client, conversationId, directUrl, fileId]);
+  }, [client, conversationId, directUrl, fileId, pdf]);
 
   if (failed) {
     return (
@@ -578,7 +579,7 @@ export function SourceFilePreview({
       </div>
     );
   }
-  return mimeType === "application/pdf" ? (
+  return pdf ? (
     <iframe title={filename} src={url} className="h-full min-h-64 w-full border-0" />
   ) : (
     <div className="flex h-full min-h-64 items-center justify-center bg-muted/20 p-4">
