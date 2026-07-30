@@ -49,6 +49,8 @@ A periodic cleanup job also scans for active workspace metadata attached to alre
 
 The worker keeps a hydrated local workspace directory after each command and reuses it until `executionWorkspaces.cleanup.hydratedWorkspaceIdleTtlMs` expires. Set the value to `0` to disable reuse. Before every command, the worker reconciles the directory with the durable workspace manifest, and after every command it syncs changed files back to durable storage. Runner containers remain short-lived.
 
+Empty directories remain available while that warm local copy is reused. The durable manifest stores files, so empty directories do not survive cache eviction, worker restart, or execution on a different worker.
+
 The same periodic cleanup removes expired or orphaned directories with the `catalyst-workspace-` prefix. The durable source of truth is object storage plus the workspace manifest, not hydrated directories or runner containers.
 
 ## Promoted Artifacts

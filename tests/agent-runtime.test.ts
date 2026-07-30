@@ -428,6 +428,138 @@ describe("local agent runtime", () => {
     });
   });
 
+  it("aborts the active tool context when a run is cancelled", async () => {
+    const clientInstanceId = asClientInstanceId("cancel-tool-client");
+    const context: RuntimeCallContext = {
+      clientInstanceId,
+      correlationId: "corr-cancel-tool",
+      user: {
+        id: "user-1",
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const store = new InMemoryPlatformStore();
+    const conversationId = await createConversationWithMessages(store, {
+      clientInstanceId,
+      messages: []
+    });
+    const providerConfig: ModelProviderConfig = {
+      id: "test-provider",
+      type: "deterministic",
+      model: "test-model"
+    };
+    let markToolStarted!: () => void;
+    const toolStarted = new Promise<void>((resolve) => {
+      markToolStarted = resolve;
+    });
+    let markToolAborted!: () => void;
+    const toolAborted = new Promise<void>((resolve) => {
+      markToolAborted = resolve;
+    });
+    let observedAbortReason: unknown;
+    const runtime = new LocalAgentRuntime({
+      assetSource: createStaticConfigAssetSource({ agents: [
+        {
+          name: "cancel_tool_agent",
+          displayName: "Cancel Tool Agent",
+          instructions: "Use the tool.",
+          modelProviderId: "test-provider",
+          toolNames: ["test.wait"],
+          initialPrompts: []
+        }
+      ] }),
+      modelProviders: [providerConfig],
+      defaultModelProvider: providerConfig,
+      conversationHistory: store,
+      modelProvider: {
+        id: "test-provider",
+        async complete() {
+          throw new Error("Expected the streaming provider path to be used");
+        },
+        async *stream(): AsyncIterable<ModelCompletionStreamEvent> {
+          yield {
+            type: "completed",
+            completion: {
+              text: "",
+              toolCalls: [
+                {
+                  toolCallId: "call_wait",
+                  toolName: "test.wait",
+                  input: {}
+                }
+              ],
+              usage: noReportedUsage()
+            }
+          };
+        }
+      },
+      toolRegistry: new ToolRegistry({
+        tools: [
+          defineTool({
+            name: "test.wait",
+            description: "Wait until cancelled.",
+            inputSchema: z.object({}),
+            async execute() {
+              throw new Error("Tool registry execution should not be used by this test");
+            }
+          })
+        ]
+      }),
+      toolExecution: {
+        async authorize() {
+          return { status: "allowed" };
+        },
+        async execute(_request, toolContext) {
+          markToolStarted();
+          await new Promise<void>((resolve) => {
+            if (toolContext.signal?.aborted) {
+              resolve();
+              return;
+            }
+            toolContext.signal?.addEventListener("abort", () => resolve(), { once: true });
+          });
+          observedAbortReason = toolContext.signal?.reason;
+          markToolAborted();
+          return {
+            status: "cancelled",
+            error: {
+              code: "cancelled",
+              message: "Tool was cancelled"
+            }
+          };
+        }
+      },
+      usageGovernance: new ModelUsageGovernance({
+        store,
+        budget: {},
+        safeguards: {}
+      })
+    });
+
+    const run = await runtime.start(
+      {
+        agentName: "cancel_tool_agent",
+        conversationId,
+        message: {
+          text: "Wait"
+        }
+      },
+      context
+    );
+    await toolStarted;
+
+    await runtime.cancel(run.runId, "user_requested", context);
+    await toolAborted;
+
+    expect(observedAbortReason).toBe("user_requested");
+    await expect(runtime.getStatus(run.runId, context)).resolves.toBe("cancelled");
+  });
+
   it("loads conversation history before the new user message", async () => {
     const clientInstanceId = asClientInstanceId("history-client");
     const context: RuntimeCallContext = {

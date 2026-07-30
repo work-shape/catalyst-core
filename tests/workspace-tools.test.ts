@@ -536,6 +536,51 @@ describe("workspace tools", () => {
     }
   });
 
+  it("cancels a queued workspace command when its agent run is cancelled", async () => {
+    const controller = new AbortController();
+    const harness = await createWorkspaceHarness({
+      execResultWaitMs: null,
+      execResultPollIntervalMs: 5
+    });
+
+    const resultPromise = harness.runTool(
+      "workspace.exec",
+      { command: "sleep 60" },
+      {
+        ...harness.context,
+        signal: controller.signal
+      }
+    );
+    await waitForQueuedCommand(harness);
+    controller.abort("user_requested");
+
+    const result = await resultPromise;
+
+    expect(result).toMatchObject({
+      status: "cancelled",
+      error: {
+        code: "cancelled",
+        details: {
+          status: "cancelled"
+        }
+      }
+    });
+    if (result.status !== "cancelled") {
+      throw new Error("Expected queued workspace command cancellation");
+    }
+    const commandId = result.error.details?.commandId;
+    expect(typeof commandId).toBe("string");
+    await expect(
+      harness.store.getWorkspaceCommand({
+        clientInstanceId: harness.clientInstanceId,
+        commandId: asWorkspaceCommandId(commandId as string)
+      })
+    ).resolves.toMatchObject({
+      status: "cancelled",
+      cancellationReason: "Workspace command was cancelled with its agent run"
+    });
+  });
+
   it("fails and cancels workspace.exec when no worker completes the command before the wait limit", async () => {
     const harness = await createWorkspaceHarness({
       execResultWaitMs: 20,
@@ -1333,4 +1378,20 @@ async function expectToolFailure(
     expect(result.error.code).toBe(code);
     expect(result.error.message).toMatch(message);
   }
+}
+
+async function waitForQueuedCommand(
+  harness: Awaited<ReturnType<typeof createWorkspaceHarness>>
+): Promise<void> {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const counts = await harness.store.countActiveWorkspaceCommands({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id
+    });
+    if (counts.queued === 1) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  }
+  throw new Error("Workspace command was not queued");
 }

@@ -111,9 +111,13 @@ export async function createWorkspaceHarness(input: {
     createRequest(toolName: string, requestInput: unknown) {
       return createToolRequest(conversation, toolName, requestInput);
     },
-    async runTool(toolName: string, requestInput: unknown) {
+    async runTool(
+      toolName: string,
+      requestInput: unknown,
+      toolContext: ToolExecutionContext = context
+    ) {
       const request = createToolRequest(conversation, toolName, requestInput);
-      const decision = await execution.authorize(request, context);
+      const decision = await execution.authorize(request, toolContext);
       if (decision.status !== "allowed") {
         return {
           status: "failed" as const,
@@ -123,7 +127,7 @@ export async function createWorkspaceHarness(input: {
           }
         };
       }
-      return execution.execute({ ...request, authorization: decision }, context);
+      return execution.execute({ ...request, authorization: decision }, toolContext);
     },
     async putWorkspaceFile(file: {
       path: string;

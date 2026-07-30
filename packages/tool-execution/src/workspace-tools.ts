@@ -180,7 +180,10 @@ export class WorkspaceCommandService {
     if (resolvedBySource && resolvedBySource.id !== command.value.id) {
       return failed("handler_failed", "Workspace command result source returned the wrong command");
     }
-    const resultCommand = await this.resolveCommandResult(resolvedBySource ?? command.value);
+    const resultCommand = await this.resolveCommandResult(
+      resolvedBySource ?? command.value,
+      context
+    );
     if (resultCommand.status === "failed") {
       return resultCommand.result;
     }
@@ -865,7 +868,10 @@ export class WorkspaceCommandService {
     );
   }
 
-  private async resolveCommandResult(command: WorkspaceCommand): Promise<ValidationResult<WorkspaceCommand>> {
+  private async resolveCommandResult(
+    command: WorkspaceCommand,
+    context: ToolExecutionContext
+  ): Promise<ValidationResult<WorkspaceCommand>> {
     if (isTerminalWorkspaceCommand(command)) {
       return { status: "success", value: command };
     }
@@ -874,18 +880,38 @@ export class WorkspaceCommandService {
       return { status: "success", value: command };
     }
 
-    const explicitDeadlineMs =
+    const waitDeadlineMs =
       this.execResultWaitMs === undefined ? undefined : Date.now() + this.execResultWaitMs;
+    const contextDeadlineMs = context.deadline?.getTime();
     let current = command;
     while (true) {
-      if (explicitDeadlineMs !== undefined && Date.now() >= explicitDeadlineMs) {
+      if (context.signal?.aborted) {
+        return this.cancelWaitingCommand(
+          command,
+          "Workspace command was cancelled with its agent run",
+          "cancelled"
+        );
+      }
+      if (contextDeadlineMs !== undefined && Date.now() >= contextDeadlineMs) {
+        return this.cancelWaitingCommand(
+          command,
+          "Workspace command exceeded the tool execution deadline",
+          "timed_out"
+        );
+      }
+      if (waitDeadlineMs !== undefined && Date.now() >= waitDeadlineMs) {
         break;
       }
+      const nextDeadlineMs = earliestDefined(waitDeadlineMs, contextDeadlineMs);
       await sleep(
-        explicitDeadlineMs === undefined
+        nextDeadlineMs === undefined
           ? this.execResultPollIntervalMs
-          : Math.min(this.execResultPollIntervalMs, Math.max(1, explicitDeadlineMs - Date.now()))
+          : Math.min(this.execResultPollIntervalMs, Math.max(1, nextDeadlineMs - Date.now())),
+        context.signal
       );
+      if (context.signal?.aborted) {
+        continue;
+      }
       const latest = await this.store.getWorkspaceCommand({
         clientInstanceId: command.clientInstanceId,
         commandId: command.id
@@ -901,12 +927,54 @@ export class WorkspaceCommandService {
       }
     }
 
-    let cancelled: WorkspaceCommand;
+    const cancelled = await this.requestCommandCancellation(
+      command,
+      "Workspace command did not complete before the tool wait limit"
+    );
+    if (cancelled.status === "completed" || cancelled.status === "failed") {
+      return { status: "success", value: cancelled };
+    }
+    return failedValidationResult("Workspace command did not complete before the tool wait limit", {
+      commandId: command.id,
+      status: cancelled.status,
+      ...(this.execResultWaitMs !== undefined ? { waitMs: this.execResultWaitMs } : {})
+    });
+  }
+
+  private async cancelWaitingCommand(
+    command: WorkspaceCommand,
+    reason: string,
+    resultStatus: "cancelled" | "timed_out"
+  ): Promise<ValidationResult<WorkspaceCommand>> {
+    const cancelled = await this.requestCommandCancellation(command, reason);
+    if (cancelled.status === "completed" || cancelled.status === "failed") {
+      return { status: "success", value: cancelled };
+    }
+    return {
+      status: "failed",
+      result: {
+        status: resultStatus,
+        error: {
+          code: resultStatus,
+          message: reason,
+          details: {
+            commandId: command.id,
+            status: cancelled.status
+          }
+        }
+      }
+    };
+  }
+
+  private async requestCommandCancellation(
+    command: WorkspaceCommand,
+    reason: string
+  ): Promise<WorkspaceCommand> {
     try {
-      cancelled = await this.store.requestWorkspaceCommandCancellation({
+      return await this.store.requestWorkspaceCommandCancellation({
         clientInstanceId: command.clientInstanceId,
         commandId: command.id,
-        reason: "Workspace command did not complete before the tool wait limit",
+        reason,
         requestedAt: this.now()
       });
     } catch (error) {
@@ -916,16 +984,11 @@ export class WorkspaceCommandService {
           commandId: command.id
         });
         if (latest && isTerminalWorkspaceCommand(latest)) {
-          return { status: "success", value: latest };
+          return latest;
         }
       }
       throw error;
     }
-    return failedValidationResult("Workspace command did not complete before the tool wait limit", {
-      commandId: command.id,
-      status: cancelled.status,
-      ...(this.execResultWaitMs !== undefined ? { waitMs: this.execResultWaitMs } : {})
-    });
   }
 
   private async readActiveCommandCounts(
@@ -1271,8 +1334,30 @@ function isTerminalWorkspaceCommand(command: WorkspaceCommand): boolean {
   return command.status === "completed" || command.status === "failed" || command.status === "cancelled";
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function earliestDefined(left: number | undefined, right: number | undefined): number | undefined {
+  if (left === undefined) {
+    return right;
+  }
+  if (right === undefined) {
+    return left;
+  }
+  return Math.min(left, right);
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    const timer = setTimeout(finish, ms);
+    signal?.addEventListener("abort", finish, { once: true });
+
+    function finish() {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", finish);
+      resolve();
+    }
+  });
 }
 
 function safeLocalFilename(filename: string): string {

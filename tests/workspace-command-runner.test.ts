@@ -289,6 +289,107 @@ describe("local workspace command runner", () => {
     await expect(harness.commandExecutionDirectories()).resolves.toEqual([]);
   });
 
+  it("keeps empty directories in the warm workspace copy", async () => {
+    const harness = await createRunnerHarness({ reuseWorkspaceDirectories: true });
+
+    const created = await harness.exec({
+      command: "mkdir test"
+    });
+    expect(created.status).toBe("success");
+
+    const reused = await harness.exec({
+      command: "test -d test"
+    });
+
+    expect(reused).toMatchObject({
+      status: "success",
+      output: {
+        status: "completed",
+        exitCode: 0
+      }
+    });
+  });
+
+  it("rehydrates when durable file paths conflict with the warm directory shape", async () => {
+    const harness = await createRunnerHarness({ reuseWorkspaceDirectories: true });
+    const created = await harness.exec({
+      command: "mkdir -p foo && printf 'cached' > foo/bar.txt"
+    });
+    expect(created.status).toBe("success");
+    const workspace = await harness.workspace();
+    await harness.store.deleteWorkspaceFile({
+      clientInstanceId: harness.clientInstanceId,
+      workspaceId: workspace.id,
+      path: "foo/bar.txt",
+      lastCommandId: asWorkspaceCommandId("wcmd_external_delete"),
+      deletedAt: "2026-06-29T12:05:00.000Z"
+    });
+    const bytes = encode("durable file");
+    const stored = await harness.byteStore.putWorkspaceFile({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      workspaceId: workspace.id,
+      commandId: asWorkspaceCommandId("wcmd_external_create"),
+      path: "foo",
+      bytes,
+      checksum: checksum(bytes),
+      mimeType: "text/plain"
+    });
+    await harness.store.upsertWorkspaceFile({
+      clientInstanceId: harness.clientInstanceId,
+      workspaceId: workspace.id,
+      path: "foo",
+      objectKey: stored.objectKey,
+      byteSize: bytes.byteLength,
+      checksum: checksum(bytes),
+      mimeType: "text/plain",
+      updatedAt: "2026-06-29T12:05:01.000Z"
+    });
+
+    const reconciled = await harness.exec({
+      command: "test -f foo && test \"$(cat foo)\" = 'durable file'"
+    });
+
+    expect(reconciled).toMatchObject({
+      status: "success",
+      output: {
+        status: "completed",
+        exitCode: 0
+      }
+    });
+  });
+
+  it("removes a warm workspace after hydration fails", async () => {
+    const harness = await createRunnerHarness({ reuseWorkspaceDirectories: true });
+    const created = await harness.exec({
+      command: "mkdir test"
+    });
+    expect(created.status).toBe("success");
+    const workspace = await harness.workspace();
+    await harness.store.upsertWorkspaceFile({
+      clientInstanceId: harness.clientInstanceId,
+      workspaceId: workspace.id,
+      path: "missing.txt",
+      objectKey: "missing-object",
+      byteSize: 1,
+      checksum: "missing-checksum",
+      mimeType: "text/plain",
+      updatedAt: "2026-06-29T12:05:00.000Z"
+    });
+
+    const failed = await harness.exec({
+      command: "true"
+    });
+
+    expect(failed).toMatchObject({
+      status: "success",
+      output: {
+        status: "failed"
+      }
+    });
+    await expect(harness.commandExecutionDirectories()).resolves.toEqual([]);
+  });
+
   it("persists file deletion across later workspace hydrations", async () => {
     const harness = await createRunnerHarness();
 

@@ -103,6 +103,7 @@ export class LocalAgentRuntime implements AgentRuntime {
   private readonly options: LocalAgentRuntimeOptions;
   private readonly runs = new Map<AgentRunId, RunState>();
   private readonly runInputs = new Map<AgentRunId, StartAgentRunInput>();
+  private readonly runAbortControllers = new Map<AgentRunId, AbortController>();
 
   constructor(options: LocalAgentRuntimeOptions) {
     this.options = options;
@@ -138,19 +139,36 @@ export class LocalAgentRuntime implements AgentRuntime {
     }
     this.runs.set(runId, state);
     this.runInputs.set(runId, input);
+    const runAbortController = new AbortController();
+    const abortFromCaller = () => runAbortController.abort(context.signal?.reason);
+    if (context.signal?.aborted) {
+      abortFromCaller();
+    } else {
+      context.signal?.addEventListener("abort", abortFromCaller, { once: true });
+    }
+    this.runAbortControllers.set(runId, runAbortController);
+    const runContext = {
+      ...context,
+      signal: runAbortController.signal
+    };
 
     queueMicrotask(() => {
-      void this.executeRun(runId, input, context).catch((error) => {
-        const failure = toRunFailureError(error);
-        this.reportRunFailure({
-          runId,
-          input,
-          context,
-          failure,
-          error
+      void this.executeRun(runId, input, runContext)
+        .catch((error) => {
+          const failure = toRunFailureError(error);
+          this.reportRunFailure({
+            runId,
+            input,
+            context: runContext,
+            failure,
+            error
+          });
+          state.fail(error, failure);
+        })
+        .finally(() => {
+          context.signal?.removeEventListener("abort", abortFromCaller);
+          this.runAbortControllers.delete(runId);
         });
-        state.fail(error, failure);
-      });
     });
 
     return {
@@ -212,6 +230,9 @@ export class LocalAgentRuntime implements AgentRuntime {
   ): Promise<void> {
     const state = this.getRun(runId);
     const partialText = state.beginCancellation();
+    this.runAbortControllers
+      .get(runId)
+      ?.abort(reason ?? "Agent run was cancelled");
     await this.options.agentRunStore?.updateAgentRunStatus({
       clientInstanceId: context.clientInstanceId,
       runId,

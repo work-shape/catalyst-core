@@ -383,77 +383,78 @@ export class LocalWorkspaceCommandRunner {
       ? join(this.tempRootDirectory, cachedWorkspaceDirectoryName(this.workerId, workspace.id))
       : await mkdtemp(join(this.tempRootDirectory, "catalyst-workspace-"));
     const workspaceDirectory = join(executionDirectory, "workspace");
-    let cachedFiles: ScannedWorkspaceFile[] = [];
-    if (this.reuseWorkspaceDirectories) {
-      try {
-        await mkdir(workspaceDirectory, { recursive: true });
-        const accessedAt = new Date();
-        await utimes(executionDirectory, accessedAt, accessedAt);
-        await this.ensureStandardWorkspaceDirectories(workspaceDirectory);
-        cachedFiles = await this.scanWorkspaceFiles(workspaceDirectory, command);
-      } catch {
+    try {
+      let cachedFiles: ScannedWorkspaceFile[] = [];
+      if (this.reuseWorkspaceDirectories) {
+        try {
+          await mkdir(workspaceDirectory, { recursive: true });
+          const accessedAt = new Date();
+          await utimes(executionDirectory, accessedAt, accessedAt);
+          await this.ensureStandardWorkspaceDirectories(workspaceDirectory);
+          cachedFiles = await this.scanWorkspaceFiles(workspaceDirectory, command);
+        } catch {
+          await rm(executionDirectory, { recursive: true, force: true });
+        }
+      }
+      await mkdir(workspaceDirectory, { recursive: true });
+      await this.ensureStandardWorkspaceDirectories(workspaceDirectory);
+      const files = await this.store.listWorkspaceFiles({
+        clientInstanceId: command.clientInstanceId,
+        workspaceId: workspace.id
+      });
+      const durablePaths = new Set(files.map((file) => file.path));
+      const cachedPaths = new Set(cachedFiles.map((file) => file.path));
+      if (this.reuseWorkspaceDirectories && !setsEqual(cachedPaths, durablePaths)) {
         await rm(executionDirectory, { recursive: true, force: true });
+        await mkdir(workspaceDirectory, { recursive: true });
+        await this.ensureStandardWorkspaceDirectories(workspaceDirectory);
+        cachedFiles = [];
       }
+      const cachedByPath = new Map(cachedFiles.map((file) => [file.path, file]));
+      const baselineFiles = new Map<string, WorkspaceFile>();
+      for (const file of files) {
+        const normalized = normalizeWorkspaceFilePath(file.path, {
+          maxPathLength: this.maxPathLength
+        });
+        if (normalized.status === "failed") {
+          throw new WorkspaceRunnerFailure(
+            "WORKSPACE_FILE_PATH_REJECTED",
+            normalized.message,
+            "runner_error",
+            normalized.details
+          );
+        }
+        const target = resolveWorkspaceFilesystemPath(workspaceDirectory, normalized.value, {
+          maxPathLength: this.maxPathLength
+        });
+        if (target.status === "failed") {
+          throw new WorkspaceRunnerFailure(
+            "WORKSPACE_FILE_PATH_REJECTED",
+            target.message,
+            "runner_error",
+            target.details
+          );
+        }
+        const cached = cachedByPath.get(normalized.value);
+        if (cached?.checksum !== file.checksum || cached.byteSize !== file.byteSize) {
+          const bytes = await this.byteStore.getObject(file.objectKey);
+          await mkdir(dirname(target.value), { recursive: true });
+          await writeFile(target.value, bytes);
+        }
+        baselineFiles.set(normalized.value, {
+          ...file,
+          path: normalized.value
+        });
+      }
+      return {
+        executionDirectory,
+        workspaceDirectory,
+        baselineFiles
+      };
+    } catch (error) {
+      await rm(executionDirectory, { recursive: true, force: true });
+      throw error;
     }
-    await mkdir(workspaceDirectory, { recursive: true });
-    await this.ensureStandardWorkspaceDirectories(workspaceDirectory);
-    const files = await this.store.listWorkspaceFiles({
-      clientInstanceId: command.clientInstanceId,
-      workspaceId: workspace.id
-    });
-    const cachedByPath = new Map(cachedFiles.map((file) => [file.path, file]));
-    const durablePaths = new Set(files.map((file) => file.path));
-    for (const cached of cachedFiles) {
-      if (durablePaths.has(cached.path)) {
-        continue;
-      }
-      const stalePath = resolveWorkspaceFilesystemPath(workspaceDirectory, cached.path, {
-        maxPathLength: this.maxPathLength
-      });
-      if (stalePath.status === "success") {
-        await rm(stalePath.value, { force: true });
-      }
-    }
-    const baselineFiles = new Map<string, WorkspaceFile>();
-    for (const file of files) {
-      const normalized = normalizeWorkspaceFilePath(file.path, {
-        maxPathLength: this.maxPathLength
-      });
-      if (normalized.status === "failed") {
-        throw new WorkspaceRunnerFailure(
-          "WORKSPACE_FILE_PATH_REJECTED",
-          normalized.message,
-          "runner_error",
-          normalized.details
-        );
-      }
-      const target = resolveWorkspaceFilesystemPath(workspaceDirectory, normalized.value, {
-        maxPathLength: this.maxPathLength
-      });
-      if (target.status === "failed") {
-        throw new WorkspaceRunnerFailure(
-          "WORKSPACE_FILE_PATH_REJECTED",
-          target.message,
-          "runner_error",
-          target.details
-        );
-      }
-      const cached = cachedByPath.get(normalized.value);
-      if (cached?.checksum !== file.checksum || cached.byteSize !== file.byteSize) {
-        const bytes = await this.byteStore.getObject(file.objectKey);
-        await mkdir(dirname(target.value), { recursive: true });
-        await writeFile(target.value, bytes);
-      }
-      baselineFiles.set(normalized.value, {
-        ...file,
-        path: normalized.value
-      });
-    }
-    return {
-      executionDirectory,
-      workspaceDirectory,
-      baselineFiles
-    };
   }
 
   private async ensureStandardWorkspaceDirectories(workspaceDirectory: string): Promise<void> {
@@ -836,6 +837,10 @@ function workspaceCommandError(
 function cachedWorkspaceDirectoryName(workerId: string, workspaceId: string): string {
   const key = createHash("sha256").update(`${workerId}:${workspaceId}`).digest("hex").slice(0, 32);
   return `catalyst-workspace-${key}`;
+}
+
+function setsEqual(left: Set<string>, right: Set<string>): boolean {
+  return left.size === right.size && [...left].every((value) => right.has(value));
 }
 
 function commandOutputFromProcess(
