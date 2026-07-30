@@ -12,6 +12,8 @@ export function AssistantThread({
   config,
   selectedAgentName,
   selectedModelBindingId,
+  showContextIndicator,
+  contextSnapshot,
   notice,
   draftAttachments,
   localUploadingAttachments,
@@ -33,6 +35,13 @@ export function AssistantThread({
   config: SafeConfig | undefined;
   selectedAgentName: string | undefined;
   selectedModelBindingId: string | undefined;
+  showContextIndicator: boolean;
+  contextSnapshot:
+    | {
+        inputTokens: number;
+        compactThresholdTokens: number;
+      }
+    | undefined;
   notice: string | undefined;
   draftAttachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
@@ -127,6 +136,8 @@ export function AssistantThread({
                   attachmentAccept={attachmentAccept}
                   selectableModels={config?.selectableModels ?? []}
                   selectedModelBindingId={selectedModelBindingId}
+                  showContextIndicator={showContextIndicator}
+                  contextSnapshot={contextSnapshot}
                   focusRequestId={composerFocusRequestId}
                   onCancelRun={onCancelRun}
                   onSelectModelBinding={onSelectModelBinding}

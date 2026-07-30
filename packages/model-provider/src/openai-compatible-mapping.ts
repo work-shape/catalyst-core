@@ -25,6 +25,7 @@ import type {
   OpenAiCompatibleResponse,
   OpenAiResponseInput,
   OpenAiResponseInputItem,
+  OpenAiResponsesCompactionItem,
   OpenAiResponsesInputContent,
   OpenAiResponsesOutputItem,
   OpenAiResponsesReasoningItem,
@@ -40,6 +41,7 @@ export interface OpenAiCompatibleProviderTool {
 
 interface OpenAiResponsesContinuationState {
   kind: "openai_responses";
+  compactionItem?: OpenAiResponsesCompactionItem;
   encryptedReasoningItems: Array<{
     beforeToolCallId: string;
     item: OpenAiResponsesReasoningItem;
@@ -224,7 +226,8 @@ function toOpenAiChatMessagesForOne(
 
 export function toOpenAiResponsesInput(
   messages: ModelMessage[],
-  encryptedReasoningItems: OpenAiResponsesContinuationState["encryptedReasoningItems"] = []
+  encryptedReasoningItems: OpenAiResponsesContinuationState["encryptedReasoningItems"] = [],
+  compactionItem?: OpenAiResponsesCompactionItem
 ): OpenAiResponseInput {
   const input: OpenAiResponseInput = [];
   const pendingVisualMessages: OpenAiResponseInputItem[] = [];
@@ -302,7 +305,18 @@ export function toOpenAiResponsesInput(
     });
   });
   flushPendingVisualMessages(input, pendingVisualMessages);
-  return input;
+  if (!compactionItem) {
+    return input;
+  }
+  const firstNonSystemIndex = input.findIndex(
+    (item) => !("role" in item && item.role === "system")
+  );
+  const insertionIndex = firstNonSystemIndex < 0 ? input.length : firstNonSystemIndex;
+  return [
+    ...input.slice(0, insertionIndex),
+    compactionItem,
+    ...input.slice(insertionIndex)
+  ];
 }
 
 export function readOpenAiResponsesContinuationItems(
@@ -326,24 +340,56 @@ export function readOpenAiResponsesContinuationItems(
   );
 }
 
+export function readOpenAiResponsesCompactionItem(
+  providerId: string,
+  continuation: ModelProviderContinuation | undefined
+): OpenAiResponsesCompactionItem | undefined {
+  if (
+    continuation?.providerId !== providerId ||
+    !isUnknownRecord(continuation.state) ||
+    continuation.state.kind !== "openai_responses"
+  ) {
+    return undefined;
+  }
+  return isOpenAiResponsesCompactionItem(continuation.state.compactionItem)
+    ? continuation.state.compactionItem
+    : undefined;
+}
+
 export function createOpenAiResponsesContinuation(
   providerId: string,
   payload: OpenAiResponsesResponse,
   previous: ModelProviderContinuation | undefined
 ): ModelProviderContinuation | undefined {
+  const latestCompactionItem = readLatestCompactionItem(payload.output ?? []);
+  const compactionItem =
+    latestCompactionItem ?? readOpenAiResponsesCompactionItem(providerId, previous);
   const encryptedReasoningItems = [
-    ...readOpenAiResponsesContinuationItems(providerId, previous),
+    ...(latestCompactionItem
+      ? []
+      : readOpenAiResponsesContinuationItems(providerId, previous)),
     ...readEncryptedReasoningItems(payload.output ?? [])
   ];
-  return encryptedReasoningItems.length > 0
+  return compactionItem || encryptedReasoningItems.length > 0
     ? {
         providerId,
         state: {
           kind: "openai_responses",
+          ...(compactionItem ? { compactionItem } : {}),
           encryptedReasoningItems
         } satisfies OpenAiResponsesContinuationState
       }
     : undefined;
+}
+
+export function didOpenAiResponsesCompact(payload: OpenAiResponsesResponse): boolean {
+  return Boolean(readLatestCompactionItem(payload.output ?? []));
+}
+
+function readLatestCompactionItem(
+  output: OpenAiResponsesOutputItem[]
+): OpenAiResponsesCompactionItem | undefined {
+  return [...output].reverse().find(isOpenAiResponsesCompactionItem);
 }
 
 function readEncryptedReasoningItems(
@@ -376,6 +422,17 @@ function isOpenAiResponsesReasoningItem(
   return (
     isUnknownRecord(value) &&
     value.type === "reasoning" &&
+    typeof value.encrypted_content === "string"
+  );
+}
+
+function isOpenAiResponsesCompactionItem(
+  value: unknown
+): value is OpenAiResponsesCompactionItem {
+  return (
+    isUnknownRecord(value) &&
+    value.type === "compaction" &&
+    typeof value.id === "string" &&
     typeof value.encrypted_content === "string"
   );
 }

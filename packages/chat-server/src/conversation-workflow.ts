@@ -25,6 +25,7 @@ import {
   createPlatformId,
   getRuntimeSubjectUserId,
   getSubjectUserId,
+  withoutAssistantProviderContinuation,
   isAppError,
   readAssistantFinalMetadata,
   readUserMessageMetadata
@@ -146,10 +147,11 @@ export class ConversationWorkflow {
     user: AuthenticatedUser
   ): Promise<ChatMessage[]> {
     await this.requireOwnedActiveConversation(conversationId, user);
-    return this.options.conversationStore.listMessages({
+    const messages = await this.options.conversationStore.listMessages({
       clientInstanceId: this.options.clientInstanceId,
       conversationId
     });
+    return messages.map(toPublicChatMessage);
   }
 
   async getThreadSnapshot(
@@ -178,7 +180,7 @@ export class ConversationWorkflow {
 
     return {
       conversation,
-      messages,
+      messages: messages.map(toPublicChatMessage),
       ...(Object.keys(completedRunProjections).length > 0 ? { completedRunProjections } : {}),
       ...(runForSnapshot
         ? {
@@ -988,6 +990,13 @@ export class ConversationWorkflow {
     return message;
   }
 
+}
+
+function toPublicChatMessage(message: ChatMessage): ChatMessage {
+  return {
+    ...message,
+    metadata: withoutAssistantProviderContinuation(message.metadata)
+  };
 }
 
 function delay(ms: number): Promise<void> {

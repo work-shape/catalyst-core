@@ -529,6 +529,122 @@ describe("OpenAI-compatible model provider", () => {
     });
   });
 
+  it("enables Responses compaction and replays the encrypted checkpoint", async () => {
+    const requestBodies: Array<{
+      context_management?: Array<Record<string, unknown>>;
+      input?: Array<Record<string, unknown>>;
+    }> = [];
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      requestBodies.push(JSON.parse(String(init?.body)));
+      if (requestBodies.length === 1) {
+        return new Response(
+          JSON.stringify({
+            output: [
+              {
+                id: "cmp_1",
+                type: "compaction",
+                encrypted_content: "encrypted-checkpoint"
+              },
+              {
+                type: "function_call",
+                call_id: "call_lookup",
+                name: "lookup",
+                arguments: "{}"
+              }
+            ],
+            usage: {
+              input_tokens: 270_001,
+              output_tokens: 10,
+              total_tokens: 270_011
+            }
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      return new Response(JSON.stringify({ output_text: "done" }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = new OpenAiCompatibleChatProvider({
+      id: "azure-eu",
+      api: "responses",
+      model: "gpt-5.5",
+      baseUrl: "https://example.test/openai/v1",
+      apiKey: "test",
+      contextManagement: {
+        compaction: {
+          compactThresholdTokens: 270_000
+        }
+      }
+    });
+    const context = createModelProviderTestContext();
+    const first = await provider.complete(
+      {
+        providerId: "azure-eu",
+        model: "gpt-5.5",
+        continuation: {
+          providerId: "azure-eu",
+          state: {
+            kind: "openai_responses",
+            encryptedReasoningItems: [
+              {
+                beforeToolCallId: "call_lookup",
+                item: {
+                  id: "rs_obsolete",
+                  type: "reasoning",
+                  encrypted_content: "obsolete-reasoning"
+                }
+              }
+            ]
+          }
+        },
+        messages: [{ role: "user", content: "continue" }],
+        tools: [{ name: "lookup", description: "Look up a record" }]
+      },
+      context
+    );
+    await provider.complete(
+      {
+        providerId: "azure-eu",
+        model: "gpt-5.5",
+        continuation: first.continuation,
+        messages: [
+          { role: "system", content: "Current policy" },
+          {
+            role: "assistant",
+            content: "",
+            toolCalls: [{ toolCallId: "call_lookup", toolName: "lookup", input: {} }]
+          },
+          { role: "tool", toolCallId: "call_lookup", content: "{\"ok\":true}" }
+        ],
+        tools: [{ name: "lookup", description: "Look up a record" }]
+      },
+      context
+    );
+
+    expect(requestBodies[0]?.context_management).toEqual([
+      { type: "compaction", compact_threshold: 270_000 }
+    ]);
+    expect(first.contextManagement).toEqual({ compacted: true });
+    expect(requestBodies[1]?.input?.map((item) => item.type ?? item.role)).toEqual([
+      "system",
+      "compaction",
+      "function_call",
+      "function_call_output"
+    ]);
+    expect(requestBodies[1]?.input?.[1]).toEqual({
+      id: "cmp_1",
+      type: "compaction",
+      encrypted_content: "encrypted-checkpoint"
+    });
+  });
+
   it("keeps visual tool context after sibling tool outputs in Responses input", async () => {
     let requestBody:
       | {
@@ -720,7 +836,12 @@ describe("OpenAI-compatible model provider", () => {
 
   it("streams OpenAI Responses text deltas, tool calls, and final usage", async () => {
     let requestBody:
-      | { stream?: boolean; reasoning?: { effort?: string; summary?: string }; tools?: Array<{ name: string }> }
+      | {
+          stream?: boolean;
+          reasoning?: { effort?: string; summary?: string };
+          tools?: Array<{ name: string }>;
+          context_management?: Array<Record<string, unknown>>;
+        }
       | undefined;
     const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       requestBody = JSON.parse(String(init?.body));
@@ -770,6 +891,11 @@ describe("OpenAI-compatible model provider", () => {
             response: {
               output: [
                 {
+                  id: "cmp_stream_1",
+                  type: "compaction",
+                  encrypted_content: "encrypted-stream-checkpoint"
+                },
+                {
                   type: "reasoning",
                   id: "rs_1",
                   encrypted_content: "encrypted-stream-reasoning"
@@ -804,7 +930,12 @@ describe("OpenAI-compatible model provider", () => {
       model: "gpt-5.5",
       baseUrl: "https://example.test/v1",
       apiKey: "test",
-      reasoningEffort: "high"
+      reasoningEffort: "high",
+      contextManagement: {
+        compaction: {
+          compactThresholdTokens: 270_000
+        }
+      }
     });
 
     const events: ModelCompletionStreamEvent[] = [];
@@ -837,7 +968,8 @@ describe("OpenAI-compatible model provider", () => {
       reasoning: {
         effort: "high",
         summary: "auto"
-      }
+      },
+      context_management: [{ type: "compaction", compact_threshold: 270_000 }]
     });
     expect(events.filter((event) => event.type === "reasoning_delta").map((event) => event.delta)).toEqual([
       "I will inspect the document."
@@ -859,6 +991,9 @@ describe("OpenAI-compatible model provider", () => {
       usage: {
         totalTokens: 10,
         source: "provider_reported"
+      },
+      contextManagement: {
+        compacted: true
       },
       continuation: {
         providerId: "openai"

@@ -18,11 +18,27 @@ export function parseClientInstanceConfig(input: unknown): ClientInstanceConfig 
     });
   }
 
+  assertModelProviderContextManagement(parsed.data);
   assertProductionSafeAuthConfig(parsed.data);
   assertExecutionWorkspaceRunnerBoundary(parsed.data);
   assertConfigReferences(parsed.data);
   assertSpendBudgetPricingCoverage(parsed.data, []);
   return parsed.data;
+}
+
+function assertModelProviderContextManagement(config: ClientInstanceConfig): void {
+  for (const provider of config.modelProviders) {
+    if (
+      provider.type === "openai-compatible" &&
+      provider.contextManagement?.compaction &&
+      provider.api !== "responses"
+    ) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `Model provider '${provider.id}' configures compaction, but provider compaction requires api: responses`
+      );
+    }
+  }
 }
 
 function assertProductionSafeAuthConfig(config: ClientInstanceConfig): void {

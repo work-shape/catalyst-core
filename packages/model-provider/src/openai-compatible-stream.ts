@@ -7,6 +7,7 @@ import { WEB_SEARCH_MODEL_TOOL_NAME } from "./types";
 import {
   noReportedUsage,
   createOpenAiResponsesContinuation,
+  didOpenAiResponsesCompact,
   readOpenAiResponsesText,
   readOpenAiResponsesWebMetadata,
   readOpenAiResponsesWebSearchCallCount,
@@ -270,6 +271,9 @@ export async function* streamOpenAiResponsesCompletion(
       continuation: finalResponse
         ? createOpenAiResponsesContinuation(providerId, finalResponse, previousContinuation)
         : previousContinuation,
+      contextManagement: {
+        compacted: finalResponse ? didOpenAiResponsesCompact(finalResponse) : false
+      },
       usage: {
         ...usage,
         webSearchCallCount

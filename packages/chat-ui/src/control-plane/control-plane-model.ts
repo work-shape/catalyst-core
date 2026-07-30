@@ -55,6 +55,8 @@ export interface ControlPlaneModelInput {
   supportedLocales: LocaleCode[];
   activeLocale: LocaleCode;
   selectLocale(locale: LocaleCode): void;
+  showContextIndicator: boolean;
+  setShowContextIndicator(visible: boolean): void;
   goToDefaultChat(options?: WorkspaceRouteChangeOptions): void;
   onAccountDeleted(): void;
   showSuperadmin(tab: SuperadminRouteTab, options?: WorkspaceRouteChangeOptions): void;
@@ -75,10 +77,12 @@ export interface ControlPlaneSettingsModel {
   deletingAccount: boolean;
   locales: LocaleCode[];
   locale: LocaleCode;
+  showContextIndicator: boolean;
   updateProfile(input: UpdateCurrentUserRequest): Promise<ApiUser>;
   changePassword(input: ChangeCurrentUserPasswordRequest): Promise<unknown>;
   deleteAccount(): Promise<unknown>;
   selectLocale(locale: LocaleCode): void;
+  setShowContextIndicator(visible: boolean): void;
 }
 
 export interface ControlPlaneSuperadminModel {
@@ -101,6 +105,8 @@ export function useControlPlaneModel({
   supportedLocales,
   activeLocale,
   selectLocale,
+  showContextIndicator,
+  setShowContextIndicator,
   goToDefaultChat,
   onAccountDeleted,
   showSuperadmin
@@ -257,10 +263,12 @@ export function useControlPlaneModel({
       deletingAccount: deleteCurrentUser.isPending,
       locales: supportedLocales,
       locale: activeLocale,
+      showContextIndicator,
       updateProfile: (input) => updateCurrentUser.mutateAsync(input),
       changePassword: (input) => changeCurrentUserPassword.mutateAsync(input),
       deleteAccount: () => deleteCurrentUser.mutateAsync(),
-      selectLocale
+      selectLocale,
+      setShowContextIndicator
     },
     superadmin: {
       shouldRender: administrationEnabled,

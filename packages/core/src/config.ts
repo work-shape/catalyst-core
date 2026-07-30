@@ -30,6 +30,7 @@ export interface OpenAiCompatibleModelProviderConfig {
   authMode?: ModelProviderAuthModeConfig;
   organizationEnvName?: string;
   reasoningEffort?: ReasoningEffortConfig;
+  contextManagement?: OpenAiCompatibleContextManagementConfig;
   compliance?: ModelProviderComplianceConfig;
 }
 
@@ -38,6 +39,11 @@ export type ModelProviderConfig =
   | OpenAiCompatibleModelProviderConfig;
 
 export type OpenAiCompatibleModelProviderApiConfig = "chat_completions" | "responses";
+export interface OpenAiCompatibleContextManagementConfig {
+  compaction?: {
+    compactThresholdTokens: number;
+  };
+}
 export const REASONING_EFFORTS = ["none", "low", "medium", "high", "xhigh"] as const;
 export type ReasoningEffortConfig = (typeof REASONING_EFFORTS)[number];
 

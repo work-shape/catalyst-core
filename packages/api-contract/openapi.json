@@ -819,6 +819,9 @@
                           },
                           "model": {
                             "type": "string"
+                          },
+                          "compactThresholdTokens": {
+                            "type": "number"
                           }
                         },
                         "required": [
@@ -841,6 +844,9 @@
                           },
                           "defaultModelBindingId": {
                             "type": "string"
+                          },
+                          "compactThresholdTokens": {
+                            "type": "number"
                           },
                           "welcomeMessage": {
                             "type": "string"
@@ -1594,6 +1600,26 @@
                                               ],
                                               "additionalProperties": false
                                             }
+                                          },
+                                          "modelContext": {
+                                            "type": "object",
+                                            "properties": {
+                                              "inputTokens": {
+                                                "type": "number"
+                                              },
+                                              "compactThresholdTokens": {
+                                                "type": "number"
+                                              },
+                                              "compacted": {
+                                                "type": "boolean"
+                                              }
+                                            },
+                                            "required": [
+                                              "inputTokens",
+                                              "compactThresholdTokens",
+                                              "compacted"
+                                            ],
+                                            "additionalProperties": false
                                           }
                                         },
                                         "required": [
@@ -1732,6 +1758,26 @@
                                               ],
                                               "additionalProperties": false
                                             }
+                                          },
+                                          "modelContext": {
+                                            "type": "object",
+                                            "properties": {
+                                              "inputTokens": {
+                                                "type": "number"
+                                              },
+                                              "compactThresholdTokens": {
+                                                "type": "number"
+                                              },
+                                              "compacted": {
+                                                "type": "boolean"
+                                              }
+                                            },
+                                            "required": [
+                                              "inputTokens",
+                                              "compactThresholdTokens",
+                                              "compacted"
+                                            ],
+                                            "additionalProperties": false
                                           }
                                         },
                                         "required": [
@@ -2476,6 +2522,26 @@
                                           ],
                                           "additionalProperties": false
                                         }
+                                      },
+                                      "modelContext": {
+                                        "type": "object",
+                                        "properties": {
+                                          "inputTokens": {
+                                            "type": "number"
+                                          },
+                                          "compactThresholdTokens": {
+                                            "type": "number"
+                                          },
+                                          "compacted": {
+                                            "type": "boolean"
+                                          }
+                                        },
+                                        "required": [
+                                          "inputTokens",
+                                          "compactThresholdTokens",
+                                          "compacted"
+                                        ],
+                                        "additionalProperties": false
                                       }
                                     },
                                     "required": [
@@ -2614,6 +2680,26 @@
                                           ],
                                           "additionalProperties": false
                                         }
+                                      },
+                                      "modelContext": {
+                                        "type": "object",
+                                        "properties": {
+                                          "inputTokens": {
+                                            "type": "number"
+                                          },
+                                          "compactThresholdTokens": {
+                                            "type": "number"
+                                          },
+                                          "compacted": {
+                                            "type": "boolean"
+                                          }
+                                        },
+                                        "required": [
+                                          "inputTokens",
+                                          "compactThresholdTokens",
+                                          "compacted"
+                                        ],
+                                        "additionalProperties": false
                                       }
                                     },
                                     "required": [
@@ -3096,6 +3182,26 @@
                                             ],
                                             "additionalProperties": false
                                           }
+                                        },
+                                        "modelContext": {
+                                          "type": "object",
+                                          "properties": {
+                                            "inputTokens": {
+                                              "type": "number"
+                                            },
+                                            "compactThresholdTokens": {
+                                              "type": "number"
+                                            },
+                                            "compacted": {
+                                              "type": "boolean"
+                                            }
+                                          },
+                                          "required": [
+                                            "inputTokens",
+                                            "compactThresholdTokens",
+                                            "compacted"
+                                          ],
+                                          "additionalProperties": false
                                         }
                                       },
                                       "required": [
@@ -3234,6 +3340,26 @@
                                             ],
                                             "additionalProperties": false
                                           }
+                                        },
+                                        "modelContext": {
+                                          "type": "object",
+                                          "properties": {
+                                            "inputTokens": {
+                                              "type": "number"
+                                            },
+                                            "compactThresholdTokens": {
+                                              "type": "number"
+                                            },
+                                            "compacted": {
+                                              "type": "boolean"
+                                            }
+                                          },
+                                          "required": [
+                                            "inputTokens",
+                                            "compactThresholdTokens",
+                                            "compacted"
+                                          ],
+                                          "additionalProperties": false
                                         }
                                       },
                                       "required": [
@@ -3585,6 +3711,26 @@
                                                   ],
                                                   "additionalProperties": false
                                                 }
+                                              },
+                                              "modelContext": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "inputTokens": {
+                                                    "type": "number"
+                                                  },
+                                                  "compactThresholdTokens": {
+                                                    "type": "number"
+                                                  },
+                                                  "compacted": {
+                                                    "type": "boolean"
+                                                  }
+                                                },
+                                                "required": [
+                                                  "inputTokens",
+                                                  "compactThresholdTokens",
+                                                  "compacted"
+                                                ],
+                                                "additionalProperties": false
                                               }
                                             },
                                             "required": [
@@ -3723,6 +3869,26 @@
                                                   ],
                                                   "additionalProperties": false
                                                 }
+                                              },
+                                              "modelContext": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "inputTokens": {
+                                                    "type": "number"
+                                                  },
+                                                  "compactThresholdTokens": {
+                                                    "type": "number"
+                                                  },
+                                                  "compacted": {
+                                                    "type": "boolean"
+                                                  }
+                                                },
+                                                "required": [
+                                                  "inputTokens",
+                                                  "compactThresholdTokens",
+                                                  "compacted"
+                                                ],
+                                                "additionalProperties": false
                                               }
                                             },
                                             "required": [
@@ -4585,6 +4751,26 @@
                                             ],
                                             "additionalProperties": false
                                           }
+                                        },
+                                        "modelContext": {
+                                          "type": "object",
+                                          "properties": {
+                                            "inputTokens": {
+                                              "type": "number"
+                                            },
+                                            "compactThresholdTokens": {
+                                              "type": "number"
+                                            },
+                                            "compacted": {
+                                              "type": "boolean"
+                                            }
+                                          },
+                                          "required": [
+                                            "inputTokens",
+                                            "compactThresholdTokens",
+                                            "compacted"
+                                          ],
+                                          "additionalProperties": false
                                         }
                                       },
                                       "required": [
@@ -4723,6 +4909,26 @@
                                             ],
                                             "additionalProperties": false
                                           }
+                                        },
+                                        "modelContext": {
+                                          "type": "object",
+                                          "properties": {
+                                            "inputTokens": {
+                                              "type": "number"
+                                            },
+                                            "compactThresholdTokens": {
+                                              "type": "number"
+                                            },
+                                            "compacted": {
+                                              "type": "boolean"
+                                            }
+                                          },
+                                          "required": [
+                                            "inputTokens",
+                                            "compactThresholdTokens",
+                                            "compacted"
+                                          ],
+                                          "additionalProperties": false
                                         }
                                       },
                                       "required": [
@@ -5074,6 +5280,26 @@
                                                   ],
                                                   "additionalProperties": false
                                                 }
+                                              },
+                                              "modelContext": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "inputTokens": {
+                                                    "type": "number"
+                                                  },
+                                                  "compactThresholdTokens": {
+                                                    "type": "number"
+                                                  },
+                                                  "compacted": {
+                                                    "type": "boolean"
+                                                  }
+                                                },
+                                                "required": [
+                                                  "inputTokens",
+                                                  "compactThresholdTokens",
+                                                  "compacted"
+                                                ],
+                                                "additionalProperties": false
                                               }
                                             },
                                             "required": [
@@ -5212,6 +5438,26 @@
                                                   ],
                                                   "additionalProperties": false
                                                 }
+                                              },
+                                              "modelContext": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "inputTokens": {
+                                                    "type": "number"
+                                                  },
+                                                  "compactThresholdTokens": {
+                                                    "type": "number"
+                                                  },
+                                                  "compacted": {
+                                                    "type": "boolean"
+                                                  }
+                                                },
+                                                "required": [
+                                                  "inputTokens",
+                                                  "compactThresholdTokens",
+                                                  "compacted"
+                                                ],
+                                                "additionalProperties": false
                                               }
                                             },
                                             "required": [

@@ -17,9 +17,15 @@ describe("user-selectable model config", () => {
         {
           id: "openai",
           type: "openai-compatible",
+          api: "responses",
           model: "gpt-5.6-sol",
           baseUrl: "https://api.openai.com/v1",
-          apiKeyEnvName: "OPENAI_API_KEY"
+          apiKeyEnvName: "OPENAI_API_KEY",
+          contextManagement: {
+            compaction: {
+              compactThresholdTokens: 270_000
+            }
+          }
         }
       ],
       modelBindings: [
@@ -62,13 +68,40 @@ describe("user-selectable model config", () => {
     });
 
     expect(safeConfig.selectableModels).toEqual([
-      { bindingId: "sol", model: "gpt-5.6-sol" },
-      { bindingId: "terra", model: "gpt-5.6-terra" }
+      { bindingId: "sol", model: "gpt-5.6-sol", compactThresholdTokens: 270_000 },
+      { bindingId: "terra", model: "gpt-5.6-terra", compactThresholdTokens: 270_000 }
     ]);
     expect(safeConfig.agents[0]).toMatchObject({
       name: "assistant",
-      defaultModelBindingId: "sol"
+      defaultModelBindingId: "sol",
+      compactThresholdTokens: 270_000
     });
     expect(config.modelBindings[2]?.userSelectable).toBe(false);
+  });
+
+  it("rejects provider compaction for chat completions", () => {
+    expect(() =>
+      parseClientInstanceConfig({
+        version: 1,
+        clientInstance: {
+          id: "invalid-compaction-test",
+          displayName: "Invalid Compaction Test",
+          environment: "development"
+        },
+        modelProviders: [
+          {
+            id: "openai",
+            type: "openai-compatible",
+            api: "chat_completions",
+            model: "gpt-test",
+            contextManagement: {
+              compaction: {
+                compactThresholdTokens: 270_000
+              }
+            }
+          }
+        ]
+      })
+    ).toThrow(/requires api: responses/u);
   });
 });

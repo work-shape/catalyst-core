@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { readAssistantModelContextSnapshot } from "@vivd-catalyst/core";
 import type {
   ApiClient,
   ApiUser,
@@ -144,6 +145,13 @@ export interface SelectedChatModel {
   locale: LocaleCode;
   selectedAgentName: string | undefined;
   selectedModelBindingId: string | undefined;
+  showContextIndicator: boolean;
+  contextSnapshot:
+    | {
+        inputTokens: number;
+        compactThresholdTokens: number;
+      }
+    | undefined;
   selectModelBindingId(modelBindingId: string): void;
   draftAttachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
@@ -345,11 +353,21 @@ export function useWorkspaceChatModel({
     supportedLocales,
     activeLocale,
     selectLocale: preferences.selectLocale,
+    showContextIndicator: preferences.showContextIndicator,
+    setShowContextIndicator: preferences.setShowContextIndicator,
     goToDefaultChat: routeState.goToDefaultChat,
     onAccountDeleted: resetAuthenticatedWorkspaceState,
     showSuperadmin: routeState.showSuperadmin
   });
   const canViewAdministration = controlPlane.canViewAdministration;
+  const latestContextSnapshot = [...messages]
+    .reverse()
+    .map((message) => readAssistantModelContextSnapshot(message.metadata))
+    .find((snapshot) => snapshot !== undefined);
+  const configuredCompactThresholdTokens =
+    config?.selectableModels.find((model) => model.bindingId === selectedModelBindingId)
+      ?.compactThresholdTokens ??
+    config?.agents.find((agent) => agent.name === activeAgentName)?.compactThresholdTokens;
 
   useEffect(() => {
     displayPanel.close();
@@ -562,6 +580,13 @@ export function useWorkspaceChatModel({
       locale: activeLocale,
       selectedAgentName: activeAgentName,
       selectedModelBindingId,
+      showContextIndicator: preferences.showContextIndicator,
+      contextSnapshot: configuredCompactThresholdTokens
+        ? {
+            inputTokens: latestContextSnapshot?.inputTokens ?? 0,
+            compactThresholdTokens: configuredCompactThresholdTokens
+          }
+        : undefined,
       selectModelBindingId: setSelectedModelBindingId,
       draftAttachments: draftAttachmentController.draftAttachments,
       localUploadingAttachments: draftAttachmentController.visibleUploadingAttachments,

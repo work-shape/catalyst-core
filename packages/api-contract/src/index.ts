@@ -128,6 +128,12 @@ export const storedReasoningSummarySchema = z.object({
   text: z.string()
 });
 
+export const storedModelContextSnapshotSchema = z.object({
+  inputTokens: z.number(),
+  compactThresholdTokens: z.number(),
+  compacted: z.boolean()
+});
+
 export const storedToolCallSchema = z.object({
   toolCallId: z.string(),
   toolName: z.string(),
@@ -169,7 +175,8 @@ export const assistantToolCallsMessageMetadataSchema = z.object({
   kind: z.literal("assistant_tool_calls"),
   runId: z.string(),
   toolCalls: z.array(storedToolCallSchema),
-  reasoning: z.array(storedReasoningSummarySchema).optional()
+  reasoning: z.array(storedReasoningSummarySchema).optional(),
+  modelContext: storedModelContextSnapshotSchema.optional()
 });
 
 export const assistantFinalMessageMetadataSchema = z.object({
@@ -180,7 +187,8 @@ export const assistantFinalMessageMetadataSchema = z.object({
   cancellationReason: z.string().optional(),
   reasoning: z.array(storedReasoningSummarySchema).optional(),
   sources: z.array(webSourceSchema).optional(),
-  citations: z.array(messageCitationSchema).optional()
+  citations: z.array(messageCitationSchema).optional(),
+  modelContext: storedModelContextSnapshotSchema.optional()
 });
 
 export const toolResultMessageMetadataSchema = z.object({
@@ -381,7 +389,8 @@ export const safeConfigSchema = z.object({
   selectableModels: z.array(
     z.object({
       bindingId: z.string(),
-      model: z.string()
+      model: z.string(),
+      compactThresholdTokens: z.number().optional()
     })
   ),
   agents: z.array(
@@ -389,6 +398,7 @@ export const safeConfigSchema = z.object({
       name: z.string(),
       displayName: z.string(),
       defaultModelBindingId: z.string().optional(),
+      compactThresholdTokens: z.number().optional(),
       welcomeMessage: z.string().optional(),
       welcomeSubtitle: z.string().optional(),
       initialPrompts: z.array(

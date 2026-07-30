@@ -90,6 +90,15 @@ const openAiCompatibleModelProviderSchema = z.object({
   authMode: z.enum(["bearer", "api-key"]).default("bearer"),
   organizationEnvName: z.string().min(1).optional(),
   reasoningEffort: z.enum(REASONING_EFFORTS).optional(),
+  contextManagement: z
+    .object({
+      compaction: z
+        .object({
+          compactThresholdTokens: z.number().int().positive()
+        })
+        .optional()
+    })
+    .optional(),
   compliance: modelProviderComplianceSchema.optional()
 });
 

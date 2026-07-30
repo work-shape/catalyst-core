@@ -207,6 +207,9 @@ modelProviders:
     reasoningEffort: high
     baseUrl: https://api.openai.com/v1
     apiKeyEnvName: OPENAI_API_KEY
+    contextManagement:
+      compaction:
+        compactThresholdTokens: 270000
 modelBindings:
   - id: primary
     providerId: openai
@@ -214,6 +217,13 @@ modelBindings:
     agentSelectable: true
     userSelectable: true
 ```
+
+`contextManagement.compaction` enables provider-native server-side compaction
+for `api: responses` providers. Catalyst sends the configured threshold as
+`context_management[].compact_threshold`, retains the encrypted checkpoint for
+later model requests, and keeps the durable conversation transcript unchanged.
+Do not configure this block for `api: chat_completions`; startup validation
+rejects that unsupported combination.
 
 Agent configuration may override a binding's default with one of Catalyst's product-owned reasoning efforts: `none`, `low`, `medium`, `high`, or `xhigh`. Only bindings with `agentSelectable: true` are valid agent choices; set it to `false` for internal bindings such as conversation-title generation. Interactive selection is available only when `modelBindingId` and/or `reasoningEffort` appear in `editableAgentFields`. The server validates model-binding references and reasoning values; the UI does not accept arbitrary model identifiers.
 

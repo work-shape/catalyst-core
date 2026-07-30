@@ -1,6 +1,7 @@
 import type { Message } from "@vivd-catalyst/api-client";
 import {
   readAgentRuntimeMessageMetadata,
+  readAssistantModelContextSnapshot,
   readAssistantWebSourceMetadata,
   readAssistantToolCallsMetadata,
   readToolResultMetadata,
@@ -39,6 +40,14 @@ export type PersistedToolResult =
 export interface PersistedAssistantWebSourceMetadata {
   sources: WebSource[];
   citations: MessageCitation[];
+}
+
+export function readCompatibleAssistantContextCompacted(
+  message: Pick<Message, "metadata" | "role">
+): boolean {
+  return message.role === "assistant"
+    ? readAssistantModelContextSnapshot(message.metadata)?.compacted === true
+    : false;
 }
 
 export function readCompatibleMessageRunId(

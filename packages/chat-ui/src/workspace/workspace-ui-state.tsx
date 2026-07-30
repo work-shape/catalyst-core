@@ -22,7 +22,9 @@ import {
 import {
   DEFAULT_LOCALES,
   readStoredLocale,
+  readStoredContextIndicatorPreference,
   readStoredThemeMode,
+  writeStoredContextIndicatorPreference,
   writeStoredLocale,
   writeStoredThemeMode
 } from "../workspace-utils";
@@ -61,6 +63,8 @@ interface WorkspacePreferencesContextValue {
   localePreference: LocaleCode | undefined;
   supportedFallbackLocales: LocaleCode[];
   selectLocale(locale: LocaleCode): void;
+  showContextIndicator: boolean;
+  setShowContextIndicator(visible: boolean): void;
   themeOverride: ResolvedThemeMode | undefined;
   systemThemeMode: ResolvedThemeMode;
   selectThemeMode(themeMode: ResolvedThemeMode): void;
@@ -105,6 +109,9 @@ export function WorkspaceUiStateProvider({
   const [composerFocusRequestId, setComposerFocusRequestId] = useState(0);
   const [browserLocale] = useState<LocaleCode | undefined>(() => readBrowserLocale());
   const [localePreference, setLocalePreference] = useState<LocaleCode | undefined>(() => readStoredLocale());
+  const [showContextIndicator, setShowContextIndicatorState] = useState(
+    () => readStoredContextIndicatorPreference()
+  );
   const [themeOverride, setThemeOverride] = useState<ResolvedThemeMode | undefined>(() =>
     readStoredThemeMode()
   );
@@ -262,6 +269,11 @@ export function WorkspaceUiStateProvider({
     writeStoredThemeMode(themeMode);
   }, []);
 
+  const setShowContextIndicator = useCallback((visible: boolean) => {
+    setShowContextIndicatorState(visible);
+    writeStoredContextIndicatorPreference(visible);
+  }, []);
+
   const routeValue = useMemo<WorkspaceRouteContextValue>(
     () => ({
       route,
@@ -306,11 +318,22 @@ export function WorkspaceUiStateProvider({
       localePreference,
       supportedFallbackLocales: DEFAULT_LOCALES,
       selectLocale,
+      showContextIndicator,
+      setShowContextIndicator,
       themeOverride,
       systemThemeMode,
       selectThemeMode
     }),
-    [browserLocale, localePreference, selectLocale, selectThemeMode, systemThemeMode, themeOverride]
+    [
+      browserLocale,
+      localePreference,
+      selectLocale,
+      selectThemeMode,
+      setShowContextIndicator,
+      showContextIndicator,
+      systemThemeMode,
+      themeOverride
+    ]
   );
 
   const conversationActivityValue = useMemo<WorkspaceConversationActivityContextValue>(

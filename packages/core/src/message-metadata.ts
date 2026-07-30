@@ -11,6 +11,17 @@ export interface StoredReasoningSummary {
   text: string;
 }
 
+export interface StoredModelContextSnapshot {
+  inputTokens: number;
+  compactThresholdTokens: number;
+  compacted: boolean;
+}
+
+export interface StoredModelProviderContinuation {
+  providerId: string;
+  state: JsonValue;
+}
+
 export interface StoredToolCall {
   toolCallId: ToolCallId | string;
   toolName: string;
@@ -29,6 +40,8 @@ export interface AgentRuntimeAssistantToolCallsMetadata {
   runId: AgentRunId | string;
   toolCalls: StoredToolCall[];
   reasoning?: StoredReasoningSummary[];
+  modelContext?: StoredModelContextSnapshot;
+  providerContinuation?: StoredModelProviderContinuation;
 }
 
 export interface AgentRuntimeAssistantFinalMetadata {
@@ -40,6 +53,8 @@ export interface AgentRuntimeAssistantFinalMetadata {
   reasoning?: StoredReasoningSummary[];
   sources?: WebSource[];
   citations?: MessageCitation[];
+  modelContext?: StoredModelContextSnapshot;
+  providerContinuation?: StoredModelProviderContinuation;
 }
 
 export interface AgentRuntimeToolResultMetadata {
@@ -82,6 +97,8 @@ export function createAssistantToolCallsMetadata(input: {
   runId: AgentRunId | string;
   toolCalls: readonly { toolCallId: ToolCallId | string; toolName: string; input: unknown }[];
   reasoning?: readonly StoredReasoningSummary[];
+  modelContext?: StoredModelContextSnapshot;
+  providerContinuation?: StoredModelProviderContinuation;
 }): JsonObject {
   return wrapAgentRuntimeMetadata({
     version: MESSAGE_METADATA_VERSION,
@@ -92,7 +109,9 @@ export function createAssistantToolCallsMetadata(input: {
       toolName: toolCall.toolName,
       input: unknownToJsonValue(toolCall.input)
     })),
-    ...createReasoningMetadata(input.reasoning)
+    ...createReasoningMetadata(input.reasoning),
+    ...(input.modelContext ? { modelContext: input.modelContext } : {}),
+    ...(input.providerContinuation ? { providerContinuation: input.providerContinuation } : {})
   });
 }
 
@@ -103,6 +122,8 @@ export function createAssistantFinalMetadata(input: {
   citations?: readonly MessageCitation[];
   finishStatus?: "completed" | "cancelled";
   cancellationReason?: string;
+  modelContext?: StoredModelContextSnapshot;
+  providerContinuation?: StoredModelProviderContinuation;
 }): JsonObject {
   return wrapAgentRuntimeMetadata({
     version: MESSAGE_METADATA_VERSION,
@@ -111,7 +132,9 @@ export function createAssistantFinalMetadata(input: {
     finishStatus: input.finishStatus ?? "completed",
     ...(input.cancellationReason ? { cancellationReason: input.cancellationReason } : {}),
     ...createReasoningMetadata(input.reasoning),
-    ...createWebSourceMetadata(input.sources, input.citations)
+    ...createWebSourceMetadata(input.sources, input.citations),
+    ...(input.modelContext ? { modelContext: input.modelContext } : {}),
+    ...(input.providerContinuation ? { providerContinuation: input.providerContinuation } : {})
   });
 }
 
@@ -154,7 +177,9 @@ export function readAgentRuntimeMessageMetadata(
       kind: "assistant_tool_calls",
       runId: runtime.runId,
       toolCalls: readStoredToolCalls(runtime.toolCalls),
-      ...readReasoningMetadata(runtime.reasoning)
+      ...readReasoningMetadata(runtime.reasoning),
+      ...readModelContextMetadata(runtime.modelContext),
+      ...readProviderContinuationMetadata(runtime.providerContinuation)
     };
   }
   if (runtime.kind === "assistant_final" && typeof runtime.runId === "string") {
@@ -167,7 +192,9 @@ export function readAgentRuntimeMessageMetadata(
         ? { cancellationReason: runtime.cancellationReason }
         : {}),
       ...readReasoningMetadata(runtime.reasoning),
-      ...readWebSourceMetadata(runtime.sources, runtime.citations)
+      ...readWebSourceMetadata(runtime.sources, runtime.citations),
+      ...readModelContextMetadata(runtime.modelContext),
+      ...readProviderContinuationMetadata(runtime.providerContinuation)
     };
   }
   if (
@@ -228,6 +255,38 @@ export function readAssistantReasoningSummaries(
   return runtime?.kind === "assistant_tool_calls" || runtime?.kind === "assistant_final"
     ? runtime.reasoning ?? []
     : [];
+}
+
+export function readAssistantModelContextSnapshot(
+  metadata: JsonObject | Record<string, unknown> | undefined
+): StoredModelContextSnapshot | undefined {
+  const runtime = readAgentRuntimeMessageMetadata(metadata);
+  return runtime?.kind === "assistant_tool_calls" || runtime?.kind === "assistant_final"
+    ? runtime.modelContext
+    : undefined;
+}
+
+export function readAssistantProviderContinuation(
+  metadata: JsonObject | Record<string, unknown> | undefined
+): StoredModelProviderContinuation | undefined {
+  const runtime = readAgentRuntimeMessageMetadata(metadata);
+  return runtime?.kind === "assistant_tool_calls" || runtime?.kind === "assistant_final"
+    ? runtime.providerContinuation
+    : undefined;
+}
+
+export function withoutAssistantProviderContinuation(
+  metadata: JsonObject | undefined
+): JsonObject | undefined {
+  const runtime = metadata?.agentRuntime;
+  if (!isUnknownRecord(runtime) || !("providerContinuation" in runtime)) {
+    return metadata;
+  }
+  const { providerContinuation: _providerContinuation, ...publicRuntime } = runtime;
+  return {
+    ...metadata,
+    agentRuntime: unknownToJsonValue(publicRuntime) as JsonObject
+  };
 }
 
 export function readAssistantWebSourceMetadata(
@@ -303,6 +362,45 @@ function readReasoningMetadata(value: unknown): { reasoning?: StoredReasoningSum
     return id && text ? [{ id, text }] : [];
   });
   return reasoning.length > 0 ? { reasoning } : {};
+}
+
+function readModelContextMetadata(
+  value: unknown
+): { modelContext?: StoredModelContextSnapshot } {
+  if (
+    !isUnknownRecord(value) ||
+    typeof value.inputTokens !== "number" ||
+    !Number.isFinite(value.inputTokens) ||
+    typeof value.compactThresholdTokens !== "number" ||
+    !Number.isFinite(value.compactThresholdTokens) ||
+    typeof value.compacted !== "boolean"
+  ) {
+    return {};
+  }
+  return {
+    modelContext: {
+      inputTokens: Math.max(0, Math.trunc(value.inputTokens)),
+      compactThresholdTokens: Math.max(1, Math.trunc(value.compactThresholdTokens)),
+      compacted: value.compacted
+    }
+  };
+}
+
+function readProviderContinuationMetadata(
+  value: unknown
+): { providerContinuation?: StoredModelProviderContinuation } {
+  if (
+    !isUnknownRecord(value) ||
+    typeof value.providerId !== "string"
+  ) {
+    return {};
+  }
+  return {
+    providerContinuation: {
+      providerId: value.providerId,
+      state: unknownToJsonValue(value.state)
+    }
+  };
 }
 
 function readWebSourceMetadata(

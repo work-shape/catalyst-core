@@ -65,6 +65,9 @@ modelProviders:
     reasoningEffort: high
     baseUrl: https://api.openai.com/v1
     apiKeyEnvName: OPENAI_API_KEY
+    contextManagement:
+      compaction:
+        compactThresholdTokens: 270000
 modelBindings:
   - id: primary
     providerId: openai

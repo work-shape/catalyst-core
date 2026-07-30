@@ -28,10 +28,12 @@ export function ControlPlaneRoutes({
         deletingAccount={settings.deletingAccount}
         locales={settings.locales}
         locale={settings.locale}
+        showContextIndicator={settings.showContextIndicator}
         onUpdateProfile={settings.updateProfile}
         onChangePassword={settings.changePassword}
         onDeleteAccount={settings.deleteAccount}
         onSelectLocale={settings.selectLocale}
+        onShowContextIndicatorChange={settings.setShowContextIndicator}
       />
     );
   }

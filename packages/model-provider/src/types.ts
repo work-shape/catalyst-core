@@ -94,6 +94,9 @@ export interface ModelCompletion {
   text: string;
   toolCalls: ModelToolCall[];
   continuation?: ModelProviderContinuation;
+  contextManagement?: {
+    compacted: boolean;
+  };
   sources?: WebSource[];
   citations?: MessageCitation[];
   usage: ModelTokenUsage & {

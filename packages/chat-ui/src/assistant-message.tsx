@@ -8,7 +8,7 @@ import {
   useAuiState,
   type PartState
 } from "@assistant-ui/react";
-import { Check, Copy, FileText, ImageIcon, Pencil, RefreshCw, User } from "lucide-react";
+import { Check, Copy, FileText, ImageIcon, ListRestart, Pencil, RefreshCw, User } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AssistantCursor } from "./assistant-cursor";
 import { AttachmentPreview } from "./attachment-preview";
@@ -78,6 +78,10 @@ function AssistantMessage({
   const completedRunId = useAuiState(
     (state) => (state.message.metadata as AssistantUiMessageMetadata | undefined)?.completedRunId
   );
+  const contextCompacted = useAuiState(
+    (state) =>
+      (state.message.metadata as AssistantUiMessageMetadata | undefined)?.contextCompacted === true
+  );
   const lastPartIndex = useAuiState((state) => state.message.parts.length - 1);
   const activeRunMessage = Boolean(conversationRunning && activeRunId && messageId === activeRunId);
   const messageRunning = useAuiState(
@@ -146,6 +150,15 @@ function AssistantMessage({
       className="group/message mx-auto w-full max-w-5xl animate-in fade-in slide-in-from-bottom-1 duration-150"
       data-role="assistant"
     >
+      {contextCompacted ? (
+        <div
+          className="mb-3 flex items-center gap-2 px-1 text-sm text-muted-foreground"
+          data-testid="context-compaction-notice"
+        >
+          <ListRestart size={18} strokeWidth={1.75} aria-hidden="true" />
+          <span>{t("contextAutomaticallyCompacted")}</span>
+        </div>
+      ) : null}
       <div className="min-w-0 rounded-md px-1 py-1 text-sm leading-6">
         {showFallbackCursor ? <AssistantFallbackCursor /> : null}
         {completedWorkSummary ? (

@@ -28,6 +28,8 @@ import {
   asToolCallId,
   createPlatformId,
   getRuntimeSubjectUserId,
+  unknownToJsonValue,
+  withoutAssistantProviderContinuation,
   systemClock
 } from "@vivd-catalyst/core";
 import {
@@ -49,6 +51,7 @@ import {
   createToolResultMetadata,
   dropCurrentSubmittedMessage,
   projectAgentVisibleHistory,
+  readAssistantProviderContinuation,
   selectRecentCompleteHistory,
   stableStringify,
   type ModelOutputProjection,
@@ -286,7 +289,7 @@ export class LocalAgentRuntime implements AgentRuntime {
       toolRegistry: this.options.toolRegistry,
       webAccess: this.options.webAccess
     });
-    const historyMessages = await this.loadModelHistory(input, context);
+    const history = await this.loadModelHistory(input, context, modelSelection.provider);
     const userContent = await createSubmittedUserMessageContent(
       input.message.text,
       input.message.attachmentManifest,
@@ -300,13 +303,14 @@ export class LocalAgentRuntime implements AgentRuntime {
           skills: getSnapshotSkillMetadataForAgent(assets, agent)
         })
       },
-      ...historyMessages,
+      ...history.messages,
       { role: "user", content: userContent }
     ];
 
     const repeatedToolCalls = new Map<string, number>();
     const maxSteps = agent.maxSteps ?? this.options.maxSteps ?? DEFAULT_MAX_STEPS;
-    let providerContinuation: ModelCompletion["continuation"];
+    let providerContinuation: ModelCompletion["continuation"] = history.providerContinuation;
+    let runCompacted = false;
 
     for (let step = 0; step < maxSteps; step += 1) {
       const { completion, emittedDeltas, reasoning } = await this.options.usageGovernance.runModelCall(
@@ -338,6 +342,24 @@ export class LocalAgentRuntime implements AgentRuntime {
         }
       );
       providerContinuation = completion.continuation;
+      const compactedThisCall = completion.contextManagement?.compacted === true;
+      runCompacted ||= compactedThisCall;
+      const compactThresholdTokens = getProviderCompactionThreshold(modelSelection.provider);
+      const modelContext =
+        compactThresholdTokens === undefined
+          ? undefined
+          : {
+              inputTokens: completion.usage.inputTokens,
+              compactThresholdTokens,
+              compacted: runCompacted
+            };
+      const persistedContinuation =
+        compactedThisCall && providerContinuation
+          ? {
+              providerId: providerContinuation.providerId,
+              state: unknownToJsonValue(providerContinuation.state)
+            }
+          : undefined;
 
       if (completion.toolCalls.length === 0) {
         if (isCancellationRequested(state.getStatus())) {
@@ -353,18 +375,27 @@ export class LocalAgentRuntime implements AgentRuntime {
             runId,
             reasoning,
             sources: completion.sources,
-            citations: completion.citations
+            citations: completion.citations,
+            modelContext,
+            providerContinuation: persistedContinuation
           })
         });
+        const publicMessage = {
+          ...persisted,
+          metadata: withoutAssistantProviderContinuation(persisted.metadata)
+        };
         if (emittedDeltas) {
-          state.completeMessage(persisted);
+          state.completeMessage(publicMessage);
         } else {
-          state.message(persisted);
+          state.message(publicMessage);
         }
         state.complete();
         return;
       }
 
+      if (compactedThisCall) {
+        removePreCompactionMessages(messages);
+      }
       messages.push({
         role: "assistant",
         content: completion.text,
@@ -378,7 +409,9 @@ export class LocalAgentRuntime implements AgentRuntime {
         metadata: createAssistantToolCallsMetadata({
           runId,
           toolCalls: completion.toolCalls,
-          reasoning
+          reasoning,
+          modelContext,
+          providerContinuation: persistedContinuation
         })
       });
 
@@ -551,20 +584,45 @@ export class LocalAgentRuntime implements AgentRuntime {
 
   private async loadModelHistory(
     input: StartAgentRunInput,
-    context: RuntimeCallContext
-  ): Promise<ModelMessage[]> {
+    context: RuntimeCallContext,
+    provider: ModelProviderConfig
+  ): Promise<{
+    messages: ModelMessage[];
+    providerContinuation?: ModelCompletion["continuation"];
+  }> {
     const persistedMessages = await this.options.conversationHistory.listMessages({
       clientInstanceId: context.clientInstanceId,
       conversationId: input.conversationId
     });
-    const activeHistory = selectRecentCompleteHistory(
-      dropCurrentSubmittedMessage(persistedMessages, input.message.text),
-      this.options.historyMessageLimit ?? DEFAULT_CONVERSATION_HISTORY_LIMIT
-    );
-    return projectAgentVisibleHistory(
-      activeHistory,
-      this.modelContextOptions(context)
-    );
+    const history = dropCurrentSubmittedMessage(persistedMessages, input.message.text);
+    const compactionEnabled = getProviderCompactionThreshold(provider) !== undefined;
+    const checkpointIndex = compactionEnabled
+      ? findLatestCompactionCheckpointIndex(history, provider.id)
+      : -1;
+    const checkpoint =
+      checkpointIndex >= 0
+        ? readAssistantProviderContinuation(history[checkpointIndex]?.metadata)
+        : undefined;
+    const activeHistory = compactionEnabled
+      ? history.slice(Math.max(checkpointIndex, 0))
+      : selectRecentCompleteHistory(
+          history,
+          this.options.historyMessageLimit ?? DEFAULT_CONVERSATION_HISTORY_LIMIT
+        );
+    return {
+      messages: await projectAgentVisibleHistory(
+        activeHistory,
+        this.modelContextOptions(context)
+      ),
+      ...(checkpoint
+        ? {
+            providerContinuation: {
+              providerId: checkpoint.providerId,
+              state: checkpoint.state
+            }
+          }
+        : {})
+    };
   }
 
   private async persistToolResult(input: {
@@ -714,6 +772,32 @@ export class LocalAgentRuntime implements AgentRuntime {
 
 function isCancellationRequested(status: AgentRunStatus): boolean {
   return status === "cancelling" || status === "cancelled";
+}
+
+function getProviderCompactionThreshold(provider: ModelProviderConfig): number | undefined {
+  return provider.type === "openai-compatible"
+    ? provider.contextManagement?.compaction?.compactThresholdTokens
+    : undefined;
+}
+
+function findLatestCompactionCheckpointIndex(
+  messages: ChatMessage[],
+  providerId: string
+): number {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const continuation = readAssistantProviderContinuation(messages[index]?.metadata);
+    if (continuation?.providerId === providerId) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function removePreCompactionMessages(messages: ModelMessage[]): void {
+  const firstNonSystemIndex = messages.findIndex((message) => message.role !== "system");
+  if (firstNonSystemIndex >= 0) {
+    messages.splice(firstNonSystemIndex);
+  }
 }
 
 function getUnstreamedCompletionText(

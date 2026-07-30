@@ -2,6 +2,7 @@ import {
   AppError,
   type ModelProviderAuthModeConfig,
   type OpenAiCompatibleModelProviderApiConfig,
+  type OpenAiCompatibleContextManagementConfig,
   type ReasoningEffortConfig,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
@@ -14,6 +15,8 @@ import type {
 import {
   createProviderToolMetadata,
   createOpenAiResponsesContinuation,
+  didOpenAiResponsesCompact,
+  readOpenAiResponsesCompactionItem,
   readOpenAiResponsesWebMetadata,
   readOpenAiResponsesWebSearchCallCount,
   readOpenAiResponsesText,
@@ -47,6 +50,7 @@ export interface OpenAiCompatibleChatProviderOptions {
   authMode?: ModelProviderAuthModeConfig;
   organization?: string;
   reasoningEffort?: ReasoningEffortConfig;
+  contextManagement?: OpenAiCompatibleContextManagementConfig;
 }
 
 export class OpenAiCompatibleChatProvider implements ModelProvider {
@@ -163,6 +167,9 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
       text: readOpenAiResponsesText(payload),
       toolCalls: readOpenAiResponsesToolCalls(payload, toolNameMap),
       continuation: createOpenAiResponsesContinuation(this.id, payload, request.continuation),
+      contextManagement: {
+        compacted: didOpenAiResponsesCompact(payload)
+      },
       sources: webMetadata.sources,
       citations: webMetadata.citations,
       usage: toResponsesModelUsage(payload.usage, readOpenAiResponsesWebSearchCallCount(payload))
@@ -281,7 +288,8 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
       model,
       input: toOpenAiResponsesInput(
         request.messages,
-        readOpenAiResponsesContinuationItems(this.id, request.continuation)
+        readOpenAiResponsesContinuationItems(this.id, request.continuation),
+        readOpenAiResponsesCompactionItem(this.id, request.continuation)
       ),
       ...(reasoningEffort
         ? {
@@ -299,6 +307,17 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
         ...(providerNativeTools.length > 0 ? ["web_search_call.action.sources"] : [])
       ],
       tool_choice: request.tools.length > 0 ? "auto" : undefined,
+      ...(this.options.contextManagement?.compaction
+        ? {
+            context_management: [
+              {
+                type: "compaction" as const,
+                compact_threshold:
+                  this.options.contextManagement.compaction.compactThresholdTokens
+              }
+            ]
+          }
+        : {}),
       store: false
     };
   }

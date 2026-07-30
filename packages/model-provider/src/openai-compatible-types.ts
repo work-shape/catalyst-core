@@ -53,6 +53,10 @@ export interface OpenAiCompatibleRequestBody {
 export interface OpenAiResponsesRequestBody {
   model: string;
   input: OpenAiResponseInput;
+  context_management?: Array<{
+    type: "compaction";
+    compact_threshold: number;
+  }>;
   reasoning?: {
     effort: ReasoningEffortConfig;
     summary?: "auto" | "concise" | "detailed";
@@ -97,6 +101,13 @@ export interface OpenAiResponsesReasoningItem {
   [key: string]: unknown;
 }
 
+export interface OpenAiResponsesCompactionItem {
+  id: string;
+  type: "compaction";
+  encrypted_content: string;
+  created_by?: string;
+}
+
 export type OpenAiResponseInputItem =
   | {
       role: "system" | "user";
@@ -117,7 +128,8 @@ export type OpenAiResponseInputItem =
       call_id: string;
       output: string;
     }
-  | OpenAiResponsesReasoningItem;
+  | OpenAiResponsesReasoningItem
+  | OpenAiResponsesCompactionItem;
 
 export interface OpenAiResponsesResponse {
   output?: OpenAiResponsesOutputItem[];
@@ -155,6 +167,7 @@ export type OpenAiResponsesOutputItem =
       encrypted_content?: string;
       [key: string]: unknown;
     }
+  | OpenAiResponsesCompactionItem
   | {
       type: string;
       [key: string]: unknown;

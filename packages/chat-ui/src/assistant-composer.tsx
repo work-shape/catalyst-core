@@ -4,6 +4,7 @@ import type { FormEvent, KeyboardEvent } from "react";
 import { useCallback, useLayoutEffect, useRef } from "react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
 import { AttachmentPreview } from "./attachment-preview";
+import { ContextIndicator } from "./context-indicator";
 import { useTranslation } from "./i18n";
 import { isComposerBlockedByBackgroundRun, shouldShowCancelAction } from "./thread-activity";
 import { Button } from "./ui/button";
@@ -27,6 +28,8 @@ export function AssistantComposer({
   attachmentAccept,
   selectableModels,
   selectedModelBindingId,
+  showContextIndicator,
+  contextSnapshot,
   focusRequestId,
   onCancelRun,
   onSelectModelBinding,
@@ -43,6 +46,13 @@ export function AssistantComposer({
   attachmentAccept: string;
   selectableModels: SafeConfig["selectableModels"];
   selectedModelBindingId: string | undefined;
+  showContextIndicator: boolean;
+  contextSnapshot:
+    | {
+        inputTokens: number;
+        compactThresholdTokens: number;
+      }
+    | undefined;
   focusRequestId: number;
   onCancelRun: () => void;
   onSelectModelBinding: (modelBindingId: string) => void;
@@ -198,6 +208,12 @@ export function AssistantComposer({
                     ))}
                   </select>
                 </label>
+              ) : null}
+              {showContextIndicator && contextSnapshot ? (
+                <ContextIndicator
+                  inputTokens={contextSnapshot.inputTokens}
+                  compactThresholdTokens={contextSnapshot.compactThresholdTokens}
+                />
               ) : null}
             </div>
             <ComposerAction

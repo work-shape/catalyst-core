@@ -237,11 +237,13 @@ export type GetConfigResponses = {
         selectableModels: Array<{
             bindingId: string;
             model: string;
+            compactThresholdTokens?: number;
         }>;
         agents: Array<{
             name: string;
             displayName: string;
             defaultModelBindingId?: string;
+            compactThresholdTokens?: number;
             welcomeMessage?: string;
             welcomeSubtitle?: string;
             initialPrompts: Array<{
@@ -468,6 +470,11 @@ export type GetConversationThreadResponses = {
                         id: string;
                         text: string;
                     }>;
+                    modelContext?: {
+                        inputTokens: number;
+                        compactThresholdTokens: number;
+                        compacted: boolean;
+                    };
                 } | {
                     version: 1;
                     kind: 'assistant_final';
@@ -498,6 +505,11 @@ export type GetConversationThreadResponses = {
                             end: number;
                         };
                     }>;
+                    modelContext?: {
+                        inputTokens: number;
+                        compactThresholdTokens: number;
+                        compacted: boolean;
+                    };
                 } | {
                     version: 1;
                     kind: 'tool_result';
@@ -666,6 +678,11 @@ export type ListConversationMessagesResponses = {
                     id: string;
                     text: string;
                 }>;
+                modelContext?: {
+                    inputTokens: number;
+                    compactThresholdTokens: number;
+                    compacted: boolean;
+                };
             } | {
                 version: 1;
                 kind: 'assistant_final';
@@ -696,6 +713,11 @@ export type ListConversationMessagesResponses = {
                         end: number;
                     };
                 }>;
+                modelContext?: {
+                    inputTokens: number;
+                    compactThresholdTokens: number;
+                    compacted: boolean;
+                };
             } | {
                 version: 1;
                 kind: 'tool_result';
@@ -825,6 +847,11 @@ export type StartConversationRunResponses = {
                         id: string;
                         text: string;
                     }>;
+                    modelContext?: {
+                        inputTokens: number;
+                        compactThresholdTokens: number;
+                        compacted: boolean;
+                    };
                 } | {
                     version: 1;
                     kind: 'assistant_final';
@@ -855,6 +882,11 @@ export type StartConversationRunResponses = {
                             end: number;
                         };
                     }>;
+                    modelContext?: {
+                        inputTokens: number;
+                        compactThresholdTokens: number;
+                        compacted: boolean;
+                    };
                 } | {
                     version: 1;
                     kind: 'tool_result';
@@ -937,6 +969,11 @@ export type StartConversationRunResponses = {
                             id: string;
                             text: string;
                         }>;
+                        modelContext?: {
+                            inputTokens: number;
+                            compactThresholdTokens: number;
+                            compacted: boolean;
+                        };
                     } | {
                         version: 1;
                         kind: 'assistant_final';
@@ -967,6 +1004,11 @@ export type StartConversationRunResponses = {
                                 end: number;
                             };
                         }>;
+                        modelContext?: {
+                            inputTokens: number;
+                            compactThresholdTokens: number;
+                            compacted: boolean;
+                        };
                     } | {
                         version: 1;
                         kind: 'tool_result';
@@ -1160,6 +1202,11 @@ export type CreateConversationRunResponses = {
                         id: string;
                         text: string;
                     }>;
+                    modelContext?: {
+                        inputTokens: number;
+                        compactThresholdTokens: number;
+                        compacted: boolean;
+                    };
                 } | {
                     version: 1;
                     kind: 'assistant_final';
@@ -1190,6 +1237,11 @@ export type CreateConversationRunResponses = {
                             end: number;
                         };
                     }>;
+                    modelContext?: {
+                        inputTokens: number;
+                        compactThresholdTokens: number;
+                        compacted: boolean;
+                    };
                 } | {
                     version: 1;
                     kind: 'tool_result';
@@ -1272,6 +1324,11 @@ export type CreateConversationRunResponses = {
                             id: string;
                             text: string;
                         }>;
+                        modelContext?: {
+                            inputTokens: number;
+                            compactThresholdTokens: number;
+                            compacted: boolean;
+                        };
                     } | {
                         version: 1;
                         kind: 'assistant_final';
@@ -1302,6 +1359,11 @@ export type CreateConversationRunResponses = {
                                 end: number;
                             };
                         }>;
+                        modelContext?: {
+                            inputTokens: number;
+                            compactThresholdTokens: number;
+                            compacted: boolean;
+                        };
                     } | {
                         version: 1;
                         kind: 'tool_result';

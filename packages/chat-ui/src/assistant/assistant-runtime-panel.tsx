@@ -65,6 +65,8 @@ function AssistantRuntimePane({
     locale,
     selectedAgentName,
     selectedModelBindingId,
+    showContextIndicator,
+    contextSnapshot,
     selectModelBindingId,
     draftAttachments,
     localUploadingAttachments,
@@ -246,6 +248,8 @@ function AssistantRuntimePane({
             config={config}
             selectedAgentName={selectedAgentName}
             selectedModelBindingId={selectedModelBindingId}
+            showContextIndicator={showContextIndicator}
+            contextSnapshot={contextSnapshot}
             notice={visibleNotice}
             draftAttachments={draftAttachments}
             localUploadingAttachments={localUploadingAttachments}

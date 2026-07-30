@@ -22,10 +22,12 @@ export function UserSettingsPanel({
   deletingAccount,
   locales,
   locale,
+  showContextIndicator,
   onUpdateProfile,
   onChangePassword,
   onDeleteAccount,
-  onSelectLocale
+  onSelectLocale,
+  onShowContextIndicatorChange
 }: {
   user: ApiUser | undefined;
   canChangePassword: boolean;
@@ -34,10 +36,12 @@ export function UserSettingsPanel({
   deletingAccount: boolean;
   locales: LocaleCode[];
   locale: LocaleCode;
+  showContextIndicator: boolean;
   onUpdateProfile(input: UpdateCurrentUserRequest): Promise<ApiUser>;
   onChangePassword(input: ChangeCurrentUserPasswordRequest): Promise<unknown>;
   onDeleteAccount(): Promise<unknown>;
   onSelectLocale(locale: LocaleCode): void;
+  onShowContextIndicatorChange(visible: boolean): void;
 }) {
   const { t, localeName } = useTranslation();
   const [displayLabel, setDisplayLabel] = useState(user?.displayLabel ?? "");
@@ -136,6 +140,35 @@ export function UserSettingsPanel({
               <CardContent className="flex items-center justify-between gap-3 p-4 pt-2">
                 <span className="text-sm text-muted-foreground">{localeName(locale)}</span>
                 <LocaleSelector locales={locales} selectedLocale={locale} onSelectLocale={onSelectLocale} />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="p-4 pb-2">
+                <CardTitle className="text-base">{t("chatDisplay")}</CardTitle>
+              </CardHeader>
+              <CardContent className="flex items-center justify-between gap-4 p-4 pt-2">
+                <div className="grid gap-1">
+                  <span className="text-sm font-medium">{t("contextIndicator")}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {t("contextIndicatorDescription")}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showContextIndicator}
+                  aria-label={t("contextIndicator")}
+                  className={`relative h-6 w-11 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 ${
+                    showContextIndicator ? "bg-primary" : "bg-muted-foreground/30"
+                  }`}
+                  onClick={() => onShowContextIndicatorChange(!showContextIndicator)}
+                >
+                  <span
+                    className={`absolute top-0.5 size-5 rounded-full bg-background shadow-sm transition-transform ${
+                      showContextIndicator ? "translate-x-5" : "translate-x-0.5"
+                    }`}
+                  />
+                </button>
               </CardContent>
             </Card>
             <Card>

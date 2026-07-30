@@ -1,6 +1,9 @@
-import type { RuntimeAssetSnapshot } from "@vivd-catalyst/core";
+import type { ModelProviderConfig, RuntimeAssetSnapshot } from "@vivd-catalyst/core";
 import type { ClientInstanceConfig } from "./schemas";
 import { createClientBranding } from "./branding";
+import {
+  getModelSelectionForAgent
+} from "./selectors";
 import {
   resolveConfigLocale,
   resolveLocalizedString,
@@ -22,7 +25,10 @@ export function createSafeConfigView(
       bindingId: binding.id,
       model:
         binding.model ??
-        config.modelProviders.find((provider) => provider.id === binding.providerId)!.model
+        config.modelProviders.find((provider) => provider.id === binding.providerId)!.model,
+      ...compactionThresholdView(
+        config.modelProviders.find((provider) => provider.id === binding.providerId)!
+      )
     }));
   const selectableModelBindingIds = new Set(
     selectableModels.map((model) => model.bindingId)
@@ -57,6 +63,7 @@ export function createSafeConfigView(
     agents: assets.agents.map((agent) => ({
       name: agent.name,
       displayName: resolveLocalizedString(agent.displayName, locale, config.localization.defaultLocale),
+      ...compactionThresholdView(getModelSelectionForAgent(config, agent).provider),
       ...(agent.modelBindingId && selectableModelBindingIds.has(agent.modelBindingId)
         ? { defaultModelBindingId: agent.modelBindingId }
         : {}),
@@ -77,4 +84,14 @@ export function createSafeConfigView(
     })),
     ui
   };
+}
+
+function compactionThresholdView(
+  provider: ModelProviderConfig
+): { compactThresholdTokens?: number } {
+  const compactThresholdTokens =
+    provider.type === "openai-compatible"
+      ? provider.contextManagement?.compaction?.compactThresholdTokens
+      : undefined;
+  return compactThresholdTokens === undefined ? {} : { compactThresholdTokens };
 }

@@ -10,6 +10,8 @@ import {
   type ChatMessage,
   type JsonObject,
   type ModelProviderConfig,
+  readAssistantModelContextSnapshot,
+  readAssistantProviderContinuation,
   readToolResultMetadata,
   type RunObservationStore,
   type RuntimeCallContext,
@@ -1742,6 +1744,178 @@ describe("local agent runtime", () => {
     expect(receivedProviderContinuation).toBe(providerContinuation);
     expect(validToolExecutions).toBe(1);
     expect(completedMessages).toEqual(["The valid retry worked."]);
+  });
+
+  it("resumes from the latest durable provider compaction checkpoint", async () => {
+    const clientInstanceId = asClientInstanceId("provider-compaction-client");
+    const context: RuntimeCallContext = {
+      clientInstanceId,
+      correlationId: "corr-provider-compaction",
+      user: {
+        id: "user-1",
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const store = new InMemoryPlatformStore();
+    const conversationId = await createConversationWithMessages(store, {
+      clientInstanceId,
+      messages: [
+        { role: "user", text: "Old question" },
+        { role: "assistant", text: "Old answer" }
+      ]
+    });
+    const providerConfig: ModelProviderConfig = {
+      id: "test-provider",
+      type: "openai-compatible",
+      api: "responses",
+      baseUrl: "https://example.test/openai/v1",
+      apiKey: "test-key",
+      model: "test-model",
+      contextManagement: {
+        compaction: {
+          compactThresholdTokens: 270000
+        }
+      }
+    };
+    const continuation = {
+      providerId: "test-provider",
+      state: {
+        compaction: {
+          type: "compaction",
+          encrypted_content: "opaque-compaction-state"
+        }
+      }
+    };
+    const requests: Parameters<ModelProvider["complete"]>[0][] = [];
+    const modelProvider: ModelProvider = {
+      id: "test-provider",
+      async complete(request) {
+        requests.push(request);
+        if (requests.length === 1) {
+          return {
+            text: "After compaction.",
+            toolCalls: [],
+            continuation,
+            contextManagement: { compacted: true },
+            usage: {
+              ...noReportedUsage(),
+              inputTokens: 269000,
+              totalTokens: 269100
+            }
+          };
+        }
+        return {
+          text: "Continued from checkpoint.",
+          toolCalls: [],
+          contextManagement: { compacted: false },
+          usage: {
+            ...noReportedUsage(),
+            inputTokens: 1200,
+            totalTokens: 1250
+          }
+        };
+      }
+    };
+    const runtime = new LocalAgentRuntime({
+      assetSource: createStaticConfigAssetSource({ agents: [
+        {
+          name: "compaction_agent",
+          displayName: "Compaction Agent",
+          instructions: "Help the user.",
+          modelProviderId: "test-provider",
+          toolNames: [],
+          initialPrompts: []
+        }
+      ] }),
+      modelProviders: [providerConfig],
+      defaultModelProvider: providerConfig,
+      conversationHistory: store,
+      agentRunStore: store,
+      runObservationStore: store,
+      modelProvider,
+      toolRegistry: new ToolRegistry({ tools: [] }),
+      toolExecution: createUnusedToolExecution(),
+      usageGovernance: new ModelUsageGovernance({
+        store,
+        budget: {},
+        safeguards: {}
+      })
+    });
+
+    const firstUserMessage = await store.appendMessage({
+      clientInstanceId,
+      conversationId,
+      role: "user",
+      text: "Compact this conversation"
+    });
+    const firstRun = await runtime.start(
+      {
+        agentName: "compaction_agent",
+        conversationId,
+        inputMessageId: firstUserMessage.id,
+        message: { text: firstUserMessage.text }
+      },
+      context
+    );
+    let emittedMetadata: JsonObject | undefined;
+    for await (const event of runtime.observe(firstRun.runId, context)) {
+      if (event.type === "message_completed") {
+        emittedMetadata = event.message.metadata;
+      }
+    }
+
+    expect(readAssistantProviderContinuation(emittedMetadata)).toBeUndefined();
+    expect(readAssistantModelContextSnapshot(emittedMetadata)).toEqual({
+      inputTokens: 269000,
+      compactThresholdTokens: 270000,
+      compacted: true
+    });
+
+    const persistedAfterCompaction = await store.listMessages({
+      clientInstanceId,
+      conversationId
+    });
+    const checkpoint = persistedAfterCompaction.at(-1);
+    expect(readAssistantProviderContinuation(checkpoint?.metadata)).toEqual({
+      providerId: "test-provider",
+      state: continuation.state
+    });
+
+    const secondUserMessage = await store.appendMessage({
+      clientInstanceId,
+      conversationId,
+      role: "user",
+      text: "Continue"
+    });
+    const secondRun = await runtime.start(
+      {
+        agentName: "compaction_agent",
+        conversationId,
+        inputMessageId: secondUserMessage.id,
+        message: { text: secondUserMessage.text }
+      },
+      context
+    );
+    for await (const _event of runtime.observe(secondRun.runId, context)) {
+      // Drain the second run.
+    }
+
+    expect(requests[1]?.continuation).toEqual(continuation);
+    expect(
+      requests[1]?.messages.map((message) => ({
+        role: message.role,
+        text: modelContentText(message.content)
+      }))
+    ).toEqual([
+      { role: "system", text: expect.stringContaining("Help the user.") },
+      { role: "assistant", text: "After compaction." },
+      { role: "user", text: "Continue" }
+    ]);
   });
 
   it("does not expose raw internal error text in run failure events", async () => {

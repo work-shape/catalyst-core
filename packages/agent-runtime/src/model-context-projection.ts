@@ -4,6 +4,7 @@ import {
   createToolResultMetadata,
   createUserMessageMetadata,
   readAssistantFinalMetadata,
+  readAssistantProviderContinuation,
   readAssistantReasoningSummaries,
   readAssistantToolCallsMetadata,
   readToolResultMetadata as readAgentRuntimeToolResultMetadata,
@@ -39,6 +40,7 @@ export {
   createToolResultMetadata,
   createUserMessageMetadata,
   readAssistantReasoningSummaries,
+  readAssistantProviderContinuation,
   unknownToJsonValue
 };
 export type { StoredReasoningSummary } from "@vivd-catalyst/core";

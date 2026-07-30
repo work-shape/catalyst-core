@@ -13,6 +13,7 @@ import type {
 } from "@vivd-catalyst/api-client";
 import {
   readCompatibleAssistantFinalRunId,
+  readCompatibleAssistantContextCompacted,
   readCompatibleAssistantToolCalls,
   readCompatibleAssistantWebSourceMetadata,
   readCompatibleMessageRunId,
@@ -47,6 +48,7 @@ export interface AssistantUiActiveRun {
 export interface AssistantUiMessageMetadata {
   source?: "active-run";
   completedRunId?: string;
+  contextCompacted?: boolean;
 }
 
 interface AiSdkMessageFormatRepository {
@@ -238,7 +240,7 @@ function toCombinedAssistantRunUiMessage(
       includeSyntheticWebSearchTool: !runHasExplicitWebSearchTool
     })
   );
-  const metadata = createPersistedUiMessageMetadata(group.finalMessage);
+  const metadata = createPersistedUiMessageMetadata(group.finalMessage, group.messages);
   return {
     id: group.finalMessage.id,
     role: "assistant",
@@ -414,9 +416,18 @@ function isRenderableMessage(message: Message): boolean {
   return message.role === "user" || message.role === "assistant" || message.role === "system";
 }
 
-function createPersistedUiMessageMetadata(message: Message): AssistantUiMessageMetadata | undefined {
+function createPersistedUiMessageMetadata(
+  message: Message,
+  runMessages: Message[] = [message]
+): AssistantUiMessageMetadata | undefined {
   const completedRunId = readCompatibleAssistantFinalRunId(message);
-  return completedRunId ? { completedRunId } : undefined;
+  const contextCompacted = runMessages.some(readCompatibleAssistantContextCompacted);
+  return completedRunId || contextCompacted
+    ? {
+        ...(completedRunId ? { completedRunId } : {}),
+        ...(contextCompacted ? { contextCompacted: true } : {})
+      }
+    : undefined;
 }
 
 function toActiveRunUiMessage(activeRun: AssistantUiActiveRun): UIMessage {

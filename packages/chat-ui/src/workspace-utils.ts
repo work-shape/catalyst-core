@@ -6,6 +6,7 @@ export const DEFAULT_LOCALES: LocaleCode[] = ["en", "de"];
 
 const THEME_STORAGE_KEY = "vivd-catalyst:theme";
 const LOCALE_STORAGE_KEY = "vivd-catalyst:locale";
+const CONTEXT_INDICATOR_STORAGE_KEY = "vivd-catalyst:show-context-indicator";
 
 export function createDraftKey(authScope: string, conversationId: string | undefined): string {
   return `${authScope}:${conversationId ?? "new"}`;
@@ -55,6 +56,14 @@ export function readStoredLocale(): LocaleCode | undefined {
 
 export function writeStoredLocale(locale: LocaleCode): void {
   window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+}
+
+export function readStoredContextIndicatorPreference(): boolean {
+  return window.localStorage.getItem(CONTEXT_INDICATOR_STORAGE_KEY) === "true";
+}
+
+export function writeStoredContextIndicatorPreference(visible: boolean): void {
+  window.localStorage.setItem(CONTEXT_INDICATOR_STORAGE_KEY, String(visible));
 }
 
 export function applyFavicon(href: string): void {

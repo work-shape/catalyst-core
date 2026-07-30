@@ -1448,6 +1448,32 @@ describe("chat UI message history projection", () => {
       })
     ]);
   });
+
+  it("projects an automatic compaction marker from assistant context metadata", () => {
+    const projected = toUiMessages([
+      {
+        id: "msg_compacted",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "assistant",
+        text: "Continuing with the compacted context.",
+        createdAt: "2026-07-30T10:00:00.000Z",
+        metadata: createAssistantFinalMetadata({
+          runId: "run_compacted",
+          modelContext: {
+            inputTokens: 80_000,
+            compactThresholdTokens: 270_000,
+            compacted: true
+          }
+        })
+      }
+    ]);
+
+    expect(projected[0]?.metadata).toMatchObject({
+      completedRunId: "run_compacted",
+      contextCompacted: true
+    });
+  });
 });
 
 function projectPersistedToolPart(input: {
