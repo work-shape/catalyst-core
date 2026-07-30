@@ -23,6 +23,7 @@ describe("system instructions", () => {
     expect(content).toContain("use the exact importedFiles[].path returned by the tool");
     expect(content).toContain("never invent a shorter filename");
     expect(content).toContain("Promote only final user-facing workspace outputs");
+    expect(content).toContain("never link internal workspace files");
     expect(content).toContain("without pasting shell logs unless the user asks for details");
     expect(content).toContain("- User selected language: German (locale: de).");
     expect(content).toContain("- Current date: Freitag, 19. Juni 2026 (ISO: 2026-06-19).");
