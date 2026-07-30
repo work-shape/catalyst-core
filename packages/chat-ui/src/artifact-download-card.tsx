@@ -254,7 +254,7 @@ export function ArtifactDownloadButton({
   );
 }
 
-function ArtifactFileIcon({
+export function ArtifactFileIcon({
   fileType,
   large
 }: {

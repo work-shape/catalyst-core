@@ -4,8 +4,6 @@ import {
   ChevronDown,
   Database,
   Download,
-  FileInput,
-  FileOutput,
   FileText,
   Library,
   X
@@ -22,7 +20,7 @@ import type {
   ApiClient,
   ConversationResourceListItem
 } from "@vivd-catalyst/api-client";
-import { ArtifactDownloadButton } from "./artifact-download-card";
+import { ArtifactDownloadButton, ArtifactFileIcon } from "./artifact-download-card";
 import { useWorkspaceApiClient } from "./api/workspace-api-client";
 import {
   useConversationResourcesQuery,
@@ -50,7 +48,7 @@ import {
   useToolDisplayPanel,
   type ToolDisplayPanelEntry
 } from "./tool-display-panel";
-import type { ToolArtifactDownloadRef } from "./tool-artifacts";
+import { getArtifactFileType, type ToolArtifactDownloadRef } from "./tool-artifacts";
 import { TooltipIconButton } from "./tooltip-icon-button";
 import { Button } from "./ui/button";
 import { Spinner } from "./ui/spinner";
@@ -114,7 +112,7 @@ export function useResourcesPanelState({
 export function ResourcesPanelToggle({ onOpen }: { onOpen(): void }) {
   const { t } = useTranslation();
   return (
-    <div className="animate-in fade-in zoom-in-95 absolute top-20 right-4 z-[45] duration-200">
+    <div className="animate-in fade-in zoom-in-95 absolute top-20 right-6 z-[45] duration-200">
       <TooltipIconButton
         className="size-9 rounded-md border bg-popover text-muted-foreground shadow-lg hover:bg-accent hover:text-accent-foreground"
         tooltip={t("resourcesToggle")}
@@ -338,7 +336,7 @@ export function ResourcesPanel({
   return (
     <aside
       aria-label={t("resourcesTitle")}
-      className="animate-in fade-in zoom-in-95 absolute top-20 right-4 z-[45] flex max-h-[calc(100%-6rem)] w-[min(22rem,calc(100%-2rem))] flex-col overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-lg duration-200"
+      className="animate-in fade-in zoom-in-95 absolute top-20 right-6 z-[45] flex max-h-[calc(100%-6rem)] w-[min(22rem,calc(100%-3rem))] flex-col overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-lg duration-200"
     >
       <div className="flex h-11 shrink-0 items-center justify-between border-b px-3">
         <h2 className="text-sm font-semibold">{t("resourcesTitle")}</h2>
@@ -411,7 +409,6 @@ function ResourceRow({
   onPreview(): void;
 }) {
   const { locale } = useTranslation();
-  const icon = resourceIcon(resource.resourceType);
 
   return (
     <div
@@ -426,7 +423,7 @@ function ResourceRow({
         }
       }}
     >
-      <span className="text-muted-foreground" aria-hidden="true">{icon}</span>
+      <ResourceRowIcon resource={resource} />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium">{resource.title}</span>
         <span className="block truncate text-xs text-muted-foreground">
@@ -647,17 +644,30 @@ function StructuredDataHeaderAction({
   return query.data ? <StructuredDataCopyAllButton resource={query.data} /> : null;
 }
 
-function resourceIcon(type: ResourceSectionType): ReactNode {
-  if (type === "structured_data") {
-    return <Database size={16} />;
+function ResourceRowIcon({ resource }: { resource: ConversationResourceListItem }) {
+  if (
+    resource.resourceType === "source_file" ||
+    resource.resourceType === "generated_file"
+  ) {
+    const fileType = getArtifactFileType({
+      artifactId: "",
+      filename: resource.download.filename,
+      mimeType: resource.resourceType === "source_file" ? resource.mimeType : undefined
+    });
+    return <ArtifactFileIcon fileType={fileType} />;
   }
-  if (type === "analysis") {
-    return <BarChart3 size={16} />;
-  }
-  if (type === "generated_file") {
-    return <FileOutput size={16} />;
-  }
-  return <FileInput size={16} />;
+  return (
+    <span
+      className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground"
+      aria-hidden="true"
+    >
+      {resource.resourceType === "structured_data" ? (
+        <Database size={16} />
+      ) : (
+        <BarChart3 size={16} />
+      )}
+    </span>
+  );
 }
 
 function sectionLabel(
