@@ -209,21 +209,23 @@ export function AssistantComposer({
                   </select>
                 </label>
               ) : null}
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
               {showContextIndicator && contextSnapshot ? (
                 <ContextIndicator
                   inputTokens={contextSnapshot.inputTokens}
                   compactThresholdTokens={contextSnapshot.compactThresholdTokens}
                 />
               ) : null}
+              <ComposerAction
+                disabled={Boolean(sendBlockedReason)}
+                disabledReason={sendBlockedReason}
+                conversationRunning={conversationRunning}
+                currentText={currentText}
+                onCancelRun={onCancelRun}
+                onSubmitMessage={onSubmitMessage}
+              />
             </div>
-            <ComposerAction
-              disabled={Boolean(sendBlockedReason)}
-              disabledReason={sendBlockedReason}
-              conversationRunning={conversationRunning}
-              currentText={currentText}
-              onCancelRun={onCancelRun}
-              onSubmitMessage={onSubmitMessage}
-            />
           </div>
         </div>
       </ComposerPrimitive.AttachmentDropzone>

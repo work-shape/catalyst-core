@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { readAssistantModelContextSnapshot } from "@vivd-catalyst/core";
 import type {
   ApiClient,
   ApiUser,
@@ -10,6 +9,7 @@ import type {
   SafeConfig,
   StartConversationRunResponse
 } from "@vivd-catalyst/api-client";
+import { resolveContextUsage } from "../context-usage";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import {
   useCancelRunMutation,
@@ -360,10 +360,6 @@ export function useWorkspaceChatModel({
     showSuperadmin: routeState.showSuperadmin
   });
   const canViewAdministration = controlPlane.canViewAdministration;
-  const latestContextSnapshot = [...messages]
-    .reverse()
-    .map((message) => readAssistantModelContextSnapshot(message.metadata))
-    .find((snapshot) => snapshot !== undefined);
   const configuredCompactThresholdTokens =
     config?.selectableModels.find((model) => model.bindingId === selectedModelBindingId)
       ?.compactThresholdTokens ??
@@ -581,12 +577,7 @@ export function useWorkspaceChatModel({
       selectedAgentName: activeAgentName,
       selectedModelBindingId,
       showContextIndicator: preferences.showContextIndicator,
-      contextSnapshot: configuredCompactThresholdTokens
-        ? {
-            inputTokens: latestContextSnapshot?.inputTokens ?? 0,
-            compactThresholdTokens: configuredCompactThresholdTokens
-          }
-        : undefined,
+      contextSnapshot: resolveContextUsage(messages, configuredCompactThresholdTokens),
       selectModelBindingId: setSelectedModelBindingId,
       draftAttachments: draftAttachmentController.draftAttachments,
       localUploadingAttachments: draftAttachmentController.visibleUploadingAttachments,

@@ -13,6 +13,7 @@ import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Dialog } from "./ui/dialog";
 import { Input } from "./ui/input";
+import { Switch } from "./ui/switch";
 
 export function UserSettingsPanel({
   user,
@@ -153,22 +154,11 @@ export function UserSettingsPanel({
                     {t("contextIndicatorDescription")}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={showContextIndicator}
+                <Switch
+                  checked={showContextIndicator}
                   aria-label={t("contextIndicator")}
-                  className={`relative h-6 w-11 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 ${
-                    showContextIndicator ? "bg-primary" : "bg-muted-foreground/30"
-                  }`}
-                  onClick={() => onShowContextIndicatorChange(!showContextIndicator)}
-                >
-                  <span
-                    className={`absolute top-0.5 size-5 rounded-full bg-background shadow-sm transition-transform ${
-                      showContextIndicator ? "translate-x-5" : "translate-x-0.5"
-                    }`}
-                  />
-                </button>
+                  onCheckedChange={onShowContextIndicatorChange}
+                />
               </CardContent>
             </Card>
             <Card>

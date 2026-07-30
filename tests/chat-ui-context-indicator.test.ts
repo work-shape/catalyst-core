@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createElement } from "../packages/chat-ui/node_modules/react";
 import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
 import { ContextIndicator } from "../packages/chat-ui/src/context-indicator";
+import { resolveContextUsage } from "../packages/chat-ui/src/context-usage";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 import { UserSettingsPanel } from "../packages/chat-ui/src/user-settings-panel";
 import {
@@ -29,7 +30,7 @@ describe("chat context indicator", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders the setting and the compact usage ring in both product locales", () => {
+  it("renders the setting and a ring-only context trigger in both product locales", () => {
     const settingsMarkup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
@@ -76,7 +77,28 @@ describe("chat context indicator", () => {
     expect(settingsMarkup).toContain("Kontextanzeige");
     expect(settingsMarkup).toContain('role="switch"');
     expect(settingsMarkup).toContain('aria-checked="false"');
-    expect(indicatorMarkup).toContain("50%");
-    expect(indicatorMarkup).toContain("50% of 270k tokens");
+    expect(indicatorMarkup).toContain("Context window: 50% full");
+    expect(indicatorMarkup).not.toContain(">50%<");
+  });
+
+  it("estimates non-zero usage for conversations without a provider snapshot", () => {
+    const usage = resolveContextUsage(
+      [
+        {
+          id: "msg_user",
+          conversationId: "conv_test",
+          clientInstanceId: "client_test",
+          role: "user",
+          text: "A".repeat(4_000),
+          createdAt: "2026-07-30T10:00:00.000Z"
+        }
+      ],
+      270_000
+    );
+
+    expect(usage).toEqual({
+      inputTokens: 1_004,
+      compactThresholdTokens: 270_000
+    });
   });
 });
