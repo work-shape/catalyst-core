@@ -181,7 +181,7 @@ function ChatWorkspaceContent({
               <div
                 className={cn(
                   "relative h-full min-h-0 min-w-0 flex-1 transition-[width] duration-300 ease-out",
-                  resourcesVisible && "xl:[--resources-inset:25rem]"
+                  resourcesVisible && "xl:[--resources-inset:28rem]"
                 )}
                 onDragEnter={chat.fileDropzone.onChatDragEnter}
                 onDragOver={chat.fileDropzone.onChatDragOver}
