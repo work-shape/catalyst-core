@@ -49,6 +49,13 @@ describe("workspace tools", () => {
     expect(importTool?.description).toContain("returns a shell-safe workspace path in importedFiles[].path");
     expect(importTool?.description).toContain("use that exact path in workspace.exec");
     expect(importTool?.description).toContain("do not invent shortened filenames");
+    const promoteTool = harness.tools.find((tool) => tool.name === "workspace.promote_artifact");
+    expect(promoteTool?.description).toContain(
+      "automatically displays a clickable download card"
+    );
+    expect(promoteTool?.description).toContain(
+      "do not add sandbox:, /mnt/data, or internal workspace links"
+    );
     expect(previewTool?.inputJsonSchema).toMatchObject({
       anyOf: expect.arrayContaining([
         { required: ["artifactId"] },

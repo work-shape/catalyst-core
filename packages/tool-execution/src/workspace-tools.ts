@@ -1466,7 +1466,7 @@ export function createWorkspaceToolDefinitions(
     defineTool({
       name: "workspace.promote_artifact",
       description:
-        "Promote an internal workspace file to a managed artifact visible to the user. Prefer final outputs under /workspace/artifacts; do not promote scripts, scratch files, or preview images unless the user explicitly needs those files.",
+        "Promote an internal workspace file to a managed artifact visible to the user. After promotion, Catalyst automatically displays a clickable download card below the assistant response; do not add sandbox:, /mnt/data, or internal workspace links to user-facing text. Prefer final outputs under /workspace/artifacts; do not promote scripts, scratch files, or preview images unless the user explicitly needs those files.",
       inputSchema: workspacePromoteArtifactInputSchema,
       outputSchema: workspacePromoteArtifactOutputSchema,
       execute(input, context) {
