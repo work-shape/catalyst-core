@@ -1,5 +1,4 @@
 import {
-  asConversationAttachmentId,
   STRUCTURED_DATA_RESOURCE_DISPLAY_KIND,
   type PlatformStore,
   type StructuredDataFieldSource,
@@ -43,6 +42,42 @@ export function createStructuredDataToolDefinitions(input: {
           );
         }
 
+        const sourceFileIds = [
+          ...new Set(
+            toolInput.operation === "replace"
+              ? toolInput.sections.flatMap((section) =>
+                  section.fields.flatMap((field) =>
+                    (field.sources ?? []).map((source) => source.fileId)
+                  )
+                )
+              : (toolInput.set ?? []).flatMap((set) =>
+                  (set.sources ?? []).map((source) => source.fileId)
+                )
+          )
+        ];
+        const sourceAttachmentIds = new Map<
+          string,
+          StructuredDataFieldSource["attachmentId"]
+        >();
+        if (sourceFileIds.length > 0) {
+          const sentAttachments = await input.store.listSentConversationAttachments({
+            clientInstanceId: context.clientInstanceId,
+            conversationId
+          });
+          for (const attachment of sentAttachments) {
+            sourceAttachmentIds.set(attachment.fileId, attachment.id);
+          }
+          const invalidSourceFileId = sourceFileIds.find(
+            (fileId) => !sourceAttachmentIds.has(fileId)
+          );
+          if (invalidSourceFileId) {
+            return toolFailed(
+              "validation_failed",
+              `File '${invalidSourceFileId}' is not a sent attachment of this conversation`
+            );
+          }
+        }
+
         let state: StructuredDataState;
         let title: string;
         if (toolInput.operation === "replace") {
@@ -53,7 +88,7 @@ export function createStructuredDataToolDefinitions(input: {
               ...section,
               fields: section.fields.map((field) => ({
                 ...field,
-                sources: mapSources(field.sources)
+                sources: mapSources(field.sources, sourceAttachmentIds)
               }))
             }))
           };
@@ -100,14 +135,14 @@ export function createStructuredDataToolDefinitions(input: {
                 field.label = set.label;
               }
               if (set.sources !== undefined) {
-                field.sources = mapSources(set.sources);
+                field.sources = mapSources(set.sources, sourceAttachmentIds);
               }
             } else {
               section.fields.push({
                 key: set.fieldKey,
                 label: set.label ?? set.fieldKey,
                 value: set.value,
-                sources: mapSources(set.sources)
+                sources: mapSources(set.sources, sourceAttachmentIds)
               });
             }
           }
@@ -126,33 +161,6 @@ export function createStructuredDataToolDefinitions(input: {
             return toolFailed(
               "validation_failed",
               "Structured data sections may contain at most 64 fields"
-            );
-          }
-        }
-
-        const sourceIds = [
-          ...new Set(
-            state.sections.flatMap((section) =>
-              section.fields.flatMap((field) =>
-                (field.sources ?? []).map((source) => source.attachmentId)
-              )
-            )
-          )
-        ];
-        if (sourceIds.length > 0) {
-          const sentIds = new Set(
-            (
-              await input.store.listSentConversationAttachments({
-                clientInstanceId: context.clientInstanceId,
-                conversationId
-              })
-            ).map((attachment) => attachment.id)
-          );
-          const invalidSourceId = sourceIds.find((attachmentId) => !sentIds.has(attachmentId));
-          if (invalidSourceId) {
-            return toolFailed(
-              "validation_failed",
-              `Attachment '${invalidSourceId}' is not a sent attachment of this conversation`
             );
           }
         }
@@ -215,10 +223,11 @@ export function createStructuredDataToolDefinitions(input: {
 }
 
 function mapSources(
-  sources: Array<{ attachmentId: string; page?: number }> | undefined
+  sources: Array<{ fileId: string; page?: number }> | undefined,
+  attachmentIds: ReadonlyMap<string, StructuredDataFieldSource["attachmentId"]>
 ): StructuredDataFieldSource[] | undefined {
   return sources?.map((source) => ({
-    attachmentId: asConversationAttachmentId(source.attachmentId),
+    attachmentId: attachmentIds.get(source.fileId)!,
     page: source.page
   }));
 }

@@ -183,7 +183,53 @@ describe("structured_data.publish", () => {
     });
   });
 
-  it("rejects cross-conversation sources and invalid keys", async () => {
+  it("maps model-visible file ids to conversation attachment sources", async () => {
+    const harness = await createHarness();
+    const attachment = await createSentAttachment(
+      harness.store,
+      harness.clientInstanceId,
+      harness.conversation.id
+    );
+
+    await expect(
+      harness.run({
+        resourceKey: "claim_data",
+        title: "Claim data",
+        operation: "replace",
+        sections: [
+          {
+            key: "person",
+            label: "Person",
+            fields: [
+              {
+                key: "name",
+                label: "Name",
+                value: "Ada",
+                sources: [{ fileId: attachment.fileId, page: 2 }]
+              }
+            ]
+          }
+        ]
+      })
+    ).resolves.toMatchObject({ status: "success" });
+    await expect(harness.resources()).resolves.toEqual([
+      expect.objectContaining({
+        state: expect.objectContaining({
+          sections: [
+            expect.objectContaining({
+              fields: [
+                expect.objectContaining({
+                  sources: [{ attachmentId: attachment.id, page: 2 }]
+                })
+              ]
+            })
+          ]
+        })
+      })
+    ]);
+  });
+
+  it("rejects cross-conversation source files and invalid keys", async () => {
     const harness = await createHarness();
     const otherConversation = await harness.store.createConversation({
       clientInstanceId: harness.clientInstanceId,
@@ -212,7 +258,7 @@ describe("structured_data.publish", () => {
                 key: "name",
                 label: "Name",
                 value: "Ada",
-                sources: [{ attachmentId: attachment.id }]
+                sources: [{ fileId: attachment.fileId }]
               }
             ]
           }
@@ -222,7 +268,7 @@ describe("structured_data.publish", () => {
       status: "failed",
       error: {
         code: "validation_failed",
-        message: expect.stringContaining(attachment.id)
+        message: expect.stringContaining(attachment.fileId)
       }
     });
     await expect(

@@ -14,14 +14,17 @@ const valueSchema = z.union([
 ]);
 const sourceSchema = z
   .object({
-    attachmentId: z.string().min(1).describe("Sent conversation attachment id."),
+    fileId: z
+      .string()
+      .min(1)
+      .describe("Managed file id from the current conversation attachment manifest."),
     page: z.number().int().positive().optional()
   })
   .strict();
 const sourcesSchema = z
   .array(sourceSchema)
   .max(8)
-  .describe("Optional source references to sent conversation attachments.");
+  .describe("Optional source references using the file ids visible to the model.");
 
 const replaceFieldSchema = z
   .object({
