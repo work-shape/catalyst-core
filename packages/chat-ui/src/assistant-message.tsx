@@ -29,7 +29,10 @@ import type { AssistantUiMessageMetadata } from "./assistant-ui-adapter";
 import { AssistantSourcePart } from "./assistant-source-part";
 import { useTranslation } from "./i18n";
 import { MarkdownText } from "./markdown-text";
-import { activeAssistantCursorPlacement } from "./thread-activity";
+import {
+  activeAssistantCursorPlacement,
+  shouldShowToolGroupActivity
+} from "./thread-activity";
 import { DataPart, ToolCallPart } from "./tool-call";
 import { ToolGroupContent, ToolGroupRoot, ToolGroupTrigger } from "./assistant-tool-group";
 import { TooltipIconButton, tooltipIconButtonClassName } from "./tooltip-icon-button";
@@ -205,6 +208,7 @@ function AssistantMessage({
                 part,
                 children,
                 activeRunMessage,
+                activeToolRunning: Boolean(activeToolRunning),
                 assistantPartComponents,
                 lastPartIndex,
                 messageParts
@@ -284,11 +288,13 @@ function renderAssistantGroupedPart({
   part,
   children,
   activeRunMessage,
+  activeToolRunning,
   assistantPartComponents,
   lastPartIndex,
   messageParts
 }: AssistantGroupedRenderInfo & {
   activeRunMessage: boolean;
+  activeToolRunning: boolean;
   assistantPartComponents: Parameters<typeof MessagePrimitive.PartByIndex>[0]["components"];
   lastPartIndex: number;
   messageParts: readonly PartState[];
@@ -299,8 +305,12 @@ function renderAssistantGroupedPart({
       return (
         <AssistantWorkGroup
           count={renderableIndices.length}
-          active={part.status.type === "running" || (activeRunMessage && renderableIndices.includes(lastPartIndex))}
-          indices={renderableIndices}
+          active={shouldShowToolGroupActivity({
+            activeToolRunning,
+            activeRunMessage,
+            groupRunning: part.status.type === "running",
+            containsLastPart: renderableIndices.includes(lastPartIndex)
+          })}
           summary={false}
         >
           {renderableIndices.map((index) => (
@@ -352,7 +362,6 @@ function AssistantWorkTimeline({
               key={`tool-group-${item.indices[0]}`}
               count={renderableIndices.length}
               active={activeRunMessage && renderableIndices.some((index) => messageParts[index]?.status?.type === "running")}
-              indices={renderableIndices}
               nested
               summary={false}
             >
@@ -387,7 +396,6 @@ function AssistantWorkGroup({
   count,
   active,
   children,
-  indices = [],
   nested = false,
   summary,
   autoCollapse = false
@@ -395,27 +403,14 @@ function AssistantWorkGroup({
   count: number;
   active: boolean;
   children: ReactNode;
-  indices?: readonly number[];
   nested?: boolean;
   summary: boolean;
   autoCollapse?: boolean;
 }) {
   const { t } = useTranslation();
-  const hasDisplay = useAuiState((state) =>
-    !summary && indices.some((index) => partHasDisplay(state.message.parts[index]))
-  );
   const [open, setOpen] = useState(autoCollapse);
   const [suppressOpenAnimation, setSuppressOpenAnimation] = useState(autoCollapse);
-  const openedForDisplayRef = useRef(false);
   const autoCollapseStartedRef = useRef(false);
-
-  useEffect(() => {
-    if (summary || !hasDisplay || openedForDisplayRef.current) {
-      return;
-    }
-    openedForDisplayRef.current = true;
-    setOpen(true);
-  }, [hasDisplay, summary]);
 
   useEffect(() => {
     if (!summary || !autoCollapse || autoCollapseStartedRef.current) {
@@ -458,13 +453,6 @@ function AssistantWorkGroup({
   );
 }
 
-function partHasDisplay(part: unknown): boolean {
-  if (!isRecord(part) || part.type !== "tool-call" || !isRecord(part.result)) {
-    return false;
-  }
-  return isRecord(part.result.display);
-}
-
 function rememberRecentlyActiveAssistantRunId(runId: string): void {
   recentlyActiveAssistantRunIds.delete(runId);
   recentlyActiveAssistantRunIds.add(runId);
@@ -475,10 +463,6 @@ function rememberRecentlyActiveAssistantRunId(runId: string): void {
   if (typeof oldestRunId === "string") {
     recentlyActiveAssistantRunIds.delete(oldestRunId);
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function UserMessage() {

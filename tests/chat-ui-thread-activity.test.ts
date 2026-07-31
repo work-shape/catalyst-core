@@ -9,11 +9,45 @@ import {
   isComposerBlockedByActiveRun,
   isThreadBusy,
   pendingAssistantPresentation,
+  shouldShowToolGroupActivity,
   shouldShowCancelAction,
   shouldShowPendingAssistantMessage
 } from "../packages/chat-ui/src/thread-activity";
 
 describe("chat UI thread activity", () => {
+  it("shows activity on the current group while one of its tools is unfinished", () => {
+    expect(
+      shouldShowToolGroupActivity({
+        activeToolRunning: true,
+        activeRunMessage: true,
+        groupRunning: true,
+        containsLastPart: true
+      })
+    ).toBe(true);
+  });
+
+  it("does not keep a completed tool group spinning with the surrounding message", () => {
+    expect(
+      shouldShowToolGroupActivity({
+        activeToolRunning: false,
+        activeRunMessage: true,
+        groupRunning: true,
+        containsLastPart: true
+      })
+    ).toBe(false);
+  });
+
+  it("does not animate a historical tool group for the current run", () => {
+    expect(
+      shouldShowToolGroupActivity({
+        activeToolRunning: true,
+        activeRunMessage: false,
+        groupRunning: true,
+        containsLastPart: true
+      })
+    ).toBe(false);
+  });
+
   it("renders one localized spinner label for the tool being prepared", () => {
     const markup = renderToStaticMarkup(
       createElement(
