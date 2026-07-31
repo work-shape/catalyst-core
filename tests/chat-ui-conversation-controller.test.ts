@@ -27,13 +27,6 @@ describe("chat UI conversation controller", () => {
       toolCallId: "call_review",
       toolName: "submit_review"
     });
-    expect(toUiMessages([], state.activeRun)?.[0]?.metadata).toMatchObject({
-      preparingTool: {
-        toolCallId: "call_review",
-        toolName: "submit_review"
-      }
-    });
-
     state = applyRunObservationToControllerState(
       state,
       createObservation({

@@ -22,6 +22,8 @@ export function AssistantThread({
   attachmentAccept,
   conversationRunning,
   activeRunId,
+  activeToolRunning,
+  preparingToolName,
   optimisticPending,
   messagesEnabled,
   composerFocusRequestId,
@@ -50,6 +52,8 @@ export function AssistantThread({
   attachmentAccept: string;
   conversationRunning?: boolean;
   activeRunId?: string;
+  activeToolRunning?: boolean;
+  preparingToolName?: string;
   optimisticPending?: boolean;
   messagesEnabled: boolean;
   composerFocusRequestId: number;
@@ -108,6 +112,8 @@ export function AssistantThread({
                     <ThreadMessage
                       conversationRunning={conversationRunning}
                       activeRunId={activeRunId}
+                      activeToolRunning={activeToolRunning}
+                      preparingToolName={preparingToolName}
                       optimisticPending={optimisticPending}
                     />
                   )}

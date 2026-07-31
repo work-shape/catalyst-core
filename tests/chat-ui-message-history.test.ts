@@ -20,6 +20,46 @@ import {
 import { readToolArtifactRefs } from "../packages/chat-ui/src/tool-artifacts";
 
 describe("chat UI message history projection", () => {
+  it("defers promoted result cards until the active run finishes", () => {
+    const projected = toUiMessages([], {
+      run: {
+        id: "run_active",
+        status: "running"
+      },
+      projection: {
+        runId: "run_active",
+        lastSequence: 3,
+        status: "running",
+        text: "",
+        reasoning: [],
+        activeToolCalls: [],
+        parts: [
+          {
+            type: "tool_call",
+            toolCallId: "call_review",
+            toolName: "submit_review",
+            input: {},
+            state: "output_available",
+            output: {
+              status: "success",
+              display: {
+                kind: "review.result",
+                version: 1,
+                mode: "side_panel",
+                title: "Review",
+                data: {}
+              }
+            }
+          }
+        ]
+      }
+    });
+
+    expect(projected[0]?.parts).not.toContainEqual(
+      expect.objectContaining({ type: "data-workspace-promoted-surfaces" })
+    );
+  });
+
   it("surfaces side-panel displays while a completed run is still active", () => {
     const projected = toUiMessages([], {
       run: {

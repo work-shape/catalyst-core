@@ -57,6 +57,16 @@ describe("chat UI thread activity", () => {
     ).toBe("hidden");
   });
 
+  it("lets the active tool group own activity without a second status row", () => {
+    expect(
+      activeAssistantCursorPlacement({
+        running: true,
+        toolActivityRunning: true,
+        parts: [{ type: "dynamic-tool", status: { type: "requires-action" } }]
+      })
+    ).toBe("hidden");
+  });
+
   it("does not add a second cursor when the active run keeps its last completed text cursor visible", () => {
     expect(
       activeAssistantCursorPlacement({

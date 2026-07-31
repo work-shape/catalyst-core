@@ -49,10 +49,6 @@ export interface AssistantUiMessageMetadata {
   source?: "active-run";
   completedRunId?: string;
   contextCompacted?: boolean;
-  preparingTool?: {
-    toolCallId: string;
-    toolName: string;
-  };
 }
 
 interface AiSdkMessageFormatRepository {
@@ -436,35 +432,38 @@ function createPersistedUiMessageMetadata(
 
 function toActiveRunUiMessage(activeRun: AssistantUiActiveRun): UIMessage {
   const parts = toProjectionUiMessageParts(activeRun.projection, activeRun);
-  appendWorkspacePromotedSurfacesPart(
-    parts,
-    activeRun.projection.parts.flatMap((part): ToolSurfaceRef[] =>
-      part.type === "tool_call"
-        ? readToolSurfaceRefs(part.output, {
-            toolCallId: part.toolCallId,
-            toolName: part.toolName
-          })
-        : []
-    )
-  );
-  appendWorkspacePromotedArtifactsPart(
-    parts,
-    activeRun.projection.parts.flatMap((part): ToolArtifactDownloadRef[] =>
-      part.type === "tool_call" ? readSurfacedToolArtifactRefs(part.output, part.toolName) : []
-    )
-  );
+  if (isTerminalRunStatus(activeRun.projection.status)) {
+    appendWorkspacePromotedSurfacesPart(
+      parts,
+      activeRun.projection.parts.flatMap((part): ToolSurfaceRef[] =>
+        part.type === "tool_call"
+          ? readToolSurfaceRefs(part.output, {
+              toolCallId: part.toolCallId,
+              toolName: part.toolName
+            })
+          : []
+      )
+    );
+    appendWorkspacePromotedArtifactsPart(
+      parts,
+      activeRun.projection.parts.flatMap((part): ToolArtifactDownloadRef[] =>
+        part.type === "tool_call" ? readSurfacedToolArtifactRefs(part.output, part.toolName) : []
+      )
+    );
+  }
 
   return {
     id: activeRun.run.id,
     role: "assistant",
     metadata: {
-      source: "active-run",
-      ...(activeRun.projection.preparingTool
-        ? { preparingTool: activeRun.projection.preparingTool }
-        : {})
+      source: "active-run"
     } satisfies AssistantUiMessageMetadata,
     parts
   };
+}
+
+function isTerminalRunStatus(status: AgentRunProjection["status"]): boolean {
+  return status === "completed" || status === "cancelled" || status === "failed";
 }
 
 function toProjectionUiMessageParts(

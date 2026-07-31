@@ -42,10 +42,14 @@ const recentlyActiveAssistantRunIds = new Set<string>();
 export function ThreadMessage({
   conversationRunning,
   activeRunId,
+  activeToolRunning,
+  preparingToolName,
   optimisticPending: _optimisticPending
 }: {
   conversationRunning?: boolean;
   activeRunId?: string;
+  activeToolRunning?: boolean;
+  preparingToolName?: string;
   optimisticPending?: boolean;
 }) {
   const role = useAuiState((state) => state.message.role);
@@ -60,16 +64,25 @@ export function ThreadMessage({
   }
 
   return (
-    <AssistantMessage activeRunId={activeRunId} conversationRunning={conversationRunning} />
+    <AssistantMessage
+      activeRunId={activeRunId}
+      activeToolRunning={activeToolRunning}
+      conversationRunning={conversationRunning}
+      preparingToolName={preparingToolName}
+    />
   );
 }
 
 function AssistantMessage({
   activeRunId,
-  conversationRunning
+  activeToolRunning,
+  conversationRunning,
+  preparingToolName
 }: {
   activeRunId?: string;
+  activeToolRunning?: boolean;
   conversationRunning?: boolean;
+  preparingToolName?: string;
 }) {
   const { t } = useTranslation();
   const messageId = useAuiState((state) => state.message.id);
@@ -83,10 +96,6 @@ function AssistantMessage({
   const contextCompacted = useAuiState(
     (state) =>
       (state.message.metadata as AssistantUiMessageMetadata | undefined)?.contextCompacted === true
-  );
-  const preparingToolName = useAuiState(
-    (state) =>
-      (state.message.metadata as AssistantUiMessageMetadata | undefined)?.preparingTool?.toolName
   );
   const lastPartIndex = useAuiState((state) => state.message.parts.length - 1);
   const activeRunMessage = Boolean(conversationRunning && activeRunId && messageId === activeRunId);
@@ -136,6 +145,7 @@ function AssistantMessage({
   const activityCursorPlacement = useAuiState((state) =>
     activeAssistantCursorPlacement({
       activeLastPart: activeRunMessage,
+      toolActivityRunning: activeRunMessage && activeToolRunning,
       running:
         state.message.role === "assistant" &&
         (state.message.status?.type === "running" || activeRunMessage),
@@ -164,7 +174,7 @@ function AssistantMessage({
       ) : null}
       <div className="min-w-0 rounded-md px-1 py-1 text-sm leading-6">
         {activityCursorPlacement === "before" ? (
-          <AssistantActivityStatus toolName={preparingToolName} />
+          <AssistantActivityStatus toolName={activeRunMessage ? preparingToolName : undefined} />
         ) : null}
         {completedWorkSummary ? (
           <>
@@ -202,7 +212,7 @@ function AssistantMessage({
           </MessagePrimitive.GroupedParts>
         )}
         {activityCursorPlacement === "after" ? (
-          <AssistantActivityStatus toolName={preparingToolName} />
+          <AssistantActivityStatus toolName={activeRunMessage ? preparingToolName : undefined} />
         ) : null}
         <MessageError />
       </div>

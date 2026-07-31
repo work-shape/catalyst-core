@@ -258,6 +258,11 @@ function AssistantRuntimePane({
           attachmentAccept={attachmentAccept}
           conversationRunning={conversationRunning}
           activeRunId={activeRun?.run.id}
+          activeToolRunning={activeRun?.projection.activeToolCalls.some(
+            (toolCall) =>
+              toolCall.state === "input_available" || toolCall.state === "waiting_for_permission"
+          )}
+          preparingToolName={activeRun?.projection.preparingTool?.toolName}
           optimisticPending={optimisticPending}
           messagesEnabled={Boolean(selectedConversationId)}
           composerFocusRequestId={composerFocusRequestId}

@@ -27,11 +27,13 @@ export type ActiveAssistantCursorPlacement = "hidden" | "before" | "after";
 
 export function activeAssistantCursorPlacement(input: {
   activeLastPart?: boolean;
+  toolActivityRunning?: boolean;
   running: boolean;
   parts: readonly ThreadActivityPart[];
 }): ActiveAssistantCursorPlacement {
   if (
     !input.running ||
+    input.toolActivityRunning ||
     input.parts.some(partShowsOwnActivity) ||
     (input.activeLastPart && lastPartShowsActiveRunActivity(input.parts))
   ) {
