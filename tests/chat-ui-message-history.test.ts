@@ -99,6 +99,10 @@ describe("chat UI message history projection", () => {
       }
     });
 
+    expect(projected[0]?.metadata).toEqual({
+      source: "active-run",
+      activeRunCompleted: true
+    });
     expect(projected[0]?.parts).toContainEqual({
       type: "data-workspace-promoted-surfaces",
       data: {

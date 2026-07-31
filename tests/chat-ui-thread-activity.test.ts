@@ -73,6 +73,19 @@ describe("chat UI thread activity", () => {
     expect(markup.match(/role="status"/gu)).toHaveLength(1);
   });
 
+  it("uses neutral wording when the next tool is not known", () => {
+    const markup = renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { locale: "de" },
+        createElement(AssistantActivityStatus)
+      )
+    );
+
+    expect(markup).toContain("Ich arbeite daran…");
+    expect(markup).not.toContain("Wird vorbereitet…");
+  });
+
   it("keeps progress visible after a completed tool surface while the run continues", () => {
     expect(
       activeAssistantCursorPlacement({

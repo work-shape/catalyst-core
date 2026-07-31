@@ -47,6 +47,7 @@ export interface AssistantUiActiveRun {
 
 export interface AssistantUiMessageMetadata {
   source?: "active-run";
+  activeRunCompleted?: boolean;
   completedRunId?: string;
   contextCompacted?: boolean;
 }
@@ -456,7 +457,8 @@ function toActiveRunUiMessage(activeRun: AssistantUiActiveRun): UIMessage {
     id: activeRun.run.id,
     role: "assistant",
     metadata: {
-      source: "active-run"
+      source: "active-run",
+      ...(activeRun.projection.status === "completed" ? { activeRunCompleted: true } : {})
     } satisfies AssistantUiMessageMetadata,
     parts
   };

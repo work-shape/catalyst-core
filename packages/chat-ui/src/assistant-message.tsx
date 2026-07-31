@@ -41,6 +41,7 @@ import { cn } from "./ui/cn";
 
 const chronologicalAssistantMessageGroupBy = createAssistantMessageGroupBy();
 const recentlyActiveAssistantRunIds = new Set<string>();
+const toolActivityExitDelayMs = 160;
 
 export function ThreadMessage({
   conversationRunning,
@@ -93,6 +94,10 @@ function AssistantMessage({
   const activeRunProjectionMessage = useAuiState(
     (state) => (state.message.metadata as AssistantUiMessageMetadata | undefined)?.source === "active-run"
   );
+  const activeRunCompleted = useAuiState(
+    (state) =>
+      (state.message.metadata as AssistantUiMessageMetadata | undefined)?.activeRunCompleted === true
+  );
   const completedRunId = useAuiState(
     (state) => (state.message.metadata as AssistantUiMessageMetadata | undefined)?.completedRunId
   );
@@ -101,7 +106,12 @@ function AssistantMessage({
       (state.message.metadata as AssistantUiMessageMetadata | undefined)?.contextCompacted === true
   );
   const lastPartIndex = useAuiState((state) => state.message.parts.length - 1);
-  const activeRunMessage = Boolean(conversationRunning && activeRunId && messageId === activeRunId);
+  const matchesActiveRun = Boolean(activeRunId && messageId === activeRunId);
+  const activeRunMessage = Boolean(conversationRunning && matchesActiveRun);
+  const stableToolActivityRunning = useStableToolActivity(
+    activeRunMessage,
+    Boolean(activeToolRunning)
+  );
   const messageRunning = useAuiState(
     (state) =>
       state.message.role === "assistant" &&
@@ -137,8 +147,10 @@ function AssistantMessage({
     recentlyActiveAssistantRunIds.delete(completedRunId);
     return true;
   });
+  const autoPreviewSurfaces =
+    autoCollapseCompletedWorkSummary || activeRunCompleted;
   const assistantPartComponents = useAssistantPartComponents(activeRunMessage, {
-    autoPreviewSurfaces: autoCollapseCompletedWorkSummary,
+    autoPreviewSurfaces,
     displayPresentation: "full"
   });
   const completedWorkPartComponents = useAssistantPartComponents(activeRunMessage, {
@@ -148,7 +160,7 @@ function AssistantMessage({
   const activityCursorPlacement = useAuiState((state) =>
     activeAssistantCursorPlacement({
       activeLastPart: activeRunMessage,
-      toolActivityRunning: activeRunMessage && activeToolRunning,
+      toolActivityRunning: stableToolActivityRunning,
       running:
         state.message.role === "assistant" &&
         (state.message.status?.type === "running" || activeRunMessage),
@@ -208,7 +220,8 @@ function AssistantMessage({
                 part,
                 children,
                 activeRunMessage,
-                activeToolRunning: Boolean(activeToolRunning),
+                activeToolRunning: stableToolActivityRunning,
+                autoPreviewSurfaces,
                 assistantPartComponents,
                 lastPartIndex,
                 messageParts
@@ -245,6 +258,25 @@ function useAssistantPartComponents(
     () => createAssistantPartComponents(activeRunMessage, options),
     [activeRunMessage, options.autoPreviewSurfaces, options.displayPresentation]
   );
+}
+
+function useStableToolActivity(activeRunMessage: boolean, activeToolRunning: boolean): boolean {
+  const [visible, setVisible] = useState(activeRunMessage && activeToolRunning);
+
+  useEffect(() => {
+    if (!activeRunMessage) {
+      setVisible(false);
+      return undefined;
+    }
+    if (activeToolRunning) {
+      setVisible(true);
+      return undefined;
+    }
+    const timeout = globalThis.setTimeout(() => setVisible(false), toolActivityExitDelayMs);
+    return () => globalThis.clearTimeout(timeout);
+  }, [activeRunMessage, activeToolRunning]);
+
+  return visible;
 }
 
 function createAssistantPartComponents(
@@ -289,12 +321,14 @@ function renderAssistantGroupedPart({
   children,
   activeRunMessage,
   activeToolRunning,
+  autoPreviewSurfaces,
   assistantPartComponents,
   lastPartIndex,
   messageParts
 }: AssistantGroupedRenderInfo & {
   activeRunMessage: boolean;
   activeToolRunning: boolean;
+  autoPreviewSurfaces: boolean;
   assistantPartComponents: Parameters<typeof MessagePrimitive.PartByIndex>[0]["components"];
   lastPartIndex: number;
   messageParts: readonly PartState[];
@@ -327,7 +361,13 @@ function renderAssistantGroupedPart({
     case "tool-call":
       return part.toolUI ?? <ToolCallPart {...part} displayPresentation="full" />;
     case "data":
-      return part.dataRendererUI ?? <DataPart {...part} displayPresentation="full" />;
+      return part.dataRendererUI ?? (
+        <DataPart
+          {...part}
+          autoPreviewSurfaces={autoPreviewSurfaces}
+          displayPresentation="full"
+        />
+      );
     case "reasoning":
       return <AssistantReasoningPart activeRunMessage={activeRunMessage} />;
     case "source":
