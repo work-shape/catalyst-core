@@ -23,6 +23,17 @@ export interface ThreadActivityInput {
 }
 
 export type PendingAssistantPresentation = "hidden" | "block-cursor" | "inline-cursor";
+export type ActiveAssistantCursorPlacement = "hidden" | "before" | "after";
+
+export function activeAssistantCursorPlacement(input: {
+  running: boolean;
+  parts: readonly ThreadActivityPart[];
+}): ActiveAssistantCursorPlacement {
+  if (!input.running || input.parts.some(partShowsOwnActivity)) {
+    return "hidden";
+  }
+  return input.parts.some(partHasVisibleAssistantContent) ? "after" : "before";
+}
 
 export function isThreadBusy({
   conversationRunning,
@@ -89,10 +100,22 @@ function lastAssistantPartShowsOwnActivity(message: ThreadActivityMessage | unde
 }
 
 function assistantMessageHasVisibleContent(message: ThreadActivityMessage): boolean {
-  return (message.parts ?? []).some((part) => {
-    if (part.type === "text") {
-      return part.text?.trim().length ? true : false;
-    }
-    return part.type !== "indicator" && part.type !== "step-start";
-  });
+  return (message.parts ?? []).some(partHasVisibleAssistantContent);
+}
+
+function partShowsOwnActivity(part: ThreadActivityPart): boolean {
+  if (part.type === "reasoning" && part.status?.type === "running") {
+    return true;
+  }
+  if (part.type === "text") {
+    return part.status?.type === "running" && Boolean(part.text?.trim().length);
+  }
+  return part.status?.type === "running";
+}
+
+function partHasVisibleAssistantContent(part: ThreadActivityPart): boolean {
+  if (part.type === "text" || part.type === "reasoning") {
+    return Boolean(part.text?.trim().length);
+  }
+  return part.type !== "indicator" && part.type !== "step-start";
 }

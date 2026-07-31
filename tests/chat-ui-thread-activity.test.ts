@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  activeAssistantCursorPlacement,
   isComposerBlockedByActiveRun,
   isThreadBusy,
   pendingAssistantPresentation,
@@ -8,6 +9,33 @@ import {
 } from "../packages/chat-ui/src/thread-activity";
 
 describe("chat UI thread activity", () => {
+  it("keeps progress visible after a completed tool surface while the run continues", () => {
+    expect(
+      activeAssistantCursorPlacement({
+        running: true,
+        parts: [{ type: "dynamic-tool", status: { type: "complete" } }]
+      })
+    ).toBe("after");
+  });
+
+  it("does not add a second cursor when the current part already shows activity", () => {
+    expect(
+      activeAssistantCursorPlacement({
+        running: true,
+        parts: [{ type: "text", text: "Writing now", status: { type: "running" } }]
+      })
+    ).toBe("hidden");
+  });
+
+  it("shows the activity cursor before the first visible assistant part", () => {
+    expect(
+      activeAssistantCursorPlacement({
+        running: true,
+        parts: [{ type: "text", text: "", status: { type: "running" } }]
+      })
+    ).toBe("before");
+  });
+
   it("does not render a fallback cursor after visible assistant content", () => {
     const lastMessage = {
       id: "assistant_1",

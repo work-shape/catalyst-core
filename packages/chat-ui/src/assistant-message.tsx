@@ -28,6 +28,7 @@ import type { AssistantUiMessageMetadata } from "./assistant-ui-adapter";
 import { AssistantSourcePart } from "./assistant-source-part";
 import { useTranslation } from "./i18n";
 import { MarkdownText } from "./markdown-text";
+import { activeAssistantCursorPlacement } from "./thread-activity";
 import { DataPart, ToolCallPart } from "./tool-call";
 import { ToolGroupContent, ToolGroupRoot, ToolGroupTrigger } from "./assistant-tool-group";
 import { TooltipIconButton, tooltipIconButtonClassName } from "./tooltip-icon-button";
@@ -127,18 +128,14 @@ function AssistantMessage({
     autoPreviewSurfaces: false,
     displayPresentation: "summary"
   });
-  const showFallbackCursor = useAuiState((state) => {
-    if (
-      state.message.role !== "assistant" ||
-      (state.message.status?.type !== "running" && !activeRunMessage)
-    ) {
-      return false;
-    }
-    return (
-      !state.message.parts.some(partShowsOwnActivity) &&
-      !state.message.parts.some(partHasVisibleAssistantContent)
-    );
-  });
+  const activityCursorPlacement = useAuiState((state) =>
+    activeAssistantCursorPlacement({
+      running:
+        state.message.role === "assistant" &&
+        (state.message.status?.type === "running" || activeRunMessage),
+      parts: state.message.parts
+    })
+  );
   useEffect(() => {
     if (activeRunProjectionMessage) {
       rememberRecentlyActiveAssistantRunId(messageId);
@@ -160,7 +157,7 @@ function AssistantMessage({
         </div>
       ) : null}
       <div className="min-w-0 rounded-md px-1 py-1 text-sm leading-6">
-        {showFallbackCursor ? <AssistantFallbackCursor /> : null}
+        {activityCursorPlacement === "before" ? <AssistantFallbackCursor /> : null}
         {completedWorkSummary ? (
           <>
             <AssistantWorkGroup
@@ -196,6 +193,7 @@ function AssistantMessage({
               })}
           </MessagePrimitive.GroupedParts>
         )}
+        {activityCursorPlacement === "after" ? <AssistantFallbackCursor /> : null}
         <MessageError />
       </div>
       {!messageRunning ? (
@@ -445,38 +443,6 @@ function partHasDisplay(part: unknown): boolean {
     return false;
   }
   return isRecord(part.result.display);
-}
-
-function partShowsOwnActivity(part: unknown): boolean {
-  if (!isRecord(part)) {
-    return false;
-  }
-  const type = typeof part.type === "string" ? part.type : undefined;
-  const status = isRecord(part.status) && typeof part.status.type === "string" ? part.status.type : undefined;
-  if (type === "reasoning" && status === "running") {
-    return true;
-  }
-  if (type === "text") {
-    return status === "running" && typeof part.text === "string" && part.text.trim().length > 0;
-  }
-  return status === "running";
-}
-
-function partHasVisibleAssistantContent(part: unknown): boolean {
-  if (!isRecord(part)) {
-    return false;
-  }
-  const type = typeof part.type === "string" ? part.type : undefined;
-  if (type === "text") {
-    return typeof part.text === "string" && part.text.trim().length > 0;
-  }
-  if (type === "indicator" || type === "step-start") {
-    return false;
-  }
-  if (type === "reasoning") {
-    return typeof part.text === "string" && part.text.trim().length > 0;
-  }
-  return true;
 }
 
 function rememberRecentlyActiveAssistantRunId(runId: string): void {
