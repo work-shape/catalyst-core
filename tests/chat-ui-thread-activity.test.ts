@@ -12,7 +12,8 @@ import {
   pendingAssistantPresentation,
   shouldShowToolGroupActivity,
   shouldShowCancelAction,
-  shouldShowPendingAssistantMessage
+  shouldShowPendingAssistantMessage,
+  toolGroupActivityLabel
 } from "../packages/chat-ui/src/thread-activity";
 
 describe("chat UI thread activity", () => {
@@ -32,6 +33,16 @@ describe("chat UI thread activity", () => {
         containsActivePart: true
       })
     ).toBe(true);
+  });
+
+  it("shows the current phase beside an active tool-group count", () => {
+    expect(
+      toolGroupActivityLabel({
+        active: true,
+        activityLabel: "Bereite Unterlagenprüfung vor…",
+        countLabel: "1 Tool-Aufruf"
+      })
+    ).toBe("1 Tool-Aufruf · Bereite Unterlagenprüfung vor…");
   });
 
   it("stops the tool-group activity when the run moves on", () => {

@@ -32,6 +32,16 @@ export function shouldShowToolGroupActivity(input: {
   return Boolean(input.activeRunMessage && input.containsActivePart);
 }
 
+export function toolGroupActivityLabel(input: {
+  active: boolean;
+  activityLabel?: string;
+  countLabel: string;
+}): string {
+  return input.active && input.activityLabel
+    ? `${input.countLabel} · ${input.activityLabel}`
+    : input.countLabel;
+}
+
 export function findLastVisibleAssistantPartIndex(
   parts: readonly ThreadActivityPart[]
 ): number | undefined {

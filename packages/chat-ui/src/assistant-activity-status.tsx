@@ -17,10 +17,7 @@ export function AssistantActivityStatus({
   toolName?: string;
   variationSeed?: string;
 }) {
-  const { locale, t } = useTranslation();
-  const configuredLabel = useToolActivityLabel(toolName, locale);
-  const label = configuredLabel ?? (toolName ? readableToolName(toolName) : undefined);
-  const fallbackKey = fallbackActivityKeys[stableVariantIndex(variationSeed)] ?? "preparing";
+  const label = useAssistantActivityLabel({ toolName, variationSeed });
 
   return (
     <div
@@ -29,9 +26,23 @@ export function AssistantActivityStatus({
       aria-live="polite"
     >
       <Spinner size="sm" />
-      <span>{label ? t("preparingTool", { tool: label }) : t(fallbackKey)}</span>
+      <span>{label}</span>
     </div>
   );
+}
+
+export function useAssistantActivityLabel({
+  toolName,
+  variationSeed
+}: {
+  toolName?: string;
+  variationSeed?: string;
+}): string {
+  const { locale, t } = useTranslation();
+  const configuredLabel = useToolActivityLabel(toolName, locale);
+  const toolLabel = configuredLabel ?? (toolName ? readableToolName(toolName) : undefined);
+  const fallbackKey = fallbackActivityKeys[stableVariantIndex(variationSeed)] ?? "preparing";
+  return toolLabel ? t("preparingTool", { tool: toolLabel }) : t(fallbackKey);
 }
 
 function stableVariantIndex(seed: string | undefined): number {

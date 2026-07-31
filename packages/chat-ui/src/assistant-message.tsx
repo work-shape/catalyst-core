@@ -10,7 +10,10 @@ import {
 } from "@assistant-ui/react";
 import { Check, Copy, FileText, ImageIcon, ListRestart, Pencil, RefreshCw, User } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { AssistantActivityStatus } from "./assistant-activity-status";
+import {
+  AssistantActivityStatus,
+  useAssistantActivityLabel
+} from "./assistant-activity-status";
 import { AssistantCursor } from "./assistant-cursor";
 import { AttachmentPreview } from "./attachment-preview";
 import { managedFileIdFromUrl, useAttachmentContentContext } from "./attachment-content";
@@ -32,7 +35,8 @@ import { MarkdownText } from "./markdown-text";
 import {
   activeAssistantCursorPlacement,
   findLastVisibleAssistantPartIndex,
-  shouldShowToolGroupActivity
+  shouldShowToolGroupActivity,
+  toolGroupActivityLabel
 } from "./thread-activity";
 import { DataPart, ToolCallPart } from "./tool-call";
 import { ToolGroupContent, ToolGroupRoot, ToolGroupTrigger } from "./assistant-tool-group";
@@ -118,6 +122,10 @@ function AssistantMessage({
       ? lastVisiblePartIndex
       : undefined;
   const toolGroupOwnsActivity = activeRunMessage && activeToolGroupPartIndex !== undefined;
+  const activityLabel = useAssistantActivityLabel({
+    toolName: activeRunMessage ? preparingToolName : undefined,
+    variationSeed: messageId
+  });
   const completedWorkIndices = useMemo(
     () => createCompletedAssistantWorkIndices(messageParts, finalTextIndex),
     [finalTextIndex, messageParts]
@@ -222,6 +230,7 @@ function AssistantMessage({
                 part,
                 children,
                 activeRunMessage,
+                activityLabel,
                 autoPreviewSurfaces,
                 activeToolGroupPartIndex,
                 assistantPartComponents,
@@ -305,12 +314,14 @@ function renderAssistantGroupedPart({
   part,
   children,
   activeRunMessage,
+  activityLabel,
   autoPreviewSurfaces,
   activeToolGroupPartIndex,
   assistantPartComponents,
   messageParts
 }: AssistantGroupedRenderInfo & {
   activeRunMessage: boolean;
+  activityLabel: string;
   autoPreviewSurfaces: boolean;
   activeToolGroupPartIndex: number | undefined;
   assistantPartComponents: Parameters<typeof MessagePrimitive.PartByIndex>[0]["components"];
@@ -328,6 +339,7 @@ function renderAssistantGroupedPart({
               activeToolGroupPartIndex !== undefined &&
               renderableIndices.includes(activeToolGroupPartIndex)
           })}
+          activityLabel={activityLabel}
           summary={false}
         >
           {renderableIndices.map((index) => (
@@ -418,6 +430,7 @@ function AssistantWorkTimeline({
 function AssistantWorkGroup({
   count,
   active,
+  activityLabel,
   children,
   nested = false,
   summary,
@@ -425,6 +438,7 @@ function AssistantWorkGroup({
 }: {
   count: number;
   active: boolean;
+  activityLabel?: string;
   children: ReactNode;
   nested?: boolean;
   summary: boolean;
@@ -462,7 +476,7 @@ function AssistantWorkGroup({
         data-testid="assistant-work-group-trigger"
         active={active}
         count={count}
-        label={countLabel}
+        label={toolGroupActivityLabel({ active, activityLabel, countLabel })}
       />
       <ToolGroupContent
         className={cn(
