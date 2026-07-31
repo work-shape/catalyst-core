@@ -989,6 +989,8 @@ test("superadmin manages config assets with validation and conflict protection",
       .toBe("static");
     await expect(fieldset("Tools").getByLabel("read_skill", { exact: true })).toBeVisible();
     await expect(fieldset("Tools").getByLabel("show_view", { exact: true })).toBeVisible();
+    const firstPrompt = form().getByText("Prompt 1", { exact: true }).locator("../..");
+    const firstPromptText = firstPrompt.locator("input").nth(2);
     await expect(fieldControl("Model", "select").locator("option")).toContainText([
       "Instance default",
       "deterministic-local"
@@ -1028,8 +1030,11 @@ test("superadmin manages config assets with validation and conflict protection",
     await expect(versionLabel(original.version + 1)).toBeVisible();
 
     await fieldset("Tools").getByLabel("read_skill", { exact: true }).check();
+    const updatedPrompt = `Keep this saved prompt ${Date.now()}.`;
+    await firstPromptText.fill(updatedPrompt);
     await form().getByRole("button", { name: "Save changes", exact: true }).click();
     await expect(versionLabel(original.version + 2)).toBeVisible();
+    await expect(firstPromptText).toHaveValue(updatedPrompt);
 
     await clickSkill();
     await form().getByRole("button", { name: "Delete", exact: true }).click();

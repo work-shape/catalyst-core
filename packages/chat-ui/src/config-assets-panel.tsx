@@ -258,8 +258,6 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
                   .then(() => {
                     if (selection.mode === "new") {
                       setSelection({ mode: "existing", kind: "agent", name: form.name.trim() });
-                    } else {
-                      setResetToken((token) => token + 1);
                     }
                   })
               )
@@ -330,8 +328,6 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
                   .then(() => {
                     if (selection.mode === "new") {
                       setSelection({ mode: "existing", kind: "skill", name: form.name.trim() });
-                    } else {
-                      setResetToken((token) => token + 1);
                     }
                   })
               )
