@@ -6,6 +6,7 @@ import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 import { ToolActivityLabelsProvider } from "../packages/chat-ui/src/tool-activity";
 import {
   activeAssistantCursorPlacement,
+  findLastVisibleAssistantPartIndex,
   isComposerBlockedByActiveRun,
   isThreadBusy,
   pendingAssistantPresentation,
@@ -19,7 +20,7 @@ describe("chat UI thread activity", () => {
     expect(
       shouldShowToolGroupActivity({
         activeRunMessage: true,
-        containsLastPart: true
+        containsActivePart: true
       })
     ).toBe(true);
   });
@@ -28,7 +29,7 @@ describe("chat UI thread activity", () => {
     expect(
       shouldShowToolGroupActivity({
         activeRunMessage: true,
-        containsLastPart: true
+        containsActivePart: true
       })
     ).toBe(true);
   });
@@ -37,16 +38,26 @@ describe("chat UI thread activity", () => {
     expect(
       shouldShowToolGroupActivity({
         activeRunMessage: true,
-        containsLastPart: false
+        containsActivePart: false
       })
     ).toBe(false);
+  });
+
+  it("ignores invisible bookkeeping after the current tool call", () => {
+    expect(
+      findLastVisibleAssistantPartIndex([
+        { type: "tool-call" },
+        { type: "indicator" },
+        { type: "step-start" }
+      ])
+    ).toBe(0);
   });
 
   it("does not animate a historical tool group for the current run", () => {
     expect(
       shouldShowToolGroupActivity({
         activeRunMessage: false,
-        containsLastPart: true
+        containsActivePart: true
       })
     ).toBe(false);
   });

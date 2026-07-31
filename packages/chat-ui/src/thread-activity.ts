@@ -27,9 +27,21 @@ export type ActiveAssistantCursorPlacement = "hidden" | "before" | "after";
 
 export function shouldShowToolGroupActivity(input: {
   activeRunMessage: boolean;
-  containsLastPart: boolean;
+  containsActivePart: boolean;
 }): boolean {
-  return Boolean(input.activeRunMessage && input.containsLastPart);
+  return Boolean(input.activeRunMessage && input.containsActivePart);
+}
+
+export function findLastVisibleAssistantPartIndex(
+  parts: readonly ThreadActivityPart[]
+): number | undefined {
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const part = parts[index];
+    if (part && partHasVisibleAssistantContent(part)) {
+      return index;
+    }
+  }
+  return undefined;
 }
 
 export function activeAssistantCursorPlacement(input: {
@@ -135,7 +147,7 @@ function lastPartShowsActiveRunActivity(parts: readonly ThreadActivityPart[]): b
   return Boolean(lastPart?.type === "text" && lastPart.text?.trim().length);
 }
 
-function partHasVisibleAssistantContent(part: ThreadActivityPart): boolean {
+export function partHasVisibleAssistantContent(part: ThreadActivityPart): boolean {
   if (part.type === "text" || part.type === "reasoning") {
     return Boolean(part.text?.trim().length);
   }

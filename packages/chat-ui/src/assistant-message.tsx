@@ -32,6 +32,7 @@ import { useTranslation } from "./i18n";
 import { MarkdownText } from "./markdown-text";
 import {
   activeAssistantCursorPlacement,
+  findLastVisibleAssistantPartIndex,
   shouldShowToolGroupActivity
 } from "./thread-activity";
 import { DataPart, ToolCallPart } from "./tool-call";
@@ -101,7 +102,6 @@ function AssistantMessage({
     (state) =>
       (state.message.metadata as AssistantUiMessageMetadata | undefined)?.contextCompacted === true
   );
-  const lastPartIndex = useAuiState((state) => state.message.parts.length - 1);
   const matchesActiveRun = Boolean(activeRunId && messageId === activeRunId);
   const activeRunMessage = Boolean(conversationRunning && matchesActiveRun);
   const messageRunning = useAuiState(
@@ -111,9 +111,14 @@ function AssistantMessage({
   );
   const finalTextIndex = findFinalAssistantTextPartIndex(messageParts);
   const toolUIs = useAuiState((state) => state.tools.toolUIs);
-  const toolGroupOwnsActivity = Boolean(
-    activeRunMessage && isAssistantToolWorkPart(messageParts[lastPartIndex], { toolUIs })
-  );
+  const lastVisiblePartIndex = findLastVisibleAssistantPartIndex(messageParts);
+  const activeToolGroupPartIndex = isAssistantToolWorkPart(
+    lastVisiblePartIndex === undefined ? undefined : messageParts[lastVisiblePartIndex],
+    { toolUIs }
+  )
+    ? lastVisiblePartIndex
+    : undefined;
+  const toolGroupOwnsActivity = activeRunMessage && activeToolGroupPartIndex !== undefined;
   const completedWorkIndices = useMemo(
     () => createCompletedAssistantWorkIndices(messageParts, finalTextIndex),
     [finalTextIndex, messageParts]
@@ -219,8 +224,8 @@ function AssistantMessage({
                 children,
                 activeRunMessage,
                 autoPreviewSurfaces,
+                activeToolGroupPartIndex,
                 assistantPartComponents,
-                lastPartIndex,
                 messageParts
               })}
           </MessagePrimitive.GroupedParts>
@@ -302,14 +307,14 @@ function renderAssistantGroupedPart({
   children,
   activeRunMessage,
   autoPreviewSurfaces,
+  activeToolGroupPartIndex,
   assistantPartComponents,
-  lastPartIndex,
   messageParts
 }: AssistantGroupedRenderInfo & {
   activeRunMessage: boolean;
   autoPreviewSurfaces: boolean;
+  activeToolGroupPartIndex: number | undefined;
   assistantPartComponents: Parameters<typeof MessagePrimitive.PartByIndex>[0]["components"];
-  lastPartIndex: number;
   messageParts: readonly PartState[];
 }) {
   switch (part.type) {
@@ -320,7 +325,9 @@ function renderAssistantGroupedPart({
           count={renderableIndices.length}
           active={shouldShowToolGroupActivity({
             activeRunMessage,
-            containsLastPart: renderableIndices.includes(lastPartIndex)
+            containsActivePart:
+              activeToolGroupPartIndex !== undefined &&
+              renderableIndices.includes(activeToolGroupPartIndex)
           })}
           summary={false}
         >
