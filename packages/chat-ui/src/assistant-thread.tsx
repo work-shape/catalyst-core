@@ -1,11 +1,12 @@
 import { AuiIf, ThreadPrimitive, useAuiState } from "@assistant-ui/react";
 import { ArrowDown, Bot, CircleAlert, Sparkles } from "lucide-react";
+import { useMemo } from "react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
 import { AssistantActivityStatus } from "./assistant-activity-status";
 import { AssistantComposer, type LocalUploadingAttachment } from "./assistant-composer";
 import { ThreadMessage } from "./assistant-message";
 import { useTranslation } from "./i18n";
-import { shouldShowPendingAssistantMessage } from "./thread-activity";
+import { findRunActivity, shouldShowRunActivity } from "./thread-activity";
 import { cn } from "./ui/cn";
 
 export function AssistantThread({
@@ -110,15 +111,15 @@ export function AssistantThread({
                     <ThreadMessage
                       conversationRunning={conversationRunning}
                       activeRunId={activeRunId}
-                      preparingToolName={preparingToolName}
                       optimisticPending={optimisticPending}
                     />
                   )}
                 </ThreadPrimitive.Messages>
-                <PendingAssistantMessage
+                <RunActivityRow
                   activeRunId={activeRunId}
                   conversationRunning={conversationRunning}
                   optimisticPending={optimisticPending}
+                  preparingToolName={preparingToolName}
                 />
               </div>
             ) : null}
@@ -220,40 +221,48 @@ function ThreadScrollToBottom() {
   );
 }
 
-function PendingAssistantMessage({
+/**
+ * The single progress indicator for the whole thread.
+ *
+ * It is mounted for as long as the thread is busy and lives at a fixed
+ * position below the last message, so nothing about the assistant part tree can
+ * move it, duplicate it, or blank it out. Only its wording changes.
+ */
+function RunActivityRow({
   activeRunId,
   conversationRunning,
-  optimisticPending
+  optimisticPending,
+  preparingToolName
 }: {
   activeRunId?: string;
   conversationRunning?: boolean;
   optimisticPending?: boolean;
+  preparingToolName?: string;
 }) {
   const threadRunning = useAuiState((state) => state.thread.isRunning);
-  const lastMessage = useAuiState((state) => state.thread.messages.at(-1));
-  if (activeRunId && lastMessage?.role === "assistant" && lastMessage.id === activeRunId) {
-    return null;
-  }
-  const showPendingMessage = shouldShowPendingAssistantMessage({
-    conversationRunning,
-    optimisticPending,
-    threadRunning,
-    lastMessage
+  const lastAssistantParts = useAuiState((state) => {
+    const lastMessage = state.thread.messages.at(-1);
+    return lastMessage?.role === "assistant" ? lastMessage.parts : undefined;
   });
+  const activity = useMemo(() => findRunActivity(lastAssistantParts), [lastAssistantParts]);
 
-  if (!showPendingMessage) {
+  if (!shouldShowRunActivity({ conversationRunning, optimisticPending, threadRunning })) {
     return null;
   }
 
   return (
+    // `-mt-6` cancels the message list gap so the row keeps its own small
+    // offset from whatever it follows, instead of inheriting message spacing.
     <div
-      className="group/message mx-auto w-full max-w-5xl animate-in fade-in slide-in-from-bottom-1 duration-150"
+      className="mx-auto -mt-6 w-full max-w-5xl px-1 pt-2 animate-in fade-in duration-150"
       data-role="assistant"
-      data-testid="pending-assistant-message"
+      data-testid="run-activity"
     >
-      <div className="min-w-0 rounded-md px-1 py-1 text-sm leading-6">
-        <AssistantActivityStatus variationSeed={activeRunId} />
-      </div>
+      <AssistantActivityStatus
+        activity={activity}
+        preparingToolName={preparingToolName}
+        variationSeed={activeRunId}
+      />
     </div>
   );
 }

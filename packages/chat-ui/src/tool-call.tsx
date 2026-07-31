@@ -10,6 +10,7 @@ import type { LocaleCode } from "@vivd-catalyst/api-client";
 import {
   isToolDisplayPayload,
   readToolDisplayPayloadFromToolResult,
+  ToolDisplayWidgetNode,
   useToolDisplayWidget
 } from "./domain-ui-widgets";
 import {
@@ -73,6 +74,17 @@ export function ToolCallPart({
         })
       : undefined;
   const builtInDisplay = display && !hasRenderedNode(renderedDisplay) ? renderBuiltInDisplay(display) : undefined;
+  const panelDisplayNode = display ? (
+    <ToolDisplayWidgetNode
+      display={display}
+      fallback={builtInDisplay}
+      locale={locale}
+      result={result}
+      source="tool-result"
+      toolCallId={toolCallId}
+      toolName={toolName}
+    />
+  ) : builtInDisplay;
   const hasDisplay = hasRenderedNode(renderedDisplay) || hasRenderedNode(builtInDisplay);
   const displayMode = readDisplayMode(display);
   const workspaceProjection = projectWorkspaceToolDisplay({ args, result, toolName });
@@ -97,7 +109,7 @@ export function ToolCallPart({
           actionLabel={actionLabel}
           detailSections={detailSections}
           display={display}
-          displayNode={renderedDisplay ?? builtInDisplay}
+          displayNode={panelDisplayNode}
           state={state}
           statusLabel={statusLabel}
           artifacts={surfacedArtifacts}
@@ -169,7 +181,11 @@ export function DataPart({
   if (promotedArtifacts) {
     return (
       <div className="chat-tool-part my-3 max-w-3xl">
-        <ToolArtifactList artifacts={promotedArtifacts.artifacts} variant="deliverable" autoPreview />
+        <ToolArtifactList
+          artifacts={promotedArtifacts.artifacts}
+          variant="deliverable"
+          autoPreview={autoPreviewSurfaces}
+        />
       </div>
     );
   }
@@ -191,13 +207,28 @@ export function DataPart({
       : undefined;
   const builtInDisplay =
     isToolDisplayPayload(data) && !hasRenderedNode(renderedDisplay) ? renderBuiltInDisplay(data) : undefined;
+  const panelDisplayNode = isToolDisplayPayload(data) ? (
+    <ToolDisplayWidgetNode
+      display={data}
+      fallback={builtInDisplay}
+      locale={locale}
+      source="message-metadata"
+    />
+  ) : builtInDisplay;
   const hasDisplay = hasRenderedNode(renderedDisplay) || hasRenderedNode(builtInDisplay);
   const displayMode = isToolDisplayPayload(data) ? readDisplayMode(data) : "inline";
   const details = formatDetails(data);
 
   if (hasDisplay && displayPresentation === "full") {
     if (displayMode === "side_panel" && displayPanel.available && isToolDisplayPayload(data)) {
-      return <SidePanelDataPart display={data} displayNode={renderedDisplay ?? builtInDisplay} name={name} />;
+      return (
+        <SidePanelDataPart
+          autoPreview={autoPreviewSurfaces}
+          display={data}
+          displayNode={panelDisplayNode}
+          name={name}
+        />
+      );
     }
 
     return <DisplayDataPart displayNode={renderedDisplay ?? builtInDisplay} name={name} />;
@@ -246,14 +277,10 @@ function SidePanelToolCall({
   const panelActive = panel.open && panel.entry?.key === panelKey;
   const subtitle = actionLabel ? `${toolTitle}: ${actionLabel}` : toolTitle;
 
-  useEffect(() => {
-    panel.showOnce({
-      key: panelKey,
-      title,
-      subtitle,
-      node: displayNode
-    });
-  }, [displayNode, panel, panelKey, subtitle, title]);
+  // No auto-open here. A tool card renders mid-run and on every history load,
+  // and it shares its panel key with the promoted result card for the same
+  // display — auto-showing from here consumed the key before the run finished,
+  // which is why the result never opened at the end.
 
   return (
     <div
@@ -295,10 +322,12 @@ function SidePanelToolCall({
 }
 
 function SidePanelDataPart({
+  autoPreview,
   display,
   displayNode,
   name
 }: {
+  autoPreview: boolean;
   display: { kind?: unknown; mode?: unknown; displayId?: unknown; title?: unknown; data?: unknown };
   displayNode: ReactNode;
   name: string;
@@ -311,13 +340,16 @@ function SidePanelDataPart({
   const subtitle = t("structuredOutput", { name });
 
   useEffect(() => {
+    if (!autoPreview) {
+      return;
+    }
     panel.showOnce({
       key: panelKey,
       title,
       subtitle,
       node: displayNode
     });
-  }, [displayNode, panel, panelKey, subtitle, title]);
+  }, [autoPreview, displayNode, panel, panelKey, subtitle, title]);
 
   return (
     <div className="chat-tool-part my-2 max-w-3xl rounded-md border border-border/60 bg-card/40 text-xs">
@@ -397,7 +429,9 @@ function DisplayToolCall({
         </button>
         {open ? <div>{displayNode}</div> : null}
       </div>
-      <ToolArtifactList artifacts={surfacedArtifacts} className="mt-2" autoPreview />
+      {/* Tool cards never open the panel themselves; only the promoted result
+          cards do, once the run has finished. */}
+      <ToolArtifactList artifacts={surfacedArtifacts} className="mt-2" />
       <ToolDetailDisclosure
         sections={detailSections}
         defaultOpen={state === "failed"}
@@ -721,7 +755,7 @@ function CompactToolCall({
       </button>
       {surfacedArtifacts.length > 0 ? (
         <div className="border-t bg-muted/20 px-2.5 py-2">
-          <ToolArtifactList artifacts={surfacedArtifacts} autoPreview />
+          <ToolArtifactList artifacts={surfacedArtifacts} />
         </div>
       ) : null}
       {open ? (

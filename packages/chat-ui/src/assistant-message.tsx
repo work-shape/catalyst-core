@@ -10,11 +10,6 @@ import {
 } from "@assistant-ui/react";
 import { Check, Copy, FileText, ImageIcon, ListRestart, Pencil, RefreshCw, User } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import {
-  AssistantActivityStatus,
-  useAssistantActivityLabel
-} from "./assistant-activity-status";
-import { AssistantCursor } from "./assistant-cursor";
 import { AttachmentPreview } from "./attachment-preview";
 import { managedFileIdFromUrl, useAttachmentContentContext } from "./attachment-content";
 import {
@@ -32,12 +27,6 @@ import type { AssistantUiMessageMetadata } from "./assistant-ui-adapter";
 import { AssistantSourcePart } from "./assistant-source-part";
 import { useTranslation } from "./i18n";
 import { MarkdownText } from "./markdown-text";
-import {
-  activeAssistantCursorPlacement,
-  findLastVisibleAssistantPartIndex,
-  shouldShowToolGroupActivity,
-  toolGroupActivityLabel
-} from "./thread-activity";
 import { DataPart, ToolCallPart } from "./tool-call";
 import { ToolGroupContent, ToolGroupRoot, ToolGroupTrigger } from "./assistant-tool-group";
 import { TooltipIconButton, tooltipIconButtonClassName } from "./tooltip-icon-button";
@@ -51,12 +40,10 @@ const recentlyActiveAssistantRunIds = new Set<string>();
 export function ThreadMessage({
   conversationRunning,
   activeRunId,
-  preparingToolName,
   optimisticPending: _optimisticPending
 }: {
   conversationRunning?: boolean;
   activeRunId?: string;
-  preparingToolName?: string;
   optimisticPending?: boolean;
 }) {
   const role = useAuiState((state) => state.message.role);
@@ -70,23 +57,15 @@ export function ThreadMessage({
     return <UserMessage />;
   }
 
-  return (
-    <AssistantMessage
-      activeRunId={activeRunId}
-      conversationRunning={conversationRunning}
-      preparingToolName={preparingToolName}
-    />
-  );
+  return <AssistantMessage activeRunId={activeRunId} conversationRunning={conversationRunning} />;
 }
 
 function AssistantMessage({
   activeRunId,
-  conversationRunning,
-  preparingToolName
+  conversationRunning
 }: {
   activeRunId?: string;
   conversationRunning?: boolean;
-  preparingToolName?: string;
 }) {
   const { t } = useTranslation();
   const messageId = useAuiState((state) => state.message.id);
@@ -116,16 +95,6 @@ function AssistantMessage({
   );
   const finalTextIndex = findFinalAssistantTextPartIndex(messageParts);
   const toolUIs = useAuiState((state) => state.tools.toolUIs);
-  const lastVisiblePartIndex = findLastVisibleAssistantPartIndex(messageParts);
-  const activeToolGroupPartIndex =
-    lastVisiblePartIndex !== undefined && messageParts[lastVisiblePartIndex]?.type === "tool-call"
-      ? lastVisiblePartIndex
-      : undefined;
-  const toolGroupOwnsActivity = activeRunMessage && activeToolGroupPartIndex !== undefined;
-  const activityLabel = useAssistantActivityLabel({
-    toolName: activeRunMessage ? preparingToolName : undefined,
-    variationSeed: messageId
-  });
   const completedWorkIndices = useMemo(
     () => createCompletedAssistantWorkIndices(messageParts, finalTextIndex),
     [finalTextIndex, messageParts]
@@ -147,33 +116,21 @@ function AssistantMessage({
     !activeRunProjectionMessage &&
     completedWorkStepCount > 0 &&
     finalTextIndex >= 0;
-  const [autoCollapseCompletedWorkSummary] = useState(() => {
-    if (!completedRunId || !recentlyActiveAssistantRunIds.has(completedRunId)) {
-      return false;
-    }
-    recentlyActiveAssistantRunIds.delete(completedRunId);
-    return true;
-  });
-  const autoPreviewSurfaces =
-    autoCollapseCompletedWorkSummary || activeRunCompleted;
-  const assistantPartComponents = useAssistantPartComponents(activeRunMessage, {
+  // Reading this must not consume it: auto-collapse and auto-preview both
+  // depend on it, and whichever ran first used to silently disable the other.
+  const justCompletedRun = Boolean(
+    completedRunId && recentlyActiveAssistantRunIds.has(completedRunId)
+  );
+  const [autoCollapseCompletedWorkSummary] = useState(() => justCompletedRun);
+  const autoPreviewSurfaces = justCompletedRun || activeRunCompleted;
+  const assistantPartComponents = useAssistantPartComponents({
     autoPreviewSurfaces,
     displayPresentation: "full"
   });
-  const completedWorkPartComponents = useAssistantPartComponents(activeRunMessage, {
+  const completedWorkPartComponents = useAssistantPartComponents({
     autoPreviewSurfaces: false,
     displayPresentation: "summary"
   });
-  const activityCursorPlacement = useAuiState((state) =>
-    activeAssistantCursorPlacement({
-      activeLastPart: activeRunMessage,
-      toolActivityRunning: toolGroupOwnsActivity,
-      running:
-        state.message.role === "assistant" &&
-        (state.message.status?.type === "running" || activeRunMessage),
-      parts: state.message.parts
-    })
-  );
   useEffect(() => {
     if (activeRunProjectionMessage) {
       rememberRecentlyActiveAssistantRunId(messageId);
@@ -195,22 +152,14 @@ function AssistantMessage({
         </div>
       ) : null}
       <div className="min-w-0 rounded-md px-1 py-1 text-sm leading-6">
-        {activityCursorPlacement === "before" ? (
-          <AssistantActivityStatus
-            toolName={activeRunMessage ? preparingToolName : undefined}
-            variationSeed={messageId}
-          />
-        ) : null}
         {completedWorkSummary ? (
           <>
             <AssistantWorkGroup
               count={completedWorkStepCount}
-              active={false}
               summary
               autoCollapse={autoCollapseCompletedWorkSummary}
             >
               <AssistantWorkTimeline
-                activeRunMessage={activeRunMessage}
                 items={completedWorkTimelineItems}
                 partComponents={completedWorkPartComponents}
               />
@@ -229,21 +178,12 @@ function AssistantMessage({
               renderAssistantGroupedPart({
                 part,
                 children,
-                activeRunMessage,
-                activityLabel,
                 autoPreviewSurfaces,
-                activeToolGroupPartIndex,
                 assistantPartComponents,
                 messageParts
               })}
           </MessagePrimitive.GroupedParts>
         )}
-        {activityCursorPlacement === "after" ? (
-          <AssistantActivityStatus
-            toolName={activeRunMessage ? preparingToolName : undefined}
-            variationSeed={messageId}
-          />
-        ) : null}
         <MessageError />
       </div>
       {!messageRunning ? (
@@ -260,29 +200,23 @@ function AssistantMessage({
   );
 }
 
-function useAssistantPartComponents(
-  activeRunMessage: boolean,
-  options: {
-    autoPreviewSurfaces: boolean;
-    displayPresentation: "full" | "summary";
-  }
-) {
+function useAssistantPartComponents(options: {
+  autoPreviewSurfaces: boolean;
+  displayPresentation: "full" | "summary";
+}) {
   return useMemo(
-    () => createAssistantPartComponents(activeRunMessage, options),
-    [activeRunMessage, options.autoPreviewSurfaces, options.displayPresentation]
+    () => createAssistantPartComponents(options),
+    [options.autoPreviewSurfaces, options.displayPresentation]
   );
 }
 
-function createAssistantPartComponents(
-  activeRunMessage: boolean,
-  options: {
-    autoPreviewSurfaces: boolean;
-    displayPresentation: "full" | "summary";
-  }
-): Parameters<typeof MessagePrimitive.PartByIndex>[0]["components"] {
+function createAssistantPartComponents(options: {
+  autoPreviewSurfaces: boolean;
+  displayPresentation: "full" | "summary";
+}): Parameters<typeof MessagePrimitive.PartByIndex>[0]["components"] {
   return {
-    Text: () => <AssistantTextPart active={activeRunMessage} />,
-    Reasoning: () => <AssistantReasoningPart activeRunMessage={activeRunMessage} />,
+    Text: AssistantTextPart,
+    Reasoning: AssistantReasoningPart,
     Source: AssistantSourcePart,
     Image: ImagePart,
     File: FilePart,
@@ -313,17 +247,11 @@ type AssistantGroupedRenderInfo = Parameters<
 function renderAssistantGroupedPart({
   part,
   children,
-  activeRunMessage,
-  activityLabel,
   autoPreviewSurfaces,
-  activeToolGroupPartIndex,
   assistantPartComponents,
   messageParts
 }: AssistantGroupedRenderInfo & {
-  activeRunMessage: boolean;
-  activityLabel: string;
   autoPreviewSurfaces: boolean;
-  activeToolGroupPartIndex: number | undefined;
   assistantPartComponents: Parameters<typeof MessagePrimitive.PartByIndex>[0]["components"];
   messageParts: readonly PartState[];
 }) {
@@ -331,17 +259,7 @@ function renderAssistantGroupedPart({
     case ASSISTANT_WORK_GROUP:
       const renderableIndices = createRenderableAssistantToolGroupIndices(messageParts, part.indices);
       return (
-        <AssistantWorkGroup
-          count={renderableIndices.length}
-          active={shouldShowToolGroupActivity({
-            activeRunMessage,
-            containsActivePart:
-              activeToolGroupPartIndex !== undefined &&
-              renderableIndices.includes(activeToolGroupPartIndex)
-          })}
-          activityLabel={activityLabel}
-          summary={false}
-        >
+        <AssistantWorkGroup count={renderableIndices.length} summary={false}>
           {renderableIndices.map((index) => (
             <MessagePrimitive.PartByIndex
               key={`part-${index}`}
@@ -352,7 +270,7 @@ function renderAssistantGroupedPart({
         </AssistantWorkGroup>
       );
     case "text":
-      return <AssistantTextPart active={activeRunMessage} />;
+      return <AssistantTextPart />;
     case "tool-call":
       return part.toolUI ?? <ToolCallPart {...part} displayPresentation="full" />;
     case "data":
@@ -364,7 +282,7 @@ function renderAssistantGroupedPart({
         />
       ) : part.dataRendererUI ?? <DataPart {...part} displayPresentation="full" />;
     case "reasoning":
-      return <AssistantReasoningPart activeRunMessage={activeRunMessage} />;
+      return <AssistantReasoningPart />;
     case "source":
       return <AssistantSourcePart {...part} />;
     case "image":
@@ -377,11 +295,9 @@ function renderAssistantGroupedPart({
 }
 
 function AssistantWorkTimeline({
-  activeRunMessage,
   items,
   partComponents
 }: {
-  activeRunMessage: boolean;
   items: readonly AssistantWorkTimelineItem[];
   partComponents: Parameters<typeof MessagePrimitive.PartByIndex>[0]["components"];
 }) {
@@ -396,7 +312,6 @@ function AssistantWorkTimeline({
             <AssistantWorkGroup
               key={`tool-group-${item.indices[0]}`}
               count={renderableIndices.length}
-              active={activeRunMessage && renderableIndices.some((index) => messageParts[index]?.status?.type === "running")}
               nested
               summary={false}
             >
@@ -429,16 +344,12 @@ function AssistantWorkTimeline({
 
 function AssistantWorkGroup({
   count,
-  active,
-  activityLabel,
   children,
   nested = false,
   summary,
   autoCollapse = false
 }: {
   count: number;
-  active: boolean;
-  activityLabel?: string;
   children: ReactNode;
   nested?: boolean;
   summary: boolean;
@@ -467,16 +378,17 @@ function AssistantWorkGroup({
 
   return (
     <ToolGroupRoot
-      className={cn("chat-tool-work max-w-5xl", nested ? "chat-tool-work-nested my-0" : "my-4")}
+      // Top margin only: whatever follows a group owns the spacing below it,
+      // via the adjacency rules in styles.css or its own offset.
+      className={cn("chat-tool-work max-w-5xl", nested ? "chat-tool-work-nested my-0" : "mt-4")}
       open={open}
       onOpenChange={setOpen}
       variant="ghost"
     >
       <ToolGroupTrigger
         data-testid="assistant-work-group-trigger"
-        active={active}
         count={count}
-        label={toolGroupActivityLabel({ active, activityLabel, countLabel })}
+        label={countLabel}
       />
       <ToolGroupContent
         className={cn(
@@ -530,50 +442,27 @@ function UserTextPart() {
   return <MarkdownText />;
 }
 
-function AssistantTextPart({ active }: { active?: boolean }) {
-  const showCursor = useAuiState((state) => {
-    if (
-      state.part.type !== "text" ||
-      (state.part.status.type !== "running" && !active) ||
-      state.part.text.trim().length === 0
-    ) {
-      return false;
-    }
+function AssistantTextPart() {
+  // An empty text part still carries the adjacency margins from styles.css,
+  // which reads as a large blank gap while the next tokens are pending.
+  const empty = useAuiState(
+    (state) => state.part.type === "text" && state.part.text.trim().length === 0
+  );
 
-    const lastPart = state.message.parts.at(-1);
-    return (
-      lastPart?.type === "text" &&
-      lastPart.text === state.part.text &&
-      (lastPart.status.type === "running" || active)
-    );
-  });
+  if (empty) {
+    return null;
+  }
 
   return (
-    <div className={cn("chat-assistant-text max-w-3xl", showCursor && "chat-assistant-text-running")}>
+    <div className="chat-assistant-text max-w-3xl">
       <MarkdownText />
     </div>
   );
 }
 
-function AssistantReasoningPart({ activeRunMessage }: { activeRunMessage?: boolean }) {
-  const { t } = useTranslation();
-  const active = useAuiState((state) => {
-    if (state.part.status.type === "running") {
-      return true;
-    }
-    const lastPart = state.message.parts.at(-1);
-    return activeRunMessage && lastPart === state.part;
-  });
-
-  if (!active) {
-    return null;
-  }
-
-  return (
-    <div className="chat-assistant-text my-1 flex min-h-6 max-w-3xl items-center text-sm" role="status" aria-live="polite">
-      <span className="chat-reasoning-status leading-6">{t("thinking")}</span>
-    </div>
-  );
+// Reasoning has no visible body of its own; the thread's activity row reports it.
+function AssistantReasoningPart() {
+  return null;
 }
 
 function CopiedState() {

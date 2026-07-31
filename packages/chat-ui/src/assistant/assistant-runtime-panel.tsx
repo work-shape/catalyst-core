@@ -7,15 +7,22 @@ import {
 import { useChatRuntime, type UseChatRuntimeOptions } from "@assistant-ui/react-ai-sdk";
 import type { UIMessage } from "ai";
 import type { SelectedChatModel } from "../workspace/workspace-chat-model";
+import type { LocaleCode } from "@vivd-catalyst/core";
 import {
   createMessageSnapshotKey,
   toAiSdkMessageRepository,
   toAttachmentFilePart,
-  toUiMessages
+  toUiMessages,
+  type AssistantUiActiveRun
 } from "../assistant-ui-adapter";
+import { createToolSurfacePanelEntry } from "../tool-surface-card";
+import { useToolDisplayPanel } from "../tool-display-panel";
+import { dedupeToolSurfaceRefs, readToolSurfaceRefs } from "../tool-surfaces";
 import { AssistantThread } from "../assistant-thread";
 import { AssistantToolRegistry } from "../assistant-tool-registry";
+import { useRegisterToolDisplayActions } from "../domain-ui-widgets";
 import { useTranslation } from "../i18n";
+import { useOpenSourceFilePreview } from "../source-file-preview";
 import {
   createRunIdempotencyKey,
   ProductConversationRunTransport,
@@ -94,6 +101,7 @@ function AssistantRuntimePane({
     : sendBlockedReason ?? (!messagesLoaded ? t("loadingConversation") : undefined);
   const sendDisabledReason = rootSubmitPending ? t("loadingConversation") : baseSendDisabledReason;
   const visibleNotice = rootSubmitError ?? notice;
+  useAutoOpenCompletedRunSurface(activeRun, locale);
 
   useEffect(() => {
     activeRef.current = true;
@@ -235,6 +243,35 @@ function AssistantRuntimePane({
     }
   });
 
+  const openSourceFilePreview = useOpenSourceFilePreview();
+  const canSend = !sendDisabledReason;
+  useRegisterToolDisplayActions(
+    useMemo(
+      () =>
+        selectedConversationId
+          ? {
+              // `thread.append` bypasses `isSendDisabled` and would only fail in
+              // the transport, so appending is gated here instead.
+              ...(canSend
+                ? {
+                    sendMessage(text: string) {
+                      runtime.thread.append(text);
+                    }
+                  }
+                : {}),
+              openSourceFile(input: { fileId: string; filename?: string }) {
+                void openSourceFilePreview({
+                  client,
+                  conversationId: selectedConversationId,
+                  ...input
+                });
+              }
+            }
+          : undefined,
+      [canSend, client, openSourceFilePreview, runtime, selectedConversationId]
+    )
+  );
+
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <RuntimeMessagesBridge
@@ -272,6 +309,66 @@ function AssistantRuntimePane({
       </AssistantToolRegistry>
     </AssistantRuntimeProvider>
   );
+}
+
+/**
+ * Opens the side panel once, when a run the user was watching finishes.
+ *
+ * Deliberately independent of message reconciliation: it does not depend on
+ * which message projection is mounted, on card render order, or on the
+ * auto-show tracker — all of which were silently swallowing the open.
+ */
+function useAutoOpenCompletedRunSurface(
+  activeRun: AssistantUiActiveRun | undefined,
+  locale: LocaleCode
+): void {
+  const panel = useToolDisplayPanel();
+  const { t } = useTranslation();
+  const watchedRunIdsRef = useRef(new Set<string>());
+  const openedRunIdsRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (!activeRun) {
+      return;
+    }
+    const runId = activeRun.run.id;
+    const status = activeRun.projection.status;
+
+    if (status !== "completed") {
+      // Only runs observed while still going are eligible, so loading a
+      // conversation whose last run happens to be finished stays quiet.
+      watchedRunIdsRef.current.add(runId);
+      return;
+    }
+    if (!watchedRunIdsRef.current.has(runId) || openedRunIdsRef.current.has(runId)) {
+      return;
+    }
+
+    const surface = dedupeToolSurfaceRefs(
+      activeRun.projection.parts.flatMap((part) =>
+        part.type === "tool_call"
+          ? readToolSurfaceRefs(part.output, {
+              toolCallId: part.toolCallId,
+              toolName: part.toolName
+            })
+          : []
+      )
+    ).at(-1);
+    if (!surface) {
+      return;
+    }
+
+    const entry = createToolSurfacePanelEntry({
+      fallbackTitle: t("displayPanelFallbackTitle"),
+      locale,
+      surface
+    });
+    if (!entry) {
+      return;
+    }
+    openedRunIdsRef.current.add(runId);
+    panel.show(entry);
+  }, [activeRun, locale, panel, t]);
 }
 
 function RuntimeMessagesBridge({

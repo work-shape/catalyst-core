@@ -1,6 +1,11 @@
 export interface ThreadActivityPart {
   type: string;
   text?: string;
+  toolName?: string;
+  // Thread-level parts (ThreadAssistantMessagePart) carry `result`/`isError`
+  // but no `status`; only message-level PartState has `status`.
+  result?: unknown;
+  isError?: boolean;
   status?: {
     type?: string;
   };
@@ -19,61 +24,16 @@ export interface ThreadActivityInput {
   conversationRunning?: boolean;
   optimisticPending?: boolean;
   threadRunning?: boolean;
-  lastMessage?: ThreadActivityMessage;
 }
 
-export type PendingAssistantPresentation = "hidden" | "block-cursor" | "inline-cursor";
-export type ActiveAssistantCursorPlacement = "hidden" | "before" | "after";
-
-export function shouldShowToolGroupActivity(input: {
-  activeRunMessage: boolean;
-  containsActivePart: boolean;
-}): boolean {
-  return Boolean(input.activeRunMessage && input.containsActivePart);
-}
-
-export function toolGroupActivityLabel(input: {
-  active: boolean;
-  activityLabel?: string;
-  countLabel: string;
-}): string {
-  return input.active && input.activityLabel
-    ? `${input.countLabel} · ${input.activityLabel}`
-    : input.countLabel;
-}
-
-export function findLastVisibleAssistantPartIndex(
-  parts: readonly ThreadActivityPart[]
-): number | undefined {
-  for (let index = parts.length - 1; index >= 0; index -= 1) {
-    const part = parts[index];
-    if (part && partHasVisibleAssistantContent(part)) {
-      return index;
-    }
-  }
-  return undefined;
-}
-
-export function activeAssistantCursorPlacement(input: {
-  activeLastPart?: boolean;
-  toolActivityRunning?: boolean;
-  running: boolean;
-  parts: readonly ThreadActivityPart[];
-}): ActiveAssistantCursorPlacement {
-  if (!input.running || input.toolActivityRunning) {
-    return "hidden";
-  }
-  if (input.activeLastPart) {
-    if (lastPartShowsActiveRunActivity(input.parts)) {
-      return "hidden";
-    }
-    return input.parts.some(partHasVisibleAssistantContent) ? "after" : "before";
-  }
-  if (input.parts.some(partShowsOwnActivity)) {
-    return "hidden";
-  }
-  return input.parts.some(partHasVisibleAssistantContent) ? "after" : "before";
-}
+/**
+ * What the run is doing right now, derived from the assistant parts.
+ *
+ * This only picks the wording of the single activity row. It never decides
+ * whether the row exists — that is `shouldShowRunActivity` alone — so a
+ * changing part tree can no longer move the indicator around the page.
+ */
+export type RunActivity = { kind: "tool"; toolName: string } | { kind: "reasoning" };
 
 export function isThreadBusy({
   conversationRunning,
@@ -83,28 +43,30 @@ export function isThreadBusy({
   return Boolean(conversationRunning || optimisticPending || threadRunning);
 }
 
-export function shouldShowPendingAssistantMessage(input: ThreadActivityInput): boolean {
-  return pendingAssistantPresentation(input) === "block-cursor";
+export function shouldShowRunActivity(input: ThreadActivityInput): boolean {
+  return isThreadBusy(input);
 }
 
-export function pendingAssistantPresentation(input: ThreadActivityInput): PendingAssistantPresentation {
-  if (!isThreadBusy(input)) {
-    return "hidden";
+export function findRunActivity(
+  parts: readonly ThreadActivityPart[] | undefined
+): RunActivity | undefined {
+  const visibleParts = parts ?? [];
+
+  for (let index = visibleParts.length - 1; index >= 0; index -= 1) {
+    const part = visibleParts[index];
+    if (part?.type === "tool-call" && part.toolName && isUnfinishedToolCall(part)) {
+      return { kind: "tool", toolName: part.toolName };
+    }
   }
 
-  if (input.threadRunning) {
-    return "hidden";
+  const lastPart = lastMeaningfulPart(visibleParts);
+  // Nothing is provably unfinished, but a trailing tool call still describes
+  // what the run is on. Worst case this is one phrase stale — it cannot
+  // affect whether the row renders.
+  if (lastPart?.type === "tool-call" && lastPart.toolName) {
+    return { kind: "tool", toolName: lastPart.toolName };
   }
-
-  if (lastAssistantPartShowsOwnActivity(input.lastMessage)) {
-    return "hidden";
-  }
-
-  if (input.lastMessage?.role === "assistant" && assistantMessageHasVisibleContent(input.lastMessage)) {
-    return "hidden";
-  }
-
-  return "block-cursor";
+  return lastPart?.type === "reasoning" ? { kind: "reasoning" } : undefined;
 }
 
 export function isComposerBlockedByActiveRun({
@@ -117,53 +79,26 @@ export function shouldShowCancelAction({
   conversationRunning,
   optimisticPending,
   threadRunning
-}: Pick<ThreadActivityInput, "conversationRunning" | "optimisticPending" | "threadRunning">): boolean {
+}: ThreadActivityInput): boolean {
   return Boolean(conversationRunning || (optimisticPending && threadRunning));
 }
 
-function lastAssistantPartShowsOwnActivity(message: ThreadActivityMessage | undefined): boolean {
-  if (message?.role !== "assistant") {
-    return false;
+function isUnfinishedToolCall(part: ThreadActivityPart): boolean {
+  const status = part.status?.type;
+  if (status) {
+    return status === "running" || status === "requires-action";
   }
-  if (message.status?.type === "running") {
-    return true;
-  }
-
-  const lastPart = message.parts?.at(-1);
-  if (lastPart?.type === "indicator") {
-    return true;
-  }
-  if (lastPart?.type === "reasoning" && lastPart.status?.type === "running") {
-    return true;
-  }
-  return Boolean(lastPart?.type === "text" && lastPart.status?.type === "running" && lastPart.text?.trim().length);
+  return part.result === undefined && part.isError !== true;
 }
 
-function assistantMessageHasVisibleContent(message: ThreadActivityMessage): boolean {
-  return (message.parts ?? []).some(partHasVisibleAssistantContent);
-}
-
-function partShowsOwnActivity(part: ThreadActivityPart): boolean {
-  if (part.type === "reasoning" && part.status?.type === "running") {
-    return true;
+function lastMeaningfulPart(
+  parts: readonly ThreadActivityPart[]
+): ThreadActivityPart | undefined {
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const part = parts[index];
+    if (part && part.type !== "indicator" && part.type !== "step-start") {
+      return part;
+    }
   }
-  if (part.type === "text") {
-    return part.status?.type === "running" && Boolean(part.text?.trim().length);
-  }
-  return part.status?.type === "running";
-}
-
-function lastPartShowsActiveRunActivity(parts: readonly ThreadActivityPart[]): boolean {
-  const lastPart = parts.at(-1);
-  if (lastPart?.type === "reasoning") {
-    return true;
-  }
-  return Boolean(lastPart?.type === "text" && lastPart.text?.trim().length);
-}
-
-export function partHasVisibleAssistantContent(part: ThreadActivityPart): boolean {
-  if (part.type === "text" || part.type === "reasoning") {
-    return Boolean(part.text?.trim().length);
-  }
-  return part.type !== "indicator" && part.type !== "step-start";
+  return undefined;
 }

@@ -193,19 +193,6 @@
     animation: chat-cursor-pulse 1.2s ease-in-out infinite;
   }
 
-  .chat-reasoning-status {
-    color: transparent;
-    background: linear-gradient(
-      100deg,
-      color-mix(in srgb, var(--muted-foreground) 70%, transparent),
-      color-mix(in srgb, var(--foreground) 72%, transparent),
-      color-mix(in srgb, var(--muted-foreground) 70%, transparent)
-    );
-    background-size: 220% 100%;
-    background-clip: text;
-    animation: chat-shimmer 1.9s ease-in-out infinite;
-  }
-
   .chat-tool-work .chat-tool-part {
     margin-top: 0;
     margin-bottom: 0;
@@ -300,20 +287,6 @@
   .chat-source-chip-group .chat-source-chip {
     margin: 0 !important;
   }
-
-  .chat-assistant-text-running .chat-markdown > :last-child::after {
-    content: "";
-    display: inline-block;
-    width: 0.55em;
-    height: 0.55em;
-    margin-left: 0.35em;
-    border-radius: 9999px;
-    background: currentColor;
-    vertical-align: middle;
-    transform-origin: center;
-    animation: chat-cursor-pulse 1.2s ease-in-out infinite;
-  }
-
 }
 
 .chat-user-message-bubble .chat-markdown [data-streamdown="link"] {
@@ -386,17 +359,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .chat-assistant-cursor-dot,
-  .chat-assistant-text-running .chat-markdown > :last-child::after,
   .aui-tool-group-content[data-state="open"],
   .aui-tool-group-content[data-state="closed"] {
     opacity: 1;
     transform: none;
-    animation: none;
-  }
-
-  .chat-reasoning-status {
-    color: var(--muted-foreground);
-    background: none;
     animation: none;
   }
 }

@@ -3,7 +3,6 @@ import { ChevronDown } from "lucide-react";
 import { useCallback, useState, type ComponentProps, type ReactNode } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "./ui/cn";
-import { Spinner } from "./ui/spinner";
 
 const toolGroupVariants = cva("aui-tool-group-root group/tool-group-root w-full", {
   variants: {
@@ -64,15 +63,15 @@ export function ToolGroupRoot({
   );
 }
 
+// Tool groups are a record of what happened, never a progress indicator.
+// Live progress belongs to the thread's single activity row.
 export function ToolGroupTrigger({
-  active = false,
   children,
   className,
   count,
   label,
   ...props
 }: ComponentProps<typeof CollapsiblePrimitive.Trigger> & {
-  active?: boolean;
   count: number;
   label?: ReactNode;
 }) {
@@ -89,7 +88,6 @@ export function ToolGroupTrigger({
       )}
       {...props}
     >
-      {active ? <Spinner data-slot="tool-group-trigger-loader" size="md" /> : null}
       <span
         data-slot="tool-group-trigger-label"
         className={cn(
@@ -100,15 +98,6 @@ export function ToolGroupTrigger({
         )}
       >
         <span>{resolvedLabel}</span>
-        {active ? (
-          <span
-            aria-hidden="true"
-            data-slot="tool-group-trigger-shimmer"
-            className="aui-tool-group-trigger-shimmer shimmer pointer-events-none absolute inset-0 motion-reduce:animate-none"
-          >
-            {resolvedLabel}
-          </span>
-        ) : null}
       </span>
       {children}
       <ChevronDown

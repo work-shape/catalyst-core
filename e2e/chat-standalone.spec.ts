@@ -384,7 +384,7 @@ test("root submit stays draft-only while create-run is pending", async ({ page }
   await expect(input).toHaveValue(messageText);
   await expect(page.getByRole("button", { name: "Send message" })).toBeDisabled();
   await expect(chatRegion.locator('[data-role="user"]').filter({ hasText: messageText })).toHaveCount(0);
-  await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
+  await expect(page.getByTestId("run-activity")).toHaveCount(0);
   await expect(page.getByTestId("assistant-cursor")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Stop generating" })).toHaveCount(0);
   expect(legacyChatRequests).toBe(0);
@@ -510,7 +510,7 @@ test("conversation switching isolates pending stream state", { tag: "@chat-state
 
     await targetConversation.getByRole("button").first().click();
     await expect(chatRegion.getByText(messageText)).toHaveCount(0);
-    await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
+    await expect(page.getByTestId("run-activity")).toHaveCount(0);
     await expect(page.getByTestId("assistant-cursor")).toHaveCount(0);
     await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
 
@@ -571,7 +571,7 @@ test("switching back to a running conversation resumes one stream indicator", { 
     timeout: 15_000
   });
   expect(await sampleMaxCursorCount(page, 1_000)).toBeLessThanOrEqual(1);
-  await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
+  await expect(page.getByTestId("run-activity")).toHaveCount(0);
   await stopActiveRun(page);
 });
 
@@ -614,7 +614,7 @@ test("direct conversation links resume a running stream from stored state", { ta
   await expect(chatRegion.locator('[data-role="assistant"]').filter({ hasText: uniqueToken }).first()).toBeVisible({
     timeout: 15_000
   });
-  await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
+  await expect(page.getByTestId("run-activity")).toHaveCount(0);
   await stopActiveRun(page);
 });
 
@@ -653,7 +653,7 @@ test("new conversation run completion does not steal the selected conversation",
   await targetConversation.getByRole("button").first().click();
   await expect(targetConversation).toHaveAttribute("data-selected", "true");
   await expect(chatRegion.getByText(messageToken, { exact: false })).toHaveCount(0);
-  await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
+  await expect(page.getByTestId("run-activity")).toHaveCount(0);
   await page.waitForTimeout(1_000);
   await expect(targetConversation).toHaveAttribute("data-selected", "true");
 });
@@ -709,7 +709,7 @@ test("completed background turns are marked unread until viewed", { tag: "@chat-
   await page.waitForTimeout(500);
   expect(eventRequests).toHaveLength(eventRequestCountBeforeView);
   await expect(sourceConversation.getByTestId("conversation-unread-indicator")).toHaveCount(0);
-  await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
+  await expect(page.getByTestId("run-activity")).toHaveCount(0);
   await expect(page.getByTestId("assistant-cursor")).toHaveCount(0);
   const workGroupTrigger = chatRegion.getByTestId("assistant-work-group-trigger").last();
   await expect(workGroupTrigger).toBeVisible();
@@ -1230,7 +1230,7 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
   await expect(toolCallCard).toContainText(forecastLocation);
   await expect(toolCallCard).toContainText("3-day forecast");
   await expect(page.getByText("Tool work completed").last()).toBeVisible();
-  await expect(page.getByTestId("pending-assistant-message")).toHaveCount(0);
+  await expect(page.getByTestId("run-activity")).toHaveCount(0);
   await expect.poll(() => historyResponses).toBeGreaterThan(0);
   await expect(toolCallCard).toBeVisible();
   await expect(toolCallCard).toContainText("Completed");

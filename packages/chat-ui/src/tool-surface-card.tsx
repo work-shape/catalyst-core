@@ -1,8 +1,9 @@
 import { Database, LayoutDashboard, PanelRightOpen } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
-import { STRUCTURED_DATA_RESOURCE_DISPLAY_KIND } from "@vivd-catalyst/core";
+import { STRUCTURED_DATA_RESOURCE_DISPLAY_KIND, type LocaleCode } from "@vivd-catalyst/core";
 import {
   isToolDisplayPayload,
+  ToolDisplayWidgetNode,
   useToolDisplayWidget
 } from "./domain-ui-widgets";
 import { useTranslation } from "./i18n";
@@ -67,11 +68,21 @@ function ToolSurfaceCard({
   const builtInDisplay =
     isToolDisplayPayload(display) && !hasRenderedNode(renderedDisplay) ? renderBuiltInDisplay(display) : undefined;
   const displayNode = renderedDisplay ?? builtInDisplay;
+  const panelDisplayNode = isToolDisplayPayload(display) ? (
+    <ToolDisplayWidgetNode
+      display={display}
+      fallback={builtInDisplay}
+      locale={locale}
+      source="message-metadata"
+      toolCallId={surface.toolCallId}
+      toolName={surface.toolName}
+    />
+  ) : builtInDisplay;
   const title = surface.title ?? displayPanelTitle(display, surface.toolName ?? t("displayPanelFallbackTitle"));
   const panelEntry = displayNode
     ? surfacePanelEntry({
         display,
-        displayNode,
+        displayNode: panelDisplayNode,
         surface,
         title
       })
@@ -140,6 +151,42 @@ function ToolSurfaceCard({
       </button>
     </div>
   );
+}
+
+/**
+ * Builds the panel entry for a surface without rendering a card.
+ *
+ * Lets a run-completion effect open the panel directly, instead of depending on
+ * a card mounting, its render order, and the auto-show tracker.
+ */
+export function createToolSurfacePanelEntry({
+  fallbackTitle,
+  locale,
+  surface
+}: {
+  fallbackTitle: string;
+  locale: LocaleCode;
+  surface: ToolSurfaceRef;
+}): ToolDisplayPanelEntry | undefined {
+  const display = surface.display;
+  if (!isToolDisplayPayload(display) || readDisplayMode(display) === "inline") {
+    return undefined;
+  }
+  return surfacePanelEntry({
+    display,
+    displayNode: (
+      <ToolDisplayWidgetNode
+        display={display}
+        fallback={renderBuiltInDisplay(display)}
+        locale={locale}
+        source="message-metadata"
+        toolCallId={surface.toolCallId}
+        toolName={surface.toolName}
+      />
+    ),
+    surface,
+    title: surface.title ?? displayPanelTitle(display, surface.toolName ?? fallbackTitle)
+  });
 }
 
 function surfacePanelEntry({

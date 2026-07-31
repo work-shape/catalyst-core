@@ -13,6 +13,7 @@ import {
   type ChatMessage,
   type Clock,
   type ConversationHistoryStore,
+  type LocaleCode,
   type ModelBindingConfig,
   type ModelProviderConfig,
   type ReasoningEffortConfig,
@@ -365,7 +366,7 @@ export class LocalAgentRuntime implements AgentRuntime {
         if (isCancellationRequested(state.getStatus())) {
           return;
         }
-        const assistantText = completion.text || "I completed the request.";
+        const assistantText = completion.text || completedWithoutTextFallback(context.locale);
         const persisted = await this.options.conversationHistory.appendMessage({
           clientInstanceId: context.clientInstanceId,
           conversationId: input.conversationId,
@@ -849,4 +850,13 @@ function getSnapshotSkillMetadataForAgent(assets: RuntimeAssetSnapshot, agent: A
       title,
       description
     }));
+}
+
+/**
+ * Used when the model finishes a run without producing any closing text.
+ * Follows the run's locale so it does not break out of the conversation
+ * language the way a hardcoded English sentence did.
+ */
+function completedWithoutTextFallback(locale: LocaleCode | undefined): string {
+  return locale === "de" ? "Ich habe die Anfrage abgeschlossen." : "I completed the request.";
 }
