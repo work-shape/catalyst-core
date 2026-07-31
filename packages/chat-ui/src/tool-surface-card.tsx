@@ -123,9 +123,6 @@ function ToolSurfaceCard({
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate font-medium">{title}</span>
-        <span className="block truncate text-xs text-muted-foreground">
-          {surface.toolName ?? t("displayPanelFallbackTitle")}
-        </span>
       </span>
       <button
         type="button"
@@ -159,7 +156,6 @@ function surfacePanelEntry({
   return {
     key: displayPanelKey(display, surface.surfaceId),
     title,
-    ...(surface.toolName ? { subtitle: surface.toolName } : {}),
     node: displayNode
   };
 }

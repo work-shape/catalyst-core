@@ -518,7 +518,7 @@ describe("chat UI message history projection", () => {
 
     expect(markup).toContain('role="button"');
     expect(markup).toContain("Customer data");
-    expect(markup).toContain("structured_data.publish");
+    expect(markup).not.toContain("structured_data.publish");
   });
 
   it("projects persisted assistant web sources as assistant-ui source parts", () => {
