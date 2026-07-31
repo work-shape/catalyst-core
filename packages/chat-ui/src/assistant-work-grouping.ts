@@ -60,7 +60,7 @@ export function createAssistantWorkTimelineItems(
     if (part.type === "reasoning") {
       continue;
     }
-    if (isToolWorkPart(part, context)) {
+    if (isAssistantToolWorkPart(part, context)) {
       flushSourceGroup();
       currentToolGroup.push(index);
       continue;
@@ -147,7 +147,13 @@ export function findFinalAssistantTextPartIndex(
   return -1;
 }
 
-function isToolWorkPart(part: PartState, context: GroupByContext): boolean {
+export function isAssistantToolWorkPart(
+  part: PartState | undefined,
+  context: GroupByContext = {}
+): boolean {
+  if (!part) {
+    return false;
+  }
   if (part.type === "tool-call") {
     return !isStandaloneToolCall(part, context);
   }

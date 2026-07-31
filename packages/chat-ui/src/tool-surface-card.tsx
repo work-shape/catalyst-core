@@ -31,10 +31,10 @@ export function ToolSurfaceList({
 
   return (
     <div className={cn("grid gap-2", className)}>
-      {surfaces.map((surface) => (
+      {surfaces.map((surface, index) => (
         <ToolSurfaceCard
           key={surface.surfaceId}
-          autoPreview={autoPreview}
+          autoPreview={autoPreview && index === surfaces.length - 1}
           surface={surface}
         />
       ))}

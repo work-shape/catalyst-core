@@ -18,21 +18,26 @@ describe("chat UI thread activity", () => {
   it("shows activity on the current group while one of its tools is unfinished", () => {
     expect(
       shouldShowToolGroupActivity({
-        activeToolRunning: true,
         activeRunMessage: true,
-        groupRunning: true,
         containsLastPart: true
       })
     ).toBe(true);
   });
 
-  it("does not keep a completed tool group spinning with the surrounding message", () => {
+  it("keeps the current tool group active between consecutive tool calls", () => {
     expect(
       shouldShowToolGroupActivity({
-        activeToolRunning: false,
         activeRunMessage: true,
-        groupRunning: true,
         containsLastPart: true
+      })
+    ).toBe(true);
+  });
+
+  it("stops the tool-group activity when the run moves on", () => {
+    expect(
+      shouldShowToolGroupActivity({
+        activeRunMessage: true,
+        containsLastPart: false
       })
     ).toBe(false);
   });
@@ -40,9 +45,7 @@ describe("chat UI thread activity", () => {
   it("does not animate a historical tool group for the current run", () => {
     expect(
       shouldShowToolGroupActivity({
-        activeToolRunning: true,
         activeRunMessage: false,
-        groupRunning: true,
         containsLastPart: true
       })
     ).toBe(false);
@@ -84,6 +87,22 @@ describe("chat UI thread activity", () => {
 
     expect(markup).toContain("Ich arbeite daran…");
     expect(markup).not.toContain("Wird vorbereitet…");
+  });
+
+  it("keeps a varied fallback phrase stable for the run", () => {
+    const render = () =>
+      renderToStaticMarkup(
+        createElement(
+          TranslationProvider,
+          { locale: "de" },
+          createElement(AssistantActivityStatus, { variationSeed: "run_42" })
+        )
+      );
+
+    expect(render()).toBe(render());
+    expect(render()).toMatch(
+      /Ich arbeite daran|Ich denke es durch|Ich setze alles zusammen|Ich prüfe die nächsten Schritte|Ich komme voran/u
+    );
   });
 
   it("keeps progress visible after a completed tool surface while the run continues", () => {

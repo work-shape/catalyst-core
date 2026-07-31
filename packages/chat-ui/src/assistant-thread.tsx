@@ -22,7 +22,6 @@ export function AssistantThread({
   attachmentAccept,
   conversationRunning,
   activeRunId,
-  activeToolRunning,
   preparingToolName,
   optimisticPending,
   messagesEnabled,
@@ -52,7 +51,6 @@ export function AssistantThread({
   attachmentAccept: string;
   conversationRunning?: boolean;
   activeRunId?: string;
-  activeToolRunning?: boolean;
   preparingToolName?: string;
   optimisticPending?: boolean;
   messagesEnabled: boolean;
@@ -112,7 +110,6 @@ export function AssistantThread({
                     <ThreadMessage
                       conversationRunning={conversationRunning}
                       activeRunId={activeRunId}
-                      activeToolRunning={activeToolRunning}
                       preparingToolName={preparingToolName}
                       optimisticPending={optimisticPending}
                     />
@@ -255,7 +252,7 @@ function PendingAssistantMessage({
       data-testid="pending-assistant-message"
     >
       <div className="min-w-0 rounded-md px-1 py-1 text-sm leading-6">
-        <AssistantActivityStatus />
+        <AssistantActivityStatus variationSeed={activeRunId} />
       </div>
     </div>
   );

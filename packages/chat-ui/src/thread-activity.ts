@@ -26,16 +26,10 @@ export type PendingAssistantPresentation = "hidden" | "block-cursor" | "inline-c
 export type ActiveAssistantCursorPlacement = "hidden" | "before" | "after";
 
 export function shouldShowToolGroupActivity(input: {
-  activeToolRunning: boolean;
   activeRunMessage: boolean;
-  groupRunning: boolean;
   containsLastPart: boolean;
 }): boolean {
-  return Boolean(
-    input.activeRunMessage &&
-      input.activeToolRunning &&
-      (input.groupRunning || input.containsLastPart)
-  );
+  return Boolean(input.activeRunMessage && input.containsLastPart);
 }
 
 export function activeAssistantCursorPlacement(input: {

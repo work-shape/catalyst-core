@@ -2,10 +2,25 @@ import { useTranslation } from "./i18n";
 import { useToolActivityLabel } from "./tool-activity";
 import { Spinner } from "./ui/spinner";
 
-export function AssistantActivityStatus({ toolName }: { toolName?: string }) {
+const fallbackActivityKeys = [
+  "preparing",
+  "preparingAlt1",
+  "preparingAlt2",
+  "preparingAlt3",
+  "preparingAlt4"
+] as const;
+
+export function AssistantActivityStatus({
+  toolName,
+  variationSeed
+}: {
+  toolName?: string;
+  variationSeed?: string;
+}) {
   const { locale, t } = useTranslation();
   const configuredLabel = useToolActivityLabel(toolName, locale);
   const label = configuredLabel ?? (toolName ? readableToolName(toolName) : undefined);
+  const fallbackKey = fallbackActivityKeys[stableVariantIndex(variationSeed)] ?? "preparing";
 
   return (
     <div
@@ -14,9 +29,20 @@ export function AssistantActivityStatus({ toolName }: { toolName?: string }) {
       aria-live="polite"
     >
       <Spinner size="sm" />
-      <span>{label ? t("preparingTool", { tool: label }) : t("preparing")}</span>
+      <span>{label ? t("preparingTool", { tool: label }) : t(fallbackKey)}</span>
     </div>
   );
+}
+
+function stableVariantIndex(seed: string | undefined): number {
+  if (!seed) {
+    return 0;
+  }
+  let hash = 0;
+  for (const character of seed) {
+    hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  }
+  return hash % fallbackActivityKeys.length;
 }
 
 function readableToolName(toolName: string): string {

@@ -23,6 +23,7 @@ import {
   createAssistantWorkTimelineItems,
   createVisibleFinalAssistantPartIndices,
   findFinalAssistantTextPartIndex,
+  isAssistantToolWorkPart,
   type AssistantWorkTimelineItem
 } from "./assistant-work-grouping";
 import type { AssistantUiMessageMetadata } from "./assistant-ui-adapter";
@@ -38,21 +39,19 @@ import { ToolGroupContent, ToolGroupRoot, ToolGroupTrigger } from "./assistant-t
 import { TooltipIconButton, tooltipIconButtonClassName } from "./tooltip-icon-button";
 import { Button } from "./ui/button";
 import { cn } from "./ui/cn";
+import { isWorkspacePromotedSurfacesData } from "./tool-surfaces";
 
 const chronologicalAssistantMessageGroupBy = createAssistantMessageGroupBy();
 const recentlyActiveAssistantRunIds = new Set<string>();
-const toolActivityExitDelayMs = 160;
 
 export function ThreadMessage({
   conversationRunning,
   activeRunId,
-  activeToolRunning,
   preparingToolName,
   optimisticPending: _optimisticPending
 }: {
   conversationRunning?: boolean;
   activeRunId?: string;
-  activeToolRunning?: boolean;
   preparingToolName?: string;
   optimisticPending?: boolean;
 }) {
@@ -70,7 +69,6 @@ export function ThreadMessage({
   return (
     <AssistantMessage
       activeRunId={activeRunId}
-      activeToolRunning={activeToolRunning}
       conversationRunning={conversationRunning}
       preparingToolName={preparingToolName}
     />
@@ -79,12 +77,10 @@ export function ThreadMessage({
 
 function AssistantMessage({
   activeRunId,
-  activeToolRunning,
   conversationRunning,
   preparingToolName
 }: {
   activeRunId?: string;
-  activeToolRunning?: boolean;
   conversationRunning?: boolean;
   preparingToolName?: string;
 }) {
@@ -108,10 +104,6 @@ function AssistantMessage({
   const lastPartIndex = useAuiState((state) => state.message.parts.length - 1);
   const matchesActiveRun = Boolean(activeRunId && messageId === activeRunId);
   const activeRunMessage = Boolean(conversationRunning && matchesActiveRun);
-  const stableToolActivityRunning = useStableToolActivity(
-    activeRunMessage,
-    Boolean(activeToolRunning)
-  );
   const messageRunning = useAuiState(
     (state) =>
       state.message.role === "assistant" &&
@@ -119,6 +111,9 @@ function AssistantMessage({
   );
   const finalTextIndex = findFinalAssistantTextPartIndex(messageParts);
   const toolUIs = useAuiState((state) => state.tools.toolUIs);
+  const toolGroupOwnsActivity = Boolean(
+    activeRunMessage && isAssistantToolWorkPart(messageParts[lastPartIndex], { toolUIs })
+  );
   const completedWorkIndices = useMemo(
     () => createCompletedAssistantWorkIndices(messageParts, finalTextIndex),
     [finalTextIndex, messageParts]
@@ -160,7 +155,7 @@ function AssistantMessage({
   const activityCursorPlacement = useAuiState((state) =>
     activeAssistantCursorPlacement({
       activeLastPart: activeRunMessage,
-      toolActivityRunning: stableToolActivityRunning,
+      toolActivityRunning: toolGroupOwnsActivity,
       running:
         state.message.role === "assistant" &&
         (state.message.status?.type === "running" || activeRunMessage),
@@ -189,7 +184,10 @@ function AssistantMessage({
       ) : null}
       <div className="min-w-0 rounded-md px-1 py-1 text-sm leading-6">
         {activityCursorPlacement === "before" ? (
-          <AssistantActivityStatus toolName={activeRunMessage ? preparingToolName : undefined} />
+          <AssistantActivityStatus
+            toolName={activeRunMessage ? preparingToolName : undefined}
+            variationSeed={messageId}
+          />
         ) : null}
         {completedWorkSummary ? (
           <>
@@ -220,7 +218,6 @@ function AssistantMessage({
                 part,
                 children,
                 activeRunMessage,
-                activeToolRunning: stableToolActivityRunning,
                 autoPreviewSurfaces,
                 assistantPartComponents,
                 lastPartIndex,
@@ -229,7 +226,10 @@ function AssistantMessage({
           </MessagePrimitive.GroupedParts>
         )}
         {activityCursorPlacement === "after" ? (
-          <AssistantActivityStatus toolName={activeRunMessage ? preparingToolName : undefined} />
+          <AssistantActivityStatus
+            toolName={activeRunMessage ? preparingToolName : undefined}
+            variationSeed={messageId}
+          />
         ) : null}
         <MessageError />
       </div>
@@ -258,25 +258,6 @@ function useAssistantPartComponents(
     () => createAssistantPartComponents(activeRunMessage, options),
     [activeRunMessage, options.autoPreviewSurfaces, options.displayPresentation]
   );
-}
-
-function useStableToolActivity(activeRunMessage: boolean, activeToolRunning: boolean): boolean {
-  const [visible, setVisible] = useState(activeRunMessage && activeToolRunning);
-
-  useEffect(() => {
-    if (!activeRunMessage) {
-      setVisible(false);
-      return undefined;
-    }
-    if (activeToolRunning) {
-      setVisible(true);
-      return undefined;
-    }
-    const timeout = globalThis.setTimeout(() => setVisible(false), toolActivityExitDelayMs);
-    return () => globalThis.clearTimeout(timeout);
-  }, [activeRunMessage, activeToolRunning]);
-
-  return visible;
 }
 
 function createAssistantPartComponents(
@@ -320,14 +301,12 @@ function renderAssistantGroupedPart({
   part,
   children,
   activeRunMessage,
-  activeToolRunning,
   autoPreviewSurfaces,
   assistantPartComponents,
   lastPartIndex,
   messageParts
 }: AssistantGroupedRenderInfo & {
   activeRunMessage: boolean;
-  activeToolRunning: boolean;
   autoPreviewSurfaces: boolean;
   assistantPartComponents: Parameters<typeof MessagePrimitive.PartByIndex>[0]["components"];
   lastPartIndex: number;
@@ -340,9 +319,7 @@ function renderAssistantGroupedPart({
         <AssistantWorkGroup
           count={renderableIndices.length}
           active={shouldShowToolGroupActivity({
-            activeToolRunning,
             activeRunMessage,
-            groupRunning: part.status.type === "running",
             containsLastPart: renderableIndices.includes(lastPartIndex)
           })}
           summary={false}
@@ -361,13 +338,13 @@ function renderAssistantGroupedPart({
     case "tool-call":
       return part.toolUI ?? <ToolCallPart {...part} displayPresentation="full" />;
     case "data":
-      return part.dataRendererUI ?? (
+      return autoPreviewSurfaces && isWorkspacePromotedSurfacesData(part.data) ? (
         <DataPart
           {...part}
           autoPreviewSurfaces={autoPreviewSurfaces}
           displayPresentation="full"
         />
-      );
+      ) : part.dataRendererUI ?? <DataPart {...part} displayPresentation="full" />;
     case "reasoning":
       return <AssistantReasoningPart activeRunMessage={activeRunMessage} />;
     case "source":
