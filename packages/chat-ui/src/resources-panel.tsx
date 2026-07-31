@@ -25,7 +25,7 @@ import {
 } from "./api/workspace-queries";
 import {
   isToolDisplayPayload,
-  useToolDisplayWidget
+  ToolDisplayWidgetNode
 } from "./domain-ui-widgets";
 import { useTranslation } from "./i18n";
 import {
@@ -144,7 +144,6 @@ export function ResourcesPanel({
 }) {
   const { locale, t } = useTranslation();
   const displayPanel = useToolDisplayPanel();
-  const displayWidget = useToolDisplayWidget();
   const sections = groupConversationResources(resources);
 
   const showEntry = useCallback(
@@ -210,20 +209,20 @@ export function ResourcesPanel({
     }
     if (resource.resourceType === "analysis") {
       const display = resource.preview.display;
-      const customNode =
-        isToolDisplayPayload(display) && displayWidget
-          ? displayWidget({
-              display,
-              locale,
-              source: "message-metadata"
-            })
-          : undefined;
-      const node =
-        customNode ??
-        (isToolDisplayPayload(display) ? renderBuiltInDisplay(display) : undefined) ??
-        <pre className="overflow-auto whitespace-pre-wrap p-4 text-xs">
-          {JSON.stringify(display, null, 2)}
-        </pre>;
+      const fallback =
+        (isToolDisplayPayload(display) ? renderBuiltInDisplay(display) : undefined) ?? (
+          <pre className="overflow-auto whitespace-pre-wrap p-4 text-xs">
+            {JSON.stringify(display, null, 2)}
+          </pre>
+        );
+      const node = isToolDisplayPayload(display) ? (
+        <ToolDisplayWidgetNode
+          display={display}
+          fallback={fallback}
+          locale={locale}
+          source="message-metadata"
+        />
+      ) : fallback;
       showEntry({
         key: displayPanelKey(display, resource.resourceId),
         title: resource.title,

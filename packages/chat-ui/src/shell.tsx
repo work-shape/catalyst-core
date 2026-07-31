@@ -4,6 +4,7 @@ export { renderStandaloneChatApp } from "./standalone-chat-app";
 export type { ChatShellAdminPanel, ChatShellProps } from "./chat-shell";
 export type {
   StandardSchemaV1,
+  ToolDisplayActions,
   ToolDisplayRenderInput,
   ToolDisplayWidget,
   ToolDisplayWidgetRegistry

@@ -14,6 +14,7 @@ import { ChatWorkspace } from "./chat-workspace";
 import type { ConfigAssetsPanelInput } from "./config-assets-panel";
 import type { ApiAccessPanelInput } from "./api-access-panel";
 import {
+  ToolDisplayActionsProvider,
   ToolDisplayWidgetProvider,
   type ToolDisplayWidgetRegistry
 } from "./domain-ui-widgets";
@@ -80,13 +81,15 @@ export function ChatShell({ displayWidgets, route, onRouteChange, ...workspacePr
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ToolDisplayWidgetProvider widgets={displayWidgets}>
-        <ChatWorkspace
-          {...workspaceProps}
-          route={resolvedRoute}
-          onRouteChange={resolvedRouteChange}
-        />
-      </ToolDisplayWidgetProvider>
+      <ToolDisplayActionsProvider>
+        <ToolDisplayWidgetProvider widgets={displayWidgets}>
+          <ChatWorkspace
+            {...workspaceProps}
+            route={resolvedRoute}
+            onRouteChange={resolvedRouteChange}
+          />
+        </ToolDisplayWidgetProvider>
+      </ToolDisplayActionsProvider>
     </QueryClientProvider>
   );
 }

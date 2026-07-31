@@ -1,29 +1,18 @@
 import { AttachmentPrimitive, useAuiState } from "@assistant-ui/react";
-import { useQueryClient } from "@tanstack/react-query";
 import { ImageIcon, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useWorkspaceApiClient } from "./api/workspace-api-client";
-import { workspaceQueryKeys } from "./api/workspace-query-keys";
 import { managedFileIdFromUrl, useAttachmentContentContext } from "./attachment-content";
 import { useTranslation } from "./i18n";
-import {
-  createSourceFilePreviewEntry,
-  findSourceFileResource
-} from "./source-file-preview";
-import { useToolDisplayPanel } from "./tool-display-panel";
+import { useOpenSourceFilePreview } from "./source-file-preview";
 import { cn } from "./ui/cn";
 import { Spinner } from "./ui/spinner";
-
-const AUTH_SCOPE = "standalone";
 
 export function AttachmentPreview({ removable }: { removable: boolean }) {
   const attachment = useAuiState((state) => state.attachment as AttachmentSnapshot);
   const imageUrl = useAttachmentImageUrl(attachment);
   const managedFileId = managedFileIdFromAttachmentContent(attachment.content);
   const attachmentContent = useAttachmentContentContext();
-  const { apiBaseUrl } = useWorkspaceApiClient();
-  const displayPanel = useToolDisplayPanel();
-  const queryClient = useQueryClient();
+  const openSourceFilePreview = useOpenSourceFilePreview();
   const { t } = useTranslation();
   const [opening, setOpening] = useState(false);
   const mounted = useRef(true);
@@ -45,47 +34,8 @@ export function AttachmentPreview({ removable }: { removable: boolean }) {
       return;
     }
     setOpening(true);
-    displayPanel.show({
-      key: `source-file-loading:${managedFileId}`,
-      title: filename,
-      node: (
-        <div className="flex min-h-64 items-center justify-center">
-          <Spinner size="sm" />
-        </div>
-      )
-    });
     try {
-      const response = await queryClient.fetchQuery({
-        queryKey: workspaceQueryKeys.conversationResources(
-          apiBaseUrl,
-          AUTH_SCOPE,
-          conversationId
-        ),
-        queryFn: () => client.conversationResources(conversationId)
-      });
-      if (!mounted.current) {
-        return;
-      }
-      const resource = findSourceFileResource(response.resources, managedFileId);
-      if (!resource) {
-        throw new Error("Attachment preview resource was not found");
-      }
-      displayPanel.show(
-        createSourceFilePreviewEntry({ client, conversationId, resource })
-      );
-    } catch {
-      if (!mounted.current) {
-        return;
-      }
-      displayPanel.show({
-        key: `source-file-error:${managedFileId}`,
-        title: filename,
-        node: (
-          <div className="flex min-h-64 items-center justify-center text-sm text-muted-foreground">
-            {t("resourcesLoadFailed")}
-          </div>
-        )
-      });
+      await openSourceFilePreview({ client, conversationId, fileId: managedFileId, filename });
     } finally {
       if (mounted.current) {
         setOpening(false);

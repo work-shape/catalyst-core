@@ -1,7 +1,9 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { FileText } from "lucide-react";
 import {
   lazy,
   Suspense,
+  useCallback,
   useEffect,
   useState,
   type ReactNode
@@ -10,11 +12,15 @@ import type {
   ApiClient,
   ConversationResourceListItem
 } from "@vivd-catalyst/api-client";
+import { useWorkspaceApiClient } from "./api/workspace-api-client";
+import { workspaceQueryKeys } from "./api/workspace-query-keys";
 import { useTranslation } from "./i18n";
 import { ResourceDownloadButton } from "./resource-download-button";
-import type { ToolDisplayPanelEntry } from "./tool-display-panel";
+import { useToolDisplayPanel, type ToolDisplayPanelEntry } from "./tool-display-panel";
 import type { ToolArtifactDownloadRef } from "./tool-artifacts";
 import { Spinner } from "./ui/spinner";
+
+const SOURCE_FILE_AUTH_SCOPE = "standalone";
 
 const ArtifactPreview = lazy(() =>
   import("./artifact-preview").then((module) => ({ default: module.ArtifactPreview }))
@@ -33,6 +39,64 @@ export function findSourceFileResource(
     (resource): resource is SourceFileResource =>
       resource.resourceType === "source_file" &&
       resource.download.fileId === fileId
+  );
+}
+
+/**
+ * Opens a conversation source file in the display panel, resolving the file id
+ * against the conversation's resources first. Shared by the attachment chips in
+ * the thread and by tool display widgets that reference a source file.
+ */
+export function useOpenSourceFilePreview(): (input: {
+  client: ApiClient;
+  conversationId: string;
+  fileId: string;
+  filename?: string;
+}) => Promise<void> {
+  const displayPanel = useToolDisplayPanel();
+  const queryClient = useQueryClient();
+  const { apiBaseUrl } = useWorkspaceApiClient();
+  const { t } = useTranslation();
+
+  return useCallback(
+    async ({ client, conversationId, fileId, filename }) => {
+      const title = filename ?? fileId;
+      displayPanel.show({
+        key: `source-file-loading:${fileId}`,
+        title,
+        node: (
+          <div className="flex min-h-64 items-center justify-center">
+            <Spinner size="sm" />
+          </div>
+        )
+      });
+      try {
+        const response = await queryClient.fetchQuery({
+          queryKey: workspaceQueryKeys.conversationResources(
+            apiBaseUrl,
+            SOURCE_FILE_AUTH_SCOPE,
+            conversationId
+          ),
+          queryFn: () => client.conversationResources(conversationId)
+        });
+        const resource = findSourceFileResource(response.resources, fileId);
+        if (!resource) {
+          throw new Error("Source file preview resource was not found");
+        }
+        displayPanel.show(createSourceFilePreviewEntry({ client, conversationId, resource }));
+      } catch {
+        displayPanel.show({
+          key: `source-file-error:${fileId}`,
+          title,
+          node: (
+            <div className="flex min-h-64 items-center justify-center text-sm text-muted-foreground">
+              {t("resourcesLoadFailed")}
+            </div>
+          )
+        });
+      }
+    },
+    [apiBaseUrl, displayPanel, queryClient, t]
   );
 }
 
