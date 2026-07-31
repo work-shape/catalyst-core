@@ -19,6 +19,7 @@ describe("system instructions", () => {
     expect(clientIndex).toBeGreaterThan(runtimeIndex);
     expect(content).toContain(CATALYST_INTERNAL_AGENT_PROMPT);
     expect(content).toContain("Keep the user informed with concise public text before tool calls");
+    expect(content).toContain("never finish on tool calls alone");
     expect(content).toContain("import it by fileId with workspace.import_files");
     expect(content).toContain("use the exact importedFiles[].path returned by the tool");
     expect(content).toContain("never invent a shorter filename");
