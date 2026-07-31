@@ -2013,6 +2013,22 @@
                               "additionalProperties": false
                             }
                           },
+                          "preparingTool": {
+                            "type": "object",
+                            "properties": {
+                              "toolCallId": {
+                                "type": "string"
+                              },
+                              "toolName": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "toolCallId",
+                              "toolName"
+                            ],
+                            "additionalProperties": false
+                          },
                           "activeToolCalls": {
                             "type": "array",
                             "items": {
@@ -2271,6 +2287,22 @@
                                 ],
                                 "additionalProperties": false
                               }
+                            },
+                            "preparingTool": {
+                              "type": "object",
+                              "properties": {
+                                "toolCallId": {
+                                  "type": "string"
+                                },
+                                "toolName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "toolCallId",
+                                "toolName"
+                              ],
+                              "additionalProperties": false
                             },
                             "activeToolCalls": {
                               "type": "array",
@@ -4590,6 +4622,22 @@
                                   "additionalProperties": false
                                 }
                               },
+                              "preparingTool": {
+                                "type": "object",
+                                "properties": {
+                                  "toolCallId": {
+                                    "type": "string"
+                                  },
+                                  "toolName": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "toolCallId",
+                                  "toolName"
+                                ],
+                                "additionalProperties": false
+                              },
                               "activeToolCalls": {
                                 "type": "array",
                                 "items": {
@@ -4848,6 +4896,22 @@
                                     ],
                                     "additionalProperties": false
                                   }
+                                },
+                                "preparingTool": {
+                                  "type": "object",
+                                  "properties": {
+                                    "toolCallId": {
+                                      "type": "string"
+                                    },
+                                    "toolName": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "toolCallId",
+                                    "toolName"
+                                  ],
+                                  "additionalProperties": false
                                 },
                                 "activeToolCalls": {
                                   "type": "array",
@@ -6159,6 +6223,22 @@
                                   "additionalProperties": false
                                 }
                               },
+                              "preparingTool": {
+                                "type": "object",
+                                "properties": {
+                                  "toolCallId": {
+                                    "type": "string"
+                                  },
+                                  "toolName": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "toolCallId",
+                                  "toolName"
+                                ],
+                                "additionalProperties": false
+                              },
                               "activeToolCalls": {
                                 "type": "array",
                                 "items": {
@@ -6417,6 +6497,22 @@
                                     ],
                                     "additionalProperties": false
                                   }
+                                },
+                                "preparingTool": {
+                                  "type": "object",
+                                  "properties": {
+                                    "toolCallId": {
+                                      "type": "string"
+                                    },
+                                    "toolName": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "toolCallId",
+                                    "toolName"
+                                  ],
+                                  "additionalProperties": false
                                 },
                                 "activeToolCalls": {
                                   "type": "array",
@@ -6739,6 +6835,39 @@
                             "sequence",
                             "createdAt",
                             "message"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "tool_call_preparing"
+                            },
+                            "runId": {
+                              "type": "string"
+                            },
+                            "sequence": {
+                              "type": "number"
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            },
+                            "toolCallId": {
+                              "type": "string"
+                            },
+                            "toolName": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "runId",
+                            "sequence",
+                            "createdAt",
+                            "toolCallId",
+                            "toolName"
                           ],
                           "additionalProperties": false
                         },

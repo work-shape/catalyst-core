@@ -8,6 +8,48 @@ import {
 } from "../packages/chat-ui/src/conversation/conversation-controller-state";
 
 describe("chat UI conversation controller", () => {
+  it("shows the preparing tool until the real tool call starts", () => {
+    let state = createControllerStateFromSnapshot(createSnapshot({ lastSequence: 0, text: "" }));
+
+    state = applyRunObservationToControllerState(
+      state,
+      createObservation({
+        sequence: 1,
+        type: "tool_call_preparing",
+        payload: {
+          toolCallId: "call_review",
+          toolName: "submit_review"
+        }
+      })
+    ).state;
+
+    expect(state.activeRun?.projection.preparingTool).toEqual({
+      toolCallId: "call_review",
+      toolName: "submit_review"
+    });
+    expect(toUiMessages([], state.activeRun)?.[0]?.metadata).toMatchObject({
+      preparingTool: {
+        toolCallId: "call_review",
+        toolName: "submit_review"
+      }
+    });
+
+    state = applyRunObservationToControllerState(
+      state,
+      createObservation({
+        sequence: 2,
+        type: "tool_call_started",
+        payload: {
+          toolCallId: "call_review",
+          toolName: "submit_review",
+          input: { documentId: "doc_1" }
+        }
+      })
+    ).state;
+
+    expect(state.activeRun?.projection.preparingTool).toBeUndefined();
+  });
+
   it("ignores duplicate or already-applied run observations", () => {
     const state = createControllerStateFromSnapshot(createSnapshot({ lastSequence: 2, text: "Hello" }));
     const duplicate = createObservation({

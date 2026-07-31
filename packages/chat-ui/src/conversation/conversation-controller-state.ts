@@ -204,6 +204,7 @@ function applyObservationToProjection(
   const toolCalls = projection.activeToolCalls.map((entry) => ({ ...entry }));
   let text = projection.text;
   let error = projection.error;
+  let preparingTool = projection.preparingTool ? { ...projection.preparingTool } : undefined;
 
   if (event.type === "message_delta") {
     text += event.delta;
@@ -228,7 +229,16 @@ function applyObservationToProjection(
       open: true
     });
   }
+  if (event.type === "tool_call_preparing") {
+    preparingTool = {
+      toolCallId: event.toolCallId,
+      toolName: event.toolName
+    };
+  }
   if (event.type === "tool_call_started") {
+    if (preparingTool?.toolCallId === event.toolCallId) {
+      preparingTool = undefined;
+    }
     const toolCall = {
       toolCallId: event.toolCallId,
       toolName: event.toolName,
@@ -324,6 +334,7 @@ function applyObservationToProjection(
     text,
     reasoning,
     activeToolCalls: toolCalls,
+    ...(preparingTool ? { preparingTool } : { preparingTool: undefined }),
     ...(error ? { error } : {})
   };
 }

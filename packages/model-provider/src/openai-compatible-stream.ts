@@ -87,6 +87,7 @@ export async function* streamOpenAiCompatibleCompletion(
   let text = "";
   let usage = noReportedUsage();
   const toolCalls = new Map<number, Partial<OpenAiCompatibleStreamingToolCall>>();
+  const announcedToolCalls = new Set<number>();
 
   for await (const data of readServerSentEventData(body)) {
     if (data === "[DONE]") {
@@ -113,12 +114,22 @@ export async function* streamOpenAiCompatibleCompletion(
 
       for (const toolCall of delta.tool_calls ?? []) {
         const existing = toolCalls.get(toolCall.index) ?? { arguments: "" };
-        toolCalls.set(toolCall.index, {
+        const updated = {
           ...existing,
           id: toolCall.id ?? existing.id,
           name: toolCall.function?.name ?? existing.name,
           arguments: `${existing.arguments ?? ""}${toolCall.function?.arguments ?? ""}`
-        });
+        };
+        toolCalls.set(toolCall.index, updated);
+        const mappedToolName = updated.name ? toolNameMap.get(updated.name) : undefined;
+        if (updated.id && mappedToolName && !announcedToolCalls.has(toolCall.index)) {
+          announcedToolCalls.add(toolCall.index);
+          yield {
+            type: "tool_call_preparing",
+            toolCallId: updated.id,
+            toolName: mappedToolName
+          };
+        }
       }
     }
   }
@@ -161,6 +172,20 @@ export async function* streamOpenAiResponsesCompletion(
       break;
     }
     const payload = parseResponsesStreamEvent(data);
+
+    if (
+      payload.type === "response.output_item.added" &&
+      payload.item?.type === "function_call" &&
+      payload.item.call_id &&
+      payload.item.name
+    ) {
+      yield {
+        type: "tool_call_preparing",
+        toolCallId: payload.item.call_id,
+        toolName: toolNameMap.get(payload.item.name) ?? payload.item.name
+      };
+      continue;
+    }
 
     if (payload.type === "response.output_item.added" && payload.item?.type === "web_search_call") {
       yield {

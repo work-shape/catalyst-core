@@ -49,6 +49,10 @@ export interface AssistantUiMessageMetadata {
   source?: "active-run";
   completedRunId?: string;
   contextCompacted?: boolean;
+  preparingTool?: {
+    toolCallId: string;
+    toolName: string;
+  };
 }
 
 interface AiSdkMessageFormatRepository {
@@ -454,7 +458,10 @@ function toActiveRunUiMessage(activeRun: AssistantUiActiveRun): UIMessage {
     id: activeRun.run.id,
     role: "assistant",
     metadata: {
-      source: "active-run"
+      source: "active-run",
+      ...(activeRun.projection.preparingTool
+        ? { preparingTool: activeRun.projection.preparingTool }
+        : {})
     } satisfies AssistantUiMessageMetadata,
     parts
   };

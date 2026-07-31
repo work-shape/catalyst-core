@@ -1067,6 +1067,7 @@ function buildAgentRunProjection(
   let text = "";
   let lastSequence = run.lastSequence;
   let error = run.error;
+  let preparingTool: AgentRunProjection["preparingTool"];
   const reasoningById = new Map<string, { id: string; text: string; open: boolean }>();
   const toolCallsById = new Map<
     string,
@@ -1103,7 +1104,17 @@ function buildAgentRunProjection(
       reconcileCompletedProjectionText(parts, event.message.text);
     }
 
+    if (event.type === "tool_call_preparing") {
+      preparingTool = {
+        toolCallId: event.toolCallId,
+        toolName: event.toolName
+      };
+    }
+
     if (event.type === "tool_call_started") {
+      if (preparingTool?.toolCallId === event.toolCallId) {
+        preparingTool = undefined;
+      }
       const toolCall = {
         toolCallId: event.toolCallId,
         toolName: event.toolName,
@@ -1185,6 +1196,7 @@ function buildAgentRunProjection(
     parts,
     text,
     reasoning: [...reasoningById.values()],
+    ...(preparingTool ? { preparingTool } : {}),
     activeToolCalls: [...toolCallsById.values()],
     ...(error ? { error } : {})
   };

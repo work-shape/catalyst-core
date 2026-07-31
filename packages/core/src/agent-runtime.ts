@@ -120,6 +120,10 @@ export interface AgentRunProjection {
     text: string;
     open: boolean;
   }>;
+  preparingTool?: {
+    toolCallId: ToolCallId;
+    toolName: string;
+  };
   activeToolCalls: Array<{
     toolCallId: ToolCallId;
     toolName: string;
@@ -213,6 +217,14 @@ export type AgentRuntimeEvent =
         text: string;
         metadata?: JsonObject;
       };
+    }
+  | {
+      type: "tool_call_preparing";
+      runId: AgentRunId;
+      sequence: number;
+      createdAt: ISODateString;
+      toolCallId: ToolCallId;
+      toolName: string;
     }
   | {
       type: "tool_call_started";

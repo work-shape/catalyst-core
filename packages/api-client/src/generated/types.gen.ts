@@ -560,6 +560,10 @@ export type GetConversationThreadResponses = {
                     text: string;
                     open: boolean;
                 }>;
+                preparingTool?: {
+                    toolCallId: string;
+                    toolName: string;
+                };
                 activeToolCalls: Array<{
                     toolCallId: string;
                     toolName: string;
@@ -612,6 +616,10 @@ export type GetConversationThreadResponses = {
                     text: string;
                     open: boolean;
                 }>;
+                preparingTool?: {
+                    toolCallId: string;
+                    toolName: string;
+                };
                 activeToolCalls: Array<{
                     toolCallId: string;
                     toolName: string;
@@ -1181,6 +1189,10 @@ export type StartConversationRunResponses = {
                         text: string;
                         open: boolean;
                     }>;
+                    preparingTool?: {
+                        toolCallId: string;
+                        toolName: string;
+                    };
                     activeToolCalls: Array<{
                         toolCallId: string;
                         toolName: string;
@@ -1233,6 +1245,10 @@ export type StartConversationRunResponses = {
                         text: string;
                         open: boolean;
                     }>;
+                    preparingTool?: {
+                        toolCallId: string;
+                        toolName: string;
+                    };
                     activeToolCalls: Array<{
                         toolCallId: string;
                         toolName: string;
@@ -1536,6 +1552,10 @@ export type CreateConversationRunResponses = {
                         text: string;
                         open: boolean;
                     }>;
+                    preparingTool?: {
+                        toolCallId: string;
+                        toolName: string;
+                    };
                     activeToolCalls: Array<{
                         toolCallId: string;
                         toolName: string;
@@ -1588,6 +1608,10 @@ export type CreateConversationRunResponses = {
                         text: string;
                         open: boolean;
                     }>;
+                    preparingTool?: {
+                        toolCallId: string;
+                        toolName: string;
+                    };
                     activeToolCalls: Array<{
                         toolCallId: string;
                         toolName: string;
@@ -1670,6 +1694,13 @@ export type ObserveConversationRunResponses = {
                     [key: string]: unknown;
                 };
             };
+        } | {
+            type: 'tool_call_preparing';
+            runId: string;
+            sequence: number;
+            createdAt: string;
+            toolCallId: string;
+            toolName: string;
         } | {
             type: 'tool_call_started';
             runId: string;

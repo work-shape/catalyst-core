@@ -1,4 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { createElement } from "../packages/chat-ui/node_modules/react";
+import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
+import { AssistantActivityStatus } from "../packages/chat-ui/src/assistant-activity-status";
+import { TranslationProvider } from "../packages/chat-ui/src/i18n";
+import { ToolActivityLabelsProvider } from "../packages/chat-ui/src/tool-activity";
 import {
   activeAssistantCursorPlacement,
   isComposerBlockedByActiveRun,
@@ -9,6 +14,31 @@ import {
 } from "../packages/chat-ui/src/thread-activity";
 
 describe("chat UI thread activity", () => {
+  it("renders one localized spinner label for the tool being prepared", () => {
+    const markup = renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { locale: "de" },
+        createElement(
+          ToolActivityLabelsProvider,
+          {
+            labels: {
+              "structured_data.publish": {
+                de: "Kundendaten",
+                en: "customer data"
+              }
+            }
+          },
+          createElement(AssistantActivityStatus, { toolName: "structured_data.publish" })
+        )
+      )
+    );
+
+    expect(markup).toContain("Bereite Kundendaten vor…");
+    expect(markup).toContain("animate-spin");
+    expect(markup.match(/role="status"/gu)).toHaveLength(1);
+  });
+
   it("keeps progress visible after a completed tool surface while the run continues", () => {
     expect(
       activeAssistantCursorPlacement({

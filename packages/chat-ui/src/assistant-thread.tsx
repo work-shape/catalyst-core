@@ -1,8 +1,8 @@
 import { AuiIf, ThreadPrimitive, useAuiState } from "@assistant-ui/react";
 import { ArrowDown, Bot, CircleAlert, Sparkles } from "lucide-react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
+import { AssistantActivityStatus } from "./assistant-activity-status";
 import { AssistantComposer, type LocalUploadingAttachment } from "./assistant-composer";
-import { AssistantCursor } from "./assistant-cursor";
 import { ThreadMessage } from "./assistant-message";
 import { useTranslation } from "./i18n";
 import { shouldShowPendingAssistantMessage } from "./thread-activity";
@@ -249,7 +249,7 @@ function PendingAssistantMessage({
       data-testid="pending-assistant-message"
     >
       <div className="min-w-0 rounded-md px-1 py-1 text-sm leading-6">
-        <AssistantCursor className="my-1" />
+        <AssistantActivityStatus />
       </div>
     </div>
   );

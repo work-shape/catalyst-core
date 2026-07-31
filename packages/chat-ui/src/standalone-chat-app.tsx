@@ -11,6 +11,7 @@ import {
 } from "@tanstack/react-router";
 import { ChatShell, type ChatShellAdminPanel } from "./chat-shell";
 import type { ToolDisplayWidgetRegistry } from "./domain-ui-widgets";
+import { ToolActivityLabelsProvider, type ToolActivityLabels } from "./tool-activity";
 import type {
   SuperadminRouteTab,
   WorkspaceRoute,
@@ -22,6 +23,7 @@ export interface StandaloneChatAppOptions {
   defaultApiPort?: string | number;
   adminPanel?: ChatShellAdminPanel;
   displayWidgets?: ToolDisplayWidgetRegistry;
+  toolActivityLabels?: ToolActivityLabels;
   rootElement?: HTMLElement | null;
 }
 
@@ -30,6 +32,7 @@ export function renderStandaloneChatApp({
   defaultApiPort,
   adminPanel,
   displayWidgets,
+  toolActivityLabels,
   rootElement = document.getElementById("root")
 }: StandaloneChatAppOptions): void {
   if (!rootElement) {
@@ -39,7 +42,8 @@ export function renderStandaloneChatApp({
   const router = createStandaloneChatRouter({
     apiBaseUrl: resolveApiBaseUrl(apiBaseUrl, defaultApiPort),
     adminPanel,
-    displayWidgets
+    displayWidgets,
+    toolActivityLabels
   });
 
   createRoot(rootElement).render(
@@ -53,6 +57,7 @@ interface StandaloneChatRouterOptions {
   apiBaseUrl: string;
   adminPanel?: ChatShellAdminPanel;
   displayWidgets?: ToolDisplayWidgetRegistry;
+  toolActivityLabels?: ToolActivityLabels;
 }
 
 function createStandaloneChatRouter(options: StandaloneChatRouterOptions) {
@@ -128,14 +133,16 @@ function StandaloneChatRouteBridge({ options }: { options: StandaloneChatRouterO
   }
 
   return (
-    <ChatShell
-      apiBaseUrl={options.apiBaseUrl}
-      adminPanel={options.adminPanel}
-      displayWidgets={options.displayWidgets}
-      manageDocumentTitle
-      route={route}
-      onRouteChange={onRouteChange}
-    />
+    <ToolActivityLabelsProvider labels={options.toolActivityLabels}>
+      <ChatShell
+        apiBaseUrl={options.apiBaseUrl}
+        adminPanel={options.adminPanel}
+        displayWidgets={options.displayWidgets}
+        manageDocumentTitle
+        route={route}
+        onRouteChange={onRouteChange}
+      />
+    </ToolActivityLabelsProvider>
   );
 }
 

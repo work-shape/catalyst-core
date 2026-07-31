@@ -115,6 +115,11 @@ export type ModelCompletionStreamEvent =
       delta: string;
     }
   | {
+      type: "tool_call_preparing";
+      toolCallId: string;
+      toolName: string;
+    }
+  | {
       type: "provider_tool_started";
       toolCallId: string;
       toolName: string;

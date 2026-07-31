@@ -719,6 +719,15 @@ export class LocalAgentRuntime implements AgentRuntime {
         }
         continue;
       }
+      if (event.type === "tool_call_preparing") {
+        state.emit({
+          type: "tool_call_preparing",
+          runId: state.runId,
+          toolCallId: asToolCallId(event.toolCallId),
+          toolName: event.toolName
+        });
+        continue;
+      }
       if (event.type === "provider_tool_started") {
         state.emit({
           type: "tool_call_started",

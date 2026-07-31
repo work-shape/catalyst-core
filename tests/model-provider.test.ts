@@ -740,17 +740,35 @@ describe("OpenAI-compatible model provider", () => {
     });
   });
 
-  it("streams OpenAI-compatible text deltas and final usage", async () => {
-    let requestBody: { stream?: boolean; stream_options?: { include_usage?: boolean } } | undefined;
+  it("announces OpenAI-compatible tool calls before their streamed input is complete", async () => {
+    let requestBody:
+      | {
+          stream?: boolean;
+          stream_options?: { include_usage?: boolean };
+          tools?: Array<{ function?: { name?: string } }>;
+        }
+      | undefined;
     const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       requestBody = JSON.parse(String(init?.body));
+      const toolName = requestBody?.tools?.[0]?.function?.name;
       return new Response(
         createSseStream([
           {
             choices: [
               {
                 delta: {
-                  content: "Hello"
+                  content: "Hello",
+                  tool_calls: [
+                    {
+                      index: 0,
+                      id: "call_1",
+                      type: "function",
+                      function: {
+                        name: toolName,
+                        arguments: "{"
+                      }
+                    }
+                  ]
                 }
               }
             ]
@@ -759,7 +777,15 @@ describe("OpenAI-compatible model provider", () => {
             choices: [
               {
                 delta: {
-                  content: " world"
+                  content: " world",
+                  tool_calls: [
+                    {
+                      index: 0,
+                      function: {
+                        arguments: "\"ok\":true}"
+                      }
+                    }
+                  ]
                 }
               }
             ]
@@ -795,7 +821,7 @@ describe("OpenAI-compatible model provider", () => {
         providerId: "openai",
         model: "gpt-test",
         messages: [{ role: "user", content: "hello" }],
-        tools: []
+        tools: [{ name: "save_data", description: "Save data" }]
       },
       {
         clientInstanceId,
@@ -823,6 +849,13 @@ describe("OpenAI-compatible model provider", () => {
     expect(events.filter((event) => event.type === "text_delta").map((event) => event.delta)).toEqual([
       "Hello",
       " world"
+    ]);
+    expect(events.filter((event) => event.type === "tool_call_preparing")).toEqual([
+      {
+        type: "tool_call_preparing",
+        toolCallId: "call_1",
+        toolName: "save_data"
+      }
     ]);
     const completed = events.find((event) => event.type === "completed");
     expect(completed?.completion).toMatchObject({
@@ -876,6 +909,14 @@ describe("OpenAI-compatible model provider", () => {
           {
             type: "response.output_text.delta",
             delta: " world"
+          },
+          {
+            type: "response.output_item.added",
+            item: {
+              type: "function_call",
+              call_id: "call_1",
+              name: toolName
+            }
           },
           {
             type: "response.output_item.done",
@@ -977,6 +1018,13 @@ describe("OpenAI-compatible model provider", () => {
     expect(events.filter((event) => event.type === "text_delta").map((event) => event.delta)).toEqual([
       "Hello",
       " world"
+    ]);
+    expect(events.filter((event) => event.type === "tool_call_preparing")).toEqual([
+      {
+        type: "tool_call_preparing",
+        toolCallId: "call_1",
+        toolName: "show_view"
+      }
     ]);
     const completed = events.find((event) => event.type === "completed");
     expect(completed?.completion).toMatchObject({

@@ -10,6 +10,7 @@ import {
 } from "@assistant-ui/react";
 import { Check, Copy, FileText, ImageIcon, ListRestart, Pencil, RefreshCw, User } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { AssistantActivityStatus } from "./assistant-activity-status";
 import { AssistantCursor } from "./assistant-cursor";
 import { AttachmentPreview } from "./attachment-preview";
 import { managedFileIdFromUrl, useAttachmentContentContext } from "./attachment-content";
@@ -82,6 +83,10 @@ function AssistantMessage({
   const contextCompacted = useAuiState(
     (state) =>
       (state.message.metadata as AssistantUiMessageMetadata | undefined)?.contextCompacted === true
+  );
+  const preparingToolName = useAuiState(
+    (state) =>
+      (state.message.metadata as AssistantUiMessageMetadata | undefined)?.preparingTool?.toolName
   );
   const lastPartIndex = useAuiState((state) => state.message.parts.length - 1);
   const activeRunMessage = Boolean(conversationRunning && activeRunId && messageId === activeRunId);
@@ -158,7 +163,9 @@ function AssistantMessage({
         </div>
       ) : null}
       <div className="min-w-0 rounded-md px-1 py-1 text-sm leading-6">
-        {activityCursorPlacement === "before" ? <AssistantFallbackCursor /> : null}
+        {activityCursorPlacement === "before" ? (
+          <AssistantActivityStatus toolName={preparingToolName} />
+        ) : null}
         {completedWorkSummary ? (
           <>
             <AssistantWorkGroup
@@ -194,7 +201,9 @@ function AssistantMessage({
               })}
           </MessagePrimitive.GroupedParts>
         )}
-        {activityCursorPlacement === "after" ? <AssistantFallbackCursor /> : null}
+        {activityCursorPlacement === "after" ? (
+          <AssistantActivityStatus toolName={preparingToolName} />
+        ) : null}
         <MessageError />
       </div>
       {!messageRunning ? (
@@ -511,14 +520,6 @@ function AssistantTextPart({ active }: { active?: boolean }) {
   return (
     <div className={cn("chat-assistant-text max-w-3xl", showCursor && "chat-assistant-text-running")}>
       <MarkdownText />
-    </div>
-  );
-}
-
-function AssistantFallbackCursor() {
-  return (
-    <div className="chat-assistant-text max-w-3xl">
-      <AssistantCursor className="my-1" />
     </div>
   );
 }

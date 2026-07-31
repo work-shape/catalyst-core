@@ -574,6 +574,14 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     })
   }),
   z.object({
+    type: z.literal("tool_call_preparing"),
+    runId: z.string(),
+    sequence: z.number(),
+    createdAt: z.string(),
+    toolCallId: z.string(),
+    toolName: z.string()
+  }),
+  z.object({
     type: z.literal("tool_call_started"),
     runId: z.string(),
     sequence: z.number(),
@@ -720,6 +728,10 @@ export const agentRunProjectionSchema = z.object({
       open: z.boolean()
     })
   ),
+  preparingTool: z.object({
+    toolCallId: z.string(),
+    toolName: z.string()
+  }).optional(),
   activeToolCalls: z.array(
     z.object({
       toolCallId: z.string(),

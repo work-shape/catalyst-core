@@ -1135,6 +1135,11 @@ describe("local agent runtime", () => {
             delta: "I need to inspect the referenced page."
           };
           yield {
+            type: "tool_call_preparing",
+            toolCallId: "call_1",
+            toolName: "test.inspect"
+          };
+          yield {
             type: "completed",
             completion: {
               text: "I will inspect page 2.",
@@ -1225,6 +1230,7 @@ describe("local agent runtime", () => {
 
     const textDeltas: string[] = [];
     const reasoningDeltas: string[] = [];
+    const preparingTools: string[] = [];
     const startedToolInputs: unknown[] = [];
     const completedMessages: string[] = [];
     for await (const event of runtime.observe(run.runId, context)) {
@@ -1233,6 +1239,9 @@ describe("local agent runtime", () => {
       }
       if (event.type === "message_delta") {
         textDeltas.push(event.delta);
+      }
+      if (event.type === "tool_call_preparing") {
+        preparingTools.push(event.toolName);
       }
       if (event.type === "tool_call_started") {
         startedToolInputs.push(event.input);
@@ -1247,6 +1256,7 @@ describe("local agent runtime", () => {
       "The page contains the invoice total."
     ]);
     expect(reasoningDeltas).toEqual(["I need to inspect the referenced page."]);
+    expect(preparingTools).toEqual(["test.inspect"]);
     expect(startedToolInputs).toEqual([{ page: 2 }]);
     expect(completedMessages).toEqual(["The page contains the invoice total."]);
 
