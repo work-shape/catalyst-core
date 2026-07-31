@@ -192,7 +192,7 @@ The model sees only the allowed skill name, title, and description. It calls `re
 
 ## UI Branding
 
-The platform shell provides `/favicon.svg` as the default favicon. Standard Vite clients use `vivdCatalystChatUiPlugin()` from `@vivd-catalyst/chat-ui/vite` to serve and copy that default unless the client provides its own `public/favicon.svg`. Set `ui.faviconUrl` when a client needs its own icon at another URL; the value may be an absolute URL or a root-relative path served by that client.
+Clients own their favicon and should serve it from `public/`, reference it from `index.html`, and set `ui.faviconUrl` so runtime branding stays explicit. The platform includes `packages/chat-ui/assets/favicon.svg` as an optional fallback asset; pass it as `faviconPath` to `vivdCatalystChatUiPlugin()` when a client intentionally wants that default copied into its build. `ui.faviconUrl` may be an absolute URL or a root-relative path served by the client.
 
 ## Model Provider Configuration
 
