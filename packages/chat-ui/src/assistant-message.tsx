@@ -23,7 +23,6 @@ import {
   createAssistantWorkTimelineItems,
   createVisibleFinalAssistantPartIndices,
   findFinalAssistantTextPartIndex,
-  isAssistantToolWorkPart,
   type AssistantWorkTimelineItem
 } from "./assistant-work-grouping";
 import type { AssistantUiMessageMetadata } from "./assistant-ui-adapter";
@@ -103,7 +102,9 @@ function AssistantMessage({
       (state.message.metadata as AssistantUiMessageMetadata | undefined)?.contextCompacted === true
   );
   const matchesActiveRun = Boolean(activeRunId && messageId === activeRunId);
-  const activeRunMessage = Boolean(conversationRunning && matchesActiveRun);
+  const activeRunMessage = Boolean(
+    conversationRunning && (activeRunProjectionMessage || matchesActiveRun)
+  );
   const messageRunning = useAuiState(
     (state) =>
       state.message.role === "assistant" &&
@@ -112,12 +113,10 @@ function AssistantMessage({
   const finalTextIndex = findFinalAssistantTextPartIndex(messageParts);
   const toolUIs = useAuiState((state) => state.tools.toolUIs);
   const lastVisiblePartIndex = findLastVisibleAssistantPartIndex(messageParts);
-  const activeToolGroupPartIndex = isAssistantToolWorkPart(
-    lastVisiblePartIndex === undefined ? undefined : messageParts[lastVisiblePartIndex],
-    { toolUIs }
-  )
-    ? lastVisiblePartIndex
-    : undefined;
+  const activeToolGroupPartIndex =
+    lastVisiblePartIndex !== undefined && messageParts[lastVisiblePartIndex]?.type === "tool-call"
+      ? lastVisiblePartIndex
+      : undefined;
   const toolGroupOwnsActivity = activeRunMessage && activeToolGroupPartIndex !== undefined;
   const completedWorkIndices = useMemo(
     () => createCompletedAssistantWorkIndices(messageParts, finalTextIndex),

@@ -50,12 +50,16 @@ export function activeAssistantCursorPlacement(input: {
   running: boolean;
   parts: readonly ThreadActivityPart[];
 }): ActiveAssistantCursorPlacement {
-  if (
-    !input.running ||
-    input.toolActivityRunning ||
-    input.parts.some(partShowsOwnActivity) ||
-    (input.activeLastPart && lastPartShowsActiveRunActivity(input.parts))
-  ) {
+  if (!input.running || input.toolActivityRunning) {
+    return "hidden";
+  }
+  if (input.activeLastPart) {
+    if (lastPartShowsActiveRunActivity(input.parts)) {
+      return "hidden";
+    }
+    return input.parts.some(partHasVisibleAssistantContent) ? "after" : "before";
+  }
+  if (input.parts.some(partShowsOwnActivity)) {
     return "hidden";
   }
   return input.parts.some(partHasVisibleAssistantContent) ? "after" : "before";

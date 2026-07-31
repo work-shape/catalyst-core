@@ -144,6 +144,17 @@ describe("chat UI thread activity", () => {
     ).toBe("hidden");
   });
 
+  it("falls back to one status row when no tool group accepts active tool state", () => {
+    expect(
+      activeAssistantCursorPlacement({
+        activeLastPart: true,
+        running: true,
+        toolActivityRunning: false,
+        parts: [{ type: "tool-call", status: { type: "running" } }]
+      })
+    ).toBe("after");
+  });
+
   it("does not add a second cursor when the active run keeps its last completed text cursor visible", () => {
     expect(
       activeAssistantCursorPlacement({
