@@ -27,6 +27,16 @@ describe("chat UI thread activity", () => {
     ).toBe("hidden");
   });
 
+  it("does not add a second cursor when the active run keeps its last completed text cursor visible", () => {
+    expect(
+      activeAssistantCursorPlacement({
+        activeLastPart: true,
+        running: true,
+        parts: [{ type: "text", text: "Writing now", status: { type: "complete" } }]
+      })
+    ).toBe("hidden");
+  });
+
   it("shows the activity cursor before the first visible assistant part", () => {
     expect(
       activeAssistantCursorPlacement({

@@ -130,6 +130,7 @@ function AssistantMessage({
   });
   const activityCursorPlacement = useAuiState((state) =>
     activeAssistantCursorPlacement({
+      activeLastPart: activeRunMessage,
       running:
         state.message.role === "assistant" &&
         (state.message.status?.type === "running" || activeRunMessage),

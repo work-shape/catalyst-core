@@ -26,10 +26,15 @@ export type PendingAssistantPresentation = "hidden" | "block-cursor" | "inline-c
 export type ActiveAssistantCursorPlacement = "hidden" | "before" | "after";
 
 export function activeAssistantCursorPlacement(input: {
+  activeLastPart?: boolean;
   running: boolean;
   parts: readonly ThreadActivityPart[];
 }): ActiveAssistantCursorPlacement {
-  if (!input.running || input.parts.some(partShowsOwnActivity)) {
+  if (
+    !input.running ||
+    input.parts.some(partShowsOwnActivity) ||
+    (input.activeLastPart && lastPartShowsActiveRunActivity(input.parts))
+  ) {
     return "hidden";
   }
   return input.parts.some(partHasVisibleAssistantContent) ? "after" : "before";
@@ -111,6 +116,14 @@ function partShowsOwnActivity(part: ThreadActivityPart): boolean {
     return part.status?.type === "running" && Boolean(part.text?.trim().length);
   }
   return part.status?.type === "running";
+}
+
+function lastPartShowsActiveRunActivity(parts: readonly ThreadActivityPart[]): boolean {
+  const lastPart = parts.at(-1);
+  if (lastPart?.type === "reasoning") {
+    return true;
+  }
+  return Boolean(lastPart?.type === "text" && lastPart.text?.trim().length);
 }
 
 function partHasVisibleAssistantContent(part: ThreadActivityPart): boolean {
