@@ -45,12 +45,16 @@ export interface AssistantUiActiveRun {
   projection: AgentRunProjection;
 }
 
-export interface AssistantUiMessageMetadata {
+export interface AssistantUiMessageCustomMetadata {
   source?: "active-run";
   activeRunCompleted?: boolean;
   completedRunId?: string;
   runDurationMs?: number;
   contextCompacted?: boolean;
+}
+
+export interface AssistantUiMessageMetadata {
+  custom?: AssistantUiMessageCustomMetadata;
 }
 
 interface AiSdkMessageFormatRepository {
@@ -321,9 +325,12 @@ function toCompletedRunProjectionUiMessage(
       ...(surfacedArtifactsByRunId.get(projection.runId) ?? [])
     ])
   );
+  const persistedMetadata = createPersistedUiMessageMetadata(finalMessage);
   const metadata = {
-    ...createPersistedUiMessageMetadata(finalMessage),
-    ...(projection.durationMs !== undefined ? { runDurationMs: projection.durationMs } : {})
+    custom: {
+      ...persistedMetadata?.custom,
+      ...(projection.durationMs !== undefined ? { runDurationMs: projection.durationMs } : {})
+    }
   } satisfies AssistantUiMessageMetadata;
   return {
     id: finalMessage.id,
@@ -429,8 +436,10 @@ function createPersistedUiMessageMetadata(
   const contextCompacted = runMessages.some(readCompatibleAssistantContextCompacted);
   return completedRunId || contextCompacted
     ? {
-        ...(completedRunId ? { completedRunId } : {}),
-        ...(contextCompacted ? { contextCompacted: true } : {})
+        custom: {
+          ...(completedRunId ? { completedRunId } : {}),
+          ...(contextCompacted ? { contextCompacted: true } : {})
+        }
       }
     : undefined;
 }
@@ -461,8 +470,10 @@ function toActiveRunUiMessage(activeRun: AssistantUiActiveRun): UIMessage {
     id: activeRun.run.id,
     role: "assistant",
     metadata: {
-      source: "active-run",
-      ...(activeRun.projection.status === "completed" ? { activeRunCompleted: true } : {})
+      custom: {
+        source: "active-run",
+        ...(activeRun.projection.status === "completed" ? { activeRunCompleted: true } : {})
+      }
     } satisfies AssistantUiMessageMetadata,
     parts
   };

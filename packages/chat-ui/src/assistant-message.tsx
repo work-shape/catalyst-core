@@ -23,7 +23,7 @@ import {
   findFinalAssistantTextPartIndex,
   type AssistantWorkTimelineItem
 } from "./assistant-work-grouping";
-import type { AssistantUiMessageMetadata } from "./assistant-ui-adapter";
+import type { AssistantUiMessageCustomMetadata } from "./assistant-ui-adapter";
 import { AssistantSourcePart } from "./assistant-source-part";
 import { useTranslation } from "./i18n";
 import { MarkdownText } from "./markdown-text";
@@ -72,21 +72,27 @@ function AssistantMessage({
   const messageId = useAuiState((state) => state.message.id);
   const messageParts = useAuiState((state) => state.message.parts);
   const activeRunProjectionMessage = useAuiState(
-    (state) => (state.message.metadata as AssistantUiMessageMetadata | undefined)?.source === "active-run"
+    (state) =>
+      (state.message.metadata.custom as AssistantUiMessageCustomMetadata | undefined)?.source ===
+      "active-run"
   );
   const activeRunCompleted = useAuiState(
     (state) =>
-      (state.message.metadata as AssistantUiMessageMetadata | undefined)?.activeRunCompleted === true
+      (state.message.metadata.custom as AssistantUiMessageCustomMetadata | undefined)
+        ?.activeRunCompleted === true
   );
   const completedRunId = useAuiState(
-    (state) => (state.message.metadata as AssistantUiMessageMetadata | undefined)?.completedRunId
+    (state) =>
+      (state.message.metadata.custom as AssistantUiMessageCustomMetadata | undefined)?.completedRunId
   );
   const runDurationMs = useAuiState(
-    (state) => (state.message.metadata as AssistantUiMessageMetadata | undefined)?.runDurationMs
+    (state) =>
+      (state.message.metadata.custom as AssistantUiMessageCustomMetadata | undefined)?.runDurationMs
   );
   const contextCompacted = useAuiState(
     (state) =>
-      (state.message.metadata as AssistantUiMessageMetadata | undefined)?.contextCompacted === true
+      (state.message.metadata.custom as AssistantUiMessageCustomMetadata | undefined)
+        ?.contextCompacted === true
   );
   const matchesActiveRun = Boolean(activeRunId && messageId === activeRunId);
   const activeRunMessage = Boolean(

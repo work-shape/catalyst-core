@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { fromThreadMessageLike } from "../packages/chat-ui/node_modules/@assistant-ui/react";
 import { createElement } from "../packages/chat-ui/node_modules/react";
 import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
 import type { AgentRunProjection, Message } from "@vivd-catalyst/api-client";
@@ -100,8 +101,10 @@ describe("chat UI message history projection", () => {
     });
 
     expect(projected[0]?.metadata).toEqual({
-      source: "active-run",
-      activeRunCompleted: true
+      custom: {
+        source: "active-run",
+        activeRunCompleted: true
+      }
     });
     expect(projected[0]?.parts).toContainEqual({
       type: "data-workspace-promoted-surfaces",
@@ -425,7 +428,9 @@ describe("chat UI message history projection", () => {
 
     expect(projected).toHaveLength(2);
     expect(projected[1]?.role).toBe("assistant");
-    expect(projected[1]?.metadata).toEqual({ completedRunId: "run_test" });
+    expect(projected[1]?.metadata).toEqual({
+      custom: { completedRunId: "run_test" }
+    });
     expect(assistantParts[0]).toMatchObject({
       type: "dynamic-tool",
       toolName: "show_view",
@@ -815,6 +820,21 @@ describe("chat UI message history projection", () => {
 
     expect(projected).toHaveLength(1);
     expect(projected[0]?.metadata).toMatchObject({
+      custom: {
+        completedRunId: "run_web",
+        runDurationMs: 102_000
+      }
+    });
+    const normalizedMessage = fromThreadMessageLike(
+      {
+        role: "assistant",
+        content: [],
+        metadata: projected[0]?.metadata
+      },
+      "msg_web_answer",
+      { type: "complete", reason: "stop" }
+    );
+    expect(normalizedMessage.metadata.custom).toMatchObject({
       completedRunId: "run_web",
       runDurationMs: 102_000
     });
@@ -1652,8 +1672,10 @@ describe("chat UI message history projection", () => {
     ]);
 
     expect(projected[0]?.metadata).toMatchObject({
-      completedRunId: "run_compacted",
-      contextCompacted: true
+      custom: {
+        completedRunId: "run_compacted",
+        contextCompacted: true
+      }
     });
   });
 });

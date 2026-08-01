@@ -356,7 +356,7 @@ describe("chat UI conversation controller", () => {
     ]);
 
     const [message] = toUiMessages([], state.activeRun);
-    expect(message?.metadata).toEqual({ source: "active-run" });
+    expect(message?.metadata).toEqual({ custom: { source: "active-run" } });
     expect(message?.parts.map((part) => part.type)).toEqual([
       "text",
       "dynamic-tool",
@@ -382,7 +382,7 @@ describe("chat UI conversation controller", () => {
 
     const [message] = toUiMessages([], state.activeRun);
 
-    expect(message?.metadata).toEqual({ source: "active-run" });
+    expect(message?.metadata).toEqual({ custom: { source: "active-run" } });
     expect(message?.parts.map((part) => part.type)).toEqual([
       "dynamic-tool",
       "text"
