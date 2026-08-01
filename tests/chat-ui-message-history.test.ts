@@ -760,6 +760,7 @@ describe("chat UI message history projection", () => {
         runId: "run_web",
         lastSequence: 6,
         status: "completed",
+        durationMs: 102_000,
         text: `${progressText}${finalText}`,
         reasoning: [],
         activeToolCalls: [
@@ -813,6 +814,10 @@ describe("chat UI message history projection", () => {
     );
 
     expect(projected).toHaveLength(1);
+    expect(projected[0]?.metadata).toMatchObject({
+      completedRunId: "run_web",
+      runDurationMs: 102_000
+    });
     expect(textParts).toEqual([
       {
         type: "text",

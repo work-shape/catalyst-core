@@ -49,6 +49,7 @@ export interface AssistantUiMessageMetadata {
   source?: "active-run";
   activeRunCompleted?: boolean;
   completedRunId?: string;
+  runDurationMs?: number;
   contextCompacted?: boolean;
 }
 
@@ -320,11 +321,14 @@ function toCompletedRunProjectionUiMessage(
       ...(surfacedArtifactsByRunId.get(projection.runId) ?? [])
     ])
   );
-  const metadata = createPersistedUiMessageMetadata(finalMessage);
+  const metadata = {
+    ...createPersistedUiMessageMetadata(finalMessage),
+    ...(projection.durationMs !== undefined ? { runDurationMs: projection.durationMs } : {})
+  } satisfies AssistantUiMessageMetadata;
   return {
     id: finalMessage.id,
     role: "assistant",
-    ...(metadata ? { metadata } : {}),
+    metadata,
     parts: parts.length > 0
       ? parts
       : [

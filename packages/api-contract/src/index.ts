@@ -719,6 +719,7 @@ export const agentRunProjectionSchema = z.object({
   runId: z.string(),
   lastSequence: z.number().int().nonnegative(),
   status: agentRunStatusSchema,
+  durationMs: z.number().int().nonnegative().optional(),
   parts: z.array(agentRunProjectionPartSchema).default([]),
   text: z.string(),
   reasoning: z.array(

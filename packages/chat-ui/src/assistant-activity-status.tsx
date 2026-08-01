@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { formatElapsedSeconds } from "./elapsed-time";
 import { useTranslation } from "./i18n";
 import type { RunActivity } from "./thread-activity";
 import { useToolActivityLabel } from "./tool-activity";
@@ -48,7 +49,7 @@ export function AssistantActivityStatus({
     >
       <Spinner size="sm" />
       <span className="text-xs tabular-nums opacity-70" data-testid="run-activity-elapsed">
-        {formatElapsed(elapsedSeconds)}
+        {formatElapsedSeconds(elapsedSeconds)}
       </span>
       <span className="text-xs opacity-50" aria-hidden="true">
         ·
@@ -151,11 +152,6 @@ function useElapsedSeconds(runKey: string | undefined): number {
   return elapsedSeconds;
 }
 
-function formatElapsed(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
-  return minutes > 0 ? `${minutes}m ${seconds % 60}s` : `${seconds}s`;
-}
-
 function useHeldLabel(label: string, holdMs: number): string {
   const [displayedLabel, setDisplayedLabel] = useState(label);
   const lastChangeRef = useRef(Date.now());
@@ -192,4 +188,3 @@ function stableVariantIndex(seed: string | undefined): number {
   }
   return hash % fallbackActivityKeys.length;
 }
-

@@ -32,6 +32,7 @@ import { ToolGroupContent, ToolGroupRoot, ToolGroupTrigger } from "./assistant-t
 import { TooltipIconButton, tooltipIconButtonClassName } from "./tooltip-icon-button";
 import { Button } from "./ui/button";
 import { cn } from "./ui/cn";
+import { formatWorkHistoryLabel } from "./elapsed-time";
 import { isWorkspacePromotedSurfacesData } from "./tool-surfaces";
 
 const chronologicalAssistantMessageGroupBy = createAssistantMessageGroupBy();
@@ -79,6 +80,9 @@ function AssistantMessage({
   );
   const completedRunId = useAuiState(
     (state) => (state.message.metadata as AssistantUiMessageMetadata | undefined)?.completedRunId
+  );
+  const runDurationMs = useAuiState(
+    (state) => (state.message.metadata as AssistantUiMessageMetadata | undefined)?.runDurationMs
   );
   const contextCompacted = useAuiState(
     (state) =>
@@ -157,6 +161,7 @@ function AssistantMessage({
             <AssistantWorkGroup
               count={completedWorkStepCount}
               summary
+              durationMs={runDurationMs}
               autoCollapse={autoCollapseCompletedWorkSummary}
             >
               <AssistantWorkTimeline
@@ -347,12 +352,14 @@ function AssistantWorkGroup({
   children,
   nested = false,
   summary,
+  durationMs,
   autoCollapse = false
 }: {
   count: number;
   children: ReactNode;
   nested?: boolean;
   summary: boolean;
+  durationMs?: number;
   autoCollapse?: boolean;
 }) {
   const { t } = useTranslation();
@@ -373,7 +380,7 @@ function AssistantWorkGroup({
   }, [autoCollapse, summary]);
 
   const countLabel = summary
-    ? t(count === 1 ? "workStepCountSingular" : "workStepCount", { count })
+    ? formatWorkHistoryLabel(t("workHistory"), durationMs)
     : t(count === 1 ? "toolCallCountSingular" : "toolCallCount", { count });
 
   return (

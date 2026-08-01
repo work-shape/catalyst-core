@@ -776,9 +776,11 @@ describe("client instance app vertical slice", () => {
     expect(snapshot.statusCode).toBe(200);
     const body = snapshot.json() as {
       completedRunProjections?: Record<string, {
+        durationMs?: number;
         parts: Array<{ type: string; text?: string; toolCallId?: string; toolName?: string }>;
       }>;
     };
+    expect(body.completedRunProjections?.[run.id]?.durationMs).toBe(6_000);
     expect(body.completedRunProjections?.[run.id]?.parts).toEqual([
       {
         type: "text",

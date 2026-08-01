@@ -537,6 +537,7 @@ export type GetConversationThreadResponses = {
                 runId: string;
                 lastSequence: number;
                 status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
+                durationMs?: number;
                 parts: Array<{
                     type: 'text';
                     text: string;
@@ -593,6 +594,7 @@ export type GetConversationThreadResponses = {
                 runId: string;
                 lastSequence: number;
                 status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
+                durationMs?: number;
                 parts: Array<{
                     type: 'text';
                     text: string;
@@ -1166,6 +1168,7 @@ export type StartConversationRunResponses = {
                     runId: string;
                     lastSequence: number;
                     status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
+                    durationMs?: number;
                     parts: Array<{
                         type: 'text';
                         text: string;
@@ -1222,6 +1225,7 @@ export type StartConversationRunResponses = {
                     runId: string;
                     lastSequence: number;
                     status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
+                    durationMs?: number;
                     parts: Array<{
                         type: 'text';
                         text: string;
@@ -1529,6 +1533,7 @@ export type CreateConversationRunResponses = {
                     runId: string;
                     lastSequence: number;
                     status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
+                    durationMs?: number;
                     parts: Array<{
                         type: 'text';
                         text: string;
@@ -1585,6 +1590,7 @@ export type CreateConversationRunResponses = {
                     runId: string;
                     lastSequence: number;
                     status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
+                    durationMs?: number;
                     parts: Array<{
                         type: 'text';
                         text: string;

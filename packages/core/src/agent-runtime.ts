@@ -113,6 +113,7 @@ export interface AgentRunProjection {
   runId: AgentRunId;
   lastSequence: number;
   status: AgentRunStatus;
+  durationMs?: number;
   parts: AgentRunProjectionPart[];
   text: string;
   reasoning: Array<{

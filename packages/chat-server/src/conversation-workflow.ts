@@ -1193,12 +1193,23 @@ function buildAgentRunProjection(
     runId: run.id,
     lastSequence,
     status: run.status,
+    ...runDuration(run),
     parts,
     text,
     reasoning: [...reasoningById.values()],
     ...(preparingTool ? { preparingTool } : {}),
     activeToolCalls: [...toolCallsById.values()],
     ...(error ? { error } : {})
+  };
+}
+
+function runDuration(run: AgentRun): Partial<Pick<AgentRunProjection, "durationMs">> {
+  const endedAt = run.completedAt ?? run.cancelledAt ?? run.failedAt;
+  if (!endedAt) {
+    return {};
+  }
+  return {
+    durationMs: Math.max(0, Date.parse(endedAt) - Date.parse(run.startedAt))
   };
 }
 
