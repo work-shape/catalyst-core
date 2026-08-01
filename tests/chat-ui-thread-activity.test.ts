@@ -116,8 +116,12 @@ describe("chat UI thread activity", () => {
 
     expect(render()).toBe(render());
     expect(render()).toMatch(
-      /Ich arbeite daran|Ich denke es durch|Ich setze alles zusammen|Ich prüfe die nächsten Schritte|Ich komme voran/u
+      /Ich arbeite daran|Ich gehe alles durch|Ich schaue es mir an|Es geht voran|Ich bleibe dran|Ich kümmere mich darum|Ich arbeite mich durch|Ich sortiere die Details|Ich mache weiter|Einen Moment noch/u
     );
+  });
+
+  it("shows the elapsed run time next to the phrase", () => {
+    expect(renderActivityStatus({})).toContain(">0s<");
   });
 
   it("blocks sending whenever the durable conversation run is active", () => {
