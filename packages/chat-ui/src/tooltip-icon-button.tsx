@@ -1,5 +1,6 @@
 import { forwardRef, type ButtonHTMLAttributes } from "react";
 import { cn } from "./ui/cn";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 export interface TooltipIconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   tooltip: string;
@@ -10,15 +11,20 @@ export const tooltipIconButtonClassName =
 
 export const TooltipIconButton = forwardRef<HTMLButtonElement, TooltipIconButtonProps>(
   function TooltipIconButton({ className, tooltip, "aria-label": ariaLabel, title, ...props }, ref) {
+    const tooltipText = title ?? tooltip;
     return (
-      <button
-        ref={ref}
-        type="button"
-        className={cn(tooltipIconButtonClassName, className)}
-        aria-label={ariaLabel ?? tooltip}
-        title={title ?? tooltip}
-        {...props}
-      />
+      <Tooltip delayDuration={100}>
+        <TooltipTrigger asChild>
+          <button
+            ref={ref}
+            type="button"
+            className={cn(tooltipIconButtonClassName, className)}
+            aria-label={ariaLabel ?? tooltipText}
+            {...props}
+          />
+        </TooltipTrigger>
+        <TooltipContent>{tooltipText}</TooltipContent>
+      </Tooltip>
     );
   }
 );

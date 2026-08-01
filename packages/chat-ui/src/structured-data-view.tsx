@@ -14,6 +14,7 @@ import {
   TableRow
 } from "./ui/table";
 import { TooltipIconButton } from "./tooltip-icon-button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 type StructuredDataSource =
   StructuredDataResourceResponse["sections"][number]["fields"][number]["sources"] extends
@@ -106,37 +107,44 @@ function StructuredDataFieldRow({
       <TableCell className="align-top">
         <div className="flex min-w-0 items-start gap-1.5">
           <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{value}</span>
-          {field.sources?.map((source) => {
-            const sourceLabel = source.page
-              ? t("resourcesSourceWithPage", {
-                  filename: source.filename,
-                  page: source.page
-                })
-              : source.filename;
-            if (!onSourceOpen) {
+          <span className="flex shrink-0 items-center gap-0.5">
+            {field.sources?.map((source) => {
+              const sourceLabel = source.page
+                ? t("resourcesSourceWithPage", {
+                    filename: source.filename,
+                    page: source.page
+                  })
+                : source.filename;
+              const key = `${source.attachmentId}:${source.page ?? ""}`;
+              if (!onSourceOpen) {
+                return (
+                  <Tooltip key={key} delayDuration={100}>
+                    <TooltipTrigger asChild>
+                      <span
+                        role="img"
+                        tabIndex={0}
+                        aria-label={sourceLabel}
+                        className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground/55 outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/40 [&_svg]:size-3.5"
+                      >
+                        <FileSearch aria-hidden="true" />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{sourceLabel}</TooltipContent>
+                  </Tooltip>
+                );
+              }
               return (
-                <span
-                  key={`${source.attachmentId}:${source.page ?? ""}`}
-                  className="mt-0.5 shrink-0 text-muted-foreground"
-                  title={sourceLabel}
+                <TooltipIconButton
+                  key={key}
+                  className="size-6 text-muted-foreground/55 hover:bg-muted/50 hover:text-muted-foreground [&_svg]:size-3.5"
+                  tooltip={sourceLabel}
+                  onClick={() => onSourceOpen(source)}
                 >
-                  <FileSearch size={14} aria-hidden="true" />
-                </span>
+                  <FileSearch aria-hidden="true" />
+                </TooltipIconButton>
               );
-            }
-            return (
-              <button
-                key={`${source.attachmentId}:${source.page ?? ""}`}
-                type="button"
-                className="mt-0.5 shrink-0 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
-                title={sourceLabel}
-                aria-label={sourceLabel}
-                onClick={() => onSourceOpen(source)}
-              >
-                <FileSearch size={14} aria-hidden="true" />
-              </button>
-            );
-          })}
+            })}
+          </span>
           <TooltipIconButton
             className="size-6 opacity-0 group-hover:opacity-100 focus:opacity-100"
             tooltip={copied ? t("copied") : t("resourcesCopyValue")}

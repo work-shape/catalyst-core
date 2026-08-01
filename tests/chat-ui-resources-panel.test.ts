@@ -264,6 +264,7 @@ describe("Resources panel rendering", () => {
 
     expect(markup).toContain("<button");
     expect(markup).toContain('aria-label="Input.pdf, Seite 2"');
+    expect(markup).not.toContain('title="Input.pdf, Seite 2"');
   });
 
   it("renders cookie-authenticated source images through the browser-managed URL", () => {
