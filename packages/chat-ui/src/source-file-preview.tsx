@@ -31,6 +31,12 @@ export type SourceFileResource = Extract<
   { resourceType: "source_file" }
 >;
 
+type OpenSourceFilePreviewInput = {
+  client: ApiClient;
+  conversationId: string;
+  filename?: string;
+} & ({ fileId: string } | { attachmentId: string });
+
 export function findSourceFileResource(
   resources: ConversationResourceListItem[],
   fileId: string
@@ -42,27 +48,37 @@ export function findSourceFileResource(
   );
 }
 
+export function findSourceFileResourceByAttachmentId(
+  resources: ConversationResourceListItem[],
+  attachmentId: string
+): SourceFileResource | undefined {
+  return resources.find(
+    (resource): resource is SourceFileResource =>
+      resource.resourceType === "source_file" &&
+      resource.attachmentId === attachmentId
+  );
+}
+
 /**
- * Opens a conversation source file in the display panel, resolving the file id
- * against the conversation's resources first. Shared by the attachment chips in
- * the thread and by tool display widgets that reference a source file.
+ * Opens a conversation source file in the display panel, resolving its managed
+ * file or attachment id against the conversation's resources first. Shared by
+ * attachment chips, structured-data sources, and tool display widgets.
  */
-export function useOpenSourceFilePreview(): (input: {
-  client: ApiClient;
-  conversationId: string;
-  fileId: string;
-  filename?: string;
-}) => Promise<void> {
+export function useOpenSourceFilePreview(): (
+  input: OpenSourceFilePreviewInput
+) => Promise<void> {
   const displayPanel = useToolDisplayPanel();
   const queryClient = useQueryClient();
   const { apiBaseUrl } = useWorkspaceApiClient();
   const { t } = useTranslation();
 
   return useCallback(
-    async ({ client, conversationId, fileId, filename }) => {
-      const title = filename ?? fileId;
+    async (input) => {
+      const { client, conversationId, filename } = input;
+      const sourceId = "fileId" in input ? input.fileId : input.attachmentId;
+      const title = filename ?? sourceId;
       displayPanel.show({
-        key: `source-file-loading:${fileId}`,
+        key: `source-file-loading:${sourceId}`,
         title,
         node: (
           <div className="flex min-h-64 items-center justify-center">
@@ -79,14 +95,20 @@ export function useOpenSourceFilePreview(): (input: {
           ),
           queryFn: () => client.conversationResources(conversationId)
         });
-        const resource = findSourceFileResource(response.resources, fileId);
+        const resource =
+          "fileId" in input
+            ? findSourceFileResource(response.resources, input.fileId)
+            : findSourceFileResourceByAttachmentId(
+                response.resources,
+                input.attachmentId
+              );
         if (!resource) {
           throw new Error("Source file preview resource was not found");
         }
         displayPanel.show(createSourceFilePreviewEntry({ client, conversationId, resource }));
       } catch {
         displayPanel.show({
-          key: `source-file-error:${fileId}`,
+          key: `source-file-error:${sourceId}`,
           title,
           node: (
             <div className="flex min-h-64 items-center justify-center text-sm text-muted-foreground">

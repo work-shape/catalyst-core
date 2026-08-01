@@ -3,6 +3,7 @@ import type { StructuredDataResourceResponse } from "@vivd-catalyst/api-client";
 import { STRUCTURED_DATA_RESOURCE_DISPLAY_KIND } from "@vivd-catalyst/core";
 import { useAttachmentContentContext } from "./attachment-content";
 import { useTranslation } from "./i18n";
+import { useOpenSourceFilePreview } from "./source-file-preview";
 import {
   StructuredDataCopyAllButton,
   StructuredDataView
@@ -27,6 +28,8 @@ function StructuredDataResourceDisplay({
   structuredDataResourceId: string;
 }) {
   const context = useAttachmentContentContext();
+  const conversationId = context?.selectedConversationId;
+  const openSourceFilePreview = useOpenSourceFilePreview();
   const { t } = useTranslation();
   const [resource, setResource] = useState<
     StructuredDataResourceResponse | undefined
@@ -83,7 +86,21 @@ function StructuredDataResourceDisplay({
       <div className="flex justify-end">
         <StructuredDataCopyAllButton resource={resource} />
       </div>
-      <StructuredDataView resource={resource} />
+      <StructuredDataView
+        resource={resource}
+        onSourceOpen={
+          context && conversationId
+            ? (source) => {
+                void openSourceFilePreview({
+                  client: context.client,
+                  conversationId,
+                  attachmentId: source.attachmentId,
+                  filename: source.filename
+                });
+              }
+            : undefined
+        }
+      />
     </div>
   );
 }

@@ -17,6 +17,7 @@ import {
 } from "../packages/chat-ui/src/resources-panel";
 import {
   findSourceFileResource,
+  findSourceFileResourceByAttachmentId,
   SourceFilePreview
 } from "../packages/chat-ui/src/source-file-preview";
 import { StructuredDataView } from "../packages/chat-ui/src/structured-data-view";
@@ -110,6 +111,12 @@ describe("Resources panel model", () => {
   it("resolves a committed attachment to its source-file preview resource", () => {
     expect(findSourceFileResource(resources, "file_1")?.resourceId).toBe("source");
     expect(findSourceFileResource(resources, "missing")).toBeUndefined();
+    expect(
+      findSourceFileResourceByAttachmentId(resources, "attachment_1")?.resourceId
+    ).toBe("source");
+    expect(
+      findSourceFileResourceByAttachmentId(resources, "missing")
+    ).toBeUndefined();
   });
 
   it("groups in product order, hides empty sections, and preserves server order", () => {
@@ -218,6 +225,45 @@ describe("Resources panel rendering", () => {
     expect(markup).toContain("Umsatz");
     expect(markup).toContain("1.234,5");
     expect(markup).toContain("Ja");
+  });
+
+  it("renders structured-data sources as buttons when document opening is available", () => {
+    const resource: StructuredDataResourceResponse = {
+      ...structuredData,
+      sections: [
+        {
+          key: "identity",
+          label: "Identität",
+          fields: [
+            {
+              key: "name",
+              label: "Name",
+              value: "Ada Lovelace",
+              sources: [
+                {
+                  attachmentId: "attachment_1",
+                  filename: "Input.pdf",
+                  page: 2
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    };
+    const markup = renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { locale: "de" },
+        createElement(StructuredDataView, {
+          resource,
+          onSourceOpen() {}
+        })
+      )
+    );
+
+    expect(markup).toContain("<button");
+    expect(markup).toContain('aria-label="Input.pdf, Seite 2"');
   });
 
   it("renders cookie-authenticated source images through the browser-managed URL", () => {
