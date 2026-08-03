@@ -12,6 +12,7 @@ import {
   type ManagedArtifactId,
   type MarkClaimedArtifactPreviewJobUnsupportedInput,
   type RecoverStaleArtifactPreviewJobsInput,
+  type RenewClaimedArtifactPreviewJobLeaseInput,
   type WriteArtifactPreviewManifestInput,
   createPlatformId,
   normalizeArtifactPreviewIdentity
@@ -208,6 +209,24 @@ export async function claimNextArtifactPreviewJob(
   return claimed ? mapArtifactPreviewJob(claimed) : undefined;
 }
 
+export async function renewClaimedArtifactPreviewJobLease(
+  db: PostgresDatabase,
+  input: RenewClaimedArtifactPreviewJobLeaseInput
+): Promise<ArtifactPreviewJobRecord> {
+  const [job] = await db
+    .update(artifactPreviewJobs)
+    .set({
+      leaseExpiresAt: new Date(input.leaseExpiresAt),
+      updatedAt: new Date(input.renewedAt)
+    })
+    .where(claimedArtifactPreviewJobWhere(input))
+    .returning();
+  if (!job) {
+    throw new AppError("CONFLICT", "Artifact preview job lease is no longer active");
+  }
+  return mapArtifactPreviewJob(job);
+}
+
 export async function completeClaimedArtifactPreviewJob(
   db: PostgresDatabase,
   input: CompleteClaimedArtifactPreviewJobInput
@@ -287,7 +306,7 @@ export async function completeClaimedArtifactPreviewJob(
         status: "ready",
         type: "image_pages",
         format: input.format,
-        pageCount: pages.length,
+        pageCount: input.sourcePageCount ?? pages.length,
         pages,
         errorCode: null,
         createdAt: completedAt,
@@ -306,7 +325,7 @@ export async function completeClaimedArtifactPreviewJob(
           status: "ready",
           type: "image_pages",
           format: input.format,
-          pageCount: pages.length,
+          pageCount: input.sourcePageCount ?? pages.length,
           pages,
           errorCode: null,
           updatedAt: completedAt
@@ -507,7 +526,7 @@ export async function writeArtifactPreviewManifest(
       status: input.status,
       type: input.status === "ready" ? "image_pages" : null,
       format: input.status === "ready" ? input.format : null,
-      pageCount: input.status === "ready" ? input.pages.length : 0,
+      pageCount: input.status === "ready" ? (input.pageCount ?? input.pages.length) : 0,
       pages: input.status === "ready" ? input.pages : [],
       errorCode: input.status === "ready" ? null : (input.errorCode ?? null),
       createdAt,
@@ -526,7 +545,7 @@ export async function writeArtifactPreviewManifest(
         status: input.status,
         type: input.status === "ready" ? "image_pages" : null,
         format: input.status === "ready" ? input.format : null,
-        pageCount: input.status === "ready" ? input.pages.length : 0,
+        pageCount: input.status === "ready" ? (input.pageCount ?? input.pages.length) : 0,
         pages: input.status === "ready" ? input.pages : [],
         errorCode: input.status === "ready" ? null : (input.errorCode ?? null),
         updatedAt: writtenAt

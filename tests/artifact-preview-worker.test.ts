@@ -65,7 +65,7 @@ describe("ArtifactPreviewWorker", () => {
     expect(renderer.inputs[0]).toMatchObject({
       sourceKind: "document",
       mimeType: fixture.source.mimeType,
-      maxPages: 40,
+      maxPages: 80,
       previewDpi: 144,
       outputFormat: "png"
     });
@@ -100,6 +100,95 @@ describe("ArtifactPreviewWorker", () => {
       }
     });
     expect(fixture.objectStore.keys().some((key) => key.startsWith("artifact-previews/"))).toBe(true);
+  });
+
+  it("reads attachment-backed preview sources through the configured managed-object reader", async () => {
+    const fixture = await createWorkerFixture();
+    await fixture.objectStore.deleteObject(fixture.source.objectKey);
+    const renderer = new FakeRenderer({
+      result: {
+        format: "png",
+        pages: [{ bytes: bytes("page-one"), mimeType: "image/png", pageNumber: 1 }]
+      }
+    });
+    const sourceReaderCalls: string[] = [];
+    const worker = createWorker(fixture, renderer, {
+      sourceReader: {
+        async readArtifact(input) {
+          sourceReaderCalls.push(input.artifactId);
+          return { bytes: bytes("attachment-backed-docx") };
+        }
+      }
+    });
+
+    const result = await worker.runOnce();
+
+    expect(result).toMatchObject({ status: "claimed", job: { status: "completed" } });
+    expect(sourceReaderCalls).toEqual([fixture.source.id]);
+    expect(renderer.inputs[0]?.bytes).toEqual(bytes("attachment-backed-docx"));
+  });
+
+  it("renews the lease while a long preview render is active", async () => {
+    const fixture = await createWorkerFixture();
+    const deferred = createDeferred<ArtifactPreviewRenderResult>();
+    const renderer = new FakeRenderer({ deferred });
+    const worker = createWorker(fixture, renderer, {
+      leaseDurationMs: 30,
+      leaseRenewIntervalMs: 5
+    });
+
+    const running = worker.runOnce();
+    await renderer.called;
+    const initiallyClaimed = await fixture.store.getArtifactPreviewJob({
+      clientInstanceId: fixture.clientInstanceId,
+      sourceArtifactId: fixture.source.id
+    });
+    await sleep(20);
+    const renewed = await fixture.store.getArtifactPreviewJob({
+      clientInstanceId: fixture.clientInstanceId,
+      sourceArtifactId: fixture.source.id
+    });
+    expect(renewed?.leaseExpiresAt).toBeDefined();
+    expect(renewed!.leaseExpiresAt! > initiallyClaimed!.leaseExpiresAt!).toBe(true);
+
+    deferred.resolve({
+      format: "png",
+      pages: [{ bytes: bytes("page-one"), mimeType: "image/png", pageNumber: 1 }]
+    });
+    await expect(running).resolves.toMatchObject({
+      status: "claimed",
+      job: { status: "completed" }
+    });
+  });
+
+  it("records the full page count when only a bounded partial preview is rendered", async () => {
+    const fixture = await createWorkerFixture();
+    const worker = createWorker(
+      fixture,
+      new FakeRenderer({
+        result: {
+          format: "png",
+          pageCount: 350,
+          pages: [
+            { bytes: bytes("page-one"), mimeType: "image/png", pageNumber: 1 },
+            { bytes: bytes("page-two"), mimeType: "image/png", pageNumber: 2 }
+          ]
+        }
+      })
+    );
+
+    await worker.runOnce();
+
+    await expect(
+      fixture.store.getArtifactPreviewManifest({
+        clientInstanceId: fixture.clientInstanceId,
+        sourceArtifactId: fixture.source.id
+      })
+    ).resolves.toMatchObject({
+      status: "ready",
+      pageCount: 350,
+      pages: [{ pageNumber: 1 }, { pageNumber: 2 }]
+    });
   });
 
   it("removes staged preview objects when deletion wins before guarded completion", async () => {

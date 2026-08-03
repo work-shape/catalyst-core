@@ -2,15 +2,20 @@ import type { FastifyInstance } from "fastify";
 import { apiOperations, type ArtifactPreviewResponse } from "@vivd-catalyst/api-contract";
 import {
   AppError,
+  ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_KIND,
+  ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_REF,
+  asConversationAttachmentId,
   asManagedArtifactId,
   detectArtifactPreviewSourceKind,
   isRetryableArtifactPreviewErrorCode,
   normalizeArtifactPreviewIdentity,
   requireAuthScope,
+  resolveFilePreviewCapability,
   type ArtifactPreviewImageFormat,
   type ArtifactPreviewJobRecord,
   type ArtifactPreviewManifest,
   type ArtifactPreviewStore,
+  type ConversationAttachment,
   type ManagedArtifactRecord
 } from "@vivd-catalyst/core";
 import { ConversationWorkflow } from "../conversation-workflow";
@@ -44,8 +49,16 @@ export function registerConversationFileRoutes(app: FastifyInstance, options: Ch
       conversationId,
       fileId: getFileId(request)
     });
-    if (!download && (!file.mimeType || !service.isInlineDisplayMimeType(file.mimeType))) {
-      throw new AppError("VALIDATION_FAILED", "Only image attachments can be displayed inline");
+    const inlineCapability = resolveFilePreviewCapability({
+      filename: file.filename,
+      mimeType: file.mimeType
+    });
+    if (
+      !download &&
+      inlineCapability !== "native_pdf" &&
+      (!file.mimeType || !service.isInlineDisplayMimeType(file.mimeType))
+    ) {
+      throw new AppError("VALIDATION_FAILED", "This attachment cannot be displayed inline");
     }
     return reply
       .header("content-type", file.mimeType ?? "application/octet-stream")
@@ -79,11 +92,16 @@ export function registerConversationFileRoutes(app: FastifyInstance, options: Ch
       artifactId
     });
     const filename = artifactRecord.filename ?? `${artifactRecord.id}`;
+    const inline = (request.query as { inline?: string }).inline === "true";
+    const previewCapability = resolveFilePreviewCapability(artifactRecord);
+    if (inline && previewCapability !== "native_image" && previewCapability !== "native_pdf") {
+      throw new AppError("VALIDATION_FAILED", "This artifact cannot be displayed inline");
+    }
     return reply
       .header("content-type", artifact.mimeType)
       .header("content-length", String(artifact.bytes.byteLength))
       .header("cache-control", "private, max-age=60")
-      .header("content-disposition", contentDisposition("attachment", filename))
+      .header("content-disposition", contentDisposition(inline ? "inline" : "attachment", filename))
       .send(Buffer.from(artifact.bytes));
   });
 
@@ -101,6 +119,28 @@ export function registerConversationFileRoutes(app: FastifyInstance, options: Ch
       throw new AppError("NOT_FOUND", "Managed artifact is not available in this conversation");
     }
     const preview = await readArtifactPreviewState(options.conversationStore, artifactRecord);
+    return reply.header("cache-control", "private, no-store, max-age=0").send(preview);
+  });
+
+  app.get(apiOperations.getConversationAttachmentPreview.path, async (request, reply) => {
+    const { user } = await authenticateRequest(options, request);
+    requireAuthScope(user, "conversation:read");
+    const conversationId = getConversationId(request);
+    await conversations.requireOwnedActiveConversation(conversationId, user);
+    const attachment = await options.conversationStore.getConversationAttachment({
+      clientInstanceId: options.clientInstanceId,
+      attachmentId: asConversationAttachmentId(getAttachmentId(request))
+    });
+    if (
+      !attachment ||
+      attachment.conversationId !== conversationId ||
+      !attachment.messageId ||
+      attachment.status === "deleted"
+    ) {
+      throw new AppError("NOT_FOUND", "Attachment is not available in this conversation");
+    }
+    const source = await ensureAttachmentPreviewSource(options, attachment);
+    const preview = await readArtifactPreviewState(options.conversationStore, source);
     return reply.header("cache-control", "private, no-store, max-age=0").send(preview);
   });
 
@@ -143,6 +183,87 @@ function getArtifactId(request: { params: unknown }): string {
     throw new AppError("BAD_REQUEST", "Missing artifact id");
   }
   return params.artifactId;
+}
+
+function getAttachmentId(request: { params: unknown }): string {
+  const params = request.params as { attachmentId?: string };
+  if (!params?.attachmentId) {
+    throw new AppError("BAD_REQUEST", "Missing attachment id");
+  }
+  return params.attachmentId;
+}
+
+async function ensureAttachmentPreviewSource(
+  options: ChatServerOptions,
+  attachment: ConversationAttachment
+): Promise<ManagedArtifactRecord> {
+  const referencedId = attachment.artifactRefs[ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_REF];
+  if (referencedId) {
+    const referenced = await options.conversationStore.getManagedArtifact({
+      clientInstanceId: options.clientInstanceId,
+      artifactId: referencedId
+    });
+    if (
+      referenced?.conversationId === attachment.conversationId &&
+      referenced.sourceFileId === attachment.fileId &&
+      referenced.status === "available"
+    ) {
+      return referenced;
+    }
+  }
+
+  const existing = (
+    await options.conversationStore.listManagedArtifactsForFile({
+      clientInstanceId: options.clientInstanceId,
+      conversationId: attachment.conversationId,
+      fileId: attachment.fileId,
+      kind: ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_KIND
+    })
+  ).find((artifact) => artifact.metadata.sourceAttachmentId === attachment.id);
+  if (existing) {
+    await rememberAttachmentPreviewSource(options, attachment, existing);
+    return existing;
+  }
+
+  const file = await options.conversationStore.getManagedFile({
+    clientInstanceId: options.clientInstanceId,
+    fileId: attachment.fileId
+  });
+  if (!file || file.status !== "available" || file.checksum !== attachment.checksum) {
+    throw new AppError("NOT_FOUND", "Attachment source file is not available");
+  }
+  const source = await options.conversationStore.createManagedArtifact({
+    clientInstanceId: options.clientInstanceId,
+    conversationId: attachment.conversationId,
+    sourceFileId: attachment.fileId,
+    kind: ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_KIND,
+    objectKey: file.objectKey,
+    filename: attachment.filename,
+    mimeType: attachment.mimeType ?? "application/octet-stream",
+    byteSize: attachment.byteSize,
+    checksum: attachment.checksum,
+    metadata: {
+      source: "conversation_attachment",
+      sourceAttachmentId: attachment.id
+    }
+  });
+  await rememberAttachmentPreviewSource(options, attachment, source);
+  return source;
+}
+
+async function rememberAttachmentPreviewSource(
+  options: ChatServerOptions,
+  attachment: ConversationAttachment,
+  source: ManagedArtifactRecord
+): Promise<void> {
+  await options.conversationStore.updateConversationAttachment({
+    clientInstanceId: options.clientInstanceId,
+    attachmentId: attachment.id,
+    artifactRefs: {
+      ...attachment.artifactRefs,
+      [ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_REF]: source.id
+    }
+  });
 }
 
 function contentDisposition(disposition: "attachment" | "inline", filename: string): string {
@@ -306,6 +427,8 @@ function artifactPreviewResponseFromManifest(
       artifactId,
       type: "image_pages",
       format: manifest.format,
+      pageCount: manifest.pageCount,
+      ...(manifest.pageCount > manifest.pages.length ? { truncated: true } : {}),
       pages: manifest.pages.map((page) => ({
         artifactId: page.artifactId,
         mimeType: page.mimeType,

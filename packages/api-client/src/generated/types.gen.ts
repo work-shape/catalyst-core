@@ -2116,7 +2116,9 @@ export type GetConversationArtifactContentData = {
         conversationId: string;
         artifactId: string;
     };
-    query?: never;
+    query?: {
+        inline?: string;
+    };
     url: '/api/conversations/{conversationId}/artifacts/{artifactId}/content';
 };
 
@@ -2152,6 +2154,8 @@ export type GetConversationArtifactPreviewResponses = {
         artifactId: string;
         type: 'image_pages';
         format: 'png' | 'webp' | 'jpeg';
+        pageCount?: number;
+        truncated?: boolean;
         pages: Array<{
             artifactId: string;
             mimeType: 'image/png' | 'image/jpeg' | 'image/webp';
@@ -2174,6 +2178,54 @@ export type GetConversationArtifactPreviewResponses = {
 };
 
 export type GetConversationArtifactPreviewResponse = GetConversationArtifactPreviewResponses[keyof GetConversationArtifactPreviewResponses];
+
+export type GetConversationAttachmentPreviewData = {
+    body?: never;
+    path: {
+        conversationId: string;
+        attachmentId: string;
+    };
+    query?: never;
+    url: '/api/conversations/{conversationId}/attachments/{attachmentId}/preview';
+};
+
+export type GetConversationAttachmentPreviewResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        status: 'pending';
+        artifactId: string;
+        queuedAt?: string;
+    } | {
+        status: 'ready';
+        artifactId: string;
+        type: 'image_pages';
+        format: 'png' | 'webp' | 'jpeg';
+        pageCount?: number;
+        truncated?: boolean;
+        pages: Array<{
+            artifactId: string;
+            mimeType: 'image/png' | 'image/jpeg' | 'image/webp';
+            filename?: string;
+            pageNumber?: number;
+            slideNumber?: number;
+            width?: number;
+            height?: number;
+        }>;
+    } | {
+        status: 'failed';
+        artifactId: string;
+        errorCode?: string;
+        retryable?: boolean;
+    } | {
+        status: 'unsupported';
+        artifactId: string;
+        errorCode?: string;
+    };
+};
+
+export type GetConversationAttachmentPreviewResponse = GetConversationAttachmentPreviewResponses[keyof GetConversationAttachmentPreviewResponses];
 
 export type RetryConversationArtifactPreviewData = {
     body?: never;
@@ -2198,6 +2250,8 @@ export type RetryConversationArtifactPreviewResponses = {
         artifactId: string;
         type: 'image_pages';
         format: 'png' | 'webp' | 'jpeg';
+        pageCount?: number;
+        truncated?: boolean;
         pages: Array<{
             artifactId: string;
             mimeType: 'image/png' | 'image/jpeg' | 'image/webp';

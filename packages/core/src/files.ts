@@ -56,6 +56,8 @@ export type ArtifactPreviewFailureCode =
 export const DEFAULT_ARTIFACT_PREVIEW_RENDERER = "artifact-preview-worker";
 export const DEFAULT_ARTIFACT_PREVIEW_RENDERER_VERSION = "preview-contract-v1";
 export const DEFAULT_ARTIFACT_PREVIEW_SETTINGS_HASH = "default-image-pages-v1";
+export const ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_REF = "preview.source_artifact";
+export const ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_KIND = "preview.source_attachment";
 
 export interface ArtifactPreviewIdentityInput {
   renderer?: string;
@@ -83,6 +85,8 @@ export function isRetryableArtifactPreviewErrorCode(errorCode: string | undefine
   return (
     errorCode === "conversion_timeout" ||
     errorCode === "conversion_failed" ||
+    errorCode === "source_too_large" ||
+    errorCode === "page_limit_exceeded" ||
     errorCode === "rasterization_failed" ||
     errorCode === "storage_failed" ||
     errorCode === "internal_error" ||
@@ -428,6 +432,7 @@ export type WriteArtifactPreviewManifestInput =
       type: "image_pages";
       format: ArtifactPreviewImageFormat;
       pages: ArtifactPreviewImagePageRef[];
+      pageCount?: number;
       writtenAt?: ISODateString;
     }
   | {
@@ -450,6 +455,14 @@ export interface ClaimNextArtifactPreviewJobInput {
   leaseExpiresAt: ISODateString;
 }
 
+export interface RenewClaimedArtifactPreviewJobLeaseInput {
+  clientInstanceId: ClientInstanceId;
+  jobId: string;
+  leaseToken: string;
+  renewedAt: ISODateString;
+  leaseExpiresAt: ISODateString;
+}
+
 export interface CompleteClaimedArtifactPreviewJobInput {
   clientInstanceId: ClientInstanceId;
   jobId: string;
@@ -457,6 +470,7 @@ export interface CompleteClaimedArtifactPreviewJobInput {
   format: ArtifactPreviewImageFormat;
   pages?: ArtifactPreviewImagePageRef[];
   previewArtifacts?: ArtifactPreviewImageArtifactInput[];
+  sourcePageCount?: number;
   completedAt: ISODateString;
 }
 
@@ -528,6 +542,9 @@ export interface ArtifactPreviewStore {
   claimNextArtifactPreviewJob(
     input: ClaimNextArtifactPreviewJobInput
   ): Promise<ArtifactPreviewJobRecord | undefined>;
+  renewClaimedArtifactPreviewJobLease(
+    input: RenewClaimedArtifactPreviewJobLeaseInput
+  ): Promise<ArtifactPreviewJobRecord>;
   completeClaimedArtifactPreviewJob(
     input: CompleteClaimedArtifactPreviewJobInput
   ): Promise<ArtifactPreviewJobRecord>;

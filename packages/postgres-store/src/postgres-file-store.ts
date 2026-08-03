@@ -36,6 +36,7 @@ import {
   type ManagedObjectDeletionResult,
   type MessageId,
   type RecoverStaleArtifactPreviewJobsInput,
+  type RenewClaimedArtifactPreviewJobLeaseInput,
   type UpdateConversationAttachmentInput,
   type WriteArtifactPreviewManifestInput,
   createPlatformId
@@ -54,6 +55,7 @@ import {
   getArtifactPreviewManifest as getPostgresArtifactPreviewManifest,
   markClaimedArtifactPreviewJobUnsupported as markClaimedPostgresArtifactPreviewJobUnsupported,
   recoverStaleArtifactPreviewJobs as recoverStalePostgresArtifactPreviewJobs,
+  renewClaimedArtifactPreviewJobLease as renewClaimedPostgresArtifactPreviewJobLease,
   writeArtifactPreviewManifest as writePostgresArtifactPreviewManifest
 } from "./postgres-artifact-preview-operations";
 import {
@@ -228,6 +230,12 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     input: ClaimNextArtifactPreviewJobInput
   ): Promise<ArtifactPreviewJobRecord | undefined> {
     return claimNextPostgresArtifactPreviewJob(this.db, input);
+  }
+
+  async renewClaimedArtifactPreviewJobLease(
+    input: RenewClaimedArtifactPreviewJobLeaseInput
+  ): Promise<ArtifactPreviewJobRecord> {
+    return renewClaimedPostgresArtifactPreviewJobLease(this.db, input);
   }
 
   async completeClaimedArtifactPreviewJob(

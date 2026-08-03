@@ -430,8 +430,11 @@ export function createApiClient(options: ApiClientOptions) {
           params: { conversationId, fileId }
         })
       ),
-    conversationArtifactContentUrl: (conversationId: string, artifactId: string) =>
-      buildUrl(conversationArtifactContentPath(conversationId, artifactId)),
+    conversationArtifactContentUrl: (
+      conversationId: string,
+      artifactId: string,
+      inline = false
+    ) => buildUrl(`${conversationArtifactContentPath(conversationId, artifactId)}${inline ? "?inline=true" : ""}`),
     conversationArtifactContent: (conversationId: string, artifactId: string) =>
       requestBlob(conversationArtifactContentPath(conversationId, artifactId)),
     conversationArtifactPreview: (conversationId: string, artifactId: string) =>
@@ -440,6 +443,13 @@ export function createApiClient(options: ApiClientOptions) {
           params: { conversationId, artifactId }
         }),
         apiOperations.getConversationArtifactPreview.responseSchema
+      ),
+    conversationAttachmentPreview: (conversationId: string, attachmentId: string) =>
+      requestJson(
+        apiOperations.getConversationAttachmentPreview.buildPath({
+          params: { conversationId, attachmentId }
+        }),
+        apiOperations.getConversationAttachmentPreview.responseSchema
       ),
     retryConversationArtifactPreview: (conversationId: string, artifactId: string) =>
       requestJson(

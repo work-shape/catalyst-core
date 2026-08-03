@@ -11,18 +11,13 @@ import {
 import type { ToolArtifactDownloadRef } from "../packages/chat-ui/src/tool-artifacts";
 
 describe("chat UI artifact preview state", () => {
-  it("backs off while pending and stops polling after the short cap", () => {
+  it("backs off while pending and continues polling at the capped interval", () => {
     expect(
       ARTIFACT_PREVIEW_POLL_DELAYS_MS.map((_, index) =>
         artifactPreviewPollDelayMs({ status: "pending", pendingAttempt: index })
       )
     ).toEqual([1000, 2000, 3000, 5000, 5000, 5000, 5000, 5000]);
-    expect(
-      artifactPreviewPollDelayMs({
-        status: "pending",
-        pendingAttempt: ARTIFACT_PREVIEW_POLL_DELAYS_MS.length
-      })
-    ).toBeUndefined();
+    expect(artifactPreviewPollDelayMs({ status: "pending", pendingAttempt: 100 })).toBe(5000);
     expect(artifactPreviewPollDelayMs({ status: "ready", pendingAttempt: 0 })).toBeUndefined();
     expect(artifactPreviewPollDelayMs({ status: "failed", pendingAttempt: 0 })).toBeUndefined();
     expect(artifactPreviewPollDelayMs({ status: "unsupported", pendingAttempt: 0 })).toBeUndefined();

@@ -3,6 +3,7 @@ import {
   detectArtifactPreviewSourceKind,
   resolveFilePreviewCapability
 } from "@vivd-catalyst/core";
+import { getSourceFilePreviewKind } from "../packages/chat-ui/src/source-file-preview";
 
 describe("file preview policy", () => {
   it.each([
@@ -24,5 +25,12 @@ describe("file preview policy", () => {
     expect(detectArtifactPreviewSourceKind({ filename: "deck.pptx" })).toBe("presentation");
     expect(detectArtifactPreviewSourceKind({ filename: "model.xlsx" })).toBe("spreadsheet");
     expect(detectArtifactPreviewSourceKind({ filename: "notes.txt" })).toBeUndefined();
+  });
+
+  it("routes uploaded files through the same capability decisions", () => {
+    expect(getSourceFilePreviewKind("deck.pptx")).toBe("office");
+    expect(getSourceFilePreviewKind("letter.docx")).toBe("office");
+    expect(getSourceFilePreviewKind("report.pdf")).toBe("pdf");
+    expect(getSourceFilePreviewKind("model.xlsx")).toBe("spreadsheet");
   });
 });

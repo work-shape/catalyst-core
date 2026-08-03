@@ -12,6 +12,7 @@ import {
   type ManagedArtifactRecord,
   type MarkClaimedArtifactPreviewJobUnsupportedInput,
   type RecoverStaleArtifactPreviewJobsInput,
+  type RenewClaimedArtifactPreviewJobLeaseInput,
   type WriteArtifactPreviewManifestInput,
   createPlatformId,
   normalizeArtifactPreviewIdentity
@@ -137,6 +138,19 @@ export class InMemoryArtifactPreviewStore {
     return claimed;
   }
 
+  async renewClaimedArtifactPreviewJobLease(
+    input: RenewClaimedArtifactPreviewJobLeaseInput
+  ): Promise<ArtifactPreviewJobRecord> {
+    const { key, job } = this.requireClaimedArtifactPreviewJob(input);
+    const renewed = {
+      ...job,
+      leaseExpiresAt: input.leaseExpiresAt,
+      updatedAt: input.renewedAt
+    };
+    this.artifactPreviewJobs.set(key, renewed);
+    return renewed;
+  }
+
   async completeClaimedArtifactPreviewJob(
     input: CompleteClaimedArtifactPreviewJobInput
   ): Promise<ArtifactPreviewJobRecord> {
@@ -205,6 +219,7 @@ export class InMemoryArtifactPreviewStore {
       type: "image_pages",
       format: input.format,
       pages,
+      pageCount: input.sourcePageCount,
       writtenAt: input.completedAt
     });
     return completed;
@@ -356,7 +371,7 @@ export class InMemoryArtifactPreviewStore {
             ...identity,
             type: "image_pages",
             format: input.format,
-            pageCount: input.pages.length,
+            pageCount: input.pageCount ?? input.pages.length,
             pages: input.pages,
             createdAt: existing?.createdAt ?? writtenAt,
             updatedAt: writtenAt

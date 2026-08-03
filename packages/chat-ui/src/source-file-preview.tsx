@@ -184,6 +184,7 @@ export function createSourceFilePreviewEntry({
       <SourceFilePreview
         client={client}
         conversationId={conversationId}
+        attachmentId={resource.attachmentId}
         fileId={resource.preview.fileId}
         filename={resource.download.filename}
         mimeType={resource.mimeType}
@@ -204,12 +205,14 @@ export function createSourceFilePreviewEntry({
 export function SourceFilePreview({
   client,
   conversationId,
+  attachmentId,
   fileId,
   filename,
   mimeType
 }: {
   client: ApiClient;
   conversationId: string;
+  attachmentId: string;
   fileId: string;
   filename: string;
   mimeType?: string;
@@ -218,8 +221,9 @@ export function SourceFilePreview({
   const previewKind = getSourceFilePreviewKind(filename, mimeType);
   const pdf = previewKind === "pdf";
   const spreadsheet = previewKind === "spreadsheet";
+  const office = previewKind === "office";
   const download = previewKind ? sourceFilePreviewRequiresDownload(previewKind) : false;
-  const directUrl = client.browserManagedDownloads && previewKind === "image"
+  const directUrl = client.browserManagedDownloads && (previewKind === "image" || previewKind === "pdf")
     ? client.conversationFileContentUrl(conversationId, fileId)
     : undefined;
   const [url, setUrl] = useState<string | undefined>(directUrl);
@@ -227,6 +231,9 @@ export function SourceFilePreview({
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
+    if (office) {
+      return undefined;
+    }
     if (directUrl) {
       setUrl(directUrl);
       setBlob(undefined);
@@ -262,7 +269,19 @@ export function SourceFilePreview({
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [client, conversationId, directUrl, download, fileId, spreadsheet]);
+  }, [client, conversationId, directUrl, download, fileId, office, spreadsheet]);
+
+  if (office) {
+    return (
+      <AttachmentOfficePreview
+        client={client}
+        conversationId={conversationId}
+        attachmentId={attachmentId}
+        filename={filename}
+        mimeType={mimeType}
+      />
+    );
+  }
 
   if (failed) {
     return (
@@ -305,7 +324,7 @@ export function SourceFilePreview({
   );
 }
 
-export type SourceFilePreviewKind = "image" | "pdf" | "spreadsheet";
+export type SourceFilePreviewKind = "image" | "pdf" | "spreadsheet" | "office";
 
 export function sourceFilePreviewRequiresDownload(
   previewKind: SourceFilePreviewKind
@@ -324,7 +343,77 @@ export function getSourceFilePreviewKind(
       ? "pdf"
       : capability === "spreadsheet"
         ? "spreadsheet"
+        : capability === "office_document_pages" || capability === "office_presentation_pages"
+          ? "office"
         : undefined;
+}
+
+function AttachmentOfficePreview({
+  client,
+  conversationId,
+  attachmentId,
+  filename,
+  mimeType
+}: {
+  client: ApiClient;
+  conversationId: string;
+  attachmentId: string;
+  filename: string;
+  mimeType?: string;
+}) {
+  const { t } = useTranslation();
+  const [artifactId, setArtifactId] = useState<string>();
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setArtifactId(undefined);
+    setFailed(false);
+    void client.conversationAttachmentPreview(conversationId, attachmentId)
+      .then((preview) => {
+        if (active) {
+          setArtifactId(preview.artifactId);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setFailed(true);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [attachmentId, client, conversationId]);
+
+  if (failed) {
+    return (
+      <div className="flex min-h-64 items-center justify-center text-sm text-muted-foreground">
+        {t("resourcesLoadFailed")}
+      </div>
+    );
+  }
+  if (!artifactId) {
+    return (
+      <div className="flex min-h-64 items-center justify-center">
+        <Spinner size="sm" />
+      </div>
+    );
+  }
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-64 items-center justify-center">
+          <Spinner size="sm" />
+        </div>
+      }
+    >
+      <ArtifactPreview
+        artifact={{ artifactId, filename, mimeType }}
+        client={client}
+        conversationId={conversationId}
+      />
+    </Suspense>
+  );
 }
 
 function FileDetails({
