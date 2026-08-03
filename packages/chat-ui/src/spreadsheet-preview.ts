@@ -25,6 +25,7 @@ import ExcelJS, {
   type Cell,
   type Color,
   type Fill,
+  type Row,
   type Style,
   type Worksheet
 } from "exceljs";
@@ -119,6 +120,7 @@ function worksheetToUniverSnapshot(
   const ySplit = view?.state === "frozen" ? view.ySplit ?? 0 : 0;
   const topLeft = decodeCellAddress(view && "topLeftCell" in view ? view.topLeftCell : undefined);
   const showHeaders = view?.showRowColHeaders !== false;
+  const defaultRowHeight = worksheet.properties.defaultRowHeight ?? 15;
 
   return {
     id,
@@ -137,13 +139,13 @@ function worksheetToUniverSnapshot(
     scrollTop: 0,
     scrollLeft: 0,
     defaultColumnWidth: columnWidthPixels(worksheet.properties.defaultColWidth ?? 11.8),
-    defaultRowHeight: pointsToPixels(worksheet.properties.defaultRowHeight ?? 15),
+    defaultRowHeight: pointsToPixels(defaultRowHeight),
     mergeData: worksheet.model.merges.flatMap((range) => {
       const decoded = decodeRange(range);
       return decoded ? [decoded] : [];
     }),
     cellData: worksheetCellData(worksheet, date1904, styleRegistry),
-    rowData: rowData(worksheet),
+    rowData: rowData(worksheet, defaultRowHeight),
     columnData: columnData(worksheet),
     rowHeader: {
       width: 44,
@@ -356,18 +358,36 @@ function colorHex(color: Partial<Color> | undefined): string | undefined {
   return rgb.length === 6 ? `#${rgb.toUpperCase()}` : undefined;
 }
 
-function rowData(worksheet: Worksheet): IWorksheetData["rowData"] {
+function rowData(
+  worksheet: Worksheet,
+  defaultRowHeight: number
+): IWorksheetData["rowData"] {
   const rows: IWorksheetData["rowData"] = {};
   for (let index = 1; index <= worksheet.rowCount; index += 1) {
     const row = worksheet.findRow(index);
-    if (row?.height || row?.hidden) {
+    const height = row?.height
+      ? pointsToPixels(row.height)
+      : row
+        ? contentRowHeight(row, defaultRowHeight)
+        : undefined;
+    if (height || row?.hidden) {
       rows[index - 1] = {
-        h: row.height ? pointsToPixels(row.height) : undefined,
-        hd: row.hidden ? BooleanNumber.TRUE : BooleanNumber.FALSE
+        h: height,
+        hd: row?.hidden ? BooleanNumber.TRUE : BooleanNumber.FALSE
       };
     }
   }
   return rows;
+}
+
+function contentRowHeight(row: Row, defaultRowHeight: number): number | undefined {
+  let largestFontSize = 0;
+  row.eachCell({ includeEmpty: false }, (cell) => {
+    largestFontSize = Math.max(largestFontSize, cell.font?.size ?? 0);
+  });
+  return largestFontSize > defaultRowHeight
+    ? pointsToPixels(largestFontSize * 1.2)
+    : undefined;
 }
 
 function columnData(worksheet: Worksheet): IWorksheetData["columnData"] {

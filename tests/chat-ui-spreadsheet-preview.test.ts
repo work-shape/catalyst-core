@@ -184,6 +184,28 @@ describe("chat UI spreadsheet preview import", () => {
     });
   });
 
+  it("expands non-custom rows to fit explicit large font sizes", async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Rows", {
+      properties: { defaultRowHeight: 15 }
+    });
+    sheet.getCell("A1").value = "Large title";
+    sheet.getCell("A1").font = { size: 20 };
+    sheet.getCell("A2").value = "Intentionally fixed";
+    sheet.getCell("A2").font = { size: 20 };
+    sheet.getRow(2).height = 12;
+    sheet.getCell("A3").value = "Default";
+
+    const bytes = await workbook.xlsx.writeBuffer();
+    const snapshot = await workbookToUniverSnapshot(bytes);
+    const sheetSnapshot = snapshot.sheets[snapshot.sheetOrder[0]!]!;
+
+    expect(sheetSnapshot.defaultRowHeight).toBe(20);
+    expect(sheetSnapshot.rowData?.[0]).toMatchObject({ h: 32 });
+    expect(sheetSnapshot.rowData?.[1]).toMatchObject({ h: 16 });
+    expect(sheetSnapshot.rowData?.[2]).toBeUndefined();
+  });
+
   it("keeps the existing value preview fallback for legacy XLS files", async () => {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(
