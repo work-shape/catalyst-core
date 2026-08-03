@@ -7,6 +7,7 @@ import {
   isImageFileFormat,
   isJsonObject,
   readToolResultMetadata,
+  resolveFilePreviewCapability,
   type ChatMessage,
   type ClientInstanceId,
   type ConversationAttachment,
@@ -79,7 +80,8 @@ function sourceFileResource(
   attachment: ConversationAttachment,
   artifactsById: ReadonlyMap<string, ManagedArtifactRecord>
 ): SourceFileResource {
-  const previewArtifact = isImageFileFormat(attachment.format)
+  const previewCapability = resolveFilePreviewCapability(attachment);
+  const previewArtifact = isImageFileFormat(attachment.format) || previewCapability === "native_pdf"
     ? undefined
     : userViewableArtifact(attachment, artifactsById);
   return {

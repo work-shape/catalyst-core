@@ -122,8 +122,7 @@ export function shouldUseLiveArtifactPreviewState(artifact: ToolArtifactDownload
   return (
     previewKind === "image-pages" ||
     previewKind === "document" ||
-    previewKind === "presentation" ||
-    previewKind === "pdf"
+    previewKind === "presentation"
   );
 }
 

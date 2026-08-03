@@ -33,6 +33,14 @@ export type ArtifactPreviewJobStatus =
   | "failed"
   | "unsupported";
 export type ArtifactPreviewSourceKind = "document" | "presentation" | "pdf" | "spreadsheet";
+export type FilePreviewCapability =
+  | "native_image"
+  | "native_pdf"
+  | "spreadsheet"
+  | "office_document_pages"
+  | "office_presentation_pages"
+  | "markdown"
+  | "text";
 export type ArtifactPreviewFailureCode =
   | "unsupported_type"
   | "source_missing"
@@ -644,18 +652,49 @@ export function detectArtifactPreviewSourceKind(input: {
   kind?: string;
   mimeType?: string;
 }): ArtifactPreviewSourceKind | undefined {
+  const capability = resolveFilePreviewCapability(input);
+  return capability === "native_pdf"
+    ? "pdf"
+    : capability === "office_presentation_pages"
+      ? "presentation"
+      : capability === "office_document_pages"
+        ? "document"
+        : capability === "spreadsheet"
+          ? "spreadsheet"
+          : undefined;
+}
+
+/** Selects preview behavior from the file itself, independent of how it entered the conversation. */
+export function resolveFilePreviewCapability(input: {
+  filename?: string;
+  kind?: string;
+  mimeType?: string;
+}): FilePreviewCapability | undefined {
   const descriptor = `${input.mimeType ?? ""} ${input.kind ?? ""} ${input.filename ?? ""}`.toLowerCase();
   if (containsPdfSignal(descriptor)) {
-    return "pdf";
+    return "native_pdf";
   }
   if (containsOfficePresentationSignal(descriptor)) {
-    return "presentation";
+    return "office_presentation_pages";
   }
   if (containsOfficeDocumentSignal(descriptor)) {
-    return "document";
+    return "office_document_pages";
   }
   if (containsSpreadsheetSignal(descriptor)) {
     return "spreadsheet";
+  }
+  if (input.mimeType?.toLowerCase().startsWith("image/")) {
+    return "native_image";
+  }
+  if (descriptor.includes("markdown") || hasArtifactPreviewExtension(descriptor, ["md", "mdx"])) {
+    return "markdown";
+  }
+  if (
+    input.mimeType?.toLowerCase().startsWith("text/") ||
+    descriptor.includes("application/json") ||
+    hasArtifactPreviewExtension(descriptor, ["txt", "csv", "json", "html", "rtf"])
+  ) {
+    return "text";
   }
   return undefined;
 }
@@ -687,7 +726,7 @@ function containsSpreadsheetSignal(descriptor: string): boolean {
     descriptor.includes("msexcel") ||
     descriptor.includes("opendocument.spreadsheet") ||
     descriptor.includes("spreadsheet") ||
-    hasArtifactPreviewExtension(descriptor, ["xlsx", "xls", "ods"])
+    hasArtifactPreviewExtension(descriptor, ["xlsx", "xlsm", "xls", "ods"])
   );
 }
 
