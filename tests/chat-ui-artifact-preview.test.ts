@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { createElement } from "../packages/chat-ui/node_modules/react";
+import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
 import type { ArtifactPreviewResponse } from "@vivd-catalyst/api-client";
 import {
   ARTIFACT_PREVIEW_POLL_DELAYS_MS,
@@ -8,9 +10,28 @@ import {
   getArtifactSourceFallbackKind,
   shouldUseLiveArtifactPreviewState
 } from "../packages/chat-ui/src/artifact-preview";
+import { ArtifactPreviewMessage } from "../packages/chat-ui/src/artifact-preview-shell";
 import type { ToolArtifactDownloadRef } from "../packages/chat-ui/src/tool-artifacts";
 
 describe("chat UI artifact preview state", () => {
+  it("wraps long preview details inside the status card", () => {
+    const markup = renderToStaticMarkup(
+      createElement(ArtifactPreviewMessage, {
+        fileType: {
+          badge: "PPT",
+          label: "Presentation",
+          className: "bg-orange-700",
+          extension: "pptx"
+        },
+        title: "Loading preview",
+        detail: "Surprise_The_Museum_of_Things_We_Havent_Lost_Yet.pptx"
+      })
+    );
+
+    expect(markup).toContain("[overflow-wrap:anywhere]");
+    expect(markup).toContain("Surprise_The_Museum_of_Things_We_Havent_Lost_Yet.pptx");
+  });
+
   it("backs off while pending and continues polling at the capped interval", () => {
     expect(
       ARTIFACT_PREVIEW_POLL_DELAYS_MS.map((_, index) =>
