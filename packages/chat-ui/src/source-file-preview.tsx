@@ -12,6 +12,7 @@ import type {
   ApiClient,
   ConversationResourceListItem
 } from "@vivd-catalyst/api-client";
+import { resolveFilePreviewCapability } from "@vivd-catalyst/core";
 import { useWorkspaceApiClient } from "./api/workspace-api-client";
 import { workspaceQueryKeys } from "./api/workspace-query-keys";
 import { useTranslation } from "./i18n";
@@ -316,18 +317,14 @@ export function getSourceFilePreviewKind(
   filename: string,
   mimeType?: string
 ): SourceFilePreviewKind | undefined {
-  if (mimeType?.startsWith("image/")) {
-    return "image";
-  }
-  if (mimeType === "application/pdf") {
-    return "pdf";
-  }
-  const value = `${mimeType ?? ""} ${filename}`.toLowerCase();
-  return value.includes("spreadsheet") ||
-    value.includes("excel") ||
-    /\.(?:xlsx|xlsm|xls)$/i.test(filename)
-    ? "spreadsheet"
-    : undefined;
+  const capability = resolveFilePreviewCapability({ filename, mimeType });
+  return capability === "native_image"
+    ? "image"
+    : capability === "native_pdf"
+      ? "pdf"
+      : capability === "spreadsheet"
+        ? "spreadsheet"
+        : undefined;
 }
 
 function FileDetails({

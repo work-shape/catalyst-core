@@ -1,5 +1,5 @@
 import {
-  detectArtifactPreviewSourceKind,
+  resolveFilePreviewCapability,
   type ArtifactPreviewJobRecord,
   type ManagedArtifactRecord,
   type PlatformStore
@@ -11,7 +11,11 @@ export async function enqueueArtifactPreviewJobForPromotedArtifact(
   store: ArtifactPreviewJobStore,
   artifact: ManagedArtifactRecord
 ): Promise<ArtifactPreviewJobRecord | undefined> {
-  if (!detectArtifactPreviewSourceKind(artifact)) {
+  const capability = resolveFilePreviewCapability(artifact);
+  if (
+    capability !== "office_document_pages" &&
+    capability !== "office_presentation_pages"
+  ) {
     return undefined;
   }
   return store.enqueueArtifactPreviewJob({

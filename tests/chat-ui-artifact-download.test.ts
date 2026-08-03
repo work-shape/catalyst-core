@@ -471,12 +471,12 @@ describe("chat UI artifact download cards", () => {
     expectPreviewKind(
       "legacy.doc",
       "application/msword",
-      undefined
+      "document"
     );
     expectPreviewKind(
       "legacy.ppt",
       "application/vnd.ms-powerpoint",
-      undefined
+      "presentation"
     );
   });
 

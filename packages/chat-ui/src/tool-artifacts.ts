@@ -1,4 +1,5 @@
 import type { ArtifactPreviewResponse } from "@vivd-catalyst/api-client";
+import { resolveFilePreviewCapability } from "@vivd-catalyst/core";
 
 export const WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE = "data-workspace-promoted-artifacts";
 
@@ -176,30 +177,22 @@ export function getArtifactPreviewKind(artifact: ToolArtifactDownloadRef): Artif
   if (readArtifactImagePagesPreview(artifact)) {
     return "image-pages";
   }
-  const value = artifactDescriptorValue(artifact);
-  const fileType = getArtifactFileType(artifact);
-  if (fileType.extension === "pdf") {
-    return "pdf";
-  }
-  if (isOfficeDocumentPreviewCandidate(value)) {
-    return "document";
-  }
-  if (isOfficePresentationPreviewCandidate(value)) {
-    return "presentation";
-  }
-  if (fileType.label === "Image") {
-    return "image";
-  }
-  if (fileType.extension === "md") {
-    return "markdown";
-  }
-  if (fileType.extension === "txt" || fileType.extension === "csv") {
-    return "text";
-  }
-  if (fileType.extension === "xlsx") {
-    return "spreadsheet";
-  }
-  return undefined;
+  const capability = resolveFilePreviewCapability(artifact);
+  return capability === "native_pdf"
+    ? "pdf"
+    : capability === "native_image"
+      ? "image"
+      : capability === "markdown"
+        ? "markdown"
+        : capability === "text"
+          ? "text"
+          : capability === "spreadsheet"
+            ? "spreadsheet"
+            : capability === "office_document_pages"
+              ? "document"
+              : capability === "office_presentation_pages"
+                ? "presentation"
+                : undefined;
 }
 
 export function readArtifactImagePagesPreview(
@@ -210,20 +203,6 @@ export function readArtifactImagePagesPreview(
 
 function artifactDescriptorValue(artifact: ToolArtifactDownloadRef): string {
   return `${artifact.mimeType ?? ""} ${artifact.kind ?? ""} ${artifact.filename ?? ""}`.toLowerCase();
-}
-
-function isOfficeDocumentPreviewCandidate(value: string): boolean {
-  return (
-    value.includes("wordprocessingml") ||
-    hasExtension(value, ["docx"])
-  );
-}
-
-function isOfficePresentationPreviewCandidate(value: string): boolean {
-  return (
-    value.includes("presentationml") ||
-    hasExtension(value, ["pptx"])
-  );
 }
 
 export function artifactDisplayFilename(artifact: ToolArtifactDownloadRef): string {
