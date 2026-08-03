@@ -20,6 +20,7 @@ import {
   findSourceFileResource,
   findSourceFileResourceByAttachmentId,
   getSourceFilePreviewKind,
+  sourceFilePreviewRequiresDownload,
   SourceFilePreview
 } from "../packages/chat-ui/src/source-file-preview";
 import { StructuredDataView } from "../packages/chat-ui/src/structured-data-view";
@@ -122,6 +123,9 @@ describe("Resources panel model", () => {
     );
     expect(getSourceFilePreviewKind("macros.xlsm")).toBe("spreadsheet");
     expect(getSourceFilePreviewKind("archive.zip", "application/zip")).toBeUndefined();
+    expect(sourceFilePreviewRequiresDownload("spreadsheet")).toBe(true);
+    expect(sourceFilePreviewRequiresDownload("pdf")).toBe(true);
+    expect(sourceFilePreviewRequiresDownload("image")).toBe(false);
 
     const workbookResource: ConversationResourceListItem = {
       resourceId: "source-workbook",

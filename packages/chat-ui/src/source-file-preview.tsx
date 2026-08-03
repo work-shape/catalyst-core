@@ -217,6 +217,7 @@ export function SourceFilePreview({
   const previewKind = getSourceFilePreviewKind(filename, mimeType);
   const pdf = previewKind === "pdf";
   const spreadsheet = previewKind === "spreadsheet";
+  const download = previewKind ? sourceFilePreviewRequiresDownload(previewKind) : false;
   const directUrl = client.browserManagedDownloads && previewKind === "image"
     ? client.conversationFileContentUrl(conversationId, fileId)
     : undefined;
@@ -238,7 +239,7 @@ export function SourceFilePreview({
     setBlob(undefined);
     setFailed(false);
     void client
-      .conversationFileContent(conversationId, fileId, pdf)
+      .conversationFileContent(conversationId, fileId, download)
       .then((blob) => {
         if (active) {
           if (spreadsheet) {
@@ -260,7 +261,7 @@ export function SourceFilePreview({
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [client, conversationId, directUrl, fileId, pdf, spreadsheet]);
+  }, [client, conversationId, directUrl, download, fileId, spreadsheet]);
 
   if (failed) {
     return (
@@ -304,6 +305,12 @@ export function SourceFilePreview({
 }
 
 export type SourceFilePreviewKind = "image" | "pdf" | "spreadsheet";
+
+export function sourceFilePreviewRequiresDownload(
+  previewKind: SourceFilePreviewKind
+): boolean {
+  return previewKind !== "image";
+}
 
 export function getSourceFilePreviewKind(
   filename: string,
