@@ -14,7 +14,7 @@ import {
 } from "@vivd-catalyst/config-schema";
 import { createModelProviderRegistry } from "@vivd-catalyst/model-provider";
 import {
-  createDataSourceQueryTools,
+  createDataSourceTools,
   createDataSourceRegistry,
   createEnvSecretResolver
 } from "@vivd-catalyst/data-source";
@@ -172,7 +172,7 @@ export async function createClientInstanceApp(
       ...workspaceTools,
       ...createStructuredDataToolDefinitions({ store }),
       ...webAccessTools,
-      ...createDataSourceQueryTools({ dataSources }),
+      ...createDataSourceTools({ dataSources }),
       createReadSkillTool({ assetSource }),
       ...capabilityContributions.flatMap((contribution) => contribution.tools ?? []),
       ...input.tools

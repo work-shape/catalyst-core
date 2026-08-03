@@ -19,10 +19,49 @@ export interface DataSourceQueryResult {
   truncated: boolean;
 }
 
+export interface DataSourceDescribeInput {
+  sourceName: string;
+  relation?: string;
+}
+
+export interface DataSourceRelationSummary {
+  schema: string;
+  name: string;
+  type: "table" | "view" | "materialized_view" | "foreign_table";
+  description?: string;
+}
+
+export interface DataSourceColumnDescription {
+  name: string;
+  dataType: string;
+  nullable: boolean;
+  description?: string;
+}
+
+export interface DataSourceForeignKeyDescription {
+  columns: string[];
+  referencedSchema: string;
+  referencedRelation: string;
+  referencedColumns: string[];
+}
+
+export interface DataSourceRelationDescription extends DataSourceRelationSummary {
+  columns: DataSourceColumnDescription[];
+  primaryKey: string[];
+  foreignKeys: DataSourceForeignKeyDescription[];
+}
+
+export interface DataSourceDescribeResult {
+  relations: DataSourceRelationSummary[];
+  relation?: DataSourceRelationDescription;
+  truncated: boolean;
+}
+
 export interface DataSourceRegistry {
   list(): DataSourceRegistration[];
   get(sourceName: string): DataSourceRegistration | undefined;
   query(input: DataSourceQueryInput): Promise<DataSourceQueryResult>;
+  describe(input: DataSourceDescribeInput): Promise<DataSourceDescribeResult>;
 }
 
 export interface SecretResolver {
@@ -34,9 +73,12 @@ export interface CreateDataSourceRegistryInput {
   secretResolver: SecretResolver;
 }
 
-export interface CreateDataSourceQueryToolsInput {
+export interface CreateDataSourceToolsInput {
   dataSources: DataSourceRegistry;
 }
+
+/** @deprecated Use CreateDataSourceToolsInput. */
+export type CreateDataSourceQueryToolsInput = CreateDataSourceToolsInput;
 
 const queryToolInputSchema = z.object({
   query: z
@@ -54,12 +96,60 @@ const queryToolOutputSchema = z.object({
 type QueryToolInput = z.infer<typeof queryToolInputSchema>;
 type QueryToolOutput = z.infer<typeof queryToolOutputSchema>;
 
+const describeToolInputSchema = z.object({
+  relation: z
+    .string()
+    .min(1)
+    .max(300)
+    .optional()
+    .describe(
+      "Optional relation name, such as fact_sales or reporting.fact_sales. Omit it to list readable relations."
+    )
+});
+
+const relationSummarySchema = z.object({
+  schema: z.string(),
+  name: z.string(),
+  type: z.enum(["table", "view", "materialized_view", "foreign_table"]),
+  description: z.string().optional()
+});
+
+const describeToolOutputSchema = z.object({
+  relations: z.array(relationSummarySchema),
+  relation: relationSummarySchema
+    .extend({
+      columns: z.array(
+        z.object({
+          name: z.string(),
+          dataType: z.string(),
+          nullable: z.boolean(),
+          description: z.string().optional()
+        })
+      ),
+      primaryKey: z.array(z.string()),
+      foreignKeys: z.array(
+        z.object({
+          columns: z.array(z.string()),
+          referencedSchema: z.string(),
+          referencedRelation: z.string(),
+          referencedColumns: z.array(z.string())
+        })
+      )
+    })
+    .optional(),
+  truncated: z.boolean()
+});
+
+type DescribeToolInput = z.infer<typeof describeToolInputSchema>;
+type DescribeToolOutput = z.infer<typeof describeToolOutputSchema>;
+
 interface RegisteredDataSource extends DataSourceRegistration {
   adapter: DataSourceAdapter;
 }
 
 interface DataSourceAdapter {
   query(query: string): Promise<DataSourceQueryResult>;
+  describe(relation?: string): Promise<DataSourceDescribeResult>;
 }
 
 export function createDataSourceRegistry(input: CreateDataSourceRegistryInput): DataSourceRegistry {
@@ -92,7 +182,7 @@ export function createEnvSecretResolver(env: Record<string, string | undefined>)
   };
 }
 
-export function createDataSourceQueryTools(input: CreateDataSourceQueryToolsInput): AnyToolDefinition[] {
+export function createDataSourceTools(input: CreateDataSourceToolsInput): AnyToolDefinition[] {
   const dataSources = input.dataSources;
   return dataSources.list().flatMap(({ name, config }) => {
     const queryTool = config.tools?.query;
@@ -100,11 +190,13 @@ export function createDataSourceQueryTools(input: CreateDataSourceQueryToolsInpu
       return [];
     }
     const toolName = queryTool.name ?? `data.${name}.query`;
+    const describeToolName = `data.${name}.describe`;
     return [
       defineTool<QueryToolInput, QueryToolOutput>({
         name: toolName,
         description: [
           `Run a read-only query against ${config.description}.`,
+          `Use ${describeToolName} first when the schema is unfamiliar.`,
           config.sql.allowedSchemas.length > 0
             ? `Unqualified table names resolve through these configured schemas: ${config.sql.allowedSchemas.join(", ")}.`
             : "",
@@ -130,10 +222,32 @@ export function createDataSourceQueryTools(input: CreateDataSourceQueryToolsInpu
             }
           });
         }
+      }),
+      defineTool<DescribeToolInput, DescribeToolOutput>({
+        name: describeToolName,
+        description: `Discover the readable schema of ${config.description}. Omit relation to list tables and views, or provide one relation to inspect its columns, primary key, and foreign keys.`,
+        inputSchema: describeToolInputSchema,
+        outputSchema: describeToolOutputSchema,
+        async execute(toolInput) {
+          const result = await dataSources.describe({
+            sourceName: name,
+            relation: toolInput.relation
+          });
+          return toolSuccess(result, {
+            auditSummary: {
+              action: describeToolName,
+              subject: name,
+              metadata: toolInput.relation ? { relation: toolInput.relation } : {}
+            }
+          });
+        }
       })
     ];
   });
 }
+
+/** @deprecated Query-enabled sources now expose both query and schema-description tools. */
+export const createDataSourceQueryTools = createDataSourceTools;
 
 export function assertReadOnlyQuery(query: string): void {
   const normalized = maskSqlLiteralsAndComments(query).trim().replace(/;+$/u, "").trim();
@@ -177,6 +291,14 @@ class DefaultDataSourceRegistry implements DataSourceRegistry {
     }
     return registration.adapter.query(input.query);
   }
+
+  async describe(input: DataSourceDescribeInput): Promise<DataSourceDescribeResult> {
+    const registration = this.registrations.get(input.sourceName);
+    if (!registration) {
+      throw new AppError("NOT_FOUND", `Data source '${input.sourceName}' is not configured`);
+    }
+    return registration.adapter.describe(input.relation);
+  }
 }
 
 function createDataSourceAdapter(
@@ -217,7 +339,7 @@ class PostgresDataSourceAdapter implements DataSourceAdapter {
         // the read-only database role and grants behind the connectionRef.
         await sql.unsafe(`set local search_path to ${this.allowedSearchPath}`);
       }
-      await sql`set local statement_timeout = ${this.config.sql.statementTimeoutMs}`;
+      await sql`select set_config('statement_timeout', ${String(this.config.sql.statementTimeoutMs)}, true)`;
       const rows = await sql.unsafe(query);
       const limitedRows = rows.slice(0, this.config.sql.maxRows);
       await sql`commit`;
@@ -236,6 +358,207 @@ class PostgresDataSourceAdapter implements DataSourceAdapter {
       await sql.end({ timeout: 1 });
     }
   }
+
+  async describe(relation?: string): Promise<DataSourceDescribeResult> {
+    const sql = postgres(this.databaseUrl, {
+      max: 1,
+      connect_timeout: Math.max(1, Math.ceil(this.config.sql.statementTimeoutMs / 1000)),
+      idle_timeout: 1
+    });
+    try {
+      await sql`begin read only`;
+      await sql`select set_config('statement_timeout', ${String(this.config.sql.statementTimeoutMs)}, true)`;
+      const relationRows = await sql<RelationRow[]>`
+        select
+          namespace.nspname as schema,
+          relation.relname as name,
+          case relation.relkind
+            when 'r' then 'table'
+            when 'p' then 'table'
+            when 'v' then 'view'
+            when 'm' then 'materialized_view'
+            when 'f' then 'foreign_table'
+          end as type,
+          obj_description(relation.oid, 'pg_class') as description
+        from pg_catalog.pg_class relation
+        join pg_catalog.pg_namespace namespace on namespace.oid = relation.relnamespace
+        where relation.relkind in ('r', 'p', 'v', 'm', 'f')
+          and namespace.nspname not in ('pg_catalog', 'information_schema')
+          and namespace.nspname not like 'pg_toast%'
+          and has_schema_privilege(namespace.oid, 'usage')
+          and has_table_privilege(relation.oid, 'select')
+        order by namespace.nspname, relation.relname
+      `;
+      const visibleRelations = relationRows
+        .filter((row) => this.isSchemaAllowed(row.schema))
+        .map(toRelationSummary);
+      const listedRelations = visibleRelations.slice(0, this.config.sql.maxRows);
+      if (!relation) {
+        await sql`commit`;
+        return {
+          relations: listedRelations,
+          truncated: visibleRelations.length > listedRelations.length
+        };
+      }
+
+      const selected = resolveRelation(relation, visibleRelations);
+      const [columnRows, primaryKeyRows, foreignKeyRows] = await Promise.all([
+        sql<ColumnRow[]>`
+          select
+            attribute.attname as name,
+            pg_catalog.format_type(attribute.atttypid, attribute.atttypmod) as data_type,
+            not attribute.attnotnull as nullable,
+            col_description(relation.oid, attribute.attnum) as description
+          from pg_catalog.pg_class relation
+          join pg_catalog.pg_namespace namespace on namespace.oid = relation.relnamespace
+          join pg_catalog.pg_attribute attribute on attribute.attrelid = relation.oid
+          where namespace.nspname = ${selected.schema}
+            and relation.relname = ${selected.name}
+            and attribute.attnum > 0
+            and not attribute.attisdropped
+          order by attribute.attnum
+        `,
+        sql<PrimaryKeyRow[]>`
+          select attribute.attname as name
+          from pg_catalog.pg_constraint constraint_record
+          join pg_catalog.pg_class relation on relation.oid = constraint_record.conrelid
+          join pg_catalog.pg_namespace namespace on namespace.oid = relation.relnamespace
+          join unnest(constraint_record.conkey) with ordinality key_column(attnum, position) on true
+          join pg_catalog.pg_attribute attribute
+            on attribute.attrelid = relation.oid and attribute.attnum = key_column.attnum
+          where constraint_record.contype = 'p'
+            and namespace.nspname = ${selected.schema}
+            and relation.relname = ${selected.name}
+          order by key_column.position
+        `,
+        sql<ForeignKeyRow[]>`
+          select
+            array(
+              select attribute.attname
+              from unnest(constraint_record.conkey) with ordinality key_column(attnum, position)
+              join pg_catalog.pg_attribute attribute
+                on attribute.attrelid = relation.oid and attribute.attnum = key_column.attnum
+              order by key_column.position
+            ) as columns,
+            referenced_namespace.nspname as referenced_schema,
+            referenced_relation.relname as referenced_relation,
+            array(
+              select attribute.attname
+              from unnest(constraint_record.confkey) with ordinality key_column(attnum, position)
+              join pg_catalog.pg_attribute attribute
+                on attribute.attrelid = referenced_relation.oid and attribute.attnum = key_column.attnum
+              order by key_column.position
+            ) as referenced_columns
+          from pg_catalog.pg_constraint constraint_record
+          join pg_catalog.pg_class relation on relation.oid = constraint_record.conrelid
+          join pg_catalog.pg_namespace namespace on namespace.oid = relation.relnamespace
+          join pg_catalog.pg_class referenced_relation on referenced_relation.oid = constraint_record.confrelid
+          join pg_catalog.pg_namespace referenced_namespace
+            on referenced_namespace.oid = referenced_relation.relnamespace
+          where constraint_record.contype = 'f'
+            and namespace.nspname = ${selected.schema}
+            and relation.relname = ${selected.name}
+          order by constraint_record.conname
+        `
+      ]);
+      await sql`commit`;
+      return {
+        relations: listedRelations,
+        relation: {
+          ...selected,
+          columns: columnRows.map((row) => ({
+            name: row.name,
+            dataType: row.data_type,
+            nullable: row.nullable,
+            ...(row.description ? { description: row.description } : {})
+          })),
+          primaryKey: primaryKeyRows.map((row) => row.name),
+          foreignKeys: foreignKeyRows.map((row) => ({
+            columns: row.columns,
+            referencedSchema: row.referenced_schema,
+            referencedRelation: row.referenced_relation,
+            referencedColumns: row.referenced_columns
+          }))
+        },
+        truncated: visibleRelations.length > listedRelations.length
+      };
+    } catch (error) {
+      try {
+        await sql`rollback`;
+      } catch {
+        // The connection may already be closed or outside a transaction after a failed begin/commit.
+      }
+      throw error;
+    } finally {
+      await sql.end({ timeout: 1 });
+    }
+  }
+
+  private isSchemaAllowed(schema: string): boolean {
+    const allowedSchemas = this.config.sql.allowedSchemas;
+    return allowedSchemas.length === 0 || allowedSchemas.includes(schema);
+  }
+}
+
+interface RelationRow {
+  schema: string;
+  name: string;
+  type: DataSourceRelationSummary["type"];
+  description: string | null;
+}
+
+interface ColumnRow {
+  name: string;
+  data_type: string;
+  nullable: boolean;
+  description: string | null;
+}
+
+interface PrimaryKeyRow {
+  name: string;
+}
+
+interface ForeignKeyRow {
+  columns: string[];
+  referenced_schema: string;
+  referenced_relation: string;
+  referenced_columns: string[];
+}
+
+function toRelationSummary(row: RelationRow): DataSourceRelationSummary {
+  return {
+    schema: row.schema,
+    name: row.name,
+    type: row.type,
+    ...(row.description ? { description: row.description } : {})
+  };
+}
+
+function resolveRelation(
+  requestedRelation: string,
+  relations: DataSourceRelationSummary[]
+): DataSourceRelationSummary {
+  const parts = requestedRelation.trim().split(".");
+  if (parts.length > 2 || parts.some((part) => part.length === 0)) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "Relation must be an unqualified name or a schema-qualified name"
+    );
+  }
+  const matches =
+    parts.length === 2
+      ? relations.filter((relation) => relation.schema === parts[0] && relation.name === parts[1])
+      : relations.filter((relation) => relation.name === parts[0]);
+  if (matches.length === 0) {
+    throw new AppError("NOT_FOUND", `Readable relation '${requestedRelation}' was not found`);
+  }
+  if (matches.length > 1) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Relation '${requestedRelation}' exists in multiple schemas; use a schema-qualified name`
+    );
+  }
+  return matches[0]!;
 }
 
 function createAllowedSearchPath(allowedSchemas: readonly string[]): string | undefined {

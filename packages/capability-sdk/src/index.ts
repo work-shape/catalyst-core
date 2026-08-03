@@ -16,6 +16,8 @@ import {
   type PlatformFileStore
 } from "@vivd-catalyst/core";
 import type {
+  DataSourceDescribeInput,
+  DataSourceDescribeResult,
   DataSourceQueryInput,
   DataSourceQueryResult,
   DataSourceRegistry,
@@ -30,7 +32,14 @@ import type {
   ToolDefinition
 } from "@vivd-catalyst/tool-sdk";
 
-export type { DataSourceQueryInput, DataSourceQueryResult, DataSourceRegistry, DataSourceRegistration };
+export type {
+  DataSourceDescribeInput,
+  DataSourceDescribeResult,
+  DataSourceQueryInput,
+  DataSourceQueryResult,
+  DataSourceRegistry,
+  DataSourceRegistration
+};
 export { defineTool, defineConfiguredTool, toolFailed, toolSuccess };
 export type {
   AnyConfiguredToolDefinition,

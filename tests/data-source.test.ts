@@ -3,6 +3,7 @@ import type { DataSourceConfig } from "@vivd-catalyst/core";
 import {
   assertReadOnlyQuery,
   createDataSourceRegistry,
+  createDataSourceTools,
   createEnvSecretResolver
 } from "@vivd-catalyst/data-source";
 
@@ -47,6 +48,53 @@ describe("data source registry", () => {
       assertReadOnlyQuery("with deleted as (delete from reporting.orders returning *) select * from deleted")
     ).toThrow(/write, DDL, transaction, or session-control/u);
     expect(() => assertReadOnlyQuery("select * from reporting.orders for update")).toThrow(/row locks/u);
+  });
+
+  it("creates model-visible query and schema-description tools together", async () => {
+    const config = createDataSource();
+    config.tools = {
+      query: {
+        enabled: true
+      }
+    };
+    const tools = createDataSourceTools({
+      dataSources: {
+        list: () => [{ name: "reporting", config }],
+        get: () => ({ name: "reporting", config }),
+        async query() {
+          return { rows: [{ order_count: 12 }], truncated: false };
+        },
+        async describe(input) {
+          expect(input).toEqual({ sourceName: "reporting", relation: "orders" });
+          return {
+            relations: [{ schema: "reporting", name: "orders", type: "table" }],
+            relation: {
+              schema: "reporting",
+              name: "orders",
+              type: "table",
+              columns: [{ name: "id", dataType: "integer", nullable: false }],
+              primaryKey: ["id"],
+              foreignKeys: []
+            },
+            truncated: false
+          };
+        }
+      }
+    });
+
+    expect(tools.map((tool) => tool.name)).toEqual([
+      "data.reporting.query",
+      "data.reporting.describe"
+    ]);
+    expect(tools[0]?.description).toContain("Use data.reporting.describe first");
+    await expect(tools[1]?.execute({ relation: "orders" }, {} as never)).resolves.toMatchObject({
+      status: "success",
+      output: {
+        relation: {
+          primaryKey: ["id"]
+        }
+      }
+    });
   });
 });
 
