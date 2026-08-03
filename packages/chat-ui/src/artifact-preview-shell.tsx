@@ -10,6 +10,35 @@ export function ArtifactPreviewFrame({ children }: { children: ReactNode }) {
   );
 }
 
+export function NativeFilePreview({
+  kind,
+  title,
+  url,
+  onError
+}: {
+  kind: "image" | "pdf";
+  title: string;
+  url: string;
+  onError?: () => void;
+}) {
+  return (
+    <ArtifactPreviewFrame>
+      {kind === "pdf" ? (
+        <iframe title={title} src={url} className="h-full w-full border-0" />
+      ) : (
+        <div className="flex h-full items-center justify-center overflow-auto bg-muted/20 p-4">
+          <img
+            src={url}
+            alt={title}
+            className="max-h-full max-w-full object-contain"
+            onError={onError}
+          />
+        </div>
+      )}
+    </ArtifactPreviewFrame>
+  );
+}
+
 export function ArtifactPreviewMessage({
   action,
   detail,

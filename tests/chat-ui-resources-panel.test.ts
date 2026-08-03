@@ -359,6 +359,7 @@ describe("Resources panel rendering", () => {
     expect(markup).toContain(
       'src="https://example.test/api/conversations/conversation%2F1/files/file%201/content"'
     );
+    expect(markup).toContain("-m-4");
   });
 });
 

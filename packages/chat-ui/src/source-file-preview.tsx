@@ -16,6 +16,7 @@ import { resolveFilePreviewCapability } from "@vivd-catalyst/core";
 import { useWorkspaceApiClient } from "./api/workspace-api-client";
 import { workspaceQueryKeys } from "./api/workspace-query-keys";
 import { useTranslation } from "./i18n";
+import { NativeFilePreview } from "./artifact-preview-shell";
 import { ResourceDownloadButton } from "./resource-download-button";
 import { useToolDisplayPanel, type ToolDisplayPanelEntry } from "./tool-display-panel";
 import type { ToolArtifactDownloadRef } from "./tool-artifacts";
@@ -310,17 +311,13 @@ export function SourceFilePreview({
       </div>
     );
   }
-  return pdf ? (
-    <iframe title={filename} src={url} className="h-full min-h-64 w-full border-0" />
-  ) : (
-    <div className="flex h-full min-h-64 items-center justify-center bg-muted/20 p-4">
-      <img
-        src={url}
-        alt={filename}
-        className="max-h-full max-w-full object-contain"
-        onError={() => setFailed(true)}
-      />
-    </div>
+  return (
+    <NativeFilePreview
+      kind={pdf ? "pdf" : "image"}
+      title={filename}
+      url={url}
+      onError={() => setFailed(true)}
+    />
   );
 }
 
