@@ -7,6 +7,11 @@ import type {
   Message,
   RunObservation
 } from "@vivd-catalyst/api-client";
+import {
+  applyAgentRunObservation,
+  type AgentRunProjection as CoreAgentRunProjection,
+  type RunObservation as CoreRunObservation
+} from "@vivd-catalyst/core";
 
 export type ConversationSnapshotStatus = "loading" | "ready" | "not_found" | "error";
 export type ConversationConnectionStatus =
@@ -129,7 +134,10 @@ export function applyRunObservationToControllerState(
     };
   }
 
-  const projection = applyObservationToProjection(activeRun.projection, observation);
+  const projection = applyAgentRunObservation(
+    activeRun.projection as CoreAgentRunProjection,
+    observation as CoreRunObservation
+  ) as AgentRunProjection;
   const nextRun = applyObservationToRunSummary(activeRun.run, observation);
   const nextMessages = applyObservationToMessages(state.messages, observation);
   return {
@@ -194,151 +202,6 @@ export function isTerminalObservation(observation: RunObservation): boolean {
   );
 }
 
-function applyObservationToProjection(
-  projection: AgentRunProjection,
-  observation: RunObservation
-): AgentRunProjection {
-  const event = observation.payload;
-  const parts = cloneProjectionParts(projection);
-  const reasoning = projection.reasoning.map((entry) => ({ ...entry }));
-  const toolCalls = projection.activeToolCalls.map((entry) => ({ ...entry }));
-  let text = projection.text;
-  let error = projection.error;
-  let preparingTool = projection.preparingTool ? { ...projection.preparingTool } : undefined;
-
-  if (event.type === "message_delta") {
-    text += event.delta;
-    appendProjectionTextPart(parts, event.delta);
-  }
-  if (event.type === "message_completed") {
-    text = event.message.text;
-    reconcileCompletedProjectionText(parts, event.message.text);
-  }
-  if (event.type === "reasoning_delta") {
-    const existing = reasoning.find((entry) => entry.id === event.id);
-    if (existing) {
-      existing.text += event.delta;
-      existing.open = true;
-    } else {
-      reasoning.push({ id: event.id, text: event.delta, open: true });
-    }
-    upsertProjectionPart(parts, {
-      type: "reasoning",
-      id: event.id,
-      text: reasoning.find((entry) => entry.id === event.id)?.text ?? event.delta,
-      open: true
-    });
-  }
-  if (event.type === "tool_call_preparing") {
-    preparingTool = {
-      toolCallId: event.toolCallId,
-      toolName: event.toolName
-    };
-  }
-  if (event.type === "tool_call_started") {
-    if (preparingTool?.toolCallId === event.toolCallId) {
-      preparingTool = undefined;
-    }
-    const toolCall = {
-      toolCallId: event.toolCallId,
-      toolName: event.toolName,
-      input: event.input,
-      state: "input_available"
-    } as const;
-    upsertToolCall(toolCalls, toolCall);
-    upsertProjectionPart(parts, {
-      type: "tool_call",
-      ...toolCall
-    });
-  }
-  if (event.type === "tool_permission_requested") {
-    const existing = toolCalls.find((entry) => entry.toolCallId === event.toolCallId);
-    const toolCall = {
-      toolCallId: event.toolCallId,
-      toolName: event.toolName,
-      input: existing?.input,
-      state: "waiting_for_permission"
-    } as const;
-    upsertToolCall(toolCalls, toolCall);
-    upsertProjectionPart(parts, {
-      type: "tool_call",
-      ...toolCall
-    });
-  }
-  if (event.type === "tool_call_completed") {
-    const existing = toolCalls.find((entry) => entry.toolCallId === event.toolCallId);
-    const result = isRecord(event.result) ? event.result : undefined;
-    const toolCall = {
-      toolCallId: event.toolCallId,
-      toolName: event.toolName,
-      input: existing?.input,
-      state: "output_available",
-      output: result
-        ? result.status === "success"
-          ? {
-              status: "success",
-              output: result.output,
-              display: result.display,
-              artifacts: result.artifacts,
-              projectionNotice: event.projectionNotice
-            }
-          : {
-              status: result.status,
-              error: result.error,
-              projectionNotice: event.projectionNotice
-            }
-        : undefined
-    } as const;
-    upsertToolCall(toolCalls, toolCall);
-    upsertProjectionPart(parts, {
-      type: "tool_call",
-      ...toolCall
-    });
-  }
-  if (event.type === "tool_call_failed") {
-    const existing = toolCalls.find((entry) => entry.toolCallId === event.toolCallId);
-    const result = isRecord(event.result) ? event.result : undefined;
-    const error = isRecord(result?.error) ? result.error : undefined;
-    const toolCall = {
-      toolCallId: event.toolCallId,
-      toolName: event.toolName,
-      input: existing?.input,
-      state: "output_error",
-      errorText: typeof error?.message === "string" ? error.message : "Tool call failed"
-    } as const;
-    upsertToolCall(toolCalls, toolCall);
-    upsertProjectionPart(parts, {
-      type: "tool_call",
-      ...toolCall
-    });
-  }
-  if (event.type === "run_failed") {
-    error = event.error;
-  }
-  if (isTerminalObservation(observation)) {
-    for (const entry of reasoning) {
-      entry.open = false;
-    }
-    for (const part of parts) {
-      if (part.type === "reasoning") {
-        part.open = false;
-      }
-    }
-  }
-
-  return {
-    ...projection,
-    lastSequence: Math.max(projection.lastSequence, observation.sequence),
-    status: applyObservationStatus(projection.status, observation),
-    parts,
-    text,
-    reasoning,
-    activeToolCalls: toolCalls,
-    ...(preparingTool ? { preparingTool } : { preparingTool: undefined }),
-    ...(error ? { error } : {})
-  };
-}
-
 function applyObservationToRunSummary(
   run: ConversationControllerRunSummary,
   observation: RunObservation
@@ -372,119 +235,6 @@ function applyObservationToMessages(
     return messages.map((candidate) => (candidate.id === message.id ? message : candidate));
   }
   return [...messages, message];
-}
-
-function upsertToolCall(
-  toolCalls: AgentRunProjection["activeToolCalls"],
-  toolCall: AgentRunProjection["activeToolCalls"][number]
-): void {
-  const index = toolCalls.findIndex((entry) => entry.toolCallId === toolCall.toolCallId);
-  if (index >= 0) {
-    toolCalls[index] = toolCall;
-    return;
-  }
-  toolCalls.push(toolCall);
-}
-
-function cloneProjectionParts(
-  projection: AgentRunProjection
-): AgentRunProjection["parts"] {
-  const projectionParts = projection.parts ?? [];
-  if (projectionParts.length > 0) {
-    return projectionParts.map((part) => ({ ...part }));
-  }
-  const parts: AgentRunProjection["parts"] = [
-    ...projection.reasoning.map((entry) => ({
-      type: "reasoning" as const,
-      id: entry.id,
-      text: entry.text,
-      open: entry.open
-    })),
-    ...projection.activeToolCalls.map((entry) => ({
-      type: "tool_call" as const,
-      ...entry
-    }))
-  ];
-  if (projection.text.length > 0 || parts.length === 0) {
-    parts.push({
-      type: "text",
-      text: projection.text
-    });
-  }
-  return parts;
-}
-
-function appendProjectionTextPart(
-  parts: AgentRunProjection["parts"],
-  delta: string
-): void {
-  if (delta.length === 0) {
-    return;
-  }
-  const lastPart = parts.at(-1);
-  if (lastPart?.type === "text") {
-    lastPart.text += delta;
-    return;
-  }
-  parts.push({
-    type: "text",
-    text: delta
-  });
-}
-
-function reconcileCompletedProjectionText(
-  parts: AgentRunProjection["parts"],
-  completedText: string
-): void {
-  const observedText = parts
-    .filter((part): part is Extract<AgentRunProjection["parts"][number], { type: "text" }> => part.type === "text")
-    .map((part) => part.text)
-    .join("");
-  if (observedText.length === 0) {
-    if (completedText.length > 0 || parts.length === 0) {
-      parts.push({
-        type: "text",
-        text: completedText
-      });
-    }
-    return;
-  }
-  if (completedText === observedText) {
-    return;
-  }
-  if (completedText.length > 0 && observedText.endsWith(completedText)) {
-    return;
-  }
-  if (completedText.startsWith(observedText)) {
-    appendProjectionTextPart(parts, completedText.slice(observedText.length));
-    return;
-  }
-  if (completedText.length > 0) {
-    appendProjectionTextPart(parts, completedText);
-  }
-}
-
-function upsertProjectionPart(
-  parts: AgentRunProjection["parts"],
-  part: AgentRunProjection["parts"][number]
-): void {
-  const index = parts.findIndex((candidate) => {
-    if (candidate.type !== part.type) {
-      return false;
-    }
-    if (part.type === "tool_call") {
-      return candidate.type === "tool_call" && candidate.toolCallId === part.toolCallId;
-    }
-    if (part.type === "reasoning") {
-      return candidate.type === "reasoning" && candidate.id === part.id;
-    }
-    return false;
-  });
-  if (index >= 0) {
-    parts[index] = part;
-    return;
-  }
-  parts.push(part);
 }
 
 function applyObservationStatus(
@@ -597,8 +347,4 @@ function terminalError(
     };
   }
   return undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
