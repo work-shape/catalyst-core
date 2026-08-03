@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import { createChatServer } from "@vivd-catalyst/chat-server";
 import {
   AppError,
+  ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_REF,
   NoopAuditRecorder,
   asClientInstanceId,
+  asManagedArtifactId,
+  asMessageId,
   type AgentRuntime,
   type AuthenticatedUser,
   type ClientInstanceId,
@@ -15,6 +18,93 @@ import type { ModelProvider } from "@vivd-catalyst/model-provider";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 
 describe("artifact preview routes", () => {
+  it("creates one hidden preview source for a sent Office attachment and reuses it", async () => {
+    const { clientInstanceId, owner, server, store } = await createPreviewServer();
+    try {
+      const conversation = await store.createConversation({
+        clientInstanceId,
+        ownerUserId: owner.id,
+        ownerExternalUserId: owner.externalUserId,
+        title: "Attachment preview",
+        retainedUntil: "2030-01-01T00:00:00.000Z"
+      });
+      const file = await store.createManagedFile({
+        clientInstanceId,
+        ownerUserId: owner.id,
+        filename: "uploaded-deck.pptx",
+        mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        byteSize: 256,
+        checksum: "sha256:uploaded-deck",
+        objectKey: "documents/private/uploaded-deck.pptx"
+      });
+      const attachment = await store.createConversationAttachment({
+        clientInstanceId,
+        conversationId: conversation.id,
+        fileId: file.id,
+        filename: file.filename,
+        mimeType: file.mimeType,
+        byteSize: file.byteSize,
+        checksum: file.checksum,
+        status: "ready",
+        format: "pptx"
+      });
+      await store.claimReadyDraftAttachmentsForMessage({
+        clientInstanceId,
+        conversationId: conversation.id,
+        messageId: asMessageId("msg_attachment_preview"),
+        claimedAt: "2026-08-03T10:00:00.000Z"
+      });
+
+      const first = await server.inject({
+        method: "GET",
+        url: `/api/conversations/${conversation.id}/attachments/${attachment.id}/preview`
+      });
+      expect(first.statusCode).toBe(200);
+      expect(first.json()).toMatchObject({
+        status: "pending",
+        artifactId: expect.any(String)
+      });
+      const previewSourceId = first.json().artifactId as string;
+      const previewSource = await store.getManagedArtifact({
+        clientInstanceId,
+        artifactId: asManagedArtifactId(previewSourceId)
+      });
+      expect(previewSource).toMatchObject({
+        conversationId: conversation.id,
+        sourceFileId: file.id,
+        filename: file.filename,
+        objectKey: file.objectKey,
+        metadata: {
+          source: "conversation_attachment",
+          sourceAttachmentId: attachment.id
+        }
+      });
+      const updatedAttachment = await store.getConversationAttachment({
+        clientInstanceId,
+        attachmentId: attachment.id
+      });
+      expect(updatedAttachment?.artifactRefs[ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_REF]).toBe(
+        previewSourceId
+      );
+
+      const second = await server.inject({
+        method: "GET",
+        url: `/api/conversations/${conversation.id}/attachments/${attachment.id}/preview`
+      });
+      expect(second.json()).toMatchObject({ artifactId: previewSourceId });
+      await expect(
+        store.listManagedArtifactsForFile({
+          clientInstanceId,
+          conversationId: conversation.id,
+          fileId: file.id,
+          kind: "preview.source_attachment"
+        })
+      ).resolves.toHaveLength(1);
+    } finally {
+      await server.close();
+    }
+  });
+
   it("serves artifact preview state without exposing renderer or storage internals", async () => {
     const { clientInstanceId, owner, server, store } = await createPreviewServer();
     try {
@@ -59,6 +149,7 @@ describe("artifact preview routes", () => {
         status: "ready",
         type: "image_pages",
         format: "png",
+        pageCount: 2,
         pages: [
           {
             artifactId: previewPage.id,
@@ -174,6 +265,8 @@ describe("artifact preview routes", () => {
         artifactId: readyArtifact.id,
         type: "image_pages",
         format: "png",
+        pageCount: 2,
+        truncated: true,
         pages: [
           {
             artifactId: previewPage.id,
@@ -307,25 +400,21 @@ describe("artifact preview routes", () => {
         status: "failed",
         errorCode: "source_too_large"
       });
-      await expect(
-        server.inject({
-          method: "POST",
-          url: `/api/conversations/${conversation.id}/artifacts/${nonRetryableArtifact.id}/preview/retry`
-        })
-      ).resolves.toMatchObject({
-        statusCode: 200,
-        payload: JSON.stringify({
-          status: "failed",
-          artifactId: nonRetryableArtifact.id,
-          errorCode: "source_too_large"
-        })
+      const increasedLimitRetry = await server.inject({
+        method: "POST",
+        url: `/api/conversations/${conversation.id}/artifacts/${nonRetryableArtifact.id}/preview/retry`
+      });
+      expect(increasedLimitRetry.statusCode).toBe(200);
+      expect(increasedLimitRetry.json()).toMatchObject({
+        status: "pending",
+        artifactId: nonRetryableArtifact.id
       });
       await expect(
         store.getArtifactPreviewJob({
           clientInstanceId,
           sourceArtifactId: nonRetryableArtifact.id
         })
-      ).resolves.toBeUndefined();
+      ).resolves.toMatchObject({ status: "pending" });
       const oldRendererFailureArtifact = await store.createManagedArtifact({
         clientInstanceId,
         conversationId: conversation.id,

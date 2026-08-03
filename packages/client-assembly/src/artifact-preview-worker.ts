@@ -1,4 +1,4 @@
-import { AppError } from "@vivd-catalyst/core";
+import { AppError, type PlatformStore } from "@vivd-catalyst/core";
 import {
   getClientInstanceId,
   loadClientInstanceConfigFromFile,
@@ -9,6 +9,7 @@ import {
   createLocalWorkspaceObjectStorage,
   LibreOfficeArtifactPreviewRenderer
 } from "@vivd-catalyst/tool-execution";
+import type { ArtifactPreviewSourceReader } from "@vivd-catalyst/tool-execution";
 import type { ClientInstanceEnv } from "./env";
 import { createPlatformStore, type PlatformStoreMode } from "./store";
 
@@ -17,7 +18,16 @@ export interface CreateClientInstanceArtifactPreviewWorkerInput {
   configPath?: string;
   env?: ClientInstanceEnv;
   storeMode?: PlatformStoreMode;
+  sourceReaderFactory?: ArtifactPreviewSourceReaderFactory;
 }
+
+export type ArtifactPreviewSourceReaderFactory = (input: {
+  config: ClientInstanceConfig;
+  clientInstanceId: ReturnType<typeof getClientInstanceId>;
+  env: ClientInstanceEnv;
+  store: PlatformStore;
+  storeMode: PlatformStoreMode;
+}) => ArtifactPreviewSourceReader | Promise<ArtifactPreviewSourceReader>;
 
 export interface ClientInstanceArtifactPreviewWorker {
   readonly config: ClientInstanceConfig;
@@ -33,13 +43,19 @@ export async function createClientInstanceArtifactPreviewWorker(
   const env = input.env ?? process.env;
   const config = input.config ?? (await loadArtifactPreviewWorkerConfig(input.configPath, env));
   const store = await createPlatformStore({ env, storeMode: input.storeMode });
+  const clientInstanceId = getClientInstanceId(config);
+  const storeMode = resolveStoreMode(input.storeMode, env);
+  const sourceReader = input.sourceReaderFactory
+    ? await input.sourceReaderFactory({ config, clientInstanceId, env, store, storeMode })
+    : undefined;
   const objectStore = createLocalWorkspaceObjectStorage({
     rootDirectory: objectRoot(env)
   });
   const worker = new ArtifactPreviewWorker({
-    clientInstanceId: getClientInstanceId(config),
+    clientInstanceId,
     store,
     objectStore,
+    sourceReader,
     renderer: new LibreOfficeArtifactPreviewRenderer({
       sofficeCommand: env.ARTIFACT_PREVIEW_SOFFICE_COMMAND,
       pdfInfoCommand: env.ARTIFACT_PREVIEW_PDFINFO_COMMAND,
@@ -50,6 +66,10 @@ export async function createClientInstanceArtifactPreviewWorker(
     concurrency: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_CONCURRENCY"),
     pollIntervalMs: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_POLL_INTERVAL_MS"),
     leaseDurationMs: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_LEASE_DURATION_MS"),
+    leaseRenewIntervalMs: readPositiveIntegerEnv(
+      env,
+      "ARTIFACT_PREVIEW_LEASE_RENEW_INTERVAL_MS"
+    ),
     maxAttempts: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_ATTEMPTS"),
     maxPages: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_PAGES"),
     maxSourceBytes: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_SOURCE_BYTES"),
@@ -74,6 +94,17 @@ export async function createClientInstanceArtifactPreviewWorker(
       await store.close?.();
     }
   };
+}
+
+function resolveStoreMode(
+  explicit: PlatformStoreMode | undefined,
+  env: ClientInstanceEnv
+): PlatformStoreMode {
+  const mode = explicit ?? env.STORE ?? "postgres";
+  if (mode === "memory" || mode === "postgres") {
+    return mode;
+  }
+  throw new AppError("VALIDATION_FAILED", "STORE must be either 'postgres' or 'memory'");
 }
 
 export async function runClientInstanceArtifactPreviewWorker(

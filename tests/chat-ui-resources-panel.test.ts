@@ -339,7 +339,7 @@ describe("Resources panel rendering", () => {
     expect(markup).not.toContain("Inhalte konnten nicht geladen werden.");
   });
 
-  it("does not send source PDFs through the image-only direct URL", () => {
+  it("renders source PDFs through the browser using the original file", () => {
     const client = createApiClient({ baseUrl: "https://example.test" });
     const markup = renderToStaticMarkup(
       createElement(
@@ -355,8 +355,10 @@ describe("Resources panel rendering", () => {
       )
     );
 
-    expect(markup).not.toContain("<iframe");
-    expect(markup).not.toContain("/files/file%201/content");
+    expect(markup).toContain('<iframe title="Input.pdf"');
+    expect(markup).toContain(
+      'src="https://example.test/api/conversations/conversation%2F1/files/file%201/content"'
+    );
   });
 });
 

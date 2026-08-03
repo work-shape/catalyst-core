@@ -900,6 +900,12 @@ export class InMemoryPlatformStore
     return this.fileStore.claimNextArtifactPreviewJob(input);
   }
 
+  async renewClaimedArtifactPreviewJobLease(
+    input: Parameters<PlatformFileStore["renewClaimedArtifactPreviewJobLease"]>[0]
+  ) {
+    return this.fileStore.renewClaimedArtifactPreviewJobLease(input);
+  }
+
   async completeClaimedArtifactPreviewJob(
     input: Parameters<PlatformFileStore["completeClaimedArtifactPreviewJob"]>[0]
   ) {

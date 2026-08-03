@@ -40,17 +40,19 @@ const DEFAULT_STALE_RECOVERY_INTERVAL_MS = 30000;
 const DEFAULT_STALE_RECOVERY_LIMIT = 50;
 const DEFAULT_MAX_ATTEMPTS = 2;
 const DEFAULT_RETRY_DELAY_MS = 0;
-const DEFAULT_MAX_SOURCE_BYTES = 50 * 1024 * 1024;
-const DEFAULT_MAX_PAGES = 40;
-const HARD_MAX_PAGES = 80;
-const DEFAULT_CONVERSION_TIMEOUT_MS = 60000;
-const DEFAULT_RASTERIZATION_TIMEOUT_MS = 60000;
+const DEFAULT_MAX_SOURCE_BYTES = 100 * 1024 * 1024;
+const HARD_MAX_SOURCE_BYTES = 1024 * 1024 * 1024;
+const DEFAULT_MAX_PAGES = 80;
+const HARD_MAX_PAGES = 500;
+const DEFAULT_CONVERSION_TIMEOUT_MS = 180000;
+const DEFAULT_RASTERIZATION_TIMEOUT_MS = 180000;
 const DEFAULT_PREVIEW_DPI = 144;
 const DEFAULT_OUTPUT_FORMAT: ArtifactPreviewImageFormat = "png";
 
 export type ArtifactPreviewWorkerStore = Pick<
   PlatformStore,
   | "claimNextArtifactPreviewJob"
+  | "renewClaimedArtifactPreviewJobLease"
   | "completeClaimedArtifactPreviewJob"
   | "failClaimedArtifactPreviewJob"
   | "getManagedArtifact"
@@ -62,11 +64,13 @@ export interface ArtifactPreviewWorkerOptions {
   clientInstanceId: ClientInstanceId;
   store: ArtifactPreviewWorkerStore;
   objectStore: DeletableWorkspaceObjectStorage;
+  sourceReader?: ArtifactPreviewSourceReader;
   renderer?: ArtifactPreviewRenderer;
   workerId?: string;
   concurrency?: number;
   pollIntervalMs?: number;
   leaseDurationMs?: number;
+  leaseRenewIntervalMs?: number;
   staleRecoveryIntervalMs?: number;
   staleRecoveryLimit?: number;
   maxAttempts?: number;
@@ -80,6 +84,13 @@ export interface ArtifactPreviewWorkerOptions {
   now?: () => string;
 }
 
+export interface ArtifactPreviewSourceReader {
+  readArtifact(input: {
+    clientInstanceId: ClientInstanceId;
+    artifactId: ManagedArtifactRecord["id"];
+  }): Promise<{ bytes: Uint8Array }>;
+}
+
 export type ArtifactPreviewWorkerRunOnceResult =
   | { status: "idle" }
   | { status: "claimed"; job: ArtifactPreviewJobRecord }
@@ -89,11 +100,13 @@ export class ArtifactPreviewWorker {
   private readonly clientInstanceId: ClientInstanceId;
   private readonly store: ArtifactPreviewWorkerStore;
   private readonly objectStore: DeletableWorkspaceObjectStorage;
+  private readonly sourceReader?: ArtifactPreviewSourceReader;
   private readonly renderer: ArtifactPreviewRenderer;
   private readonly workerId: string;
   private readonly concurrency: number;
   private readonly pollIntervalMs: number;
   private readonly leaseDurationMs: number;
+  private readonly leaseRenewIntervalMs: number;
   private readonly staleRecoveryIntervalMs: number;
   private readonly staleRecoveryLimit: number;
   private readonly maxAttempts: number;
@@ -114,17 +127,23 @@ export class ArtifactPreviewWorker {
     this.clientInstanceId = options.clientInstanceId;
     this.store = options.store;
     this.objectStore = options.objectStore;
+    this.sourceReader = options.sourceReader;
     this.renderer = options.renderer ?? new LibreOfficeArtifactPreviewRenderer();
     this.workerId = options.workerId ?? `artifact-preview-worker-${randomUUID()}`;
     this.concurrency = options.concurrency ?? 1;
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     this.leaseDurationMs = options.leaseDurationMs ?? DEFAULT_LEASE_DURATION_MS;
+    this.leaseRenewIntervalMs =
+      options.leaseRenewIntervalMs ?? Math.max(1000, Math.floor(this.leaseDurationMs / 3));
     this.staleRecoveryIntervalMs =
       options.staleRecoveryIntervalMs ?? DEFAULT_STALE_RECOVERY_INTERVAL_MS;
     this.staleRecoveryLimit = options.staleRecoveryLimit ?? DEFAULT_STALE_RECOVERY_LIMIT;
     this.maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
     this.retryDelayMs = options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
-    this.maxSourceBytes = options.maxSourceBytes ?? DEFAULT_MAX_SOURCE_BYTES;
+    this.maxSourceBytes = Math.min(
+      options.maxSourceBytes ?? DEFAULT_MAX_SOURCE_BYTES,
+      HARD_MAX_SOURCE_BYTES
+    );
     this.maxPages = Math.min(options.maxPages ?? DEFAULT_MAX_PAGES, HARD_MAX_PAGES);
     this.conversionTimeoutMs = options.conversionTimeoutMs ?? DEFAULT_CONVERSION_TIMEOUT_MS;
     this.rasterizationTimeoutMs = options.rasterizationTimeoutMs ?? DEFAULT_RASTERIZATION_TIMEOUT_MS;
@@ -214,6 +233,7 @@ export class ArtifactPreviewWorker {
   ): Promise<ArtifactPreviewWorkerRunOnceResult> {
     const controller = new AbortController();
     this.activeControllers.add(controller);
+    const stopLeaseRenewal = this.startLeaseRenewal(job, controller);
     try {
       const terminal = await this.processClaimedJobWithSignal(job, controller.signal);
       return { status: "claimed", job: terminal };
@@ -235,6 +255,7 @@ export class ArtifactPreviewWorker {
         throw terminalError;
       }
     } finally {
+      stopLeaseRenewal();
       this.activeControllers.delete(controller);
     }
   }
@@ -298,6 +319,7 @@ export class ArtifactPreviewWorker {
         leaseToken: requiredLeaseToken(job),
         format: rendered.format,
         previewArtifacts: staged.previewArtifacts,
+        sourcePageCount: rendered.pageCount,
         completedAt: this.now()
       });
     } catch (error: unknown) {
@@ -309,9 +331,37 @@ export class ArtifactPreviewWorker {
   private async readSourceBytes(source: ManagedArtifactRecord): Promise<Uint8Array> {
     try {
       return await this.objectStore.getObject(source.objectKey);
-    } catch {
-      throw previewFailure("source_missing", false);
+    } catch (localError) {
+      if (!this.sourceReader) {
+        throw previewFailure("source_missing", false);
+      }
+      try {
+        return (await this.sourceReader.readArtifact({
+          clientInstanceId: source.clientInstanceId,
+          artifactId: source.id
+        })).bytes;
+      } catch {
+        void localError;
+        throw previewFailure("source_missing", false);
+      }
     }
+  }
+
+  private startLeaseRenewal(job: ArtifactPreviewJobRecord, controller: AbortController): () => void {
+    const timer = setInterval(() => {
+      const renewedAt = this.now();
+      void this.store.renewClaimedArtifactPreviewJobLease({
+        clientInstanceId: job.clientInstanceId,
+        jobId: job.id,
+        leaseToken: requiredLeaseToken(job),
+        renewedAt,
+        leaseExpiresAt: addMilliseconds(renewedAt, this.leaseDurationMs)
+      }).catch((error: unknown) => {
+        controller.abort(error instanceof Error ? error.message : "Artifact preview lease was lost");
+      });
+    }, this.leaseRenewIntervalMs);
+    timer.unref?.();
+    return () => clearInterval(timer);
   }
 
   private async stageRenderedPages(input: {

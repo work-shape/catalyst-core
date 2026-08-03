@@ -43,6 +43,7 @@ export interface ArtifactPreviewRenderedPage {
 export interface ArtifactPreviewRenderResult {
   format: ArtifactPreviewImageFormat;
   pages: ArtifactPreviewRenderedPage[];
+  pageCount?: number;
 }
 
 export interface ArtifactPreviewRenderer {
@@ -120,7 +121,7 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
           ...readPngDimensions(bytes)
         });
       }
-      return { format: "png", pages };
+      return { format: "png", pages, pageCount };
     } finally {
       await rm(tempDirectory, { recursive: true, force: true });
     }
@@ -291,15 +292,12 @@ function rasterPageNumbers(input: ArtifactPreviewRenderInput, pageCount: number)
   const requested = numericRasterSelection(input);
   if (requested.length > 0) {
     const selected = requested.filter((pageNumber) => pageNumber <= pageCount);
-    if (selected.length === 0 || selected.length > input.maxPages) {
+    if (selected.length === 0) {
       throw previewFailure("page_limit_exceeded", false);
     }
-    return selected;
+    return selected.slice(0, input.maxPages);
   }
-  if (pageCount > input.maxPages) {
-    throw previewFailure("page_limit_exceeded", false);
-  }
-  return Array.from({ length: pageCount }, (_, index) => index + 1);
+  return Array.from({ length: Math.min(pageCount, input.maxPages) }, (_, index) => index + 1);
 }
 
 function numericRasterSelection(input: ArtifactPreviewRenderInput): number[] {

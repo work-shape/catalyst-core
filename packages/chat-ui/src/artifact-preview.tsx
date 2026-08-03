@@ -87,6 +87,32 @@ export function ArtifactPreview({
     );
   }
 
+  if (
+    client.browserManagedDownloads &&
+    (previewKind === "pdf" || previewKind === "image")
+  ) {
+    const url = client.conversationArtifactContentUrl(
+      conversationId,
+      artifact.artifactId,
+      true
+    );
+    return (
+      <ArtifactPreviewFrame>
+        {previewKind === "pdf" ? (
+          <iframe title={artifactDisplayFilename(artifact)} src={url} className="h-full w-full border-0" />
+        ) : (
+          <div className="flex h-full items-center justify-center overflow-auto bg-muted/20 p-4">
+            <img
+              src={url}
+              alt={artifactDisplayFilename(artifact)}
+              className="max-h-full max-w-full object-contain"
+            />
+          </div>
+        )}
+      </ArtifactPreviewFrame>
+    );
+  }
+
   return (
     <BlobArtifactPreview
       artifact={artifact}

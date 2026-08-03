@@ -24,6 +24,7 @@ import {
   type ManagedObjectDeletionResult,
   type MessageId,
   type RecoverStaleArtifactPreviewJobsInput,
+  type RenewClaimedArtifactPreviewJobLeaseInput,
   type UpdateConversationAttachmentInput,
   type WriteArtifactPreviewManifestInput,
   createPlatformId
@@ -174,6 +175,12 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
     input: ClaimNextArtifactPreviewJobInput
   ): Promise<ArtifactPreviewJobRecord | undefined> {
     return this.artifactPreviewStore.claimNextArtifactPreviewJob(input);
+  }
+
+  async renewClaimedArtifactPreviewJobLease(
+    input: RenewClaimedArtifactPreviewJobLeaseInput
+  ): Promise<ArtifactPreviewJobRecord> {
+    return this.artifactPreviewStore.renewClaimedArtifactPreviewJobLease(input);
   }
 
   async completeClaimedArtifactPreviewJob(

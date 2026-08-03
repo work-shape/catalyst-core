@@ -134,6 +134,11 @@ describe("api operation catalog and client", () => {
         params: { conversationId: "conv 1", artifactId: "art/final" }
       })}`
     );
+    expect(client.conversationArtifactContentUrl("conv 1", "art/final", true)).toBe(
+      `https://chat.example${apiOperations.getConversationArtifactContent.buildPath({
+        params: { conversationId: "conv 1", artifactId: "art/final" }
+      })}?inline=true`
+    );
     expect(calls).toHaveLength(1);
     const request = calls[0];
     expect(request?.url).toBe(

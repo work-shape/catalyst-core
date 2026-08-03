@@ -1,6 +1,6 @@
 import type { ApiClient, ArtifactPreviewResponse } from "@vivd-catalyst/api-client";
 import { RotateCcw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "./i18n";
 import { ArtifactPreviewFrame, ArtifactPreviewMessage } from "./artifact-preview-shell";
 import {
@@ -67,7 +67,9 @@ export function artifactPreviewPollDelayMs(input: {
   if (input.status !== "pending") {
     return undefined;
   }
-  return ARTIFACT_PREVIEW_POLL_DELAYS_MS[input.pendingAttempt];
+  return ARTIFACT_PREVIEW_POLL_DELAYS_MS[
+    Math.min(input.pendingAttempt, ARTIFACT_PREVIEW_POLL_DELAYS_MS.length - 1)
+  ];
 }
 
 export function createArtifactPreviewView(input: {
@@ -366,73 +368,12 @@ function ImagePagesArtifactPreview({
 }) {
   const { t } = useTranslation();
   const previewPlan = createImagePagesArtifactPreviewLoadPlan(artifact);
-  const previewKey = previewPlan?.key ?? "";
-  const [state, setState] = useState<
-    | { status: "loading" }
-    | { status: "ready"; pages: Array<ToolArtifactImagePagesPreview["pages"][number] & { url: string }> }
-    | { status: "failed"; message: string }
-  >({ status: "loading" });
-
-  useEffect(() => {
-    if (!previewPlan) {
-      setState({ status: "failed", message: t("artifactPreviewUnavailable") });
-      return undefined;
-    }
-
-    let cancelled = false;
-    const objectUrls: string[] = [];
-    setState({ status: "loading" });
-    void Promise.allSettled(
-      previewPlan.pages.map(async (page) => {
-        const blob = await client.conversationArtifactContent(conversationId, page.artifactId);
-        const url = URL.createObjectURL(blob);
-        objectUrls.push(url);
-        if (cancelled) {
-          URL.revokeObjectURL(url);
-        }
-        return { ...page, url };
-      })
-    )
-      .then((results) => {
-        if (cancelled) {
-          revokeObjectUrls(objectUrls);
-          return;
-        }
-        const rejected = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
-        if (rejected) {
-          revokeObjectUrls(objectUrls);
-          setState({
-            status: "failed",
-            message: previewPageErrorMessage(rejected.reason, t("artifactPreviewFailed"))
-          });
-          return;
-        }
-        const pages = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
-        setState({ status: "ready", pages });
-      });
-
-    return () => {
-      cancelled = true;
-      revokeObjectUrls(objectUrls);
-    };
-  }, [client, conversationId, previewKey, t]);
-
-  if (state.status === "loading") {
+  if (!previewPlan) {
     return (
       <ArtifactPreviewMessage
         fileType={fileType}
-        title={t("artifactPreviewLoading")}
+        title={t("artifactPreviewUnavailable")}
         detail={artifactDisplayFilename(artifact)}
-      />
-    );
-  }
-
-  if (state.status === "failed") {
-    return (
-      <ArtifactPreviewMessage
-        fileType={fileType}
-        title={previewPlan ? t("artifactPreviewFailed") : t("artifactPreviewUnavailable")}
-        detail={state.message}
       />
     );
   }
@@ -440,12 +381,21 @@ function ImagePagesArtifactPreview({
   return (
     <div className="chat-scrollbar h-full overflow-auto bg-slate-100">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-6 py-6">
-        {state.pages.map((page, index) => (
-          <img
+        {artifact.preview?.truncated && artifact.preview.pageCount ? (
+          <div className="rounded-md border bg-background px-4 py-3 text-sm text-muted-foreground">
+            {t("artifactPreviewPartial", {
+              shown: previewPlan.pages.length,
+              total: artifact.preview.pageCount
+            })}
+          </div>
+        ) : null}
+        {previewPlan.pages.map((page, index) => (
+          <LazyArtifactPreviewPage
             key={page.artifactId}
-            src={page.url}
+            client={client}
+            conversationId={conversationId}
+            page={page}
             alt={imagePageAltText(artifact, page, index)}
-            className="mx-auto block h-auto w-full rounded-sm bg-white object-contain shadow-sm ring-1 ring-border/70"
           />
         ))}
       </div>
@@ -453,14 +403,89 @@ function ImagePagesArtifactPreview({
   );
 }
 
-function revokeObjectUrls(urls: readonly string[]): void {
-  for (const url of urls) {
-    URL.revokeObjectURL(url);
-  }
-}
+function LazyArtifactPreviewPage({
+  client,
+  conversationId,
+  page,
+  alt
+}: {
+  client: ApiClient;
+  conversationId: string;
+  page: ToolArtifactImagePagesPreview["pages"][number];
+  alt: string;
+}) {
+  const { t } = useTranslation();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(client.browserManagedDownloads);
+  const [url, setUrl] = useState<string | undefined>(() =>
+    client.browserManagedDownloads
+      ? client.conversationArtifactContentUrl(conversationId, page.artifactId, true)
+      : undefined
+  );
+  const [failed, setFailed] = useState(false);
 
-function previewPageErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
+  useEffect(() => {
+    if (visible || !containerRef.current) {
+      return undefined;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "600px 0px" }
+    );
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, [visible]);
+
+  useEffect(() => {
+    if (!visible || client.browserManagedDownloads) {
+      return undefined;
+    }
+    let active = true;
+    let objectUrl: string | undefined;
+    void client.conversationArtifactContent(conversationId, page.artifactId)
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob);
+        if (active) {
+          setUrl(objectUrl);
+        } else {
+          URL.revokeObjectURL(objectUrl);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setFailed(true);
+        }
+      });
+    return () => {
+      active = false;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [client, conversationId, page.artifactId, visible]);
+
+  return (
+    <div ref={containerRef} className="grid min-h-64 place-items-center rounded-sm bg-white shadow-sm ring-1 ring-border/70">
+      {failed ? (
+        <span className="p-6 text-sm text-muted-foreground">{t("artifactPreviewFailed")}</span>
+      ) : url ? (
+        <img
+          src={url}
+          alt={alt}
+          loading="lazy"
+          className="mx-auto block h-auto w-full object-contain"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <span className="p-6 text-sm text-muted-foreground">{t("artifactPreviewLoading")}</span>
+      )}
+    </div>
+  );
 }
 
 function artifactPreviewDescriptorHasExtension(value: string, extensions: string[]): boolean {

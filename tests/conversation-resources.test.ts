@@ -285,14 +285,31 @@ describe("conversation resource routes", () => {
         fixture.clientInstanceId,
         ownerId
       );
+      const pdfBytes = new TextEncoder().encode("%PDF-1.4 original");
       const file = await fixture.store.createManagedFile({
         clientInstanceId: fixture.clientInstanceId,
         ownerUserId: ownerId,
         filename: "input.pdf",
         mimeType: "application/pdf",
-        byteSize: 10,
+        byteSize: pdfBytes.byteLength,
         checksum: "sha256:input-pdf",
         objectKey: "private/source/input.pdf"
+      });
+      fixture.files.set(file.id, {
+        filename: file.filename,
+        mimeType: file.mimeType,
+        bytes: pdfBytes
+      });
+      const canonicalPdf = await fixture.store.createManagedArtifact({
+        clientInstanceId: fixture.clientInstanceId,
+        conversationId: conversation.id,
+        sourceFileId: file.id,
+        kind: "document.canonical_pdf",
+        objectKey: "private/prepared/input.canonical.pdf",
+        filename: "input.canonical.pdf",
+        mimeType: "application/pdf",
+        byteSize: 10,
+        checksum: "sha256:input-canonical"
       });
       const pagesJson = await fixture.store.createManagedArtifact({
         clientInstanceId: fixture.clientInstanceId,
@@ -315,7 +332,10 @@ describe("conversation resource routes", () => {
         checksum: file.checksum,
         status: "ready",
         format: "pdf",
-        artifactRefs: { "document.pages_json": pagesJson.id }
+        artifactRefs: {
+          "document.pages_json": pagesJson.id,
+          "document.canonical_pdf": canonicalPdf.id
+        }
       });
       await fixture.store.claimReadyDraftAttachmentsForMessage({
         clientInstanceId: fixture.clientInstanceId,
@@ -339,6 +359,14 @@ describe("conversation resource routes", () => {
           })
         ]
       });
+      const inline = await request(
+        fixture.server,
+        fixture.ownerToken,
+        `/api/conversations/${conversation.id}/files/${file.id}/content`
+      );
+      expect(inline.statusCode).toBe(200);
+      expect(inline.headers["content-disposition"]).toContain('inline; filename="input.pdf"');
+      expect(inline.rawPayload).toEqual(Buffer.from(pdfBytes));
     } finally {
       await fixture.server.close();
     }
@@ -461,9 +489,8 @@ describe("conversation resource routes", () => {
             createdAt: sent.createdAt,
             updatedAt: expect.any(String),
             preview: {
-              kind: "artifact",
-              artifactId: prepared.id,
-              mimeType: prepared.mimeType
+              kind: "source_file",
+              fileId: file.id
             },
             download: {
               kind: "source_file",
@@ -474,6 +501,7 @@ describe("conversation resource routes", () => {
         ]
       });
       expect(response.payload).not.toContain(oldPromotion.id);
+      expect(response.payload).not.toContain(prepared.id);
       expect(response.payload).not.toContain("workspace-secret");
       expect(response.payload).not.toContain("private/results");
       expect(response.payload).not.toContain("command-secret");

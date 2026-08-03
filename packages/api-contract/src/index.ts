@@ -390,6 +390,8 @@ export const artifactPreviewReadyResponseSchema = z.object({
   artifactId: z.string(),
   type: z.literal("image_pages"),
   format: z.enum(["png", "webp", "jpeg"]),
+  pageCount: z.number().int().positive().optional(),
+  truncated: z.boolean().optional(),
   pages: z.array(artifactPreviewImagePageSchema)
 });
 
@@ -1422,12 +1424,19 @@ export const apiOperations = {
   getConversationArtifactContent: defineBlobApiOperation({
     operationId: "getConversationArtifactContent",
     method: "GET",
-    path: "/api/conversations/:conversationId/artifacts/:artifactId/content"
+    path: "/api/conversations/:conversationId/artifacts/:artifactId/content",
+    queryParams: ["inline"]
   }),
   getConversationArtifactPreview: defineJsonApiOperation({
     operationId: "getConversationArtifactPreview",
     method: "GET",
     path: "/api/conversations/:conversationId/artifacts/:artifactId/preview",
+    responseSchema: artifactPreviewResponseSchema
+  }),
+  getConversationAttachmentPreview: defineJsonApiOperation({
+    operationId: "getConversationAttachmentPreview",
+    method: "GET",
+    path: "/api/conversations/:conversationId/attachments/:attachmentId/preview",
     responseSchema: artifactPreviewResponseSchema
   }),
   retryConversationArtifactPreview: defineJsonApiOperation({

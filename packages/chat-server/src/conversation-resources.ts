@@ -4,6 +4,7 @@ import type {
   ConversationResourceListResponse
 } from "@vivd-catalyst/api-contract";
 import {
+  ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_REF,
   isImageFileFormat,
   isJsonObject,
   readToolResultMetadata,
@@ -81,9 +82,10 @@ function sourceFileResource(
   artifactsById: ReadonlyMap<string, ManagedArtifactRecord>
 ): SourceFileResource {
   const previewCapability = resolveFilePreviewCapability(attachment);
-  const previewArtifact = isImageFileFormat(attachment.format) || previewCapability === "native_pdf"
-    ? undefined
-    : userViewableArtifact(attachment, artifactsById);
+  const previewArtifact =
+    isImageFileFormat(attachment.format) || previewCapability === "native_pdf"
+      ? undefined
+      : attachmentPreviewSourceArtifact(attachment, artifactsById);
   return {
     resourceType: "source_file",
     resourceId: `source_file:${attachment.id}`,
@@ -103,15 +105,16 @@ function sourceFileResource(
   };
 }
 
-function userViewableArtifact(
+function attachmentPreviewSourceArtifact(
   attachment: ConversationAttachment,
   artifactsById: ReadonlyMap<string, ManagedArtifactRecord>
 ): ManagedArtifactRecord | undefined {
-  const referenced = Object.values(attachment.artifactRefs).flatMap((id) => {
-    const artifact = artifactsById.get(id);
-    return artifact ? [artifact] : [];
-  });
-  return referenced.find((artifact) => artifact.kind === "document.canonical_pdf");
+  const previewSourceId = attachment.artifactRefs[ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_REF];
+  const previewSource = previewSourceId ? artifactsById.get(previewSourceId) : undefined;
+  if (previewSource?.status === "available") {
+    return previewSource;
+  }
+  return undefined;
 }
 
 function generatedFileResources(
