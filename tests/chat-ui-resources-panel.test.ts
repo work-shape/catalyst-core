@@ -9,6 +9,7 @@ import {
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 import {
   groupConversationResources,
+  isResourcesPanelAvailable,
   resolveResourcesPanelOpen,
   structuredDataToTsv
 } from "../packages/chat-ui/src/resources-panel-model";
@@ -111,6 +112,18 @@ const structuredData: StructuredDataResourceResponse = {
 };
 
 describe("Resources panel model", () => {
+  it("is available only inside a persisted conversation", () => {
+    expect(
+      isResourcesPanelAvailable({ enabled: true, conversationId: undefined })
+    ).toBe(false);
+    expect(
+      isResourcesPanelAvailable({ enabled: true, conversationId: "conversation_1" })
+    ).toBe(true);
+    expect(
+      isResourcesPanelAvailable({ enabled: false, conversationId: "conversation_1" })
+    ).toBe(false);
+  });
+
   it("routes uploaded Excel workbooks to the source-file preview", () => {
     expect(
       getSourceFilePreviewKind(

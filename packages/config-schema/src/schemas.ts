@@ -519,8 +519,8 @@ export const uiConfigSchema = z
     title: localizedStringSchema.default("Vivd Catalyst"),
     welcomeMessage: localizedStringSchema.default("How can I help?"),
     resources: z
-      .object({ enabled: z.boolean().default(false) })
-      .default({ enabled: false }),
+      .object({ enabled: z.boolean().default(true) })
+      .default({ enabled: true }),
     accentColor: z.string().min(1).default("#0f766e"),
     theme: lightUiThemeSchema,
     darkTheme: darkUiThemeSchema,
@@ -529,7 +529,7 @@ export const uiConfigSchema = z
   .default({
     title: "Vivd Catalyst",
     welcomeMessage: "How can I help?",
-    resources: { enabled: false },
+    resources: { enabled: true },
     accentColor: "#0f766e",
     logoInvertOnDark: false,
     theme: defaultLightUiTheme,

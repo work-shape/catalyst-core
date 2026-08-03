@@ -11,6 +11,7 @@ import {
   ResourcesPanelToggle,
   useResourcesPanelState
 } from "./resources-panel";
+import { isResourcesPanelAvailable } from "./resources-panel-model";
 import { ToolDisplayPanel, useToolDisplayPanel } from "./tool-display-panel";
 import { cn } from "./ui/cn";
 import { UserMenu } from "./user-menu";
@@ -61,9 +62,14 @@ function ChatWorkspaceContent({
   const [displayPanelWidth, setDisplayPanelWidth] = useState(0);
   const resourcesEnabled =
     model.config.config?.features.resources.enabled ?? false;
+  const resourcesConversationId = model.route.selectedConversationId;
+  const resourcesAvailable = isResourcesPanelAvailable({
+    enabled: resourcesEnabled,
+    conversationId: resourcesConversationId
+  });
   const resourcesPanel = useResourcesPanelState({
-    conversationId: model.route.selectedConversationId,
-    enabled: resourcesEnabled
+    conversationId: resourcesConversationId,
+    enabled: resourcesAvailable
   });
   const displayPanel = useToolDisplayPanel();
   const resourcesVisible = resourcesPanel.open && !displayPanel.open;
@@ -197,11 +203,11 @@ function ChatWorkspaceContent({
                 >
                   <AssistantChatPanel chat={chat} />
                   {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
-                  {resourcesEnabled && chat.selectedConversationId ? (
+                  {resourcesAvailable && resourcesConversationId ? (
                     resourcesVisible ? (
                       <ResourcesPanel
                         client={resourcesPanel.client}
-                        conversationId={chat.selectedConversationId}
+                        conversationId={resourcesConversationId}
                         error={resourcesPanel.error}
                         loading={resourcesPanel.loading}
                         onClose={resourcesPanel.close}

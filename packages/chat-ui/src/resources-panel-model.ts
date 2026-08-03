@@ -19,6 +19,13 @@ export interface ResourceSection {
   resources: ConversationResourceListItem[];
 }
 
+export function isResourcesPanelAvailable(input: {
+  enabled: boolean;
+  conversationId: string | undefined;
+}): boolean {
+  return input.enabled && Boolean(input.conversationId);
+}
+
 export function groupConversationResources(
   resources: readonly ConversationResourceListItem[]
 ): ResourceSection[] {

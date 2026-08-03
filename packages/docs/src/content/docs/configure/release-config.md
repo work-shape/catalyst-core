@@ -51,8 +51,6 @@ ui:
   faviconUrl: /favicon.svg
   defaultLocale: en
   supportedLocales: [en, de]
-  resources:
-    enabled: false
   welcomeMessage:
     en: How can I help with your support case?
     de: Wie kann ich bei deinem Supportfall helfen?
@@ -86,6 +84,8 @@ usage:
           cachedInputPricePerMillionTokens: 0.5
           outputPricePerMillionTokens: 30
 ```
+
+The conversation Resources panel is enabled by default and appears only after a user enters a persisted Conversation. Set `ui.resources.enabled: false` only when a deployment must opt out of that surface.
 
 Daily and monthly spend limits use `usage.costs.customer.currency`. Set it to the invoice currency and express every configured model and web-search price in that same currency.
 
