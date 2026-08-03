@@ -198,8 +198,18 @@ function readableForeground(background) {
   if (!rgb) {
     return "#ffffff";
   }
-  const luminance = relativeLuminance(rgb);
-  return luminance > 0.56 ? "#071312" : "#ffffff";
+  const backgroundLuminance = relativeLuminance(rgb);
+  const darkForeground = "#071312";
+  const darkLuminance = relativeLuminance({ r: 7, g: 19, b: 18 });
+  return contrastRatio(backgroundLuminance, darkLuminance) >= contrastRatio(backgroundLuminance, 1)
+    ? darkForeground
+    : "#ffffff";
+}
+
+function contrastRatio(firstLuminance, secondLuminance) {
+  const lighter = Math.max(firstLuminance, secondLuminance);
+  const darker = Math.min(firstLuminance, secondLuminance);
+  return (lighter + 0.05) / (darker + 0.05);
 }
 
 function parseHexColor(value) {

@@ -33,6 +33,7 @@ describe("vivdCatalystChatUiPlugin", () => {
     expect(style).toContain(':root[data-vivd-theme="light"]');
     expect(style).toContain(':root[data-vivd-theme="dark"]');
     expect(style).toContain("--primary:#00a6e3;");
+    expect(style).toContain("--primary-foreground:#071312;");
     expect(style).toContain("--background:#ffffff;");
     expect(style).toContain("--success:#047857;");
     expect(style).toContain("--warning:#b45309;");
