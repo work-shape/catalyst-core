@@ -759,6 +759,69 @@ describe("workspace.preview_images", () => {
     });
   });
 
+  it("loads a legacy embedded GIF preview snapshot without format metadata", async () => {
+    const harness = await createWorkspaceHarness();
+    const gif = await harness.store.createManagedArtifact({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      kind: "document.preview_page_image",
+      objectKey: "artifact-previews/private/legacy-page.gif",
+      filename: "legacy-page.gif",
+      mimeType: "image/gif",
+      byteSize: 32,
+      checksum: "sha256:legacy-gif"
+    });
+    const source = await harness.store.createManagedArtifact({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      kind: "presentation.pptx",
+      objectKey: "execution-workspaces/private/legacy-deck.pptx",
+      filename: "legacy-deck.pptx",
+      mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      byteSize: 128,
+      checksum: "sha256:legacy-deck",
+      metadata: {
+        preview: {
+          type: "image_pages",
+          pages: [
+            {
+              artifactId: gif.id,
+              mimeType: "image/gif",
+              slideNumber: 1
+            }
+          ]
+        }
+      }
+    });
+
+    const result = await harness.runTool("workspace.preview_images", {
+      artifactId: source.id,
+      slides: [1]
+    });
+
+    expect(result.status).toBe("success");
+    if (result.status !== "success") {
+      throw new Error("Expected embedded GIF preview to succeed");
+    }
+    expect(result.output).toMatchObject({
+      artifactId: source.id,
+      status: "ready",
+      images: [
+        {
+          sourceArtifactId: source.id,
+          imageArtifactId: gif.id,
+          mimeType: "image/gif",
+          slideNumber: 1
+        }
+      ],
+      warnings: [expect.objectContaining({ code: "embedded_preview_snapshot" })]
+    });
+    expect(result.artifacts?.[0]).toMatchObject({
+      artifactId: gif.id,
+      modelVisibility: { type: "image", mimeType: "image/gif" }
+    });
+  });
+
   it("reports pending and unsupported preview states without attaching images", async () => {
     const harness = await createWorkspaceHarness();
     const document = await harness.store.createManagedArtifact({

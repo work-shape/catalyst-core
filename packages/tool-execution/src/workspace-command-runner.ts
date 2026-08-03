@@ -26,7 +26,7 @@ import {
   type WorkspaceCommandPromotedArtifact,
   type WorkspaceFile
 } from "@vivd-catalyst/core";
-import { enqueueArtifactPreviewJobForPromotedArtifact } from "./artifact-preview-jobs";
+import { promoteWorkspaceFile } from "./workspace-artifact-promotion";
 import type { WorkspaceCommandResultSource } from "./workspace-tools";
 import type { WorkspaceFileByteStore } from "./workspace-file-bytes";
 import {
@@ -104,6 +104,11 @@ interface ScannedWorkspaceFile {
   byteSize: number;
   checksum: string;
   mimeType?: string;
+}
+
+interface SyncedWorkspaceFile {
+  file: WorkspaceFile;
+  output: WorkspaceCommandChangedFile;
 }
 
 export interface RunClaimedWorkspaceCommandOptions {
@@ -309,17 +314,17 @@ export class LocalWorkspaceCommandRunner {
         options.signal
       );
       const scannedFiles = await this.scanWorkspaceFiles(hydrated.workspaceDirectory, command);
-      changedFiles = await this.syncChangedFiles(
+      const syncedFiles = await this.syncChangedFiles(
         workspace,
         command,
         hydrated.baselineFiles,
         scannedFiles
       );
+      changedFiles = syncedFiles.map((changed) => changed.output);
       cacheReusable = true;
       promotedArtifacts = await this.promoteExpectedOutputs(
-        workspace,
         command,
-        changedFiles,
+        syncedFiles,
         hydrated.workspaceDirectory
       );
       const output = commandOutputFromProcess(processResult, changedFiles, promotedArtifacts);
@@ -583,8 +588,8 @@ export class LocalWorkspaceCommandRunner {
     command: WorkspaceCommand,
     baselineFiles: Map<string, WorkspaceFile>,
     scannedFiles: ScannedWorkspaceFile[]
-  ): Promise<WorkspaceCommandChangedFile[]> {
-    const changedFiles: WorkspaceCommandChangedFile[] = [];
+  ): Promise<SyncedWorkspaceFile[]> {
+    const changedFiles: SyncedWorkspaceFile[] = [];
     const scannedPaths = new Set(scannedFiles.map((file) => file.path));
     for (const scanned of scannedFiles) {
       const baseline = baselineFiles.get(scanned.path);
@@ -601,7 +606,7 @@ export class LocalWorkspaceCommandRunner {
         checksum: scanned.checksum,
         mimeType: scanned.mimeType
       });
-      await this.store.upsertWorkspaceFile({
+      const file = await this.store.upsertWorkspaceFile({
         clientInstanceId: command.clientInstanceId,
         workspaceId: workspace.id,
         path: scanned.path,
@@ -610,17 +615,21 @@ export class LocalWorkspaceCommandRunner {
         checksum: scanned.checksum,
         mimeType: scanned.mimeType,
         metadata: {
+          ...baseline?.metadata,
           source: "workspace.exec"
         },
         lastCommandId: command.id,
         updatedAt: this.now()
       });
       changedFiles.push({
-        path: scanned.path,
-        byteSize: scanned.byteSize,
-        checksum: scanned.checksum,
-        objectKey: stored.objectKey,
-        mimeType: scanned.mimeType
+        file,
+        output: {
+          path: scanned.path,
+          byteSize: scanned.byteSize,
+          checksum: scanned.checksum,
+          objectKey: stored.objectKey,
+          mimeType: scanned.mimeType
+        }
       });
     }
     for (const [path, baseline] of baselineFiles) {
@@ -639,9 +648,8 @@ export class LocalWorkspaceCommandRunner {
   }
 
   private async promoteExpectedOutputs(
-    workspace: ExecutionWorkspace,
     command: WorkspaceCommand,
-    changedFiles: WorkspaceCommandChangedFile[],
+    changedFiles: SyncedWorkspaceFile[],
     workspaceDirectory: string
   ): Promise<WorkspaceCommandPromotedArtifact[]> {
     const promotedArtifacts: WorkspaceCommandPromotedArtifact[] = [];
@@ -649,59 +657,29 @@ export class LocalWorkspaceCommandRunner {
       if (!expected.promote) {
         continue;
       }
-      const changed = changedFiles.find((file) => file.path === expected.path);
-      if (!changed?.objectKey) {
+      const changed = changedFiles.find((file) => file.output.path === expected.path);
+      if (!changed?.output.objectKey) {
         continue;
       }
       const kind = expected.kind ?? "workspace.file";
-      const sourcePath = resolveWorkspaceFilesystemPath(workspaceDirectory, changed.path, {
+      const sourcePath = resolveWorkspaceFilesystemPath(workspaceDirectory, changed.output.path, {
         maxPathLength: this.maxPathLength
       });
       if (sourcePath.status === "failed") {
         continue;
       }
-      const artifact = await this.store.createManagedArtifact({
-        clientInstanceId: command.clientInstanceId,
-        conversationId: workspace.conversationId,
+      const artifact = await promoteWorkspaceFile(this.store, {
+        file: changed.file,
         kind,
-        objectKey: changed.objectKey,
-        filename: basename(changed.path),
-        mimeType: changed.mimeType ?? "application/octet-stream",
-        byteSize: changed.byteSize,
-        checksum: changed.checksum,
-        metadata: {
-          source: "execution_workspace",
-          workspaceId: workspace.id,
-          workspacePath: changed.path,
-          commandId: command.id
-        }
+        filename: basename(changed.output.path),
+        mimeType: changed.output.mimeType ?? "application/octet-stream",
+        commandId: command.id,
+        now: this.now
       });
-      await enqueueArtifactPreviewJobForPromotedArtifact(this.store, artifact);
-      changed.artifactId = artifact.id;
-      await this.store.upsertWorkspaceFile({
-        clientInstanceId: command.clientInstanceId,
-        workspaceId: workspace.id,
-        path: changed.path,
-        objectKey: changed.objectKey,
-        byteSize: changed.byteSize,
-        checksum: changed.checksum,
-        mimeType: changed.mimeType,
-        metadata: {
-          source: "workspace.exec",
-          promotedArtifacts: [
-            {
-              artifactId: artifact.id,
-              kind: artifact.kind,
-              promotedAt: artifact.createdAt
-            }
-          ]
-        },
-        lastCommandId: command.id,
-        updatedAt: this.now()
-      });
+      changed.output.artifactId = artifact.id;
       promotedArtifacts.push({
         artifactId: artifact.id,
-        path: changed.path,
+        path: changed.output.path,
         kind: artifact.kind,
         mimeType: artifact.mimeType
       });

@@ -2,8 +2,8 @@ import type { z } from "zod";
 import {
   asManagedArtifactId,
   detectArtifactPreviewSourceKind,
-  type ArtifactPreviewJobRecord,
-  type ArtifactPreviewManifest,
+  readArtifactPreviewLifecycle,
+  type ArtifactPreviewLifecyclePageRef,
   type ClientInstanceId,
   type JsonObject,
   type ManagedArtifactId,
@@ -149,47 +149,21 @@ export async function resolveWorkspacePreviewImages(
     );
   }
 
-  const job = await options.store.getArtifactPreviewJob({
+  const preview = await readArtifactPreviewLifecycle(options.store, {
     clientInstanceId: context.clientInstanceId,
     sourceArtifactId: source.id,
-    settingsHash
+    settingsHash,
+    metadata: source.metadata
   });
-  const manifest = await options.store.getArtifactPreviewManifest({
-    clientInstanceId: context.clientInstanceId,
-    sourceArtifactId: source.id,
-    settingsHash
-  });
-  if (manifest) {
-    if (manifest.status === "ready") {
-      if (
-        detectArtifactPreviewSourceKind(source) &&
-        !readyCandidatesCoverSelection(previewCandidatesFromManifest(manifest), selection)
-      ) {
-        if (job && isActiveArtifactPreviewJob(job)) {
-          return pendingPreviewImages(source, maxImages);
-        }
-        const queued = await queuePreviewJob(source, options.store, settingsHash, {
-          replaceTerminal: true
-        });
-        return queuedPending(source, maxImages, queued.nextAttemptAt ?? queued.createdAt);
-      }
-      return previewStateFromManifest(source, manifest, selection, maxImages, context.clientInstanceId, options.store);
-    }
-    if (job && isActiveArtifactPreviewJob(job)) {
-      return pendingPreviewImages(source, maxImages);
-    }
-    return previewStateFromManifest(source, manifest, selection, maxImages, context.clientInstanceId, options.store);
-  }
-  if (job && isActiveArtifactPreviewJob(job)) {
-    return pendingPreviewImages(source, maxImages);
-  }
-
-  const embeddedPreview = readEmbeddedImagePagesPreview(source.metadata);
-  if (embeddedPreview.length > 0) {
+  if (preview.status === "ready") {
+    const candidates = previewCandidates(preview.pages);
     if (
       detectArtifactPreviewSourceKind(source) &&
-      !readyCandidatesCoverSelection(embeddedPreview, selection)
+      !readyCandidatesCoverSelection(candidates, selection)
     ) {
+      if (preview.activeQueuedAt) {
+        return pendingPreviewImages(source, maxImages);
+      }
       const queued = await queuePreviewJob(source, options.store, settingsHash, {
         replaceTerminal: true
       });
@@ -197,58 +171,29 @@ export async function resolveWorkspacePreviewImages(
     }
     return previewStateFromReadyImages(
       source,
-      embeddedPreview,
+      candidates,
       selection,
       maxImages,
       context.clientInstanceId,
       options.store,
-      [
-        {
-          code: "embedded_preview_snapshot",
-          message: "Loaded preview images from the source artifact's bounded preview snapshot."
-        }
-      ]
+      preview.source === "embedded"
+        ? [
+            {
+              code: "embedded_preview_snapshot",
+              message: "Loaded preview images from the source artifact's bounded preview snapshot."
+            }
+          ]
+        : []
     );
   }
-
-  if (job) {
-    if (job.settingsHash !== settingsHash && detectArtifactPreviewSourceKind(source)) {
-      const queued = await queuePreviewJob(source, options.store, settingsHash);
-      return queuedPending(source, maxImages, queued.nextAttemptAt ?? queued.createdAt);
-    }
-    if (job.status === "failed" || job.status === "unsupported") {
-      return success(source, job.status, maxImages, [], {
-        errorCode: job.errorCode,
-        warnings: [
-          {
-            code: job.errorCode ?? job.status,
-            message:
-              job.status === "failed"
-                ? "Preview image generation failed; no model-visible image parts were attached."
-                : "This artifact type is not supported by the configured preview renderer."
-          }
-        ]
-      });
-    }
-    if (job.status === "completed") {
-      return success(source, "failed", maxImages, [], {
-        errorCode: "preview_manifest_missing",
-        warnings: [
-          {
-            code: "preview_manifest_missing",
-            message: "Preview job completed but no ready preview manifest is available."
-          }
-        ]
-      });
-    }
-    return success(source, "pending", maxImages, [], {
-      warnings: [
-        {
-          code: "preview_pending",
-          message: "Preview image generation is pending; no model-visible image parts were attached."
-        }
-      ]
-    });
+  if (preview.status === "active") {
+    return pendingPreviewImages(source, maxImages);
+  }
+  if (preview.status === "failed" || preview.status === "unsupported") {
+    return terminalPreviewImages(source, preview.status, maxImages, preview.errorCode);
+  }
+  if (preview.completedWithoutManifest) {
+    return terminalPreviewImages(source, "failed", maxImages, "preview_manifest_missing");
   }
 
   if (detectArtifactPreviewSourceKind(source)) {
@@ -256,13 +201,28 @@ export async function resolveWorkspacePreviewImages(
     return queuedPending(source, maxImages, queued.nextAttemptAt ?? queued.createdAt);
   }
 
-  return success(source, "unsupported", maxImages, [], {
-    errorCode: "unsupported_type",
+  return terminalPreviewImages(source, "unsupported", maxImages, "unsupported_type");
+}
+
+function terminalPreviewImages(
+  source: ManagedArtifactRecord,
+  status: "failed" | "unsupported",
+  maxImages: number,
+  errorCode: string | undefined
+): ToolHandlerResult<WorkspacePreviewImagesOutput> {
+  return success(source, status, maxImages, [], {
+    errorCode,
     warnings: [
       {
-        code: "unsupported_type",
+        code: errorCode ?? status,
         message:
-          "No ready preview images are available, and this artifact type is not supported by the configured preview renderer."
+          status === "failed"
+            ? errorCode === "preview_manifest_missing"
+              ? "Preview job completed but no ready preview manifest is available."
+              : "Preview image generation failed; no model-visible image parts were attached."
+            : errorCode === "unsupported_type"
+              ? "No ready preview images are available, and this artifact type is not supported by the configured preview renderer."
+              : "This artifact type is not supported by the configured preview renderer."
       }
     ]
   });
@@ -314,61 +274,17 @@ function queuedPending(
   });
 }
 
-async function previewStateFromManifest(
-  source: ManagedArtifactRecord,
-  manifest: ArtifactPreviewManifest,
-  selection: NormalizedSelection,
-  maxImages: number,
-  clientInstanceId: ClientInstanceId,
-  store: WorkspacePreviewImagesStore
-): Promise<ToolHandlerResult<WorkspacePreviewImagesOutput>> {
-  if (manifest.status !== "ready") {
-    return success(source, manifest.status, maxImages, [], {
-      errorCode: manifest.errorCode,
-      warnings: [
-        {
-          code: manifest.errorCode ?? manifest.status,
-          message:
-            manifest.status === "failed"
-              ? "Preview image generation failed; no model-visible image parts were attached."
-              : "This artifact type is not supported by the configured preview renderer."
-        }
-      ]
-    });
-  }
-
-  const candidates = previewCandidatesFromManifest(manifest);
-  return previewStateFromReadyImages(
-    source,
-    candidates,
-    selection,
-    maxImages,
-    clientInstanceId,
-    store
-  );
-}
-
-function previewCandidatesFromManifest(manifest: ArtifactPreviewManifest): PreviewImageCandidate[] {
-  if (manifest.status !== "ready") {
-    return [];
-  }
-  return manifest.pages.flatMap((page) => {
-    const mimeType = readSupportedImageMimeType(page.mimeType);
-    return mimeType
-      ? [
-          {
-            artifactId: page.artifactId,
-            mimeType,
-            pageNumber: page.pageNumber,
-            slideNumber: page.slideNumber,
-            sheet: page.sheet,
-            range: page.range,
-            width: page.width,
-            height: page.height
-          }
-        ]
-      : [];
-  });
+function previewCandidates(pages: ArtifactPreviewLifecyclePageRef[]): PreviewImageCandidate[] {
+  return pages.map((page) => ({
+    artifactId: page.artifactId,
+    mimeType: page.mimeType,
+    pageNumber: page.pageNumber,
+    slideNumber: page.slideNumber,
+    sheet: page.sheet,
+    range: page.range,
+    width: page.width,
+    height: page.height
+  }));
 }
 
 async function previewStateFromReadyImages(
@@ -646,10 +562,6 @@ function readyCandidatesCoverSelection(
   );
 }
 
-function isActiveArtifactPreviewJob(job: ArtifactPreviewJobRecord): boolean {
-  return job.status === "pending" || job.status === "processing";
-}
-
 function coversAllNumbers(
   candidates: PreviewImageCandidate[],
   values: Set<number> | undefined,
@@ -708,33 +620,6 @@ function addSelectionMetadataWarnings(
   }
 }
 
-function readEmbeddedImagePagesPreview(metadata: JsonObject): PreviewImageCandidate[] {
-  const preview = isRecord(metadata.preview) ? metadata.preview : undefined;
-  if (preview?.type !== "image_pages" || !Array.isArray(preview.pages)) {
-    return [];
-  }
-  return preview.pages.slice(0, 200).flatMap((page) => {
-    const record = isRecord(page) ? page : undefined;
-    const artifactId = typeof record?.artifactId === "string" ? record.artifactId : undefined;
-    const mimeType = readSupportedImageMimeType(record?.mimeType);
-    if (!artifactId || !mimeType) {
-      return [];
-    }
-    return [
-      {
-        artifactId: asManagedArtifactId(artifactId),
-        mimeType,
-        pageNumber: readPositiveInteger(record?.pageNumber),
-        slideNumber: readPositiveInteger(record?.slideNumber),
-        sheet: readShortString(record?.sheet, 160),
-        range: readShortString(record?.range, 160),
-        width: readPositiveInteger(record?.width),
-        height: readPositiveInteger(record?.height)
-      }
-    ];
-  });
-}
-
 function imageMetadata(sourceArtifactId: ManagedArtifactId, candidate: PreviewImageCandidate): JsonObject {
   return {
     sourceArtifactId,
@@ -777,18 +662,4 @@ function readSupportedImageMimeType(value: unknown): SupportedImageMimeType | un
 
 function isSupportedImageMimeType(value: string): value is SupportedImageMimeType {
   return value === "image/png" || value === "image/jpeg" || value === "image/webp" || value === "image/gif";
-}
-
-function readPositiveInteger(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
-}
-
-function readShortString(value: unknown, maxLength: number): string | undefined {
-  return typeof value === "string" && value.length > 0 && value.length <= maxLength
-    ? value
-    : undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }

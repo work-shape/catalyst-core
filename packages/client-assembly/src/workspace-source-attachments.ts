@@ -1,7 +1,5 @@
-import { createHash } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, resolve, sep } from "node:path";
 import { posix as posixPath } from "node:path";
+import { createManagedObjectChecksum } from "@vivd-catalyst/capability-sdk";
 import {
   AppError,
   asConversationAttachmentId,
@@ -23,7 +21,11 @@ import type {
   ClientInstanceAttachmentHandler,
   ClientInstanceManagedObjectReaderContribution
 } from "./capabilities";
-import type { WorkspaceFileByteStore } from "@vivd-catalyst/tool-execution";
+import {
+  createLocalWorkspaceObjectStorage,
+  type DeletableWorkspaceObjectStorage,
+  type WorkspaceFileByteStore
+} from "@vivd-catalyst/tool-execution";
 
 const WORKSPACE_SOURCE_ATTACHMENT_KIND = "workspace_source";
 const WORKSPACE_SOURCE_METADATA_SOURCE = "execution_workspace_source";
@@ -106,7 +108,9 @@ export interface CreateExecutionWorkspaceSourceAttachmentHandlerInput {
 export function createExecutionWorkspaceSourceAttachmentHandler(
   input: CreateExecutionWorkspaceSourceAttachmentHandlerInput
 ): ClientInstanceAttachmentHandler {
-  const objectStore = new LocalWorkspaceSourceObjectStore(input.objectRootDirectory);
+  const objectStore = createLocalWorkspaceObjectStorage({
+    rootDirectory: input.objectRootDirectory
+  });
   const maxFileBytes = input.maxFileBytes ?? DEFAULT_WORKSPACE_SOURCE_MAX_FILE_BYTES;
   const service = new ExecutionWorkspaceSourceAttachmentService({
     ...input,
@@ -283,13 +287,13 @@ function createWorkspaceSourceAttachmentManifest(
 class ExecutionWorkspaceSourceAttachmentService {
   private readonly clientInstanceId: ClientInstanceId;
   private readonly files: PlatformFileStore;
-  private readonly objectStore: LocalWorkspaceSourceObjectStore;
+  private readonly objectStore: DeletableWorkspaceObjectStorage;
   private readonly maxFileBytes: number;
   private readonly markDeletedOnDelete: boolean;
 
   constructor(
     input: CreateExecutionWorkspaceSourceAttachmentHandlerInput & {
-      objectStore: LocalWorkspaceSourceObjectStore;
+      objectStore: DeletableWorkspaceObjectStorage;
       maxFileBytes: number;
     }
   ) {
@@ -328,14 +332,18 @@ class ExecutionWorkspaceSourceAttachmentService {
       );
     }
 
-    const checksum = checksumBytes(input.bytes);
+    const checksum = createManagedObjectChecksum(input.bytes);
     const objectKey = createSourceObjectKey({
       clientInstanceId: this.clientInstanceId,
       conversationId: input.conversationId,
       checksum,
       filename: input.filename
     });
-    await this.objectStore.putObject(objectKey, input.bytes);
+    await this.objectStore.putObject({
+      key: objectKey,
+      body: input.bytes,
+      contentType: input.mimeType
+    });
     const file = await this.files.createManagedFile({
       clientInstanceId: this.clientInstanceId,
       ownerUserId: input.ownerUserId,
@@ -475,34 +483,6 @@ class ExecutionWorkspaceSourceAttachmentService {
   }
 }
 
-class LocalWorkspaceSourceObjectStore {
-  constructor(private readonly rootDirectory: string) {}
-
-  async putObject(key: string, bytes: Uint8Array): Promise<void> {
-    const path = this.resolveObjectPath(key);
-    await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, bytes);
-  }
-
-  async getObject(key: string): Promise<Uint8Array> {
-    return readFile(this.resolveObjectPath(key));
-  }
-
-  async deleteObject(key: string): Promise<void> {
-    await rm(this.resolveObjectPath(key), { force: true });
-  }
-
-  private resolveObjectPath(key: string): string {
-    const normalized = normalizeObjectKey(key);
-    const root = resolve(this.rootDirectory);
-    const target = resolve(root, ...normalized.split("/"));
-    if (target !== root && !target.startsWith(`${root}${sep}`)) {
-      throw new Error(`Workspace source object key '${key}' escapes the object root`);
-    }
-    return target;
-  }
-}
-
 function isWorkspaceSourceAttachment(attachment: ConversationAttachment): boolean {
   return attachment.processingMetadata.source === WORKSPACE_SOURCE_METADATA_SOURCE;
 }
@@ -530,10 +510,6 @@ function isWorkspaceArtifactObjectKey(value: string): boolean {
   return value.startsWith("execution-workspaces/");
 }
 
-function checksumBytes(bytes: Uint8Array): string {
-  return createHash("sha256").update(bytes).digest("hex");
-}
-
 function extensionFromFilename(filename: string): string | undefined {
   return filename.trim().toLowerCase().match(/\.([a-z0-9]+)$/u)?.[1];
 }
@@ -542,21 +518,4 @@ function safeObjectFilename(filename: string): string {
   const normalized = filename.replaceAll("\\", "/");
   const basename = posixPath.basename(normalized).trim();
   return basename && basename !== "." && basename !== ".." ? basename : "source.bin";
-}
-
-function normalizeObjectKey(key: string): string {
-  if (
-    key.trim().length === 0 ||
-    key.includes("\0") ||
-    key.startsWith("/") ||
-    key.startsWith("\\") ||
-    key.includes("\\")
-  ) {
-    throw new Error(`Invalid workspace source object key '${key}'`);
-  }
-  const normalized = posixPath.normalize(key);
-  if (normalized === "." || normalized === ".." || normalized.startsWith("../")) {
-    throw new Error(`Invalid workspace source object key '${key}'`);
-  }
-  return normalized;
 }

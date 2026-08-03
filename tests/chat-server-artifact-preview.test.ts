@@ -225,6 +225,26 @@ describe("artifact preview routes", () => {
           }
         ]
       });
+      const emptyReadyArtifact = await store.createManagedArtifact({
+        clientInstanceId,
+        conversationId: conversation.id,
+        kind: "document.docx",
+        objectKey: "execution-workspaces/private/empty-ready.docx",
+        filename: "empty-ready.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        byteSize: 64,
+        checksum: "sha256:empty-ready-docx"
+      });
+      await store.writeArtifactPreviewManifest({
+        clientInstanceId,
+        conversationId: conversation.id,
+        sourceArtifactId: emptyReadyArtifact.id,
+        status: "ready",
+        type: "image_pages",
+        format: "png",
+        pageCount: 1,
+        pages: []
+      });
       const pendingArtifact = await store.createManagedArtifact({
         clientInstanceId,
         conversationId: conversation.id,
@@ -277,6 +297,22 @@ describe("artifact preview routes", () => {
         status: "unsupported",
         errorCode: "unsupported_type"
       });
+      const unsupportedWithoutCodeArtifact = await store.createManagedArtifact({
+        clientInstanceId,
+        conversationId: conversation.id,
+        kind: "presentation.ppt",
+        objectKey: "execution-workspaces/private/legacy-without-code.ppt",
+        filename: "legacy-without-code.ppt",
+        mimeType: "application/vnd.ms-powerpoint",
+        byteSize: 64,
+        checksum: "sha256:unsupported-without-code"
+      });
+      await store.writeArtifactPreviewManifest({
+        clientInstanceId,
+        conversationId: conversation.id,
+        sourceArtifactId: unsupportedWithoutCodeArtifact.id,
+        status: "unsupported"
+      });
       const spreadsheetArtifact = await store.createManagedArtifact({
         clientInstanceId,
         conversationId: conversation.id,
@@ -317,6 +353,22 @@ describe("artifact preview routes", () => {
           }
         }
       });
+      const embeddedGifWithoutFormatArtifact = await store.createManagedArtifact({
+        clientInstanceId,
+        conversationId: conversation.id,
+        kind: "presentation.pptx",
+        objectKey: "execution-workspaces/private/embedded-gif.pptx",
+        filename: "embedded-gif.pptx",
+        mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        byteSize: 64,
+        checksum: "sha256:embedded-gif-pptx",
+        metadata: {
+          preview: {
+            type: "image_pages",
+            pages: [{ artifactId: previewPage.id, mimeType: "image/gif", slideNumber: 1 }]
+          }
+        }
+      });
 
       const ready = await server.inject({
         method: "GET",
@@ -344,6 +396,23 @@ describe("artifact preview routes", () => {
       });
       expect(ready.payload).not.toContain("artifact-previews/private");
       expect(ready.payload).not.toContain("renderer");
+
+      const emptyReadyRetry = await server.inject({
+        method: "POST",
+        url: `/api/conversations/${conversation.id}/artifacts/${emptyReadyArtifact.id}/preview/retry`
+      });
+      expect(emptyReadyRetry.statusCode).toBe(200);
+      expect(emptyReadyRetry.json()).toMatchObject({
+        status: "pending",
+        artifactId: emptyReadyArtifact.id,
+        queuedAt: expect.any(String)
+      });
+      await expect(
+        store.getArtifactPreviewJob({
+          clientInstanceId,
+          sourceArtifactId: emptyReadyArtifact.id
+        })
+      ).resolves.toMatchObject({ status: "pending" });
 
       const pending = await server.inject({
         method: "GET",
@@ -447,6 +516,19 @@ describe("artifact preview routes", () => {
           errorCode: "unsupported_type"
         })
       });
+      await expect(
+        server.inject({
+          method: "POST",
+          url: `/api/conversations/${conversation.id}/artifacts/${unsupportedWithoutCodeArtifact.id}/preview/retry`
+        })
+      ).resolves.toMatchObject({
+        statusCode: 200,
+        payload: JSON.stringify({
+          status: "unsupported",
+          artifactId: unsupportedWithoutCodeArtifact.id,
+          errorCode: "unsupported_type"
+        })
+      });
       const nonRetryableArtifact = await store.createManagedArtifact({
         clientInstanceId,
         conversationId: conversation.id,
@@ -543,6 +625,17 @@ describe("artifact preview routes", () => {
       expect(embedded.payload).not.toContain("workspacePath");
       expect(embedded.payload).not.toContain("wcmd_secret");
       expect(embedded.payload).not.toContain("document.preview_page_image");
+
+      const embeddedGif = await server.inject({
+        method: "GET",
+        url: `/api/conversations/${conversation.id}/artifacts/${embeddedGifWithoutFormatArtifact.id}/preview`
+      });
+      expect(embeddedGif.statusCode).toBe(200);
+      expect(embeddedGif.json()).toMatchObject({
+        status: "pending",
+        artifactId: embeddedGifWithoutFormatArtifact.id,
+        queuedAt: expect.any(String)
+      });
 
       const wrongConversation = await server.inject({
         method: "GET",

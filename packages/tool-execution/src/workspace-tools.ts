@@ -20,7 +20,7 @@ import {
   isAppError
 } from "@vivd-catalyst/core";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
-import { enqueueArtifactPreviewJobForPromotedArtifact } from "./artifact-preview-jobs";
+import { promoteWorkspaceFile } from "./workspace-artifact-promotion";
 import type { WorkspaceFileByteStore, WorkspaceObjectStore } from "./workspace-file-bytes";
 import {
   emitWorkspaceCommandTelemetry,
@@ -59,7 +59,6 @@ import {
   failed,
   failedValidationResult,
   boundTextByBytes,
-  mergePromotedFileArtifacts,
   normalizeWorkspaceDirectory,
   normalizeWorkspaceFilePath,
   readPromotedFileArtifacts,
@@ -494,26 +493,12 @@ export class WorkspaceCommandService {
     }
     const filename = input.filename ?? path.basename(file.value.file.path);
     const mimeType = input.mimeType ?? file.value.file.mimeType ?? "application/octet-stream";
-    const artifact = await this.store.createManagedArtifact({
-      clientInstanceId: context.clientInstanceId,
-      conversationId: file.value.conversationId,
+    const artifact = await promoteWorkspaceFile(this.store, {
+      file: file.value.file,
       kind: input.kind,
-      objectKey: file.value.file.objectKey,
       filename,
       mimeType,
-      byteSize: file.value.file.byteSize,
-      checksum: file.value.file.checksum,
-      metadata: {
-        source: "execution_workspace",
-        workspaceId: file.value.workspaceId,
-        workspacePath: file.value.file.path
-      }
-    });
-    await enqueueArtifactPreviewJobForPromotedArtifact(this.store, artifact);
-    await this.markFilePromoted(file.value.file, {
-      artifactId: artifact.id,
-      kind: artifact.kind,
-      promotedAt: artifact.createdAt
+      now: this.now
     });
 
     const output = {
@@ -1245,31 +1230,6 @@ export class WorkspaceCommandService {
         now: this.now()
       })
     };
-  }
-
-  private async markFilePromoted(
-    file: WorkspaceFile,
-    artifact: {
-      artifactId: string;
-      kind: string;
-      promotedAt: string;
-    }
-  ): Promise<void> {
-    await this.store.upsertWorkspaceFile({
-      clientInstanceId: file.clientInstanceId,
-      workspaceId: file.workspaceId,
-      path: file.path,
-      objectKey: file.objectKey,
-      byteSize: file.byteSize,
-      checksum: file.checksum,
-      mimeType: file.mimeType,
-      metadata: {
-        ...file.metadata,
-        promotedArtifacts: mergePromotedFileArtifacts(file.metadata, artifact)
-      },
-      lastCommandId: file.lastCommandId,
-      updatedAt: this.now()
-    });
   }
 
 }

@@ -6,6 +6,7 @@ import {
   StoreBackedAuditRecorder,
   type ClientInstanceId,
   type Conversation,
+  type JsonObject,
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
@@ -129,6 +130,7 @@ export async function createWorkspaceHarness(input: {
       objectKey: string;
       bytes: string | Uint8Array;
       mimeType?: string;
+      metadata?: JsonObject;
     }) {
       const workspace = await store.ensureExecutionWorkspace({
         clientInstanceId,
@@ -146,6 +148,7 @@ export async function createWorkspaceHarness(input: {
         byteSize: bytes.byteLength,
         checksum: `sha256:${file.path}`,
         mimeType: file.mimeType,
+        metadata: file.metadata,
         updatedAt: "2026-06-29T12:01:00.000Z"
       });
     }

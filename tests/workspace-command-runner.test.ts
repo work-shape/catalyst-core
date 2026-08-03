@@ -746,6 +746,28 @@ describe("local workspace command runner", () => {
 
   it("promotes expected outputs after syncing the changed file manifest", async () => {
     const harness = await createRunnerHarness();
+    const workspace = await harness.workspace();
+    const initialBytes = encode("old-placeholder");
+    const initial = await harness.byteStore.putWorkspaceFile({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      workspaceId: workspace.id,
+      commandId: asWorkspaceCommandId("wcmd_initial_deck"),
+      path: "deck.pptx",
+      bytes: initialBytes,
+      checksum: checksum(initialBytes),
+      mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    });
+    await harness.store.upsertWorkspaceFile({
+      clientInstanceId: harness.clientInstanceId,
+      workspaceId: workspace.id,
+      path: "deck.pptx",
+      objectKey: initial.objectKey,
+      byteSize: initialBytes.byteLength,
+      checksum: checksum(initialBytes),
+      mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      metadata: { purpose: "final" }
+    });
 
     const result = await harness.exec({
       command: "printf '%s' 'pptx-placeholder' > deck.pptx",
@@ -775,7 +797,13 @@ describe("local workspace command runner", () => {
     });
     expect(artifact).toMatchObject({
       kind: "presentation.pptx",
-      objectKey: deckFile?.objectKey
+      objectKey: deckFile?.objectKey,
+      metadata: {
+        source: "execution_workspace",
+        workspaceId: workspace.id,
+        workspacePath: "deck.pptx",
+        commandId: result.output.commandId
+      }
     });
     expect(artifact?.metadata).not.toHaveProperty("preview");
     const previewJob = await harness.store.getArtifactPreviewJob({
@@ -787,6 +815,11 @@ describe("local workspace command runner", () => {
       conversationId: harness.conversation.id,
       sourceChecksum: deckFile?.checksum,
       sourceMimeType: artifact?.mimeType
+    });
+    expect(deckFile?.metadata).toMatchObject({
+      purpose: "final",
+      source: "workspace.exec",
+      promotedArtifacts: [expect.objectContaining({ artifactId: artifact?.id })]
     });
   });
 

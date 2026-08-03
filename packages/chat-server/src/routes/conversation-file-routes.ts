@@ -4,16 +4,15 @@ import {
   AppError,
   ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_KIND,
   ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_REF,
+  asArtifactPreviewContractReady,
   asConversationAttachmentId,
   asManagedArtifactId,
   detectArtifactPreviewSourceKind,
   isRetryableArtifactPreviewErrorCode,
-  normalizeArtifactPreviewIdentity,
+  readArtifactPreviewLifecycle,
   requireAuthScope,
   resolveFilePreviewCapability,
-  type ArtifactPreviewImageFormat,
-  type ArtifactPreviewJobRecord,
-  type ArtifactPreviewManifest,
+  type ArtifactPreviewLifecycleState,
   type ArtifactPreviewStore,
   type ConversationAttachment,
   type ManagedArtifactRecord
@@ -21,8 +20,6 @@ import {
 import { ConversationWorkflow } from "../conversation-workflow";
 import { authenticateRequest, getConversationId } from "../request-context";
 import type { ChatServerOptions } from "../types";
-
-type ArtifactPreviewReadyResponse = Extract<ArtifactPreviewResponse, { status: "ready" }>;
 
 export function registerConversationFileRoutes(app: FastifyInstance, options: ChatServerOptions): void {
   const conversations = new ConversationWorkflow(options);
@@ -309,61 +306,24 @@ async function readArtifactPreviewState(
   store: ArtifactPreviewStore,
   artifact: ManagedArtifactRecord
 ): Promise<ArtifactPreviewResponse> {
-  const previewIdentity = normalizeArtifactPreviewIdentity();
-  const job = await store.getArtifactPreviewJob({
+  const preview = await readArtifactPreviewLifecycle(store, {
     clientInstanceId: artifact.clientInstanceId,
     sourceArtifactId: artifact.id,
-    ...previewIdentity
+    metadata: artifact.metadata
   });
-  const manifest = await store.getArtifactPreviewManifest({
-    clientInstanceId: artifact.clientInstanceId,
-    sourceArtifactId: artifact.id,
-    ...previewIdentity
-  });
-  if (manifest?.status === "ready") {
-    return artifactPreviewResponseFromManifest(artifact.id, manifest);
-  }
-  if (job && isActiveArtifactPreviewJob(job)) {
-    return pendingArtifactPreviewResponse(artifact.id, job);
-  }
-  if (manifest) {
-    return artifactPreviewResponseFromManifest(artifact.id, manifest);
-  }
-
-  const embedded = readEmbeddedImagePagesPreview(artifact.metadata);
-  if (embedded) {
-    return {
-      artifactId: artifact.id,
-      ...embedded
-    };
-  }
-
-  if (job) {
-    if (job.status === "failed") {
-      return failedArtifactPreviewResponse(artifact.id, job.errorCode);
+  if (preview.status === "ready") {
+    if (asArtifactPreviewContractReady(preview)) {
+      return artifactPreviewResponse(artifact.id, preview);
     }
-    if (job.status === "unsupported") {
-      return {
-        status: "unsupported",
-        artifactId: artifact.id,
-        ...(job.errorCode ? { errorCode: job.errorCode } : {})
-      };
-    }
-    if (job.status === "completed") {
-      return failedArtifactPreviewResponse(artifact.id, "preview_manifest_missing");
-    }
-    return pendingArtifactPreviewResponse(artifact.id, job);
+  } else if (preview.status !== "missing") {
+    return artifactPreviewResponse(artifact.id, preview);
+  }
+  if (preview.status === "missing" && preview.completedWithoutManifest) {
+    return failedArtifactPreviewResponse(artifact.id, "preview_manifest_missing");
   }
 
   if (detectArtifactPreviewSourceKind(artifact)) {
-    const queued = await store.enqueueArtifactPreviewJob({
-      clientInstanceId: artifact.clientInstanceId,
-      conversationId: artifact.conversationId,
-      sourceArtifactId: artifact.id,
-      sourceChecksum: artifact.checksum,
-      sourceMimeType: artifact.mimeType
-    });
-    return pendingArtifactPreviewResponse(artifact.id, queued);
+    return queueArtifactPreview(store, artifact);
   }
 
   return {
@@ -377,75 +337,78 @@ async function retryArtifactPreviewState(
   store: ArtifactPreviewStore,
   artifact: ManagedArtifactRecord
 ): Promise<ArtifactPreviewResponse> {
-  const previewIdentity = normalizeArtifactPreviewIdentity();
-  const job = await store.getArtifactPreviewJob({
+  const preview = await readArtifactPreviewLifecycle(store, {
     clientInstanceId: artifact.clientInstanceId,
-    sourceArtifactId: artifact.id,
-    ...previewIdentity
+    sourceArtifactId: artifact.id
   });
-  const manifest = await store.getArtifactPreviewManifest({
-    clientInstanceId: artifact.clientInstanceId,
-    sourceArtifactId: artifact.id,
-    ...previewIdentity
-  });
-  if (manifest?.status === "ready") {
-    return artifactPreviewResponseFromManifest(artifact.id, manifest);
+  if (preview.status === "ready") {
+    if (asArtifactPreviewContractReady(preview)) {
+      return artifactPreviewResponse(artifact.id, preview);
+    }
+    return detectArtifactPreviewSourceKind(artifact)
+      ? queueArtifactPreview(store, artifact, true)
+      : failedArtifactPreviewResponse(artifact.id, "preview_manifest_missing");
   }
-  if (job && isActiveArtifactPreviewJob(job)) {
-    return pendingArtifactPreviewResponse(artifact.id, job);
+  if (preview.status === "active") {
+    return artifactPreviewResponse(artifact.id, preview);
   }
-  if (manifest?.status === "unsupported" || job?.status === "unsupported") {
-    return {
-      status: "unsupported",
-      artifactId: artifact.id,
-      errorCode: manifest?.errorCode ?? job?.errorCode ?? "unsupported_type"
-    };
+  if (preview.status === "unsupported") {
+    return artifactPreviewResponse(artifact.id, {
+      ...preview,
+      errorCode: preview.errorCode ?? "unsupported_type"
+    });
   }
-
-  const errorCode =
-    manifest?.status === "failed"
-      ? manifest.errorCode
-      : job?.status === "failed"
-        ? job.errorCode
-        : job?.status === "completed"
-          ? "preview_manifest_missing"
-          : undefined;
+  const errorCode = preview.status === "failed"
+    ? preview.errorCode
+    : preview.completedWithoutManifest
+      ? "preview_manifest_missing"
+      : undefined;
   if (
     errorCode &&
     isRetryableArtifactPreviewErrorCode(errorCode) &&
     detectArtifactPreviewSourceKind(artifact)
   ) {
-    const queued = await store.enqueueArtifactPreviewJob({
-      clientInstanceId: artifact.clientInstanceId,
-      conversationId: artifact.conversationId,
-      sourceArtifactId: artifact.id,
-      sourceChecksum: artifact.checksum,
-      sourceMimeType: artifact.mimeType,
-      ...previewIdentity,
-      replaceTerminal: true
-    });
-    return pendingArtifactPreviewResponse(artifact.id, queued);
+    return queueArtifactPreview(store, artifact, true);
   }
   if (errorCode) {
     return failedArtifactPreviewResponse(artifact.id, errorCode);
   }
-
   return readArtifactPreviewState(store, artifact);
 }
 
-function artifactPreviewResponseFromManifest(
+async function queueArtifactPreview(
+  store: ArtifactPreviewStore,
+  artifact: ManagedArtifactRecord,
+  replaceTerminal = false
+): Promise<ArtifactPreviewResponse> {
+  const queued = await store.enqueueArtifactPreviewJob({
+    clientInstanceId: artifact.clientInstanceId,
+    conversationId: artifact.conversationId,
+    sourceArtifactId: artifact.id,
+    sourceChecksum: artifact.checksum,
+    sourceMimeType: artifact.mimeType,
+    ...(replaceTerminal ? { replaceTerminal: true } : {})
+  });
+  return pendingArtifactPreviewResponse(artifact.id, queued.nextAttemptAt ?? queued.createdAt);
+}
+
+function artifactPreviewResponse(
   artifactId: string,
-  manifest: ArtifactPreviewManifest
+  preview: Exclude<ArtifactPreviewLifecycleState, { status: "missing" }>
 ): ArtifactPreviewResponse {
-  if (manifest.status === "ready") {
+  if (preview.status === "ready") {
+    const ready = asArtifactPreviewContractReady(preview);
+    if (!ready) {
+      return failedArtifactPreviewResponse(artifactId, "preview_manifest_missing");
+    }
     return {
       status: "ready",
       artifactId,
       type: "image_pages",
-      format: manifest.format,
-      pageCount: manifest.pageCount,
-      ...(manifest.pageCount > manifest.pages.length ? { truncated: true } : {}),
-      pages: manifest.pages.map((page) => ({
+      format: ready.format,
+      ...(preview.pageCount ? { pageCount: preview.pageCount } : {}),
+      ...(preview.pageCount && preview.pageCount > preview.pages.length ? { truncated: true } : {}),
+      pages: ready.pages.map((page) => ({
         artifactId: page.artifactId,
         mimeType: page.mimeType,
         ...(page.filename ? { filename: page.filename } : {}),
@@ -456,24 +419,27 @@ function artifactPreviewResponseFromManifest(
       }))
     };
   }
+  if (preview.status === "active") {
+    return pendingArtifactPreviewResponse(artifactId, preview.queuedAt);
+  }
+  if (preview.status === "failed") {
+    return failedArtifactPreviewResponse(artifactId, preview.errorCode);
+  }
   return {
-    status: manifest.status,
+    status: "unsupported",
     artifactId,
-    ...(manifest.errorCode ? { errorCode: manifest.errorCode } : {}),
-    ...(manifest.status === "failed" && isRetryableArtifactPreviewErrorCode(manifest.errorCode)
-      ? { retryable: true }
-      : {})
+    ...(preview.errorCode ? { errorCode: preview.errorCode } : {})
   };
 }
 
 function pendingArtifactPreviewResponse(
   artifactId: string,
-  job: ArtifactPreviewJobRecord
+  queuedAt: string
 ): ArtifactPreviewResponse {
   return {
     status: "pending",
     artifactId,
-    queuedAt: job.nextAttemptAt ?? job.createdAt
+    queuedAt
   };
 }
 
@@ -487,95 +453,4 @@ function failedArtifactPreviewResponse(
     ...(errorCode ? { errorCode } : {}),
     ...(isRetryableArtifactPreviewErrorCode(errorCode) ? { retryable: true } : {})
   };
-}
-
-function isActiveArtifactPreviewJob(job: ArtifactPreviewJobRecord): boolean {
-  return job.status === "pending" || job.status === "processing";
-}
-
-function readEmbeddedImagePagesPreview(
-  metadata: unknown
-): Omit<ArtifactPreviewReadyResponse, "artifactId"> | undefined {
-  const metadataRecord = isRecord(metadata) ? metadata : undefined;
-  const preview = isRecord(metadataRecord?.preview) ? metadataRecord.preview : undefined;
-  if (preview?.type !== "image_pages") {
-    return undefined;
-  }
-  const format = readPreviewImageFormat(preview.format);
-  if (!format) {
-    return undefined;
-  }
-  const pages = Array.isArray(preview.pages)
-    ? preview.pages.slice(0, 200).flatMap((page): ArtifactPreviewReadyResponse["pages"] => {
-        const sanitized = sanitizeEmbeddedPreviewPage(page);
-        return sanitized ? [sanitized] : [];
-      })
-    : [];
-  if (pages.length === 0) {
-    return undefined;
-  }
-  return {
-    status: "ready",
-    type: "image_pages",
-    format,
-    pages
-  };
-}
-
-function sanitizeEmbeddedPreviewPage(
-  value: unknown
-): ArtifactPreviewReadyResponse["pages"][number] | undefined {
-  const record = isRecord(value) ? value : undefined;
-  const artifactId = readShortString(record?.artifactId, 200);
-  const mimeType = readPreviewImageMimeType(record?.mimeType);
-  if (!artifactId || !mimeType) {
-    return undefined;
-  }
-  return {
-    artifactId,
-    mimeType,
-    ...optionalStringField("filename", readShortString(record?.filename, 255)),
-    ...optionalPositiveIntegerField("pageNumber", record?.pageNumber),
-    ...optionalPositiveIntegerField("slideNumber", record?.slideNumber),
-    ...optionalPositiveIntegerField("width", record?.width),
-    ...optionalPositiveIntegerField("height", record?.height)
-  };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
-
-function readPreviewImageFormat(value: unknown): ArtifactPreviewImageFormat | undefined {
-  return value === "png" || value === "jpeg" || value === "webp" ? value : undefined;
-}
-
-function readPreviewImageMimeType(
-  value: unknown
-): "image/png" | "image/jpeg" | "image/webp" | undefined {
-  return value === "image/png" || value === "image/jpeg" || value === "image/webp"
-    ? value
-    : undefined;
-}
-
-function readShortString(value: unknown, maxLength: number): string | undefined {
-  return typeof value === "string" && value.length > 0 && value.length <= maxLength
-    ? value
-    : undefined;
-}
-
-function optionalStringField<Field extends string>(
-  field: Field,
-  value: string | undefined
-): { [key in Field]?: string } {
-  return (value ? { [field]: value } : {}) as { [key in Field]?: string };
-}
-
-function optionalPositiveIntegerField<Field extends string>(
-  field: Field,
-  value: unknown
-): { [key in Field]?: number } {
-  return (
-    typeof value === "number" && Number.isInteger(value) && value > 0 ? { [field]: value } : {}
-  ) as { [key in Field]?: number };
 }

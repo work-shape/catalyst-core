@@ -1097,11 +1097,12 @@ describe("workspace tools", () => {
 
   it("promotes a workspace file as a managed artifact while unpromoted files stay hidden", async () => {
     const harness = await createWorkspaceHarness();
-    await harness.putWorkspaceFile({
+    const sourceFile = await harness.putWorkspaceFile({
       path: "reports/final.docx",
       objectKey: "workspace/reports/final.docx",
       bytes: "docx-preview",
-      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      metadata: { purpose: "final" }
     });
     await harness.putWorkspaceFile({
       path: "reports/draft.pdf",
@@ -1135,7 +1136,12 @@ describe("workspace tools", () => {
     expect(artifact).toMatchObject({
       kind: "document.docx",
       objectKey: "workspace/reports/final.docx",
-      filename: "final.docx"
+      filename: "final.docx",
+      metadata: {
+        source: "execution_workspace",
+        workspaceId: expect.any(String),
+        workspacePath: "reports/final.docx"
+      }
     });
     expect(artifact?.metadata).not.toHaveProperty("preview");
     const previewJob = await harness.store.getArtifactPreviewJob({
@@ -1147,6 +1153,14 @@ describe("workspace tools", () => {
       conversationId: harness.conversation.id,
       sourceChecksum: "sha256:reports/final.docx",
       sourceMimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    });
+    const promotedFile = (await harness.store.listWorkspaceFiles({
+      clientInstanceId: harness.clientInstanceId,
+      workspaceId: sourceFile.workspaceId
+    })).find((file) => file.path === "reports/final.docx");
+    expect(promotedFile?.metadata).toMatchObject({
+      purpose: "final",
+      promotedArtifacts: [expect.objectContaining({ artifactId: artifact?.id })]
     });
 
     const listed = await harness.runTool("workspace.list_files", {});

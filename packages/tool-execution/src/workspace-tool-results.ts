@@ -184,31 +184,6 @@ export function readPromotedFileArtifacts(metadata: JsonObject): Array<{
   return artifacts.length > 0 ? artifacts : undefined;
 }
 
-export function mergePromotedFileArtifacts(
-  metadata: JsonObject,
-  artifact: {
-    artifactId: string;
-    kind: string;
-    promotedAt: string;
-  }
-): JsonObject[] {
-  const existing = readPromotedFileArtifacts(metadata) ?? [];
-  return [
-    ...existing
-      .filter((candidate) => candidate.artifactId !== artifact.artifactId)
-      .map((candidate) => ({
-        artifactId: candidate.artifactId,
-        kind: candidate.kind,
-        promotedAt: candidate.promotedAt
-      })),
-    {
-      artifactId: artifact.artifactId,
-      kind: artifact.kind,
-      promotedAt: artifact.promotedAt
-    }
-  ];
-}
-
 export function decodeTextFile(bytes: Uint8Array, mimeType: string | undefined): ValidationResult<string> {
   if (bytes.includes(0)) {
     return {
