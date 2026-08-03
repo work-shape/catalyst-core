@@ -128,10 +128,11 @@ function AssistantMessage({
     finalTextIndex >= 0;
   // Reading this must not consume it: auto-collapse and auto-preview both
   // depend on it, and whichever ran first used to silently disable the other.
-  const justCompletedRun = Boolean(
-    completedRunId && recentlyActiveAssistantRunIds.has(completedRunId)
-  );
-  const [autoCollapseCompletedWorkSummary] = useState(() => justCompletedRun);
+  // Capture this for the lifetime of the mounted message, then acknowledge it
+  // after the first paint. Returning to the conversation mounts a fresh message
+  // without replaying completion-only effects such as the collapse animation.
+  const [justCompletedRun] = useState(() => isRecentlyActiveAssistantRunId(completedRunId));
+  const autoCollapseCompletedWorkSummary = justCompletedRun;
   const autoPreviewSurfaces = justCompletedRun || activeRunCompleted;
   const assistantPartComponents = useAssistantPartComponents({
     autoPreviewSurfaces,
@@ -146,6 +147,11 @@ function AssistantMessage({
       rememberRecentlyActiveAssistantRunId(messageId);
     }
   }, [activeRunProjectionMessage, messageId]);
+  useEffect(() => {
+    if (justCompletedRun) {
+      acknowledgeRecentlyActiveAssistantRunId(completedRunId);
+    }
+  }, [completedRunId, justCompletedRun]);
 
   return (
     <MessagePrimitive.Root
@@ -415,7 +421,7 @@ function AssistantWorkGroup({
   );
 }
 
-function rememberRecentlyActiveAssistantRunId(runId: string): void {
+export function rememberRecentlyActiveAssistantRunId(runId: string): void {
   recentlyActiveAssistantRunIds.delete(runId);
   recentlyActiveAssistantRunIds.add(runId);
   if (recentlyActiveAssistantRunIds.size <= 20) {
@@ -424,6 +430,16 @@ function rememberRecentlyActiveAssistantRunId(runId: string): void {
   const oldestRunId = recentlyActiveAssistantRunIds.values().next().value;
   if (typeof oldestRunId === "string") {
     recentlyActiveAssistantRunIds.delete(oldestRunId);
+  }
+}
+
+export function isRecentlyActiveAssistantRunId(runId: string | undefined): boolean {
+  return Boolean(runId && recentlyActiveAssistantRunIds.has(runId));
+}
+
+export function acknowledgeRecentlyActiveAssistantRunId(runId: string | undefined): void {
+  if (runId) {
+    recentlyActiveAssistantRunIds.delete(runId);
   }
 }
 

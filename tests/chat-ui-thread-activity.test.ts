@@ -6,6 +6,11 @@ import {
 import { createElement } from "../packages/chat-ui/node_modules/react";
 import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
 import { AssistantActivityStatus } from "../packages/chat-ui/src/assistant-activity-status";
+import {
+  acknowledgeRecentlyActiveAssistantRunId,
+  isRecentlyActiveAssistantRunId,
+  rememberRecentlyActiveAssistantRunId
+} from "../packages/chat-ui/src/assistant-message";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 import { ToolActivityLabelsProvider } from "../packages/chat-ui/src/tool-activity";
 import {
@@ -17,6 +22,16 @@ import {
 } from "../packages/chat-ui/src/thread-activity";
 
 describe("chat UI thread activity", () => {
+  it("runs completed-work effects only once across conversation remounts", () => {
+    const runId = "run_completed_work_once";
+
+    rememberRecentlyActiveAssistantRunId(runId);
+    expect(isRecentlyActiveAssistantRunId(runId)).toBe(true);
+
+    acknowledgeRecentlyActiveAssistantRunId(runId);
+    expect(isRecentlyActiveAssistantRunId(runId)).toBe(false);
+  });
+
   it("shows the activity row for the whole busy window, whatever the parts look like", () => {
     expect(shouldShowRunActivity({ conversationRunning: true })).toBe(true);
     expect(shouldShowRunActivity({ optimisticPending: true })).toBe(true);
