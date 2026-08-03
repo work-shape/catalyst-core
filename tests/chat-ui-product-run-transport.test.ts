@@ -15,12 +15,14 @@ describe("chat UI product run transport", () => {
   it("starts a new conversation through the product createConversationRun API", async () => {
     const calls: unknown[] = [];
     const client = {
-      async createConversationRun(input: unknown) {
-        calls.push(input);
-        return createStartResponse({ conversationId: "conv_new" });
-      },
-      async startConversationRun() {
-        throw new Error("startConversationRun should not be called");
+      conversations: {
+        async createRun(input: unknown) {
+          calls.push(input);
+          return createStartResponse({ conversationId: "conv_new" });
+        },
+        async startRun() {
+          throw new Error("startRun should not be called");
+        }
       }
     };
 
@@ -54,12 +56,14 @@ describe("chat UI product run transport", () => {
   it("starts an existing conversation through the product startConversationRun API", async () => {
     const calls: unknown[] = [];
     const client = {
-      async createConversationRun() {
-        throw new Error("createConversationRun should not be called");
-      },
-      async startConversationRun(conversationId: string, input: unknown) {
-        calls.push({ conversationId, input });
-        return createStartResponse({ conversationId });
+      conversations: {
+        async createRun() {
+          throw new Error("createRun should not be called");
+        },
+        async startRun(conversationId: string, input: unknown) {
+          calls.push({ conversationId, input });
+          return createStartResponse({ conversationId });
+        }
       }
     };
 
@@ -88,12 +92,14 @@ describe("chat UI product run transport", () => {
   it("reuses the generated idempotency key for the submitted user message", async () => {
     const idempotencyKeys: string[] = [];
     const client = {
-      async createConversationRun(input: { idempotencyKey: string }) {
-        idempotencyKeys.push(input.idempotencyKey);
-        return createStartResponse({ conversationId: "conv_new" });
-      },
-      async startConversationRun() {
-        throw new Error("startConversationRun should not be called");
+      conversations: {
+        async createRun(input: { idempotencyKey: string }) {
+          idempotencyKeys.push(input.idempotencyKey);
+          return createStartResponse({ conversationId: "conv_new" });
+        },
+        async startRun() {
+          throw new Error("startRun should not be called");
+        }
       }
     };
     const transport = new ProductConversationRunTransport({
@@ -130,11 +136,13 @@ describe("chat UI product run transport", () => {
     const startedRuns: StartConversationRunResponse[] = [];
     const response = createStartResponse({ conversationId: "conv_new", lastSequence: 2 });
     const client = {
-      async createConversationRun() {
-        return response;
-      },
-      async startConversationRun() {
-        throw new Error("startConversationRun should not be called");
+      conversations: {
+        async createRun() {
+          return response;
+        },
+        async startRun() {
+          throw new Error("startRun should not be called");
+        }
       }
     };
     const transport = new ProductConversationRunTransport({
@@ -167,13 +175,15 @@ describe("chat UI product run transport", () => {
   it("rejects an active-run submission before calling the API", async () => {
     let apiCalls = 0;
     const client = {
-      async createConversationRun() {
-        apiCalls += 1;
-        return createStartResponse({ conversationId: "conv_new" });
-      },
-      async startConversationRun() {
-        apiCalls += 1;
-        return createStartResponse({ conversationId: "conv_existing" });
+      conversations: {
+        async createRun() {
+          apiCalls += 1;
+          return createStartResponse({ conversationId: "conv_new" });
+        },
+        async startRun() {
+          apiCalls += 1;
+          return createStartResponse({ conversationId: "conv_existing" });
+        }
       }
     };
     const transport = new ProductConversationRunTransport({

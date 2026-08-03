@@ -92,7 +92,7 @@ describe("api operation catalog and client", () => {
     });
     const operation = apiOperations.listConversationMessages;
 
-    await expect(client.messages("conversation/with space")).resolves.toEqual([]);
+    await expect(client.conversations.messages("conversation/with space")).resolves.toEqual([]);
 
     expect(calls).toHaveLength(1);
     const request = calls[0];
@@ -106,14 +106,14 @@ describe("api operation catalog and client", () => {
     expect(request?.headers.get("authorization")).toBe("Bearer test-token");
   });
 
-  it("downloads promoted managed artifact content through the API client", async () => {
+  it("forces promoted managed artifact content to a blob regardless of content type", async () => {
     const calls: Request[] = [];
     const fetchImpl: typeof fetch = async (input, init) => {
       const request = input instanceof Request ? input : new Request(input, init);
       calls.push(request);
       return new Response("artifact-bytes", {
         headers: {
-          "content-type": "application/pdf"
+          "content-type": "application/json"
         }
       });
     };
@@ -126,9 +126,8 @@ describe("api operation catalog and client", () => {
     const blob = await client.conversationArtifactContent("conv 1", "art/final");
 
     expect(await blob.text()).toBe("artifact-bytes");
-    expect(blob.type).toBe("application/pdf");
+    expect(blob.type).toBe("application/json");
     expect(client.browserManagedDownloads).toBe(false);
-    expect(client.browserManagedArtifactDownloads).toBe(false);
     expect(client.conversationArtifactContentUrl("conv 1", "art/final")).toBe(
       `https://chat.example${apiOperations.getConversationArtifactContent.buildPath({
         params: { conversationId: "conv 1", artifactId: "art/final" }
@@ -161,6 +160,22 @@ describe("api operation catalog and client", () => {
         params: { conversationId: "conv 1", fileId: "file/image" }
       })}`
     );
+  });
+
+  it("forces conversation file content to a blob regardless of content type", async () => {
+    const client = createApiClient({
+      baseUrl: "https://chat.example/",
+      fetchImpl: async () =>
+        new Response("source-file-bytes", {
+          headers: { "content-type": "text/plain" }
+        })
+    });
+
+    const blob = await client.conversationFileContent("conv_1", "file_1");
+
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.type).toBe("text/plain");
+    expect(await blob.text()).toBe("source-file-bytes");
   });
 
   it("fetches promoted managed artifact preview state through the API client", async () => {
@@ -221,7 +236,6 @@ describe("api operation catalog and client", () => {
     });
 
     expect(client.browserManagedDownloads).toBe(true);
-    expect(client.browserManagedArtifactDownloads).toBe(true);
     expect(client.conversationArtifactContentUrl("conversation/with space", "art/final")).toBe(
       "https://chat.example/api/conversations/conversation%2Fwith%20space/artifacts/art%2Ffinal/content"
     );
@@ -236,8 +250,73 @@ describe("api operation catalog and client", () => {
       fetchImpl
     });
 
-    expect(() => client.createConversation({ title: "" })).toThrow();
+    expect(() => client.conversations.create({ title: "" })).toThrow();
     expect(() => client.renameConversation("conv_1", "   ")).toThrow();
+  });
+
+  it("lets the generated SDK own multipart boundaries", async () => {
+    let request: Request | undefined;
+    const attachment = {
+      id: "attachment_1",
+      conversationId: "conv_1",
+      fileId: "file_1",
+      filename: "notes.txt",
+      mimeType: "text/plain",
+      byteSize: 5,
+      status: "ready" as const,
+      artifactRefs: {},
+      processingMetadata: {},
+      warnings: [],
+      createdAt: "2026-06-27T00:00:00.000Z",
+      updatedAt: "2026-06-27T00:00:00.000Z"
+    };
+    const client = createApiClient({
+      baseUrl: "https://chat.example",
+      fetchImpl: async (input, init) => {
+        request = input instanceof Request ? input : new Request(input, init);
+        return Response.json({ attachment, attachments: [attachment], outcome: "created" });
+      }
+    });
+
+    await client.uploadDraftAttachment(
+      "conv_1",
+      new File(["notes"], "notes.txt", { type: "text/plain" })
+    );
+
+    expect(request?.headers.get("content-type")).toMatch(
+      /^multipart\/form-data; boundary=/u
+    );
+    expect(await request?.clone().text()).toContain('filename="notes.txt"');
+  });
+
+  it("normalizes generated HTTP and network failures as ApiError", async () => {
+    const httpClient = createApiClient({
+      baseUrl: "https://chat.example",
+      fetchImpl: async () =>
+        Response.json(
+          { error: { message: "Conversation unavailable" } },
+          { status: 503 }
+        )
+    });
+    const networkFailure = new TypeError("offline");
+    const networkClient = createApiClient({
+      baseUrl: "https://chat.example",
+      fetchImpl: async () => {
+        throw networkFailure;
+      }
+    });
+
+    await expect(httpClient.conversations.list()).rejects.toMatchObject({
+      name: "ApiError",
+      status: 503,
+      message: "Conversation unavailable"
+    });
+    await expect(networkClient.conversations.list()).rejects.toMatchObject({
+      name: "ApiError",
+      status: 0,
+      message: "API request failed",
+      payload: networkFailure
+    });
   });
 
   it("exposes resource-oriented Agent Runs client helpers", async () => {
@@ -371,7 +450,7 @@ describe("api operation catalog and client", () => {
       idempotencyKey: "idem_1",
       message: { text: "Hello" }
     });
-    await client.conversations.createAndStartRun({
+    await client.conversations.createRun({
       idempotencyKey: "idem_2",
       message: { text: "Hello" }
     });
@@ -415,7 +494,7 @@ describe("api operation catalog and client", () => {
     const observed = [];
     let caughtUp = false;
 
-    for await (const observation of client.observeRunEvents("conv_1", "run_1", {
+    for await (const observation of client.runs.observe("conv_1", "run_1", {
       afterSequence: 7,
       onCaughtUp: () => {
         caughtUp = true;
@@ -429,6 +508,52 @@ describe("api operation catalog and client", () => {
     ]);
     expect(observed).toEqual([]);
     expect(caughtUp).toBe(true);
+  });
+
+  it("decodes incrementally split UTF-8 run events with CRLF framing", async () => {
+    const observation = {
+      clientInstanceId: "client_1",
+      runId: "run_1",
+      conversationId: "conv_1",
+      ownerUserId: "user_1",
+      sequence: 1,
+      type: "message_delta",
+      payload: {
+        type: "message_delta",
+        runId: "run_1",
+        sequence: 1,
+        createdAt: "2026-06-27T00:00:00.000Z",
+        delta: "Hello 🌍"
+      },
+      createdAt: "2026-06-27T00:00:00.000Z"
+    };
+    const encoder = new TextEncoder();
+    const [prefix, suffix] = `data: ${JSON.stringify(observation)}\r\n\r\n`.split("🌍");
+    const emoji = encoder.encode("🌍");
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new Uint8Array([...encoder.encode(prefix), ...emoji.slice(0, 2)])
+        );
+        controller.enqueue(
+          new Uint8Array([...emoji.slice(2), ...encoder.encode(suffix)])
+        );
+        controller.close();
+      }
+    });
+    const client = createApiClient({
+      baseUrl: "https://chat.example",
+      fetchImpl: async () =>
+        new Response(stream, { headers: { "content-type": "text/event-stream" } })
+    });
+    const observed = [];
+
+    for await (const event of client.runs.observe("conv_1", "run_1")) {
+      observed.push(event);
+    }
+
+    expect(observed).toEqual([observation]);
+    expect(stream.locked).toBe(false);
   });
 
   it("keeps normal server route registrations tied to the operation catalog", async () => {

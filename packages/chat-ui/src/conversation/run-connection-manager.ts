@@ -22,7 +22,7 @@ export interface RunConnectionManager {
 }
 
 export interface StartRunConnectionManagerInput {
-  client: Pick<ApiClient, "observeRunEvents">;
+  client: { runs: Pick<ApiClient["runs"], "observe"> };
   connection: RunConnectionTarget;
   markConnecting(): void;
   applyObservation(observation: RunObservation): {
@@ -49,7 +49,7 @@ export function startRunConnectionManager(
     try {
       let streamCaughtUp = false;
       let sawObservation = false;
-      for await (const observation of input.client.observeRunEvents(
+      for await (const observation of input.client.runs.observe(
         input.connection.conversationId,
         input.connection.runId,
         {

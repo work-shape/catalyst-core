@@ -20,18 +20,20 @@ describe("chat UI run connection manager", () => {
     const refreshed = new Promise<void>((resolve, reject) => {
       manager = startRunConnectionManager({
         client: {
-          async *observeRunEvents(_conversationId, _runId, options = {}) {
-            afterSequences.push(options.afterSequence);
-            if (options.signal) {
-              signals.push(options.signal);
-            }
-            yield createObservation({
-              sequence: 4,
-              type: "message_delta",
-              payload: {
-                delta: " after a gap"
+          runs: {
+            async *observe(_conversationId, _runId, options = {}) {
+              afterSequences.push(options.afterSequence);
+              if (options.signal) {
+                signals.push(options.signal);
               }
-            });
+              yield createObservation({
+                sequence: 4,
+                type: "message_delta",
+                payload: {
+                  delta: " after a gap"
+                }
+              });
+            }
           }
         },
         connection: {
@@ -74,8 +76,10 @@ describe("chat UI run connection manager", () => {
     const refreshed = new Promise<void>((resolve, reject) => {
       startRunConnectionManager({
         client: {
-          async *observeRunEvents(_conversationId, _runId, options = {}) {
-            options.onCaughtUp?.();
+          runs: {
+            async *observe(_conversationId, _runId, options = {}) {
+              options.onCaughtUp?.();
+            }
           }
         },
         connection: {
@@ -117,7 +121,9 @@ describe("chat UI run connection manager", () => {
     const completed = new Promise<void>((resolve, reject) => {
       startRunConnectionManager({
         client: {
-          async *observeRunEvents() {}
+          runs: {
+            async *observe() {}
+          }
         },
         connection: {
           conversationId: "conv_1",
@@ -157,17 +163,19 @@ describe("chat UI run connection manager", () => {
     await new Promise<void>((resolve, reject) => {
       startRunConnectionManager({
         client: {
-          async *observeRunEvents() {
-            yield createObservation({
-              sequence: 4,
-              type: "tool_call_completed",
-              payload: {
-                toolCallId: "call_1",
-                toolName: "publish",
-                result: { status: "success" },
-                modelOutput: "{}"
-              }
-            });
+          runs: {
+            async *observe() {
+              yield createObservation({
+                sequence: 4,
+                type: "tool_call_completed",
+                payload: {
+                  toolCallId: "call_1",
+                  toolName: "publish",
+                  result: { status: "success" },
+                  modelOutput: "{}"
+                }
+              });
+            }
           }
         },
         connection: {

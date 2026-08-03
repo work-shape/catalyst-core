@@ -298,7 +298,7 @@ export function useWorkspaceChatModel({
     }
     const title =
       files.length === 1 ? files[0]?.name ?? "Attached file" : `${files.length} attached files`;
-    const conversation = await client.createConversation({
+    const conversation = await client.conversations.create({
       title,
       locale: activeLocale
     });

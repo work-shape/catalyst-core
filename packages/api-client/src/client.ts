@@ -1,9 +1,14 @@
 import type { z } from "zod";
+import {
+  apiOperations,
+  runObservationSchema,
+  type ConfigAssetKind,
+  type LocaleCode,
+  type RunObservation
+} from "@vivd-catalyst/api-contract";
 import { ApiError } from "./errors";
 import { createClient as createGeneratedClient } from "./generated/client";
 import * as generatedSdk from "./generated/sdk.gen";
-import { apiOperations, runObservationSchema } from "./schemas";
-import type { ConfigAssetKind, LocaleCode, RunObservation } from "./schemas";
 
 export interface ApiClientOptions {
   baseUrl: string;
@@ -77,44 +82,6 @@ export function createApiClient(options: ApiClientOptions) {
     return payload.data;
   }
 
-  async function requestBlob(path: string, init: RequestInit = {}): Promise<Blob> {
-    const response = await request(path, init);
-    if (!response.ok) {
-      const payload = await readJsonPayload(response);
-      throw new ApiError(response.status, apiErrorMessage(payload), payload);
-    }
-    return response.blob();
-  }
-
-  async function requestJson<T>(
-    path: string,
-    schema: z.ZodType<T>,
-    init: RequestInit = {}
-  ): Promise<T> {
-    const response = await request(path, init);
-    const payload = await readJsonPayload(response);
-    if (!response.ok) {
-      throw new ApiError(response.status, apiErrorMessage(payload), payload);
-    }
-    return schema.parse(payload);
-  }
-
-  async function request(path: string, init: RequestInit = {}): Promise<Response> {
-    const headers = new Headers(init.headers);
-    const token = await options.getToken?.();
-    if (token) {
-      headers.set("authorization", `Bearer ${token}`);
-    }
-    if (init.body !== undefined && !headers.has("content-type")) {
-      headers.set("content-type", "application/json");
-    }
-    return (options.fetchImpl ?? fetch)(`${baseUrl}${path}`, {
-      ...init,
-      credentials: "include",
-      headers
-    });
-  }
-
   function buildUrl(path: string): string {
     return `${baseUrl}${path}`;
   }
@@ -130,30 +97,39 @@ export function createApiClient(options: ApiClientOptions) {
     runId: string,
     observeOptions: ObserveRunEventsOptions = {}
   ): AsyncIterable<RunObservation> {
-    const path = apiOperations.observeConversationRun.buildPath({
-      params: { conversationId, runId },
-      query: { after: observeOptions.afterSequence }
-    });
-    const response = await request(path, {
-      method: "GET",
+    const result = await generatedClient.get<ReadableStream<Uint8Array>, unknown>({
+      url: "/api/conversations/{conversationId}/runs/{runId}/events",
+      path: { conversationId, runId },
+      query:
+        observeOptions.afterSequence === undefined
+          ? undefined
+          : { after: String(observeOptions.afterSequence) },
       headers: {
         accept: "text/event-stream"
       },
+      parseAs: "stream",
       signal: observeOptions.signal
     });
+    const response = result.response;
+    if (!response) {
+      if (result.error instanceof Error && result.error.name === "AbortError") {
+        throw result.error;
+      }
+      throw apiErrorFromGeneratedResult(result);
+    }
     if (response.status === 204) {
       observeOptions.onCaughtUp?.();
       return;
     }
-    if (!response.ok) {
-      const payload = await readJsonPayload(response);
-      throw new ApiError(response.status, apiErrorMessage(payload), payload);
+    if (result.error !== undefined) {
+      throw apiErrorFromGeneratedResult(result);
     }
-    if (!response.body) {
+    const body = result.data;
+    if (!body) {
       return;
     }
 
-    const reader = response.body.getReader();
+    const reader = body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
     try {
@@ -202,8 +178,11 @@ export function createApiClient(options: ApiClientOptions) {
     );
 
   const getConversationThread = (conversationId: string) =>
-    requestJson(
-      apiOperations.getConversationThread.buildPath({ params: { conversationId } }),
+    unwrapJson(
+      generatedSdk.getConversationThread({
+        client: generatedClient,
+        path: { conversationId }
+      }),
       apiOperations.getConversationThread.responseSchema
     );
 
@@ -241,25 +220,24 @@ export function createApiClient(options: ApiClientOptions) {
     conversationId: string,
     input: OperationRequestInput<typeof apiOperations.startConversationRun>
   ) =>
-    requestJson(
-      apiOperations.startConversationRun.buildPath({ params: { conversationId } }),
-      apiOperations.startConversationRun.responseSchema,
-      {
-        method: "POST",
-        body: JSON.stringify(apiOperations.startConversationRun.requestSchema.parse(input))
-      }
+    unwrapJson(
+      generatedSdk.startConversationRun({
+        client: generatedClient,
+        path: { conversationId },
+        body: apiOperations.startConversationRun.requestSchema.parse(input)
+      }),
+      apiOperations.startConversationRun.responseSchema
     );
 
   const createConversationRun = (
     input: OperationRequestInput<typeof apiOperations.createConversationRun>
   ) =>
-    requestJson(
-      apiOperations.createConversationRun.buildPath(),
-      apiOperations.createConversationRun.responseSchema,
-      {
-        method: "POST",
-        body: JSON.stringify(apiOperations.createConversationRun.requestSchema.parse(input))
-      }
+    unwrapJson(
+      generatedSdk.createConversationRun({
+        client: generatedClient,
+        body: apiOperations.createConversationRun.requestSchema.parse(input)
+      }),
+      apiOperations.createConversationRun.responseSchema
     );
 
   const cancelRun = (
@@ -267,13 +245,13 @@ export function createApiClient(options: ApiClientOptions) {
     runId: string,
     input: OperationRequestInput<typeof apiOperations.cancelConversationRun> = {}
   ) =>
-    requestJson(
-      apiOperations.cancelConversationRun.buildPath({ params: { conversationId, runId } }),
-      apiOperations.cancelConversationRun.responseSchema,
-      {
-        method: "POST",
-        body: JSON.stringify(apiOperations.cancelConversationRun.requestSchema.parse(input))
-      }
+    unwrapJson(
+      generatedSdk.cancelConversationRun({
+        client: generatedClient,
+        path: { conversationId, runId },
+        body: apiOperations.cancelConversationRun.requestSchema.parse(input)
+      }),
+      apiOperations.cancelConversationRun.responseSchema
     );
 
   const commandRun = (
@@ -281,23 +259,23 @@ export function createApiClient(options: ApiClientOptions) {
     runId: string,
     input: OperationRequestInput<typeof apiOperations.commandConversationRun>
   ) =>
-    requestJson(
-      apiOperations.commandConversationRun.buildPath({ params: { conversationId, runId } }),
-      apiOperations.commandConversationRun.responseSchema,
-      {
-        method: "POST",
-        body: JSON.stringify(apiOperations.commandConversationRun.requestSchema.parse(input))
-      }
+    unwrapJson(
+      generatedSdk.commandConversationRun({
+        client: generatedClient,
+        path: { conversationId, runId },
+        body: apiOperations.commandConversationRun.requestSchema.parse(input)
+      }),
+      apiOperations.commandConversationRun.responseSchema
     );
 
-  const conversations = Object.assign(listConversations, {
+  const conversations = {
     list: listConversations,
     create: createConversation,
     getThread: getConversationThread,
     messages: listConversationMessages,
     startRun: startConversationRun,
-    createAndStartRun: createConversationRun
-  });
+    createRun: createConversationRun
+  };
 
   const runs = {
     observe: observeRunEvents,
@@ -307,7 +285,6 @@ export function createApiClient(options: ApiClientOptions) {
 
   return {
     browserManagedDownloads,
-    browserManagedArtifactDownloads: browserManagedDownloads,
     me: () =>
       unwrapJson(
         generatedSdk.getCurrentUser({ client: generatedClient }),
@@ -355,7 +332,6 @@ export function createApiClient(options: ApiClientOptions) {
         apiOperations.getConfig.responseSchema
       ),
     conversations,
-    createConversation,
     generateConversationTitle: (conversationId: string) =>
       unwrapJson(
         generatedSdk.generateConversationTitle({
@@ -373,16 +349,9 @@ export function createApiClient(options: ApiClientOptions) {
         }),
         apiOperations.renameConversation.responseSchema
       ),
-    thread: getConversationThread,
-    messages: listConversationMessages,
     conversationResources,
     structuredDataResource,
     runs,
-    startConversationRun,
-    createConversationRun,
-    cancelRun,
-    commandRun,
-    observeRunEvents,
     draftAttachments: (conversationId: string) =>
       unwrapJson(
         generatedSdk.listDraftAttachments({
@@ -421,7 +390,8 @@ export function createApiClient(options: ApiClientOptions) {
         generatedSdk.getConversationFileContent({
           client: generatedClient,
           path: { conversationId, fileId },
-          query: download ? { download: "true" } : {}
+          query: download ? { download: "true" } : {},
+          parseAs: "blob"
         })
       ),
     conversationFileContentUrl: (conversationId: string, fileId: string) =>
@@ -436,28 +406,36 @@ export function createApiClient(options: ApiClientOptions) {
       inline = false
     ) => buildUrl(`${conversationArtifactContentPath(conversationId, artifactId)}${inline ? "?inline=true" : ""}`),
     conversationArtifactContent: (conversationId: string, artifactId: string) =>
-      requestBlob(conversationArtifactContentPath(conversationId, artifactId)),
+      unwrapBlob(
+        generatedSdk.getConversationArtifactContent({
+          client: generatedClient,
+          path: { conversationId, artifactId },
+          parseAs: "blob"
+        })
+      ),
     conversationArtifactPreview: (conversationId: string, artifactId: string) =>
-      requestJson(
-        apiOperations.getConversationArtifactPreview.buildPath({
-          params: { conversationId, artifactId }
+      unwrapJson(
+        generatedSdk.getConversationArtifactPreview({
+          client: generatedClient,
+          path: { conversationId, artifactId }
         }),
         apiOperations.getConversationArtifactPreview.responseSchema
       ),
     conversationAttachmentPreview: (conversationId: string, attachmentId: string) =>
-      requestJson(
-        apiOperations.getConversationAttachmentPreview.buildPath({
-          params: { conversationId, attachmentId }
+      unwrapJson(
+        generatedSdk.getConversationAttachmentPreview({
+          client: generatedClient,
+          path: { conversationId, attachmentId }
         }),
         apiOperations.getConversationAttachmentPreview.responseSchema
       ),
     retryConversationArtifactPreview: (conversationId: string, artifactId: string) =>
-      requestJson(
-        apiOperations.retryConversationArtifactPreview.buildPath({
-          params: { conversationId, artifactId }
+      unwrapJson(
+        generatedSdk.retryConversationArtifactPreview({
+          client: generatedClient,
+          path: { conversationId, artifactId }
         }),
-        apiOperations.retryConversationArtifactPreview.responseSchema,
-        { method: "POST" }
+        apiOperations.retryConversationArtifactPreview.responseSchema
       ),
     deleteConversation: (conversationId: string) =>
       unwrapJson(
@@ -473,8 +451,8 @@ export function createApiClient(options: ApiClientOptions) {
         apiOperations.listAuditEvents.responseSchema
       ),
     auditActivities: () =>
-      requestJson(
-        apiOperations.listAuditActivities.path,
+      unwrapJson(
+        generatedSdk.listAuditActivities({ client: generatedClient }),
         apiOperations.listAuditActivities.responseSchema
       ),
     usageSummary: () =>
@@ -691,21 +669,6 @@ export function createApiClient(options: ApiClientOptions) {
 }
 
 export type ApiClient = ReturnType<typeof createApiClient>;
-
-async function readJsonPayload(response: Response): Promise<unknown> {
-  if (response.status === 204) {
-    return undefined;
-  }
-  const text = await response.text();
-  if (!text) {
-    return undefined;
-  }
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return text;
-  }
-}
 
 function splitCompleteSseEvents(buffer: string): { blocks: string[]; remaining: string } {
   const normalized = buffer.replaceAll("\r\n", "\n");

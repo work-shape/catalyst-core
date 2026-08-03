@@ -3,7 +3,9 @@ import type { ApiClient, LocaleCode, StartConversationRunResponse } from "@vivd-
 import { firstLineTitle } from "../conversation-title";
 
 export interface ProductRunTransportOptions {
-  client: Pick<ApiClient, "createConversationRun" | "startConversationRun">;
+  client: {
+    conversations: Pick<ApiClient["conversations"], "createRun" | "startRun">;
+  };
   selectedConversationId?: string;
   locale: LocaleCode;
   selectedAgentName?: string;
@@ -88,7 +90,9 @@ export async function startProductConversationRun({
 }: {
   agentName?: string;
   modelBindingId?: string;
-  client: Pick<ApiClient, "createConversationRun" | "startConversationRun">;
+  client: {
+    conversations: Pick<ApiClient["conversations"], "createRun" | "startRun">;
+  };
   conversationId?: string;
   idempotencyKey: string;
   locale: LocaleCode;
@@ -105,10 +109,10 @@ export async function startProductConversationRun({
   };
 
   if (conversationId) {
-    return client.startConversationRun(conversationId, request);
+    return client.conversations.startRun(conversationId, request);
   }
 
-  return client.createConversationRun({
+  return client.conversations.createRun({
     ...request,
     conversation: {
       title: firstLineTitle(text),

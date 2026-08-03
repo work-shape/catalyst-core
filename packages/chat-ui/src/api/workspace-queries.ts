@@ -45,7 +45,7 @@ export function useWorkspaceConversationsQuery(
 ) {
   return useQuery({
     queryKey: workspaceQueryKeys.conversations(input.apiBaseUrl, input.authScope),
-    queryFn: input.client.conversations,
+    queryFn: input.client.conversations.list,
     enabled: input.enabled
   });
 }
@@ -58,7 +58,7 @@ export function useWorkspaceThreadQuery(
 ) {
   return useQuery({
     queryKey: workspaceQueryKeys.thread(input.apiBaseUrl, input.authScope, input.conversationId),
-    queryFn: () => input.client.thread(input.conversationId ?? ""),
+    queryFn: () => input.client.conversations.getThread(input.conversationId ?? ""),
     enabled: input.enabled
   });
 }
@@ -266,7 +266,7 @@ export function useWorkspaceCacheActions(
     (conversationId: string) =>
       queryClient.fetchQuery({
         queryKey: workspaceQueryKeys.thread(apiBaseUrl, authScope, conversationId),
-        queryFn: () => client.thread(conversationId),
+        queryFn: () => client.conversations.getThread(conversationId),
         staleTime: 0
       }),
     [apiBaseUrl, authScope, client, queryClient]

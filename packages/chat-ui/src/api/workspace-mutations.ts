@@ -234,7 +234,7 @@ export function useCancelRunMutation(
 
   return useMutation({
     mutationFn: (mutationInput: { conversationId: string; runId: string }) =>
-      input.client.cancelRun(mutationInput.conversationId, mutationInput.runId, {
+      input.client.runs.cancel(mutationInput.conversationId, mutationInput.runId, {
         reason: "user_requested"
       }),
     onMutate: ({ conversationId, runId }) => {
