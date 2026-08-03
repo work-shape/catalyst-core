@@ -12,6 +12,7 @@ import {
 import { ChatShell, type ChatShellAdminPanel } from "./chat-shell";
 import type { ToolDisplayWidgetRegistry } from "./domain-ui-widgets";
 import { ToolActivityLabelsProvider, type ToolActivityLabels } from "./tool-activity";
+import { installStaleChunkRecovery } from "./stale-chunk-recovery";
 import type {
   SuperadminRouteTab,
   WorkspaceRoute,
@@ -38,6 +39,8 @@ export function renderStandaloneChatApp({
   if (!rootElement) {
     throw new Error("Missing root element for standalone chat app");
   }
+
+  installStaleChunkRecovery();
 
   const router = createStandaloneChatRouter({
     apiBaseUrl: resolveApiBaseUrl(apiBaseUrl, defaultApiPort),
