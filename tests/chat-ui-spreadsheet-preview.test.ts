@@ -135,6 +135,55 @@ describe("chat UI spreadsheet preview import", () => {
     expect(snapshot.sheets[snapshot.sheetOrder[1]!]!.hidden).toBe(BooleanNumber.TRUE);
   });
 
+  it("preserves Openpyxl-style colors with a 00 ARGB prefix", async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Openpyxl", {
+      properties: {
+        tabColor: { argb: "001F4E78" }
+      }
+    });
+    const cell = sheet.getCell("A1");
+    cell.value = "Styled";
+    cell.style = {
+      font: {
+        bold: true,
+        color: { argb: "00FFFFFF" }
+      },
+      fill: {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "001F4E78" }
+      },
+      border: {
+        bottom: {
+          style: "thin",
+          color: { argb: "00D9E2F3" }
+        }
+      }
+    };
+
+    const bytes = await workbook.xlsx.writeBuffer();
+    const snapshot = await workbookToUniverSnapshot(bytes);
+    const sheetSnapshot = snapshot.sheets[snapshot.sheetOrder[0]!]!;
+    const cellSnapshot = sheetSnapshot.cellData?.[0]?.[0];
+    const cellStyle = typeof cellSnapshot?.s === "string"
+      ? snapshot.styles[cellSnapshot.s]
+      : cellSnapshot?.s;
+
+    expect(sheetSnapshot.tabColor).toBe("#1F4E78");
+    expect(cellStyle).toMatchObject({
+      bl: BooleanNumber.TRUE,
+      cl: { rgb: "#FFFFFF" },
+      bg: { rgb: "#1F4E78" },
+      bd: {
+        b: {
+          s: BorderStyleTypes.THIN,
+          cl: { rgb: "#D9E2F3" }
+        }
+      }
+    });
+  });
+
   it("keeps the existing value preview fallback for legacy XLS files", async () => {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(

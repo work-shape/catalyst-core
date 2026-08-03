@@ -352,9 +352,6 @@ function colorHex(color: Partial<Color> | undefined): string | undefined {
   if (!argb) {
     return undefined;
   }
-  if (argb.length === 8 && argb.slice(0, 2) === "00") {
-    return undefined;
-  }
   const rgb = argb.length === 8 ? argb.slice(2) : argb;
   return rgb.length === 6 ? `#${rgb.toUpperCase()}` : undefined;
 }
