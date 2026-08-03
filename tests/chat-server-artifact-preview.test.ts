@@ -55,16 +55,24 @@ describe("artifact preview routes", () => {
         claimedAt: "2026-08-03T10:00:00.000Z"
       });
 
-      const first = await server.inject({
-        method: "GET",
-        url: `/api/conversations/${conversation.id}/attachments/${attachment.id}/preview`
-      });
+      const [first, concurrent] = await Promise.all([
+        server.inject({
+          method: "GET",
+          url: `/api/conversations/${conversation.id}/attachments/${attachment.id}/preview`
+        }),
+        server.inject({
+          method: "GET",
+          url: `/api/conversations/${conversation.id}/attachments/${attachment.id}/preview`
+        })
+      ]);
       expect(first.statusCode).toBe(200);
+      expect(concurrent.statusCode).toBe(200);
       expect(first.json()).toMatchObject({
         status: "pending",
         artifactId: expect.any(String)
       });
       const previewSourceId = first.json().artifactId as string;
+      expect(concurrent.json()).toMatchObject({ artifactId: previewSourceId });
       const previewSource = await store.getManagedArtifact({
         clientInstanceId,
         artifactId: asManagedArtifactId(previewSourceId)
@@ -100,6 +108,62 @@ describe("artifact preview routes", () => {
           kind: "preview.source_attachment"
         })
       ).resolves.toHaveLength(1);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("rejects attachment preview jobs for files with native preview paths", async () => {
+    const { clientInstanceId, owner, server, store } = await createPreviewServer();
+    try {
+      const conversation = await store.createConversation({
+        clientInstanceId,
+        ownerUserId: owner.id,
+        ownerExternalUserId: owner.externalUserId,
+        title: "Native PDF preview",
+        retainedUntil: "2030-01-01T00:00:00.000Z"
+      });
+      const file = await store.createManagedFile({
+        clientInstanceId,
+        ownerUserId: owner.id,
+        filename: "uploaded.pdf",
+        mimeType: "application/pdf",
+        byteSize: 32,
+        checksum: "sha256:uploaded-pdf",
+        objectKey: "documents/private/uploaded.pdf"
+      });
+      const attachment = await store.createConversationAttachment({
+        clientInstanceId,
+        conversationId: conversation.id,
+        fileId: file.id,
+        filename: file.filename,
+        mimeType: file.mimeType,
+        byteSize: file.byteSize,
+        checksum: file.checksum,
+        status: "ready",
+        format: "pdf"
+      });
+      await store.claimReadyDraftAttachmentsForMessage({
+        clientInstanceId,
+        conversationId: conversation.id,
+        messageId: asMessageId("msg_native_pdf_preview"),
+        claimedAt: "2026-08-03T10:00:00.000Z"
+      });
+
+      const response = await server.inject({
+        method: "GET",
+        url: `/api/conversations/${conversation.id}/attachments/${attachment.id}/preview`
+      });
+
+      expect(response.statusCode).toBe(422);
+      await expect(
+        store.listManagedArtifactsForFile({
+          clientInstanceId,
+          conversationId: conversation.id,
+          fileId: file.id,
+          kind: "preview.source_attachment"
+        })
+      ).resolves.toHaveLength(0);
     } finally {
       await server.close();
     }

@@ -73,6 +73,12 @@ export async function createClientInstanceArtifactPreviewWorker(
     maxAttempts: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_ATTEMPTS"),
     maxPages: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_PAGES"),
     maxSourceBytes: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_SOURCE_BYTES"),
+    maxConvertedPdfBytes: readPositiveIntegerEnv(
+      env,
+      "ARTIFACT_PREVIEW_MAX_CONVERTED_PDF_BYTES"
+    ),
+    maxOutputBytes: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_OUTPUT_BYTES"),
+    maxRasterDimension: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_RASTER_DIMENSION"),
     conversionTimeoutMs: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_CONVERSION_TIMEOUT_MS"),
     rasterizationTimeoutMs: readPositiveIntegerEnv(
       env,

@@ -231,14 +231,19 @@ export function LiveArtifactPreview({
           }
         })
         .catch(() => {
-          if (!cancelled) {
-            setState({
-              apiError: true,
-              pendingAttempt,
-              preview: undefined,
-              refreshing: false
-            });
+          if (cancelled) {
+            return;
           }
+          setState((current) => ({
+            apiError: !current.preview,
+            pendingAttempt,
+            preview: current.preview,
+            refreshing: false
+          }));
+          timeout = setTimeout(
+            () => poll(pendingAttempt + 1),
+            artifactPreviewPollDelayMs({ status: "pending", pendingAttempt }) ?? 5000
+          );
         });
     };
 

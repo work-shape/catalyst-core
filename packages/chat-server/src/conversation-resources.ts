@@ -109,6 +109,10 @@ function attachmentPreviewSourceArtifact(
   attachment: ConversationAttachment,
   artifactsById: ReadonlyMap<string, ManagedArtifactRecord>
 ): ManagedArtifactRecord | undefined {
+  const capability = resolveFilePreviewCapability(attachment);
+  if (capability !== "office_document_pages" && capability !== "office_presentation_pages") {
+    return undefined;
+  }
   const previewSourceId = attachment.artifactRefs[ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_REF];
   const previewSource = previewSourceId ? artifactsById.get(previewSourceId) : undefined;
   if (previewSource?.status === "available") {

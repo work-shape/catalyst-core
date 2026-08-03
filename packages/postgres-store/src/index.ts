@@ -591,6 +591,10 @@ export class PostgresPlatformStore
     return this.fileStore.createManagedArtifact(input);
   }
 
+  async ensureManagedArtifact(input: Parameters<PlatformFileStore["ensureManagedArtifact"]>[0]) {
+    return this.fileStore.ensureManagedArtifact(input);
+  }
+
   async getManagedArtifact(input: Parameters<PlatformFileStore["getManagedArtifact"]>[0]) {
     return this.fileStore.getManagedArtifact(input);
   }

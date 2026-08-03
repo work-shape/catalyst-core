@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import postgres, { type Sql } from "postgres";
 import {
   asClientInstanceId,
+  asManagedArtifactId,
   type ClientInstanceId,
   type Conversation,
   type ManagedArtifactRecord,
@@ -15,6 +16,10 @@ const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
 const postgresIt = databaseUrl ? it : it.skip;
 
 describe("artifact preview store adapters", () => {
+  it("ensures one deterministic attachment preview source in memory", async () => {
+    await expectManagedArtifactEnsureContract(new InMemoryPlatformStore());
+  });
+
   it("keeps in-memory preview job idempotency scoped to renderer settings identity", async () => {
     await expectPreviewJobIdentityContract(new InMemoryPlatformStore());
   });
@@ -30,6 +35,21 @@ describe("artifact preview store adapters", () => {
   it("recovers stale preview job leases in memory", async () => {
     await expectPreviewJobStaleRecoveryContract(new InMemoryPlatformStore());
   });
+
+  postgresIt(
+    "ensures one deterministic attachment preview source in Postgres",
+    async () => {
+      const store = await PostgresPlatformStore.connect({
+        databaseUrl: databaseUrl!,
+        runMigrations: true
+      });
+      try {
+        await expectManagedArtifactEnsureContract(store);
+      } finally {
+        await store.close();
+      }
+    }
+  );
 
   postgresIt(
     "keeps Postgres preview job idempotency scoped to renderer settings identity",
@@ -99,6 +119,63 @@ describe("artifact preview store adapters", () => {
     }
   );
 });
+
+async function expectManagedArtifactEnsureContract(
+  store: Pick<
+    PlatformStore,
+    | "createConversation"
+    | "createManagedFile"
+    | "ensureManagedArtifact"
+    | "listManagedArtifactsForFile"
+  >
+): Promise<void> {
+  const clientInstanceId = asClientInstanceId(`preview_source_${globalThis.crypto.randomUUID()}`);
+  const conversation = await store.createConversation({
+    clientInstanceId,
+    ownerUserId: "user-1",
+    ownerExternalUserId: "user-1",
+    title: "Attachment preview source",
+    retainedUntil: "2030-01-01T00:00:00.000Z"
+  });
+  const file = await store.createManagedFile({
+    clientInstanceId,
+    ownerUserId: "user-1",
+    filename: "deck.pptx",
+    mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    byteSize: 128,
+    checksum: "sha256:deck",
+    objectKey: "documents/private/deck.pptx"
+  });
+  const input = {
+    id: asManagedArtifactId(`art_attachment_preview_${globalThis.crypto.randomUUID()}`),
+    clientInstanceId,
+    conversationId: conversation.id,
+    sourceFileId: file.id,
+    kind: "preview.source_attachment",
+    objectKey: file.objectKey,
+    filename: file.filename,
+    mimeType: file.mimeType!,
+    byteSize: file.byteSize,
+    checksum: file.checksum,
+    metadata: { source: "conversation_attachment" }
+  };
+
+  const [first, second] = await Promise.all([
+    store.ensureManagedArtifact(input),
+    store.ensureManagedArtifact(input)
+  ]);
+
+  expect(first.id).toBe(input.id);
+  expect(second.id).toBe(input.id);
+  await expect(
+    store.listManagedArtifactsForFile({
+      clientInstanceId,
+      conversationId: conversation.id,
+      fileId: file.id,
+      kind: input.kind
+    })
+  ).resolves.toHaveLength(1);
+}
 
 async function expectPreviewJobIdentityContract(store: PreviewJobIdentityStore): Promise<void> {
   const fixture = await createPreviewFixture(store);

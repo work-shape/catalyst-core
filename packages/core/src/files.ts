@@ -45,6 +45,7 @@ export type ArtifactPreviewFailureCode =
   | "unsupported_type"
   | "source_missing"
   | "source_too_large"
+  | "output_too_large"
   | "page_limit_exceeded"
   | "conversion_timeout"
   | "conversion_failed"
@@ -86,6 +87,7 @@ export function isRetryableArtifactPreviewErrorCode(errorCode: string | undefine
     errorCode === "conversion_timeout" ||
     errorCode === "conversion_failed" ||
     errorCode === "source_too_large" ||
+    errorCode === "output_too_large" ||
     errorCode === "page_limit_exceeded" ||
     errorCode === "rasterization_failed" ||
     errorCode === "storage_failed" ||
@@ -390,6 +392,10 @@ export interface CreateManagedArtifactInput {
   metadata?: JsonObject;
 }
 
+export interface EnsureManagedArtifactInput extends CreateManagedArtifactInput {
+  id: ManagedArtifactId;
+}
+
 export interface ArtifactPreviewImageArtifactInput {
   sourceFileId?: ManagedFileId;
   kind: ManagedArtifactKind;
@@ -514,6 +520,7 @@ export interface ManagedFileStore {
 
 export interface ManagedArtifactStore {
   createManagedArtifact(input: CreateManagedArtifactInput): Promise<ManagedArtifactRecord>;
+  ensureManagedArtifact(input: EnsureManagedArtifactInput): Promise<ManagedArtifactRecord>;
   getManagedArtifact(input: {
     clientInstanceId: ClientInstanceId;
     artifactId: ManagedArtifactId;

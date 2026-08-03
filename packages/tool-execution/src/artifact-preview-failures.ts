@@ -36,6 +36,8 @@ export function previewFailureMessage(code: ArtifactPreviewFailureCode): string 
       return "Source artifact is not available";
     case "source_too_large":
       return "Source artifact exceeds the preview size limit";
+    case "output_too_large":
+      return "Rendered preview exceeds the output size limit";
     case "page_limit_exceeded":
       return "Source artifact exceeds the preview page limit";
     case "conversion_timeout":

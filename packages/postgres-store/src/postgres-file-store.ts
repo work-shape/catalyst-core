@@ -22,6 +22,7 @@ import {
   type ConversationId,
   type CreateConversationAttachmentInput,
   type EnqueueArtifactPreviewJobInput,
+  type EnsureManagedArtifactInput,
   type CreateManagedArtifactInput,
   type CreateManagedFileInput,
   type FailClaimedArtifactPreviewJobInput,
@@ -149,6 +150,39 @@ class PostgresPlatformFileStore implements PlatformFileStore {
       })
       .returning();
     return mapManagedArtifact(row);
+  }
+
+  async ensureManagedArtifact(input: EnsureManagedArtifactInput): Promise<ManagedArtifactRecord> {
+    const [created] = await this.db
+      .insert(managedArtifacts)
+      .values({
+        id: input.id,
+        clientInstanceId: input.clientInstanceId,
+        conversationId: input.conversationId,
+        sourceFileId: input.sourceFileId ?? null,
+        kind: input.kind,
+        objectKey: input.objectKey,
+        filename: input.filename ?? null,
+        mimeType: input.mimeType,
+        byteSize: input.byteSize,
+        checksum: input.checksum,
+        metadata: input.metadata ?? {},
+        status: "available",
+        createdAt: new Date()
+      })
+      .onConflictDoNothing({ target: managedArtifacts.id })
+      .returning();
+    if (created) {
+      return mapManagedArtifact(created);
+    }
+    const existing = await this.getManagedArtifact({
+      clientInstanceId: input.clientInstanceId,
+      artifactId: input.id
+    });
+    if (!existing || !managedArtifactMatchesEnsureInput(existing, input)) {
+      throw new AppError("CONFLICT", "Managed artifact id belongs to a different artifact");
+    }
+    return existing;
   }
 
   async getManagedArtifact(input: {
@@ -857,6 +891,21 @@ class PostgresPlatformFileStore implements PlatformFileStore {
       artifactObjectKeys: uniqueStrings(deletion.artifacts.map((artifact) => artifact.objectKey))
     };
   }
+}
+
+function managedArtifactMatchesEnsureInput(
+  artifact: ManagedArtifactRecord,
+  input: EnsureManagedArtifactInput
+): boolean {
+  return (
+    artifact.clientInstanceId === input.clientInstanceId &&
+    artifact.conversationId === input.conversationId &&
+    artifact.sourceFileId === input.sourceFileId &&
+    artifact.kind === input.kind &&
+    artifact.objectKey === input.objectKey &&
+    artifact.checksum === input.checksum &&
+    artifact.status === "available"
+  );
 }
 
 type PostgresFileStoreDatabase = PostgresDatabase | Parameters<Parameters<PostgresDatabase["transaction"]>[0]>[0];

@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, extname, join } from "node:path";
 import * as XLSX from "xlsx";
@@ -22,6 +22,9 @@ export interface ArtifactPreviewRenderInput {
   sheets?: string[];
   ranges?: string[];
   maxPages: number;
+  maxConvertedPdfBytes: number;
+  maxOutputBytes: number;
+  maxRasterDimension: number;
   previewDpi: number;
   outputFormat: ArtifactPreviewImageFormat;
   conversionTimeoutMs: number;
@@ -93,6 +96,7 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
               timeoutMs: input.conversionTimeoutMs,
               signal: input.signal
             });
+      await assertFileSizeAtMost(pdfPath, input.maxConvertedPdfBytes);
       const pageCount = await this.readPageCount({
         pdfPath,
         timeoutMs: input.rasterizationTimeoutMs,
@@ -103,6 +107,7 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
       }
       const pageNumbers = rasterPageNumbers(input, pageCount);
       const pages: ArtifactPreviewRenderedPage[] = [];
+      let outputBytes = 0;
       for (const [index, pageNumber] of pageNumbers.entries()) {
         const bytes = await this.rasterizePdfPage({
           input,
@@ -111,6 +116,10 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
           pageNumber,
           pdfPath
         });
+        outputBytes += bytes.byteLength;
+        if (outputBytes > input.maxOutputBytes) {
+          throw previewFailure("output_too_large", false);
+        }
         pages.push({
           bytes,
           mimeType: "image/png",
@@ -138,6 +147,7 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
     }
 
     const pages: ArtifactPreviewRenderedPage[] = [];
+    let outputBytes = 0;
     for (const [index, selection] of selections.entries()) {
       const sourcePath = join(tempDirectory, `spreadsheet-preview-${index + 1}.xlsx`);
       const outputDirectory = join(tempDirectory, `spreadsheet-out-${index + 1}`);
@@ -149,6 +159,7 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
         timeoutMs: input.conversionTimeoutMs,
         signal: input.signal
       });
+      await assertFileSizeAtMost(pdfPath, input.maxConvertedPdfBytes);
       const pageCount = await this.readPageCount({
         pdfPath,
         timeoutMs: input.rasterizationTimeoutMs,
@@ -164,6 +175,10 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
         pageNumber: 1,
         pdfPath
       });
+      outputBytes += bytes.byteLength;
+      if (outputBytes > input.maxOutputBytes) {
+        throw previewFailure("output_too_large", false);
+      }
       pages.push({
         bytes,
         mimeType: "image/png",
@@ -184,26 +199,37 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
     pdfPath: string;
   }): Promise<Uint8Array> {
     const prefix = join(input.outputDirectory, `page-${input.pageIndex + 1}`);
-    await runProcess({
-      command: this.pdfToPpmCommand,
-      args: [
-        "-png",
-        "-singlefile",
-        "-r",
-        String(input.input.previewDpi),
-        "-f",
-        String(input.pageNumber),
-        "-l",
-        String(input.pageNumber),
-        input.pdfPath,
-        prefix
-      ],
-      timeoutMs: input.input.rasterizationTimeoutMs,
-      timeoutCode: "rasterization_failed",
-      failureCode: "rasterization_failed",
-      signal: input.input.signal
-    });
-    return readFile(`${prefix}.png`);
+    const outputPath = `${prefix}.png`;
+    try {
+      await runProcess({
+        command: this.pdfToPpmCommand,
+        args: [
+          "-png",
+          "-singlefile",
+          "-r",
+          String(input.input.previewDpi),
+          "-scale-to",
+          String(input.input.maxRasterDimension),
+          "-f",
+          String(input.pageNumber),
+          "-l",
+          String(input.pageNumber),
+          input.pdfPath,
+          prefix
+        ],
+        timeoutMs: input.input.rasterizationTimeoutMs,
+        timeoutCode: "rasterization_failed",
+        failureCode: "rasterization_failed",
+        signal: input.input.signal
+      });
+      const bytes = await readFile(outputPath);
+      if (bytes.byteLength > input.input.maxOutputBytes) {
+        throw previewFailure("output_too_large", false);
+      }
+      return bytes;
+    } finally {
+      await rm(outputPath, { force: true });
+    }
   }
 
   private async convertToPdf(input: {
@@ -264,6 +290,13 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
       throw previewFailure("rasterization_failed", true);
     }
     return Number(match[1]);
+  }
+}
+
+async function assertFileSizeAtMost(path: string, maxBytes: number): Promise<void> {
+  const file = await stat(path);
+  if (file.size > maxBytes) {
+    throw previewFailure("output_too_large", false);
   }
 }
 

@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   asExecutionWorkspaceId,
-  asManagedArtifactId,
   asWorkspaceCommandId,
   type WorkspaceCommand
 } from "@vivd-catalyst/core";
@@ -14,7 +13,7 @@ import {
   WorkspaceCommandWorker,
   type WorkspaceCommandTelemetry
 } from "@vivd-catalyst/tool-execution";
-import { createWorkspaceHarness, encode, TestArtifactPreviewGenerator } from "./workspace-tools-harness";
+import { createWorkspaceHarness, encode } from "./workspace-tools-harness";
 
 describe("workspace tools", () => {
   it("describes safe shell command shape to the model", async () => {
@@ -1138,6 +1137,7 @@ describe("workspace tools", () => {
       objectKey: "workspace/reports/final.docx",
       filename: "final.docx"
     });
+    expect(artifact?.metadata).not.toHaveProperty("preview");
     const previewJob = await harness.store.getArtifactPreviewJob({
       clientInstanceId: harness.clientInstanceId,
       sourceArtifactId: promoted.artifacts![0]!.artifactId
@@ -1269,75 +1269,6 @@ describe("workspace tools", () => {
         promotedArtifacts: undefined
       })
     ]);
-  });
-
-  it("attaches derived image-page previews when explicitly promoting office artifacts", async () => {
-    const previewGenerator = new TestArtifactPreviewGenerator([
-      {
-        bytes: encode("slide-1"),
-        filename: "deck-slide-1.png",
-        mimeType: "image/png",
-        slideNumber: 1
-      }
-    ]);
-    const harness = await createWorkspaceHarness({ artifactPreviewGenerator: previewGenerator });
-    await harness.putWorkspaceFile({
-      path: "deck.pptx",
-      objectKey: "workspace/deck.pptx",
-      bytes: "pptx-bytes",
-      mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-    });
-
-    const promoted = await harness.runTool("workspace.promote_artifact", {
-      path: "deck.pptx",
-      kind: "presentation.pptx",
-      filename: "deck.pptx",
-      mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-    });
-
-    expect(promoted.status).toBe("success");
-    if (promoted.status !== "success") {
-      throw new Error("Expected promote_artifact to succeed");
-    }
-    expect(previewGenerator.calls).toEqual([
-      expect.objectContaining({
-        filename: "deck.pptx",
-        kind: "presentation.pptx",
-        previewKind: "presentation"
-      })
-    ]);
-    expect(promoted.artifacts?.[0]?.metadata).toMatchObject({
-      preview: {
-        type: "image_pages",
-        format: "png",
-        pages: [
-          expect.objectContaining({
-            filename: "deck-slide-1.png",
-            kind: "presentation.preview_slide_image",
-            mimeType: "image/png",
-            slideNumber: 1
-          })
-        ]
-      }
-    });
-    expect(promoted.output?.metadata).toEqual({
-      preview: promoted.artifacts?.[0]?.metadata?.preview
-    });
-    const previewPage = promoted.artifacts?.[0]?.metadata?.preview?.pages[0];
-    const previewArtifact = await harness.store.getManagedArtifact({
-      clientInstanceId: harness.clientInstanceId,
-      artifactId: asManagedArtifactId(previewPage!.artifactId)
-    });
-    expect(previewArtifact).toMatchObject({
-      kind: "presentation.preview_slide_image",
-      objectKey: expect.stringContaining("deck-slide-1.png"),
-      metadata: expect.objectContaining({
-        source: "execution_workspace",
-        workspacePath: "deck.pptx",
-        previewRole: "slide_image"
-      })
-    });
-    await expect(harness.objectStore.getObject(previewArtifact!.objectKey)).resolves.toEqual(encode("slide-1"));
   });
 
   it("shapes command stdout and stderr to configured bounds", () => {

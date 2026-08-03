@@ -14,7 +14,6 @@ import {
   InProcessToolExecution,
   ToolRegistry,
   WorkspaceCommandService,
-  type WorkspaceArtifactPreviewGenerator,
   type WorkspaceCommandTelemetry,
   type WorkspaceFileByteStore,
   type WorkspaceObjectStore
@@ -22,7 +21,6 @@ import {
 
 export async function createWorkspaceHarness(input: {
   agentToolNames?: string[];
-  artifactPreviewGenerator?: WorkspaceArtifactPreviewGenerator;
   commandResults?: ConstructorParameters<typeof WorkspaceCommandService>[0]["commandResults"];
   execResultWaitMs?: ConstructorParameters<typeof WorkspaceCommandService>[0]["execResultWaitMs"] | null;
   execResultPollIntervalMs?: ConstructorParameters<typeof WorkspaceCommandService>[0]["execResultPollIntervalMs"];
@@ -59,10 +57,8 @@ export async function createWorkspaceHarness(input: {
     store: input.serviceStore?.(store) ?? store,
     objectStore,
     fileStore: objectStore,
-    ...(input.sourceFiles || input.artifactPreviewGenerator
+    ...(input.sourceFiles
       ? {
-          ...(input.artifactPreviewGenerator ? { artifactPreviewGenerator: input.artifactPreviewGenerator } : {}),
-          ...(input.sourceFiles ? {
           sourceFileReader: {
             async readSourceFile(readInput) {
               const source = input.sourceFiles?.[readInput.fileId];
@@ -78,7 +74,6 @@ export async function createWorkspaceHarness(input: {
               };
             }
           }
-          } : {})
         }
       : {}),
     ...(input.commandResults ? { commandResults: input.commandResults } : {}),
@@ -186,23 +181,6 @@ function createToolRequest(conversation: Conversation, toolName: string, input: 
 
 export function encode(value: string): Uint8Array {
   return new TextEncoder().encode(value);
-}
-
-export class TestArtifactPreviewGenerator implements WorkspaceArtifactPreviewGenerator {
-  readonly calls: Parameters<WorkspaceArtifactPreviewGenerator["generatePreviewImages"]>[0][] = [];
-
-  constructor(
-    private readonly images: Awaited<
-      ReturnType<WorkspaceArtifactPreviewGenerator["generatePreviewImages"]>
-    >
-  ) {}
-
-  async generatePreviewImages(
-    input: Parameters<WorkspaceArtifactPreviewGenerator["generatePreviewImages"]>[0]
-  ) {
-    this.calls.push(input);
-    return this.images;
-  }
 }
 
 class TestWorkspaceObjectStore implements WorkspaceFileByteStore, WorkspaceObjectStore {

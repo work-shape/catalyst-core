@@ -9,7 +9,6 @@ import {
   createDockerProcessExecutorFromConfig,
   createConsoleWorkspaceCommandTelemetry,
   createLocalWorkspaceFileByteStore,
-  LibreOfficeArtifactPreviewGenerator,
   LocalWorkspaceCommandProcessExecutor,
   LocalWorkspaceCommandRunner,
   WorkspaceCommandWorker
@@ -65,9 +64,6 @@ export async function createClientInstanceWorkspaceCommandWorker(
     leaseDurationMs: config.executionWorkspaces.worker.leaseDurationMs,
     reuseWorkspaceDirectories: config.executionWorkspaces.cleanup.hydratedWorkspaceIdleTtlMs > 0,
     processExecutor,
-    artifactPreviewGenerator: new LibreOfficeArtifactPreviewGenerator({
-      tempRootDirectory: env.WORKSPACE_COMMAND_TEMP_ROOT ?? tmpdir()
-    }),
     auditRecorder,
     telemetry
   });

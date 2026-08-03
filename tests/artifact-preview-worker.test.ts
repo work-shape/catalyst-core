@@ -401,6 +401,9 @@ describe("ArtifactPreviewWorker", () => {
       mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       bytes: sourceBytes,
       maxPages: 1,
+      maxConvertedPdfBytes: 1024 * 1024,
+      maxOutputBytes: 1024 * 1024,
+      maxRasterDimension: 4096,
       previewDpi: 96,
       outputFormat: "png" as const,
       conversionTimeoutMs: 60000,
@@ -459,6 +462,9 @@ describe("ArtifactPreviewWorker", () => {
         mimeType: "application/pdf",
         bytes: bytes("%PDF fake"),
         maxPages: 1,
+        maxConvertedPdfBytes: 1024 * 1024,
+        maxOutputBytes: 1024 * 1024,
+        maxRasterDimension: 4096,
         previewDpi: 96,
         outputFormat: "png",
         conversionTimeoutMs: 1000,
@@ -503,6 +509,30 @@ describe("ArtifactPreviewWorker", () => {
       status: "failed",
       errorCode: "source_too_large"
     });
+  });
+
+  it("fails safely when rendered pages exceed the cumulative output limit", async () => {
+    const fixture = await createWorkerFixture();
+    const renderer = new FakeRenderer({
+      result: {
+        format: "png",
+        pages: [{ bytes: bytes("too-large"), mimeType: "image/png", pageNumber: 1 }]
+      }
+    });
+    const worker = createWorker(fixture, renderer, { maxOutputBytes: 4 });
+
+    const result = await worker.runOnce();
+
+    expect(result.status).toBe("claimed");
+    if (result.status !== "claimed") {
+      throw new Error("Expected preview job to be claimed");
+    }
+    expect(result.job).toMatchObject({
+      status: "failed",
+      attempts: 1,
+      errorCode: "output_too_large"
+    });
+    expect(fixture.objectStore.keys()).toEqual([fixture.source.objectKey]);
   });
 
   it("retries renderer failures until the configured attempt limit then writes a failed manifest", async () => {

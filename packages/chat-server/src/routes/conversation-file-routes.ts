@@ -139,6 +139,9 @@ export function registerConversationFileRoutes(app: FastifyInstance, options: Ch
     ) {
       throw new AppError("NOT_FOUND", "Attachment is not available in this conversation");
     }
+    if (!isOfficePagePreviewCapability(resolveFilePreviewCapability(attachment))) {
+      throw new AppError("VALIDATION_FAILED", "This attachment uses its native preview path");
+    }
     const source = await ensureAttachmentPreviewSource(options, attachment);
     const preview = await readArtifactPreviewState(options.conversationStore, source);
     return reply.header("cache-control", "private, no-store, max-age=0").send(preview);
@@ -160,6 +163,12 @@ export function registerConversationFileRoutes(app: FastifyInstance, options: Ch
     const preview = await retryArtifactPreviewState(options.conversationStore, artifactRecord);
     return reply.header("cache-control", "private, no-store, max-age=0").send(preview);
   });
+}
+
+function isOfficePagePreviewCapability(
+  capability: ReturnType<typeof resolveFilePreviewCapability>
+): boolean {
+  return capability === "office_document_pages" || capability === "office_presentation_pages";
 }
 
 function attachments(options: ChatServerOptions) {
@@ -232,7 +241,8 @@ async function ensureAttachmentPreviewSource(
   if (!file || file.status !== "available" || file.checksum !== attachment.checksum) {
     throw new AppError("NOT_FOUND", "Attachment source file is not available");
   }
-  const source = await options.conversationStore.createManagedArtifact({
+  const source = await options.conversationStore.ensureManagedArtifact({
+    id: attachmentPreviewSourceArtifactId(attachment),
     clientInstanceId: options.clientInstanceId,
     conversationId: attachment.conversationId,
     sourceFileId: attachment.fileId,
@@ -249,6 +259,12 @@ async function ensureAttachmentPreviewSource(
   });
   await rememberAttachmentPreviewSource(options, attachment, source);
   return source;
+}
+
+function attachmentPreviewSourceArtifactId(
+  attachment: ConversationAttachment
+): ManagedArtifactRecord["id"] {
+  return asManagedArtifactId(`art_attachment_preview_${attachment.id}`);
 }
 
 async function rememberAttachmentPreviewSource(

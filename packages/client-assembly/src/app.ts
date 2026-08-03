@@ -27,7 +27,6 @@ import {
   createStructuredDataToolDefinitions,
   createWorkspaceToolDefinitions,
   InProcessToolExecution,
-  LibreOfficeArtifactPreviewGenerator,
   ToolRegistry
 } from "@vivd-catalyst/tool-execution";
 import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
@@ -147,7 +146,6 @@ export async function createClientInstanceApp(
         store,
         objectStore: workspaceFileByteStore,
         fileStore: workspaceFileByteStore,
-        artifactPreviewGenerator: new LibreOfficeArtifactPreviewGenerator(),
         auditRecorder,
         telemetry: createConsoleWorkspaceCommandTelemetry(console),
         limits: config.executionWorkspaces.command,

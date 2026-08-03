@@ -42,8 +42,14 @@ const DEFAULT_MAX_ATTEMPTS = 2;
 const DEFAULT_RETRY_DELAY_MS = 0;
 const DEFAULT_MAX_SOURCE_BYTES = 100 * 1024 * 1024;
 const HARD_MAX_SOURCE_BYTES = 1024 * 1024 * 1024;
+const DEFAULT_MAX_CONVERTED_PDF_BYTES = 256 * 1024 * 1024;
+const HARD_MAX_CONVERTED_PDF_BYTES = 1024 * 1024 * 1024;
+const DEFAULT_MAX_OUTPUT_BYTES = 256 * 1024 * 1024;
+const HARD_MAX_OUTPUT_BYTES = 1024 * 1024 * 1024;
 const DEFAULT_MAX_PAGES = 80;
 const HARD_MAX_PAGES = 500;
+const DEFAULT_MAX_RASTER_DIMENSION = 4096;
+const HARD_MAX_RASTER_DIMENSION = 8192;
 const DEFAULT_CONVERSION_TIMEOUT_MS = 180000;
 const DEFAULT_RASTERIZATION_TIMEOUT_MS = 180000;
 const DEFAULT_PREVIEW_DPI = 144;
@@ -76,7 +82,10 @@ export interface ArtifactPreviewWorkerOptions {
   maxAttempts?: number;
   retryDelayMs?: number;
   maxSourceBytes?: number;
+  maxConvertedPdfBytes?: number;
+  maxOutputBytes?: number;
   maxPages?: number;
+  maxRasterDimension?: number;
   conversionTimeoutMs?: number;
   rasterizationTimeoutMs?: number;
   previewDpi?: number;
@@ -112,7 +121,10 @@ export class ArtifactPreviewWorker {
   private readonly maxAttempts: number;
   private readonly retryDelayMs: number;
   private readonly maxSourceBytes: number;
+  private readonly maxConvertedPdfBytes: number;
+  private readonly maxOutputBytes: number;
   private readonly maxPages: number;
+  private readonly maxRasterDimension: number;
   private readonly conversionTimeoutMs: number;
   private readonly rasterizationTimeoutMs: number;
   private readonly previewDpi: number;
@@ -144,7 +156,19 @@ export class ArtifactPreviewWorker {
       options.maxSourceBytes ?? DEFAULT_MAX_SOURCE_BYTES,
       HARD_MAX_SOURCE_BYTES
     );
+    this.maxConvertedPdfBytes = Math.min(
+      options.maxConvertedPdfBytes ?? DEFAULT_MAX_CONVERTED_PDF_BYTES,
+      HARD_MAX_CONVERTED_PDF_BYTES
+    );
+    this.maxOutputBytes = Math.min(
+      options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
+      HARD_MAX_OUTPUT_BYTES
+    );
     this.maxPages = Math.min(options.maxPages ?? DEFAULT_MAX_PAGES, HARD_MAX_PAGES);
+    this.maxRasterDimension = Math.min(
+      options.maxRasterDimension ?? DEFAULT_MAX_RASTER_DIMENSION,
+      HARD_MAX_RASTER_DIMENSION
+    );
     this.conversionTimeoutMs = options.conversionTimeoutMs ?? DEFAULT_CONVERSION_TIMEOUT_MS;
     this.rasterizationTimeoutMs = options.rasterizationTimeoutMs ?? DEFAULT_RASTERIZATION_TIMEOUT_MS;
     this.previewDpi = options.previewDpi ?? DEFAULT_PREVIEW_DPI;
@@ -296,6 +320,9 @@ export class ArtifactPreviewWorker {
       ...(renderSettings.sheets ? { sheets: renderSettings.sheets } : {}),
       ...(renderSettings.ranges ? { ranges: renderSettings.ranges } : {}),
       maxPages: Math.min(renderSettings.maxImages ?? this.maxPages, this.maxPages),
+      maxConvertedPdfBytes: this.maxConvertedPdfBytes,
+      maxOutputBytes: this.maxOutputBytes,
+      maxRasterDimension: this.maxRasterDimension,
       previewDpi: this.previewDpi,
       outputFormat: this.outputFormat,
       conversionTimeoutMs: this.conversionTimeoutMs,
@@ -304,6 +331,15 @@ export class ArtifactPreviewWorker {
     });
     if (rendered.pages.length === 0 || rendered.pages.length > this.maxPages) {
       return this.failClaimedJob(job, previewFailure("page_limit_exceeded", false));
+    }
+    const outputBytes = rendered.pages.reduce((total, page) => total + page.bytes.byteLength, 0);
+    const oversizedPage = rendered.pages.some(
+      (page) =>
+        (page.width !== undefined && page.width > this.maxRasterDimension) ||
+        (page.height !== undefined && page.height > this.maxRasterDimension)
+    );
+    if (outputBytes > this.maxOutputBytes || oversizedPage) {
+      return this.failClaimedJob(job, previewFailure("output_too_large", false));
     }
 
     const staged = await this.stageRenderedPages({

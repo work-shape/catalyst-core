@@ -9,6 +9,7 @@ import {
   type ClaimNextArtifactPreviewJobInput,
   type CompleteClaimedArtifactPreviewJobInput,
   type EnqueueArtifactPreviewJobInput,
+  type EnsureManagedArtifactInput,
   type CreateManagedArtifactInput,
   type CreateConversationAttachmentInput,
   type CreateManagedFileInput,
@@ -95,6 +96,33 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
   async createManagedArtifact(input: CreateManagedArtifactInput): Promise<ManagedArtifactRecord> {
     const artifact: ManagedArtifactRecord = {
       id: createPlatformId("art"),
+      clientInstanceId: input.clientInstanceId,
+      conversationId: input.conversationId,
+      sourceFileId: input.sourceFileId,
+      kind: input.kind,
+      objectKey: input.objectKey,
+      filename: input.filename,
+      mimeType: input.mimeType,
+      byteSize: input.byteSize,
+      checksum: input.checksum,
+      metadata: input.metadata ?? {},
+      status: "available",
+      createdAt: new Date().toISOString()
+    };
+    this.managedArtifacts.set(artifact.id, artifact);
+    return artifact;
+  }
+
+  async ensureManagedArtifact(input: EnsureManagedArtifactInput): Promise<ManagedArtifactRecord> {
+    const existing = this.managedArtifacts.get(input.id);
+    if (existing) {
+      if (!managedArtifactMatchesEnsureInput(existing, input)) {
+        throw new AppError("CONFLICT", "Managed artifact id belongs to a different artifact");
+      }
+      return existing;
+    }
+    const artifact: ManagedArtifactRecord = {
+      id: input.id,
       clientInstanceId: input.clientInstanceId,
       conversationId: input.conversationId,
       sourceFileId: input.sourceFileId,
@@ -750,6 +778,21 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
       }
     ).length;
   }
+}
+
+function managedArtifactMatchesEnsureInput(
+  artifact: ManagedArtifactRecord,
+  input: EnsureManagedArtifactInput
+): boolean {
+  return (
+    artifact.clientInstanceId === input.clientInstanceId &&
+    artifact.conversationId === input.conversationId &&
+    artifact.sourceFileId === input.sourceFileId &&
+    artifact.kind === input.kind &&
+    artifact.objectKey === input.objectKey &&
+    artifact.checksum === input.checksum &&
+    artifact.status === "available"
+  );
 }
 
 function uniqueStrings(values: string[]): string[] {

@@ -25,7 +25,6 @@ import {
   LocalWorkspaceCommandRunner,
   normalizeWorkspaceFilePath,
   WorkspaceCommandService,
-  type WorkspaceArtifactPreviewGenerator,
   type WorkspaceCommandTelemetry,
   type WorkspaceObjectStorage
 } from "@vivd-catalyst/tool-execution";
@@ -778,6 +777,7 @@ describe("local workspace command runner", () => {
       kind: "presentation.pptx",
       objectKey: deckFile?.objectKey
     });
+    expect(artifact?.metadata).not.toHaveProperty("preview");
     const previewJob = await harness.store.getArtifactPreviewJob({
       clientInstanceId: harness.clientInstanceId,
       sourceArtifactId: result.output!.promotedArtifacts[0]!.artifactId
@@ -848,71 +848,6 @@ describe("local workspace command runner", () => {
     await expect(
       harness.byteStore.getObject(artifact!.objectKey).then((bytes) => new TextDecoder().decode(bytes))
     ).resolves.toBe("final-bytes");
-  });
-
-  it("attaches derived image-page previews to promoted office outputs", async () => {
-    const previewGenerator = new TestArtifactPreviewGenerator([
-      {
-        bytes: encode("page-1"),
-        filename: "memo-page-1.png",
-        mimeType: "image/png",
-        pageNumber: 1
-      }
-    ]);
-    const harness = await createRunnerHarness({ artifactPreviewGenerator: previewGenerator });
-
-    const result = await harness.exec({
-      command: "printf '%s' 'docx-bytes' > memo.docx",
-      expectedOutputs: [{ path: "memo.docx", kind: "document.docx", promote: true }]
-    });
-
-    expect(result.status).toBe("success");
-    if (result.status !== "success") {
-      throw new Error("Expected office output promotion to succeed");
-    }
-    expect(previewGenerator.calls).toEqual([
-      expect.objectContaining({
-        filename: "memo.docx",
-        kind: "document.docx",
-        previewKind: "document"
-      })
-    ]);
-    expect(result.artifacts?.[0]?.metadata).toMatchObject({
-      preview: {
-        type: "image_pages",
-        format: "png",
-        pages: [
-          expect.objectContaining({
-            kind: "document.preview_page_image",
-            filename: "memo-page-1.png",
-            mimeType: "image/png",
-            pageNumber: 1
-          })
-        ]
-      }
-    });
-    expect(result.output?.promotedArtifacts[0]?.metadata).toEqual({
-      preview: result.artifacts?.[0]?.metadata?.preview
-    });
-    const previewPage = result.artifacts?.[0]?.metadata?.preview?.pages[0];
-    expect(previewPage?.artifactId).toEqual(expect.any(String));
-    const previewArtifact = await harness.store.getManagedArtifact({
-      clientInstanceId: harness.clientInstanceId,
-      artifactId: asManagedArtifactId(previewPage!.artifactId)
-    });
-    expect(previewArtifact).toMatchObject({
-      kind: "document.preview_page_image",
-      filename: "memo-page-1.png",
-      mimeType: "image/png",
-      metadata: expect.objectContaining({
-        source: "execution_workspace",
-        workspacePath: "memo.docx",
-        previewRole: "page_image"
-      })
-    });
-    await expect(
-      harness.byteStore.getObject(previewArtifact!.objectKey).then((bytes) => new TextDecoder().decode(bytes))
-    ).resolves.toBe("page-1");
   });
 
   it("proves the PR9 workspace readiness flow with Python persistence and promoted-only artifacts", async () => {
@@ -1048,7 +983,6 @@ describe("local workspace command runner", () => {
 });
 
 async function createRunnerHarness(input: {
-  artifactPreviewGenerator?: WorkspaceArtifactPreviewGenerator;
   limits?: ConstructorParameters<typeof WorkspaceCommandService>[0]["limits"];
   reuseWorkspaceDirectories?: boolean;
   telemetry?: WorkspaceCommandTelemetry;
@@ -1081,7 +1015,6 @@ async function createRunnerHarness(input: {
     ...(input.reuseWorkspaceDirectories !== undefined
       ? { reuseWorkspaceDirectories: input.reuseWorkspaceDirectories }
       : {}),
-    ...(input.artifactPreviewGenerator ? { artifactPreviewGenerator: input.artifactPreviewGenerator } : {}),
     ...(auditRecorder ? { auditRecorder } : {}),
     ...(input.telemetry ? { telemetry: input.telemetry } : {}),
     now: () => new Date().toISOString()
@@ -1183,23 +1116,6 @@ function checksum(bytes: Uint8Array): string {
 
 function encode(value: string): Uint8Array {
   return new TextEncoder().encode(value);
-}
-
-class TestArtifactPreviewGenerator implements WorkspaceArtifactPreviewGenerator {
-  readonly calls: Parameters<WorkspaceArtifactPreviewGenerator["generatePreviewImages"]>[0][] = [];
-
-  constructor(
-    private readonly images: Awaited<
-      ReturnType<WorkspaceArtifactPreviewGenerator["generatePreviewImages"]>
-    >
-  ) {}
-
-  async generatePreviewImages(
-    input: Parameters<WorkspaceArtifactPreviewGenerator["generatePreviewImages"]>[0]
-  ) {
-    this.calls.push(input);
-    return this.images;
-  }
 }
 
 class MemoryObjectStorage implements WorkspaceObjectStorage {
