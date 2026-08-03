@@ -168,6 +168,10 @@ function BlobArtifactPreview({
     );
   }
 
+  if (previewKind === "spreadsheet") {
+    return <SpreadsheetFilePreview blob={state.blob} />;
+  }
+
   return (
     <ArtifactPreviewFrame>
       {previewKind === "pdf" ? (
@@ -184,11 +188,18 @@ function BlobArtifactPreview({
       ) : null}
       {previewKind === "markdown" ? <MarkdownArtifactPreview blob={state.blob} /> : null}
       {previewKind === "text" ? <TextArtifactPreview blob={state.blob} /> : null}
-      {previewKind === "spreadsheet" ? <SpreadsheetArtifactPreview blob={state.blob} /> : null}
       {previewKind === "document" ? <DocumentArtifactPreview blob={state.blob} fileType={fileType} /> : null}
       {previewKind === "presentation" ? (
         <PresentationArtifactPreview blob={state.blob} fileType={fileType} />
       ) : null}
+    </ArtifactPreviewFrame>
+  );
+}
+
+export function SpreadsheetFilePreview({ blob }: { blob: Blob }) {
+  return (
+    <ArtifactPreviewFrame>
+      <SpreadsheetArtifactPreview blob={blob} />
     </ArtifactPreviewFrame>
   );
 }

@@ -25,6 +25,9 @@ const SOURCE_FILE_AUTH_SCOPE = "standalone";
 const ArtifactPreview = lazy(() =>
   import("./artifact-preview").then((module) => ({ default: module.ArtifactPreview }))
 );
+const SpreadsheetFilePreview = lazy(() =>
+  import("./artifact-preview").then((module) => ({ default: module.SpreadsheetFilePreview }))
+);
 
 export type SourceFileResource = Extract<
   ConversationResourceListItem,
@@ -167,15 +170,16 @@ export function createSourceFilePreviewEntry({
     };
   }
 
-  const inline =
-    (resource.mimeType?.startsWith("image/") ?? false) ||
-    resource.mimeType === "application/pdf";
+  const previewKind = getSourceFilePreviewKind(
+    resource.download.filename,
+    resource.mimeType
+  );
   return {
     key: `resource:${resource.resourceId}`,
     title: resource.title,
     subtitle: resource.subtitle,
     headerActions,
-    node: inline ? (
+    node: previewKind ? (
       <SourceFilePreview
         client={client}
         conversationId={conversationId}
@@ -210,16 +214,20 @@ export function SourceFilePreview({
   mimeType?: string;
 }) {
   const { t } = useTranslation();
-  const pdf = mimeType === "application/pdf";
-  const directUrl = client.browserManagedDownloads && !pdf
+  const previewKind = getSourceFilePreviewKind(filename, mimeType);
+  const pdf = previewKind === "pdf";
+  const spreadsheet = previewKind === "spreadsheet";
+  const directUrl = client.browserManagedDownloads && previewKind === "image"
     ? client.conversationFileContentUrl(conversationId, fileId)
     : undefined;
   const [url, setUrl] = useState<string | undefined>(directUrl);
+  const [blob, setBlob] = useState<Blob | undefined>();
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     if (directUrl) {
       setUrl(directUrl);
+      setBlob(undefined);
       setFailed(false);
       return undefined;
     }
@@ -227,13 +235,18 @@ export function SourceFilePreview({
     let active = true;
     let objectUrl: string | undefined;
     setUrl(undefined);
+    setBlob(undefined);
     setFailed(false);
     void client
       .conversationFileContent(conversationId, fileId, pdf)
       .then((blob) => {
         if (active) {
-          objectUrl = URL.createObjectURL(blob);
-          setUrl(objectUrl);
+          if (spreadsheet) {
+            setBlob(blob);
+          } else {
+            objectUrl = URL.createObjectURL(blob);
+            setUrl(objectUrl);
+          }
         }
       })
       .catch(() => {
@@ -247,13 +260,26 @@ export function SourceFilePreview({
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [client, conversationId, directUrl, fileId, pdf]);
+  }, [client, conversationId, directUrl, fileId, pdf, spreadsheet]);
 
   if (failed) {
     return (
       <div className="flex min-h-64 items-center justify-center text-sm text-muted-foreground">
         {t("resourcesLoadFailed")}
       </div>
+    );
+  }
+  if (spreadsheet && blob) {
+    return (
+      <Suspense
+        fallback={
+          <div className="flex min-h-64 items-center justify-center">
+            <Spinner size="sm" />
+          </div>
+        }
+      >
+        <SpreadsheetFilePreview blob={blob} />
+      </Suspense>
     );
   }
   if (!url) {
@@ -275,6 +301,26 @@ export function SourceFilePreview({
       />
     </div>
   );
+}
+
+export type SourceFilePreviewKind = "image" | "pdf" | "spreadsheet";
+
+export function getSourceFilePreviewKind(
+  filename: string,
+  mimeType?: string
+): SourceFilePreviewKind | undefined {
+  if (mimeType?.startsWith("image/")) {
+    return "image";
+  }
+  if (mimeType === "application/pdf") {
+    return "pdf";
+  }
+  const value = `${mimeType ?? ""} ${filename}`.toLowerCase();
+  return value.includes("spreadsheet") ||
+    value.includes("excel") ||
+    /\.(?:xlsx|xlsm|xls)$/i.test(filename)
+    ? "spreadsheet"
+    : undefined;
 }
 
 function FileDetails({

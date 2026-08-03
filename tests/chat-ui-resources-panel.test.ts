@@ -16,8 +16,10 @@ import {
   ResourcesPanel
 } from "../packages/chat-ui/src/resources-panel";
 import {
+  createSourceFilePreviewEntry,
   findSourceFileResource,
   findSourceFileResourceByAttachmentId,
+  getSourceFilePreviewKind,
   SourceFilePreview
 } from "../packages/chat-ui/src/source-file-preview";
 import { StructuredDataView } from "../packages/chat-ui/src/structured-data-view";
@@ -108,6 +110,49 @@ const structuredData: StructuredDataResourceResponse = {
 };
 
 describe("Resources panel model", () => {
+  it("routes uploaded Excel workbooks to the source-file preview", () => {
+    expect(
+      getSourceFilePreviewKind(
+        "Cosmic_Cafe_REPAIRED.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      )
+    ).toBe("spreadsheet");
+    expect(getSourceFilePreviewKind("legacy.xls", "application/vnd.ms-excel")).toBe(
+      "spreadsheet"
+    );
+    expect(getSourceFilePreviewKind("macros.xlsm")).toBe("spreadsheet");
+    expect(getSourceFilePreviewKind("archive.zip", "application/zip")).toBeUndefined();
+
+    const workbookResource: ConversationResourceListItem = {
+      resourceId: "source-workbook",
+      resourceType: "source_file",
+      attachmentId: "attachment_workbook",
+      title: "Cosmic_Cafe_REPAIRED.xlsx",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      createdAt: "2026-08-03T09:00:00.000Z",
+      updatedAt: "2026-08-03T09:00:00.000Z",
+      preview: { kind: "source_file", fileId: "file_workbook" },
+      download: {
+        kind: "source_file",
+        fileId: "file_workbook",
+        filename: "Cosmic_Cafe_REPAIRED.xlsx"
+      }
+    };
+    const entry = createSourceFilePreviewEntry({
+      client: createApiClient({ baseUrl: "https://example.test" }),
+      conversationId: "conversation_1",
+      resource: workbookResource
+    });
+    const markup = renderToStaticMarkup(
+      createElement(TranslationProvider, { locale: "de" }, entry.node)
+    );
+
+    expect(markup).toContain("animate-spin");
+    expect(markup).not.toContain(
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+  });
+
   it("resolves a committed attachment to its source-file preview resource", () => {
     expect(findSourceFileResource(resources, "file_1")?.resourceId).toBe("source");
     expect(findSourceFileResource(resources, "missing")).toBeUndefined();
