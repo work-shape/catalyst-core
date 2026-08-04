@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AssistantChatPanel } from "./assistant-chat-panel";
+import { AssistantRuntimePanel } from "./assistant/assistant-runtime-panel";
 import { AttachmentContentProvider } from "./attachment-content";
 import { ChatDropOverlay } from "./chat-file-dropzone";
 import type { ChatShellProps } from "./chat-shell";
@@ -197,7 +197,7 @@ function ChatWorkspaceContent({
                   onDragLeave={chat.fileDropzone.onChatDragLeave}
                   onDrop={chat.fileDropzone.onChatDrop}
                 >
-                  <AssistantChatPanel chat={chat} />
+                  <AssistantRuntimePanel chat={chat} />
                   {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
                   {resourcesAvailable && resourcesConversationId ? (
                     resourcesVisible ? (

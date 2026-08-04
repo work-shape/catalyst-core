@@ -4,7 +4,6 @@ import type {
   LocaleCode,
   StartConversationRunResponse
 } from "@vivd-catalyst/api-client";
-import { firstLineTitle } from "../conversation-title";
 
 export interface ProductRunTransportOptions {
   client: {
@@ -161,4 +160,9 @@ function extractUserText(message: UIMessage | undefined): string {
       .join("\n")
       .trim() ?? ""
   );
+}
+
+function firstLineTitle(text: string): string {
+  const firstLine = text.split("\n")[0]?.trim() ?? "New conversation";
+  return firstLine.length > 60 ? `${firstLine.slice(0, 57)}...` : firstLine || "New conversation";
 }

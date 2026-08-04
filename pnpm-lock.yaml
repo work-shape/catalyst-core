@@ -301,9 +301,6 @@ importers:
       '@ai-sdk/react':
         specifier: ^3.0.201
         version: 3.0.226(react@19.2.7)(zod@4.4.3)
-      '@aiden0z/pptx-renderer':
-        specifier: 1.2.2
-        version: 1.2.2
       '@assistant-ui/react':
         specifier: ^0.14.26
         version: 0.14.26(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(use-sync-external-store@1.6.0(react@19.2.7))
@@ -373,9 +370,6 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
-      docx-preview:
-        specifier: 0.3.7
-        version: 0.3.7
       echarts:
         specifier: 6.1.0
         version: 6.1.0
@@ -767,14 +761,6 @@ packages:
     engines: {node: '>=18'}
     peerDependencies:
       react: ^18 || ~19.0.1 || ~19.1.2 || ^19.2.1
-
-  '@aiden0z/pptx-renderer@1.2.2':
-    resolution: {integrity: sha512-UKiV0JGz34OXZfE4UfKNkSx8flSAh9b3Lc2qFZlbwJ7UdQdz55pSz7MqWsx5CLU+BpFfzNlo5CN4ZSoSRWM6lw==}
-    peerDependencies:
-      pdfjs-dist: ^5.0.0
-    peerDependenciesMeta:
-      pdfjs-dist:
-        optional: true
 
   '@antfu/install-pkg@1.1.0':
     resolution: {integrity: sha512-MGQsmw10ZyI+EJo45CdSER4zEb+p31LpDAFp2Z3gkSd1yqVZGi0Ebx++YTEMonJy4oChEMLsxZ64j8FH6sSqtQ==}
@@ -4265,9 +4251,6 @@ packages:
     resolution: {integrity: sha512-9S6m9Sukh1cZNknO1CWAr2QAWsbKLafQiyM5gZ7VgXHeuaoUwffKN4q6NC4A/Mf9iiPlOXQEKW/Mv/mh9/3YFA==}
     hasBin: true
 
-  docx-preview@0.3.7:
-    resolution: {integrity: sha512-Lav69CTA/IYZPJTsKH7oYeoZjyg96N0wEJMNslGJnZJ+dMUZK85Lt5ASC79yUlD48ecWjuv+rkcmFt6EVPV0Xg==}
-
   dom-helpers@5.2.1:
     resolution: {integrity: sha512-nRCa7CK3VTrM2NmGkIy4cbK7IZlgBE/PYMn55rrXefr5xXDP0LdtfPnblFDoVdcAfslJ7or6iqAUnx0CCGIWQA==}
 
@@ -6702,11 +6685,6 @@ snapshots:
       throttleit: 2.1.0
     transitivePeerDependencies:
       - zod
-
-  '@aiden0z/pptx-renderer@1.2.2':
-    dependencies:
-      echarts: 6.1.0
-      jszip: 3.10.1
 
   '@antfu/install-pkg@1.1.0':
     dependencies:
@@ -10192,10 +10170,6 @@ snapshots:
   diff@8.0.4: {}
 
   direction@2.0.1: {}
-
-  docx-preview@0.3.7:
-    dependencies:
-      jszip: 3.10.1
 
   dom-helpers@5.2.1:
     dependencies:
