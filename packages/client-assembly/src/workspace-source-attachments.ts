@@ -239,7 +239,9 @@ export function detectWorkspaceSourceFileFormat(
   mimeType: string | undefined
 ): string | undefined {
   const normalizedMimeType = mimeType?.split(";", 1)[0]?.trim().toLowerCase();
-  const mimeFormat = normalizedMimeType ? WORKSPACE_SOURCE_MIME_TYPES.get(normalizedMimeType) : undefined;
+  const mimeFormat = normalizedMimeType
+    ? WORKSPACE_SOURCE_MIME_TYPES.get(normalizedMimeType)
+    : undefined;
   if (mimeFormat) {
     return mimeFormat;
   }
@@ -410,7 +412,9 @@ class ExecutionWorkspaceSourceAttachmentService {
       conversationId: input.conversationId
     });
     const sourceFileObjectKeys = deletion.fileObjectKeys.filter(isSourceObjectKey);
-    const workspaceArtifactObjectKeys = deletion.artifactObjectKeys.filter(isWorkspaceArtifactObjectKey);
+    const workspaceArtifactObjectKeys = deletion.artifactObjectKeys.filter(
+      isWorkspaceArtifactObjectKey
+    );
     await Promise.all(
       [...sourceFileObjectKeys, ...workspaceArtifactObjectKeys].map((objectKey) =>
         this.objectStore.deleteObject(objectKey)
@@ -430,10 +434,7 @@ class ExecutionWorkspaceSourceAttachmentService {
     };
   }
 
-  async readConversationFile(input: {
-    conversationId: ConversationId;
-    fileId: string;
-  }): Promise<{
+  async readConversationFile(input: { conversationId: ConversationId; fileId: string }): Promise<{
     fileId: ManagedFileId;
     filename: string;
     mimeType?: string;
@@ -473,7 +474,11 @@ class ExecutionWorkspaceSourceAttachmentService {
       clientInstanceId: this.clientInstanceId,
       attachmentId: asConversationAttachmentId(attachmentId)
     });
-    if (!attachment || attachment.conversationId !== conversationId || !isWorkspaceSourceAttachment(attachment)) {
+    if (
+      !attachment ||
+      attachment.conversationId !== conversationId ||
+      !isWorkspaceSourceAttachment(attachment)
+    ) {
       throw new AppError("NOT_FOUND", "Draft attachment is not available");
     }
     if (attachment.messageId !== undefined) {
@@ -511,7 +516,10 @@ function isWorkspaceArtifactObjectKey(value: string): boolean {
 }
 
 function extensionFromFilename(filename: string): string | undefined {
-  return filename.trim().toLowerCase().match(/\.([a-z0-9]+)$/u)?.[1];
+  return filename
+    .trim()
+    .toLowerCase()
+    .match(/\.([a-z0-9]+)$/u)?.[1];
 }
 
 function safeObjectFilename(filename: string): string {

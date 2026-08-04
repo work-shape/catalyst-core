@@ -59,7 +59,10 @@ function extractHtmlTitle(html: string): string | undefined {
 }
 
 function normalizePlainText(text: string): string {
-  return text.replace(/^\uFEFF/u, "").replace(/\r\n?/gu, "\n").trim();
+  return text
+    .replace(/^\uFEFF/u, "")
+    .replace(/\r\n?/gu, "\n")
+    .trim();
 }
 
 function decodeHtmlEntities(text: string): string {

@@ -1,9 +1,6 @@
 import { Download } from "lucide-react";
 import { useState } from "react";
-import type {
-  ApiClient,
-  ConversationResourceListItem
-} from "@vivd-catalyst/api-client";
+import type { ApiClient, ConversationResourceListItem } from "@vivd-catalyst/api-client";
 import { useTranslation } from "./i18n";
 import { Button } from "./ui/button";
 import { Spinner } from "./ui/spinner";
@@ -31,11 +28,11 @@ export function ResourceDownloadButton({
     try {
       const blob =
         resource.download.kind === "artifact"
-          ? await client.conversationArtifactContent(
+          ? await client.conversations.artifacts.getContent(
               conversationId,
               resource.download.artifactId
             )
-          : await client.conversationFileContent(
+          : await client.conversations.files.getContent(
               conversationId,
               resource.download.fileId,
               true

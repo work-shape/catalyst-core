@@ -104,10 +104,7 @@ export const servicePrincipals = pgTable(
     lastUsedAt: timestamp("last_used_at", { withTimezone: true })
   },
   (table) => [
-    index("service_principals_client_label_idx").on(
-      table.clientInstanceId,
-      table.displayLabel
-    ),
+    index("service_principals_client_label_idx").on(table.clientInstanceId, table.displayLabel),
     uniqueIndex("service_principals_client_id_idx").on(table.clientInstanceId, table.id),
     foreignKey({
       name: "service_principals_client_creator_fk",
@@ -500,7 +497,11 @@ export const conversationAttachments = pgTable(
       table.messageId,
       table.updatedAt
     ),
-    index("conversation_attachments_file_idx").on(table.clientInstanceId, table.conversationId, table.fileId),
+    index("conversation_attachments_file_idx").on(
+      table.clientInstanceId,
+      table.conversationId,
+      table.fileId
+    ),
     index("conversation_attachments_processing_idx").on(
       table.clientInstanceId,
       table.status,
@@ -542,7 +543,9 @@ export const managedArtifacts = pgTable(
     conversationId: text("conversation_id")
       .notNull()
       .references(() => conversations.id, { onDelete: "cascade" }),
-    sourceFileId: text("source_file_id").references(() => managedFiles.id, { onDelete: "restrict" }),
+    sourceFileId: text("source_file_id").references(() => managedFiles.id, {
+      onDelete: "restrict"
+    }),
     kind: text("kind").$type<ManagedArtifactRecord["kind"]>().notNull(),
     objectKey: text("object_key").notNull(),
     filename: text("filename"),
@@ -608,10 +611,7 @@ export const artifactPreviewJobs = pgTable(
       table.nextAttemptAt,
       table.createdAt
     ),
-    index("artifact_preview_jobs_conversation_idx").on(
-      table.clientInstanceId,
-      table.conversationId
-    )
+    index("artifact_preview_jobs_conversation_idx").on(table.clientInstanceId, table.conversationId)
   ]
 );
 
@@ -690,8 +690,8 @@ export const modelUsageEvents = pgTable(
     totalTokens: integer("total_tokens").notNull(),
     webSearchCallCount: integer("web_search_call_count").notNull().default(0),
     source: text("source").$type<ModelUsageEvent["source"]>().notNull(),
-    customerBillableCost: jsonb("customer_billable_cost")
-      .$type<ModelUsageEvent["customerBillableCost"]>(),
+    customerBillableCost:
+      jsonb("customer_billable_cost").$type<ModelUsageEvent["customerBillableCost"]>(),
     correlationId: text("correlation_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull()
   },
@@ -740,19 +740,14 @@ export const configAssetRevisions = pgTable(
       .notNull()
       .references(() => configAssets.id, { onDelete: "cascade" }),
     revision: integer("revision").notNull(),
-    operation: text("operation")
-      .$type<ConfigAssetRevisionRecord["operation"]>()
-      .notNull(),
+    operation: text("operation").$type<ConfigAssetRevisionRecord["operation"]>().notNull(),
     config: jsonb("config").$type<JsonObject>(),
     actor: jsonb("actor").$type<AuditActor>(),
     globalVersion: bigint("global_version", { mode: "number" }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull()
   },
   (table) => [
-    uniqueIndex("config_asset_revisions_asset_revision_idx").on(
-      table.assetId,
-      table.revision
-    ),
+    uniqueIndex("config_asset_revisions_asset_revision_idx").on(table.assetId, table.revision),
     index("config_asset_revisions_client_asset_revision_idx").on(
       table.clientInstanceId,
       table.assetId,

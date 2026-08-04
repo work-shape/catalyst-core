@@ -47,6 +47,7 @@ import {
   workspaceCommandTelemetryEvent,
   type WorkspaceCommandTelemetry
 } from "./workspace-command-telemetry";
+import { createWorkspaceChecksum } from "./workspace-tool-results";
 
 const DEFAULT_MAX_PATH_LENGTH = 512;
 const DEFAULT_LEASE_DURATION_MS = 10 * 60 * 1000;
@@ -138,7 +139,8 @@ export class LocalWorkspaceCommandRunner {
     this.maxPathLength = options.maxPathLength ?? DEFAULT_MAX_PATH_LENGTH;
     this.reuseWorkspaceDirectories = options.reuseWorkspaceDirectories ?? false;
     this.processExecutor =
-      options.processExecutor ?? new LocalWorkspaceCommandProcessExecutor({ shellPath: options.shellPath });
+      options.processExecutor ??
+      new LocalWorkspaceCommandProcessExecutor({ shellPath: options.shellPath });
     this.auditRecorder = options.auditRecorder;
     this.telemetry = options.telemetry;
     this.now = options.now ?? (() => new Date().toISOString());
@@ -829,10 +831,6 @@ function terminalCommandAuditMetadata(command: WorkspaceCommand): JsonObject {
         }
       : {})
   };
-}
-
-function createWorkspaceChecksum(bytes: Uint8Array): string {
-  return createHash("sha256").update(bytes).digest("hex");
 }
 
 function inferWorkspaceMimeType(path: string): string | undefined {

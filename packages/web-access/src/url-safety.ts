@@ -126,7 +126,10 @@ function assertAllowedIpAddress(address: string): void {
 }
 
 function normalizeHostname(hostname: string): string {
-  return hostname.toLowerCase().replace(/^\[|\]$/gu, "").replace(/\.+$/gu, "");
+  return hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/gu, "")
+    .replace(/\.+$/gu, "");
 }
 
 function isBlockedIpv4Address(address: string): boolean {
@@ -180,12 +183,7 @@ function isBlockedIpv6Address(address: string): boolean {
   if (bytes.every((byte) => byte === 0)) return true;
   if (bytes.slice(0, 15).every((byte) => byte === 0) && bytes[15] === 1) return true;
   const [first, second, third, fourth] = bytes;
-  if (
-    first === undefined ||
-    second === undefined ||
-    third === undefined ||
-    fourth === undefined
-  ) {
+  if (first === undefined || second === undefined || third === undefined || fourth === undefined) {
     return true;
   }
   if ((first & 0xfe) === 0xfc) return true;
@@ -199,9 +197,8 @@ function isBlockedIpv6Address(address: string): boolean {
 }
 
 function getIpv4MappedAddress(bytes: number[]): string | undefined {
-  const isMapped = bytes
-    .slice(0, 10)
-    .every((byte) => byte === 0) && bytes[10] === 0xff && bytes[11] === 0xff;
+  const isMapped =
+    bytes.slice(0, 10).every((byte) => byte === 0) && bytes[10] === 0xff && bytes[11] === 0xff;
   if (!isMapped) {
     return undefined;
   }

@@ -27,7 +27,9 @@ test("standalone login renders the authenticated chat workspace", async ({ page 
   await expect(page.getByText("E2E Customer")).toBeVisible();
   await expect(page.getByText("E2E User")).toBeVisible();
   await expect(page.getByRole("button", { name: "E2E User account" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Select agent" })).toContainText("Application Assistant");
+  await expect(page.getByRole("button", { name: "Select agent" })).toContainText(
+    "Application Assistant"
+  );
   await expect(page.getByRole("button", { name: "Close sidebar" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Switch to (dark|light) theme/ })).toBeVisible();
@@ -61,7 +63,9 @@ test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
   await page.getByRole("button", { name: "Select agent" }).click();
   await expect(page.getByRole("option", { name: /Research Assistant/ })).toBeVisible();
   await page.getByRole("option", { name: /Research Assistant/ }).click();
-  await expect(page.getByRole("button", { name: "Select agent" })).toContainText("Research Assistant");
+  await expect(page.getByRole("button", { name: "Select agent" })).toContainText(
+    "Research Assistant"
+  );
 
   const appShell = page.locator("main").first();
   const backgroundBefore = await appShell.evaluate((element) =>
@@ -163,42 +167,46 @@ test("composer sends on Enter and inserts a newline on Shift+Enter", async ({ pa
   await expect(input).toHaveValue("");
 });
 
-test("active runs block Enter without clearing the draft", { tag: "@chat-state" }, async ({ page }) => {
-  await signInViaUi(page, normalUser);
-  await page.goto("/");
+test(
+  "active runs block Enter without clearing the draft",
+  { tag: "@chat-state" },
+  async ({ page }) => {
+    await signInViaUi(page, normalUser);
+    await page.goto("/");
 
-  const input = page.getByPlaceholder("Message");
-  const suffix = Date.now();
-  const longMessage = Array.from(
-    { length: 240 },
-    (_, index) => `active-run-guard-${suffix}-${index}`
-  ).join(" ");
-  await input.fill(longMessage);
-  await input.press("Enter");
-  await expect(page).toHaveURL(/\/c\/[^/]+$/u);
-  await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
+    const input = page.getByPlaceholder("Message");
+    const suffix = Date.now();
+    const longMessage = Array.from(
+      { length: 240 },
+      (_, index) => `active-run-guard-${suffix}-${index}`
+    ).join(" ");
+    await input.fill(longMessage);
+    await input.press("Enter");
+    await expect(page).toHaveURL(/\/c\/[^/]+$/u);
+    await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
 
-  const conversationId = currentConversationId(page);
-  const runPath = `/api/conversations/${conversationId}/runs`;
-  let followUpRunRequests = 0;
-  page.on("request", (request) => {
-    if (request.method() === "POST" && new URL(request.url()).pathname === runPath) {
-      followUpRunRequests += 1;
-    }
-  });
+    const conversationId = currentConversationId(page);
+    const runPath = `/api/conversations/${conversationId}/runs`;
+    let followUpRunRequests = 0;
+    page.on("request", (request) => {
+      if (request.method() === "POST" && new URL(request.url()).pathname === runPath) {
+        followUpRunRequests += 1;
+      }
+    });
 
-  const followUpDraft = `Keep this draft ${suffix}`;
-  await input.fill(followUpDraft);
-  await input.press("Enter");
-  await page.waitForTimeout(250);
+    const followUpDraft = `Keep this draft ${suffix}`;
+    await input.fill(followUpDraft);
+    await input.press("Enter");
+    await page.waitForTimeout(250);
 
-  expect(followUpRunRequests).toBe(0);
-  await expect(input).toHaveValue(followUpDraft);
-  await expect(page.getByText("Conversation already has an active agent run")).toHaveCount(0);
+    expect(followUpRunRequests).toBe(0);
+    await expect(input).toHaveValue(followUpDraft);
+    await expect(page.getByText("Conversation already has an active agent run")).toHaveCount(0);
 
-  await stopActiveRun(page);
-  await expect(input).toHaveValue(followUpDraft);
-});
+    await stopActiveRun(page);
+    await expect(input).toHaveValue(followUpDraft);
+  }
+);
 
 test("links in user messages keep the bubble foreground contrast", async ({ page }) => {
   await signInViaApi(page, normalUser);
@@ -235,7 +243,9 @@ test("new conversation action opens an unsaved draft screen", async ({ page }) =
   await page.goto("/");
   const newConversationButton = page.getByRole("button", { name: "New", exact: true });
   await expect(newConversationButton).toBeVisible();
-  await expect(page.getByRole("button", { name: "Select agent" })).toContainText("Application Assistant");
+  await expect(page.getByRole("button", { name: "Select agent" })).toContainText(
+    "Application Assistant"
+  );
   await expect(page.getByRole("button", { name: "Add attachment" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Find review risks" })).toBeVisible();
 
@@ -248,7 +258,9 @@ test("new conversation action opens an unsaved draft screen", async ({ page }) =
   await expect(input).toBeFocused();
 });
 
-test("new conversation action returns from a persisted conversation to a clean draft route", async ({ page }) => {
+test("new conversation action returns from a persisted conversation to a clean draft route", async ({
+  page
+}) => {
   await signInViaUi(page, normalUser);
   await page.goto("/");
   const input = page.getByPlaceholder("Message");
@@ -277,10 +289,14 @@ test("new conversation action returns from a persisted conversation to a clean d
   await expect(createdConversation).toHaveCount(1);
 
   await createdConversation.getByRole("button").first().click();
-  await expect(page).toHaveURL(new RegExp(`${escapeRegExp(conversationPath(conversationId))}$`, "u"));
+  await expect(page).toHaveURL(
+    new RegExp(`${escapeRegExp(conversationPath(conversationId))}$`, "u")
+  );
 });
 
-test("standalone conversation routes are addressable and follow rail navigation", async ({ page }) => {
+test("standalone conversation routes are addressable and follow rail navigation", async ({
+  page
+}) => {
   await signInViaApi(page, normalUser);
   const title = `Route target ${Date.now()}`;
   const created = await page.request.post(`${apiBaseUrl}/api/conversations`, {
@@ -309,7 +325,9 @@ test("standalone conversation routes are addressable and follow rail navigation"
   await expect(input).toHaveValue("Route-scoped new draft");
 });
 
-test("first message from the root route moves to the persisted conversation route", async ({ page }) => {
+test("first message from the root route moves to the persisted conversation route", async ({
+  page
+}) => {
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(/\/$/u);
   let legacyChatRequests = 0;
@@ -331,7 +349,9 @@ test("first message from the root route moves to the persisted conversation rout
   expect(response.ok()).toBe(true);
   const started = (await response.json()) as { conversation: { id: string } };
 
-  await expect(page).toHaveURL(new RegExp(`${escapeRegExp(conversationPath(started.conversation.id))}$`, "u"));
+  await expect(page).toHaveURL(
+    new RegExp(`${escapeRegExp(conversationPath(started.conversation.id))}$`, "u")
+  );
   expect(legacyChatRequests).toBe(0);
   const createdConversation = page.getByTestId("conversation-row").filter({ hasText: messageText });
   await expect(createdConversation).toHaveAttribute("data-selected", "true");
@@ -383,7 +403,9 @@ test("root submit stays draft-only while create-run is pending", async ({ page }
   await expect(page).toHaveURL(/\/$/u);
   await expect(input).toHaveValue(messageText);
   await expect(page.getByRole("button", { name: "Send message" })).toBeDisabled();
-  await expect(chatRegion.locator('[data-role="user"]').filter({ hasText: messageText })).toHaveCount(0);
+  await expect(
+    chatRegion.locator('[data-role="user"]').filter({ hasText: messageText })
+  ).toHaveCount(0);
   await expect(page.getByTestId("run-activity")).toHaveCount(0);
   await expect(page.getByTestId("assistant-cursor")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Stop generating" })).toHaveCount(0);
@@ -394,14 +416,20 @@ test("root submit stays draft-only while create-run is pending", async ({ page }
   expect(response.ok()).toBe(true);
   const started = (await response.json()) as { conversation: { id: string } };
 
-  await expect(page).toHaveURL(new RegExp(`${escapeRegExp(conversationPath(started.conversation.id))}$`, "u"));
+  await expect(page).toHaveURL(
+    new RegExp(`${escapeRegExp(conversationPath(started.conversation.id))}$`, "u")
+  );
   await expect(input).toHaveValue("");
-  await expect(chatRegion.locator('[data-role="user"]').filter({ hasText: messageText })).toHaveCount(1);
+  await expect(
+    chatRegion.locator('[data-role="user"]').filter({ hasText: messageText })
+  ).toHaveCount(1);
   expect(createRunRequests).toBe(1);
   expect(legacyChatRequests).toBe(0);
 });
 
-test("stop generating cancels the active stream instead of only hiding the button", async ({ page }) => {
+test("stop generating cancels the active stream instead of only hiding the button", async ({
+  page
+}) => {
   await signInViaUi(page, normalUser);
 
   await page.goto("/");
@@ -424,10 +452,14 @@ test("stop generating cancels the active stream instead of only hiding the butto
   await expect(stopButton).toHaveCount(0);
   await page.waitForTimeout(6_000);
 
-  await expect(page.locator('[data-role="assistant"]').filter({ hasText: lateToken })).toHaveCount(0);
+  await expect(page.locator('[data-role="assistant"]').filter({ hasText: lateToken })).toHaveCount(
+    0
+  );
 
   const conversationId = currentConversationId(page);
-  const messages = await page.request.get(`${apiBaseUrl}/api/conversations/${conversationId}/messages`);
+  const messages = await page.request.get(
+    `${apiBaseUrl}/api/conversations/${conversationId}/messages`
+  );
   expect(messages.ok()).toBe(true);
   const persistedMessages = (await messages.json()) as Array<{ role: string; text: string }>;
   const persistedAssistantText = persistedMessages
@@ -437,7 +469,9 @@ test("stop generating cancels the active stream instead of only hiding the butto
   expect(persistedAssistantText).not.toContain(lateToken);
 });
 
-test("composer drafts are scoped to the new screen and selected conversations", async ({ page }) => {
+test("composer drafts are scoped to the new screen and selected conversations", async ({
+  page
+}) => {
   await signInViaApi(page, normalUser);
   const title = `Draft target ${Date.now()}`;
   const created = await page.request.post(`${apiBaseUrl}/api/conversations`, {
@@ -462,270 +496,316 @@ test("composer drafts are scoped to the new screen and selected conversations", 
   await expect(input).toHaveValue("Selected conversation draft");
 });
 
-test("conversation switching isolates pending stream state", { tag: "@chat-state" }, async ({ page }) => {
-  await signInViaUi(page, normalUser);
-  const suffix = Date.now();
-  const sourceTitle = `Streaming source ${suffix}`;
-  const targetTitle = `Stable target ${suffix}`;
-  const source = await page.request.post(`${apiBaseUrl}/api/conversations`, {
-    data: { title: sourceTitle }
-  });
-  const target = await page.request.post(`${apiBaseUrl}/api/conversations`, {
-    data: { title: targetTitle }
-  });
-  expect(source.ok()).toBe(true);
-  expect(target.ok()).toBe(true);
+test(
+  "conversation switching isolates pending stream state",
+  { tag: "@chat-state" },
+  async ({ page }) => {
+    await signInViaUi(page, normalUser);
+    const suffix = Date.now();
+    const sourceTitle = `Streaming source ${suffix}`;
+    const targetTitle = `Stable target ${suffix}`;
+    const source = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+      data: { title: sourceTitle }
+    });
+    const target = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+      data: { title: targetTitle }
+    });
+    expect(source.ok()).toBe(true);
+    expect(target.ok()).toBe(true);
 
-  let chatRequestStarted = false;
-  let releaseChat: () => void = () => {};
-  const chatGate = new Promise<void>((resolve) => {
-    releaseChat = resolve;
-  });
-  const runStartRoute = new RegExp(`${escapeRegExp(apiBaseUrl)}/api/conversations/[^/]+/runs$`, "u");
-  await page.route(runStartRoute, async (route) => {
-    chatRequestStarted = true;
-    await chatGate;
-    await route.abort("aborted").catch(() => undefined);
-  });
+    let chatRequestStarted = false;
+    let releaseChat: () => void = () => {};
+    const chatGate = new Promise<void>((resolve) => {
+      releaseChat = resolve;
+    });
+    const runStartRoute = new RegExp(
+      `${escapeRegExp(apiBaseUrl)}/api/conversations/[^/]+/runs$`,
+      "u"
+    );
+    await page.route(runStartRoute, async (route) => {
+      chatRequestStarted = true;
+      await chatGate;
+      await route.abort("aborted").catch(() => undefined);
+    });
 
-  try {
+    try {
+      await page.goto("/");
+      const input = page.getByPlaceholder("Message");
+      const chatRegion = page.getByRole("region", { name: "Chat" });
+      const sourceConversation = page
+        .getByTestId("conversation-row")
+        .filter({ hasText: sourceTitle });
+      const targetConversation = page
+        .getByTestId("conversation-row")
+        .filter({ hasText: targetTitle });
+      await expect(sourceConversation).toHaveCount(1);
+      await expect(targetConversation).toHaveCount(1);
+
+      await sourceConversation.getByRole("button").first().click();
+      const sendButton = page.getByRole("button", { name: "Send message" });
+      await expect(sendButton).toBeEnabled();
+      const messageText = `Session isolation ${suffix}`;
+      await input.fill(messageText);
+      await sendButton.click();
+      await expect(chatRegion.getByText(messageText)).toBeVisible();
+      await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
+      await expect.poll(() => chatRequestStarted).toBe(true);
+      await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
+
+      await targetConversation.getByRole("button").first().click();
+      await expect(chatRegion.getByText(messageText)).toHaveCount(0);
+      await expect(page.getByTestId("run-activity")).toHaveCount(0);
+      await expect(page.getByTestId("assistant-cursor")).toHaveCount(0);
+      await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
+
+      await sourceConversation.getByRole("button").first().click();
+      await expect(page.getByTestId("assistant-cursor")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Send message" })).toBeDisabled();
+    } finally {
+      releaseChat();
+      await page.unroute(runStartRoute);
+    }
+  }
+);
+
+test(
+  "switching back to a running conversation resumes one stream indicator",
+  { tag: "@chat-state" },
+  async ({ page }) => {
+    await signInViaUi(page, normalUser);
+    const suffix = Date.now();
+    const sourceTitle = `Resume source ${suffix}`;
+    const targetTitle = `Resume target ${suffix}`;
+    const source = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+      data: { title: sourceTitle }
+    });
+    const target = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+      data: { title: targetTitle }
+    });
+    expect(source.ok()).toBe(true);
+    expect(target.ok()).toBe(true);
+
+    const eventRequests: string[] = [];
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (request.method() === "GET" && isRunEventsPath(url.pathname)) {
+        eventRequests.push(request.url());
+      }
+    });
+
     await page.goto("/");
     const input = page.getByPlaceholder("Message");
     const chatRegion = page.getByRole("region", { name: "Chat" });
-    const sourceConversation = page.getByTestId("conversation-row").filter({ hasText: sourceTitle });
-    const targetConversation = page.getByTestId("conversation-row").filter({ hasText: targetTitle });
+    const sourceConversation = page
+      .getByTestId("conversation-row")
+      .filter({ hasText: sourceTitle });
+    const targetConversation = page
+      .getByTestId("conversation-row")
+      .filter({ hasText: targetTitle });
+    await expect(sourceConversation).toHaveCount(1);
+    await expect(targetConversation).toHaveCount(1);
+
+    await sourceConversation.getByRole("button").first().click();
+    const uniqueToken = `resume-token-${suffix}`;
+    await input.fill(Array.from({ length: 90 }, (_, index) => `${uniqueToken}-${index}`).join(" "));
+    await page.getByRole("button", { name: "Send message" }).click();
+    await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
+    expect(await sampleMaxCursorCount(page, 300)).toBeLessThanOrEqual(1);
+
+    await targetConversation.getByRole("button").first().click();
+    await expect(chatRegion.getByText(uniqueToken)).toHaveCount(0);
+
+    await sourceConversation.getByRole("button").first().click();
+    await expect.poll(() => eventRequests.length, { timeout: 10_000 }).toBeGreaterThan(0);
+    await expect(chatRegion.getByText(uniqueToken, { exact: false }).first()).toBeVisible({
+      timeout: 15_000
+    });
+    expect(await sampleMaxCursorCount(page, 1_000)).toBeLessThanOrEqual(1);
+    await expect(page.getByTestId("run-activity")).toHaveCount(0);
+    await stopActiveRun(page);
+  }
+);
+
+test(
+  "direct conversation links resume a running stream from stored state",
+  { tag: "@chat-state" },
+  async ({ page }) => {
+    await signInViaUi(page, normalUser);
+    const suffix = Date.now();
+    const sourceTitle = `Direct resume source ${suffix}`;
+    const source = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+      data: { title: sourceTitle }
+    });
+    expect(source.ok()).toBe(true);
+    const conversation = (await source.json()) as { id: string };
+
+    const eventRequests: string[] = [];
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (request.method() === "GET" && isRunEventsPath(url.pathname)) {
+        eventRequests.push(request.url());
+      }
+    });
+
+    await page.goto(conversationPath(conversation.id));
+    const input = page.getByPlaceholder("Message");
+    const chatRegion = page.getByRole("region", { name: "Chat" });
+    const sourceConversation = page
+      .getByTestId("conversation-row")
+      .filter({ hasText: sourceTitle });
+    await expect(sourceConversation).toHaveCount(1);
+
+    const uniqueToken = `direct-resume-token-${suffix}`;
+    await input.fill(
+      Array.from({ length: 100 }, (_, index) => `${uniqueToken}-${index}`).join(" ")
+    );
+    await page.getByRole("button", { name: "Send message" }).click();
+    await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
+
+    await page.goto(conversationPath(conversation.id));
+    const runningConversation = page.getByTestId("conversation-row").filter({
+      has: page.getByTestId("conversation-running-indicator")
+    });
+    await expect(runningConversation).toHaveCount(1);
+    await expect(runningConversation).toHaveAttribute("data-selected", "true");
+    await expect.poll(() => eventRequests.length, { timeout: 10_000 }).toBeGreaterThan(0);
+    await expect(
+      chatRegion.locator('[data-role="assistant"]').filter({ hasText: uniqueToken }).first()
+    ).toBeVisible({
+      timeout: 15_000
+    });
+    await expect(page.getByTestId("run-activity")).toHaveCount(0);
+    await stopActiveRun(page);
+  }
+);
+
+test(
+  "new conversation run completion does not steal the selected conversation",
+  { tag: "@chat-state" },
+  async ({ page }) => {
+    await signInViaUi(page, normalUser);
+    const suffix = Date.now();
+    const targetTitle = `Switch target ${suffix}`;
+    const target = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+      data: { title: targetTitle }
+    });
+    expect(target.ok()).toBe(true);
+
+    await page.goto("/");
+    const input = page.getByPlaceholder("Message");
+    const chatRegion = page.getByRole("region", { name: "Chat" });
+    const sendButton = page.getByRole("button", { name: "Send message" });
+    await expect(sendButton).toBeEnabled();
+    const messageToken = `new-run-isolation-${suffix}`;
+    const messageText = Array.from({ length: 120 }, (_, index) => `${messageToken}-${index}`).join(
+      " "
+    );
+    await input.fill(messageText);
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          new URL(response.url()).pathname === "/api/conversations/runs"
+      ),
+      sendButton.click()
+    ]);
+    await expect(page).toHaveURL(/\/c\/[^/]+$/u);
+    await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
+    expect(await sampleMaxCursorCount(page, 300)).toBeLessThanOrEqual(1);
+    const newConversation = page.getByTestId("conversation-row").filter({ hasText: messageToken });
+    await expect(newConversation.getByTestId("conversation-running-indicator")).toBeVisible();
+
+    const targetConversation = page
+      .getByTestId("conversation-row")
+      .filter({ hasText: targetTitle });
+    await targetConversation.getByRole("button").first().click();
+    await expect(targetConversation).toHaveAttribute("data-selected", "true");
+    await expect(chatRegion.getByText(messageToken, { exact: false })).toHaveCount(0);
+    await expect(page.getByTestId("run-activity")).toHaveCount(0);
+    await page.waitForTimeout(1_000);
+    await expect(targetConversation).toHaveAttribute("data-selected", "true");
+  }
+);
+
+test(
+  "completed background turns are marked unread until viewed",
+  { tag: "@chat-state" },
+  async ({ page }) => {
+    await signInViaUi(page, normalUser);
+    const suffix = Date.now();
+    const sourceTitle = `Unread source ${suffix}`;
+    const targetTitle = `Unread target ${suffix}`;
+    const source = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+      data: { title: sourceTitle }
+    });
+    const target = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+      data: { title: targetTitle }
+    });
+    expect(source.ok()).toBe(true);
+    expect(target.ok()).toBe(true);
+
+    const eventRequests: string[] = [];
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (request.method() === "GET" && isRunEventsPath(url.pathname)) {
+        eventRequests.push(request.url());
+      }
+    });
+
+    await page.goto("/");
+    const input = page.getByPlaceholder("Message");
+    const chatRegion = page.getByRole("region", { name: "Chat" });
+    const sourceConversation = page
+      .getByTestId("conversation-row")
+      .filter({ hasText: sourceTitle });
+    const targetConversation = page
+      .getByTestId("conversation-row")
+      .filter({ hasText: targetTitle });
     await expect(sourceConversation).toHaveCount(1);
     await expect(targetConversation).toHaveCount(1);
 
     await sourceConversation.getByRole("button").first().click();
     const sendButton = page.getByRole("button", { name: "Send message" });
     await expect(sendButton).toBeEnabled();
-    const messageText = `Session isolation ${suffix}`;
-    await input.fill(messageText);
+    const forecastLocation = `Unread background ${suffix}`;
+    await input.fill(
+      `/tool demo.weather_forecast {"location":"${forecastLocation}","days":3,"unit":"celsius","startDate":"2026-06-13"}`
+    );
     await sendButton.click();
-    await expect(chatRegion.getByText(messageText)).toBeVisible();
-    await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
-    await expect.poll(() => chatRequestStarted).toBe(true);
     await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
 
     await targetConversation.getByRole("button").first().click();
-    await expect(chatRegion.getByText(messageText)).toHaveCount(0);
+    await expect(sourceConversation.getByTestId("conversation-unread-indicator")).toBeVisible({
+      timeout: 20_000
+    });
+    await expect(sourceConversation.getByTestId("conversation-unread-label")).toBeVisible();
+
+    const eventRequestCountBeforeView = eventRequests.length;
+    await sourceConversation.getByRole("button").first().click();
+    await page.waitForTimeout(500);
+    expect(eventRequests).toHaveLength(eventRequestCountBeforeView);
+    await expect(sourceConversation.getByTestId("conversation-unread-indicator")).toHaveCount(0);
     await expect(page.getByTestId("run-activity")).toHaveCount(0);
     await expect(page.getByTestId("assistant-cursor")).toHaveCount(0);
-    await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
-
-    await sourceConversation.getByRole("button").first().click();
-    await expect(page.getByTestId("assistant-cursor")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Send message" })).toBeDisabled();
-  } finally {
-    releaseChat();
-    await page.unroute(runStartRoute);
+    const workGroupTrigger = chatRegion.getByTestId("assistant-work-group-trigger").last();
+    await expect(workGroupTrigger).toBeVisible();
+    await workGroupTrigger.click();
+    const toolCallCard = chatRegion.getByTestId("tool-call-card").last();
+    await expect(toolCallCard).toBeVisible();
+    await expect(toolCallCard).toContainText("Completed");
+    await expect(toolCallCard).toContainText(forecastLocation);
+    await expect(chatRegion.getByText("Tool work completed")).toHaveCount(1);
   }
-});
-
-test("switching back to a running conversation resumes one stream indicator", { tag: "@chat-state" }, async ({ page }) => {
-  await signInViaUi(page, normalUser);
-  const suffix = Date.now();
-  const sourceTitle = `Resume source ${suffix}`;
-  const targetTitle = `Resume target ${suffix}`;
-  const source = await page.request.post(`${apiBaseUrl}/api/conversations`, {
-    data: { title: sourceTitle }
-  });
-  const target = await page.request.post(`${apiBaseUrl}/api/conversations`, {
-    data: { title: targetTitle }
-  });
-  expect(source.ok()).toBe(true);
-  expect(target.ok()).toBe(true);
-
-  const eventRequests: string[] = [];
-  page.on("request", (request) => {
-    const url = new URL(request.url());
-    if (request.method() === "GET" && isRunEventsPath(url.pathname)) {
-      eventRequests.push(request.url());
-    }
-  });
-
-  await page.goto("/");
-  const input = page.getByPlaceholder("Message");
-  const chatRegion = page.getByRole("region", { name: "Chat" });
-  const sourceConversation = page.getByTestId("conversation-row").filter({ hasText: sourceTitle });
-  const targetConversation = page.getByTestId("conversation-row").filter({ hasText: targetTitle });
-  await expect(sourceConversation).toHaveCount(1);
-  await expect(targetConversation).toHaveCount(1);
-
-  await sourceConversation.getByRole("button").first().click();
-  const uniqueToken = `resume-token-${suffix}`;
-  await input.fill(
-    Array.from({ length: 90 }, (_, index) => `${uniqueToken}-${index}`).join(" ")
-  );
-  await page.getByRole("button", { name: "Send message" }).click();
-  await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
-  expect(await sampleMaxCursorCount(page, 300)).toBeLessThanOrEqual(1);
-
-  await targetConversation.getByRole("button").first().click();
-  await expect(chatRegion.getByText(uniqueToken)).toHaveCount(0);
-
-  await sourceConversation.getByRole("button").first().click();
-  await expect.poll(() => eventRequests.length, { timeout: 10_000 }).toBeGreaterThan(0);
-  await expect(chatRegion.getByText(uniqueToken, { exact: false }).first()).toBeVisible({
-    timeout: 15_000
-  });
-  expect(await sampleMaxCursorCount(page, 1_000)).toBeLessThanOrEqual(1);
-  await expect(page.getByTestId("run-activity")).toHaveCount(0);
-  await stopActiveRun(page);
-});
-
-test("direct conversation links resume a running stream from stored state", { tag: "@chat-state" }, async ({ page }) => {
-  await signInViaUi(page, normalUser);
-  const suffix = Date.now();
-  const sourceTitle = `Direct resume source ${suffix}`;
-  const source = await page.request.post(`${apiBaseUrl}/api/conversations`, {
-    data: { title: sourceTitle }
-  });
-  expect(source.ok()).toBe(true);
-  const conversation = (await source.json()) as { id: string };
-
-  const eventRequests: string[] = [];
-  page.on("request", (request) => {
-    const url = new URL(request.url());
-    if (request.method() === "GET" && isRunEventsPath(url.pathname)) {
-      eventRequests.push(request.url());
-    }
-  });
-
-  await page.goto(conversationPath(conversation.id));
-  const input = page.getByPlaceholder("Message");
-  const chatRegion = page.getByRole("region", { name: "Chat" });
-  const sourceConversation = page.getByTestId("conversation-row").filter({ hasText: sourceTitle });
-  await expect(sourceConversation).toHaveCount(1);
-
-  const uniqueToken = `direct-resume-token-${suffix}`;
-  await input.fill(Array.from({ length: 100 }, (_, index) => `${uniqueToken}-${index}`).join(" "));
-  await page.getByRole("button", { name: "Send message" }).click();
-  await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
-
-  await page.goto(conversationPath(conversation.id));
-  const runningConversation = page.getByTestId("conversation-row").filter({
-    has: page.getByTestId("conversation-running-indicator")
-  });
-  await expect(runningConversation).toHaveCount(1);
-  await expect(runningConversation).toHaveAttribute("data-selected", "true");
-  await expect.poll(() => eventRequests.length, { timeout: 10_000 }).toBeGreaterThan(0);
-  await expect(chatRegion.locator('[data-role="assistant"]').filter({ hasText: uniqueToken }).first()).toBeVisible({
-    timeout: 15_000
-  });
-  await expect(page.getByTestId("run-activity")).toHaveCount(0);
-  await stopActiveRun(page);
-});
-
-test("new conversation run completion does not steal the selected conversation", { tag: "@chat-state" }, async ({ page }) => {
-  await signInViaUi(page, normalUser);
-  const suffix = Date.now();
-  const targetTitle = `Switch target ${suffix}`;
-  const target = await page.request.post(`${apiBaseUrl}/api/conversations`, {
-    data: { title: targetTitle }
-  });
-  expect(target.ok()).toBe(true);
-
-  await page.goto("/");
-  const input = page.getByPlaceholder("Message");
-  const chatRegion = page.getByRole("region", { name: "Chat" });
-  const sendButton = page.getByRole("button", { name: "Send message" });
-  await expect(sendButton).toBeEnabled();
-  const messageToken = `new-run-isolation-${suffix}`;
-  const messageText = Array.from({ length: 120 }, (_, index) => `${messageToken}-${index}`).join(" ");
-  await input.fill(messageText);
-  await Promise.all([
-    page.waitForResponse(
-      (response) =>
-        response.request().method() === "POST" &&
-        new URL(response.url()).pathname === "/api/conversations/runs"
-    ),
-    sendButton.click()
-  ]);
-  await expect(page).toHaveURL(/\/c\/[^/]+$/u);
-  await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
-  expect(await sampleMaxCursorCount(page, 300)).toBeLessThanOrEqual(1);
-  const newConversation = page.getByTestId("conversation-row").filter({ hasText: messageToken });
-  await expect(newConversation.getByTestId("conversation-running-indicator")).toBeVisible();
-
-  const targetConversation = page.getByTestId("conversation-row").filter({ hasText: targetTitle });
-  await targetConversation.getByRole("button").first().click();
-  await expect(targetConversation).toHaveAttribute("data-selected", "true");
-  await expect(chatRegion.getByText(messageToken, { exact: false })).toHaveCount(0);
-  await expect(page.getByTestId("run-activity")).toHaveCount(0);
-  await page.waitForTimeout(1_000);
-  await expect(targetConversation).toHaveAttribute("data-selected", "true");
-});
-
-test("completed background turns are marked unread until viewed", { tag: "@chat-state" }, async ({ page }) => {
-  await signInViaUi(page, normalUser);
-  const suffix = Date.now();
-  const sourceTitle = `Unread source ${suffix}`;
-  const targetTitle = `Unread target ${suffix}`;
-  const source = await page.request.post(`${apiBaseUrl}/api/conversations`, {
-    data: { title: sourceTitle }
-  });
-  const target = await page.request.post(`${apiBaseUrl}/api/conversations`, {
-    data: { title: targetTitle }
-  });
-  expect(source.ok()).toBe(true);
-  expect(target.ok()).toBe(true);
-
-  const eventRequests: string[] = [];
-  page.on("request", (request) => {
-    const url = new URL(request.url());
-    if (request.method() === "GET" && isRunEventsPath(url.pathname)) {
-      eventRequests.push(request.url());
-    }
-  });
-
-  await page.goto("/");
-  const input = page.getByPlaceholder("Message");
-  const chatRegion = page.getByRole("region", { name: "Chat" });
-  const sourceConversation = page.getByTestId("conversation-row").filter({ hasText: sourceTitle });
-  const targetConversation = page.getByTestId("conversation-row").filter({ hasText: targetTitle });
-  await expect(sourceConversation).toHaveCount(1);
-  await expect(targetConversation).toHaveCount(1);
-
-  await sourceConversation.getByRole("button").first().click();
-  const sendButton = page.getByRole("button", { name: "Send message" });
-  await expect(sendButton).toBeEnabled();
-  const forecastLocation = `Unread background ${suffix}`;
-  await input.fill(
-    `/tool demo.weather_forecast {"location":"${forecastLocation}","days":3,"unit":"celsius","startDate":"2026-06-13"}`
-  );
-  await sendButton.click();
-  await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
-
-  await targetConversation.getByRole("button").first().click();
-  await expect(sourceConversation.getByTestId("conversation-unread-indicator")).toBeVisible({
-    timeout: 20_000
-  });
-  await expect(sourceConversation.getByTestId("conversation-unread-label")).toBeVisible();
-
-  const eventRequestCountBeforeView = eventRequests.length;
-  await sourceConversation.getByRole("button").first().click();
-  await page.waitForTimeout(500);
-  expect(eventRequests).toHaveLength(eventRequestCountBeforeView);
-  await expect(sourceConversation.getByTestId("conversation-unread-indicator")).toHaveCount(0);
-  await expect(page.getByTestId("run-activity")).toHaveCount(0);
-  await expect(page.getByTestId("assistant-cursor")).toHaveCount(0);
-  const workGroupTrigger = chatRegion.getByTestId("assistant-work-group-trigger").last();
-  await expect(workGroupTrigger).toBeVisible();
-  await workGroupTrigger.click();
-  const toolCallCard = chatRegion.getByTestId("tool-call-card").last();
-  await expect(toolCallCard).toBeVisible();
-  await expect(toolCallCard).toContainText("Completed");
-  await expect(toolCallCard).toContainText(forecastLocation);
-  await expect(chatRegion.getByText("Tool work completed")).toHaveCount(1);
-});
+);
 
 test("conversation rail deletes a conversation", async ({ page }) => {
   await signInViaApi(page, normalUser);
   let deleteConversationRequests = 0;
   page.on("request", (request) => {
-    if (request.method() === "DELETE" && /^\/api\/conversations\/[^/]+$/u.test(new URL(request.url()).pathname)) {
+    if (
+      request.method() === "DELETE" &&
+      /^\/api\/conversations\/[^/]+$/u.test(new URL(request.url()).pathname)
+    ) {
       deleteConversationRequests += 1;
     }
   });
@@ -749,10 +829,14 @@ test("conversation rail deletes a conversation", async ({ page }) => {
   await expect(optionsButton).toBeVisible();
   await optionsButton.click();
   await page.getByRole("menuitem", { name: "Delete conversation", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "Delete conversation?", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("dialog", { name: "Delete conversation?", exact: true })
+  ).toBeVisible();
   expect(deleteConversationRequests).toBe(0);
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "Delete conversation?", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Delete conversation?", exact: true })).toHaveCount(
+    0
+  );
 
   await optionsButton.click();
   await page.getByRole("menuitem", { name: "Delete conversation", exact: true }).click();
@@ -770,7 +854,9 @@ test("conversation rail deletes a conversation", async ({ page }) => {
   await expect(conversations).toHaveCount(conversationCountBefore - 1);
 });
 
-test("conversation rail renames from the menu and a later selected-title click", async ({ page }) => {
+test("conversation rail renames from the menu and a later selected-title click", async ({
+  page
+}) => {
   await signInViaApi(page, normalUser);
   const initialTitle = `Rename target ${Date.now()}`;
   const menuTitle = `${initialTitle} menu`;
@@ -794,7 +880,9 @@ test("conversation rail renames from the menu and a later selected-title click",
   await expect(initialRow).toHaveCount(1);
   await expect(initialRow.locator(".lucide-message-square")).toHaveCount(0);
 
-  await initialRow.getByRole("button", { name: `Conversation options for ${initialTitle}` }).click();
+  await initialRow
+    .getByRole("button", { name: `Conversation options for ${initialTitle}` })
+    .click();
   await page.getByRole("menuitem", { name: "Rename conversation", exact: true }).click();
   const titleInput = page.getByRole("textbox", { name: "Conversation title", exact: true });
   await expect(titleInput).toBeFocused();
@@ -868,7 +956,9 @@ test("standalone settings and superadmin tabs are route-backed", async ({ page }
   await page.getByRole("button", { name: "Open administration panel" }).click();
   await expect(page).toHaveURL(/\/admin\/users$/u);
   await expect(
-    page.getByRole("region", { name: "Administration panel" }).getByRole("heading", { name: "Users" })
+    page
+      .getByRole("region", { name: "Administration panel" })
+      .getByRole("heading", { name: "Users" })
   ).toBeVisible();
 
   await page.goto("/settings");
@@ -879,7 +969,9 @@ test("standalone settings and superadmin tabs are route-backed", async ({ page }
   await expect(page).toHaveURL(/\/admin\/users$/u);
   await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
   await expect(
-    page.getByRole("region", { name: "Administration panel" }).getByRole("heading", { name: "Users" })
+    page
+      .getByRole("region", { name: "Administration panel" })
+      .getByRole("heading", { name: "Users" })
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Config" }).click();
@@ -934,10 +1026,14 @@ test("superadmin config follows the German locale", async ({ page }) => {
   await expect(
     form.getByRole("button", { name: "Änderungen speichern", exact: true })
   ).toBeVisible();
-  await expect(form.getByText("Gilt sofort für neue Unterhaltungen.", { exact: true })).toBeVisible();
+  await expect(
+    form.getByText("Gilt sofort für neue Unterhaltungen.", { exact: true })
+  ).toBeVisible();
 });
 
-test("superadmin manages config assets with validation and conflict protection", async ({ page }) => {
+test("superadmin manages config assets with validation and conflict protection", async ({
+  page
+}) => {
   test.setTimeout(60_000);
   await signInViaApi(page, superadminUser);
   const originalResponse = await page.request.get(`${apiBaseUrl}/api/admin/config/export`);
@@ -953,8 +1049,7 @@ test("superadmin manages config assets with validation and conflict protection",
   );
   expect(originalResearchAgent).toBeDefined();
 
-  const versionLabel = (version: number) =>
-    page.getByText(`Version ${version}`, { exact: false });
+  const versionLabel = (version: number) => page.getByText(`Version ${version}`, { exact: false });
   const form = () => page.locator("form");
   const fieldset = (name: string) => form().getByRole("group", { name, exact: true });
   const fieldControl = (label: string, selector: string) =>
@@ -1011,11 +1106,11 @@ test("superadmin manages config assets with validation and conflict protection",
     await fieldControl("Content", "textarea").fill("# Verify config assets");
     await form().getByRole("button", { name: "Create skill", exact: true }).click();
     await expect(versionLabel(original.version + 1)).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Config E2E skill", exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Config E2E skill", exact: true })
+    ).toBeVisible();
     await expect(fieldControl("Title", "input")).toHaveValue("Config E2E skill");
-    await expect(fieldControl("Description", "input")).toHaveValue(
-      "Verifies config asset editing"
-    );
+    await expect(fieldControl("Description", "input")).toHaveValue("Verifies config asset editing");
     await expect(fieldControl("Content", "textarea")).toHaveValue("# Verify config assets");
 
     await clickAgent();
@@ -1043,10 +1138,9 @@ test("superadmin manages config assets with validation and conflict protection",
       .getByRole("button", { name: "Delete", exact: true })
       .click();
     await expect(
-      page.getByText(
-        "Agent 'research_assistant' references missing skill 'config_e2e_skill'",
-        { exact: true }
-      )
+      page.getByText("Agent 'research_assistant' references missing skill 'config_e2e_skill'", {
+        exact: true
+      })
     ).toBeVisible();
     await expect(versionLabel(original.version + 2)).toBeVisible();
 
@@ -1177,7 +1271,9 @@ test("admin sees billed usage and can manage users", async ({ page }) => {
   };
   const dialog = page.getByRole("dialog", { name: "New user" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel("Access level").locator("option[value=\"superadmin\"]")).toHaveCount(0);
+  await expect(dialog.getByLabel("Access level").locator('option[value="superadmin"]')).toHaveCount(
+    0
+  );
   await dialog.getByLabel("Display label").fill(createdUser.displayLabel);
   await dialog.getByLabel("Email").fill(createdUser.email);
   await dialog.getByLabel("Initial password").fill(createdUser.password);
@@ -1357,7 +1453,9 @@ test("superadmin creates a user with a password from the users panel", async ({ 
     { email: createdUser.email, password: createdUser.password },
     { alreadyOnLogin: true }
   );
-  await expect(page.getByRole("button", { name: `${createdUser.displayLabel} account` })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: `${createdUser.displayLabel} account` })
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: "Open administration panel" })).toHaveCount(0);
 });
 
@@ -1462,11 +1560,21 @@ async function signInViaApi(page: Page, user: { email: string; password: string 
 }
 
 async function ensureDarkMode(page: Page): Promise<void> {
-  const isDark = await page.locator("main").first().evaluate((element) => element.classList.contains("dark"));
+  const isDark = await page
+    .locator("main")
+    .first()
+    .evaluate((element) => element.classList.contains("dark"));
   if (!isDark) {
     await page.getByRole("button", { name: "Switch to dark theme" }).click();
   }
-  await expect.poll(() => page.locator("main").first().evaluate((element) => element.classList.contains("dark"))).toBe(true);
+  await expect
+    .poll(() =>
+      page
+        .locator("main")
+        .first()
+        .evaluate((element) => element.classList.contains("dark"))
+    )
+    .toBe(true);
 }
 
 async function sampleMaxCursorCount(page: Page, durationMs: number): Promise<number> {

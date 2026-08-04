@@ -6,7 +6,9 @@ export interface DevelopmentAuthUsers {
   defaultUserId: string;
 }
 
-export function getDevelopmentAuthUsers(config: ClientInstanceConfig): DevelopmentAuthUsers | undefined {
+export function getDevelopmentAuthUsers(
+  config: ClientInstanceConfig
+): DevelopmentAuthUsers | undefined {
   const development = config.auth.development;
   if (!development?.enabled) {
     return undefined;
@@ -14,7 +16,10 @@ export function getDevelopmentAuthUsers(config: ClientInstanceConfig): Developme
 
   const users = development.users.length > 0 ? development.users : [development.user];
   if (users.length === 0) {
-    throw new AppError("VALIDATION_FAILED", "Development auth is enabled without any configured users");
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "Development auth is enabled without any configured users"
+    );
   }
 
   const seen = new Set<string>();

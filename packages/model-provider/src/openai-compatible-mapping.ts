@@ -312,11 +312,7 @@ export function toOpenAiResponsesInput(
     (item) => !("role" in item && item.role === "system")
   );
   const insertionIndex = firstNonSystemIndex < 0 ? input.length : firstNonSystemIndex;
-  return [
-    ...input.slice(0, insertionIndex),
-    compactionItem,
-    ...input.slice(insertionIndex)
-  ];
+  return [...input.slice(0, insertionIndex), compactionItem, ...input.slice(insertionIndex)];
 }
 
 export function readOpenAiResponsesContinuationItems(
@@ -365,9 +361,7 @@ export function createOpenAiResponsesContinuation(
   const compactionItem =
     latestCompactionItem ?? readOpenAiResponsesCompactionItem(providerId, previous);
   const encryptedReasoningItems = [
-    ...(latestCompactionItem
-      ? []
-      : readOpenAiResponsesContinuationItems(providerId, previous)),
+    ...(latestCompactionItem ? [] : readOpenAiResponsesContinuationItems(providerId, previous)),
     ...readEncryptedReasoningItems(payload.output ?? [])
   ];
   return compactionItem || encryptedReasoningItems.length > 0
@@ -416,9 +410,7 @@ function readEncryptedReasoningItems(
   return entries;
 }
 
-function isOpenAiResponsesReasoningItem(
-  value: unknown
-): value is OpenAiResponsesReasoningItem {
+function isOpenAiResponsesReasoningItem(value: unknown): value is OpenAiResponsesReasoningItem {
   return (
     isUnknownRecord(value) &&
     value.type === "reasoning" &&
@@ -426,9 +418,7 @@ function isOpenAiResponsesReasoningItem(
   );
 }
 
-function isOpenAiResponsesCompactionItem(
-  value: unknown
-): value is OpenAiResponsesCompactionItem {
+function isOpenAiResponsesCompactionItem(value: unknown): value is OpenAiResponsesCompactionItem {
   return (
     isUnknownRecord(value) &&
     value.type === "compaction" &&
@@ -575,8 +565,10 @@ function readOpenAiWebSource(
     return undefined;
   }
   const title = typeof value.title === "string" && value.title.length > 0 ? value.title : undefined;
-  const snippet = typeof value.snippet === "string" && value.snippet.length > 0 ? value.snippet : undefined;
-  const query = typeof value.query === "string" && value.query.length > 0 ? value.query : defaults.query;
+  const snippet =
+    typeof value.snippet === "string" && value.snippet.length > 0 ? value.snippet : undefined;
+  const query =
+    typeof value.query === "string" && value.query.length > 0 ? value.query : defaults.query;
   const resultPosition =
     typeof value.resultPosition === "number" && Number.isInteger(value.resultPosition)
       ? value.resultPosition
@@ -592,7 +584,9 @@ function readOpenAiWebSource(
   };
 }
 
-function readCitationRange(value: Record<string, unknown>): Pick<MessageCitation, "characterRange"> {
+function readCitationRange(
+  value: Record<string, unknown>
+): Pick<MessageCitation, "characterRange"> {
   const start =
     typeof value.start_index === "number" && Number.isInteger(value.start_index)
       ? value.start_index

@@ -138,10 +138,7 @@ export type ModelCompletionStreamEvent =
 
 export interface ModelProvider {
   readonly id: string;
-  complete(
-    request: ModelCompletionRequest,
-    context: RuntimeCallContext
-  ): Promise<ModelCompletion>;
+  complete(request: ModelCompletionRequest, context: RuntimeCallContext): Promise<ModelCompletion>;
   stream?(
     request: ModelCompletionRequest,
     context: RuntimeCallContext
@@ -164,5 +161,7 @@ export function modelContentImages(
   if (typeof content === "string") {
     return [];
   }
-  return content.filter((part): part is Extract<ModelContentPart, { type: "image" }> => part.type === "image");
+  return content.filter(
+    (part): part is Extract<ModelContentPart, { type: "image" }> => part.type === "image"
+  );
 }

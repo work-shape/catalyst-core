@@ -1,23 +1,19 @@
 import { useState } from "react";
-import { AssistantChatPanel } from "./assistant-chat-panel";
+import { AssistantRuntimePanel } from "./assistant/assistant-runtime-panel";
 import { AttachmentContentProvider } from "./attachment-content";
 import { ChatDropOverlay } from "./chat-file-dropzone";
 import type { ChatShellProps } from "./chat-shell";
 import { ControlPlaneRoutes } from "./control-plane/control-plane-routes";
 import { TranslationProvider } from "./i18n";
 import { LoginPanel } from "./login-panel";
-import {
-  ResourcesPanel,
-  ResourcesPanelToggle,
-  useResourcesPanelState
-} from "./resources-panel";
+import { ResourcesPanel, ResourcesPanelToggle, useResourcesPanelState } from "./resources-panel";
 import { isResourcesPanelAvailable } from "./resources-panel-model";
 import { ToolDisplayPanel, useToolDisplayPanel } from "./tool-display-panel";
 import { cn } from "./ui/cn";
-import { UserMenu } from "./user-menu";
-import { ConfigCheckPanel, SessionCheckPanel, WorkspaceChrome } from "./workspace-chrome";
-import { WorkspaceRail } from "./workspace-rail";
-import { type WorkspaceRoute, type WorkspaceRouteChangeOptions } from "./workspace-route";
+import { UserMenu } from "./workspace/user-menu";
+import { ConfigCheckPanel, SessionCheckPanel, WorkspaceChrome } from "./workspace/workspace-chrome";
+import { WorkspaceRail } from "./workspace/workspace-rail";
+import { type WorkspaceRoute, type WorkspaceRouteChangeOptions } from "./workspace/workspace-route";
 import { useWorkspaceChatModel } from "./workspace/workspace-chat-model";
 import { WorkspaceProviders } from "./workspace/workspace-providers";
 
@@ -60,8 +56,7 @@ function ChatWorkspaceContent({
 }: Pick<ChatWorkspaceProps, "adminPanel" | "manageDocumentTitle" | "className">) {
   const model = useWorkspaceChatModel({ adminPanel, manageDocumentTitle });
   const [displayPanelWidth, setDisplayPanelWidth] = useState(0);
-  const resourcesEnabled =
-    model.config.config?.features.resources.enabled ?? false;
+  const resourcesEnabled = model.config.config?.features.resources.enabled ?? false;
   const resourcesConversationId = model.route.selectedConversationId;
   const resourcesAvailable = isResourcesPanelAvailable({
     enabled: resourcesEnabled,
@@ -123,7 +118,9 @@ function ChatWorkspaceContent({
       <main
         className={cn(
           "relative grid h-dvh w-full min-h-0 overflow-hidden bg-background text-foreground transition-colors md:grid-rows-[minmax(0,1fr)] max-md:grid-cols-1",
-          model.chrome.sidebarOpen ? "md:grid-cols-[20rem_minmax(0,1fr)]" : "md:grid-cols-[minmax(0,1fr)]",
+          model.chrome.sidebarOpen
+            ? "md:grid-cols-[20rem_minmax(0,1fr)]"
+            : "md:grid-cols-[minmax(0,1fr)]",
           isStaging && "pt-6",
           model.config.resolvedThemeMode === "dark" && "dark",
           className
@@ -168,8 +165,7 @@ function ChatWorkspaceContent({
         <WorkspaceChrome
           agents={model.config.config.agents}
           contextLabel={
-            model.config.config.ui.clientName ??
-            model.config.config.clientInstance.displayName
+            model.config.config.ui.clientName ?? model.config.config.clientInstance.displayName
           }
           displayPanelOpen={model.toolDisplay.open}
           displayPanelWidth={displayPanelWidth}
@@ -202,7 +198,7 @@ function ChatWorkspaceContent({
                   onDragLeave={chat.fileDropzone.onChatDragLeave}
                   onDrop={chat.fileDropzone.onChatDrop}
                 >
-                  <AssistantChatPanel chat={chat} />
+                  <AssistantRuntimePanel chat={chat} />
                   {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
                   {resourcesAvailable && resourcesConversationId ? (
                     resourcesVisible ? (

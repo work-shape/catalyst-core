@@ -327,12 +327,7 @@ export const conversationResourceListResponseSchema = z.object({
   resources: z.array(conversationResourceListItemSchema)
 });
 
-const structuredDataValueSchema = z.union([
-  z.string(),
-  z.number(),
-  z.boolean(),
-  z.null()
-]);
+const structuredDataValueSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 
 export const structuredDataResourceResponseSchema = z.object({
   id: z.string(),
@@ -365,9 +360,7 @@ export const structuredDataResourceResponseSchema = z.object({
   )
 });
 
-export type StructuredDataResourceResponse = z.infer<
-  typeof structuredDataResourceResponseSchema
->;
+export type StructuredDataResourceResponse = z.infer<typeof structuredDataResourceResponseSchema>;
 
 export const artifactPreviewImagePageSchema = z.object({
   artifactId: z.string(),
@@ -732,10 +725,12 @@ export const agentRunProjectionSchema = z.object({
       open: z.boolean()
     })
   ),
-  preparingTool: z.object({
-    toolCallId: z.string(),
-    toolName: z.string()
-  }).optional(),
+  preparingTool: z
+    .object({
+      toolCallId: z.string(),
+      toolName: z.string()
+    })
+    .optional(),
   activeToolCalls: z.array(
     z.object({
       toolCallId: z.string(),
@@ -963,10 +958,7 @@ export const servicePrincipalPermissionSchema = z.enum([
   "config_assets.release"
 ]);
 
-export const apiCredentialScopeSchema = z.enum([
-  "config_assets:read",
-  "config_assets:release"
-]);
+export const apiCredentialScopeSchema = z.enum(["config_assets:read", "config_assets:release"]);
 
 export const apiCredentialSchema = z.object({
   id: z.string(),
@@ -1215,7 +1207,7 @@ export const modelUsageBillableCostSchema = z.object({
   webSearchBillableCostMicros: z.number().int().nonnegative().optional(),
   billableCostMicros: z.number().int().nonnegative().optional(),
   complete: z.boolean(),
-  webSearchCostVisible: z.boolean(),
+  webSearchCostVisible: z.boolean()
 });
 
 export const modelUsageBillableCostSummarySchema = modelUsageBillableCostSchema.extend({
@@ -1647,7 +1639,9 @@ export type ConversationResourceListResponse = z.infer<
 >;
 export type AgentRuntimeMessageMetadata = z.infer<typeof agentRuntimeMessageMetadataSchema>;
 export type UserMessageMetadata = z.infer<typeof userMessageMetadataSchema>;
-export type AssistantToolCallsMessageMetadata = z.infer<typeof assistantToolCallsMessageMetadataSchema>;
+export type AssistantToolCallsMessageMetadata = z.infer<
+  typeof assistantToolCallsMessageMetadataSchema
+>;
 export type AssistantFinalMessageMetadata = z.infer<typeof assistantFinalMessageMetadataSchema>;
 export type ToolResultMessageMetadata = z.infer<typeof toolResultMessageMetadataSchema>;
 export type ClientBranding = z.infer<typeof clientBrandingSchema>;
@@ -1704,9 +1698,7 @@ export type AuditActivityActor = z.infer<typeof auditActivityActorSchema>;
 export type AuditActivityTarget = z.infer<typeof auditActivityTargetSchema>;
 export type ModelUsageVolumeEvent = z.infer<typeof modelUsageVolumeEventSchema>;
 export type ModelUsageBillableCost = z.infer<typeof modelUsageBillableCostSchema>;
-export type ModelUsageBillableCostSummary = z.infer<
-  typeof modelUsageBillableCostSummarySchema
->;
+export type ModelUsageBillableCostSummary = z.infer<typeof modelUsageBillableCostSummarySchema>;
 export type ModelUsageEvent = z.infer<typeof modelUsageEventSchema>;
 export type ModelUsageDailyBucket = z.infer<typeof modelUsageDailyBucketSchema>;
 export type ModelUsageMonthlyBucket = z.infer<typeof modelUsageMonthlyBucketSchema>;

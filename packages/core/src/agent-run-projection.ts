@@ -6,10 +6,7 @@ import type {
   RunObservation
 } from "./agent-runtime";
 
-export function projectAgentRun(
-  run: AgentRun,
-  observations: RunObservation[]
-): AgentRunProjection {
+export function projectAgentRun(run: AgentRun, observations: RunObservation[]): AgentRunProjection {
   let projection = createAgentRunProjection(run);
   for (const observation of observations) {
     projection = applyAgentRunObservation(projection, observation);
@@ -168,7 +165,9 @@ function appendText(parts: AgentRunProjection["parts"], delta: string): void {
 
 function reconcileCompletedText(parts: AgentRunProjection["parts"], completedText: string): void {
   const observedText = parts
-    .filter((part): part is Extract<AgentRunProjectionPart, { type: "text" }> => part.type === "text")
+    .filter(
+      (part): part is Extract<AgentRunProjectionPart, { type: "text" }> => part.type === "text"
+    )
     .map((part) => part.text)
     .join("");
   if (observedText.length === 0) {
@@ -204,17 +203,15 @@ function upsertToolCall(
   upsertPart(parts, { type: "tool_call", ...toolCall });
 }
 
-function upsertPart(
-  parts: AgentRunProjection["parts"],
-  part: AgentRunProjectionPart
-): void {
-  const index = parts.findIndex((candidate) =>
-    candidate.type === part.type &&
-    (part.type === "tool_call"
-      ? candidate.type === "tool_call" && candidate.toolCallId === part.toolCallId
-      : part.type === "reasoning"
-        ? candidate.type === "reasoning" && candidate.id === part.id
-        : false)
+function upsertPart(parts: AgentRunProjection["parts"], part: AgentRunProjectionPart): void {
+  const index = parts.findIndex(
+    (candidate) =>
+      candidate.type === part.type &&
+      (part.type === "tool_call"
+        ? candidate.type === "tool_call" && candidate.toolCallId === part.toolCallId
+        : part.type === "reasoning"
+          ? candidate.type === "reasoning" && candidate.id === part.id
+          : false)
   );
   if (index >= 0) {
     parts[index] = part;
@@ -230,9 +227,7 @@ function findToolCallInput(
   return toolCalls.find((entry) => entry.toolCallId === toolCallId)?.input;
 }
 
-function toToolOutput(
-  event: Extract<AgentRuntimeEvent, { type: "tool_call_completed" }>
-): unknown {
+function toToolOutput(event: Extract<AgentRuntimeEvent, { type: "tool_call_completed" }>): unknown {
   return event.result.status === "success"
     ? {
         status: "success",
@@ -248,14 +243,14 @@ function toToolOutput(
       };
 }
 
-function toToolError(
-  event: Extract<AgentRuntimeEvent, { type: "tool_call_failed" }>
-): string {
+function toToolError(event: Extract<AgentRuntimeEvent, { type: "tool_call_failed" }>): string {
   return event.result.status === "success" ? "Tool call failed" : event.result.error.message;
 }
 
 function isTerminalEvent(event: AgentRuntimeEvent): boolean {
-  return event.type === "run_completed" || event.type === "run_cancelled" || event.type === "run_failed";
+  return (
+    event.type === "run_completed" || event.type === "run_cancelled" || event.type === "run_failed"
+  );
 }
 
 function statusAfterEvent(

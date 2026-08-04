@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { asClientInstanceId, isJsonObject, type ToolExecutionContext } from "@vivd-catalyst/core";
-import { prepareVisualizationHtml, showViewTool, showViewToolDefinition } from "@vivd-catalyst/tool-execution";
+import {
+  prepareVisualizationHtml,
+  showViewTool,
+  showViewToolDefinition
+} from "@vivd-catalyst/tool-execution";
 
 describe("built-in platform tools", () => {
   it("renders model-authored HTML through display without echoing HTML into model-visible output", async () => {
@@ -50,7 +54,9 @@ describe("built-in platform tools", () => {
       throw new Error("Expected show_view to succeed");
     }
 
-    expect(readCsp(result.display.data?.html)).toContain("script-src https://cdn.tailwindcss.com https://unpkg.com https:");
+    expect(readCsp(result.display.data?.html)).toContain(
+      "script-src https://cdn.tailwindcss.com https://unpkg.com https:"
+    );
     expect(showViewTool.description).toContain("External HTTPS script sources are configured");
   });
 
@@ -177,7 +183,9 @@ describe("built-in platform tools", () => {
     const html = prepareVisualizationHtml("<section>Status</section>");
 
     expect(html).toContain('const vcThemeColorNames=["background"');
-    expect(html).toContain('"destructive","success","warning","info","chart-1","chart-2","chart-3","chart-4","chart-5","border"');
+    expect(html).toContain(
+      '"destructive","success","warning","info","chart-1","chart-2","chart-3","chart-4","chart-5","border"'
+    );
     expect(html).toContain("--success: #047857;");
     expect(html).toContain("--warning: #b45309;");
     expect(html).toContain("--info: #0369a1;");
@@ -189,7 +197,9 @@ describe("built-in platform tools", () => {
     expect(html).toContain('success:color("success")');
     expect(html).toContain('warning:color("warning")');
     expect(html).toContain('info:color("info")');
-    expect(html).toContain('function chartPalette(){return[color("chart-1"),color("chart-2"),color("chart-3"),color("chart-4"),color("chart-5")]}');
+    expect(html).toContain(
+      'function chartPalette(){return[color("chart-1"),color("chart-2"),color("chart-3"),color("chart-4"),color("chart-5")]}'
+    );
     expect(html).toContain("window.vivdCatalystTheme={color,chartColors,chartPalette}");
   });
 
@@ -215,13 +225,17 @@ describe("built-in platform tools", () => {
   });
 
   it("rejects unsafe configured script sources", () => {
-    expect(showViewToolDefinition.configSchema?.safeParse({
-      allowedScriptSrc: ["http://cdn.jsdelivr.net"]
-    }).success).toBe(false);
+    expect(
+      showViewToolDefinition.configSchema?.safeParse({
+        allowedScriptSrc: ["http://cdn.jsdelivr.net"]
+      }).success
+    ).toBe(false);
 
-    expect(showViewToolDefinition.configSchema?.safeParse({
-      allowedScriptSrc: ["https://cdn.jsdelivr.net/npm/chart.js?leak=value"]
-    }).success).toBe(false);
+    expect(
+      showViewToolDefinition.configSchema?.safeParse({
+        allowedScriptSrc: ["https://cdn.jsdelivr.net/npm/chart.js?leak=value"]
+      }).success
+    ).toBe(false);
   });
 });
 
@@ -247,7 +261,10 @@ function readCsp(html: string | undefined): string {
 
 function readCspDirective(html: string | undefined, directiveName: string): string[] {
   const csp = readCsp(html);
-  const directive = csp.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${directiveName} `));
+  const directive = csp
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${directiveName} `));
   if (!directive) {
     throw new Error(`Expected rendered HTML CSP to include ${directiveName}`);
   }

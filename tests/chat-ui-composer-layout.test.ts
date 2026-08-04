@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shouldExpandComposer } from "../packages/chat-ui/src/assistant-composer";
+import { shouldExpandComposer } from "../packages/chat-ui/src/assistant/assistant-composer";
 
 describe("assistant composer layout", () => {
   it("moves controls below the input for multiline drafts", () => {

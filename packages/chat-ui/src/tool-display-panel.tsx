@@ -70,13 +70,16 @@ export function ToolDisplayPanelProvider({ children }: { children: ReactNode }) 
     setOpen(true);
   }, []);
 
-  const showOnce = useCallback((nextEntry: ToolDisplayPanelEntry) => {
-    if (!autoShowTracker.shouldAutoShow(nextEntry.key)) {
-      return;
-    }
-    setEntry(nextEntry);
-    setOpen(true);
-  }, [autoShowTracker]);
+  const showOnce = useCallback(
+    (nextEntry: ToolDisplayPanelEntry) => {
+      if (!autoShowTracker.shouldAutoShow(nextEntry.key)) {
+        return;
+      }
+      setEntry(nextEntry);
+      setOpen(true);
+    },
+    [autoShowTracker]
+  );
 
   const close = useCallback(() => {
     setOpen(false);
@@ -95,7 +98,9 @@ export function ToolDisplayPanelProvider({ children }: { children: ReactNode }) 
     [close, entry, open, show, showOnce]
   );
 
-  return <ToolDisplayPanelContext.Provider value={value}>{children}</ToolDisplayPanelContext.Provider>;
+  return (
+    <ToolDisplayPanelContext.Provider value={value}>{children}</ToolDisplayPanelContext.Provider>
+  );
 }
 
 export function useToolDisplayPanel(): ToolDisplayPanelContextValue {
@@ -166,15 +171,18 @@ export function ToolDisplayPanel({
     [availableWidth, clampedPanelWidth]
   );
 
-  const onResizeKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
-      return;
-    }
-    event.preventDefault();
-    setPanelWidth((currentWidth) =>
-      clampPanelWidth(currentWidth + (event.key === "ArrowLeft" ? 24 : -24), availableWidth)
-    );
-  }, [availableWidth]);
+  const onResizeKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+        return;
+      }
+      event.preventDefault();
+      setPanelWidth((currentWidth) =>
+        clampPanelWidth(currentWidth + (event.key === "ArrowLeft" ? 24 : -24), availableWidth)
+      );
+    },
+    [availableWidth]
+  );
 
   useEffect(() => {
     const parent = panelRef.current?.parentElement;
@@ -246,11 +254,7 @@ export function ToolDisplayPanel({
             onKeyDown={onResizeKeyDown}
           />
         ) : null}
-        <ToolDisplayPanelFrame
-          entry={entry}
-          onClose={close}
-          style={innerWidthStyle}
-        />
+        <ToolDisplayPanelFrame entry={entry} onClose={close} style={innerWidthStyle} />
       </aside>
 
       <button
@@ -293,7 +297,9 @@ export function ToolDisplayPanelFrame({
     <div className="flex h-full min-h-0 flex-col bg-card text-card-foreground" style={style}>
       <div className="flex h-16 min-h-16 items-start gap-3 border-b px-4 py-3">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{entry?.title ?? t("displayPanelFallbackTitle")}</p>
+          <p className="truncate text-sm font-semibold">
+            {entry?.title ?? t("displayPanelFallbackTitle")}
+          </p>
           {entry?.subtitle ? (
             <p className="mt-0.5 truncate text-xs text-muted-foreground">{entry.subtitle}</p>
           ) : null}

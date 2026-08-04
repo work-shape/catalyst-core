@@ -135,7 +135,7 @@ export type ShowViewToolConfig = z.input<typeof showViewConfigSchema>;
 type ResolvedShowViewToolConfig = z.output<typeof showViewConfigSchema>;
 
 const showViewColorGuidance =
-  'Use theme tokens for structure/layout: bg-background text-foreground, bg-card text-card-foreground border-border, text-muted-foreground, bg-primary text-primary-foreground. Use semantic tokens for status/severity/priority: text-success, text-warning, text-destructive, text-info, including translucent fills/borders like bg-success/10 border-success/30. Example: <span class="rounded-md border border-warning/30 bg-warning/10 px-2 py-1 text-warning">needs review</span>. Do not make the view monochrome when status, severity, or priority matters. Never use color as the only signal -- pair it with labels or icons. Do not hard-code surfaces/text with bg-white, text-gray-*/text-slate-*, #fff, #ffffff, #111827, fixed dark backgrounds, or !important color overrides. For categorical or series data, use the ordered palette window.vivdCatalystTheme.chartPalette() (an array) or Tailwind classes text-chart-1 through text-chart-5 / bg-chart-2/20; window.vivdCatalystTheme.chartColors() returns a named object of theme colors, so never index it like an array. For canvas or Chart.js charts, read colors from window.vivdCatalystTheme.chartColors() (includes success, warning, info) or window.vivdCatalystTheme.color(\'foreground\') for text, grid, and borders.';
+  "Use theme tokens for structure/layout: bg-background text-foreground, bg-card text-card-foreground border-border, text-muted-foreground, bg-primary text-primary-foreground. Use semantic tokens for status/severity/priority: text-success, text-warning, text-destructive, text-info, including translucent fills/borders like bg-success/10 border-success/30. Example: <span class=\"rounded-md border border-warning/30 bg-warning/10 px-2 py-1 text-warning\">needs review</span>. Do not make the view monochrome when status, severity, or priority matters. Never use color as the only signal -- pair it with labels or icons. Do not hard-code surfaces/text with bg-white, text-gray-*/text-slate-*, #fff, #ffffff, #111827, fixed dark backgrounds, or !important color overrides. For categorical or series data, use the ordered palette window.vivdCatalystTheme.chartPalette() (an array) or Tailwind classes text-chart-1 through text-chart-5 / bg-chart-2/20; window.vivdCatalystTheme.chartColors() returns a named object of theme colors, so never index it like an array. For canvas or Chart.js charts, read colors from window.vivdCatalystTheme.chartColors() (includes success, warning, info) or window.vivdCatalystTheme.color('foreground') for text, grid, and borders.";
 
 const showViewLayoutGuidance =
   "The view is embedded flush in the chat, so it must not frame itself: no outer page padding or margin (no p-*/px-*/py-*/m-* on the outermost element, no max-width wrapper, no centering container), and no heading that repeats the title. Start directly with the content and let it span the full width. The view grows to its full content height and never scrolls inside itself, so do not set h-screen, min-h-screen, fixed heights, or overflow-y-auto on the outermost element.";
@@ -155,7 +155,12 @@ function createShowViewInputSchema(scriptSourceHint: string) {
       .describe(
         "How prominently the user interface should render the HTML. Use side_panel when the user should keep chatting while the view opens in the right preview panel."
       ),
-    title: z.string().min(1).max(160).describe("Optional short title for the rendered display.").optional()
+    title: z
+      .string()
+      .min(1)
+      .max(160)
+      .describe("Optional short title for the rendered display.")
+      .optional()
   });
 }
 
@@ -179,7 +184,9 @@ export const showViewToolDefinition = defineConfiguredTool({
 
 export const showViewTool = createShowViewTool();
 
-export function createShowViewTool(config: ShowViewToolConfig = showViewConfigSchema.parse({})): AnyToolDefinition {
+export function createShowViewTool(
+  config: ShowViewToolConfig = showViewConfigSchema.parse({})
+): AnyToolDefinition {
   const parsedConfig = showViewConfigSchema.parse(config);
   const allowedScriptSrc = uniqueScriptSources(parsedConfig.allowedScriptSrc);
   const scriptSourceHint = externalScriptSourceHint(allowedScriptSrc, parsedConfig.externalRuntime);
@@ -230,15 +237,24 @@ export function createShowViewTool(config: ShowViewToolConfig = showViewConfigSc
   });
 }
 
-export function prepareVisualizationHtml(html: string, config: ShowViewToolConfig = showViewConfigSchema.parse({})): string {
+export function prepareVisualizationHtml(
+  html: string,
+  config: ShowViewToolConfig = showViewConfigSchema.parse({})
+): string {
   const parsedConfig = showViewConfigSchema.parse(config);
   const sanitizedHtml = stripVisualizationContentSecurityPolicyMeta(html);
-  const visualizationRuntimeHead = createVisualizationRuntimeHead(parsedConfig, collectInlineScriptHashSources(sanitizedHtml));
+  const visualizationRuntimeHead = createVisualizationRuntimeHead(
+    parsedConfig,
+    collectInlineScriptHashSources(sanitizedHtml)
+  );
   if (/<html(?:\s|>)/iu.test(sanitizedHtml)) {
     if (/<head(?:\s|>)/iu.test(sanitizedHtml)) {
       return sanitizedHtml.replace(/<head([^>]*)>/iu, `<head$1>\n${visualizationRuntimeHead}`);
     }
-    return sanitizedHtml.replace(/<html([^>]*)>/iu, `<html$1><head>${visualizationRuntimeHead}</head>`);
+    return sanitizedHtml.replace(
+      /<html([^>]*)>/iu,
+      `<html$1><head>${visualizationRuntimeHead}</head>`
+    );
   }
   return [
     "<!doctype html>",
@@ -304,7 +320,9 @@ function createVisualizationContentSecurityPolicy(
 }
 
 function uniqueScriptSources(sources: string[]): string[] {
-  return Array.from(new Set(sources.map((source) => normalizeVisualizationScriptSource(source)).filter(isString)));
+  return Array.from(
+    new Set(sources.map((source) => normalizeVisualizationScriptSource(source)).filter(isString))
+  );
 }
 
 function uniqueScriptHashes(sources: string[]): string[] {
@@ -339,13 +357,7 @@ function normalizeVisualizationScriptSource(value: string): string | undefined {
     return undefined;
   }
 
-  if (
-    url.protocol !== "https:" ||
-    url.username ||
-    url.password ||
-    url.search ||
-    url.hash
-  ) {
+  if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) {
     return undefined;
   }
 

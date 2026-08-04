@@ -6,7 +6,9 @@ interface AttachmentContentContextValue {
   selectedConversationId: string | undefined;
 }
 
-const AttachmentContentContext = createContext<AttachmentContentContextValue | undefined>(undefined);
+const AttachmentContentContext = createContext<AttachmentContentContextValue | undefined>(
+  undefined
+);
 
 export function AttachmentContentProvider({
   client,

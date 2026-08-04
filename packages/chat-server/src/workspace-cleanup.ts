@@ -32,7 +32,10 @@ export class ExecutionWorkspaceCleanupWorkflow {
   private readonly batchSize: number;
   private readonly now: () => Date;
 
-  constructor(private readonly options: ChatServerOptions, jobOptions: ExecutionWorkspaceCleanupJobOptions = {}) {
+  constructor(
+    private readonly options: ChatServerOptions,
+    jobOptions: ExecutionWorkspaceCleanupJobOptions = {}
+  ) {
     if (!options.executionWorkspaceCleanup) {
       throw new Error("Execution workspace cleanup is not configured");
     }
@@ -160,7 +163,9 @@ export async function cleanupExecutionWorkspaceForConversation(
     throw new Error("Execution workspace object deletion is not configured");
   }
   if (cleanup.objects) {
-    await Promise.all(pending.fileObjectKeys.map((objectKey) => cleanup.objects!.deleteObject(objectKey)));
+    await Promise.all(
+      pending.fileObjectKeys.map((objectKey) => cleanup.objects!.deleteObject(objectKey))
+    );
   }
   const deleted = await cleanup.store.markExecutionWorkspaceDeleted({
     clientInstanceId: options.clientInstanceId,

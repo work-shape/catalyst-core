@@ -41,12 +41,7 @@ export interface WorkspaceFile {
 }
 
 export type WorkspaceCommandStatus =
-  | "queued"
-  | "running"
-  | "cancelling"
-  | "completed"
-  | "failed"
-  | "cancelled";
+  "queued" | "running" | "cancelling" | "completed" | "failed" | "cancelled";
 
 export interface WorkspaceCommandLimits {
   timeoutSeconds: number;
@@ -102,11 +97,7 @@ export interface WorkspaceCommandResult {
 }
 
 export type WorkspaceCommandFailureCategory =
-  | "runner_error"
-  | "timeout"
-  | "cancelled"
-  | "stale_lease"
-  | "internal_error";
+  "runner_error" | "timeout" | "cancelled" | "stale_lease" | "internal_error";
 
 export interface WorkspaceCommandError {
   code: string;
@@ -312,13 +303,17 @@ export interface WorkspaceCommandStore {
     clientInstanceId: ClientInstanceId;
     commandId: WorkspaceCommandId;
   }): Promise<WorkspaceCommand | undefined>;
-  claimNextWorkspaceCommand(input: ClaimWorkspaceCommandInput): Promise<WorkspaceCommand | undefined>;
+  claimNextWorkspaceCommand(
+    input: ClaimWorkspaceCommandInput
+  ): Promise<WorkspaceCommand | undefined>;
   completeWorkspaceCommand(input: CompleteWorkspaceCommandInput): Promise<WorkspaceCommand>;
   failWorkspaceCommand(input: FailWorkspaceCommandInput): Promise<WorkspaceCommand>;
   requestWorkspaceCommandCancellation(
     input: RequestWorkspaceCommandCancellationInput
   ): Promise<WorkspaceCommand>;
-  cancelClaimedWorkspaceCommand(input: CancelClaimedWorkspaceCommandInput): Promise<WorkspaceCommand>;
+  cancelClaimedWorkspaceCommand(
+    input: CancelClaimedWorkspaceCommandInput
+  ): Promise<WorkspaceCommand>;
   heartbeatWorkspaceCommand(input: HeartbeatWorkspaceCommandInput): Promise<WorkspaceCommand>;
   recoverStaleWorkspaceCommands(
     input: RecoverStaleWorkspaceCommandsInput

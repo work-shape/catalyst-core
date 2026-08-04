@@ -13,9 +13,7 @@ import {
   resolveResourcesPanelOpen,
   structuredDataToTsv
 } from "../packages/chat-ui/src/resources-panel-model";
-import {
-  ResourcesPanel
-} from "../packages/chat-ui/src/resources-panel";
+import { ResourcesPanel } from "../packages/chat-ui/src/resources-panel";
 import {
   createSourceFilePreviewEntry,
   findSourceFileResource,
@@ -113,15 +111,13 @@ const structuredData: StructuredDataResourceResponse = {
 
 describe("Resources panel model", () => {
   it("is available only inside a persisted conversation", () => {
-    expect(
-      isResourcesPanelAvailable({ enabled: true, conversationId: undefined })
-    ).toBe(false);
-    expect(
-      isResourcesPanelAvailable({ enabled: true, conversationId: "conversation_1" })
-    ).toBe(true);
-    expect(
-      isResourcesPanelAvailable({ enabled: false, conversationId: "conversation_1" })
-    ).toBe(false);
+    expect(isResourcesPanelAvailable({ enabled: true, conversationId: undefined })).toBe(false);
+    expect(isResourcesPanelAvailable({ enabled: true, conversationId: "conversation_1" })).toBe(
+      true
+    );
+    expect(isResourcesPanelAvailable({ enabled: false, conversationId: "conversation_1" })).toBe(
+      false
+    );
   });
 
   it("routes uploaded Excel workbooks to the source-file preview", () => {
@@ -131,9 +127,7 @@ describe("Resources panel model", () => {
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
       )
     ).toBe("spreadsheet");
-    expect(getSourceFilePreviewKind("legacy.xls", "application/vnd.ms-excel")).toBe(
-      "spreadsheet"
-    );
+    expect(getSourceFilePreviewKind("legacy.xls", "application/vnd.ms-excel")).toBe("spreadsheet");
     expect(getSourceFilePreviewKind("macros.xlsm")).toBe("spreadsheet");
     expect(getSourceFilePreviewKind("archive.zip", "application/zip")).toBeUndefined();
     expect(sourceFilePreviewRequiresDownload("spreadsheet")).toBe(true);
@@ -173,12 +167,10 @@ describe("Resources panel model", () => {
   it("resolves a committed attachment to its source-file preview resource", () => {
     expect(findSourceFileResource(resources, "file_1")?.resourceId).toBe("source");
     expect(findSourceFileResource(resources, "missing")).toBeUndefined();
-    expect(
-      findSourceFileResourceByAttachmentId(resources, "attachment_1")?.resourceId
-    ).toBe("source");
-    expect(
-      findSourceFileResourceByAttachmentId(resources, "missing")
-    ).toBeUndefined();
+    expect(findSourceFileResourceByAttachmentId(resources, "attachment_1")?.resourceId).toBe(
+      "source"
+    );
+    expect(findSourceFileResourceByAttachmentId(resources, "missing")).toBeUndefined();
   });
 
   it("groups in product order, hides empty sections, and preserves server order", () => {

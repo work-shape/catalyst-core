@@ -1,9 +1,4 @@
-import {
-  CheckCircle2,
-  ChevronRight,
-  CircleAlert,
-  Wrench
-} from "lucide-react";
+import { CheckCircle2, ChevronRight, CircleAlert, Wrench } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
 import type { LocaleCode } from "@vivd-catalyst/api-client";
@@ -73,7 +68,8 @@ export function ToolCallPart({
           result
         })
       : undefined;
-  const builtInDisplay = display && !hasRenderedNode(renderedDisplay) ? renderBuiltInDisplay(display) : undefined;
+  const builtInDisplay =
+    display && !hasRenderedNode(renderedDisplay) ? renderBuiltInDisplay(display) : undefined;
   const panelDisplayNode = display ? (
     <ToolDisplayWidgetNode
       display={display}
@@ -84,18 +80,22 @@ export function ToolCallPart({
       toolCallId={toolCallId}
       toolName={toolName}
     />
-  ) : builtInDisplay;
+  ) : (
+    builtInDisplay
+  );
   const hasDisplay = hasRenderedNode(renderedDisplay) || hasRenderedNode(builtInDisplay);
   const displayMode = readDisplayMode(display);
   const workspaceProjection = projectWorkspaceToolDisplay({ args, result, toolName });
   const toolDisplay = readToolDisplayProjection({ args, result, toolName, locale });
-  const detailSections = workspaceProjection?.sections ?? toolDetailSections({
-    args,
-    argsText,
-    toolName,
-    result,
-    labels: { input: t("toolInput"), output: t("toolOutput") }
-  });
+  const detailSections =
+    workspaceProjection?.sections ??
+    toolDetailSections({
+      args,
+      argsText,
+      toolName,
+      result,
+      labels: { input: t("toolInput"), output: t("toolOutput") }
+    });
   const artifacts = readToolArtifactRefs(result);
   const surfacedArtifacts = readSurfacedToolArtifactRefs(result, toolName);
   const summary = workspaceProjection?.summary ?? getToolSummary(result, t);
@@ -134,7 +134,8 @@ export function ToolCallPart({
     );
   }
 
-  const hasDisclosureContent = Boolean(summary) || surfacedArtifacts.length > 0 || detailSections.length > 0;
+  const hasDisclosureContent =
+    Boolean(summary) || surfacedArtifacts.length > 0 || detailSections.length > 0;
 
   if (!hasDisclosureContent) {
     return (
@@ -206,7 +207,9 @@ export function DataPart({
         })
       : undefined;
   const builtInDisplay =
-    isToolDisplayPayload(data) && !hasRenderedNode(renderedDisplay) ? renderBuiltInDisplay(data) : undefined;
+    isToolDisplayPayload(data) && !hasRenderedNode(renderedDisplay)
+      ? renderBuiltInDisplay(data)
+      : undefined;
   const panelDisplayNode = isToolDisplayPayload(data) ? (
     <ToolDisplayWidgetNode
       display={data}
@@ -214,7 +217,9 @@ export function DataPart({
       locale={locale}
       source="message-metadata"
     />
-  ) : builtInDisplay;
+  ) : (
+    builtInDisplay
+  );
   const hasDisplay = hasRenderedNode(renderedDisplay) || hasRenderedNode(builtInDisplay);
   const displayMode = isToolDisplayPayload(data) ? readDisplayMode(data) : "inline";
   const details = formatDetails(data);
@@ -456,7 +461,9 @@ function DisplayDataPart({ displayNode, name }: { displayNode: ReactNode; name: 
         className="flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
       >
         <Wrench size={14} className="shrink-0" aria-hidden="true" />
-        <span className="truncate font-medium text-foreground">{t("structuredOutput", { name })}</span>
+        <span className="truncate font-medium text-foreground">
+          {t("structuredOutput", { name })}
+        </span>
         <ChevronRight
           size={14}
           className={cn("ml-auto shrink-0 transition-transform", open && "rotate-90")}
@@ -621,7 +628,9 @@ function readToolSubjectLabel(input: {
     return readSkillSubjectLabel(input.args, input.result);
   }
   if (input.toolName === "show_view") {
-    const displayTitle = readDisplayProvidedTitle(readToolDisplayPayloadFromToolResult(input.result));
+    const displayTitle = readDisplayProvidedTitle(
+      readToolDisplayPayloadFromToolResult(input.result)
+    );
     return displayTitle ?? readRecordString(input.args, "title");
   }
   return undefined;
@@ -761,7 +770,9 @@ function CompactToolCall({
       {open ? (
         <div className="grid gap-2 border-t bg-muted/40 px-2.5 py-2">
           {summary ? (
-            <p className="text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]">{summary}</p>
+            <p className="text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]">
+              {summary}
+            </p>
           ) : null}
           <ToolDetails sections={detailSections} />
         </div>

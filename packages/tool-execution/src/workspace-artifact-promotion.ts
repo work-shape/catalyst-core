@@ -65,8 +65,9 @@ export async function promoteWorkspaceFile(
     metadata: {
       ...input.file.metadata,
       promotedArtifacts: [
-        ...(readPromotedFileArtifacts(input.file.metadata) ?? [])
-          .filter((candidate) => candidate.artifactId !== artifact.id),
+        ...(readPromotedFileArtifacts(input.file.metadata) ?? []).filter(
+          (candidate) => candidate.artifactId !== artifact.id
+        ),
         { artifactId: artifact.id, kind: artifact.kind, promotedAt: artifact.createdAt }
       ]
     },

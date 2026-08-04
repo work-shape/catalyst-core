@@ -73,8 +73,7 @@ export interface StandardSchemaV1Types<Input, Output> {
 }
 
 export type StandardSchemaV1Result<Output> =
-  | StandardSchemaV1Success<Output>
-  | StandardSchemaV1Failure;
+  StandardSchemaV1Success<Output> | StandardSchemaV1Failure;
 
 export interface StandardSchemaV1Success<Output> {
   readonly value: Output;
@@ -172,7 +171,9 @@ export function ToolDisplayActionsProvider({ children }: { children: ReactNode }
   const value = useMemo(() => ({ actions, register: setActions }), [actions]);
 
   return (
-    <ToolDisplayActionsContext.Provider value={value}>{children}</ToolDisplayActionsContext.Provider>
+    <ToolDisplayActionsContext.Provider value={value}>
+      {children}
+    </ToolDisplayActionsContext.Provider>
   );
 }
 
@@ -245,7 +246,9 @@ export function ToolDisplayWidgetNode({
     : rendered;
 }
 
-export function readToolDisplayPayloadFromToolResult(result: unknown): ToolDisplayPayload | undefined {
+export function readToolDisplayPayloadFromToolResult(
+  result: unknown
+): ToolDisplayPayload | undefined {
   if (!isRecord(result)) {
     return undefined;
   }

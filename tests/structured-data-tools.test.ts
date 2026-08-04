@@ -318,9 +318,7 @@ describe("structured_data.publish", () => {
 });
 
 async function createHarness() {
-  const clientInstanceId = asClientInstanceId(
-    `structured_data_${globalThis.crypto.randomUUID()}`
-  );
+  const clientInstanceId = asClientInstanceId(`structured_data_${globalThis.crypto.randomUUID()}`);
   const store = new InMemoryPlatformStore();
   const conversation = await store.createConversation({
     clientInstanceId,
@@ -377,7 +375,9 @@ async function createHarness() {
 async function createSentAttachment(
   store: InMemoryPlatformStore,
   clientInstanceId: ReturnType<typeof asClientInstanceId>,
-  conversationId: Parameters<InMemoryPlatformStore["createConversationAttachment"]>[0]["conversationId"]
+  conversationId: Parameters<
+    InMemoryPlatformStore["createConversationAttachment"]
+  >[0]["conversationId"]
 ) {
   const file = await store.createManagedFile({
     clientInstanceId,

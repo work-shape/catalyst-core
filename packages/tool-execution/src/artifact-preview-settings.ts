@@ -11,9 +11,7 @@ export interface ArtifactPreviewRenderSettings {
   maxImages?: number;
 }
 
-export function createArtifactPreviewSettingsHash(
-  settings: ArtifactPreviewRenderSettings
-): string {
+export function createArtifactPreviewSettingsHash(settings: ArtifactPreviewRenderSettings): string {
   const normalized = normalizeArtifactPreviewRenderSettings(settings);
   if (
     !normalized.pages &&
@@ -30,7 +28,9 @@ export function createArtifactPreviewSettingsHash(
   ).toString("base64url")}`;
 }
 
-export function readArtifactPreviewSettingsHash(settingsHash: string): ArtifactPreviewRenderSettings {
+export function readArtifactPreviewSettingsHash(
+  settingsHash: string
+): ArtifactPreviewRenderSettings {
   if (!settingsHash.startsWith(PREVIEW_IMAGES_SETTINGS_PREFIX)) {
     return {};
   }

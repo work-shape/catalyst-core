@@ -7,7 +7,7 @@ import {
   pairToLocalized,
   skillConfigToForm,
   skillFormToConfig
-} from "../packages/chat-ui/src/config-assets-model";
+} from "../packages/chat-ui/src/control-plane/config-assets-model";
 
 describe("config assets form model", () => {
   it("round-trips a full agent config through the form state", () => {
@@ -71,9 +71,7 @@ describe("config assets form model", () => {
     ];
 
     const config = agentFormToConfig(form);
-    expect(config.initialPrompts).toEqual([
-      { title: { en: "Keep" }, prompt: { en: "Do it" } }
-    ]);
+    expect(config.initialPrompts).toEqual([{ title: { en: "Keep" }, prompt: { en: "Do it" } }]);
   });
 
   it("round-trips a skill config", () => {

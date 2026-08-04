@@ -158,7 +158,10 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
   const api = await connectApi(instance.url, options);
   const remote = parseExportBundle(await api.exportAssets());
   const plannedRemote = selectBundle(remote, selectors, false);
-  writeOutput(options, formatPushPlan(createPushPlan(bundle, plannedRemote), options.prune === true));
+  writeOutput(
+    options,
+    formatPushPlan(createPushPlan(bundle, plannedRemote), options.prune === true)
+  );
   try {
     const result = await api.replaceAssets({
       ...bundle,
@@ -512,8 +515,7 @@ function formatCount(count: number, singular: string): string {
 
 function isValidationApiError(error: unknown): error is ConfigApiError {
   return (
-    error instanceof ConfigApiError &&
-    (error.status === 422 || error.code === "VALIDATION_FAILED")
+    error instanceof ConfigApiError && (error.status === 422 || error.code === "VALIDATION_FAILED")
   );
 }
 
@@ -536,9 +538,10 @@ function readValidationIssues(details: unknown): string[] {
       typeof issue.assetKind === "string"
         ? `${issue.assetKind}${typeof issue.assetName === "string" ? ` '${issue.assetName}'` : typeof issue.index === "number" ? ` #${issue.index + 1}` : ""}`
         : "config";
-    const path = Array.isArray(issue.path) && issue.path.length > 0
-      ? ` (${issue.path.map(String).join(".")})`
-      : "";
+    const path =
+      Array.isArray(issue.path) && issue.path.length > 0
+        ? ` (${issue.path.map(String).join(".")})`
+        : "";
     return [`${asset}${path}: ${issue.message}`];
   });
 }

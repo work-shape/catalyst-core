@@ -38,7 +38,10 @@ import {
   type SupportedImageMimeType
 } from "@vivd-catalyst/core";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
-import { parseClientInstanceConfig, type UsageSafeguardsConfig } from "@vivd-catalyst/config-schema";
+import {
+  parseClientInstanceConfig,
+  type UsageSafeguardsConfig
+} from "@vivd-catalyst/config-schema";
 import type { ModelProvider } from "@vivd-catalyst/model-provider";
 import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
@@ -164,9 +167,9 @@ describe("client instance app vertical slice", () => {
       url: "/api/audit-events"
     });
     expect(audit.statusCode).toBe(200);
-    expect((audit.json() as Array<{ type: string }>).some((event) => event.type === "tool.completed")).toBe(
-      true
-    );
+    expect(
+      (audit.json() as Array<{ type: string }>).some((event) => event.type === "tool.completed")
+    ).toBe(true);
 
     const usage = await app.server.inject({
       method: "GET",
@@ -440,13 +443,16 @@ describe("client instance app vertical slice", () => {
 
     const completedSnapshot = await fetch(`${baseUrl}/api/conversations/${conversation.id}/thread`);
     expect(completedSnapshot.status).toBe(200);
-    const completedBody = await completedSnapshot.json() as {
+    const completedBody = (await completedSnapshot.json()) as {
       activeRun?: unknown;
-      completedRunProjections?: Record<string, {
-        runId: string;
-        status: string;
-        parts: Array<{ type: string; text?: string }>;
-      }>;
+      completedRunProjections?: Record<
+        string,
+        {
+          runId: string;
+          status: string;
+          parts: Array<{ type: string; text?: string }>;
+        }
+      >;
     };
     expect(completedBody.activeRun).toBeUndefined();
     expect(completedBody.completedRunProjections?.[runId]).toMatchObject({
@@ -496,7 +502,8 @@ describe("client instance app vertical slice", () => {
       startedAt: "2026-07-01T12:00:00.000Z"
     });
     const toolCallId = asToolCallId("call_web");
-    const progressText = "Ich prüfe kurz die aktuellen offiziellen Regeln, damit die Antwort rechtlich sauber ist.";
+    const progressText =
+      "Ich prüfe kurz die aktuellen offiziellen Regeln, damit die Antwort rechtlich sauber ist.";
     const finalText = "Kurz: Nein. Supermärkte müssen nicht jegliches Pfand annehmen.";
     const finalMessageId = createPlatformId<"MessageId">("msg");
 
@@ -545,7 +552,7 @@ describe("client instance app vertical slice", () => {
         result: toolSuccess({
           sourceCount: 1
         }),
-        modelOutput: "{\"sourceCount\":1}"
+        modelOutput: '{"sourceCount":1}'
       }
     });
     await store.appendRunObservation({
@@ -678,7 +685,7 @@ describe("client instance app vertical slice", () => {
         result: toolSuccess({
           ok: true
         }),
-        modelOutput: "{\"ok\":true}"
+        modelOutput: '{"ok":true}'
       }
     });
     await store.appendRunObservation({
@@ -775,10 +782,13 @@ describe("client instance app vertical slice", () => {
 
     expect(snapshot.statusCode).toBe(200);
     const body = snapshot.json() as {
-      completedRunProjections?: Record<string, {
-        durationMs?: number;
-        parts: Array<{ type: string; text?: string; toolCallId?: string; toolName?: string }>;
-      }>;
+      completedRunProjections?: Record<
+        string,
+        {
+          durationMs?: number;
+          parts: Array<{ type: string; text?: string; toolCallId?: string; toolName?: string }>;
+        }
+      >;
     };
     expect(body.completedRunProjections?.[run.id]?.durationMs).toBe(6_000);
     expect(body.completedRunProjections?.[run.id]?.parts).toEqual([
@@ -926,12 +936,14 @@ describe("client instance app vertical slice", () => {
       messages: Array<{ role: string; text: string }>;
     };
     expect(body.completedRunProjections?.[run.id]).toBeUndefined();
-    expect(body.messages).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        role: "assistant",
-        text: "Kurz: Nein. Supermärkte müssen nicht jegliches Pfand annehmen."
-      })
-    ]));
+    expect(body.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "assistant",
+          text: "Kurz: Nein. Supermärkte müssen nicht jegliches Pfand annehmen."
+        })
+      ])
+    );
 
     await server.close();
   });
@@ -1038,8 +1050,9 @@ describe("client instance app vertical slice", () => {
       url: "/api/conversations"
     });
     expect(listed.statusCode).toBe(200);
-    const listedConversation = (listed.json() as Array<{ id: string; activeRun?: unknown }>)
-      .find((item) => item.id === conversation.id);
+    const listedConversation = (listed.json() as Array<{ id: string; activeRun?: unknown }>).find(
+      (item) => item.id === conversation.id
+    );
     expect(listedConversation).toBeDefined();
     expect(listedConversation).not.toHaveProperty("activeRun");
 
@@ -1179,10 +1192,7 @@ describe("client instance app vertical slice", () => {
       runId: run.id,
       ownerUserId: fixture.owner.id
     });
-    expect(replay.map((observation) => observation.type)).toEqual([
-      "message_delta",
-      "run_failed"
-    ]);
+    expect(replay.map((observation) => observation.type)).toEqual(["message_delta", "run_failed"]);
     await server.close();
   });
 
@@ -1514,7 +1524,9 @@ describe("client instance app vertical slice", () => {
         text: acceptedDifferentKeyStart.userMessage.text
       })
     ]);
-    expect(racedMessages[0]?.metadata?.agentRuntime?.attachmentManifest?.attachments).toContainEqual(
+    expect(
+      racedMessages[0]?.metadata?.agentRuntime?.attachmentManifest?.attachments
+    ).toContainEqual(
       expect.objectContaining({
         attachmentId: uploadedBody.attachment.id
       })
@@ -1750,13 +1762,15 @@ describe("client instance app vertical slice", () => {
       "cancel this deliberately long enough response"
     );
     const runId = started.run.id;
-    const events = await fetch(`${baseUrl}/api/conversations/${conversation.id}/runs/${runId}/events`);
+    const events = await fetch(
+      `${baseUrl}/api/conversations/${conversation.id}/runs/${runId}/events`
+    );
     expect(events.status).toBe(200);
     const sentReader = events.body?.getReader();
     expect(sentReader).toBeDefined();
     const sentDecoder = new TextDecoder();
     let sentPayload = "";
-    while (!sentPayload.includes("\"type\":\"message_delta\"")) {
+    while (!sentPayload.includes('"type":"message_delta"')) {
       const next = await sentReader!.read();
       expect(next.done).toBe(false);
       sentPayload += sentDecoder.decode(next.value, { stream: true });
@@ -1805,11 +1819,13 @@ describe("client instance app vertical slice", () => {
     expect(streamedPrefix.length).toBeGreaterThan(0);
     const messages = await fetch(`${baseUrl}/api/conversations/${conversation.id}/messages`);
     expect(messages.status).toBe(200);
-    const assistantMessages = ((await messages.json()) as Array<{
-      role: string;
-      text: string;
-      metadata?: { agentRuntime?: Record<string, unknown> };
-    }>).filter((message) => message.role === "assistant");
+    const assistantMessages = (
+      (await messages.json()) as Array<{
+        role: string;
+        text: string;
+        metadata?: { agentRuntime?: Record<string, unknown> };
+      }>
+    ).filter((message) => message.role === "assistant");
     expect(assistantMessages).toHaveLength(1);
     expect(assistantMessages[0]).toMatchObject({
       text: streamedPrefix,
@@ -1931,11 +1947,12 @@ describe("client instance app vertical slice", () => {
       url: "/api/audit-events"
     });
     expect(audit.statusCode).toBe(200);
-    const messageCreatedEvents = (audit.json() as Array<{ type: string; metadata?: { conversationId?: string } }>)
-      .filter(
-        (event) =>
-          event.type === "message.created" && event.metadata?.conversationId === conversation.id
-      );
+    const messageCreatedEvents = (
+      audit.json() as Array<{ type: string; metadata?: { conversationId?: string } }>
+    ).filter(
+      (event) =>
+        event.type === "message.created" && event.metadata?.conversationId === conversation.id
+    );
     expect(messageCreatedEvents).toHaveLength(1);
 
     await app.close();
@@ -1964,16 +1981,23 @@ describe("client instance app vertical slice", () => {
       const messageTokens = Array.from({ length: 240 }, (_, index) => `cancel-token-${index}`);
       const lateToken = messageTokens.at(-1) ?? "";
 
-      const started = await fetchStartConversationRun(baseUrl, conversation.id, messageTokens.join(" "));
+      const started = await fetchStartConversationRun(
+        baseUrl,
+        conversation.id,
+        messageTokens.join(" ")
+      );
       const runId = started.run.id;
 
-      const cancelled = await fetch(`${baseUrl}/api/conversations/${conversation.id}/runs/${runId}/cancel`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({ reason: "test cancellation" })
-      });
+      const cancelled = await fetch(
+        `${baseUrl}/api/conversations/${conversation.id}/runs/${runId}/cancel`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify({ reason: "test cancellation" })
+        }
+      );
       expect(cancelled.status).toBe(200);
       expect(await cancelled.json()).toMatchObject({
         run: {
@@ -2028,9 +2052,14 @@ describe("client instance app vertical slice", () => {
     });
     await drainRunEvents(app.server, conversation.id, firstMessage.run.id);
 
-    const secondMessage = await injectStartConversationRun(app.server, conversation.id, "hello again", {
-      idempotencyKey: "usage-limit-second"
-    });
+    const secondMessage = await injectStartConversationRun(
+      app.server,
+      conversation.id,
+      "hello again",
+      {
+        idempotencyKey: "usage-limit-second"
+      }
+    );
     const failedEvents = parseSseChunks(
       await drainRunEvents(app.server, conversation.id, secondMessage.run.id)
     );
@@ -2204,9 +2233,11 @@ describe("client instance app vertical slice", () => {
       url: "/api/audit-events"
     });
     expect(audit.statusCode).toBe(200);
-    expect((audit.json() as Array<{ type: string }>).some((event) => event.type === "conversation.title_generated")).toBe(
-      true
-    );
+    expect(
+      (audit.json() as Array<{ type: string }>).some(
+        (event) => event.type === "conversation.title_generated"
+      )
+    ).toBe(true);
 
     await app.close();
   });
@@ -2351,7 +2382,9 @@ describe("client instance app vertical slice", () => {
       payload: upload.payload
     });
     expect(uploaded.statusCode).toBe(200);
-    const body = uploaded.json() as { attachment: { fileId: string; status: string; format: string } };
+    const body = uploaded.json() as {
+      attachment: { fileId: string; status: string; format: string };
+    };
     expect(body.attachment).toMatchObject({
       status: "ready",
       format: "gif"
@@ -2444,7 +2477,7 @@ describe("client instance app vertical slice", () => {
       expect(content.statusCode).toBe(200);
       expect(content.headers["content-type"]).toContain("text/csv");
       expect(content.headers["content-disposition"]).toBe(
-        'attachment; filename="final _.csv"; filename*=UTF-8\'\'final%20%C3%A4.csv'
+        "attachment; filename=\"final _.csv\"; filename*=UTF-8''final%20%C3%A4.csv"
       );
       expect(content.payload).toBe("final,report\n");
       expect(JSON.stringify(content.headers)).not.toContain("execution-workspaces/private");
@@ -2985,7 +3018,9 @@ describe("client instance app vertical slice", () => {
     await expect(store.getConversation(clientInstanceId, conversation.id)).resolves.toMatchObject({
       status: "deleted"
     });
-    await expect(store.getConversation(clientInstanceId, otherConversation.id)).resolves.toMatchObject({
+    await expect(
+      store.getConversation(clientInstanceId, otherConversation.id)
+    ).resolves.toMatchObject({
       status: "active"
     });
     await expect(
@@ -3518,7 +3553,8 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(ambiguousIssued.statusCode).toBe(200);
-    const ambiguousToken = (ambiguousIssued.json() as { chatSessionToken: string }).chatSessionToken;
+    const ambiguousToken = (ambiguousIssued.json() as { chatSessionToken: string })
+      .chatSessionToken;
 
     const ambiguousConversation = await app.server.inject({
       method: "POST",
@@ -4113,7 +4149,6 @@ describe("client instance app vertical slice", () => {
       })
     ).toThrow("Spend budget requires configured customer pricing for model openai/gpt-4.1");
   });
-
 });
 
 type LocalizedTestString =
@@ -4327,54 +4362,56 @@ function createUnusedModelProvider(): ModelProvider {
   };
 }
 
-function createTestConfig(input: {
-  toolNames?: string[];
-  tools?: Array<{ name: string; enabled?: boolean }>;
-  displayName?: LocalizedTestString;
-  welcomeMessage?: LocalizedTestString;
-  initialPrompts?: Array<{ title: LocalizedTestString; prompt: LocalizedTestString }>;
-  modelProviders?: Array<
-    | { id: string; type: "deterministic"; model: string }
-    | {
-        id: string;
-        type: "openai-compatible";
-        model: string;
-        baseUrl: string;
-        apiKeyEnvName: string;
-      }
-  >;
-  modelBindings?: Array<{
-    id: string;
-    providerId: string;
-    model?: string;
-    reasoningEffort?: "none" | "low" | "medium" | "high" | "xhigh";
-    agentSelectable?: boolean;
-    userSelectable?: boolean;
-  }>;
-  agentModelBindingId?: string;
-  usageBudget?: {
-    monthlySpendLimit?: number;
-  };
-  usageSafeguards?: UsageSafeguardsConfig;
-  executionWorkspaces?: unknown;
-	  usagePricing?: {
-	    currency: string;
-	    models: Array<{
-	      providerId: string;
-	      model: string;
-	      inputPricePerMillionTokens: number;
-	      outputPricePerMillionTokens: number;
-	    }>;
-    webSearch?: Array<{
+function createTestConfig(
+  input: {
+    toolNames?: string[];
+    tools?: Array<{ name: string; enabled?: boolean }>;
+    displayName?: LocalizedTestString;
+    welcomeMessage?: LocalizedTestString;
+    initialPrompts?: Array<{ title: LocalizedTestString; prompt: LocalizedTestString }>;
+    modelProviders?: Array<
+      | { id: string; type: "deterministic"; model: string }
+      | {
+          id: string;
+          type: "openai-compatible";
+          model: string;
+          baseUrl: string;
+          apiKeyEnvName: string;
+        }
+    >;
+    modelBindings?: Array<{
+      id: string;
       providerId: string;
       model?: string;
-      pricePerCall: number;
+      reasoningEffort?: "none" | "low" | "medium" | "high" | "xhigh";
+      agentSelectable?: boolean;
+      userSelectable?: boolean;
     }>;
-  };
-  webAccess?: unknown;
-  developmentAuth?: unknown;
-  sessionToken?: unknown;
-} = {}) {
+    agentModelBindingId?: string;
+    usageBudget?: {
+      monthlySpendLimit?: number;
+    };
+    usageSafeguards?: UsageSafeguardsConfig;
+    executionWorkspaces?: unknown;
+    usagePricing?: {
+      currency: string;
+      models: Array<{
+        providerId: string;
+        model: string;
+        inputPricePerMillionTokens: number;
+        outputPricePerMillionTokens: number;
+      }>;
+      webSearch?: Array<{
+        providerId: string;
+        model?: string;
+        pricePerCall: number;
+      }>;
+    };
+    webAccess?: unknown;
+    developmentAuth?: unknown;
+    sessionToken?: unknown;
+  } = {}
+) {
   const config = parseClientInstanceConfig({
     version: 1,
     clientInstance: {
@@ -4395,7 +4432,9 @@ function createTestConfig(input: {
       },
       ...(input.sessionToken ? { sessionToken: input.sessionToken } : {})
     },
-    modelProviders: input.modelProviders ?? [{ id: "local", type: "deterministic", model: "local" }],
+    modelProviders: input.modelProviders ?? [
+      { id: "local", type: "deterministic", model: "local" }
+    ],
     modelBindings: input.modelBindings,
     usage: {
       budget: input.usageBudget ?? {},
@@ -4409,12 +4448,9 @@ function createTestConfig(input: {
               models: input.usagePricing.models.map((price) => ({
                 providerId: price.providerId,
                 model: price.model,
-                uncachedInputPricePerMillionTokens:
-                  price.inputPricePerMillionTokens,
-                cachedInputPricePerMillionTokens:
-                  price.inputPricePerMillionTokens,
-                outputPricePerMillionTokens:
-                  price.outputPricePerMillionTokens
+                uncachedInputPricePerMillionTokens: price.inputPricePerMillionTokens,
+                cachedInputPricePerMillionTokens: price.inputPricePerMillionTokens,
+                outputPricePerMillionTokens: price.outputPricePerMillionTokens
               })),
               webSearch: input.usagePricing.webSearch ?? []
             }
@@ -4442,10 +4478,7 @@ function createTestConfig(input: {
   return config;
 }
 
-const testAssetsByConfig = new WeakMap<
-  object,
-  { defaultAgentName: string; agent: JsonObject }
->();
+const testAssetsByConfig = new WeakMap<object, { defaultAgentName: string; agent: JsonObject }>();
 
 async function createClientInstanceApp(
   input: Parameters<typeof createUnseededClientInstanceApp>[0]
@@ -4556,15 +4589,19 @@ async function fetchStartConversationRun(
   return (await response.json()) as StartedRunBody;
 }
 
-async function fetchRunEvents(baseUrl: string, conversationId: string, runId: string): Promise<string> {
-  const response = await fetch(`${baseUrl}/api/conversations/${conversationId}/runs/${runId}/events`);
+async function fetchRunEvents(
+  baseUrl: string,
+  conversationId: string,
+  runId: string
+): Promise<string> {
+  const response = await fetch(
+    `${baseUrl}/api/conversations/${conversationId}/runs/${runId}/events`
+  );
   expect(response.status).toBe(200);
   return response.text();
 }
 
-function parseSseChunks(
-  text: string
-): Array<{
+function parseSseChunks(text: string): Array<{
   type?: string;
   sequence?: number;
   runId?: string;
@@ -4584,10 +4621,13 @@ function parseSseChunks(
     .filter((line) => line.startsWith("data:"))
     .map((line) => line.slice("data:".length).trim())
     .filter((line) => line !== "[DONE]")
-    .map((line) => JSON.parse(line) as {
-      type?: string;
-      payload?: { type?: string; delta?: string };
-    });
+    .map(
+      (line) =>
+        JSON.parse(line) as {
+          type?: string;
+          payload?: { type?: string; delta?: string };
+        }
+    );
 }
 
 async function waitForAuditEvents(
@@ -4678,88 +4718,92 @@ function createManagedObjectTestAttachmentCapability(): {
           }
         });
         return {
-          attachments: [{
-            name: "managed-object-test-attachments",
-            maxFileBytes: 1024 * 1024,
-            acceptedFileTypes: ["text/plain"],
-            acceptsFile() {
-              return true;
-            },
-            listDraftAttachments(conversationId) {
-              return context.files.listDraftAttachments({
-                clientInstanceId: context.clientInstanceId,
-                conversationId
-              });
-            },
-            async uploadDraftAttachment(input) {
-              const file = await managedObjects.createFile({
-                ownerUserId: input.ownerUserId,
-                conversationId: input.conversationId,
-                filename: input.filename,
-                mimeType: input.mimeType,
-                bytes: input.bytes
-              });
-              const attachment = await context.files.createConversationAttachment({
-                clientInstanceId: context.clientInstanceId,
-                conversationId: input.conversationId,
-                fileId: file.id,
-                filename: input.filename,
-                mimeType: input.mimeType,
-                byteSize: input.bytes.byteLength,
-                checksum: file.checksum,
-                status: "ready"
-              });
-              return { attachment, outcome: "created" };
-            },
-            async retryDraftAttachment() {
-              throw new Error("Retry is not used by this test");
-            },
-            deleteDraftAttachment(input) {
-              return context.files.deleteDraftAttachment({
-                clientInstanceId: context.clientInstanceId,
-                conversationId: input.conversationId,
-                attachmentId: input.attachmentId as DraftAttachment["id"],
-                deletedAt: new Date().toISOString()
-              });
-            },
-            deleteConversationAttachments(input) {
-              return managedObjects.deleteConversationObjects(input);
-            },
-            async readConversationFile(input) {
-              const file = await managedObjects.readFile({
-                fileId: input.fileId as ManagedFileId
-              });
-              return {
-                fileId: file.record.id,
-                filename: file.record.filename,
-                mimeType: file.record.mimeType,
-                byteSize: file.record.byteSize,
-                bytes: file.bytes
-              };
-            },
-            blockingDraftAttachmentMessage() {
-              return undefined;
-            },
-            createAttachmentManifest() {
-              return { version: 1, attachments: [] };
-            },
-            isInlineDisplayMimeType() {
-              return false;
+          attachments: [
+            {
+              name: "managed-object-test-attachments",
+              maxFileBytes: 1024 * 1024,
+              acceptedFileTypes: ["text/plain"],
+              acceptsFile() {
+                return true;
+              },
+              listDraftAttachments(conversationId) {
+                return context.files.listDraftAttachments({
+                  clientInstanceId: context.clientInstanceId,
+                  conversationId
+                });
+              },
+              async uploadDraftAttachment(input) {
+                const file = await managedObjects.createFile({
+                  ownerUserId: input.ownerUserId,
+                  conversationId: input.conversationId,
+                  filename: input.filename,
+                  mimeType: input.mimeType,
+                  bytes: input.bytes
+                });
+                const attachment = await context.files.createConversationAttachment({
+                  clientInstanceId: context.clientInstanceId,
+                  conversationId: input.conversationId,
+                  fileId: file.id,
+                  filename: input.filename,
+                  mimeType: input.mimeType,
+                  byteSize: input.bytes.byteLength,
+                  checksum: file.checksum,
+                  status: "ready"
+                });
+                return { attachment, outcome: "created" };
+              },
+              async retryDraftAttachment() {
+                throw new Error("Retry is not used by this test");
+              },
+              deleteDraftAttachment(input) {
+                return context.files.deleteDraftAttachment({
+                  clientInstanceId: context.clientInstanceId,
+                  conversationId: input.conversationId,
+                  attachmentId: input.attachmentId as DraftAttachment["id"],
+                  deletedAt: new Date().toISOString()
+                });
+              },
+              deleteConversationAttachments(input) {
+                return managedObjects.deleteConversationObjects(input);
+              },
+              async readConversationFile(input) {
+                const file = await managedObjects.readFile({
+                  fileId: input.fileId as ManagedFileId
+                });
+                return {
+                  fileId: file.record.id,
+                  filename: file.record.filename,
+                  mimeType: file.record.mimeType,
+                  byteSize: file.record.byteSize,
+                  bytes: file.bytes
+                };
+              },
+              blockingDraftAttachmentMessage() {
+                return undefined;
+              },
+              createAttachmentManifest() {
+                return { version: 1, attachments: [] };
+              },
+              isInlineDisplayMimeType() {
+                return false;
+              }
             }
-          }]
+          ]
         };
       }
     }
   };
 }
 
-function createTestAttachmentCapability(options: {
-  onConversationAttachmentsDeleted?(deletion: {
-    attachmentCount: number;
-    fileObjectKeys: string[];
-    artifactObjectKeys: string[];
-  }): void;
-} = {}): ClientInstanceCapability {
+function createTestAttachmentCapability(
+  options: {
+    onConversationAttachmentsDeleted?(deletion: {
+      attachmentCount: number;
+      fileObjectKeys: string[];
+      artifactObjectKeys: string[];
+    }): void;
+  } = {}
+): ClientInstanceCapability {
   const attachmentsByConversation = new Map<string, DraftAttachment[]>();
   const files = new Map<
     string,
@@ -4774,113 +4818,117 @@ function createTestAttachmentCapability(options: {
     name: "test-attachments",
     create(context) {
       return {
-        attachments: [{
-          name: "test-attachments",
-          maxFileBytes: 1024 * 1024,
-          acceptedFileTypes: ["text/plain", "image/gif"],
-          acceptsFile() {
-            return true;
-          },
-          async listDraftAttachments(conversationId) {
-            return attachmentsByConversation.get(conversationId) ?? [];
-          },
-          async uploadDraftAttachment(input) {
-            const fileId = createPlatformId<"ManagedFileId">("file");
-            const attachment: DraftAttachment = {
-              id: createPlatformId<"ConversationAttachmentId">("att"),
-              clientInstanceId: context.clientInstanceId,
-              conversationId: input.conversationId,
-              fileId,
-              filename: input.filename,
-              mimeType: input.mimeType,
-              byteSize: input.bytes.byteLength,
-              checksum: "test-checksum",
-              status: "ready",
-              format: formatForMimeType(input.mimeType),
-              artifactRefs: {},
-              processingMetadata: {},
-              warnings: [],
-              error: null,
-              processingAttempts: 0,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            };
-            files.set(fileId, {
-              filename: input.filename,
-              mimeType: input.mimeType,
-              bytes: input.bytes
-            });
-            const conversationAttachments =
-              attachmentsByConversation.get(input.conversationId) ?? [];
-            conversationAttachments.push(attachment);
-            attachmentsByConversation.set(input.conversationId, conversationAttachments);
-            return {
-              attachment,
-              outcome: "created"
-            };
-          },
-          async retryDraftAttachment() {
-            throw new Error("Retry is not implemented by the test attachment capability");
-          },
-          async deleteDraftAttachment(input) {
-            const conversationAttachments = attachmentsByConversation.get(input.conversationId) ?? [];
-            const remaining = conversationAttachments.filter(
-              (attachment) => attachment.id !== input.attachmentId
-            );
-            attachmentsByConversation.set(input.conversationId, remaining);
-            const deleted = conversationAttachments.find(
-              (attachment) => attachment.id === input.attachmentId
-            );
-            if (!deleted) {
-              throw new Error("Attachment is not available");
+        attachments: [
+          {
+            name: "test-attachments",
+            maxFileBytes: 1024 * 1024,
+            acceptedFileTypes: ["text/plain", "image/gif"],
+            acceptsFile() {
+              return true;
+            },
+            async listDraftAttachments(conversationId) {
+              return attachmentsByConversation.get(conversationId) ?? [];
+            },
+            async uploadDraftAttachment(input) {
+              const fileId = createPlatformId<"ManagedFileId">("file");
+              const attachment: DraftAttachment = {
+                id: createPlatformId<"ConversationAttachmentId">("att"),
+                clientInstanceId: context.clientInstanceId,
+                conversationId: input.conversationId,
+                fileId,
+                filename: input.filename,
+                mimeType: input.mimeType,
+                byteSize: input.bytes.byteLength,
+                checksum: "test-checksum",
+                status: "ready",
+                format: formatForMimeType(input.mimeType),
+                artifactRefs: {},
+                processingMetadata: {},
+                warnings: [],
+                error: null,
+                processingAttempts: 0,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+              };
+              files.set(fileId, {
+                filename: input.filename,
+                mimeType: input.mimeType,
+                bytes: input.bytes
+              });
+              const conversationAttachments =
+                attachmentsByConversation.get(input.conversationId) ?? [];
+              conversationAttachments.push(attachment);
+              attachmentsByConversation.set(input.conversationId, conversationAttachments);
+              return {
+                attachment,
+                outcome: "created"
+              };
+            },
+            async retryDraftAttachment() {
+              throw new Error("Retry is not implemented by the test attachment capability");
+            },
+            async deleteDraftAttachment(input) {
+              const conversationAttachments =
+                attachmentsByConversation.get(input.conversationId) ?? [];
+              const remaining = conversationAttachments.filter(
+                (attachment) => attachment.id !== input.attachmentId
+              );
+              attachmentsByConversation.set(input.conversationId, remaining);
+              const deleted = conversationAttachments.find(
+                (attachment) => attachment.id === input.attachmentId
+              );
+              if (!deleted) {
+                throw new Error("Attachment is not available");
+              }
+              return {
+                ...deleted,
+                deletedAt: new Date().toISOString()
+              };
+            },
+            async deleteConversationAttachments(input) {
+              const conversationAttachments =
+                attachmentsByConversation.get(input.conversationId) ?? [];
+              attachmentsByConversation.set(input.conversationId, []);
+              for (const attachment of conversationAttachments) {
+                files.delete(attachment.fileId);
+              }
+              const deletion = {
+                attachmentCount: conversationAttachments.length,
+                fileObjectKeys: conversationAttachments.map((attachment) => attachment.fileId),
+                artifactObjectKeys: []
+              };
+              options.onConversationAttachmentsDeleted?.(deletion);
+              return deletion;
+            },
+            async readConversationFile(input) {
+              const file = files.get(input.fileId);
+              if (!file) {
+                throw new Error("File is not available");
+              }
+              return {
+                fileId: input.fileId as ManagedFileId,
+                filename: file.filename,
+                mimeType: file.mimeType,
+                byteSize: file.bytes.byteLength,
+                bytes: file.bytes
+              };
+            },
+            blockingDraftAttachmentMessage() {
+              return undefined;
+            },
+            createAttachmentManifest(attachments) {
+              return {
+                version: 1,
+                attachments: attachments.flatMap((attachment) =>
+                  manifestEntryForAttachment(attachment)
+                )
+              };
+            },
+            isInlineDisplayMimeType(mimeType) {
+              return mimeType === "image/gif";
             }
-            return {
-              ...deleted,
-              deletedAt: new Date().toISOString()
-            };
-          },
-          async deleteConversationAttachments(input) {
-            const conversationAttachments = attachmentsByConversation.get(input.conversationId) ?? [];
-            attachmentsByConversation.set(input.conversationId, []);
-            for (const attachment of conversationAttachments) {
-              files.delete(attachment.fileId);
-            }
-            const deletion = {
-              attachmentCount: conversationAttachments.length,
-              fileObjectKeys: conversationAttachments.map((attachment) => attachment.fileId),
-              artifactObjectKeys: []
-            };
-            options.onConversationAttachmentsDeleted?.(deletion);
-            return deletion;
-          },
-          async readConversationFile(input) {
-            const file = files.get(input.fileId);
-            if (!file) {
-              throw new Error("File is not available");
-            }
-            return {
-              fileId: input.fileId as ManagedFileId,
-              filename: file.filename,
-              mimeType: file.mimeType,
-              byteSize: file.bytes.byteLength,
-              bytes: file.bytes
-            };
-          },
-          blockingDraftAttachmentMessage() {
-            return undefined;
-          },
-          createAttachmentManifest(attachments) {
-            return {
-              version: 1,
-              attachments: attachments.flatMap((attachment) =>
-                manifestEntryForAttachment(attachment)
-              )
-            };
-          },
-          isInlineDisplayMimeType(mimeType) {
-            return mimeType === "image/gif";
           }
-        }]
+        ]
       };
     }
   };

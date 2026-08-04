@@ -15,7 +15,10 @@ describe("workspace tool display", () => {
       "pptx_inspect artifacts/deck.pptx --view summary",
       "pptx_render artifacts/deck.pptx --out previews/surprise_deck"
     ].join("\n");
-    const inlineCommand = command.split("\n").map((line) => line.trim()).join(" ");
+    const inlineCommand = command
+      .split("\n")
+      .map((line) => line.trim())
+      .join(" ");
 
     expect(formatWorkspaceCommandActionLabel(command)).toBe(inlineCommand);
     const projection = projectWorkspaceToolDisplay({
@@ -35,7 +38,9 @@ describe("workspace tool display", () => {
 
   it("keeps strict-mode setup lines in the actual command label", () => {
     expect(
-      formatWorkspaceCommandActionLabel("set -e\npython scripts/build.py\npptx_inspect deck.pptx --view summary")
+      formatWorkspaceCommandActionLabel(
+        "set -e\npython scripts/build.py\npptx_inspect deck.pptx --view summary"
+      )
     ).toBe("set -e python scripts/build.py pptx_inspect deck.pptx --view summary");
   });
 });

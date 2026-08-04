@@ -14,14 +14,7 @@ import {
 import { Button } from "./ui/button";
 
 export const ARTIFACT_PREVIEW_POLL_DELAYS_MS = [
-  1000,
-  2000,
-  3000,
-  5000,
-  5000,
-  5000,
-  5000,
-  5000
+  1000, 2000, 3000, 5000, 5000, 5000, 5000, 5000
 ] as const;
 
 type ReadyArtifactPreview = Extract<ArtifactPreviewResponse, { status: "ready" }>;
@@ -122,16 +115,15 @@ export function createArtifactPreviewView(input: {
 export function shouldUseLiveArtifactPreviewState(artifact: ToolArtifactDownloadRef): boolean {
   const previewKind = getArtifactPreviewKind(artifact);
   return (
-    previewKind === "image-pages" ||
-    previewKind === "document" ||
-    previewKind === "presentation"
+    previewKind === "image-pages" || previewKind === "document" || previewKind === "presentation"
   );
 }
 
 export function getArtifactSourceFallbackKind(
   artifact: ToolArtifactDownloadRef
 ): ArtifactSourceFallbackKind | undefined {
-  const descriptor = `${artifact.mimeType ?? ""} ${artifact.kind ?? ""} ${artifact.filename ?? ""}`.toLowerCase();
+  const descriptor =
+    `${artifact.mimeType ?? ""} ${artifact.kind ?? ""} ${artifact.filename ?? ""}`.toLowerCase();
   if (
     descriptor.includes("image/png") ||
     descriptor.includes("image/jpeg") ||
@@ -141,7 +133,10 @@ export function getArtifactSourceFallbackKind(
   ) {
     return "image";
   }
-  if (descriptor.includes("application/pdf") || artifactPreviewDescriptorHasExtension(descriptor, ["pdf"])) {
+  if (
+    descriptor.includes("application/pdf") ||
+    artifactPreviewDescriptorHasExtension(descriptor, ["pdf"])
+  ) {
     return "pdf";
   }
   if (
@@ -210,8 +205,8 @@ export function LiveArtifactPreview({
         preview: current.preview,
         refreshing: true
       }));
-      void client
-        .conversationArtifactPreview(conversationId, artifact.artifactId)
+      void client.conversations.artifacts
+        .getPreview(conversationId, artifact.artifactId)
         .then((preview) => {
           if (cancelled) {
             return;
@@ -269,8 +264,8 @@ export function LiveArtifactPreview({
 
   function retryPreview() {
     setRetrying(true);
-    void client
-      .retryConversationArtifactPreview(conversationId, artifact.artifactId)
+    void client.conversations.artifacts
+      .retryPreview(conversationId, artifact.artifactId)
       .then((preview) => {
         setState({
           apiError: false,
@@ -331,7 +326,13 @@ export function LiveArtifactPreview({
         detail={artifactPreviewStatusDetail(artifact, view.errorCode)}
         action={
           view.retryable ? (
-            <Button type="button" size="sm" variant="outline" onClick={retryPreview} disabled={retrying}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={retryPreview}
+              disabled={retrying}
+            >
               <RotateCcw aria-hidden="true" />
               <span>{retrying ? t("artifactPreviewRetrying") : t("artifactPreviewRetry")}</span>
             </Button>
@@ -424,7 +425,7 @@ function LazyArtifactPreviewPage({
   const [visible, setVisible] = useState(client.browserManagedDownloads);
   const [url, setUrl] = useState<string | undefined>(() =>
     client.browserManagedDownloads
-      ? client.conversationArtifactContentUrl(conversationId, page.artifactId, true)
+      ? client.conversations.artifacts.contentUrl(conversationId, page.artifactId, true)
       : undefined
   );
   const [failed, setFailed] = useState(false);
@@ -452,7 +453,8 @@ function LazyArtifactPreviewPage({
     }
     let active = true;
     let objectUrl: string | undefined;
-    void client.conversationArtifactContent(conversationId, page.artifactId)
+    void client.conversations.artifacts
+      .getContent(conversationId, page.artifactId)
       .then((blob) => {
         objectUrl = URL.createObjectURL(blob);
         if (active) {
@@ -475,7 +477,10 @@ function LazyArtifactPreviewPage({
   }, [client, conversationId, page.artifactId, visible]);
 
   return (
-    <div ref={containerRef} className="grid min-h-64 place-items-center rounded-sm bg-white shadow-sm ring-1 ring-border/70">
+    <div
+      ref={containerRef}
+      className="grid min-h-64 place-items-center rounded-sm bg-white shadow-sm ring-1 ring-border/70"
+    >
       {failed ? (
         <span className="p-6 text-sm text-muted-foreground">{t("artifactPreviewFailed")}</span>
       ) : url ? (
@@ -513,7 +518,10 @@ function artifactPreviewStateKey(preview: ArtifactPreviewResponse | undefined): 
   return `${preview.status}:${preview.artifactId}:${preview.pages.map((page) => page.artifactId).join("|")}`;
 }
 
-function artifactPreviewStatusDetail(artifact: ToolArtifactDownloadRef, errorCode: string | undefined): string {
+function artifactPreviewStatusDetail(
+  artifact: ToolArtifactDownloadRef,
+  errorCode: string | undefined
+): string {
   const filename = artifactDisplayFilename(artifact);
   return errorCode ? `${filename}: ${errorCode}` : filename;
 }

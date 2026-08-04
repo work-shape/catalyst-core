@@ -25,7 +25,10 @@ export async function seedStandaloneAuth(
   const env = input.env ?? process.env;
   const config = input.config ?? (await loadConfig(input.configPath));
   if (!config.auth.standalone?.enabled) {
-    throw new AppError("VALIDATION_FAILED", "Standalone auth is not enabled for this client instance");
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "Standalone auth is not enabled for this client instance"
+    );
   }
 
   const store = await createPlatformStore({

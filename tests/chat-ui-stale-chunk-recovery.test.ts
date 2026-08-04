@@ -39,10 +39,7 @@ describe("stale client chunk recovery", () => {
   });
 
   it("does not serve the SPA document for missing hashed assets", () => {
-    const config = readFileSync(
-      new URL("../docker/nginx-spa.conf", import.meta.url),
-      "utf8"
-    );
+    const config = readFileSync(new URL("../docker/nginx-spa.conf", import.meta.url), "utf8");
 
     expect(config).toMatch(/location \/assets\/ \{[\s\S]*try_files \$uri =404;/);
     expect(config).toContain('Cache-Control "public, max-age=31536000, immutable"');

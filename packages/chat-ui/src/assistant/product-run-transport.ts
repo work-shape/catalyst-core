@@ -1,10 +1,13 @@
 import type { ChatTransport, UIMessage, UIMessageChunk } from "ai";
-import type { ApiClient, LocaleCode, StartConversationRunResponse } from "@vivd-catalyst/api-client";
-import { firstLineTitle } from "../conversation-title";
+import type {
+  ApiClient,
+  LocaleCode,
+  StartConversationRunResponse
+} from "@vivd-catalyst/api-client";
 
 export interface ProductRunTransportOptions {
   client: {
-    conversations: Pick<ApiClient["conversations"], "createRun" | "startRun">;
+    runs: Pick<ApiClient["runs"], "create" | "start">;
   };
   selectedConversationId?: string;
   locale: LocaleCode;
@@ -25,7 +28,9 @@ export class ProductConversationRunTransport implements ChatTransport<UIMessage>
     messageId,
     messages,
     trigger
-  }: Parameters<ChatTransport<UIMessage>["sendMessages"]>[0]): Promise<ReadableStream<UIMessageChunk>> {
+  }: Parameters<ChatTransport<UIMessage>["sendMessages"]>[0]): Promise<
+    ReadableStream<UIMessageChunk>
+  > {
     if (trigger !== "submit-message") {
       throw new Error("Only new message submission is supported by the product run transport.");
     }
@@ -91,7 +96,7 @@ export async function startProductConversationRun({
   agentName?: string;
   modelBindingId?: string;
   client: {
-    conversations: Pick<ApiClient["conversations"], "createRun" | "startRun">;
+    runs: Pick<ApiClient["runs"], "create" | "start">;
   };
   conversationId?: string;
   idempotencyKey: string;
@@ -109,10 +114,10 @@ export async function startProductConversationRun({
   };
 
   if (conversationId) {
-    return client.conversations.startRun(conversationId, request);
+    return client.runs.start(conversationId, request);
   }
 
-  return client.conversations.createRun({
+  return client.runs.create({
     ...request,
     conversation: {
       title: firstLineTitle(text),
@@ -155,4 +160,9 @@ function extractUserText(message: UIMessage | undefined): string {
       .join("\n")
       .trim() ?? ""
   );
+}
+
+function firstLineTitle(text: string): string {
+  const firstLine = text.split("\n")[0]?.trim() ?? "New conversation";
+  return firstLine.length > 60 ? `${firstLine.slice(0, 57)}...` : firstLine || "New conversation";
 }

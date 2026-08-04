@@ -18,20 +18,12 @@ export interface ManagedFileRef {
 
 export type ManagedArtifactKind = string;
 
-export type SupportedImageMimeType =
-  | "image/png"
-  | "image/jpeg"
-  | "image/webp"
-  | "image/gif";
+export type SupportedImageMimeType = "image/png" | "image/jpeg" | "image/webp" | "image/gif";
 
 export type ArtifactPreviewImageFormat = "png" | "jpeg" | "webp";
 export type ArtifactPreviewStatus = "pending" | "ready" | "failed" | "unsupported";
 export type ArtifactPreviewJobStatus =
-  | "pending"
-  | "processing"
-  | "completed"
-  | "failed"
-  | "unsupported";
+  "pending" | "processing" | "completed" | "failed" | "unsupported";
 export type ArtifactPreviewSourceKind = "document" | "presentation" | "pdf" | "spreadsheet";
 export type FilePreviewCapability =
   | "native_image"
@@ -235,12 +227,7 @@ export function isImageFileFormat(
 }
 
 export type ConversationAttachmentStatus =
-  | "queued"
-  | "preprocessing"
-  | "ready"
-  | "failed"
-  | "unsupported"
-  | "deleted";
+  "queued" | "preprocessing" | "ready" | "failed" | "unsupported" | "deleted";
 
 export interface AttachmentWarning {
   code: string;
@@ -538,7 +525,9 @@ export interface ManagedArtifactStore {
 }
 
 export interface ArtifactPreviewStore {
-  enqueueArtifactPreviewJob(input: EnqueueArtifactPreviewJobInput): Promise<ArtifactPreviewJobRecord>;
+  enqueueArtifactPreviewJob(
+    input: EnqueueArtifactPreviewJobInput
+  ): Promise<ArtifactPreviewJobRecord>;
   getArtifactPreviewJob(input: {
     clientInstanceId: ClientInstanceId;
     sourceArtifactId: ManagedArtifactId;
@@ -666,7 +655,8 @@ export interface ConversationAttachmentStore {
 }
 
 export interface PlatformFileStore
-  extends ManagedFileStore,
+  extends
+    ManagedFileStore,
     ManagedArtifactStore,
     ArtifactPreviewStore,
     ConversationAttachmentStore {}
@@ -694,7 +684,8 @@ export function resolveFilePreviewCapability(input: {
   kind?: string;
   mimeType?: string;
 }): FilePreviewCapability | undefined {
-  const descriptor = `${input.mimeType ?? ""} ${input.kind ?? ""} ${input.filename ?? ""}`.toLowerCase();
+  const descriptor =
+    `${input.mimeType ?? ""} ${input.kind ?? ""} ${input.filename ?? ""}`.toLowerCase();
   if (containsPdfSignal(descriptor)) {
     return "native_pdf";
   }
@@ -755,5 +746,7 @@ function containsSpreadsheetSignal(descriptor: string): boolean {
 }
 
 function hasArtifactPreviewExtension(descriptor: string, extensions: string[]): boolean {
-  return extensions.some((extension) => new RegExp(`(^|[^a-z0-9])${extension}([^a-z0-9]|$)`, "iu").test(descriptor));
+  return extensions.some((extension) =>
+    new RegExp(`(^|[^a-z0-9])${extension}([^a-z0-9]|$)`, "iu").test(descriptor)
+  );
 }

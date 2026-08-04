@@ -71,9 +71,7 @@ export function createConsoleWorkspaceCommandTelemetry(
   };
 }
 
-export function workspaceCommandCountsMetadata(
-  counts: ActiveWorkspaceCommandCounts
-): JsonObject {
+export function workspaceCommandCountsMetadata(counts: ActiveWorkspaceCommandCounts): JsonObject {
   return {
     queued: counts.queued,
     running: counts.running,

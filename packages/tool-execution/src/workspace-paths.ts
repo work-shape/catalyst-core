@@ -51,9 +51,10 @@ export function resolveWorkspaceFilesystemPath(
     return normalized;
   }
   const workspaceRoot = resolve(workspaceDirectory);
-  const target = normalized.value === "."
-    ? workspaceRoot
-    : resolve(workspaceRoot, ...normalized.value.split("/"));
+  const target =
+    normalized.value === "."
+      ? workspaceRoot
+      : resolve(workspaceRoot, ...normalized.value.split("/"));
   if (target !== workspaceRoot && !target.startsWith(`${workspaceRoot}${sep}`)) {
     return workspacePathFailed("Workspace path cannot traverse outside the workspace", {
       path: workspacePath
@@ -70,11 +71,12 @@ function normalizeWorkspacePath(
   limits: WorkspacePathLimits
 ): WorkspacePathValidationResult<string> {
   const trimmedInput = value.trim();
-  const trimmed = trimmedInput === "/workspace"
-    ? "."
-    : trimmedInput.startsWith("/workspace/")
-      ? trimmedInput.slice("/workspace/".length)
-      : trimmedInput;
+  const trimmed =
+    trimmedInput === "/workspace"
+      ? "."
+      : trimmedInput.startsWith("/workspace/")
+        ? trimmedInput.slice("/workspace/".length)
+        : trimmedInput;
   if (trimmed.length === 0) {
     return workspacePathFailed("Workspace path cannot be blank");
   }

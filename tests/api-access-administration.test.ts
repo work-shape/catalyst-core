@@ -28,7 +28,7 @@ describe("API Access administration", () => {
     const fixture = await createFixture();
     const client = await createClient(fixture.server, "superadmin");
 
-    const created = await client.createServicePrincipal({
+    const created = await client.apiAccess.createServicePrincipal({
       displayLabel: "Release CLI",
       description: "Configuration release automation",
       permissions: ["config_assets.read", "config_assets.release"]
@@ -43,7 +43,7 @@ describe("API Access administration", () => {
       credentials: []
     });
 
-    const updated = await client.updateServicePrincipal(created.principal.id, {
+    const updated = await client.apiAccess.updateServicePrincipal(created.principal.id, {
       displayLabel: "Disabled release CLI",
       description: null,
       status: "disabled",
@@ -57,7 +57,7 @@ describe("API Access administration", () => {
     expect(updated.principal.description).toBeUndefined();
 
     const expiresAt = new Date(Date.now() + 60_000).toISOString();
-    const createdCredential = await client.createApiCredential(created.principal.id, {
+    const createdCredential = await client.apiAccess.createCredential(created.principal.id, {
       name: "CI key",
       scopes: ["config_assets:read"],
       expiresAt
@@ -73,13 +73,13 @@ describe("API Access administration", () => {
       secret: expect.stringMatching(/^cat\.apic_/u)
     });
 
-    const listed = await client.servicePrincipals();
+    const listed = await client.apiAccess.listServicePrincipals();
     expect(listed).toHaveLength(1);
     expect(listed[0]?.credentials).toEqual([createdCredential.credential]);
     expect(JSON.stringify(listed)).not.toContain(createdCredential.secret);
     expect(JSON.stringify(listed)).not.toContain("secretHash");
 
-    const revoked = await client.revokeApiCredential(createdCredential.credential.id);
+    const revoked = await client.apiAccess.revokeCredential(createdCredential.credential.id);
     expect(revoked.revokedAt).toEqual(expect.any(String));
 
     const events = await fixture.store.listAuditEvents({
@@ -120,43 +120,45 @@ describe("API Access administration", () => {
 
     const managerClient = await createClient(fixture.server, "admin-manager");
     await expect(
-      managerClient.createServicePrincipal({
+      managerClient.apiAccess.createServicePrincipal({
         displayLabel: "Forbidden managed principal",
         permissions: ["config_assets.read"]
       })
     ).rejects.toMatchObject({ status: 403 });
 
     const superadminClient = await createClient(fixture.server, "superadmin");
-    const principal = await superadminClient.createServicePrincipal({
+    const principal = await superadminClient.apiAccess.createServicePrincipal({
       displayLabel: "Managed principal",
       permissions: ["config_assets.read"]
     });
     await expect(
-      managerClient.updateServicePrincipal(principal.principal.id, {
+      managerClient.apiAccess.updateServicePrincipal(principal.principal.id, {
         displayLabel: "Forbidden update"
       })
     ).rejects.toMatchObject({ status: 403 });
-    await superadminClient.updateServicePrincipal(principal.principal.id, {
+    await superadminClient.apiAccess.updateServicePrincipal(principal.principal.id, {
       status: "disabled"
     });
     await expect(
-      managerClient.updateServicePrincipal(principal.principal.id, {
+      managerClient.apiAccess.updateServicePrincipal(principal.principal.id, {
         status: "active"
       })
     ).rejects.toMatchObject({ status: 403 });
     await expect(
-      managerClient.updateServicePrincipal(principal.principal.id, {
+      managerClient.apiAccess.updateServicePrincipal(principal.principal.id, {
         permissions: ["config_assets.read", "config_assets.release"]
       })
     ).rejects.toMatchObject({ status: 403 });
     await expect(
-      managerClient.createApiCredential(principal.principal.id, { name: "Forbidden key" })
+      managerClient.apiAccess.createCredential(principal.principal.id, { name: "Forbidden key" })
     ).rejects.toMatchObject({ status: 403 });
 
-    const credential = await superadminClient.createApiCredential(principal.principal.id, {
+    const credential = await superadminClient.apiAccess.createCredential(principal.principal.id, {
       name: "Superadmin key"
     });
-    await expect(managerClient.revokeApiCredential(credential.credential.id)).rejects.toMatchObject({
+    await expect(
+      managerClient.apiAccess.revokeCredential(credential.credential.id)
+    ).rejects.toMatchObject({
       status: 403
     });
   });
@@ -180,7 +182,7 @@ describe("API Access administration", () => {
   it("rejects unsupported credential scopes and non-future expiry", async () => {
     const fixture = await createFixture();
     const client = await createClient(fixture.server, "superadmin");
-    const principal = await client.createServicePrincipal({
+    const principal = await client.apiAccess.createServicePrincipal({
       displayLabel: "Validation principal",
       permissions: ["config_assets.read"]
     });

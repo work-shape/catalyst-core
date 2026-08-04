@@ -220,7 +220,8 @@ function expectConfigIssue(run: () => void, message: RegExp): void {
   try {
     run();
   } catch (error) {
-    const issues = (error as { details?: { issues?: Array<{ message?: string }> } }).details?.issues ?? [];
+    const issues =
+      (error as { details?: { issues?: Array<{ message?: string }> } }).details?.issues ?? [];
     expect(issues.some((issue) => message.test(issue.message ?? ""))).toBe(true);
     return;
   }

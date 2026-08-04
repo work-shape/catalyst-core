@@ -17,4 +17,3 @@ export function addDays(value: Date, days: number): Date {
   next.setUTCDate(next.getUTCDate() + days);
   return next;
 }
-

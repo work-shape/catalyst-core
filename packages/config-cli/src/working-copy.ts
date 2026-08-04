@@ -91,7 +91,9 @@ export function resolveInstance(
 ): ResolvedInstance {
   const key = requestedInstance ?? manifest.defaultInstance;
   if (!key) {
-    throw new Error(`No instance selected; pass --instance or set defaultInstance in ${MANIFEST_FILENAME}`);
+    throw new Error(
+      `No instance selected; pass --instance or set defaultInstance in ${MANIFEST_FILENAME}`
+    );
   }
   const configured = manifest.instances[key];
   if (configured) {
@@ -362,14 +364,23 @@ function readOptionalString(
 
 function readStringArray(input: Record<string, unknown>, key: string, source: string): string[] {
   const value = input[key];
-  if (!Array.isArray(value) || !value.every((item) => typeof item === "string" && item.length > 0)) {
+  if (
+    !Array.isArray(value) ||
+    !value.every((item) => typeof item === "string" && item.length > 0)
+  ) {
     throw new Error(`${source} ${key} must be an array of file globs`);
   }
   return value;
 }
 
 function assertSafeAssetName(name: string): void {
-  if (name === "." || name === ".." || name.includes("/") || name.includes("\\") || name.includes("\0")) {
+  if (
+    name === "." ||
+    name === ".." ||
+    name.includes("/") ||
+    name.includes("\\") ||
+    name.includes("\0")
+  ) {
     throw new Error(`Config asset name cannot be represented safely as a local path: ${name}`);
   }
 }

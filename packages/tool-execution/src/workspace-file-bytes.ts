@@ -31,11 +31,7 @@ export interface PutWorkspaceFileBytesInput {
 }
 
 export interface WorkspaceObjectStorage {
-  putObject(input: {
-    key: string;
-    body: Uint8Array;
-    contentType?: string;
-  }): Promise<void>;
+  putObject(input: { key: string; body: Uint8Array; contentType?: string }): Promise<void>;
   getObject(key: string): Promise<Uint8Array>;
   deleteObject?(key: string): Promise<void>;
 }

@@ -138,7 +138,12 @@ describe("projectAuditActivities", () => {
   it("resolves an assistant acting on behalf of a human", () => {
     const delegated: AuditActor = {
       ...human,
-      delegatedActor: { kind: "service_principal", id: "svc_agent", displayLabel: "Agent", authSource: "system" }
+      delegatedActor: {
+        kind: "service_principal",
+        id: "svc_agent",
+        displayLabel: "Agent",
+        authSource: "system"
+      }
     };
     const [activity] = projectAuditActivities([
       evt({ type: "tool.completed", correlationId: "c", actor: delegated, status: "failed" })
@@ -210,7 +215,12 @@ describe("reasonForEvent", () => {
 describe("conversation audit labels", () => {
   it("describes a manual conversation rename", () => {
     const [activity] = projectAuditActivities([
-      evt({ type: "conversation.renamed", correlationId: "rename", actor: human, subject: "conv_1" })
+      evt({
+        type: "conversation.renamed",
+        correlationId: "rename",
+        actor: human,
+        subject: "conv_1"
+      })
     ]);
 
     expect(activity!.label).toBe("Renamed a conversation");

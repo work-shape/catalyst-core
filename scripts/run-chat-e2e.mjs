@@ -56,10 +56,9 @@ serverExitPromise.catch(() => undefined);
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => {
-    void cleanup()
-      .finally(() => {
-        process.exit(signal === "SIGINT" ? 130 : 143);
-      });
+    void cleanup().finally(() => {
+      process.exit(signal === "SIGINT" ? 130 : 143);
+    });
   });
 }
 
@@ -175,7 +174,10 @@ async function buildRequiredPackages() {
       throw new Error(`Expected ${relativePackageDir} ${scriptName} to use tsup, got: ${script}`);
     }
 
-    await run(localBin(command), args, { cwd: packageDir, label: `${relativePackageDir}:${scriptName}` });
+    await run(localBin(command), args, {
+      cwd: packageDir,
+      label: `${relativePackageDir}:${scriptName}`
+    });
   }
 }
 
@@ -185,16 +187,24 @@ async function startPostgres() {
     COMPOSE_PROJECT_NAME: e2eComposeProject,
     POSTGRES_HOST_PORT: e2ePostgresPort
   };
-  await run("docker", ["compose", "-f", "clients/demo/docker-compose.yml", "down", "-v", "--remove-orphans"], {
-    cwd: repoRoot,
-    env: composeEnv,
-    label: "docker compose down"
-  });
-  await run("docker", ["compose", "-f", "clients/demo/docker-compose.yml", "up", "-d", "--wait", "postgres"], {
-    cwd: repoRoot,
-    env: composeEnv,
-    label: "docker compose up postgres"
-  });
+  await run(
+    "docker",
+    ["compose", "-f", "clients/demo/docker-compose.yml", "down", "-v", "--remove-orphans"],
+    {
+      cwd: repoRoot,
+      env: composeEnv,
+      label: "docker compose down"
+    }
+  );
+  await run(
+    "docker",
+    ["compose", "-f", "clients/demo/docker-compose.yml", "up", "-d", "--wait", "postgres"],
+    {
+      cwd: repoRoot,
+      env: composeEnv,
+      label: "docker compose up postgres"
+    }
+  );
 }
 
 function startApiServer() {
@@ -319,7 +329,9 @@ async function waitForUrl(url, { label }) {
     }
     await delay(250);
   }
-  throw new Error(`Timed out waiting for ${label} at ${url}: ${lastError?.message ?? "unknown error"}`);
+  throw new Error(
+    `Timed out waiting for ${label} at ${url}: ${lastError?.message ?? "unknown error"}`
+  );
 }
 
 async function waitForAuthReady() {
@@ -330,7 +342,7 @@ async function waitForAuthReady() {
       const response = await fetch(`${e2eApiUrl}/api/auth/sign-in/email`, {
         method: "POST",
         headers: {
-          "origin": e2eUiUrl,
+          origin: e2eUiUrl,
           "content-type": "application/json"
         },
         body: JSON.stringify({
@@ -348,7 +360,9 @@ async function waitForAuthReady() {
     }
     await delay(250);
   }
-  throw new Error(`Timed out waiting for auth/database readiness: ${lastError?.message ?? "unknown error"}`);
+  throw new Error(
+    `Timed out waiting for auth/database readiness: ${lastError?.message ?? "unknown error"}`
+  );
 }
 
 function spawnManaged(command, args, { cwd, env, label }) {
@@ -362,7 +376,9 @@ function spawnManaged(command, args, { cwd, env, label }) {
   child.once("exit", (code, signal) => {
     children.delete(child);
     if (!cleanupStarted) {
-      serverExitError = new Error(`${label} exited unexpectedly with ${signal ?? `exit code ${code}`}`);
+      serverExitError = new Error(
+        `${label} exited unexpectedly with ${signal ?? `exit code ${code}`}`
+      );
       rejectServerExit(serverExitError);
     }
   });
@@ -401,15 +417,19 @@ async function cleanup() {
     return;
   }
 
-  await run("docker", ["compose", "-f", "clients/demo/docker-compose.yml", "down", "-v", "--remove-orphans"], {
-    cwd: repoRoot,
-    env: {
-      ...process.env,
-      COMPOSE_PROJECT_NAME: e2eComposeProject,
-      POSTGRES_HOST_PORT: e2ePostgresPort
-    },
-    label: "docker compose cleanup"
-  }).catch((error) => {
+  await run(
+    "docker",
+    ["compose", "-f", "clients/demo/docker-compose.yml", "down", "-v", "--remove-orphans"],
+    {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        COMPOSE_PROJECT_NAME: e2eComposeProject,
+        POSTGRES_HOST_PORT: e2ePostgresPort
+      },
+      label: "docker compose cleanup"
+    }
+  ).catch((error) => {
     console.error(`[e2e] cleanup failed: ${error.message}`);
   });
 }

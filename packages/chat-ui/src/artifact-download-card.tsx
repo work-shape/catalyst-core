@@ -83,7 +83,11 @@ export function ToolArtifactList({
                 </div>
               }
             >
-              <ArtifactPreview artifact={artifact} client={client} conversationId={conversationId} />
+              <ArtifactPreview
+                artifact={artifact}
+                client={client}
+                conversationId={conversationId}
+              />
             </Suspense>
           </ArtifactPreviewErrorBoundary>
         )
@@ -138,7 +142,10 @@ export function ToolArtifactList({
             onKeyDown={
               previewAvailable
                 ? (event) => {
-                    if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+                    if (
+                      event.target === event.currentTarget &&
+                      (event.key === "Enter" || event.key === " ")
+                    ) {
                       event.preventDefault();
                       previewArtifact(artifact);
                     }
@@ -148,7 +155,12 @@ export function ToolArtifactList({
           >
             <ArtifactFileIcon fileType={fileType} large={variant === "deliverable"} />
             <span className="min-w-0 flex-1 truncate">
-              <span className={cn("block truncate font-medium", variant === "deliverable" && "text-base")}>
+              <span
+                className={cn(
+                  "block truncate font-medium",
+                  variant === "deliverable" && "text-base"
+                )}
+              >
                 {filename}
               </span>
               <span className="block truncate text-xs text-muted-foreground">
@@ -187,7 +199,7 @@ export function ArtifactDownloadButton({
   const large = variant === "deliverable";
   const nativeDownloadUrl =
     downloadAvailable && client?.browserManagedDownloads && conversationId
-      ? client.conversationArtifactContentUrl(conversationId, artifact.artifactId)
+      ? client.conversations.artifacts.contentUrl(conversationId, artifact.artifactId)
       : undefined;
   const className = cn(
     "inline-flex shrink-0 items-center justify-center gap-2 rounded-md border bg-background font-medium text-foreground no-underline transition-colors",
@@ -202,7 +214,10 @@ export function ArtifactDownloadButton({
     }
     setDownloading(true);
     try {
-      const blob = await client.conversationArtifactContent(conversationId, artifact.artifactId);
+      const blob = await client.conversations.artifacts.getContent(
+        conversationId,
+        artifact.artifactId
+      );
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -237,7 +252,9 @@ export function ArtifactDownloadButton({
       type="button"
       disabled={!downloadAvailable || downloading}
       title={downloadAvailable ? t("downloadArtifact", { filename }) : t("downloadUnavailable")}
-      aria-label={downloadAvailable ? t("downloadArtifact", { filename }) : t("downloadUnavailable")}
+      aria-label={
+        downloadAvailable ? t("downloadArtifact", { filename }) : t("downloadUnavailable")
+      }
       onClick={(event) => {
         stopCardPreview(event);
         void downloadArtifact();

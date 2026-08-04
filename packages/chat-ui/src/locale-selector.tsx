@@ -60,7 +60,10 @@ export function LocaleSelector({
         <span className="uppercase">{selectedLocale}</span>
         <ChevronDown
           size={15}
-          className={cn("shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
+          className={cn(
+            "shrink-0 text-muted-foreground transition-transform",
+            open && "rotate-180"
+          )}
           aria-hidden="true"
         />
       </button>

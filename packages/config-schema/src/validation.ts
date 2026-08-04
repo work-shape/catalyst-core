@@ -1,14 +1,7 @@
 import { AppError } from "@vivd-catalyst/core";
-import {
-  clientInstanceConfigSchema,
-  type AgentConfig,
-  type ClientInstanceConfig
-} from "./schemas";
+import { clientInstanceConfigSchema, type AgentConfig, type ClientInstanceConfig } from "./schemas";
 import { findDuplicates } from "./reference-validation";
-import {
-  getModelSelectionForAgent,
-  getModelSelectionForConversationTitles
-} from "./selectors";
+import { getModelSelectionForAgent, getModelSelectionForConversationTitles } from "./selectors";
 
 export function parseClientInstanceConfig(input: unknown): ClientInstanceConfig {
   const parsed = clientInstanceConfigSchema.safeParse(input);
@@ -93,7 +86,9 @@ function assertConfigReferences(config: ClientInstanceConfig): void {
     );
   }
 
-  const duplicateModelBindingIds = findDuplicates(config.modelBindings.map((binding) => binding.id));
+  const duplicateModelBindingIds = findDuplicates(
+    config.modelBindings.map((binding) => binding.id)
+  );
   if (duplicateModelBindingIds.length > 0) {
     throw new AppError(
       "VALIDATION_FAILED",
@@ -155,16 +150,11 @@ export function assertSpendBudgetPricingCoverage(
 
   const customerRateCard = config.usage.costs.customer;
   if (!customerRateCard) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      "Spend budget requires an explicit customer rate card"
-    );
+    throw new AppError("VALIDATION_FAILED", "Spend budget requires an explicit customer rate card");
   }
 
   const priceKeys = new Set(
-    customerRateCard.models.map((price) =>
-      createPricingKey(price.providerId, price.model)
-    )
+    customerRateCard.models.map((price) => createPricingKey(price.providerId, price.model))
   );
   const requiredPrices = new Set<string>();
 

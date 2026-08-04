@@ -1,0 +1,702 @@
+import {
+  ActionBarPrimitive,
+  AttachmentPrimitive,
+  ComposerPrimitive,
+  ErrorPrimitive,
+  MessagePartPrimitive,
+  MessagePrimitive,
+  useAuiState,
+  type PartState
+} from "@assistant-ui/react";
+import {
+  Check,
+  Copy,
+  FileText,
+  ImageIcon,
+  ListRestart,
+  Pencil,
+  RefreshCw,
+  User
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { AttachmentPreview } from "../attachment-preview";
+import { managedFileIdFromUrl, useAttachmentContentContext } from "../attachment-content";
+import {
+  ASSISTANT_WORK_GROUP,
+  countAssistantWorkTimelineSteps,
+  createCompletedAssistantWorkIndices,
+  createAssistantMessageGroupBy,
+  createRenderableAssistantToolGroupIndices,
+  createAssistantWorkTimelineItems,
+  createVisibleFinalAssistantPartIndices,
+  findFinalAssistantTextPartIndex,
+  type AssistantWorkTimelineItem
+} from "./assistant-work-grouping";
+import type { AssistantUiMessageCustomMetadata } from "./assistant-ui-adapter";
+import { AssistantSourcePart } from "./assistant-source-part";
+import { useTranslation } from "../i18n";
+import { MarkdownText } from "../markdown-text";
+import { DataPart, ToolCallPart } from "../tool-call";
+import { ToolGroupContent, ToolGroupRoot, ToolGroupTrigger } from "./assistant-tool-group";
+import { TooltipIconButton, tooltipIconButtonClassName } from "../ui/tooltip-icon-button";
+import { Button } from "../ui/button";
+import { cn } from "../ui/cn";
+import { formatWorkHistoryLabel } from "./elapsed-time";
+import { isWorkspacePromotedSurfacesData } from "../tool-surfaces";
+
+const chronologicalAssistantMessageGroupBy = createAssistantMessageGroupBy();
+const recentlyActiveAssistantRunIds = new Set<string>();
+
+export function ThreadMessage({
+  conversationRunning,
+  activeRunId,
+  optimisticPending: _optimisticPending
+}: {
+  conversationRunning?: boolean;
+  activeRunId?: string;
+  optimisticPending?: boolean;
+}) {
+  const role = useAuiState((state) => state.message.role);
+  const isEditing = useAuiState((state) => state.message.composer.isEditing);
+
+  if (isEditing) {
+    return <DisabledEditComposer />;
+  }
+
+  if (role === "user") {
+    return <UserMessage />;
+  }
+
+  return <AssistantMessage activeRunId={activeRunId} conversationRunning={conversationRunning} />;
+}
+
+function AssistantMessage({
+  activeRunId,
+  conversationRunning
+}: {
+  activeRunId?: string;
+  conversationRunning?: boolean;
+}) {
+  const { t } = useTranslation();
+  const messageId = useAuiState((state) => state.message.id);
+  const messageParts = useAuiState((state) => state.message.parts);
+  const activeRunProjectionMessage = useAuiState(
+    (state) =>
+      (state.message.metadata.custom as AssistantUiMessageCustomMetadata | undefined)?.source ===
+      "active-run"
+  );
+  const activeRunCompleted = useAuiState(
+    (state) =>
+      (state.message.metadata.custom as AssistantUiMessageCustomMetadata | undefined)
+        ?.activeRunCompleted === true
+  );
+  const completedRunId = useAuiState(
+    (state) =>
+      (state.message.metadata.custom as AssistantUiMessageCustomMetadata | undefined)
+        ?.completedRunId
+  );
+  const runDurationMs = useAuiState(
+    (state) =>
+      (state.message.metadata.custom as AssistantUiMessageCustomMetadata | undefined)?.runDurationMs
+  );
+  const contextCompacted = useAuiState(
+    (state) =>
+      (state.message.metadata.custom as AssistantUiMessageCustomMetadata | undefined)
+        ?.contextCompacted === true
+  );
+  const matchesActiveRun = Boolean(activeRunId && messageId === activeRunId);
+  const activeRunMessage = Boolean(
+    conversationRunning && (activeRunProjectionMessage || matchesActiveRun)
+  );
+  const messageRunning = useAuiState(
+    (state) =>
+      state.message.role === "assistant" &&
+      (state.message.status?.type === "running" || activeRunMessage)
+  );
+  const finalTextIndex = findFinalAssistantTextPartIndex(messageParts);
+  const toolUIs = useAuiState((state) => state.tools.toolUIs);
+  const completedWorkIndices = useMemo(
+    () => createCompletedAssistantWorkIndices(messageParts, finalTextIndex),
+    [finalTextIndex, messageParts]
+  );
+  const visibleFinalPartIndices = useMemo(
+    () => createVisibleFinalAssistantPartIndices(messageParts, finalTextIndex),
+    [finalTextIndex, messageParts]
+  );
+  const completedWorkTimelineItems = useMemo(
+    () => createAssistantWorkTimelineItems(messageParts, completedWorkIndices, { toolUIs }),
+    [completedWorkIndices, messageParts, toolUIs]
+  );
+  const completedWorkStepCount = useMemo(
+    () => countAssistantWorkTimelineSteps(completedWorkTimelineItems),
+    [completedWorkTimelineItems]
+  );
+  const completedWorkSummary =
+    !messageRunning &&
+    !activeRunProjectionMessage &&
+    completedWorkStepCount > 0 &&
+    finalTextIndex >= 0;
+  // Reading this must not consume it: auto-collapse and auto-preview both
+  // depend on it, and whichever ran first used to silently disable the other.
+  // Capture this for the lifetime of the mounted message, then acknowledge it
+  // after the first paint. Returning to the conversation mounts a fresh message
+  // without replaying completion-only effects such as the collapse animation.
+  const [justCompletedRun] = useState(() => isRecentlyActiveAssistantRunId(completedRunId));
+  const autoCollapseCompletedWorkSummary = justCompletedRun;
+  const autoPreviewSurfaces = justCompletedRun || activeRunCompleted;
+  const assistantPartComponents = useAssistantPartComponents({
+    autoPreviewSurfaces,
+    displayPresentation: "full"
+  });
+  const completedWorkPartComponents = useAssistantPartComponents({
+    autoPreviewSurfaces: false,
+    displayPresentation: "summary"
+  });
+  useEffect(() => {
+    if (activeRunProjectionMessage) {
+      rememberRecentlyActiveAssistantRunId(messageId);
+    }
+  }, [activeRunProjectionMessage, messageId]);
+  useEffect(() => {
+    if (justCompletedRun) {
+      acknowledgeRecentlyActiveAssistantRunId(completedRunId);
+    }
+  }, [completedRunId, justCompletedRun]);
+
+  return (
+    <MessagePrimitive.Root
+      className="group/message mx-auto w-full max-w-5xl animate-in fade-in slide-in-from-bottom-1 duration-150"
+      data-role="assistant"
+    >
+      {contextCompacted ? (
+        <div
+          className="mb-3 flex items-center gap-2 px-1 text-sm text-muted-foreground"
+          data-testid="context-compaction-notice"
+        >
+          <ListRestart size={18} strokeWidth={1.75} aria-hidden="true" />
+          <span>{t("contextAutomaticallyCompacted")}</span>
+        </div>
+      ) : null}
+      <div className="min-w-0 rounded-md px-1 py-1 text-sm leading-6">
+        {completedWorkSummary ? (
+          <>
+            <AssistantWorkGroup
+              count={completedWorkStepCount}
+              summary
+              durationMs={runDurationMs}
+              autoCollapse={autoCollapseCompletedWorkSummary}
+            >
+              <AssistantWorkTimeline
+                items={completedWorkTimelineItems}
+                partComponents={completedWorkPartComponents}
+              />
+            </AssistantWorkGroup>
+            {visibleFinalPartIndices.map((index) => (
+              <MessagePrimitive.PartByIndex
+                key={`part-${index}`}
+                index={index}
+                components={assistantPartComponents}
+              />
+            ))}
+          </>
+        ) : (
+          <MessagePrimitive.GroupedParts groupBy={chronologicalAssistantMessageGroupBy}>
+            {({ part, children }) =>
+              renderAssistantGroupedPart({
+                part,
+                children,
+                autoPreviewSurfaces,
+                assistantPartComponents,
+                messageParts
+              })
+            }
+          </MessagePrimitive.GroupedParts>
+        )}
+        <MessageError />
+      </div>
+      {!messageRunning ? (
+        <div className="mt-1 flex min-h-8 items-center gap-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
+          <ActionBarPrimitive.Copy
+            className={tooltipIconButtonClassName}
+            title={t("copy")}
+            aria-label={t("copy")}
+          >
+            <CopiedState />
+          </ActionBarPrimitive.Copy>
+          <TooltipIconButton tooltip={t("regenerateResponse")} disabled>
+            <RefreshCw aria-hidden="true" />
+          </TooltipIconButton>
+        </div>
+      ) : null}
+    </MessagePrimitive.Root>
+  );
+}
+
+function useAssistantPartComponents(options: {
+  autoPreviewSurfaces: boolean;
+  displayPresentation: "full" | "summary";
+}) {
+  return useMemo(
+    () => createAssistantPartComponents(options),
+    [options.autoPreviewSurfaces, options.displayPresentation]
+  );
+}
+
+function createAssistantPartComponents(options: {
+  autoPreviewSurfaces: boolean;
+  displayPresentation: "full" | "summary";
+}): Parameters<typeof MessagePrimitive.PartByIndex>[0]["components"] {
+  return {
+    Text: AssistantTextPart,
+    Reasoning: AssistantReasoningPart,
+    Source: AssistantSourcePart,
+    Image: ImagePart,
+    File: FilePart,
+    tools: {
+      Override: (part) => (
+        <ToolCallPart {...part} displayPresentation={options.displayPresentation} />
+      )
+    },
+    data: {
+      Fallback: (part) => (
+        <DataPart
+          {...part}
+          autoPreviewSurfaces={options.autoPreviewSurfaces}
+          displayPresentation={options.displayPresentation}
+        />
+      )
+    }
+  };
+}
+
+type AssistantGroupedRenderInfo = Parameters<
+  Parameters<typeof MessagePrimitive.GroupedParts>[0]["children"]
+>[0];
+
+function renderAssistantGroupedPart({
+  part,
+  children,
+  autoPreviewSurfaces,
+  assistantPartComponents,
+  messageParts
+}: AssistantGroupedRenderInfo & {
+  autoPreviewSurfaces: boolean;
+  assistantPartComponents: Parameters<typeof MessagePrimitive.PartByIndex>[0]["components"];
+  messageParts: readonly PartState[];
+}) {
+  switch (part.type) {
+    case ASSISTANT_WORK_GROUP:
+      const renderableIndices = createRenderableAssistantToolGroupIndices(
+        messageParts,
+        part.indices
+      );
+      return (
+        <AssistantWorkGroup count={renderableIndices.length} summary={false}>
+          {renderableIndices.map((index) => (
+            <MessagePrimitive.PartByIndex
+              key={`part-${index}`}
+              index={index}
+              components={assistantPartComponents}
+            />
+          ))}
+        </AssistantWorkGroup>
+      );
+    case "text":
+      return <AssistantTextPart />;
+    case "tool-call":
+      return part.toolUI ?? <ToolCallPart {...part} displayPresentation="full" />;
+    case "data":
+      return autoPreviewSurfaces && isWorkspacePromotedSurfacesData(part.data) ? (
+        <DataPart {...part} autoPreviewSurfaces={autoPreviewSurfaces} displayPresentation="full" />
+      ) : (
+        (part.dataRendererUI ?? <DataPart {...part} displayPresentation="full" />)
+      );
+    case "reasoning":
+      return <AssistantReasoningPart />;
+    case "source":
+      return <AssistantSourcePart {...part} />;
+    case "image":
+      return <ImagePart />;
+    case "file":
+      return <FilePart />;
+    default:
+      return null;
+  }
+}
+
+function AssistantWorkTimeline({
+  items,
+  partComponents
+}: {
+  items: readonly AssistantWorkTimelineItem[];
+  partComponents: Parameters<typeof MessagePrimitive.PartByIndex>[0]["components"];
+}) {
+  const messageParts = useAuiState((state) => state.message.parts);
+
+  return (
+    <div className="chat-work-timeline">
+      {items.map((item) => {
+        if (item.type === "tool-group") {
+          const renderableIndices = createRenderableAssistantToolGroupIndices(
+            messageParts,
+            item.indices
+          );
+          return (
+            <AssistantWorkGroup
+              key={`tool-group-${item.indices[0]}`}
+              count={renderableIndices.length}
+              nested
+              summary={false}
+            >
+              {renderableIndices.map((index) => (
+                <MessagePrimitive.PartByIndex
+                  key={`part-${index}`}
+                  index={index}
+                  components={partComponents}
+                />
+              ))}
+            </AssistantWorkGroup>
+          );
+        }
+        if (item.type === "source-group") {
+          return (
+            <div key={`source-group-${item.indices[0]}`} className="chat-source-chip-group">
+              {item.indices.map((index) => (
+                <MessagePrimitive.PartByIndex
+                  key={`part-${index}`}
+                  index={index}
+                  components={partComponents}
+                />
+              ))}
+            </div>
+          );
+        }
+        return (
+          <MessagePrimitive.PartByIndex
+            key={`part-${item.index}`}
+            index={item.index}
+            components={partComponents}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function AssistantWorkGroup({
+  count,
+  children,
+  nested = false,
+  summary,
+  durationMs,
+  autoCollapse = false
+}: {
+  count: number;
+  children: ReactNode;
+  nested?: boolean;
+  summary: boolean;
+  durationMs?: number;
+  autoCollapse?: boolean;
+}) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(autoCollapse);
+  const [suppressOpenAnimation, setSuppressOpenAnimation] = useState(autoCollapse);
+  const autoCollapseStartedRef = useRef(false);
+
+  useEffect(() => {
+    if (!summary || !autoCollapse || autoCollapseStartedRef.current) {
+      return;
+    }
+    autoCollapseStartedRef.current = true;
+    const timeout = globalThis.setTimeout(() => {
+      setSuppressOpenAnimation(false);
+      setOpen(false);
+    }, 80);
+    return () => globalThis.clearTimeout(timeout);
+  }, [autoCollapse, summary]);
+
+  const countLabel = summary
+    ? formatWorkHistoryLabel(t("workHistory"), durationMs)
+    : t(count === 1 ? "toolCallCountSingular" : "toolCallCount", { count });
+
+  return (
+    <ToolGroupRoot
+      // Top margin only: whatever follows a group owns the spacing below it,
+      // via the adjacency rules in styles.css or its own offset.
+      className={cn("chat-tool-work max-w-5xl", nested ? "chat-tool-work-nested my-0" : "mt-4")}
+      open={open}
+      onOpenChange={setOpen}
+      variant="ghost"
+    >
+      <ToolGroupTrigger
+        data-testid="assistant-work-group-trigger"
+        count={count}
+        label={countLabel}
+      />
+      <ToolGroupContent
+        className={cn(
+          summary && "chat-work-summary-content",
+          suppressOpenAnimation && "chat-tool-group-suppress-open-animation"
+        )}
+      >
+        {children}
+      </ToolGroupContent>
+    </ToolGroupRoot>
+  );
+}
+
+export function rememberRecentlyActiveAssistantRunId(runId: string): void {
+  recentlyActiveAssistantRunIds.delete(runId);
+  recentlyActiveAssistantRunIds.add(runId);
+  if (recentlyActiveAssistantRunIds.size <= 20) {
+    return;
+  }
+  const oldestRunId = recentlyActiveAssistantRunIds.values().next().value;
+  if (typeof oldestRunId === "string") {
+    recentlyActiveAssistantRunIds.delete(oldestRunId);
+  }
+}
+
+export function isRecentlyActiveAssistantRunId(runId: string | undefined): boolean {
+  return Boolean(runId && recentlyActiveAssistantRunIds.has(runId));
+}
+
+export function acknowledgeRecentlyActiveAssistantRunId(runId: string | undefined): void {
+  if (runId) {
+    recentlyActiveAssistantRunIds.delete(runId);
+  }
+}
+
+function UserMessage() {
+  const { t } = useTranslation();
+
+  return (
+    <MessagePrimitive.Root
+      className="group/message mx-auto grid w-full max-w-3xl justify-items-end gap-1 animate-in fade-in slide-in-from-bottom-1 duration-150"
+      data-role="user"
+    >
+      <MessagePrimitive.Attachments>
+        {() => <AttachmentPreview removable={false} />}
+      </MessagePrimitive.Attachments>
+      <div className="chat-user-message-bubble max-w-[min(42rem,88%)] rounded-2xl rounded-tr-md bg-primary px-4 py-2.5 text-sm leading-6 text-primary-foreground shadow-xs [overflow-wrap:anywhere]">
+        <MessagePrimitive.Parts
+          components={{ Text: UserTextPart, File: FilePart, Image: ImagePart }}
+        />
+      </div>
+      <div className="flex min-h-8 items-center gap-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
+        <ActionBarPrimitive.Copy
+          className={tooltipIconButtonClassName}
+          title={t("copy")}
+          aria-label={t("copy")}
+        >
+          <CopiedState />
+        </ActionBarPrimitive.Copy>
+        <TooltipIconButton tooltip={t("editMessage")} disabled>
+          <Pencil aria-hidden="true" />
+        </TooltipIconButton>
+      </div>
+    </MessagePrimitive.Root>
+  );
+}
+
+function UserTextPart() {
+  return <MarkdownText />;
+}
+
+function AssistantTextPart() {
+  // An empty text part still carries the adjacency margins from styles.css,
+  // which reads as a large blank gap while the next tokens are pending.
+  const empty = useAuiState(
+    (state) => state.part.type === "text" && state.part.text.trim().length === 0
+  );
+
+  if (empty) {
+    return null;
+  }
+
+  return (
+    <div className="chat-assistant-text max-w-3xl">
+      <MarkdownText />
+    </div>
+  );
+}
+
+// Reasoning has no visible body of its own; the thread's activity row reports it.
+function AssistantReasoningPart() {
+  return null;
+}
+
+function CopiedState() {
+  const isCopied = useAuiState((state) => state.message.isCopied);
+  return isCopied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />;
+}
+
+function FilePart() {
+  const file = useAuiState((state) => (state.part.type === "file" ? state.part : undefined));
+  if (!file) {
+    return null;
+  }
+  const mimeType = filePartMimeType(file);
+  const url = filePartUrl(file);
+  if (isSupportedImageMimeType(mimeType)) {
+    return <ImageFilePart data={url} filename={file.filename} mimeType={mimeType} />;
+  }
+  return (
+    <div className="my-2 inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
+      <FileText size={16} aria-hidden="true" className="text-muted-foreground" />
+      <span className="truncate">{file.filename ?? mimeType ?? "file"}</span>
+    </div>
+  );
+}
+
+function ImagePart() {
+  const image = useAuiState((state) => (state.part.type === "image" ? state.part : undefined));
+  if (!image) {
+    return null;
+  }
+  return (
+    <div className="my-2 overflow-hidden rounded-md border bg-card shadow-xs">
+      <MessagePartPrimitive.Image
+        alt={image.filename ?? "Attached image"}
+        className="max-h-96 w-auto max-w-full object-contain"
+      />
+    </div>
+  );
+}
+
+function ImageFilePart({
+  data,
+  filename,
+  mimeType
+}: {
+  data: string;
+  filename?: string;
+  mimeType: string;
+}) {
+  const attachmentContent = useAttachmentContentContext();
+  const attachmentClient = attachmentContent?.client;
+  const selectedConversationId = attachmentContent?.selectedConversationId;
+  const [imageUrl, setImageUrl] = useState<string | undefined>(() =>
+    isDirectImageUrl(data) ? data : undefined
+  );
+
+  useEffect(() => {
+    if (isDirectImageUrl(data)) {
+      setImageUrl(data);
+      return undefined;
+    }
+
+    const fileId = managedFileIdFromUrl(data);
+    if (!fileId || !attachmentClient || !selectedConversationId) {
+      setImageUrl(undefined);
+      return undefined;
+    }
+
+    let active = true;
+    let objectUrl: string | undefined;
+    void attachmentClient.conversations.files
+      .getContent(selectedConversationId, fileId)
+      .then((blob) => {
+        if (!active) {
+          return;
+        }
+        objectUrl = URL.createObjectURL(blob);
+        setImageUrl(objectUrl);
+      })
+      .catch(() => {
+        if (active) {
+          setImageUrl(undefined);
+        }
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [attachmentClient, data, selectedConversationId]);
+
+  if (!imageUrl) {
+    return (
+      <div className="my-2 inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
+        <ImageIcon size={16} aria-hidden="true" className="text-muted-foreground" />
+        <span className="truncate">{filename ?? mimeType}</span>
+      </div>
+    );
+  }
+
+  return (
+    <figure className="my-2 grid gap-1 overflow-hidden rounded-md border bg-card p-1 shadow-xs">
+      <img
+        src={imageUrl}
+        alt={filename ?? "Attached image"}
+        className="max-h-96 w-auto max-w-full rounded object-contain"
+      />
+      {filename ? (
+        <figcaption className="truncate px-1 pb-1 text-xs text-muted-foreground">
+          {filename}
+        </figcaption>
+      ) : null}
+    </figure>
+  );
+}
+
+function isDirectImageUrl(value: string | undefined): value is string {
+  return Boolean(value && /^(https:\/\/|blob:|data:image\/)/u.test(value));
+}
+
+function isSupportedImageMimeType(value: string | undefined): value is string {
+  return (
+    value === "image/png" ||
+    value === "image/jpeg" ||
+    value === "image/webp" ||
+    value === "image/gif"
+  );
+}
+
+function filePartMimeType(file: { mediaType?: string; mimeType?: string }): string | undefined {
+  return file.mediaType ?? file.mimeType;
+}
+
+function filePartUrl(file: { url?: string; data?: unknown }): string {
+  if (typeof file.url === "string") {
+    return file.url;
+  }
+  return typeof file.data === "string" ? file.data : "";
+}
+
+function MessageError() {
+  return (
+    <MessagePrimitive.Error>
+      <ErrorPrimitive.Root className="mt-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+        <ErrorPrimitive.Message />
+      </ErrorPrimitive.Root>
+    </MessagePrimitive.Error>
+  );
+}
+
+function DisabledEditComposer() {
+  const { t } = useTranslation();
+
+  return (
+    <MessagePrimitive.Root className="mx-auto w-full max-w-3xl">
+      <ComposerPrimitive.Root className="grid gap-2 rounded-md border bg-muted/50 p-3">
+        <ComposerPrimitive.Input
+          className="min-h-20 resize-none rounded-md border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          disabled
+        />
+        <div className="flex justify-end gap-2">
+          <ComposerPrimitive.Cancel asChild>
+            <Button variant="ghost" size="sm">
+              {t("cancel")}
+            </Button>
+          </ComposerPrimitive.Cancel>
+          <Button size="sm" disabled>
+            {t("update")}
+          </Button>
+        </div>
+      </ComposerPrimitive.Root>
+    </MessagePrimitive.Root>
+  );
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ConversationThreadSnapshot, RunObservation } from "@vivd-catalyst/api-client";
-import { toUiMessages } from "../packages/chat-ui/src/assistant-ui-adapter";
+import { toUiMessages } from "../packages/chat-ui/src/assistant/assistant-ui-adapter";
 import {
   applyRunObservationToControllerState,
   completeRunObservationStreamInControllerState,
@@ -44,7 +44,9 @@ describe("chat UI conversation controller", () => {
   });
 
   it("ignores duplicate or already-applied run observations", () => {
-    const state = createControllerStateFromSnapshot(createSnapshot({ lastSequence: 2, text: "Hello" }));
+    const state = createControllerStateFromSnapshot(
+      createSnapshot({ lastSequence: 2, text: "Hello" })
+    );
     const duplicate = createObservation({
       sequence: 2,
       type: "message_delta",
@@ -63,7 +65,9 @@ describe("chat UI conversation controller", () => {
   });
 
   it("requires a snapshot refresh before applying a sequence gap", () => {
-    const state = createControllerStateFromSnapshot(createSnapshot({ lastSequence: 2, text: "Hello" }));
+    const state = createControllerStateFromSnapshot(
+      createSnapshot({ lastSequence: 2, text: "Hello" })
+    );
     const skipped = createObservation({
       sequence: 4,
       type: "message_delta",
@@ -132,7 +136,9 @@ describe("chat UI conversation controller", () => {
     const result = applyRunObservationToControllerState(state, completed);
 
     expect(result.applied).toBe(true);
-    expect(result.state.messages.filter((message) => message.id === "msg_assistant")).toHaveLength(1);
+    expect(result.state.messages.filter((message) => message.id === "msg_assistant")).toHaveLength(
+      1
+    );
     expect(result.state.messages).toContainEqual(
       expect.objectContaining({
         id: "msg_assistant",
@@ -172,7 +178,7 @@ describe("chat UI conversation controller", () => {
             status: "success",
             output: { ok: true }
           },
-          modelOutput: "{\"ok\":true}"
+          modelOutput: '{"ok":true}'
         }
       }),
       createObservation({
@@ -246,7 +252,7 @@ describe("chat UI conversation controller", () => {
             status: "success",
             output: { ok: true }
           },
-          modelOutput: "{\"ok\":true}"
+          modelOutput: '{"ok":true}'
         }
       }),
       createObservation({
@@ -325,7 +331,7 @@ describe("chat UI conversation controller", () => {
             status: "success",
             output: { ok: true }
           },
-          modelOutput: "{\"ok\":true}"
+          modelOutput: '{"ok":true}'
         }
       }),
       createObservation({
@@ -357,11 +363,7 @@ describe("chat UI conversation controller", () => {
 
     const [message] = toUiMessages([], state.activeRun);
     expect(message?.metadata).toEqual({ custom: { source: "active-run" } });
-    expect(message?.parts.map((part) => part.type)).toEqual([
-      "text",
-      "dynamic-tool",
-      "text"
-    ]);
+    expect(message?.parts.map((part) => part.type)).toEqual(["text", "dynamic-tool", "text"]);
   });
 
   it("renders active-run text when projection parts only contain tools", () => {
@@ -383,10 +385,7 @@ describe("chat UI conversation controller", () => {
     const [message] = toUiMessages([], state.activeRun);
 
     expect(message?.metadata).toEqual({ custom: { source: "active-run" } });
-    expect(message?.parts.map((part) => part.type)).toEqual([
-      "dynamic-tool",
-      "text"
-    ]);
+    expect(message?.parts.map((part) => part.type)).toEqual(["dynamic-tool", "text"]);
     expect(message?.parts.at(-1)).toMatchObject({
       type: "text",
       text: "I am checking the uploaded files."
@@ -420,7 +419,9 @@ describe("chat UI conversation controller", () => {
 
   it("keeps failed terminal run state visible across snapshot refresh", () => {
     const state = applyRunObservationToControllerState(
-      createControllerStateFromSnapshot(createSnapshot({ lastSequence: 1, text: "Partial answer" })),
+      createControllerStateFromSnapshot(
+        createSnapshot({ lastSequence: 1, text: "Partial answer" })
+      ),
       createObservation({
         sequence: 2,
         type: "tool_call_started",
@@ -459,16 +460,20 @@ describe("chat UI conversation controller", () => {
     });
 
     const [message] = toUiMessages([], refreshed.activeRun);
-    expect(message?.parts).toContainEqual(expect.objectContaining({
-      type: "dynamic-tool",
-      toolCallId: "tool_stuck",
-      state: "output-error",
-      errorText: "Model provider failed"
-    }));
+    expect(message?.parts).toContainEqual(
+      expect.objectContaining({
+        type: "dynamic-tool",
+        toolCallId: "tool_stuck",
+        state: "output-error",
+        errorText: "Model provider failed"
+      })
+    );
   });
 
   it("keeps cancelled terminal run state visible across snapshot refresh", () => {
-    const state = createControllerStateFromSnapshot(createSnapshot({ lastSequence: 2, text: "Partial answer" }));
+    const state = createControllerStateFromSnapshot(
+      createSnapshot({ lastSequence: 2, text: "Partial answer" })
+    );
     const cancelled = applyRunObservationToControllerState(
       state,
       createObservation({
@@ -520,7 +525,9 @@ describe("chat UI conversation controller", () => {
   });
 
   it("treats caught-up no-observation streams as caught up rather than disconnected", () => {
-    const state = createControllerStateFromSnapshot(createSnapshot({ lastSequence: 3, text: "Final" }));
+    const state = createControllerStateFromSnapshot(
+      createSnapshot({ lastSequence: 3, text: "Final" })
+    );
     const reconnected = completeRunObservationStreamInControllerState(
       {
         ...state,
@@ -542,7 +549,9 @@ describe("chat UI conversation controller", () => {
   });
 
   it("keeps real no-observation stream closures user-visible as disconnected", () => {
-    const state = createControllerStateFromSnapshot(createSnapshot({ lastSequence: 3, text: "Waiting" }));
+    const state = createControllerStateFromSnapshot(
+      createSnapshot({ lastSequence: 3, text: "Waiting" })
+    );
     const disconnected = completeRunObservationStreamInControllerState(state, {
       sawObservation: false,
       streamCaughtUp: false
@@ -556,7 +565,9 @@ describe("chat UI conversation controller", () => {
   });
 
   it("uses refreshed snapshots to resolve stale active run state after caught-up streams", () => {
-    const stale = createControllerStateFromSnapshot(createSnapshot({ lastSequence: 3, text: "Final" }));
+    const stale = createControllerStateFromSnapshot(
+      createSnapshot({ lastSequence: 3, text: "Final" })
+    );
     const caughtUp = completeRunObservationStreamInControllerState(stale, {
       sawObservation: false,
       streamCaughtUp: true
@@ -616,14 +627,15 @@ function createSnapshot({
               runId: "run_1",
               lastSequence,
               status: runStatus,
-              parts: text.length > 0
-                ? [
-                    {
-                      type: "text",
-                      text
-                    }
-                  ]
-                : [],
+              parts:
+                text.length > 0
+                  ? [
+                      {
+                        type: "text",
+                        text
+                      }
+                    ]
+                  : [],
               text,
               reasoning: [],
               activeToolCalls: [],

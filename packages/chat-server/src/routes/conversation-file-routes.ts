@@ -21,7 +21,10 @@ import { ConversationWorkflow } from "../conversation-workflow";
 import { authenticateRequest, getConversationId } from "../request-context";
 import type { ChatServerOptions } from "../types";
 
-export function registerConversationFileRoutes(app: FastifyInstance, options: ChatServerOptions): void {
+export function registerConversationFileRoutes(
+  app: FastifyInstance,
+  options: ChatServerOptions
+): void {
   const conversations = new ConversationWorkflow(options);
 
   app.get(apiOperations.getConversationFileContent.path, async (request, reply) => {
@@ -63,7 +66,10 @@ export function registerConversationFileRoutes(app: FastifyInstance, options: Ch
       .header("cache-control", "private, max-age=60")
       .header(
         "content-disposition",
-        contentDisposition(download ? "attachment" : "inline", sentAttachment?.filename ?? file.filename)
+        contentDisposition(
+          download ? "attachment" : "inline",
+          sentAttachment?.filename ?? file.filename
+        )
       )
       .send(Buffer.from(file.bytes));
   });
@@ -297,8 +303,9 @@ function asciiFilenameFallback(value: string): string {
 }
 
 function encodeRfc5987Value(value: string): string {
-  return encodeURIComponent(value).replaceAll(/['()*]/gu, (character) =>
-    `%${character.charCodeAt(0).toString(16).toUpperCase()}`
+  return encodeURIComponent(value).replaceAll(
+    /['()*]/gu,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`
   );
 }
 
@@ -358,11 +365,12 @@ async function retryArtifactPreviewState(
       errorCode: preview.errorCode ?? "unsupported_type"
     });
   }
-  const errorCode = preview.status === "failed"
-    ? preview.errorCode
-    : preview.completedWithoutManifest
-      ? "preview_manifest_missing"
-      : undefined;
+  const errorCode =
+    preview.status === "failed"
+      ? preview.errorCode
+      : preview.completedWithoutManifest
+        ? "preview_manifest_missing"
+        : undefined;
   if (
     errorCode &&
     isRetryableArtifactPreviewErrorCode(errorCode) &&

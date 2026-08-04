@@ -9,13 +9,7 @@ describe("tool SDK", () => {
       description: "Representative test tool.",
       inputSchema: z.object({
         title: z.string().min(2).max(40).describe("Short user-visible title."),
-        count: z
-          .number()
-          .int()
-          .min(1)
-          .max(10)
-          .default(3)
-          .describe("Number of items to include."),
+        count: z.number().int().min(1).max(10).default(3).describe("Number of items to include."),
         mode: z.enum(["fast", "thorough"]).default("fast").describe("Execution mode."),
         code: z
           .string()
@@ -73,7 +67,8 @@ describe("tool SDK", () => {
       }
     });
 
-    const labels = (tool.inputJsonSchema.properties as Record<string, Record<string, unknown>>).labels;
+    const labels = (tool.inputJsonSchema.properties as Record<string, Record<string, unknown>>)
+      .labels;
     expect(labels.type).toBe("object");
     expect(labels.additionalProperties).toEqual({ type: "string" });
     expect(tool.inputJsonSchema.additionalProperties).toBe(false);

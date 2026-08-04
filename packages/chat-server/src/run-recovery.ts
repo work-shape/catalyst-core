@@ -112,7 +112,10 @@ export class RunRecoveryWatchdog {
         }
       }
       if (recovered > 0) {
-        this.logger?.warn({ recovered, checked: candidates.length }, "Recovered stale active agent runs");
+        this.logger?.warn(
+          { recovered, checked: candidates.length },
+          "Recovered stale active agent runs"
+        );
       }
       return { recovered, checked: candidates.length };
     } finally {
@@ -171,7 +174,9 @@ async function recoverActiveRun(
   if (recovered.status !== "recovered") {
     return undefined;
   }
-  await recordRecoveryAudit(options, recovered.run, new Date(input.recoveredAt)).catch(() => undefined);
+  await recordRecoveryAudit(options, recovered.run, new Date(input.recoveredAt)).catch(
+    () => undefined
+  );
   return {
     run: recovered.run,
     observation: recovered.observation

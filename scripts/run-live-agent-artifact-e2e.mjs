@@ -12,9 +12,7 @@ if (args.help) {
   process.exit(0);
 }
 
-const deploymentRoot = resolvePath(
-  args.deploymentDir ?? process.env.LIVE_AGENT_E2E_DEPLOYMENT_DIR
-);
+const deploymentRoot = resolvePath(args.deploymentDir ?? process.env.LIVE_AGENT_E2E_DEPLOYMENT_DIR);
 const apiBaseUrl = (
   args.apiUrl ??
   process.env.LIVE_AGENT_E2E_API_URL ??
@@ -23,8 +21,8 @@ const apiBaseUrl = (
 const origin = args.origin ?? process.env.LIVE_AGENT_E2E_ORIGIN;
 const outputRoot = resolvePath(
   args.outputDir ??
-  process.env.LIVE_AGENT_E2E_OUTPUT_DIR ??
-  resolve(platformRoot, ".tmp/live-agent-artifact-e2e", timestamp())
+    process.env.LIVE_AGENT_E2E_OUTPUT_DIR ??
+    resolve(platformRoot, ".tmp/live-agent-artifact-e2e", timestamp())
 );
 const scenarios = [
   {
@@ -81,27 +79,27 @@ const keepStack = flag(args.keepStack, process.env.LIVE_AGENT_E2E_KEEP_STACK, fa
 const buildRunner = flag(args.buildRunner, process.env.LIVE_AGENT_E2E_BUILD_RUNNER, true);
 const autoApprove = flag(args.autoApprove, process.env.LIVE_AGENT_E2E_AUTO_APPROVE, true);
 const seedAuth = flag(args.seedAuth, process.env.LIVE_AGENT_E2E_SEED_AUTH, managedCompose);
-const runTimeoutMs = Number(args.runTimeoutMs ?? process.env.LIVE_AGENT_E2E_RUN_TIMEOUT_MS ?? 10 * 60 * 1000);
+const runTimeoutMs = Number(
+  args.runTimeoutMs ?? process.env.LIVE_AGENT_E2E_RUN_TIMEOUT_MS ?? 10 * 60 * 1000
+);
 const userEmail = args.userEmail ?? process.env.LIVE_AGENT_E2E_USER_EMAIL;
 const userPassword = args.userPassword ?? process.env.LIVE_AGENT_E2E_USER_PASSWORD;
 const buildRunnerCommand = splitShellWords(
   args.buildRunnerCommand ??
-  process.env.LIVE_AGENT_E2E_BUILD_RUNNER_COMMAND ??
-  "corepack pnpm@10.29.3 run dev:runner"
+    process.env.LIVE_AGENT_E2E_BUILD_RUNNER_COMMAND ??
+    "corepack pnpm@10.29.3 run dev:runner"
 );
 const seedAuthCommand = splitShellWords(
   args.seedAuthCommand ??
-  process.env.LIVE_AGENT_E2E_SEED_AUTH_COMMAND ??
-  "corepack pnpm@10.29.3 run seed:auth"
+    process.env.LIVE_AGENT_E2E_SEED_AUTH_COMMAND ??
+    "corepack pnpm@10.29.3 run seed:auth"
 );
 const composeServices = splitCsv(
   args.composeServices ??
-  process.env.LIVE_AGENT_E2E_COMPOSE_SERVICES ??
-  "postgres,s3mock,api,workspace-command-worker,artifact-preview-worker"
+    process.env.LIVE_AGENT_E2E_COMPOSE_SERVICES ??
+    "postgres,s3mock,api,workspace-command-worker,artifact-preview-worker"
 );
-const selectedScenarios = selectScenarios(
-  args.scenarios ?? process.env.LIVE_AGENT_E2E_SCENARIOS
-);
+const selectedScenarios = selectScenarios(args.scenarios ?? process.env.LIVE_AGENT_E2E_SCENARIOS);
 
 const commandEnv = {
   ...process.env,
@@ -138,7 +136,9 @@ if (!userEmail || !userPassword) {
   throw new Error("Missing LIVE_AGENT_E2E_USER_EMAIL or LIVE_AGENT_E2E_USER_PASSWORD");
 }
 if (selectedScenarios.length === 0) {
-  throw new Error(`No scenarios selected. Valid ids: ${scenarios.map((scenario) => scenario.id).join(", ")}`);
+  throw new Error(
+    `No scenarios selected. Valid ids: ${scenarios.map((scenario) => scenario.id).join(", ")}`
+  );
 }
 
 try {
@@ -303,17 +303,20 @@ async function observeRun(eventsUrl, input) {
           autoApprove &&
           event.payload.toolCallId
         ) {
-          await requestJson(`/api/conversations/${input.conversationId}/runs/${input.runId}/commands`, {
-            method: "POST",
-            body: {
-              command: {
-                type: "tool_permission_decision",
-                toolCallId: event.payload.toolCallId,
-                approved: true,
-                reason: "Approved by local live E2E harness"
+          await requestJson(
+            `/api/conversations/${input.conversationId}/runs/${input.runId}/commands`,
+            {
+              method: "POST",
+              body: {
+                command: {
+                  type: "tool_permission_decision",
+                  toolCallId: event.payload.toolCallId,
+                  approved: true,
+                  reason: "Approved by local live E2E harness"
+                }
               }
             }
-          });
+          );
         }
         if (["run_completed", "run_cancelled", "run_failed"].includes(event.payload.type)) {
           return events;
@@ -390,7 +393,13 @@ function analyzeScenario(scenario, events, toolCalls) {
   }
   if (promotionCalls.length === 0) {
     failures.push("Expected workspace.promote_artifact for the final artifact");
-  } else if (!promotionCalls.some((tool) => JSON.stringify(tool.input ?? {}).toLowerCase().includes(scenario.extension))) {
+  } else if (
+    !promotionCalls.some((tool) =>
+      JSON.stringify(tool.input ?? {})
+        .toLowerCase()
+        .includes(scenario.extension)
+    )
+  ) {
     warnings.push(`Promotion call did not visibly reference a ${scenario.extension} path`);
   }
   if (failedTools.length > 0) {
@@ -588,7 +597,9 @@ function sanitize(value) {
 }
 
 function isSensitiveKey(key) {
-  return /(authorization|cookie|credential|password|secret|session|token|api[_-]?key|objectkey|workspaceid)/iu.test(key);
+  return /(authorization|cookie|credential|password|secret|session|token|api[_-]?key|objectkey|workspaceid)/iu.test(
+    key
+  );
 }
 
 function redactString(value) {
@@ -611,7 +622,10 @@ function flag(argValue, envValue, defaultValue) {
 }
 
 function splitCsv(value) {
-  return (value ?? "").split(",").map((entry) => entry.trim()).filter(Boolean);
+  return (value ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 }
 
 function splitShellWords(value) {

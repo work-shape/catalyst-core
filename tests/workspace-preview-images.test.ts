@@ -157,7 +157,10 @@ describe("workspace.preview_images", () => {
       ranges: ["Summary!A1:H10"],
       maxImages: 1
     });
-    harness.objectStore.putObject("artifact-previews/private/workbook-summary-range.png", previewBytes);
+    harness.objectStore.putObject(
+      "artifact-previews/private/workbook-summary-range.png",
+      previewBytes
+    );
     const previewRange = await harness.store.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
@@ -314,7 +317,10 @@ describe("workspace.preview_images", () => {
       ranges: ["Summary!A1:B4"],
       maxImages: 1
     });
-    harness.objectStore.putObject("artifact-previews/private/workbook-summary-a1-b4.png", previewBytes);
+    harness.objectStore.putObject(
+      "artifact-previews/private/workbook-summary-a1-b4.png",
+      previewBytes
+    );
     const previewRange = await harness.store.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,

@@ -6,12 +6,15 @@ import {
   isCredentialActive,
   optionalTrimmedValue,
   scopesAllowedByPermissions
-} from "../packages/chat-ui/src/api-access-model";
+} from "../packages/chat-ui/src/control-plane/api-access-model";
 import {
   createApiAccessAuthorityKey,
   createApiAccessRevealController
-} from "../packages/chat-ui/src/api-access-reveal-controller";
-import { canManageApiAccess, canViewAdministrationPanel } from "../packages/chat-ui/src/governance";
+} from "../packages/chat-ui/src/control-plane/api-access-reveal-controller";
+import {
+  canManageApiAccess,
+  canViewAdministrationPanel
+} from "../packages/chat-ui/src/control-plane/governance";
 import {
   workspaceRouteFromPath,
   workspaceRouteNavigation
@@ -20,9 +23,7 @@ import {
 describe("API access model", () => {
   it("maps only current service-principal grants to credential scopes", () => {
     expect(DEFAULT_SERVICE_PRINCIPAL_PERMISSIONS).toEqual(["config_assets.read"]);
-    expect(scopesAllowedByPermissions(["config_assets.read"])).toEqual([
-      "config_assets:read"
-    ]);
+    expect(scopesAllowedByPermissions(["config_assets.read"])).toEqual(["config_assets:read"]);
     expect(
       constrainCredentialScopes(
         ["config_assets:read", "config_assets:release"],

@@ -2,7 +2,7 @@ import { createElement } from "../packages/chat-ui/node_modules/react";
 import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { UsageSummary } from "@vivd-catalyst/api-client";
-import { UsageView } from "../packages/chat-ui/src/usage-view";
+import { UsageView } from "../packages/chat-ui/src/control-plane/usage-view";
 
 describe("usage spend budget progress", () => {
   it("shows daily and monthly progress against currency-denominated limits", () => {

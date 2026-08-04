@@ -272,7 +272,9 @@ export function mapManagedArtifact(row: ManagedArtifactRow | undefined): Managed
   };
 }
 
-export function mapArtifactPreviewJob(row: ArtifactPreviewJobRow | undefined): ArtifactPreviewJobRecord {
+export function mapArtifactPreviewJob(
+  row: ArtifactPreviewJobRow | undefined
+): ArtifactPreviewJobRecord {
   if (!row) {
     throw new AppError("INTERNAL", "Expected artifact preview job row");
   }
@@ -481,9 +483,7 @@ export function mapUserRecord(
   };
 }
 
-export function mapServicePrincipal(
-  row: ServicePrincipalRow | undefined
-): ServicePrincipalRecord {
+export function mapServicePrincipal(row: ServicePrincipalRow | undefined): ServicePrincipalRecord {
   if (!row) {
     throw new AppError("INTERNAL", "Expected service principal row");
   }

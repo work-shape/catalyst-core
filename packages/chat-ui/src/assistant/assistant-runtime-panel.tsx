@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  AssistantRuntimeProvider,
-  useComposer,
-  useComposerRuntime,
-} from "@assistant-ui/react";
+import { AssistantRuntimeProvider, useComposer, useComposerRuntime } from "@assistant-ui/react";
 import { useChatRuntime, type UseChatRuntimeOptions } from "@assistant-ui/react-ai-sdk";
 import type { UIMessage } from "ai";
 import type { SelectedChatModel } from "../workspace/workspace-chat-model";
@@ -14,12 +10,12 @@ import {
   toAttachmentFilePart,
   toUiMessages,
   type AssistantUiActiveRun
-} from "../assistant-ui-adapter";
+} from "./assistant-ui-adapter";
 import { createToolSurfacePanelEntry } from "../tool-surface-card";
 import { useToolDisplayPanel } from "../tool-display-panel";
 import { dedupeToolSurfaceRefs, readToolSurfaceRefs } from "../tool-surfaces";
-import { AssistantThread } from "../assistant-thread";
-import { AssistantToolRegistry } from "../assistant-tool-registry";
+import { AssistantThread } from "./assistant-thread";
+import { AssistantToolRegistry } from "./assistant-tool-registry";
 import { useRegisterToolDisplayActions } from "../domain-ui-widgets";
 import { useTranslation } from "../i18n";
 import { useOpenSourceFilePreview } from "../source-file-preview";
@@ -98,7 +94,7 @@ function AssistantRuntimePane({
   const [rootSubmitError, setRootSubmitError] = useState<string | undefined>(undefined);
   const baseSendDisabledReason = conversationRunning
     ? t("conversationStillRunning")
-    : sendBlockedReason ?? (!messagesLoaded ? t("loadingConversation") : undefined);
+    : (sendBlockedReason ?? (!messagesLoaded ? t("loadingConversation") : undefined));
   const sendDisabledReason = rootSubmitPending ? t("loadingConversation") : baseSendDisabledReason;
   const visibleNotice = rootSubmitError ?? notice;
   useAutoOpenCompletedRunSurface(activeRun, locale);
@@ -280,7 +276,11 @@ function AssistantRuntimePane({
         syncKey={messagesSyncKey}
       />
       <AssistantToolRegistry>
-        <DraftBridge draftKey={selectedConversationId ?? "new"} draft={draft} onDraftChange={onDraftChange} />
+        <DraftBridge
+          draftKey={selectedConversationId ?? "new"}
+          draft={draft}
+          onDraftChange={onDraftChange}
+        />
         <AssistantThread
           config={config}
           selectedAgentName={selectedAgentName}
@@ -421,7 +421,9 @@ function DraftBridge({
   return null;
 }
 
-type ComposerAppendMessage = Parameters<NonNullable<UseChatRuntimeOptions<UIMessage>["toCreateMessage"]>>[0];
+type ComposerAppendMessage = Parameters<
+  NonNullable<UseChatRuntimeOptions<UIMessage>["toCreateMessage"]>
+>[0];
 
 function toOutgoingUiMessageParts(message: ComposerAppendMessage): UIMessage["parts"] {
   const parts: UIMessage["parts"] = [];

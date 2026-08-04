@@ -18,7 +18,9 @@ export function validateWorkspaceShellCommand(command: string): ValidationResult
     }
   }
   for (const line of significantLines) {
-    const segments = splitShellCommandSegments(line) ?? [{ segment: line, hasFollowingSegment: false }];
+    const segments = splitShellCommandSegments(line) ?? [
+      { segment: line, hasFollowingSegment: false }
+    ];
     for (const segment of segments) {
       const fileCommand = validateFileDisplayCommandLine(segment.segment);
       if (fileCommand.status === "failed") {
@@ -53,7 +55,7 @@ function commandValidationLines(command: string): string[] {
 
 function extractHereDocDelimiters(line: string): Array<{ delimiter: string; stripTabs: boolean }> {
   const delimiters: Array<{ delimiter: string; stripTabs: boolean }> = [];
-  let quote: "'" | "\"" | undefined;
+  let quote: "'" | '"' | undefined;
   let escaped = false;
   for (let index = 0; index < line.length; index += 1) {
     const character = line[index] ?? "";
@@ -71,7 +73,7 @@ function extractHereDocDelimiters(line: string): Array<{ delimiter: string; stri
       }
       continue;
     }
-    if (character === "'" || character === "\"") {
+    if (character === "'" || character === '"') {
       quote = character;
       continue;
     }
@@ -105,7 +107,7 @@ function parseHereDocDelimiter(
   startIndex: number
 ): { delimiter: string; endIndex: number } | undefined {
   let delimiter = "";
-  let quote: "'" | "\"" | undefined;
+  let quote: "'" | '"' | undefined;
   let escaped = false;
   for (let index = startIndex; index < line.length; index += 1) {
     const character = line[index] ?? "";
@@ -126,7 +128,7 @@ function parseHereDocDelimiter(
       }
       continue;
     }
-    if (character === "'" || character === "\"") {
+    if (character === "'" || character === '"') {
       quote = character;
       continue;
     }
@@ -138,13 +140,18 @@ function parseHereDocDelimiter(
   return delimiter && !quote && !escaped ? { delimiter, endIndex: line.length } : undefined;
 }
 
-function validateShellSetupLine(firstSegment: string, hasFollowingCommand: boolean): ValidationResult<void> {
+function validateShellSetupLine(
+  firstSegment: string,
+  hasFollowingCommand: boolean
+): ValidationResult<void> {
   const tokens = splitShellWords(firstSegment);
   if (!tokens || tokens[0] !== "set") {
     return { status: "success", value: undefined };
   }
   const setArguments = tokens.slice(1);
-  const hasCommandLikeSetArgument = setArguments.some((argument) => !argument.startsWith("-") && !argument.startsWith("+"));
+  const hasCommandLikeSetArgument = setArguments.some(
+    (argument) => !argument.startsWith("-") && !argument.startsWith("+")
+  );
   if (tokens.length === 1 || !hasFollowingCommand || hasCommandLikeSetArgument) {
     return validationFailed(
       "workspace.exec received shell setup without a command. Run helpers directly, or put set -e on its own line before the command.",
@@ -157,10 +164,12 @@ function validateShellSetupLine(firstSegment: string, hasFollowingCommand: boole
   return { status: "success", value: undefined };
 }
 
-function splitShellCommandSegments(line: string): Array<{ segment: string; hasFollowingSegment: boolean }> | undefined {
+function splitShellCommandSegments(
+  line: string
+): Array<{ segment: string; hasFollowingSegment: boolean }> | undefined {
   const rawSegments: string[] = [];
   let current = "";
-  let quote: "'" | "\"" | undefined;
+  let quote: "'" | '"' | undefined;
   let escaped = false;
   for (let index = 0; index < line.length; index += 1) {
     const character = line[index] ?? "";
@@ -181,7 +190,7 @@ function splitShellCommandSegments(line: string): Array<{ segment: string; hasFo
       }
       continue;
     }
-    if (character === "'" || character === "\"") {
+    if (character === "'" || character === '"') {
       quote = character;
       continue;
     }
@@ -219,7 +228,8 @@ function validateFileDisplayCommandLine(line: string): ValidationResult<void> {
   const helperFlag = args.find((argument) =>
     helperOnlyFlags.some((flag) => argument === flag || argument.startsWith(`${flag}=`))
   );
-  const catWithLsFlags = commandName === "cat" && args.some((argument) => argument === "-lh" || argument === "-hl");
+  const catWithLsFlags =
+    commandName === "cat" && args.some((argument) => argument === "-lh" || argument === "-hl");
   if (!helperFlag && !catWithLsFlags) {
     return { status: "success", value: undefined };
   }
@@ -238,7 +248,7 @@ function validateFileDisplayCommandLine(line: string): ValidationResult<void> {
 function splitShellWords(line: string): string[] | undefined {
   const words: string[] = [];
   let current = "";
-  let quote: "'" | "\"" | undefined;
+  let quote: "'" | '"' | undefined;
   let escaped = false;
   for (const character of line) {
     if (escaped) {
@@ -258,7 +268,7 @@ function splitShellWords(line: string): string[] | undefined {
       }
       continue;
     }
-    if (character === "'" || character === "\"") {
+    if (character === "'" || character === '"') {
       quote = character;
       continue;
     }

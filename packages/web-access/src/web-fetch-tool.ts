@@ -18,7 +18,9 @@ export const webFetchInputSchema = z
       .int()
       .min(1)
       .max(200000)
-      .describe("Optional maximum characters of extracted text to return, capped by the client instance webAccess.fetch setting.")
+      .describe(
+        "Optional maximum characters of extracted text to return, capped by the client instance webAccess.fetch setting."
+      )
       .optional()
   })
   .strict();

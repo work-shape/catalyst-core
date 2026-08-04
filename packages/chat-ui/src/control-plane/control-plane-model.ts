@@ -32,15 +32,15 @@ import {
   canManageUsers,
   canViewAudit,
   canViewUsageGovernance
-} from "../governance";
+} from "./governance";
 import type {
   SuperadminRouteTab,
   WorkspaceRoute,
   WorkspaceRouteChangeOptions,
   WorkspaceRouteView
-} from "../workspace-route";
+} from "../workspace/workspace-route";
 import { apiErrorMessage, STANDALONE_AUTH_SOURCE } from "../workspace-utils";
-import { createApiAccessAuthorityKey } from "../api-access-reveal-controller";
+import { createApiAccessAuthorityKey } from "./api-access-reveal-controller";
 
 export interface ControlPlaneModelInput {
   apiBaseUrl: string;
@@ -124,7 +124,11 @@ export function useControlPlaneModel({
     canEditConfigAssets(user);
   const canViewAdministration =
     (adminPanel?.canView(user) ?? false) &&
-    (canViewUsage || userCanManageUsers || userCanManageApiAccess || userCanViewAudit || userCanEditConfigAssets);
+    (canViewUsage ||
+      userCanManageUsers ||
+      userCanManageApiAccess ||
+      userCanViewAudit ||
+      userCanEditConfigAssets);
   const canManageSuperadminAccess = Boolean(user?.roles.includes("superadmin"));
   const administrationEnabled = canViewAdministration && view === "superadmin";
   const routeTab = route.kind === "superadmin" ? route.tab : undefined;
@@ -331,7 +335,10 @@ export function useControlPlaneModel({
           loading: configAssetsOverviewQuery.isLoading || configAssetsExportQuery.isLoading,
           error:
             configAssetsOverviewQuery.error || configAssetsExportQuery.error
-              ? apiErrorMessage(configAssetsOverviewQuery.error ?? configAssetsExportQuery.error, undefined)
+              ? apiErrorMessage(
+                  configAssetsOverviewQuery.error ?? configAssetsExportQuery.error,
+                  undefined
+                )
               : undefined,
           mutating: configAssetMutations.isPending,
           onSaveAsset: (saveInput) => configAssetMutations.putAsset.mutateAsync(saveInput),
@@ -339,7 +346,7 @@ export function useControlPlaneModel({
           onSetDefaultAgent: (defaultInput) =>
             configAssetMutations.setDefaultAgent.mutateAsync(defaultInput),
           onRevertAsset: (revertInput) => configAssetMutations.revertAsset.mutateAsync(revertInput),
-          onLoadRevisions: (kind, name) => client.configAssetRevisions(kind, name),
+          onLoadRevisions: (kind, name) => client.configAssets.listRevisions(kind, name),
           onReload: () =>
             queryClient.invalidateQueries({
               queryKey: workspaceQueryKeys.configAssetsOverview(apiBaseUrl, authScope)

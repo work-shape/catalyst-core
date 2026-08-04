@@ -14,9 +14,7 @@ import { UniverSheetsDrawingUIPlugin } from "@univerjs/sheets-drawing-ui";
 import "@univerjs/sheets-drawing-ui/facade";
 import "@univerjs/sheets-drawing-ui/lib/index.css";
 import "@univerjs/ui/facade";
-import { PptxViewer, RECOMMENDED_ZIP_LIMITS } from "@aiden0z/pptx-renderer";
 import type { ApiClient } from "@vivd-catalyst/api-client";
-import { renderAsync as renderDocxAsync } from "docx-preview";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import {
   LiveArtifactPreview,
@@ -29,14 +27,8 @@ import {
 } from "./artifact-preview-shell";
 import { useTranslation } from "./i18n";
 import { MarkdownArtifact } from "./markdown-text";
-import {
-  workbookToUniverPreview,
-  type SpreadsheetWorkbookPreview
-} from "./spreadsheet-preview";
-import {
-  SPREADSHEET_VISUAL_COMPONENT,
-  SpreadsheetVisualLayer
-} from "./spreadsheet-visual-layer";
+import { workbookToUniverPreview, type SpreadsheetWorkbookPreview } from "./spreadsheet-preview";
+import { SPREADSHEET_VISUAL_COMPONENT, SpreadsheetVisualLayer } from "./spreadsheet-visual-layer";
 import type { SpreadsheetVisual, SpreadsheetVisualAnchor } from "./spreadsheet-visuals";
 import { Spinner } from "./ui/spinner";
 import {
@@ -91,21 +83,14 @@ export function ArtifactPreview({
     );
   }
 
-  if (
-    client.browserManagedDownloads &&
-    (previewKind === "pdf" || previewKind === "image")
-  ) {
-    const url = client.conversationArtifactContentUrl(
+  if (client.browserManagedDownloads && (previewKind === "pdf" || previewKind === "image")) {
+    const url = client.conversations.artifacts.contentUrl(
       conversationId,
       artifact.artifactId,
       true
     );
     return (
-      <NativeFilePreview
-        kind={previewKind}
-        title={artifactDisplayFilename(artifact)}
-        url={url}
-      />
+      <NativeFilePreview kind={previewKind} title={artifactDisplayFilename(artifact)} url={url} />
     );
   }
 
@@ -144,8 +129,8 @@ function BlobArtifactPreview({
     let cancelled = false;
     let objectUrl: string | undefined;
     setState({ status: "loading" });
-    void client
-      .conversationArtifactContent(conversationId, artifact.artifactId)
+    void client.conversations.artifacts
+      .getContent(conversationId, artifact.artifactId)
       .then((blob) => {
         if (cancelled) {
           return;
@@ -208,10 +193,6 @@ function BlobArtifactPreview({
     <ArtifactPreviewFrame>
       {previewKind === "markdown" ? <MarkdownArtifactPreview blob={state.blob} /> : null}
       {previewKind === "text" ? <TextArtifactPreview blob={state.blob} /> : null}
-      {previewKind === "document" ? <DocumentArtifactPreview blob={state.blob} fileType={fileType} /> : null}
-      {previewKind === "presentation" ? (
-        <PresentationArtifactPreview blob={state.blob} fileType={fileType} />
-      ) : null}
     </ArtifactPreviewFrame>
   );
 }
@@ -222,292 +203,6 @@ export function SpreadsheetFilePreview({ blob }: { blob: Blob }) {
       <SpreadsheetArtifactPreview blob={blob} />
     </ArtifactPreviewFrame>
   );
-}
-
-function DocumentArtifactPreview({ blob, fileType }: { blob: Blob; fileType: ArtifactFileType }) {
-  const { t } = useTranslation();
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const fitViewportRef = useRef<HTMLDivElement | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | undefined>();
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) {
-      return undefined;
-    }
-
-    let cancelled = false;
-    let settled = false;
-    let styleContainer: HTMLDivElement | undefined;
-    let resizeObserver: ResizeObserver | undefined;
-    const failPreview = (message: string) => {
-      if (cancelled || settled) {
-        return;
-      }
-      settled = true;
-      setError(message);
-      setLoading(false);
-    };
-    const timeout = window.setTimeout(() => {
-      failPreview(t("artifactPreviewUnavailable"));
-    }, 12_000);
-    container.replaceChildren();
-    styleContainer = document.createElement("div");
-    styleContainer.hidden = true;
-    container.after(styleContainer);
-    setLoading(true);
-    setError(undefined);
-    void renderDocxAsync(blob, container, styleContainer, {
-      breakPages: true,
-      className: "artifact-docx",
-      experimental: false,
-      ignoreFonts: false,
-      ignoreHeight: false,
-      ignoreLastRenderedPageBreak: false,
-      ignoreWidth: false,
-      inWrapper: true,
-      renderComments: false,
-      renderEndnotes: true,
-      renderFooters: true,
-      renderFootnotes: true,
-      renderHeaders: true,
-      useBase64URL: true
-    })
-      .then(() => {
-        window.clearTimeout(timeout);
-        if (cancelled || settled) {
-          return;
-        }
-        if (!hasRenderedDocxContent(container)) {
-          failPreview(t("artifactPreviewUnavailable"));
-          return;
-        }
-        normalizeDocxLayout(container);
-        resizeObserver = observeDocxFit(container, fitViewportRef.current);
-        settled = true;
-        setLoading(false);
-      })
-      .catch((value: unknown) => {
-        window.clearTimeout(timeout);
-        failPreview(value instanceof Error ? value.message : t("artifactPreviewFailed"));
-      });
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeout);
-      resizeObserver?.disconnect();
-      container.replaceChildren();
-      styleContainer?.remove();
-    };
-  }, [blob, t]);
-
-  if (error) {
-    return (
-      <ArtifactPreviewMessage
-        fileType={fileType}
-        title={t("artifactPreviewFailed")}
-        detail={error}
-      />
-    );
-  }
-
-  return (
-    <div ref={scrollRef} className="chat-scrollbar relative h-full overflow-auto bg-slate-100">
-      {loading ? (
-        <div className="absolute inset-x-0 top-8 z-10 flex justify-center">
-          <div className="inline-flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm text-muted-foreground shadow-xs">
-            <Spinner size="sm" />
-            <span>{t("artifactPreviewLoading")}</span>
-          </div>
-        </div>
-      ) : null}
-      <div ref={fitViewportRef} className="min-w-0 px-6 py-6">
-        <div
-          ref={containerRef}
-          className="mx-auto w-fit max-w-full [&_.artifact-docx-wrapper]:!bg-transparent [&_.artifact-docx-wrapper]:!p-0 [&_.docx-wrapper]:!bg-transparent [&_.docx-wrapper]:!p-0"
-        />
-      </div>
-    </div>
-  );
-}
-
-function hasRenderedDocxContent(container: HTMLElement): boolean {
-  return Boolean(
-    container.textContent?.trim() ||
-      container.querySelector("img, svg, table, canvas, object, embed")
-  );
-}
-
-function observeDocxFit(container: HTMLElement, viewport: HTMLElement | null): ResizeObserver | undefined {
-  fitDocxToViewport(container, viewport);
-  if (!viewport || typeof ResizeObserver === "undefined") {
-    return undefined;
-  }
-  const resizeObserver = new ResizeObserver(() => fitDocxToViewport(container, viewport));
-  resizeObserver.observe(viewport);
-  resizeObserver.observe(container);
-  return resizeObserver;
-}
-
-function fitDocxToViewport(container: HTMLElement, viewport: HTMLElement | null): void {
-  const wrapper = docxWrapperElement(container);
-  if (!wrapper || !viewport) {
-    return;
-  }
-  wrapper.style.zoom = "1";
-  const availableWidth = contentBoxWidth(viewport);
-  const naturalWidth = wrapper.scrollWidth;
-  if (availableWidth <= 0 || naturalWidth <= 0) {
-    return;
-  }
-  const scale = Math.min(1, availableWidth / naturalWidth);
-  wrapper.style.zoom = String(scale);
-}
-
-function normalizeDocxLayout(container: HTMLElement): void {
-  const wrapper = docxWrapperElement(container);
-  if (wrapper) {
-    wrapper.style.setProperty("background", "transparent", "important");
-    wrapper.style.setProperty("padding", "0", "important");
-  }
-  for (const page of container.querySelectorAll<HTMLElement>(".artifact-docx, .docx")) {
-    page.style.setProperty("margin", "0 auto 1.5rem", "important");
-    page.style.setProperty("box-shadow", "0 1px 4px rgb(15 23 42 / 0.18)", "important");
-  }
-}
-
-function docxWrapperElement(container: HTMLElement): HTMLElement | undefined {
-  return (
-    container.querySelector<HTMLElement>(".artifact-docx-wrapper") ??
-    container.querySelector<HTMLElement>(".docx-wrapper") ??
-    (container.firstElementChild instanceof HTMLElement ? container.firstElementChild : undefined)
-  );
-}
-
-function contentBoxWidth(element: HTMLElement): number {
-  const style = window.getComputedStyle(element);
-  const paddingLeft = Number.parseFloat(style.paddingLeft) || 0;
-  const paddingRight = Number.parseFloat(style.paddingRight) || 0;
-  return element.clientWidth - paddingLeft - paddingRight;
-}
-
-function PresentationArtifactPreview({ blob, fileType }: { blob: Blob; fileType: ArtifactFileType }) {
-  const { t } = useTranslation();
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const fitViewportRef = useRef<HTMLDivElement | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | undefined>();
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) {
-      return undefined;
-    }
-
-    let cancelled = false;
-    let viewer: PptxViewer | undefined;
-    let resizeObserver: ResizeObserver | undefined;
-    const abortController = new AbortController();
-    container.replaceChildren();
-    setLoading(true);
-    setError(undefined);
-
-    void blob
-      .arrayBuffer()
-      .then((buffer) =>
-        PptxViewer.open(buffer, container, {
-          fitMode: "contain",
-          lazyMedia: true,
-          lazySlides: true,
-          listOptions: {
-            batchSize: 4,
-            initialSlides: 4,
-            overscanViewport: 1,
-            windowed: true
-          },
-          pdfjs: false,
-          scrollContainer: scrollRef.current ?? undefined,
-          signal: abortController.signal,
-          zipLimits: RECOMMENDED_ZIP_LIMITS
-        })
-      )
-      .then((nextViewer) => {
-        if (cancelled) {
-          nextViewer.destroy();
-          return;
-        }
-        viewer = nextViewer;
-        resizeObserver = observeElementFit(container, fitViewportRef.current);
-        setLoading(false);
-      })
-      .catch((value: unknown) => {
-        if (!cancelled) {
-          setError(value instanceof Error ? value.message : t("artifactPreviewFailed"));
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-      abortController.abort();
-      resizeObserver?.disconnect();
-      viewer?.destroy();
-      container.replaceChildren();
-    };
-  }, [blob, t]);
-
-  if (error) {
-    return (
-      <ArtifactPreviewMessage
-        fileType={fileType}
-        title={t("artifactPreviewFailed")}
-        detail={error}
-      />
-    );
-  }
-
-  return (
-    <div ref={scrollRef} className="chat-scrollbar relative h-full overflow-auto bg-slate-100">
-      {loading ? (
-        <div className="absolute inset-x-0 top-8 z-10 flex justify-center">
-          <div className="inline-flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm text-muted-foreground shadow-xs">
-            <Spinner size="sm" />
-            <span>{t("artifactPreviewLoading")}</span>
-          </div>
-        </div>
-      ) : null}
-      <div ref={fitViewportRef} className="min-w-0 px-6 py-6">
-        <div ref={containerRef} className="mx-auto min-h-full w-fit max-w-full" />
-      </div>
-    </div>
-  );
-}
-
-function observeElementFit(element: HTMLElement, viewport: HTMLElement | null): ResizeObserver | undefined {
-  fitElementToViewport(element, viewport);
-  if (!viewport || typeof ResizeObserver === "undefined") {
-    return undefined;
-  }
-  const resizeObserver = new ResizeObserver(() => fitElementToViewport(element, viewport));
-  resizeObserver.observe(viewport);
-  resizeObserver.observe(element);
-  return resizeObserver;
-}
-
-function fitElementToViewport(element: HTMLElement, viewport: HTMLElement | null): void {
-  if (!viewport) {
-    return;
-  }
-  element.style.zoom = "1";
-  const availableWidth = contentBoxWidth(viewport);
-  const naturalWidth = element.scrollWidth;
-  if (availableWidth <= 0 || naturalWidth <= 0) {
-    return;
-  }
-  element.style.zoom = String(Math.min(1, availableWidth / naturalWidth));
 }
 
 function TextArtifactPreview({ blob }: { blob: Blob }) {
@@ -527,7 +222,11 @@ function MarkdownArtifactPreview({ blob }: { blob: Blob }) {
 
   return (
     <div className="chat-scrollbar h-full overflow-auto bg-background px-5 py-6 text-foreground lg:px-7">
-      {text === undefined ? t("artifactPreviewLoading") : <MarkdownArtifact>{text}</MarkdownArtifact>}
+      {text === undefined ? (
+        t("artifactPreviewLoading")
+      ) : (
+        <MarkdownArtifact>{text}</MarkdownArtifact>
+      )}
     </div>
   );
 }
@@ -582,7 +281,12 @@ function SpreadsheetArtifactPreview({ blob }: { blob: Blob }) {
   if (error) {
     return (
       <ArtifactPreviewMessage
-        fileType={{ badge: "XLS", label: "Spreadsheet", className: "bg-emerald-700", extension: "xlsx" }}
+        fileType={{
+          badge: "XLS",
+          label: "Spreadsheet",
+          className: "bg-emerald-700",
+          extension: "xlsx"
+        }}
         title={t("artifactPreviewFailed")}
         detail={error}
       />
@@ -592,18 +296,18 @@ function SpreadsheetArtifactPreview({ blob }: { blob: Blob }) {
   if (!preview) {
     return (
       <ArtifactPreviewMessage
-        fileType={{ badge: "XLS", label: "Spreadsheet", className: "bg-emerald-700", extension: "xlsx" }}
+        fileType={{
+          badge: "XLS",
+          label: "Spreadsheet",
+          className: "bg-emerald-700",
+          extension: "xlsx"
+        }}
         title={t("artifactPreviewLoading")}
       />
     );
   }
 
-  return (
-    <UniverReadOnlyWorkbook
-      visuals={preview.visuals}
-      workbookData={preview.workbookData}
-    />
-  );
+  return <UniverReadOnlyWorkbook visuals={preview.visuals} workbookData={preview.workbookData} />;
 }
 
 function UniverReadOnlyWorkbook({
@@ -707,20 +411,17 @@ function visualPosition(
 ) {
   const startX = sheetSpan(sheet.columnData, sheet.defaultColumnWidth ?? 88, 0, anchor.startColumn);
   const startY = sheetSpan(sheet.rowData, sheet.defaultRowHeight ?? 24, 0, anchor.startRow);
-  const width = anchor.width
-    ?? sheetSpan(
+  const width =
+    anchor.width ??
+    sheetSpan(
       sheet.columnData,
       sheet.defaultColumnWidth ?? 88,
       anchor.startColumn,
       anchor.endColumn + 1
     );
-  const height = anchor.height
-    ?? sheetSpan(
-      sheet.rowData,
-      sheet.defaultRowHeight ?? 24,
-      anchor.startRow,
-      anchor.endRow + 1
-    );
+  const height =
+    anchor.height ??
+    sheetSpan(sheet.rowData, sheet.defaultRowHeight ?? 24, anchor.startRow, anchor.endRow + 1);
   return {
     startX,
     startY,
@@ -738,7 +439,7 @@ function sheetSpan(
   let size = 0;
   for (let index = start; index < end; index += 1) {
     const item = data?.[index];
-    size += item?.hd === BooleanNumber.TRUE ? 0 : item?.h ?? item?.w ?? defaultSize;
+    size += item?.hd === BooleanNumber.TRUE ? 0 : (item?.h ?? item?.w ?? defaultSize);
   }
   return size;
 }
@@ -747,10 +448,7 @@ function blockSpreadsheetEditingKeys(event: KeyboardEvent<HTMLDivElement>) {
   if ((event.metaKey || event.ctrlKey) && ["a", "c", "f"].includes(event.key.toLowerCase())) {
     return;
   }
-  if (
-    event.key.length === 1 ||
-    ["Backspace", "Delete", "Enter", "F2"].includes(event.key)
-  ) {
+  if (event.key.length === 1 || ["Backspace", "Delete", "Enter", "F2"].includes(event.key)) {
     event.preventDefault();
   }
 }

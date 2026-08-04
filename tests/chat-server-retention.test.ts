@@ -6,7 +6,10 @@ import {
   type ChatAttachmentService,
   type ChatServerOptions
 } from "@vivd-catalyst/chat-server";
-import { createManagedObjectAccess, type ManagedObjectByteStore } from "@vivd-catalyst/capability-sdk";
+import {
+  createManagedObjectAccess,
+  type ManagedObjectByteStore
+} from "@vivd-catalyst/capability-sdk";
 import {
   StoreBackedAuditRecorder,
   asClientInstanceId,
@@ -86,16 +89,27 @@ describe("conversation retention expiration", () => {
         );
       });
 
-      await expect(store.listMessages({
-        clientInstanceId,
-        conversationId: startupConversation.id
-      })).rejects.toMatchObject({
+      await expect(
+        store.listMessages({
+          clientInstanceId,
+          conversationId: startupConversation.id
+        })
+      ).rejects.toMatchObject({
         code: "NOT_FOUND"
       });
       await expectDeletedManagedObjects(store, byteStore, clientInstanceId, startupObjects);
-      await expectDeletedWorkspaceObjects(store, byteStore, clientInstanceId, startupWorkspaceObjects);
+      await expectDeletedWorkspaceObjects(
+        store,
+        byteStore,
+        clientInstanceId,
+        startupWorkspaceObjects
+      );
 
-      const periodicConversation = await createExpiredConversation(store, clientInstanceId, "periodic");
+      const periodicConversation = await createExpiredConversation(
+        store,
+        clientInstanceId,
+        "periodic"
+      );
       await waitFor(async () => {
         await expectConversationStatus(
           store,
@@ -107,7 +121,9 @@ describe("conversation retention expiration", () => {
 
       const events = await store.listAuditEvents({ clientInstanceId, limit: 10 });
       const startupAudit = events.find(
-        (event) => event.subject === startupConversation.id && event.type === "conversation.retention_expired"
+        (event) =>
+          event.subject === startupConversation.id &&
+          event.type === "conversation.retention_expired"
       );
       expect(startupAudit).toMatchObject({
         type: "conversation.retention_expired",
@@ -126,7 +142,9 @@ describe("conversation retention expiration", () => {
       expect(startupAudit).not.toHaveProperty("actor");
       expect(
         events.find(
-          (event) => event.subject === periodicConversation.id && event.type === "conversation.retention_expired"
+          (event) =>
+            event.subject === periodicConversation.id &&
+            event.type === "conversation.retention_expired"
         )
       ).toMatchObject({
         type: "conversation.retention_expired",
@@ -182,17 +200,21 @@ describe("conversation retention expiration", () => {
       failedCount: 1
     });
     await expectConversationStatus(store, clientInstanceId, conversation.id, "active");
-    await expect(store.getConversationAttachment({
-      clientInstanceId,
-      attachmentId: objects.attachment.id
-    })).resolves.toMatchObject({
+    await expect(
+      store.getConversationAttachment({
+        clientInstanceId,
+        attachmentId: objects.attachment.id
+      })
+    ).resolves.toMatchObject({
       id: objects.attachment.id,
       status: "ready"
     });
-    await expect(store.getManagedArtifact({
-      clientInstanceId,
-      artifactId: objects.artifact.id
-    })).resolves.toMatchObject({
+    await expect(
+      store.getManagedArtifact({
+        clientInstanceId,
+        artifactId: objects.artifact.id
+      })
+    ).resolves.toMatchObject({
       id: objects.artifact.id,
       status: "available"
     });
@@ -206,7 +228,9 @@ describe("conversation retention expiration", () => {
     await expectDeletedManagedObjects(store, byteStore, clientInstanceId, objects);
 
     const events = await store.listAuditEvents({ clientInstanceId, limit: 10 });
-    const failureAudit = events.find((event) => event.type === "conversation.retention_expiration_failed");
+    const failureAudit = events.find(
+      (event) => event.type === "conversation.retention_expiration_failed"
+    );
     expect(failureAudit).toMatchObject({
       status: "failed",
       subject: conversation.id,
@@ -234,7 +258,11 @@ describe("conversation retention expiration", () => {
       workspaceObjects: byteStore
     });
     const workflow = new ConversationRetentionWorkflow(options);
-    const conversation = await createExpiredConversation(store, clientInstanceId, "workspace-failure");
+    const conversation = await createExpiredConversation(
+      store,
+      clientInstanceId,
+      "workspace-failure"
+    );
     const workspaceObjects = await createWorkspaceObjects({
       store,
       byteStore,
@@ -250,7 +278,9 @@ describe("conversation retention expiration", () => {
     await expectConversationStatus(store, clientInstanceId, conversation.id, "active");
 
     const events = await store.listAuditEvents({ clientInstanceId, limit: 10 });
-    const failureAudit = events.find((event) => event.type === "conversation.retention_expiration_failed");
+    const failureAudit = events.find(
+      (event) => event.type === "conversation.retention_expiration_failed"
+    );
     expect(failureAudit).toMatchObject({
       status: "failed",
       subject: conversation.id,
@@ -272,7 +302,11 @@ describe("conversation retention expiration", () => {
       store,
       workspaceObjects: byteStore
     });
-    const conversation = await createExpiredConversation(store, clientInstanceId, "cleanup-failure");
+    const conversation = await createExpiredConversation(
+      store,
+      clientInstanceId,
+      "cleanup-failure"
+    );
     const workspaceObjects = await createWorkspaceObjects({
       store,
       byteStore,
@@ -293,7 +327,9 @@ describe("conversation retention expiration", () => {
     });
 
     const events = await store.listAuditEvents({ clientInstanceId, limit: 10 });
-    const cleanupAudit = events.find((event) => event.type === "execution_workspace.cleanup_failed");
+    const cleanupAudit = events.find(
+      (event) => event.type === "execution_workspace.cleanup_failed"
+    );
     expect(cleanupAudit).toMatchObject({
       status: "failed",
       subject: conversation.id,
@@ -458,7 +494,7 @@ async function createWorkspaceObjects(input: {
     },
     {
       path: "tmp/session-cache.json",
-      body: "{\"cached\":true}\n",
+      body: '{"cached":true}\n',
       mimeType: "application/json",
       metadata: { source: "workspace.exec", role: "temporary" }
     },
@@ -601,18 +637,24 @@ async function expectDeletedManagedObjects(
     artifact: ManagedArtifactRecord;
   }
 ): Promise<void> {
-  await expect(store.getConversationAttachment({
-    clientInstanceId,
-    attachmentId: objects.attachment.id
-  })).resolves.toBeUndefined();
-  await expect(store.getManagedFile({
-    clientInstanceId,
-    fileId: objects.file.id
-  })).resolves.toBeUndefined();
-  await expect(store.getManagedArtifact({
-    clientInstanceId,
-    artifactId: objects.artifact.id
-  })).resolves.toBeUndefined();
+  await expect(
+    store.getConversationAttachment({
+      clientInstanceId,
+      attachmentId: objects.attachment.id
+    })
+  ).resolves.toBeUndefined();
+  await expect(
+    store.getManagedFile({
+      clientInstanceId,
+      fileId: objects.file.id
+    })
+  ).resolves.toBeUndefined();
+  await expect(
+    store.getManagedArtifact({
+      clientInstanceId,
+      artifactId: objects.artifact.id
+    })
+  ).resolves.toBeUndefined();
   expect(byteStore.has(objects.file.objectKey)).toBe(false);
   expect(byteStore.has(objects.artifact.objectKey)).toBe(false);
   expect(byteStore.deletedKeys).toEqual(
@@ -630,14 +672,18 @@ async function expectDeletedWorkspaceObjects(
     objectKeys: string[];
   }
 ): Promise<void> {
-  await expect(store.getExecutionWorkspace({
-    clientInstanceId,
-    workspaceId: asExecutionWorkspaceId(objects.workspaceId)
-  })).resolves.toBeUndefined();
-  await expect(store.listWorkspaceFiles({
-    clientInstanceId,
-    workspaceId: asExecutionWorkspaceId(objects.workspaceId)
-  })).resolves.toEqual([]);
+  await expect(
+    store.getExecutionWorkspace({
+      clientInstanceId,
+      workspaceId: asExecutionWorkspaceId(objects.workspaceId)
+    })
+  ).resolves.toBeUndefined();
+  await expect(
+    store.listWorkspaceFiles({
+      clientInstanceId,
+      workspaceId: asExecutionWorkspaceId(objects.workspaceId)
+    })
+  ).resolves.toEqual([]);
   for (const objectKey of objects.objectKeys) {
     expect(byteStore.has(objectKey)).toBe(false);
   }

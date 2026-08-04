@@ -26,10 +26,7 @@ export type {
   UploadDraftAttachmentInput,
   UploadDraftAttachmentResult
 } from "./attachments";
-export type {
-  ConversationRetentionJobOptions,
-  ConversationRetentionRunSummary
-} from "./retention";
+export type { ConversationRetentionJobOptions, ConversationRetentionRunSummary } from "./retention";
 export { ConversationRetentionJob, ConversationRetentionWorkflow } from "./retention";
 export { RUN_RECOVERY_ERROR, RunRecoveryWatchdog, recoverStaleRun } from "./run-recovery";
 export type { RunRecoveryOptions, RunRecoverySweepSummary } from "./run-recovery";

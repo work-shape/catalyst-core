@@ -1,17 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { FileText } from "lucide-react";
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  useState,
-  type ReactNode
-} from "react";
-import type {
-  ApiClient,
-  ConversationResourceListItem
-} from "@vivd-catalyst/api-client";
+import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
+import type { ApiClient, ConversationResourceListItem } from "@vivd-catalyst/api-client";
 import { resolveFilePreviewCapability } from "@vivd-catalyst/core";
 import { useWorkspaceApiClient } from "./api/workspace-api-client";
 import { workspaceQueryKeys } from "./api/workspace-query-keys";
@@ -48,8 +38,7 @@ export function findSourceFileResource(
 ): SourceFileResource | undefined {
   return resources.find(
     (resource): resource is SourceFileResource =>
-      resource.resourceType === "source_file" &&
-      resource.download.fileId === fileId
+      resource.resourceType === "source_file" && resource.download.fileId === fileId
   );
 }
 
@@ -59,8 +48,7 @@ export function findSourceFileResourceByAttachmentId(
 ): SourceFileResource | undefined {
   return resources.find(
     (resource): resource is SourceFileResource =>
-      resource.resourceType === "source_file" &&
-      resource.attachmentId === attachmentId
+      resource.resourceType === "source_file" && resource.attachmentId === attachmentId
   );
 }
 
@@ -69,9 +57,7 @@ export function findSourceFileResourceByAttachmentId(
  * file or attachment id against the conversation's resources first. Shared by
  * attachment chips, structured-data sources, and tool display widgets.
  */
-export function useOpenSourceFilePreview(): (
-  input: OpenSourceFilePreviewInput
-) => Promise<void> {
+export function useOpenSourceFilePreview(): (input: OpenSourceFilePreviewInput) => Promise<void> {
   const displayPanel = useToolDisplayPanel();
   const queryClient = useQueryClient();
   const { apiBaseUrl } = useWorkspaceApiClient();
@@ -98,15 +84,12 @@ export function useOpenSourceFilePreview(): (
             SOURCE_FILE_AUTH_SCOPE,
             conversationId
           ),
-          queryFn: () => client.conversationResources(conversationId)
+          queryFn: () => client.conversations.resources.list(conversationId)
         });
         const resource =
           "fileId" in input
             ? findSourceFileResource(response.resources, input.fileId)
-            : findSourceFileResourceByAttachmentId(
-                response.resources,
-                input.attachmentId
-              );
+            : findSourceFileResourceByAttachmentId(response.resources, input.attachmentId);
         if (!resource) {
           throw new Error("Source file preview resource was not found");
         }
@@ -137,11 +120,7 @@ export function createSourceFilePreviewEntry({
   resource: SourceFileResource;
 }): ToolDisplayPanelEntry {
   const headerActions = (
-    <ResourceDownloadButton
-      client={client}
-      conversationId={conversationId}
-      resource={resource}
-    />
+    <ResourceDownloadButton client={client} conversationId={conversationId} resource={resource} />
   );
 
   if (resource.preview.kind === "artifact") {
@@ -162,20 +141,13 @@ export function createSourceFilePreviewEntry({
             </div>
           }
         >
-          <ArtifactPreview
-            artifact={preview}
-            client={client}
-            conversationId={conversationId}
-          />
+          <ArtifactPreview artifact={preview} client={client} conversationId={conversationId} />
         </Suspense>
       )
     };
   }
 
-  const previewKind = getSourceFilePreviewKind(
-    resource.download.filename,
-    resource.mimeType
-  );
+  const previewKind = getSourceFilePreviewKind(resource.download.filename, resource.mimeType);
   return {
     key: `resource:${resource.resourceId}`,
     title: resource.title,
@@ -224,9 +196,10 @@ export function SourceFilePreview({
   const spreadsheet = previewKind === "spreadsheet";
   const office = previewKind === "office";
   const download = previewKind ? sourceFilePreviewRequiresDownload(previewKind) : false;
-  const directUrl = client.browserManagedDownloads && (previewKind === "image" || previewKind === "pdf")
-    ? client.conversationFileContentUrl(conversationId, fileId)
-    : undefined;
+  const directUrl =
+    client.browserManagedDownloads && (previewKind === "image" || previewKind === "pdf")
+      ? client.conversations.files.contentUrl(conversationId, fileId)
+      : undefined;
   const [url, setUrl] = useState<string | undefined>(directUrl);
   const [blob, setBlob] = useState<Blob | undefined>();
   const [failed, setFailed] = useState(false);
@@ -247,8 +220,8 @@ export function SourceFilePreview({
     setUrl(undefined);
     setBlob(undefined);
     setFailed(false);
-    void client
-      .conversationFileContent(conversationId, fileId, download)
+    void client.conversations.files
+      .getContent(conversationId, fileId, download)
       .then((blob) => {
         if (active) {
           if (spreadsheet) {
@@ -323,9 +296,7 @@ export function SourceFilePreview({
 
 export type SourceFilePreviewKind = "image" | "pdf" | "spreadsheet" | "office";
 
-export function sourceFilePreviewRequiresDownload(
-  previewKind: SourceFilePreviewKind
-): boolean {
+export function sourceFilePreviewRequiresDownload(previewKind: SourceFilePreviewKind): boolean {
   return previewKind !== "image";
 }
 
@@ -342,7 +313,7 @@ export function getSourceFilePreviewKind(
         ? "spreadsheet"
         : capability === "office_document_pages" || capability === "office_presentation_pages"
           ? "office"
-        : undefined;
+          : undefined;
 }
 
 function AttachmentOfficePreview({
@@ -366,7 +337,8 @@ function AttachmentOfficePreview({
     let active = true;
     setArtifactId(undefined);
     setFailed(false);
-    void client.conversationAttachmentPreview(conversationId, attachmentId)
+    void client.conversations.artifacts
+      .getAttachmentPreview(conversationId, attachmentId)
       .then((preview) => {
         if (active) {
           setArtifactId(preview.artifactId);

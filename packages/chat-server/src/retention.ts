@@ -87,7 +87,12 @@ export class ConversationRetentionWorkflow {
         status: "success",
         subject: expired.id,
         correlationId: createPlatformId("corr"),
-        metadata: createRetentionAuditMetadata(conversation, expiredAt, objectDeletion, workspaceDeletion)
+        metadata: createRetentionAuditMetadata(
+          conversation,
+          expiredAt,
+          objectDeletion,
+          workspaceDeletion
+        )
       });
       return "expired";
     } catch (error) {
@@ -140,8 +145,7 @@ export class ConversationRetentionJob {
     logger: RetentionLogger;
   }) {
     this.workflow = input.workflow;
-    this.checkIntervalMs =
-      input.options?.checkIntervalMs ?? DEFAULT_RETENTION_CHECK_INTERVAL_MS;
+    this.checkIntervalMs = input.options?.checkIntervalMs ?? DEFAULT_RETENTION_CHECK_INTERVAL_MS;
     this.runOnStartup = input.options?.runOnStartup ?? true;
     this.logger = input.logger;
   }

@@ -44,8 +44,14 @@ export function shapeWorkspaceCommandOutput(
   raw: WorkspaceRawCommandOutput,
   limits: WorkspaceCommandLimits
 ): WorkspaceCommandOutput {
-  const stdout = boundTextByBytes(raw.stdout, limits.maxStdoutBytes ?? DEFAULT_LIMITS.maxStdoutBytes);
-  const stderr = boundTextByBytes(raw.stderr, limits.maxStderrBytes ?? DEFAULT_LIMITS.maxStderrBytes);
+  const stdout = boundTextByBytes(
+    raw.stdout,
+    limits.maxStdoutBytes ?? DEFAULT_LIMITS.maxStdoutBytes
+  );
+  const stderr = boundTextByBytes(
+    raw.stderr,
+    limits.maxStderrBytes ?? DEFAULT_LIMITS.maxStderrBytes
+  );
   return {
     exitCode: raw.exitCode,
     stdoutPreview: stdout.text,
@@ -105,11 +111,10 @@ export function validateExpectedOutputResult(
     const changed = output.changedFiles.find((file) => file.path === expected.path);
     const existsAsFile = Boolean(changed) || existingWorkspacePaths.has(expected.path);
     const expectsDirectory = isDirectoryExpectedOutput(expected);
-    const existsAsDirectory = expectsDirectory
-      && (
-        workspacePathSetContainsChild(existingWorkspacePaths, expected.path)
-        || output.changedFiles.some((file) => isWorkspacePathChildOf(file.path, expected.path))
-      );
+    const existsAsDirectory =
+      expectsDirectory &&
+      (workspacePathSetContainsChild(existingWorkspacePaths, expected.path) ||
+        output.changedFiles.some((file) => isWorkspacePathChildOf(file.path, expected.path)));
     if (!existsAsFile && !existsAsDirectory) {
       return failed("handler_failed", "Expected workspace output was not produced", {
         path: expected.path
@@ -149,25 +154,23 @@ export function normalizeWorkspaceFilePath(
   value: string,
   limits: WorkspaceCommandServiceLimits
 ): ValidationResult<string> {
-  return workspacePathValidationToToolValidation(
-    normalizeWorkspaceFilePathValue(value, limits)
-  );
+  return workspacePathValidationToToolValidation(normalizeWorkspaceFilePathValue(value, limits));
 }
 
 export function normalizeWorkspaceDirectory(
   value: string,
   limits: WorkspaceCommandServiceLimits
 ): ValidationResult<string> {
-  return workspacePathValidationToToolValidation(
-    normalizeWorkspaceDirectoryPath(value, limits)
-  );
+  return workspacePathValidationToToolValidation(normalizeWorkspaceDirectoryPath(value, limits));
 }
 
-export function readPromotedFileArtifacts(metadata: JsonObject): Array<{
-  artifactId: string;
-  kind: string;
-  promotedAt: string;
-}> | undefined {
+export function readPromotedFileArtifacts(metadata: JsonObject):
+  | Array<{
+      artifactId: string;
+      kind: string;
+      promotedAt: string;
+    }>
+  | undefined {
   const raw = metadata.promotedArtifacts;
   if (!Array.isArray(raw)) {
     return undefined;
@@ -184,7 +187,10 @@ export function readPromotedFileArtifacts(metadata: JsonObject): Array<{
   return artifacts.length > 0 ? artifacts : undefined;
 }
 
-export function decodeTextFile(bytes: Uint8Array, mimeType: string | undefined): ValidationResult<string> {
+export function decodeTextFile(
+  bytes: Uint8Array,
+  mimeType: string | undefined
+): ValidationResult<string> {
   if (bytes.includes(0)) {
     return {
       status: "failed",
@@ -212,7 +218,10 @@ export function decodeTextFile(bytes: Uint8Array, mimeType: string | undefined):
   }
 }
 
-export function boundTextByBytes(text: string, maxBytes: number): { text: string; truncated: boolean } {
+export function boundTextByBytes(
+  text: string,
+  maxBytes: number
+): { text: string; truncated: boolean } {
   const bytes = new TextEncoder().encode(text);
   if (bytes.byteLength <= maxBytes) {
     return { text, truncated: false };
@@ -257,7 +266,10 @@ export function validationFailed(message: string, details?: JsonObject): Validat
   };
 }
 
-export function failedValidationResult(message: string, details?: JsonObject): ValidationResult<never> {
+export function failedValidationResult(
+  message: string,
+  details?: JsonObject
+): ValidationResult<never> {
   return {
     status: "failed",
     result: failed("handler_failed", message, details)
@@ -279,7 +291,9 @@ export function failed(
   };
 }
 
-function publicChangedFile(file: WorkspaceCommandChangedFile): Omit<WorkspaceCommandChangedFile, "objectKey"> {
+function publicChangedFile(
+  file: WorkspaceCommandChangedFile
+): Omit<WorkspaceCommandChangedFile, "objectKey"> {
   return {
     path: file.path,
     byteSize: file.byteSize,

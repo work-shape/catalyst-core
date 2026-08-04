@@ -58,9 +58,7 @@ export type ConfigAssetMutation =
   | { type: "setDefaultAgent"; agentName: string | undefined };
 
 export interface ConfigAssetStore {
-  getConfigAssetState(input: {
-    clientInstanceId: ClientInstanceId;
-  }): Promise<ConfigAssetState>;
+  getConfigAssetState(input: { clientInstanceId: ClientInstanceId }): Promise<ConfigAssetState>;
   listActiveConfigAssets(input: {
     clientInstanceId: ClientInstanceId;
     kind?: ConfigAssetKind;

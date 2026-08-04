@@ -27,7 +27,12 @@ import {
   requireAuthScope
 } from "@vivd-catalyst/core";
 import { ConversationWorkflow } from "../conversation-workflow";
-import { authenticateRequest, getConversationId, parseBody, withRequestLocale } from "../request-context";
+import {
+  authenticateRequest,
+  getConversationId,
+  parseBody,
+  withRequestLocale
+} from "../request-context";
 import type { ChatServerOptions } from "../types";
 
 export function registerAgentRunRoutes(app: FastifyInstance, options: ChatServerOptions): void {
@@ -46,15 +51,22 @@ export function registerAgentRunRoutes(app: FastifyInstance, options: ChatServer
       return existingTask;
     }
 
-    const task = conversations.generateTitleForConversation(conversationId, user, context).finally(() => {
-      titleGenerationTasks.delete(key);
-    });
+    const task = conversations
+      .generateTitleForConversation(conversationId, user, context)
+      .finally(() => {
+        titleGenerationTasks.delete(key);
+      });
     titleGenerationTasks.set(key, task);
     return task;
   }
 
-  async function readCurrentConversation(conversationId: ConversationId, user: AuthenticatedUser): Promise<Conversation> {
-    const conversation = (await conversations.listConversations(user)).find((candidate) => candidate.id === conversationId);
+  async function readCurrentConversation(
+    conversationId: ConversationId,
+    user: AuthenticatedUser
+  ): Promise<Conversation> {
+    const conversation = (await conversations.listConversations(user)).find(
+      (candidate) => candidate.id === conversationId
+    );
     if (!conversation) {
       throw new AppError("NOT_FOUND", "Conversation not found");
     }
@@ -103,12 +115,14 @@ export function registerAgentRunRoutes(app: FastifyInstance, options: ChatServer
       idempotencyKey: body.idempotencyKey,
       text: body.message.text
     });
-    void generateTitleForConversationOnce(conversationId, user, localizedContext).catch((error: unknown) => {
-      request.log.warn(
-        { err: error, conversationId, runId: started.runId },
-        "Conversation title generation failed after public run start"
-      );
-    });
+    void generateTitleForConversationOnce(conversationId, user, localizedContext).catch(
+      (error: unknown) => {
+        request.log.warn(
+          { err: error, conversationId, runId: started.runId },
+          "Conversation title generation failed after public run start"
+        );
+      }
+    );
     if (isObservableRunStatus(started.run.status)) {
       monitorRunLifecycleOnce({
         conversationId,
@@ -143,12 +157,14 @@ export function registerAgentRunRoutes(app: FastifyInstance, options: ChatServer
         title: body.conversation?.title
       }
     );
-    void generateTitleForConversationOnce(started.conversation.id, user, localizedContext).catch((error: unknown) => {
-      request.log.warn(
-        { err: error, conversationId: started.conversation.id, runId: started.runId },
-        "Conversation title generation failed after public create-and-run"
-      );
-    });
+    void generateTitleForConversationOnce(started.conversation.id, user, localizedContext).catch(
+      (error: unknown) => {
+        request.log.warn(
+          { err: error, conversationId: started.conversation.id, runId: started.runId },
+          "Conversation title generation failed after public create-and-run"
+        );
+      }
+    );
     if (isObservableRunStatus(started.run.status)) {
       monitorRunLifecycleOnce({
         conversationId: started.conversation.id,
@@ -211,7 +227,9 @@ export function registerAgentRunRoutes(app: FastifyInstance, options: ChatServer
     return reply.send(
       Readable.from(
         (async function* streamRunObservations() {
-          for await (const event of conversations.observeRun(runId, localizedContext, { afterSequence })) {
+          for await (const event of conversations.observeRun(runId, localizedContext, {
+            afterSequence
+          })) {
             if (closed) {
               return;
             }
@@ -287,7 +305,10 @@ export function registerAgentRunRoutes(app: FastifyInstance, options: ChatServer
       lifecycleMonitorTasks.delete(input.runId);
     })().catch((error: unknown) => {
       lifecycleMonitorTasks.delete(input.runId);
-      app.log.warn({ err: error, conversationId: input.conversationId, runId: input.runId }, "Agent run lifecycle monitor failed");
+      app.log.warn(
+        { err: error, conversationId: input.conversationId, runId: input.runId },
+        "Agent run lifecycle monitor failed"
+      );
     });
   }
 
@@ -343,14 +364,18 @@ function readAfterSequence(request: {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 0;
 }
 
-function toRuntimeRunCommand(command: {
-  type: "continue";
-} | {
-  type: "tool_permission_decision";
-  toolCallId: string;
-  approved: boolean;
-  reason?: string;
-}) {
+function toRuntimeRunCommand(
+  command:
+    | {
+        type: "continue";
+      }
+    | {
+        type: "tool_permission_decision";
+        toolCallId: string;
+        approved: boolean;
+        reason?: string;
+      }
+) {
   if (command.type === "continue") {
     return command;
   }

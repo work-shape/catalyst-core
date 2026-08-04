@@ -204,9 +204,7 @@ describe("chat UI run connection manager", () => {
   });
 });
 
-function createCursorStorage(
-  rememberedCursors: Array<[string, string, number]>
-): RunCursorStorage {
+function createCursorStorage(rememberedCursors: Array<[string, string, number]>): RunCursorStorage {
   return {
     rememberCursor(conversationId, runId, sequence) {
       rememberedCursors.push([conversationId, runId, sequence]);

@@ -253,7 +253,7 @@ export function readAssistantReasoningSummaries(
 ): StoredReasoningSummary[] {
   const runtime = readAgentRuntimeMessageMetadata(metadata);
   return runtime?.kind === "assistant_tool_calls" || runtime?.kind === "assistant_final"
-    ? runtime.reasoning ?? []
+    ? (runtime.reasoning ?? [])
     : [];
 }
 
@@ -307,9 +307,9 @@ function wrapAgentRuntimeMetadata(runtime: AgentRuntimeMessageMetadata): JsonObj
   };
 }
 
-function createReasoningMetadata(
-  reasoning: readonly StoredReasoningSummary[] | undefined
-): { reasoning?: StoredReasoningSummary[] } {
+function createReasoningMetadata(reasoning: readonly StoredReasoningSummary[] | undefined): {
+  reasoning?: StoredReasoningSummary[];
+} {
   const summaries = reasoning?.filter((summary) => summary.text.length > 0) ?? [];
   return summaries.length > 0 ? { reasoning: [...summaries] } : {};
 }
@@ -318,7 +318,8 @@ function createWebSourceMetadata(
   sources: readonly WebSource[] | undefined,
   citations: readonly MessageCitation[] | undefined
 ): { sources?: WebSource[]; citations?: MessageCitation[] } {
-  const activeSources = sources?.filter((source) => source.id.length > 0 && source.url.length > 0) ?? [];
+  const activeSources =
+    sources?.filter((source) => source.id.length > 0 && source.url.length > 0) ?? [];
   const activeCitations = citations?.filter((citation) => citation.sourceId.length > 0) ?? [];
   return {
     ...(activeSources.length > 0 ? { sources: [...activeSources] } : {}),
@@ -364,9 +365,7 @@ function readReasoningMetadata(value: unknown): { reasoning?: StoredReasoningSum
   return reasoning.length > 0 ? { reasoning } : {};
 }
 
-function readModelContextMetadata(
-  value: unknown
-): { modelContext?: StoredModelContextSnapshot } {
+function readModelContextMetadata(value: unknown): { modelContext?: StoredModelContextSnapshot } {
   if (
     !isUnknownRecord(value) ||
     typeof value.inputTokens !== "number" ||
@@ -386,13 +385,10 @@ function readModelContextMetadata(
   };
 }
 
-function readProviderContinuationMetadata(
-  value: unknown
-): { providerContinuation?: StoredModelProviderContinuation } {
-  if (
-    !isUnknownRecord(value) ||
-    typeof value.providerId !== "string"
-  ) {
+function readProviderContinuationMetadata(value: unknown): {
+  providerContinuation?: StoredModelProviderContinuation;
+} {
+  if (!isUnknownRecord(value) || typeof value.providerId !== "string") {
     return {};
   }
   return {
@@ -439,9 +435,13 @@ function readWebSources(value: unknown): WebSource[] {
         provider,
         ...(typeof candidate.title === "string" ? { title: candidate.title } : {}),
         ...(typeof candidate.query === "string" ? { query: candidate.query } : {}),
-        ...(typeof candidate.retrievedAt === "string" ? { retrievedAt: candidate.retrievedAt } : {}),
+        ...(typeof candidate.retrievedAt === "string"
+          ? { retrievedAt: candidate.retrievedAt }
+          : {}),
         ...(typeof candidate.snippet === "string" ? { snippet: candidate.snippet } : {}),
-        ...(typeof candidate.contentHash === "string" ? { contentHash: candidate.contentHash } : {}),
+        ...(typeof candidate.contentHash === "string"
+          ? { contentHash: candidate.contentHash }
+          : {}),
         ...(typeof candidate.resultPosition === "number"
           ? { resultPosition: candidate.resultPosition }
           : {})
@@ -474,7 +474,8 @@ function readCitationCharacterRange(value: unknown): MessageCitation["characterR
   if (!isUnknownRecord(value)) {
     return undefined;
   }
-  const start = typeof value.start === "number" && Number.isInteger(value.start) ? value.start : undefined;
+  const start =
+    typeof value.start === "number" && Number.isInteger(value.start) ? value.start : undefined;
   const end = typeof value.end === "number" && Number.isInteger(value.end) ? value.end : undefined;
   return start !== undefined && end !== undefined ? { start, end } : undefined;
 }

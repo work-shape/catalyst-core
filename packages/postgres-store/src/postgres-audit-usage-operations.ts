@@ -45,7 +45,10 @@ export async function listAuditEvents(
 ): Promise<AuditEvent[]> {
   const limit = input.limit ?? 100;
   const filters = input.type
-    ? and(eq(auditEvents.clientInstanceId, input.clientInstanceId), eq(auditEvents.type, input.type))
+    ? and(
+        eq(auditEvents.clientInstanceId, input.clientInstanceId),
+        eq(auditEvents.type, input.type)
+      )
     : eq(auditEvents.clientInstanceId, input.clientInstanceId);
   const rows = await db
     .select()

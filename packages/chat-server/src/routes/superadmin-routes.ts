@@ -76,7 +76,10 @@ export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServ
   app.put(apiOperations.upsertAdministeredUserIdentity.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
     requireAuthScope(user, "user_admin:write");
-    const body = parseBody(apiOperations.upsertAdministeredUserIdentity.requestSchema, request.body);
+    const body = parseBody(
+      apiOperations.upsertAdministeredUserIdentity.requestSchema,
+      request.body
+    );
     const userId = getUserIdParam(request.params);
     return userAdministration.upsertIdentity(user, context, {
       userId,

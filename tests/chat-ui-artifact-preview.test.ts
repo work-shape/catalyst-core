@@ -41,7 +41,9 @@ describe("chat UI artifact preview state", () => {
     expect(artifactPreviewPollDelayMs({ status: "pending", pendingAttempt: 100 })).toBe(5000);
     expect(artifactPreviewPollDelayMs({ status: "ready", pendingAttempt: 0 })).toBeUndefined();
     expect(artifactPreviewPollDelayMs({ status: "failed", pendingAttempt: 0 })).toBeUndefined();
-    expect(artifactPreviewPollDelayMs({ status: "unsupported", pendingAttempt: 0 })).toBeUndefined();
+    expect(
+      artifactPreviewPollDelayMs({ status: "unsupported", pendingAttempt: 0 })
+    ).toBeUndefined();
   });
 
   it("uses embedded ready snapshots only until live preview state replaces them", () => {
@@ -214,38 +216,48 @@ describe("chat UI artifact preview state", () => {
   });
 
   it("uses live preview state only for Office page-image previews", () => {
-    expect(shouldUseLiveArtifactPreviewState({
-      artifactId: "art_docx",
-      filename: "memo.docx",
-      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    })).toBe(true);
-    expect(shouldUseLiveArtifactPreviewState({
-      artifactId: "art_pptx",
-      filename: "deck.pptx",
-      mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-    })).toBe(true);
-    expect(shouldUseLiveArtifactPreviewState({
-      artifactId: "art_pdf",
-      filename: "report.pdf",
-      mimeType: "application/pdf"
-    })).toBe(false);
-    expect(shouldUseLiveArtifactPreviewState({
-      artifactId: "art_xlsx",
-      filename: "analysis.xlsx",
-      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    })).toBe(false);
-    expect(shouldUseLiveArtifactPreviewState({
-      artifactId: "art_docx",
-      filename: "memo.docx",
-      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      preview: {
-        status: "ready",
+    expect(
+      shouldUseLiveArtifactPreviewState({
         artifactId: "art_docx",
-        type: "image_pages",
-        format: "png",
-        pages: [{ artifactId: "art_docx_page_1", mimeType: "image/png" }]
-      }
-    })).toBe(true);
+        filename: "memo.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      })
+    ).toBe(true);
+    expect(
+      shouldUseLiveArtifactPreviewState({
+        artifactId: "art_pptx",
+        filename: "deck.pptx",
+        mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+      })
+    ).toBe(true);
+    expect(
+      shouldUseLiveArtifactPreviewState({
+        artifactId: "art_pdf",
+        filename: "report.pdf",
+        mimeType: "application/pdf"
+      })
+    ).toBe(false);
+    expect(
+      shouldUseLiveArtifactPreviewState({
+        artifactId: "art_xlsx",
+        filename: "analysis.xlsx",
+        mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      })
+    ).toBe(false);
+    expect(
+      shouldUseLiveArtifactPreviewState({
+        artifactId: "art_docx",
+        filename: "memo.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        preview: {
+          status: "ready",
+          artifactId: "art_docx",
+          type: "image_pages",
+          format: "png",
+          pages: [{ artifactId: "art_docx_page_1", mimeType: "image/png" }]
+        }
+      })
+    ).toBe(true);
   });
 
   it("uses a stable primitive load key for image-page preview fetches", () => {

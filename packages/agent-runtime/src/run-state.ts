@@ -84,9 +84,7 @@ export class RunState {
   }
 
   async *observe(options: AgentRuntimeObserveOptions = {}): AsyncIterable<AgentRuntimeEvent> {
-    let index = this.events.findIndex(
-      (event) => event.sequence > (options.afterSequence ?? 0)
-    );
+    let index = this.events.findIndex((event) => event.sequence > (options.afterSequence ?? 0));
     if (index < 0) {
       index = this.events.length;
     }
@@ -275,14 +273,11 @@ export class RunState {
           return;
         }
         this.persistenceFailed = true;
-        this.fail(
-          new AppError("INTERNAL", "Agent run observation persistence failed"),
-          {
-            code: "OBSERVATION_PERSISTENCE_FAILED",
-            message: "Agent run observation persistence failed",
-            category: "internal_error"
-          }
-        );
+        this.fail(new AppError("INTERNAL", "Agent run observation persistence failed"), {
+          code: "OBSERVATION_PERSISTENCE_FAILED",
+          message: "Agent run observation persistence failed",
+          category: "internal_error"
+        });
       });
   }
 }

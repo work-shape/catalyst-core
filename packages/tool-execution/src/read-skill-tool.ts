@@ -1,7 +1,12 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { ConfigAssetSource, SkillConfig } from "@vivd-catalyst/core";
-import { defineTool, toolFailed, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
+import {
+  defineTool,
+  toolFailed,
+  toolSuccess,
+  type AnyToolDefinition
+} from "@vivd-catalyst/tool-sdk";
 
 const skillNameSchema = z
   .string()

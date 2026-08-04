@@ -1,6 +1,6 @@
 import type { ChatShellAdminPanel } from "./chat-shell";
-import { canViewAdministrationPanel } from "./governance";
-import { SuperadminPanel } from "./superadmin-panel";
+import { canViewAdministrationPanel } from "./control-plane/governance";
+import { SuperadminPanel } from "./control-plane/superadmin-panel";
 
 export {
   canEditConfigAssets,
@@ -10,8 +10,8 @@ export {
   canViewAdministrationPanel,
   canViewSuperadminPanel,
   canViewUsageGovernance
-} from "./governance";
-export { SuperadminPanel } from "./superadmin-panel";
+} from "./control-plane/governance";
+export { SuperadminPanel } from "./control-plane/superadmin-panel";
 
 export const superadminPanel: ChatShellAdminPanel = {
   canView: canViewAdministrationPanel,

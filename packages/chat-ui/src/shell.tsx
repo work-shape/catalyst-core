@@ -14,4 +14,4 @@ export type {
   SuperadminRouteTab,
   WorkspaceRoute,
   WorkspaceRouteChangeOptions
-} from "./workspace-route";
+} from "./workspace/workspace-route";

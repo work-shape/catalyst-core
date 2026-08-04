@@ -44,9 +44,11 @@ export interface DefinedClientInstance {
     storeMode?: CreateClientInstanceAppInput["storeMode"];
     corsOrigin?: string | string[];
   }): Promise<ClientInstanceApp>;
-  seedStandaloneAuth(input?: Omit<SeedStandaloneAuthInput, "configPath"> & {
-    configPath?: string;
-  }): Promise<SeedStandaloneAuthResult>;
+  seedStandaloneAuth(
+    input?: Omit<SeedStandaloneAuthInput, "configPath"> & {
+      configPath?: string;
+    }
+  ): Promise<SeedStandaloneAuthResult>;
 }
 
 export function defineClientInstance(input: DefineClientInstanceInput): DefinedClientInstance {
@@ -66,10 +68,12 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
     return env;
   }
 
-  function resolveConfigPath(resolveInput: {
-    env?: ClientInstanceEnv;
-    configPath?: string;
-  } = {}): string {
+  function resolveConfigPath(
+    resolveInput: {
+      env?: ClientInstanceEnv;
+      configPath?: string;
+    } = {}
+  ): string {
     const env = resolveInput.env ?? process.env;
     const configuredPath =
       resolveInput.configPath ?? env.CLIENT_CONFIG_PATH ?? input.configFile ?? "config/app.yaml";

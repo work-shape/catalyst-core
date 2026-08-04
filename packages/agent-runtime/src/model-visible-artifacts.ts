@@ -41,7 +41,12 @@ async function readModelVisibleImages(
   result: ToolExecutionResult,
   options: ModelVisibleArtifactProjectionOptions
 ): Promise<ModelContentPart[]> {
-  if (result.status !== "success" || !result.artifacts?.length || !options.clientInstanceId || !options.artifactReader) {
+  if (
+    result.status !== "success" ||
+    !result.artifacts?.length ||
+    !options.clientInstanceId ||
+    !options.artifactReader
+  ) {
     return [];
   }
   const images: ModelContentPart[] = [];
@@ -54,7 +59,10 @@ async function readModelVisibleImages(
         clientInstanceId: options.clientInstanceId,
         artifactId: artifact.artifactId
       });
-      if (!isSupportedImageMimeType(object.mimeType) || object.mimeType !== artifact.modelVisibility.mimeType) {
+      if (
+        !isSupportedImageMimeType(object.mimeType) ||
+        object.mimeType !== artifact.modelVisibility.mimeType
+      ) {
         continue;
       }
       images.push({
@@ -76,7 +84,12 @@ async function readModelVisibleImages(
 }
 
 function isSupportedImageMimeType(value: string): value is SupportedImageMimeType {
-  return value === "image/png" || value === "image/jpeg" || value === "image/webp" || value === "image/gif";
+  return (
+    value === "image/png" ||
+    value === "image/jpeg" ||
+    value === "image/webp" ||
+    value === "image/gif"
+  );
 }
 
 function createVisualArtifactSummary(result: ToolExecutionResult): string | undefined {

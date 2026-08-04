@@ -1,8 +1,5 @@
 import { AppError } from "@vivd-catalyst/core";
-import type {
-  ModelCompletionStreamEvent,
-  ModelProviderContinuation
-} from "./types";
+import type { ModelCompletionStreamEvent, ModelProviderContinuation } from "./types";
 import { WEB_SEARCH_MODEL_TOOL_NAME } from "./types";
 import {
   noReportedUsage,
@@ -15,10 +12,7 @@ import {
   toResponsesModelUsage
 } from "./openai-compatible-mapping";
 import { parseToolInput } from "./tool-input";
-import type {
-  OpenAiCompatibleResponse,
-  OpenAiResponsesResponse
-} from "./openai-compatible-types";
+import type { OpenAiCompatibleResponse, OpenAiResponsesResponse } from "./openai-compatible-types";
 
 interface OpenAiCompatibleStreamChunk {
   usage?: OpenAiCompatibleResponse["usage"];
@@ -210,13 +204,21 @@ export async function* streamOpenAiResponsesCompletion(
     }
 
     if (payload.type === "response.reasoning_summary_part.added") {
-      const id = createReasoningSummaryId(payload, reasoningItemsByOutputIndex, latestReasoningItemId);
+      const id = createReasoningSummaryId(
+        payload,
+        reasoningItemsByOutputIndex,
+        latestReasoningItemId
+      );
       latestReasoningItemId = id.itemId;
       continue;
     }
 
     if (payload.type === "response.reasoning_summary_text.delta" && payload.delta) {
-      const id = createReasoningSummaryId(payload, reasoningItemsByOutputIndex, latestReasoningItemId);
+      const id = createReasoningSummaryId(
+        payload,
+        reasoningItemsByOutputIndex,
+        latestReasoningItemId
+      );
       latestReasoningItemId = id.itemId;
       yield {
         type: "reasoning_delta",
@@ -235,10 +237,7 @@ export async function* streamOpenAiResponsesCompletion(
       continue;
     }
 
-    if (
-      payload.type === "response.output_item.done" &&
-      payload.item?.type === "web_search_call"
-    ) {
+    if (payload.type === "response.output_item.done" && payload.item?.type === "web_search_call") {
       yield {
         type: "provider_tool_completed",
         toolCallId: createResponsesProviderToolCallId(payload, WEB_SEARCH_MODEL_TOOL_NAME),
@@ -270,7 +269,9 @@ export async function* streamOpenAiResponsesCompletion(
 
     if (payload.type === "response.failed" || payload.type === "error") {
       const message =
-        payload.response?.error?.message ?? payload.error?.message ?? "Model provider stream failed";
+        payload.response?.error?.message ??
+        payload.error?.message ??
+        "Model provider stream failed";
       throw new AppError("INTERNAL", message);
     }
   }
@@ -319,14 +320,18 @@ function createResponsesProviderToolCallId(
   );
 }
 
-function readResponsesWebSearchToolInput(item: NonNullable<OpenAiResponsesStreamEvent["item"]>): unknown {
+function readResponsesWebSearchToolInput(
+  item: NonNullable<OpenAiResponsesStreamEvent["item"]>
+): unknown {
   if (isRecord(item.action) && typeof item.action.query === "string") {
     return { query: item.action.query };
   }
   return {};
 }
 
-function readResponsesWebSearchToolOutput(item: NonNullable<OpenAiResponsesStreamEvent["item"]>): unknown {
+function readResponsesWebSearchToolOutput(
+  item: NonNullable<OpenAiResponsesStreamEvent["item"]>
+): unknown {
   const action = isRecord(item.action) ? item.action : undefined;
   const sources = Array.isArray(action?.sources) ? action.sources : [];
   return {
@@ -345,7 +350,9 @@ function createReasoningSummaryId(
   const itemId =
     payload.item_id ??
     payload.item?.id ??
-    (payload.output_index !== undefined ? reasoningItemsByOutputIndex.get(payload.output_index) : undefined) ??
+    (payload.output_index !== undefined
+      ? reasoningItemsByOutputIndex.get(payload.output_index)
+      : undefined) ??
     latestReasoningItemId ??
     "reasoning";
   const summaryIndex = payload.summary_index ?? 0;
@@ -375,9 +382,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-async function* readServerSentEventData(
-  body: ReadableStream<Uint8Array>
-): AsyncIterable<string> {
+async function* readServerSentEventData(body: ReadableStream<Uint8Array>): AsyncIterable<string> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";

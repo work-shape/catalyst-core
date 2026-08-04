@@ -120,7 +120,7 @@ function agent(name: string, skillNames: string[]) {
 
 function createExecution(input: {
   agents: ReturnType<typeof agent>[];
-  skills: typeof supportSkill[];
+  skills: (typeof supportSkill)[];
 }) {
   const tool = createReadSkillTool({
     assetSource: createStaticConfigAssetSource(input)

@@ -2,24 +2,24 @@ import { describe, expect, it } from "vitest";
 import {
   formatElapsedSeconds,
   formatWorkHistoryLabel
-} from "../packages/chat-ui/src/elapsed-time";
+} from "../packages/chat-ui/src/assistant/elapsed-time";
 import { createElement } from "../packages/chat-ui/node_modules/react";
 import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
-import { AssistantActivityStatus } from "../packages/chat-ui/src/assistant-activity-status";
+import { AssistantActivityStatus } from "../packages/chat-ui/src/assistant/assistant-activity-status";
 import {
   acknowledgeRecentlyActiveAssistantRunId,
   isRecentlyActiveAssistantRunId,
   rememberRecentlyActiveAssistantRunId
-} from "../packages/chat-ui/src/assistant-message";
+} from "../packages/chat-ui/src/assistant/assistant-message";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
-import { ToolActivityLabelsProvider } from "../packages/chat-ui/src/tool-activity";
+import { ToolActivityLabelsProvider } from "../packages/chat-ui/src/assistant/tool-activity";
 import {
   findRunActivity,
   isComposerBlockedByActiveRun,
   isThreadBusy,
   shouldShowCancelAction,
   shouldShowRunActivity
-} from "../packages/chat-ui/src/thread-activity";
+} from "../packages/chat-ui/src/assistant/thread-activity";
 
 describe("chat UI thread activity", () => {
   it("runs completed-work effects only once across conversation remounts", () => {

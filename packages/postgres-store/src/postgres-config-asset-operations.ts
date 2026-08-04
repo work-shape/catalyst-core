@@ -42,10 +42,7 @@ export async function listActiveConfigAssets(
   const rows = await db
     .select({ asset: configAssets, revision: configAssetRevisions })
     .from(configAssets)
-    .innerJoin(
-      configAssetRevisions,
-      eq(configAssetRevisions.id, configAssets.activeRevisionId)
-    )
+    .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
     .where(and(...conditions))
     .orderBy(asc(configAssets.kind), asc(configAssets.name));
   return rows.map((row) => mapConfigAsset(row.asset, row.revision));
@@ -58,10 +55,7 @@ export async function getConfigAsset(
   const [row] = await db
     .select({ asset: configAssets, revision: configAssetRevisions })
     .from(configAssets)
-    .innerJoin(
-      configAssetRevisions,
-      eq(configAssetRevisions.id, configAssets.activeRevisionId)
-    )
+    .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
     .where(
       and(
         eq(configAssets.clientInstanceId, input.clientInstanceId),

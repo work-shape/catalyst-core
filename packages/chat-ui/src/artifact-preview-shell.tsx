@@ -66,7 +66,9 @@ export function ArtifactPreviewMessage({
           <div className="min-w-0">
             <p className="font-medium">{title}</p>
             {detail ? (
-              <p className="mt-1 text-xs text-muted-foreground [overflow-wrap:anywhere]">{detail}</p>
+              <p className="mt-1 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                {detail}
+              </p>
             ) : null}
             {action ? <div className="mt-3">{action}</div> : null}
           </div>

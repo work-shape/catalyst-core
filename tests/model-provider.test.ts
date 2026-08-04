@@ -13,9 +13,11 @@ describe("OpenAI-compatible model provider", () => {
   });
 
   it("round-trips provider tool names without dot/underscore collisions", async () => {
-    let requestBody: {
-      tools: Array<{ function: { name: string; description: string } }>;
-    } | undefined;
+    let requestBody:
+      | {
+          tools: Array<{ function: { name: string; description: string } }>;
+        }
+      | undefined;
     const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       requestBody = JSON.parse(String(init?.body));
       const secondToolName = requestBody?.tools.find(
@@ -101,9 +103,11 @@ describe("OpenAI-compatible model provider", () => {
   });
 
   it("returns malformed tool arguments as a recoverable parse error", async () => {
-    let requestBody: {
-      tools: Array<{ function: { name: string; description: string } }>;
-    } | undefined;
+    let requestBody:
+      | {
+          tools: Array<{ function: { name: string; description: string } }>;
+        }
+      | undefined;
     const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       requestBody = JSON.parse(String(init?.body));
       const toolName = requestBody?.tools[0]?.function.name;
@@ -120,7 +124,7 @@ describe("OpenAI-compatible model provider", () => {
                     type: "function",
                     function: {
                       name: toolName,
-                      arguments: "{\"city\":"
+                      arguments: '{"city":'
                     }
                   }
                 ]
@@ -183,7 +187,7 @@ describe("OpenAI-compatible model provider", () => {
         inputParseError: {
           code: "invalid_json",
           message: "Tool input must be valid JSON",
-          rawInput: "{\"city\":"
+          rawInput: '{"city":'
         }
       }
     ]);
@@ -333,7 +337,7 @@ describe("OpenAI-compatible model provider", () => {
               type: "function_call",
               call_id: "call_render",
               name: toolName,
-              arguments: "{\"html\":\"<p>Hello</p>\"}"
+              arguments: '{"html":"<p>Hello</p>"}'
             }
           ],
           usage: {
@@ -373,7 +377,7 @@ describe("OpenAI-compatible model provider", () => {
             content: "",
             toolCalls: [{ toolCallId: "call_previous", toolName: "show_view", input: { html: "" } }]
           },
-          { role: "tool", toolCallId: "call_previous", content: "{\"status\":\"displayed\"}" }
+          { role: "tool", toolCallId: "call_previous", content: '{"status":"displayed"}' }
         ],
         tools: [{ name: "show_view", description: "Show view" }]
       },
@@ -405,12 +409,12 @@ describe("OpenAI-compatible model provider", () => {
         expect.objectContaining({
           type: "function_call",
           call_id: "call_previous",
-          arguments: "{\"html\":\"\"}"
+          arguments: '{"html":""}'
         }),
         expect.objectContaining({
           type: "function_call_output",
           call_id: "call_previous",
-          output: "{\"status\":\"displayed\"}"
+          output: '{"status":"displayed"}'
         })
       ])
     );
@@ -452,7 +456,7 @@ describe("OpenAI-compatible model provider", () => {
                 type: "function_call",
                 call_id: "call_lookup",
                 name: "lookup",
-                arguments: "{\"id\":42}"
+                arguments: '{"id":42}'
               }
             ]
           }),
@@ -508,7 +512,7 @@ describe("OpenAI-compatible model provider", () => {
           {
             role: "tool",
             toolCallId: "call_lookup",
-            content: "{\"name\":\"Record\"}"
+            content: '{"name":"Record"}'
           }
         ],
         tools: [{ name: "lookup", description: "Look up a record" }]
@@ -621,7 +625,7 @@ describe("OpenAI-compatible model provider", () => {
             content: "",
             toolCalls: [{ toolCallId: "call_lookup", toolName: "lookup", input: {} }]
           },
-          { role: "tool", toolCallId: "call_lookup", content: "{\"ok\":true}" }
+          { role: "tool", toolCallId: "call_lookup", content: '{"ok":true}' }
         ],
         tools: [{ name: "lookup", description: "Look up a record" }]
       },
@@ -687,7 +691,11 @@ describe("OpenAI-compatible model provider", () => {
             role: "assistant",
             content: "",
             toolCalls: [
-              { toolCallId: "call_image", toolName: "view_document_page", input: { pageNumber: 1 } },
+              {
+                toolCallId: "call_image",
+                toolName: "view_document_page",
+                input: { pageNumber: 1 }
+              },
               { toolCallId: "call_text", toolName: "read_document", input: { mode: "pages" } }
             ]
           },
@@ -695,7 +703,7 @@ describe("OpenAI-compatible model provider", () => {
             role: "tool",
             toolCallId: "call_image",
             content: [
-              { type: "text", text: "{\"pageNumber\":1}" },
+              { type: "text", text: '{"pageNumber":1}' },
               {
                 type: "image",
                 mimeType: "image/png",
@@ -703,7 +711,7 @@ describe("OpenAI-compatible model provider", () => {
               }
             ]
           },
-          { role: "tool", toolCallId: "call_text", content: "{\"text\":\"page text\"}" }
+          { role: "tool", toolCallId: "call_text", content: '{"text":"page text"}' }
         ],
         tools: [
           { name: "view_document_page", description: "View PDF page" },
@@ -734,9 +742,7 @@ describe("OpenAI-compatible model provider", () => {
     ]);
     expect(requestBody?.input?.[4]).toMatchObject({
       role: "user",
-      content: expect.arrayContaining([
-        expect.objectContaining({ type: "input_image" })
-      ])
+      content: expect.arrayContaining([expect.objectContaining({ type: "input_image" })])
     });
   });
 
@@ -782,7 +788,7 @@ describe("OpenAI-compatible model provider", () => {
                     {
                       index: 0,
                       function: {
-                        arguments: "\"ok\":true}"
+                        arguments: '"ok":true}'
                       }
                     }
                   ]
@@ -846,10 +852,9 @@ describe("OpenAI-compatible model provider", () => {
         include_usage: true
       }
     });
-    expect(events.filter((event) => event.type === "text_delta").map((event) => event.delta)).toEqual([
-      "Hello",
-      " world"
-    ]);
+    expect(
+      events.filter((event) => event.type === "text_delta").map((event) => event.delta)
+    ).toEqual(["Hello", " world"]);
     expect(events.filter((event) => event.type === "tool_call_preparing")).toEqual([
       {
         type: "tool_call_preparing",
@@ -924,7 +929,7 @@ describe("OpenAI-compatible model provider", () => {
               type: "function_call",
               call_id: "call_1",
               name: toolName,
-              arguments: "{\"html\":\"<p>Hello</p>\"}"
+              arguments: '{"html":"<p>Hello</p>"}'
             }
           },
           {
@@ -945,7 +950,7 @@ describe("OpenAI-compatible model provider", () => {
                   type: "function_call",
                   call_id: "call_1",
                   name: toolName,
-                  arguments: "{\"html\":\"<p>Hello</p>\"}"
+                  arguments: '{"html":"<p>Hello</p>"}'
                 }
               ],
               usage: {
@@ -1012,13 +1017,12 @@ describe("OpenAI-compatible model provider", () => {
       },
       context_management: [{ type: "compaction", compact_threshold: 270_000 }]
     });
-    expect(events.filter((event) => event.type === "reasoning_delta").map((event) => event.delta)).toEqual([
-      "I will inspect the document."
-    ]);
-    expect(events.filter((event) => event.type === "text_delta").map((event) => event.delta)).toEqual([
-      "Hello",
-      " world"
-    ]);
+    expect(
+      events.filter((event) => event.type === "reasoning_delta").map((event) => event.delta)
+    ).toEqual(["I will inspect the document."]);
+    expect(
+      events.filter((event) => event.type === "text_delta").map((event) => event.delta)
+    ).toEqual(["Hello", " world"]);
     expect(events.filter((event) => event.type === "tool_call_preparing")).toEqual([
       {
         type: "tool_call_preparing",

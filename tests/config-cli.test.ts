@@ -47,7 +47,9 @@ const temporaryDirectories: string[] = [];
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.close()));
   await Promise.all(
-    temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true }))
+    temporaryDirectories
+      .splice(0)
+      .map((directory) => rm(directory, { recursive: true, force: true }))
   );
 });
 
@@ -88,9 +90,7 @@ describe("config CLI serialization", () => {
 
     expect(serialized).toContain("---\n# Pulled from staging (config version 4).\n");
     expect(parseSkillFile(serialized)).toEqual(skill);
-    expect(serializeSkillMarkdown(parseSkillFile(serialized))).toBe(
-      serializeSkillMarkdown(skill)
-    );
+    expect(serializeSkillMarkdown(parseSkillFile(serialized))).toBe(serializeSkillMarkdown(skill));
   });
 });
 
@@ -432,25 +432,15 @@ skills:
     });
     const requests: unknown[] = [];
     expect(
-      await runCli(
-        [
-          "config",
-          "push",
-          "--only",
-          "agent:assistant",
-          "--only",
-          "skill:review"
-        ],
-        {
-          cwd: directory,
-          env: { CATALYST_API_KEY: "cat_scoped" },
-          fetchImpl: configApiFetch(
-            { version: 3, agents: [agentConfig("Remote")], skills: [] },
-            requests,
-            4
-          )
-        }
-      )
+      await runCli(["config", "push", "--only", "agent:assistant", "--only", "skill:review"], {
+        cwd: directory,
+        env: { CATALYST_API_KEY: "cat_scoped" },
+        fetchImpl: configApiFetch(
+          { version: 3, agents: [agentConfig("Remote")], skills: [] },
+          requests,
+          4
+        )
+      })
     ).toBe(0);
     expect(requests.at(-1)).toEqual({
       agents: [canonicalizeAgentConfig(agentConfig("Selected"))],
@@ -461,10 +451,10 @@ skills:
 
     const stderr: string[] = [];
     expect(
-      await runCli(
-        ["config", "push", "--prune", "--only", "agent:assistant"],
-        { cwd: directory, stderr: (text) => stderr.push(text) }
-      )
+      await runCli(["config", "push", "--prune", "--only", "agent:assistant"], {
+        cwd: directory,
+        stderr: (text) => stderr.push(text)
+      })
     ).toBe(2);
     expect(stderr.join("")).toContain("--prune cannot be combined with --only");
   });
@@ -492,10 +482,7 @@ skills:
         env: { CATALYST_API_KEY: "cat_pull" },
         fetchImpl: configApiFetch({
           version: 9,
-          agents: [
-            agentConfig("New selected"),
-            agentConfig("New other", { name: "other" })
-          ],
+          agents: [agentConfig("New selected"), agentConfig("New other", { name: "other" })],
           skills: []
         }),
         stdout: (text) => stdout.push(text)
@@ -595,10 +582,9 @@ skills:
         },
         fetchImpl: async (input) => {
           exchangeRequests.push(input instanceof Request ? input.url : String(input));
-          return jsonResponse(
-            401,
-            { error: { code: "UNAUTHENTICATED", message: `Invalid API key ${apiKey}` } }
-          );
+          return jsonResponse(401, {
+            error: { code: "UNAUTHENTICATED", message: `Invalid API key ${apiKey}` }
+          });
         },
         stderr: (text) => exchangeStderr.push(text)
       })
@@ -685,38 +671,37 @@ skills:
     expect(stderr.join("")).not.toContain(apiKey);
   });
 
-  it.each([
-    "http://localhost:4100/",
-    "http://127.42.0.8:4100/",
-    "http://[::1]:4100/"
-  ])("allows API-key exchange for loopback direct URL %s", async (instance) => {
-    const directory = await createTemporaryDirectory();
-    await writeMinimalManifest(directory, "https://manifest-instance.test");
-    const requests: string[] = [];
+  it.each(["http://localhost:4100/", "http://127.42.0.8:4100/", "http://[::1]:4100/"])(
+    "allows API-key exchange for loopback direct URL %s",
+    async (instance) => {
+      const directory = await createTemporaryDirectory();
+      await writeMinimalManifest(directory, "https://manifest-instance.test");
+      const requests: string[] = [];
 
-    expect(
-      await runConfigCommand("pull", {
-        cwd: directory,
-        instance,
-        env: { CATALYST_API_KEY: "cat_loopback_key" },
-        fetchImpl: async (input) => {
-          const url = input instanceof Request ? input.url : String(input);
-          requests.push(url);
-          return url.endsWith("/api/auth/access-token")
-            ? jsonResponse(200, {
-                accessToken: "loopback-access-token",
-                expiresAt: "2030-01-01T00:00:00.000Z"
-              })
-            : jsonResponse(200, { version: 0, agents: [], skills: [] });
-        }
-      })
-    ).toBe(0);
-    const baseUrl = instance.replace(/\/$/u, "");
-    expect(requests).toEqual([
-      `${baseUrl}/api/auth/access-token`,
-      `${baseUrl}/api/admin/config/export`
-    ]);
-  });
+      expect(
+        await runConfigCommand("pull", {
+          cwd: directory,
+          instance,
+          env: { CATALYST_API_KEY: "cat_loopback_key" },
+          fetchImpl: async (input) => {
+            const url = input instanceof Request ? input.url : String(input);
+            requests.push(url);
+            return url.endsWith("/api/auth/access-token")
+              ? jsonResponse(200, {
+                  accessToken: "loopback-access-token",
+                  expiresAt: "2030-01-01T00:00:00.000Z"
+                })
+              : jsonResponse(200, { version: 0, agents: [], skills: [] });
+          }
+        })
+      ).toBe(0);
+      const baseUrl = instance.replace(/\/$/u, "");
+      expect(requests).toEqual([
+        `${baseUrl}/api/auth/access-token`,
+        `${baseUrl}/api/admin/config/export`
+      ]);
+    }
+  );
 });
 
 describe("config CLI API transport", () => {
@@ -893,10 +878,7 @@ function recordFetch(
   };
 }
 
-function agentConfig(
-  instructions: string,
-  overrides: { name?: string } = {}
-) {
+function agentConfig(instructions: string, overrides: { name?: string } = {}) {
   return {
     name: overrides.name ?? "assistant",
     displayName: "Assistant",

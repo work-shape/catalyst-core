@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { asClientInstanceId, type RuntimeCallContext } from "@vivd-catalyst/core";
-import { OpenAiCompatibleChatProvider, type ModelCompletionStreamEvent } from "@vivd-catalyst/model-provider";
+import {
+  OpenAiCompatibleChatProvider,
+  type ModelCompletionStreamEvent
+} from "@vivd-catalyst/model-provider";
 
 const OPENAI_WEB_SEARCH_TOOL = {
   kind: "provider",
@@ -52,10 +55,7 @@ describe("OpenAI provider-native web search", () => {
     );
 
     expect(requestBody).toMatchObject({
-      include: [
-        "reasoning.encrypted_content",
-        "web_search_call.action.sources"
-      ],
+      include: ["reasoning.encrypted_content", "web_search_call.action.sources"],
       tools: [{ type: "web_search" }]
     });
     expect(requestBody?.tools?.[0]).not.toHaveProperty("name");
@@ -281,10 +281,7 @@ describe("OpenAI provider-native web search", () => {
     }
 
     expect(requestBody).toMatchObject({
-      include: [
-        "reasoning.encrypted_content",
-        "web_search_call.action.sources"
-      ],
+      include: ["reasoning.encrypted_content", "web_search_call.action.sources"],
       stream: true,
       tools: [{ type: "web_search" }]
     });
@@ -307,7 +304,12 @@ describe("OpenAI provider-native web search", () => {
         }
       }
     ]);
-    expect(events.filter((event) => event.type === "text_delta").map((event) => event.delta).join("")).toBe("See Example A.");
+    expect(
+      events
+        .filter((event) => event.type === "text_delta")
+        .map((event) => event.delta)
+        .join("")
+    ).toBe("See Example A.");
     expect(events.at(-1)).toMatchObject({
       type: "completed",
       completion: {

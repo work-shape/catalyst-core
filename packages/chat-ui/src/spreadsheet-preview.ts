@@ -29,10 +29,7 @@ import ExcelJS, {
   type Style,
   type Worksheet
 } from "exceljs";
-import {
-  extractSpreadsheetVisuals,
-  type SpreadsheetVisual
-} from "./spreadsheet-visuals";
+import { extractSpreadsheetVisuals, type SpreadsheetVisual } from "./spreadsheet-visuals";
 
 export async function workbookToUniverSnapshot(buffer: ArrayBuffer): Promise<IWorkbookData> {
   return (await workbookToUniverPreview(buffer)).workbookData;
@@ -116,8 +113,8 @@ function worksheetToUniverSnapshot(
   styleRegistry: StyleRegistry
 ): Partial<IWorksheetData> {
   const view = worksheet.views?.[0];
-  const xSplit = view?.state === "frozen" ? view.xSplit ?? 0 : 0;
-  const ySplit = view?.state === "frozen" ? view.ySplit ?? 0 : 0;
+  const xSplit = view?.state === "frozen" ? (view.xSplit ?? 0) : 0;
+  const ySplit = view?.state === "frozen" ? (view.ySplit ?? 0) : 0;
   const topLeft = decodeCellAddress(view && "topLeftCell" in view ? view.topLeftCell : undefined);
   const showHeaders = view?.showRowColHeaders !== false;
   const defaultRowHeight = worksheet.properties.defaultRowHeight ?? 15;
@@ -222,7 +219,9 @@ function toUniverCellValue(value: unknown, date1904: boolean): Partial<ICellData
   if ("richText" in value && Array.isArray(value.richText)) {
     return {
       v: value.richText
-        .map((part) => (part && typeof part === "object" && "text" in part ? String(part.text) : ""))
+        .map((part) =>
+          part && typeof part === "object" && "text" in part ? String(part.text) : ""
+        )
         .join(""),
       t: CellValueType.STRING
     };
@@ -245,18 +244,22 @@ function toUniverStyle(style: Partial<Style>): IStyleData | undefined {
     converted.bl = font.bold ? BooleanNumber.TRUE : undefined;
     converted.it = font.italic ? BooleanNumber.TRUE : undefined;
     converted.cl = toColorStyle(font.color);
-    converted.ul = font.underline && font.underline !== "none"
-      ? {
-          s: BooleanNumber.TRUE,
-          t: String(font.underline).includes("double") ? TextDecoration.DOUBLE : TextDecoration.SINGLE
-        }
-      : undefined;
-    converted.st = font.strike ? { s: BooleanNumber.TRUE } : undefined;
-    converted.va = font.vertAlign === "superscript"
-      ? BaselineOffset.SUPERSCRIPT
-      : font.vertAlign === "subscript"
-        ? BaselineOffset.SUBSCRIPT
+    converted.ul =
+      font.underline && font.underline !== "none"
+        ? {
+            s: BooleanNumber.TRUE,
+            t: String(font.underline).includes("double")
+              ? TextDecoration.DOUBLE
+              : TextDecoration.SINGLE
+          }
         : undefined;
+    converted.st = font.strike ? { s: BooleanNumber.TRUE } : undefined;
+    converted.va =
+      font.vertAlign === "superscript"
+        ? BaselineOffset.SUPERSCRIPT
+        : font.vertAlign === "subscript"
+          ? BaselineOffset.SUBSCRIPT
+          : undefined;
   }
 
   converted.bg = fillColor(style.fill);
@@ -268,7 +271,9 @@ function toUniverStyle(style: Partial<Style>): IStyleData | undefined {
 }
 
 function fillColor(fill: Fill | undefined): IColorStyle | undefined {
-  return fill?.type === "pattern" && fill.pattern === "solid" ? toColorStyle(fill.fgColor) : undefined;
+  return fill?.type === "pattern" && fill.pattern === "solid"
+    ? toColorStyle(fill.fgColor)
+    : undefined;
 }
 
 function borderData(borders: Partial<Borders> | undefined): IBorderData | undefined {
@@ -318,11 +323,12 @@ function alignmentData(alignment: Partial<Alignment> | undefined): Partial<IStyl
     ht: alignment.horizontal ? HORIZONTAL_ALIGNMENTS[alignment.horizontal] : undefined,
     vt: alignment.vertical ? VERTICAL_ALIGNMENTS[alignment.vertical] : undefined,
     tb: alignment.wrapText ? WrapStrategy.WRAP : undefined,
-    tr: alignment.textRotation === "vertical"
-      ? { a: 0, v: BooleanNumber.TRUE }
-      : typeof alignment.textRotation === "number"
-        ? { a: alignment.textRotation, v: BooleanNumber.FALSE }
-        : undefined
+    tr:
+      alignment.textRotation === "vertical"
+        ? { a: 0, v: BooleanNumber.TRUE }
+        : typeof alignment.textRotation === "number"
+          ? { a: alignment.textRotation, v: BooleanNumber.FALSE }
+          : undefined
   };
 }
 
@@ -358,10 +364,7 @@ function colorHex(color: Partial<Color> | undefined): string | undefined {
   return rgb.length === 6 ? `#${rgb.toUpperCase()}` : undefined;
 }
 
-function rowData(
-  worksheet: Worksheet,
-  defaultRowHeight: number
-): IWorksheetData["rowData"] {
+function rowData(worksheet: Worksheet, defaultRowHeight: number): IWorksheetData["rowData"] {
   const rows: IWorksheetData["rowData"] = {};
   for (let index = 1; index <= worksheet.rowCount; index += 1) {
     const row = worksheet.findRow(index);
@@ -385,9 +388,7 @@ function contentRowHeight(row: Row, defaultRowHeight: number): number | undefine
   row.eachCell({ includeEmpty: false }, (cell) => {
     largestFontSize = Math.max(largestFontSize, cell.font?.size ?? 0);
   });
-  return largestFontSize > defaultRowHeight
-    ? pointsToPixels(largestFontSize * 1.2)
-    : undefined;
+  return largestFontSize > defaultRowHeight ? pointsToPixels(largestFontSize * 1.2) : undefined;
 }
 
 function columnData(worksheet: Worksheet): IWorksheetData["columnData"] {
@@ -404,12 +405,14 @@ function columnData(worksheet: Worksheet): IWorksheetData["columnData"] {
   return columns;
 }
 
-function decodeRange(range: string): {
-  startRow: number;
-  endRow: number;
-  startColumn: number;
-  endColumn: number;
-} | undefined {
+function decodeRange(range: string):
+  | {
+      startRow: number;
+      endRow: number;
+      startColumn: number;
+      endColumn: number;
+    }
+  | undefined {
   const [startText, endText = startText] = range.split(":");
   const start = decodeCellAddress(startText);
   const end = decodeCellAddress(endText);
@@ -423,7 +426,9 @@ function decodeRange(range: string): {
     : undefined;
 }
 
-function decodeCellAddress(address: string | undefined): { row: number; column: number } | undefined {
+function decodeCellAddress(
+  address: string | undefined
+): { row: number; column: number } | undefined {
   const match = address?.replaceAll("$", "").match(/^([A-Z]+)([1-9][0-9]*)$/iu);
   if (!match) {
     return undefined;
@@ -449,7 +454,10 @@ function columnWidthPixels(width: number): number {
 }
 
 function sheetId(sheetName: string, index: number): string {
-  const cleaned = sheetName.toLowerCase().replaceAll(/[^a-z0-9]+/gu, "-").replaceAll(/^-|-$/gu, "");
+  const cleaned = sheetName
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/gu, "-")
+    .replaceAll(/^-|-$/gu, "");
   return `sheet-${cleaned || index + 1}`;
 }
 

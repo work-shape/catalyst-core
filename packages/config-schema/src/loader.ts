@@ -24,7 +24,10 @@ export async function loadClientInstanceConfigFromFile(
 
   const baseDir = dirname(path);
   if (parsed.data.uiFile && hasInlineUi) {
-    throw new AppError("VALIDATION_FAILED", "Use either ui or uiFile in client instance config, not both");
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "Use either ui or uiFile in client instance config, not both"
+    );
   }
 
   const fileUi = parsed.data.uiFile
@@ -131,7 +134,11 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-export function parseSkillMarkdown(contents: string, skillFile: string, skillPath: string): unknown {
+export function parseSkillMarkdown(
+  contents: string,
+  skillFile: string,
+  skillPath: string
+): unknown {
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/u.exec(contents);
   if (!match) {
     throw new AppError(
@@ -160,7 +167,9 @@ function deriveSkillName(skillPath: string): string {
   const extension = extname(skillPath);
   const filename = basename(skillPath);
   const sourceName =
-    filename.toLowerCase() === "skill.md" ? basename(dirname(skillPath)) : basename(skillPath, extension);
+    filename.toLowerCase() === "skill.md"
+      ? basename(dirname(skillPath))
+      : basename(skillPath, extension);
   return sourceName
     .trim()
     .toLowerCase()
@@ -169,5 +178,7 @@ function deriveSkillName(skillPath: string): string {
 }
 
 function hasOwnProperty(input: unknown, key: string): boolean {
-  return typeof input === "object" && input !== null && Object.prototype.hasOwnProperty.call(input, key);
+  return (
+    typeof input === "object" && input !== null && Object.prototype.hasOwnProperty.call(input, key)
+  );
 }

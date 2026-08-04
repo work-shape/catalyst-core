@@ -175,7 +175,10 @@ export function createEnvSecretResolver(env: Record<string, string | undefined>)
       const envName = ref.slice(envPrefix.length);
       const value = env[envName];
       if (!value) {
-        throw new AppError("VALIDATION_FAILED", `Missing data source connection secret '${envName}'`);
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `Missing data source connection secret '${envName}'`
+        );
       }
       return value;
     }
@@ -200,7 +203,9 @@ export function createDataSourceTools(input: CreateDataSourceToolsInput): AnyToo
           config.sql.allowedSchemas.length > 0
             ? `Unqualified table names resolve through these configured schemas: ${config.sql.allowedSchemas.join(", ")}.`
             : "",
-          config.sql.schemaDescription ? `Allowed query surface: ${config.sql.schemaDescription}` : ""
+          config.sql.schemaDescription
+            ? `Allowed query surface: ${config.sql.schemaDescription}`
+            : ""
         ]
           .filter(Boolean)
           .join(" "),
@@ -252,12 +257,18 @@ export const createDataSourceQueryTools = createDataSourceTools;
 export function assertReadOnlyQuery(query: string): void {
   const normalized = maskSqlLiteralsAndComments(query).trim().replace(/;+$/u, "").trim();
   if (!/^(select|with)\b/iu.test(normalized)) {
-    throw new AppError("VALIDATION_FAILED", "Data source queries must be read-only SELECT or WITH statements");
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "Data source queries must be read-only SELECT or WITH statements"
+    );
   }
   if (/;\s*\S/u.test(normalized)) {
     throw new AppError("VALIDATION_FAILED", "Data source queries must contain a single statement");
   }
-  if (/\bfor\s+(?:no\s+key\s+)?update\b/iu.test(normalized) || /\bfor\s+(?:key\s+)?share\b/iu.test(normalized)) {
+  if (
+    /\bfor\s+(?:no\s+key\s+)?update\b/iu.test(normalized) ||
+    /\bfor\s+(?:key\s+)?share\b/iu.test(normalized)
+  ) {
     throw new AppError("VALIDATION_FAILED", "Data source queries must not request row locks");
   }
   if (containsDisallowedSqlToken(normalized)) {
@@ -272,7 +283,9 @@ class DefaultDataSourceRegistry implements DataSourceRegistry {
   private readonly registrations: Map<string, RegisteredDataSource>;
 
   constructor(registrations: RegisteredDataSource[]) {
-    this.registrations = new Map(registrations.map((registration) => [registration.name, registration]));
+    this.registrations = new Map(
+      registrations.map((registration) => [registration.name, registration])
+    );
   }
 
   list(): DataSourceRegistration[] {

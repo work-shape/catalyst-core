@@ -29,9 +29,7 @@ export function createSystemInstructions(
   locale?: LocaleCode,
   options: CreateSystemInstructionsOptions = {}
 ): string {
-  const sections = [
-    `Catalyst internal instructions:\n${CATALYST_INTERNAL_AGENT_PROMPT}`
-  ];
+  const sections = [`Catalyst internal instructions:\n${CATALYST_INTERNAL_AGENT_PROMPT}`];
 
   const runtimeContext = createRuntimeContext(locale, options.currentDate);
   if (runtimeContext) {
@@ -42,9 +40,7 @@ export function createSystemInstructions(
     sections.push(
       [
         "Available client skills:",
-        ...options.skills.map(
-          (skill) => `- ${skill.name}: ${skill.title} - ${skill.description}`
-        ),
+        ...options.skills.map((skill) => `- ${skill.name}: ${skill.title} - ${skill.description}`),
         "",
         "These are metadata summaries only. When one matches the user's task, call read_skill with that skill name before applying its instructions."
       ].join("\n")
@@ -56,7 +52,10 @@ export function createSystemInstructions(
   return sections.join("\n\n");
 }
 
-function createRuntimeContext(locale: LocaleCode | undefined, currentDate: Date | undefined): string | undefined {
+function createRuntimeContext(
+  locale: LocaleCode | undefined,
+  currentDate: Date | undefined
+): string | undefined {
   const lines = [
     createSelectedLanguageContext(locale),
     currentDate ? `- Current date: ${formatCurrentDate(currentDate, locale)}.` : undefined

@@ -13,9 +13,7 @@ if (watchProcesses.length === 0) {
   process.exit(0);
 }
 
-const processList = watchProcesses
-  .map((entry) => `PID ${entry.pid}: ${entry.command}`)
-  .join("\n");
+const processList = watchProcesses.map((entry) => `PID ${entry.pid}: ${entry.command}`).join("\n");
 const activeServices = activeContainers
   .map((entry) => entry.Service || entry.Name || entry.Names)
   .filter(Boolean)
@@ -49,9 +47,7 @@ function parseArguments(args) {
       break;
     }
     if (argument === "--help" || argument === "-h") {
-      console.log(
-        "Usage: compose-watch-preflight.mjs --root DIR [--services SERVICE ...]"
-      );
+      console.log("Usage: compose-watch-preflight.mjs --root DIR [--services SERVICE ...]");
       process.exit(0);
     }
     throw new Error(`Unknown argument: ${argument}`);
@@ -151,7 +147,9 @@ function isComposeWatchInvocation(commandParts) {
   const executable = basename(executableName || "");
   return (
     (executable === "docker" && firstArgument === "compose" && secondArgument === "watch") ||
-    (executable === "docker-compose" && firstArgument === "compose" && secondArgument === "watch") ||
+    (executable === "docker-compose" &&
+      firstArgument === "compose" &&
+      secondArgument === "watch") ||
     (executable === "docker-compose" && firstArgument === "watch")
   );
 }
@@ -183,7 +181,13 @@ async function terminateProcesses(processes) {
       // It may already have exited after a sibling Compose process stopped.
     }
   }
-  if (await waitForExit(processes.map((entry) => entry.pid), 3000)) return;
+  if (
+    await waitForExit(
+      processes.map((entry) => entry.pid),
+      3000
+    )
+  )
+    return;
   for (const entry of processes) {
     try {
       process.kill(entry.pid, "SIGKILL");
@@ -191,7 +195,12 @@ async function terminateProcesses(processes) {
       // Nothing else to do if it exits between checks.
     }
   }
-  if (!(await waitForExit(processes.map((entry) => entry.pid), 1000))) {
+  if (
+    !(await waitForExit(
+      processes.map((entry) => entry.pid),
+      1000
+    ))
+  ) {
     throw new Error("Could not stop the existing docker compose watch process");
   }
 }

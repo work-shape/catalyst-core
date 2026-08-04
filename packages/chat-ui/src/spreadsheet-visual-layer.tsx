@@ -51,11 +51,7 @@ export function SpreadsheetVisualLayer({ data }: { data?: SpreadsheetVisual }) {
   return <SpreadsheetChart visual={data} />;
 }
 
-function SpreadsheetChart({
-  visual
-}: {
-  visual: Extract<SpreadsheetVisual, { kind: "chart" }>;
-}) {
+function SpreadsheetChart({ visual }: { visual: Extract<SpreadsheetVisual, { kind: "chart" }> }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -174,7 +170,8 @@ function chartOption(
 
 function longestCategories(series: SpreadsheetChartSeries[]): string[] {
   return series.reduce<string[]>(
-    (longest, current) => current.categories.length > longest.length ? current.categories : longest,
+    (longest, current) =>
+      current.categories.length > longest.length ? current.categories : longest,
     []
   );
 }

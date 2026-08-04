@@ -24,7 +24,9 @@ export function getModelProviderForAgent(
   return getModelSelectionForAgent(config, agent).provider;
 }
 
-export function getModelProviderForConversationTitles(config: ClientInstanceConfig): ModelProviderConfig {
+export function getModelProviderForConversationTitles(
+  config: ClientInstanceConfig
+): ModelProviderConfig {
   return getModelSelectionForConversationTitles(config).provider;
 }
 
@@ -39,7 +41,10 @@ export function getModelSelectionForAgent(
       reasoningEffort: agent.reasoningEffort ?? selection.reasoningEffort
     };
   }
-  const provider = resolveModelProvider(config, agent.modelProviderId ?? config.modelProviders[0]?.id);
+  const provider = resolveModelProvider(
+    config,
+    agent.modelProviderId ?? config.modelProviders[0]?.id
+  );
   return {
     provider,
     model: provider.model,

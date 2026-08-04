@@ -4,10 +4,7 @@ import { STRUCTURED_DATA_RESOURCE_DISPLAY_KIND } from "@vivd-catalyst/core";
 import { useAttachmentContentContext } from "./attachment-content";
 import { useTranslation } from "./i18n";
 import { useOpenSourceFilePreview } from "./source-file-preview";
-import {
-  StructuredDataCopyAllButton,
-  StructuredDataView
-} from "./structured-data-view";
+import { StructuredDataCopyAllButton, StructuredDataView } from "./structured-data-view";
 import { Spinner } from "./ui/spinner";
 
 export function renderStructuredDataResourceDisplay(display: {
@@ -16,9 +13,7 @@ export function renderStructuredDataResourceDisplay(display: {
 }): ReactNode {
   const structuredDataResourceId = readStructuredDataResourceId(display);
   return structuredDataResourceId ? (
-    <StructuredDataResourceDisplay
-      structuredDataResourceId={structuredDataResourceId}
-    />
+    <StructuredDataResourceDisplay structuredDataResourceId={structuredDataResourceId} />
   ) : undefined;
 }
 
@@ -31,9 +26,7 @@ function StructuredDataResourceDisplay({
   const conversationId = context?.selectedConversationId;
   const openSourceFilePreview = useOpenSourceFilePreview();
   const { t } = useTranslation();
-  const [resource, setResource] = useState<
-    StructuredDataResourceResponse | undefined
-  >();
+  const [resource, setResource] = useState<StructuredDataResourceResponse | undefined>();
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -43,11 +36,8 @@ function StructuredDataResourceDisplay({
     let active = true;
     setResource(undefined);
     setFailed(false);
-    void context.client
-      .structuredDataResource(
-        context.selectedConversationId,
-        structuredDataResourceId
-      )
+    void context.client.conversations.resources
+      .getStructuredData(context.selectedConversationId, structuredDataResourceId)
       .then((nextResource) => {
         if (active) {
           setResource(nextResource);
@@ -61,11 +51,7 @@ function StructuredDataResourceDisplay({
     return () => {
       active = false;
     };
-  }, [
-    context?.client,
-    context?.selectedConversationId,
-    structuredDataResourceId
-  ]);
+  }, [context?.client, context?.selectedConversationId, structuredDataResourceId]);
 
   if (failed) {
     return (

@@ -5,11 +5,8 @@ import {
   createAssistantToolCallsMetadata,
   createToolResultMetadata
 } from "@vivd-catalyst/core";
-import { toUiMessages } from "../packages/chat-ui/src/assistant-ui-adapter";
-import {
-  readToolActionLabel,
-  readToolDetailSections
-} from "../packages/chat-ui/src/tool-call";
+import { toUiMessages } from "../packages/chat-ui/src/assistant/assistant-ui-adapter";
+import { readToolActionLabel, readToolDetailSections } from "../packages/chat-ui/src/tool-call";
 import {
   WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE,
   readSurfacedToolArtifactRefs,
@@ -44,7 +41,7 @@ describe("chat UI artifact history projection", () => {
         conversationId: "conv_test",
         clientInstanceId: "client_test",
         role: "tool",
-        text: "{\"status\":\"completed\"}",
+        text: '{"status":"completed"}',
         createdAt: "2026-06-15T00:00:02.000Z",
         metadata: createToolResultMetadata({
           runId: "run_test",
@@ -95,16 +92,14 @@ describe("chat UI artifact history projection", () => {
             ]
           },
           modelOutput: {
-            text: "{\"status\":\"completed\"}"
+            text: '{"status":"completed"}'
           }
         })
       }
     ];
 
     const projected = toUiMessages(messages);
-    const toolPart = projected[0]?.parts[0] as
-      | { type: string; output?: unknown }
-      | undefined;
+    const toolPart = projected[0]?.parts[0] as { type: string; output?: unknown } | undefined;
 
     expect(toolPart).toMatchObject({
       type: "dynamic-tool",
@@ -142,13 +137,15 @@ describe("chat UI artifact history projection", () => {
       result: toolPart?.output,
       toolName: "workspace.exec"
     });
-    expect(readToolActionLabel({
-      args: {
-        command: "cat scratch/final-report.pdf && echo shell"
-      },
-      result: toolPart?.output,
-      toolName: "workspace.exec"
-    })).toBe("cat [redacted path] && echo shell");
+    expect(
+      readToolActionLabel({
+        args: {
+          command: "cat scratch/final-report.pdf && echo shell"
+        },
+        result: toolPart?.output,
+        toolName: "workspace.exec"
+      })
+    ).toBe("cat [redacted path] && echo shell");
     const serializedDetails = JSON.stringify(detailSections);
     expect(serializedDetails).toContain("status completed");
     expect(serializedDetails).toContain("final-report.pdf");
@@ -186,7 +183,7 @@ describe("chat UI artifact history projection", () => {
         conversationId: "conv_test",
         clientInstanceId: "client_test",
         role: "tool",
-        text: "{\"artifactId\":\"art_ducks\"}",
+        text: '{"artifactId":"art_ducks"}',
         createdAt: "2026-06-15T00:00:02.000Z",
         metadata: createToolResultMetadata({
           runId: "run_test",
@@ -210,7 +207,8 @@ describe("chat UI artifact history projection", () => {
                 artifactId: "art_ducks",
                 kind: "presentation.pptx",
                 filename: "ducks.pptx",
-                mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                mimeType:
+                  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
                 metadata: {
                   source: "execution_workspace",
                   workspacePath: "scratch/ducks.pptx"
@@ -219,7 +217,7 @@ describe("chat UI artifact history projection", () => {
             ]
           },
           modelOutput: {
-            text: "{\"artifactId\":\"art_ducks\"}"
+            text: '{"artifactId":"art_ducks"}'
           }
         })
       },
@@ -258,7 +256,9 @@ describe("chat UI artifact history projection", () => {
         ]
       }
     });
-    const artifactPart = finalParts.find((part) => part.type === WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE);
+    const artifactPart = finalParts.find(
+      (part) => part.type === WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE
+    );
     expect(JSON.stringify(artifactPart)).not.toContain("scratch/ducks.pptx");
   });
 
@@ -324,7 +324,7 @@ describe("chat UI artifact history projection", () => {
         conversationId: "conv_test",
         clientInstanceId: "client_test",
         role: "tool",
-        text: "{\"pageNumber\":1}",
+        text: '{"pageNumber":1}',
         createdAt: "2026-06-15T00:00:02.000Z",
         metadata: createToolResultMetadata({
           runId: "run_test",
@@ -354,7 +354,7 @@ describe("chat UI artifact history projection", () => {
             ]
           },
           modelOutput: {
-            text: "{\"pageNumber\":1}"
+            text: '{"pageNumber":1}'
           }
         })
       },
@@ -379,6 +379,8 @@ describe("chat UI artifact history projection", () => {
       text: "The page looks correct.",
       state: "done"
     });
-    expect(finalParts.some((part) => part.type === WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE)).toBe(false);
+    expect(finalParts.some((part) => part.type === WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE)).toBe(
+      false
+    );
   });
 });

@@ -6,12 +6,7 @@ const keySchema = z
   .max(64)
   .regex(/^[a-z][a-z0-9_]*$/u);
 const labelSchema = z.string().min(1).max(120);
-const valueSchema = z.union([
-  z.string().max(2000),
-  z.number(),
-  z.boolean(),
-  z.null()
-]);
+const valueSchema = z.union([z.string().max(2000), z.number(), z.boolean(), z.null()]);
 const sourceSchema = z
   .object({
     fileId: z

@@ -55,10 +55,7 @@ export function createStructuredDataToolDefinitions(input: {
                 )
           )
         ];
-        const sourceAttachmentIds = new Map<
-          string,
-          StructuredDataFieldSource["attachmentId"]
-        >();
+        const sourceAttachmentIds = new Map<string, StructuredDataFieldSource["attachmentId"]>();
         if (sourceFileIds.length > 0) {
           const sentAttachments = await input.store.listSentConversationAttachments({
             clientInstanceId: context.clientInstanceId,
@@ -117,18 +114,14 @@ export function createStructuredDataToolDefinitions(input: {
             }))
           };
           for (const set of toolInput.set ?? []) {
-            const section = state.sections.find(
-              (candidate) => candidate.key === set.sectionKey
-            );
+            const section = state.sections.find((candidate) => candidate.key === set.sectionKey);
             if (!section) {
               return toolFailed(
                 "validation_failed",
                 `Structured data section '${set.sectionKey}' does not exist`
               );
             }
-            const field = section.fields.find(
-              (candidate) => candidate.key === set.fieldKey
-            );
+            const field = section.fields.find((candidate) => candidate.key === set.fieldKey);
             if (field) {
               field.value = set.value;
               if (set.label !== undefined) {
@@ -147,13 +140,9 @@ export function createStructuredDataToolDefinitions(input: {
             }
           }
           for (const remove of toolInput.remove ?? []) {
-            const section = state.sections.find(
-              (candidate) => candidate.key === remove.sectionKey
-            );
+            const section = state.sections.find((candidate) => candidate.key === remove.sectionKey);
             if (section) {
-              section.fields = section.fields.filter(
-                (field) => field.key !== remove.fieldKey
-              );
+              section.fields = section.fields.filter((field) => field.key !== remove.fieldKey);
             }
           }
           state.sections = state.sections.filter((section) => section.fields.length > 0);

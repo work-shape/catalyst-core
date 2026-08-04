@@ -103,7 +103,9 @@ export class WorkspaceCommandWorker {
     this.now = options.now ?? (() => new Date().toISOString());
   }
 
-  async runOnce(input: { recoverStale?: boolean } = {}): Promise<WorkspaceCommandWorkerRunOnceResult> {
+  async runOnce(
+    input: { recoverStale?: boolean } = {}
+  ): Promise<WorkspaceCommandWorkerRunOnceResult> {
     if (input.recoverStale ?? true) {
       await this.recoverStaleCommands();
     }
@@ -273,7 +275,9 @@ export class WorkspaceCommandWorker {
       heartbeatInFlight = true;
       this.heartbeat(command, leaseToken)
         .catch((error: unknown) => {
-          controller.abort(error instanceof Error ? error.message : "Workspace command heartbeat failed");
+          controller.abort(
+            error instanceof Error ? error.message : "Workspace command heartbeat failed"
+          );
         })
         .finally(() => {
           heartbeatInFlight = false;
@@ -286,7 +290,9 @@ export class WorkspaceCommandWorker {
       cancellationInFlight = true;
       this.pollCancellation(command, controller)
         .catch((error: unknown) => {
-          controller.abort(error instanceof Error ? error.message : "Workspace command cancellation check failed");
+          controller.abort(
+            error instanceof Error ? error.message : "Workspace command cancellation check failed"
+          );
         })
         .finally(() => {
           cancellationInFlight = false;

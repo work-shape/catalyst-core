@@ -20,7 +20,7 @@ interface WorkspaceQueryInput {
 export function useWorkspaceMeQuery(input: Pick<WorkspaceQueryInput, "apiBaseUrl" | "client">) {
   return useQuery({
     queryKey: workspaceQueryKeys.me(input.apiBaseUrl),
-    queryFn: input.client.me,
+    queryFn: input.client.account.get,
     retry: false
   });
 }
@@ -33,7 +33,7 @@ export function useWorkspaceConfigQuery(
 ) {
   return useQuery({
     queryKey: workspaceQueryKeys.config(input.apiBaseUrl, input.authScope, input.localePreference),
-    queryFn: () => input.client.config(input.localePreference),
+    queryFn: () => input.client.configuration.get(input.localePreference),
     enabled: input.enabled
   });
 }
@@ -75,7 +75,7 @@ export function useConversationResourcesQuery(
       input.authScope,
       input.conversationId
     ),
-    queryFn: () => input.client.conversationResources(input.conversationId ?? ""),
+    queryFn: () => input.client.conversations.resources.list(input.conversationId ?? ""),
     enabled: input.enabled
   });
 }
@@ -94,7 +94,7 @@ export function useStructuredDataResourceQuery(
       input.structuredDataResourceId
     ),
     queryFn: () =>
-      input.client.structuredDataResource(
+      input.client.conversations.resources.getStructuredData(
         input.conversationId,
         input.structuredDataResourceId
       )
@@ -108,7 +108,7 @@ export function useWorkspaceUsageQuery(
 ) {
   return useQuery({
     queryKey: workspaceQueryKeys.usage(input.apiBaseUrl, input.authScope),
-    queryFn: input.client.usageSummary,
+    queryFn: input.client.governance.getUsageSummary,
     enabled: input.enabled
   });
 }
@@ -122,7 +122,7 @@ export function useWorkspaceAuditActivitiesQuery(
     // `auditEvents` is the historical cache namespace; it now holds the
     // projected activity timeline served from /api/audit-activities.
     queryKey: workspaceQueryKeys.auditEvents(input.apiBaseUrl, input.authScope),
-    queryFn: input.client.auditActivities,
+    queryFn: input.client.governance.listAuditActivities,
     enabled: input.enabled
   });
 }
@@ -134,7 +134,7 @@ export function useWorkspaceUsersQuery(
 ) {
   return useQuery({
     queryKey: workspaceQueryKeys.superadminUsers(input.apiBaseUrl, input.authScope),
-    queryFn: input.client.users,
+    queryFn: input.client.users.list,
     enabled: input.enabled
   });
 }
@@ -146,7 +146,7 @@ export function useServicePrincipalsQuery(
 ) {
   return useQuery({
     queryKey: workspaceQueryKeys.servicePrincipals(input.apiBaseUrl, input.authScope),
-    queryFn: input.client.servicePrincipals,
+    queryFn: input.client.apiAccess.listServicePrincipals,
     enabled: input.enabled
   });
 }
@@ -158,7 +158,7 @@ export function useConfigAssetsOverviewQuery(
 ) {
   return useQuery({
     queryKey: workspaceQueryKeys.configAssetsOverview(input.apiBaseUrl, input.authScope),
-    queryFn: input.client.configAssetsOverview,
+    queryFn: input.client.configAssets.getOverview,
     enabled: input.enabled
   });
 }
@@ -173,7 +173,7 @@ export function useConfigAssetsExportQuery(
       ...workspaceQueryKeys.configAssetsOverview(input.apiBaseUrl, input.authScope),
       "export"
     ] as const,
-    queryFn: input.client.exportConfigAssets,
+    queryFn: input.client.configAssets.export,
     enabled: input.enabled
   });
 }
@@ -192,9 +192,7 @@ export interface WorkspaceCacheActions {
   invalidateStreamError(conversationId: string): void;
 }
 
-export function useWorkspaceCacheActions(
-  input: WorkspaceQueryInput
-): WorkspaceCacheActions {
+export function useWorkspaceCacheActions(input: WorkspaceQueryInput): WorkspaceCacheActions {
   const queryClient = useQueryClient();
   const { apiBaseUrl, authScope, client } = input;
 
@@ -229,11 +227,7 @@ export function useWorkspaceCacheActions(
   const invalidateConversationResources = useCallback(
     (conversationId: string) => {
       void queryClient.invalidateQueries({
-        queryKey: workspaceQueryKeys.conversationResources(
-          apiBaseUrl,
-          authScope,
-          conversationId
-        )
+        queryKey: workspaceQueryKeys.conversationResources(apiBaseUrl, authScope, conversationId)
       });
       void queryClient.invalidateQueries({
         queryKey: workspaceQueryKeys.structuredDataResourcesScope(
@@ -247,7 +241,9 @@ export function useWorkspaceCacheActions(
   );
 
   const invalidateUsage = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.usage(apiBaseUrl, authScope) });
+    void queryClient.invalidateQueries({
+      queryKey: workspaceQueryKeys.usage(apiBaseUrl, authScope)
+    });
   }, [apiBaseUrl, authScope, queryClient]);
 
   const invalidateAuditEvents = useCallback(() => {
@@ -281,10 +277,7 @@ export function useWorkspaceCacheActions(
   );
 
   const invalidateRunCompletion = useCallback(
-    (
-      conversationId: string,
-      options: { draftAttachmentsChanged?: boolean } = {}
-    ) => {
+    (conversationId: string, options: { draftAttachmentsChanged?: boolean } = {}) => {
       invalidateConversations();
       invalidateThread(conversationId);
       invalidateConversationResources(conversationId);
@@ -350,13 +343,17 @@ export function useWorkspaceCacheActions(
   const handleRunRequestAccepted = useCallback(
     (conversationId: string) => {
       invalidateConversations();
-      void client
-        .generateConversationTitle(conversationId)
+      void client.conversations
+        .generateTitle(conversationId)
         .then((updatedConversation) => {
           queryClient.setQueryData<ConversationListItem[]>(
             workspaceQueryKeys.conversations(apiBaseUrl, authScope),
             (currentConversations = []) => {
-              if (currentConversations.some((conversation) => conversation.id === updatedConversation.id)) {
+              if (
+                currentConversations.some(
+                  (conversation) => conversation.id === updatedConversation.id
+                )
+              ) {
                 return currentConversations.map((conversation) =>
                   conversation.id === updatedConversation.id
                     ? { ...conversation, ...updatedConversation }

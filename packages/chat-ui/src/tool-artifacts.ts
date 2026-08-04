@@ -146,7 +146,10 @@ export function getArtifactFileType(artifact: ToolArtifactDownloadRef): Artifact
   ) {
     return { badge: "XLS", label: "Spreadsheet", className: "bg-emerald-700", extension: "xlsx" };
   }
-  if (value.includes("image") || hasExtension(value, ["png", "jpg", "jpeg", "webp", "gif", "svg"])) {
+  if (
+    value.includes("image") ||
+    hasExtension(value, ["png", "jpg", "jpeg", "webp", "gif", "svg"])
+  ) {
     return { badge: "IMG", label: "Image", className: "bg-violet-700", extension: "png" };
   }
   if (
@@ -157,10 +160,7 @@ export function getArtifactFileType(artifact: ToolArtifactDownloadRef): Artifact
   ) {
     return { badge: "ZIP", label: "Archive", className: "bg-stone-700", extension: "zip" };
   }
-  if (
-    value.includes("markdown") ||
-    hasExtension(value, ["md", "mdx"])
-  ) {
+  if (value.includes("markdown") || hasExtension(value, ["md", "mdx"])) {
     return { badge: "MD", label: "Markdown", className: "bg-slate-700", extension: "md" };
   }
   if (
@@ -173,7 +173,9 @@ export function getArtifactFileType(artifact: ToolArtifactDownloadRef): Artifact
   return { badge: "FILE", label: "File", className: "bg-neutral-700", extension: "bin" };
 }
 
-export function getArtifactPreviewKind(artifact: ToolArtifactDownloadRef): ArtifactPreviewKind | undefined {
+export function getArtifactPreviewKind(
+  artifact: ToolArtifactDownloadRef
+): ArtifactPreviewKind | undefined {
   if (readArtifactImagePagesPreview(artifact)) {
     return "image-pages";
   }
@@ -404,7 +406,9 @@ function readSafeArtifactKind(value: unknown): string | undefined {
   if (isSafeMimeType(value)) {
     return value;
   }
-  return /^[a-z0-9][a-z0-9_.:-]*$/iu.test(value) && !isInternalIdentifier(value) ? value : undefined;
+  return /^[a-z0-9][a-z0-9_.:-]*$/iu.test(value) && !isInternalIdentifier(value)
+    ? value
+    : undefined;
 }
 
 function readSafeMimeType(value: unknown): string | undefined {
@@ -414,7 +418,9 @@ function readSafeMimeType(value: unknown): string | undefined {
   return isSafeMimeType(value) ? value : undefined;
 }
 
-function readSafeImageMimeType(value: unknown): ToolArtifactPreviewImagePageRef["mimeType"] | undefined {
+function readSafeImageMimeType(
+  value: unknown
+): ToolArtifactPreviewImagePageRef["mimeType"] | undefined {
   const mimeType = readSafeMimeType(value);
   return mimeType === "image/png" ||
     mimeType === "image/jpeg" ||
@@ -444,11 +450,15 @@ function readSafeManagedArtifactId(value: unknown): string | undefined {
 }
 
 function isSafeMimeType(value: string): boolean {
-  return /^(?:application|audio|font|image|message|model|multipart|text|video)\/[a-z0-9][a-z0-9!#$&^_.+-]*$/iu.test(value);
+  return /^(?:application|audio|font|image|message|model|multipart|text|video)\/[a-z0-9][a-z0-9!#$&^_.+-]*$/iu.test(
+    value
+  );
 }
 
 function hasExtension(value: string, extensions: string[]): boolean {
-  return extensions.some((extension) => new RegExp(`\\.${escapeRegExp(extension)}(?:\\s|$)`, "iu").test(value));
+  return extensions.some((extension) =>
+    new RegExp(`\\.${escapeRegExp(extension)}(?:\\s|$)`, "iu").test(value)
+  );
 }
 
 function escapeRegExp(value: string): string {

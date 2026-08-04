@@ -58,10 +58,7 @@ export interface ModelContextProjectionOptions {
 }
 
 export interface ModelContextFileReader {
-  readFile(input: {
-    clientInstanceId: ClientInstanceId;
-    fileId: ManagedFileId;
-  }): Promise<{
+  readFile(input: { clientInstanceId: ClientInstanceId; fileId: ManagedFileId }): Promise<{
     bytes: Uint8Array;
     mimeType?: string;
   }>;
@@ -77,8 +74,12 @@ export async function projectAgentVisibleHistory(
   messages: ChatMessage[],
   options: ModelContextProjectionOptions
 ): Promise<ModelMessage[]> {
-  const projected = await Promise.all(messages.map((message) => toModelHistoryMessage(message, options)));
-  return removeIncompleteToolContext(projected.filter((message): message is ModelMessage => message !== undefined));
+  const projected = await Promise.all(
+    messages.map((message) => toModelHistoryMessage(message, options))
+  );
+  return removeIncompleteToolContext(
+    projected.filter((message): message is ModelMessage => message !== undefined)
+  );
 }
 
 export function selectRecentCompleteHistory(
@@ -128,7 +129,9 @@ export async function createModelVisibleToolOutput(
   if (visualArtifacts.parts.length === 0) {
     return bounded;
   }
-  const text = visualArtifacts.summary ? `${bounded.text}\n\n${visualArtifacts.summary}` : bounded.text;
+  const text = visualArtifacts.summary
+    ? `${bounded.text}\n\n${visualArtifacts.summary}`
+    : bounded.text;
   return {
     ...bounded,
     text,
@@ -171,7 +174,11 @@ async function toModelHistoryMessage(
       role: message.role,
       content:
         message.role === "user"
-          ? await createUserMessageContent(message.text, readUserAttachmentManifest(message.metadata), options)
+          ? await createUserMessageContent(
+              message.text,
+              readUserAttachmentManifest(message.metadata),
+              options
+            )
           : message.text
     };
   }
@@ -220,7 +227,8 @@ function chunkHistoryMessages(messages: ChatMessage[]): ChatMessage[][] {
     if (!message) {
       break;
     }
-    const toolCalls = message.role === "assistant" ? readAssistantToolCalls(message.metadata) : undefined;
+    const toolCalls =
+      message.role === "assistant" ? readAssistantToolCalls(message.metadata) : undefined;
     if (!toolCalls?.length) {
       chunks.push([message]);
       index += 1;
@@ -285,7 +293,10 @@ function removeIncompleteToolContext(messages: ModelMessage[]): ModelMessage[] {
       if (candidate?.role !== "tool") {
         break;
       }
-      if (!expectedToolCallIds.has(candidate.toolCallId) || seenToolCallIds.has(candidate.toolCallId)) {
+      if (
+        !expectedToolCallIds.has(candidate.toolCallId) ||
+        seenToolCallIds.has(candidate.toolCallId)
+      ) {
         break;
       }
       toolResults.push(candidate);
@@ -351,16 +362,22 @@ function readToolResultMetadata(metadata: JsonObject | undefined):
   };
 }
 
-function appendAssistantFinalStatusForModel(text: string, metadata: JsonObject | undefined): string {
+function appendAssistantFinalStatusForModel(
+  text: string,
+  metadata: JsonObject | undefined
+): string {
   const runtime = readAssistantFinalMetadata(metadata);
   if (!runtime || runtime.finishStatus !== "cancelled") {
     return text;
   }
-  const marker = "[Assistant response stopped by the user before completion. Treat the text above as incomplete.]";
+  const marker =
+    "[Assistant response stopped by the user before completion. Treat the text above as incomplete.]";
   return text.trim().length > 0 ? `${text}\n\n${marker}` : marker;
 }
 
-function readUserAttachmentManifest(metadata: JsonObject | undefined): AttachmentManifest | undefined {
+function readUserAttachmentManifest(
+  metadata: JsonObject | undefined
+): AttachmentManifest | undefined {
   const runtime = readUserMessageMetadata(metadata);
   if (!runtime || !isJsonObject(runtime.attachmentManifest)) {
     return undefined;
@@ -473,7 +490,8 @@ async function projectUserAttachmentImages(
         clientInstanceId: options.clientInstanceId,
         fileId: attachment.fileId
       });
-      const mimeType = object.mimeType ?? attachment.mimeType ?? attachment.modelVisibility.mimeType;
+      const mimeType =
+        object.mimeType ?? attachment.mimeType ?? attachment.modelVisibility.mimeType;
       if (!isSupportedImageMimeType(mimeType) || mimeType !== attachment.modelVisibility.mimeType) {
         continue;
       }
@@ -495,7 +513,9 @@ async function projectUserAttachmentImages(
   return images;
 }
 
-function readModelVisibility(value: JsonValue | undefined): AttachmentManifestEntry["modelVisibility"] | undefined {
+function readModelVisibility(
+  value: JsonValue | undefined
+): AttachmentManifestEntry["modelVisibility"] | undefined {
   if (!isJsonObject(value) || value.type !== "image") {
     return undefined;
   }
@@ -509,7 +529,9 @@ function readModelVisibility(value: JsonValue | undefined): AttachmentManifestEn
   };
 }
 
-function readAttachmentModelContext(value: JsonValue | undefined): AttachmentManifestEntry["modelContext"] | undefined {
+function readAttachmentModelContext(
+  value: JsonValue | undefined
+): AttachmentManifestEntry["modelContext"] | undefined {
   if (!isJsonObject(value)) {
     return undefined;
   }
@@ -519,7 +541,12 @@ function readAttachmentModelContext(value: JsonValue | undefined): AttachmentMan
 }
 
 function isSupportedImageMimeType(value: string): value is SupportedImageMimeType {
-  return value === "image/png" || value === "image/jpeg" || value === "image/webp" || value === "image/gif";
+  return (
+    value === "image/png" ||
+    value === "image/jpeg" ||
+    value === "image/webp" ||
+    value === "image/gif"
+  );
 }
 
 function readToolExecutionResult(value: JsonValue | undefined): ToolExecutionResult | undefined {

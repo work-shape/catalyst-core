@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode
+} from "react";
 import { useTranslation } from "./i18n";
 import { renderStructuredDataResourceDisplay } from "./structured-data-resource-display";
 import { Spinner } from "./ui/spinner";
@@ -85,7 +92,10 @@ export function displayPanelTitle(
   if (typeof display?.title === "string" && display.title.trim()) {
     return display.title;
   }
-  const dataTitle = isRecord(display?.data) && typeof display.data.title === "string" ? display.data.title : undefined;
+  const dataTitle =
+    isRecord(display?.data) && typeof display.data.title === "string"
+      ? display.data.title
+      : undefined;
   if (dataTitle?.trim()) {
     return dataTitle;
   }
@@ -95,7 +105,11 @@ export function displayPanelTitle(
   return fallback;
 }
 
-export function renderBuiltInDisplay(display: { kind?: unknown; mode?: unknown; data?: unknown }): ReactNode {
+export function renderBuiltInDisplay(display: {
+  kind?: unknown;
+  mode?: unknown;
+  data?: unknown;
+}): ReactNode {
   const structuredDataDisplay = renderStructuredDataResourceDisplay(display);
   if (structuredDataDisplay) {
     return structuredDataDisplay;
@@ -130,7 +144,11 @@ function RenderedHtmlDisplay({
   const [contentHeight, setContentHeight] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const heightLimit = FRAME_HEIGHT_LIMITS[mode];
-  const frameHeight = clampNumber(contentHeight ?? heightLimit.fallback, heightLimit.min, MAX_FRAME_HEIGHT);
+  const frameHeight = clampNumber(
+    contentHeight ?? heightLimit.fallback,
+    heightLimit.min,
+    MAX_FRAME_HEIGHT
+  );
   const frameStyle: CSSProperties = { height: `${frameHeight}px` };
 
   const refreshFrameDocument = useCallback(() => {
@@ -172,7 +190,10 @@ function RenderedHtmlDisplay({
       if (event.source !== iframeRef.current?.contentWindow || !isRecord(event.data)) {
         return;
       }
-      if (event.data.type !== DISPLAY_HEIGHT_MESSAGE_TYPE || typeof event.data.height !== "number") {
+      if (
+        event.data.type !== DISPLAY_HEIGHT_MESSAGE_TYPE ||
+        typeof event.data.height !== "number"
+      ) {
         return;
       }
       if (!Number.isFinite(event.data.height) || event.data.height <= 0) {

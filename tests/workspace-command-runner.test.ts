@@ -32,7 +32,9 @@ import {
 const cleanupDirectories: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(cleanupDirectories.map((directory) => rm(directory, { recursive: true, force: true })));
+  await Promise.all(
+    cleanupDirectories.map((directory) => rm(directory, { recursive: true, force: true }))
+  );
   cleanupDirectories.length = 0;
 });
 
@@ -72,7 +74,10 @@ describe("local workspace command runner", () => {
       ])
     });
 
-    const report = await harness.service.readFile({ path: "artifacts/report.txt" }, harness.context);
+    const report = await harness.service.readFile(
+      { path: "artifacts/report.txt" },
+      harness.context
+    );
     expect(report.status).toBe("success");
     if (report.status !== "success") {
       throw new Error("Expected report to be readable");
@@ -110,7 +115,8 @@ describe("local workspace command runner", () => {
     const harness = await createRunnerHarness();
 
     const fresh = await harness.exec({
-      command: "test -d scripts && test -d artifacts && test -d previews && test -d tmp && printf 'ready' > artifacts/report.txt"
+      command:
+        "test -d scripts && test -d artifacts && test -d previews && test -d tmp && printf 'ready' > artifacts/report.txt"
     });
     expect(fresh.status).toBe("success");
     if (fresh.status !== "success") {
@@ -123,7 +129,8 @@ describe("local workspace command runner", () => {
     });
 
     const later = await harness.exec({
-      command: "test -d scripts && test -d artifacts && test -d previews && test -d tmp && printf 'again' > scripts/next.txt"
+      command:
+        "test -d scripts && test -d artifacts && test -d previews && test -d tmp && printf 'again' > scripts/next.txt"
     });
     expect(later.status).toBe("success");
     if (later.status !== "success") {
@@ -160,7 +167,7 @@ describe("local workspace command runner", () => {
 
     const next = await harness.exec({
       command: [
-        "test \"${PROFILE_RAN-unset}\" = \"unset\"",
+        'test "${PROFILE_RAN-unset}" = "unset"',
         "printf 'root\\n' > profile-check.txt"
       ].join("\n")
     });
@@ -420,7 +427,9 @@ describe("local workspace command runner", () => {
       changedFiles: []
     });
     await expect(
-      harness.byteStore.getObject(createdFile!.objectKey).then((bytes) => new TextDecoder().decode(bytes))
+      harness.byteStore
+        .getObject(createdFile!.objectKey)
+        .then((bytes) => new TextDecoder().decode(bytes))
     ).resolves.toBe("alpha");
 
     const listedAfterDelete = await harness.store.listWorkspaceFiles({
@@ -496,18 +505,18 @@ describe("local workspace command runner", () => {
         "cat > pptx_render <<'SH'",
         "#!/bin/sh",
         "out=",
-        "while [ \"$#\" -gt 0 ]; do",
-        "  if [ \"$1\" = \"--out\" ]; then",
+        'while [ "$#" -gt 0 ]; do',
+        '  if [ "$1" = "--out" ]; then',
         "    shift",
-        "    out=\"$1\"",
+        '    out="$1"',
         "  fi",
         "  shift",
         "done",
-        "mkdir -p \"$out\"",
+        'mkdir -p "$out"',
         "printf 'rendered\\n' > \"$out/slide-1.txt\"",
         "SH",
         "chmod +x pptx_render",
-        "PATH=\"$PWD:$PATH\" pptx_render deck.pptx --out previews/slides"
+        'PATH="$PWD:$PATH" pptx_render deck.pptx --out previews/slides'
       ].join("\n"),
       expectedOutputs: [{ path: "previews/slides/slide-1.txt" }]
     });
@@ -523,7 +532,10 @@ describe("local workspace command runner", () => {
         expect.objectContaining({ path: "previews/slides/slide-1.txt" })
       ])
     });
-    const rendered = await harness.service.readFile({ path: "previews/slides/slide-1.txt" }, harness.context);
+    const rendered = await harness.service.readFile(
+      { path: "previews/slides/slide-1.txt" },
+      harness.context
+    );
     expect(rendered.status).toBe("success");
     if (rendered.status !== "success") {
       throw new Error("Expected rendered helper output to be readable");
@@ -781,7 +793,9 @@ describe("local workspace command runner", () => {
     expect(result.artifacts).toHaveLength(1);
     expect(result.output).toMatchObject({
       status: "completed",
-      changedFiles: [expect.objectContaining({ path: "deck.pptx", artifactId: expect.any(String) })],
+      changedFiles: [
+        expect.objectContaining({ path: "deck.pptx", artifactId: expect.any(String) })
+      ],
       promotedArtifacts: [expect.objectContaining({ path: "deck.pptx", kind: "presentation.pptx" })]
     });
     expect(result.output.changedFiles[0]).not.toHaveProperty("objectKey");
@@ -870,7 +884,9 @@ describe("local workspace command runner", () => {
         clientInstanceId: harness.clientInstanceId,
         workspaceId
       })
-    ).resolves.not.toEqual(expect.arrayContaining([expect.objectContaining({ path: "final.pdf" })]));
+    ).resolves.not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: "final.pdf" })])
+    );
     const later = await harness.exec({
       command: "test ! -e final.pdf && printf ok > after-promoted-delete.txt"
     });
@@ -879,7 +895,9 @@ describe("local workspace command runner", () => {
       throw new Error("Expected later hydration command to succeed");
     }
     await expect(
-      harness.byteStore.getObject(artifact!.objectKey).then((bytes) => new TextDecoder().decode(bytes))
+      harness.byteStore
+        .getObject(artifact!.objectKey)
+        .then((bytes) => new TextDecoder().decode(bytes))
     ).resolves.toBe("final-bytes");
   });
 
@@ -970,7 +988,9 @@ describe("local workspace command runner", () => {
       status: "success",
       value: "notes.txt"
     });
-    expect(normalizeWorkspaceFilePath("/workspace/artifacts/report.pdf", { maxPathLength: 512 })).toEqual({
+    expect(
+      normalizeWorkspaceFilePath("/workspace/artifacts/report.pdf", { maxPathLength: 512 })
+    ).toEqual({
       status: "success",
       value: "artifacts/report.pdf"
     });
@@ -1015,13 +1035,15 @@ describe("local workspace command runner", () => {
   });
 });
 
-async function createRunnerHarness(input: {
-  limits?: ConstructorParameters<typeof WorkspaceCommandService>[0]["limits"];
-  reuseWorkspaceDirectories?: boolean;
-  telemetry?: WorkspaceCommandTelemetry;
-  useResultSource?: boolean;
-  withAuditRecorder?: boolean;
-} = {}) {
+async function createRunnerHarness(
+  input: {
+    limits?: ConstructorParameters<typeof WorkspaceCommandService>[0]["limits"];
+    reuseWorkspaceDirectories?: boolean;
+    telemetry?: WorkspaceCommandTelemetry;
+    useResultSource?: boolean;
+    withAuditRecorder?: boolean;
+  } = {}
+) {
   const clientInstanceId = asClientInstanceId(`workspace_runner_${globalThis.crypto.randomUUID()}`);
   const ownerUserId = "user-1";
   const store = new InMemoryPlatformStore();
@@ -1055,9 +1077,8 @@ async function createRunnerHarness(input: {
   const service = new WorkspaceCommandService({
     store,
     objectStore: byteStore,
-    commandResults: input.useResultSource === false
-      ? undefined
-      : new LocalWorkspaceCommandResultSource(runner),
+    commandResults:
+      input.useResultSource === false ? undefined : new LocalWorkspaceCommandResultSource(runner),
     ...(auditRecorder ? { auditRecorder } : {}),
     ...(input.telemetry ? { telemetry: input.telemetry } : {}),
     limits: input.limits
@@ -1155,11 +1176,7 @@ class MemoryObjectStorage implements WorkspaceObjectStorage {
   private readonly objects = new Map<string, Uint8Array>();
   private readonly contentTypes = new Map<string, string | undefined>();
 
-  async putObject(input: {
-    key: string;
-    body: Uint8Array;
-    contentType?: string;
-  }): Promise<void> {
+  async putObject(input: { key: string; body: Uint8Array; contentType?: string }): Promise<void> {
     this.objects.set(input.key, input.body);
     this.contentTypes.set(input.key, input.contentType);
   }

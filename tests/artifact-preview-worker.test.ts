@@ -99,7 +99,9 @@ describe("ArtifactPreviewWorker", () => {
         rendererVersion: "preview-contract-v1"
       }
     });
-    expect(fixture.objectStore.keys().some((key) => key.startsWith("artifact-previews/"))).toBe(true);
+    expect(fixture.objectStore.keys().some((key) => key.startsWith("artifact-previews/"))).toBe(
+      true
+    );
   });
 
   it("reads attachment-backed preview sources through the configured managed-object reader", async () => {
@@ -216,9 +218,9 @@ describe("ArtifactPreviewWorker", () => {
 
     expect(result.status).toBe("stale");
     expect(deletionRan).toBe(true);
-    expect(fixture.objectStore.keys().filter((key) => key.startsWith("artifact-previews/"))).toEqual(
-      []
-    );
+    expect(
+      fixture.objectStore.keys().filter((key) => key.startsWith("artifact-previews/"))
+    ).toEqual([]);
     await expect(
       fixture.store.getArtifactPreviewManifest({
         clientInstanceId: fixture.clientInstanceId,
@@ -442,10 +444,7 @@ describe("ArtifactPreviewWorker", () => {
       await mkdir(bin);
       const pdfInfo = join(bin, "fake-pdfinfo");
       const pdfToPpm = join(bin, "fake-pdftoppm");
-      await writeExecutable(
-        pdfInfo,
-        `#!/usr/bin/env node\nconsole.log("Pages: 1");\n`
-      );
+      await writeExecutable(pdfInfo, `#!/usr/bin/env node\nconsole.log("Pages: 1");\n`);
       await writeExecutable(
         pdfToPpm,
         `#!/usr/bin/env node\nconst fs = require("node:fs");\nconst prefix = process.argv[process.argv.length - 1];\nfs.writeFileSync(prefix + ".png", Buffer.from("${onePixelPngHex()}", "hex"));\n`
@@ -625,14 +624,16 @@ function createWorker(
   });
 }
 
-async function createWorkerFixture(input: {
-  kind?: string;
-  filename?: string;
-  mimeType?: string;
-  byteSize?: number;
-  sourceBytes?: Uint8Array;
-  settingsHash?: string;
-} = {}): Promise<WorkerFixture> {
+async function createWorkerFixture(
+  input: {
+    kind?: string;
+    filename?: string;
+    mimeType?: string;
+    byteSize?: number;
+    sourceBytes?: Uint8Array;
+    settingsHash?: string;
+  } = {}
+): Promise<WorkerFixture> {
   const clientInstanceId = asClientInstanceId(`preview_worker_${globalThis.crypto.randomUUID()}`);
   const store = new InMemoryPlatformStore();
   const objectStore = new MemoryObjectStorage();

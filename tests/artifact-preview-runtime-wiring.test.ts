@@ -126,9 +126,7 @@ describe("artifact preview runtime wiring", () => {
     );
     expect(serverBuild).toContain('if [ -n "${ARTIFACT_PREVIEW_WORKER_ENTRY}" ]');
     expect(serverBuild).toContain('test -f "${ARTIFACT_PREVIEW_WORKER_ENTRY}"');
-    expect(serverBuild).toContain(
-      'pnpm --filter "${APP_PACKAGE}" exec node --input-type=module'
-    );
+    expect(serverBuild).toContain('pnpm --filter "${APP_PACKAGE}" exec node --input-type=module');
     for (const demoOnlyGuard of demoOnlyServerBuildGuards) {
       expect(serverBuild).not.toContain(demoOnlyGuard);
     }
@@ -167,7 +165,9 @@ describe("artifact preview runtime wiring", () => {
     expect(api).toContain("FROM node:24-bookworm-slim AS api");
     expect(workspaceWorker).toContain("FROM api AS workspace-command-worker");
     expect(workspaceWorker).toContain("COPY --from=docker-cli");
-    expect(workspaceRunner).toContain("FROM workspace-artifact-runtime AS workspace-command-runner");
+    expect(workspaceRunner).toContain(
+      "FROM workspace-artifact-runtime AS workspace-command-runner"
+    );
     expect(workspaceRunner).toContain("WORKDIR /workspace");
     expect(workspaceRunner).toContain('CMD ["/bin/bash"]');
     expect(previewRuntime).toContain("FROM workspace-artifact-runtime AS artifact-preview-runtime");
@@ -179,7 +179,9 @@ describe("artifact preview runtime wiring", () => {
     expect(artifactRuntime).toContain("fc-match Caladea");
     expect(artifactRuntime).toContain("PIP_DISABLE_PIP_VERSION_CHECK=1");
     expect(artifactRuntime).toContain("PYTHONDONTWRITEBYTECODE=1");
-    expect(artifactRuntime).toContain("python3 -m pip install --no-cache-dir --break-system-packages");
+    expect(artifactRuntime).toContain(
+      "python3 -m pip install --no-cache-dir --break-system-packages"
+    );
     expect(artifactRuntime).toContain("/bin/bash --version");
     expect(artifactRuntime).toContain("python3 -c");
     expect(artifactRuntime).toContain("node --version");
@@ -213,7 +215,9 @@ describe("artifact preview runtime wiring", () => {
 
     expect(api).toContain("FROM node:24-bookworm-slim AS api");
     expect(workspaceWorker).toContain("COPY --from=docker-cli");
-    expect(artifactRuntime).toContain("FROM workspace-artifact-runtime AS artifact-preview-runtime");
+    expect(artifactRuntime).toContain(
+      "FROM workspace-artifact-runtime AS artifact-preview-runtime"
+    );
     expect(artifactWorker).toContain("FROM artifact-preview-runtime AS artifact-preview-worker");
     expect(artifactWorker).toContain("ARTIFACT_PREVIEW_WORKER_ENTRY");
     expect(artifactRuntime).not.toContain("COPY --from=server-build");
@@ -225,23 +229,24 @@ describe("artifact preview runtime wiring", () => {
     }
   });
 
-  it.each(dockerIgnoreFiles)("keeps local build junk out of Docker contexts in %s", (ignorePath) => {
-    const ignorePatterns = readDockerIgnorePatterns(ignorePath);
+  it.each(dockerIgnoreFiles)(
+    "keeps local build junk out of Docker contexts in %s",
+    (ignorePath) => {
+      const ignorePatterns = readDockerIgnorePatterns(ignorePath);
 
-    for (const pattern of expectedIgnoredContextPatterns) {
-      expect(ignorePatterns).toContain(pattern);
-    }
+      for (const pattern of expectedIgnoredContextPatterns) {
+        expect(ignorePatterns).toContain(pattern);
+      }
 
-    for (const requiredPath of requiredContextFiles) {
-      expect(ignorePatterns).not.toContain(requiredPath);
-      expect(ignorePatterns).not.toContain(`**/${requiredPath}`);
+      for (const requiredPath of requiredContextFiles) {
+        expect(ignorePatterns).not.toContain(requiredPath);
+        expect(ignorePatterns).not.toContain(`**/${requiredPath}`);
+      }
     }
-  });
+  );
 
   it("keeps documentation changes out of client image cache inputs", () => {
-    const ignorePatterns = readDockerIgnorePatterns(
-      "docker/vivd-client.Dockerfile.dockerignore"
-    );
+    const ignorePatterns = readDockerIgnorePatterns("docker/vivd-client.Dockerfile.dockerignore");
 
     for (const pattern of ["README.md", "**/README.md", "docs", "**/docs"]) {
       expect(ignorePatterns).toContain(pattern);
@@ -260,7 +265,9 @@ describe("artifact preview runtime wiring", () => {
       expect(worker).toContain("artifact-preview-tmp");
       expect(compose).toContain("ARTIFACT_PREVIEW_WORKER_ID");
       expect(compose).toContain("ARTIFACT_PREVIEW_CONCURRENCY");
-      expect(compose).toContain("ARTIFACT_PREVIEW_WORKER_ENTRY: clients/demo/dist/artifact-preview-worker.js");
+      expect(compose).toContain(
+        "ARTIFACT_PREVIEW_WORKER_ENTRY: clients/demo/dist/artifact-preview-worker.js"
+      );
       expect(api).not.toContain("target: artifact-preview-worker");
 
       for (const secretEnvName of secretEnvNames) {

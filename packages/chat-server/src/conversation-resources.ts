@@ -20,27 +20,19 @@ import {
   type StructuredDataStore
 } from "@vivd-catalyst/core";
 
-type SourceFileResource = Extract<
-  ConversationResourceListItem,
-  { resourceType: "source_file" }
->;
+type SourceFileResource = Extract<ConversationResourceListItem, { resourceType: "source_file" }>;
 type GeneratedFileResource = Extract<
   ConversationResourceListItem,
   { resourceType: "generated_file" }
 >;
-type AnalysisResource = Extract<
-  ConversationResourceListItem,
-  { resourceType: "analysis" }
->;
+type AnalysisResource = Extract<ConversationResourceListItem, { resourceType: "analysis" }>;
 type StructuredDataResource = Extract<
   ConversationResourceListItem,
   { resourceType: "structured_data" }
 >;
 
 export async function listConversationResources(input: {
-  store: PlatformFileStore &
-    Pick<ConversationStore, "listMessages"> &
-    StructuredDataStore;
+  store: PlatformFileStore & Pick<ConversationStore, "listMessages"> & StructuredDataStore;
   clientInstanceId: ClientInstanceId;
   conversationId: ConversationId;
 }): Promise<ConversationResourceListResponse> {

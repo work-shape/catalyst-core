@@ -15,7 +15,8 @@ import type { ApiAccessStore } from "./api-access";
 import type { StructuredDataStore } from "./structured-data";
 
 export interface PlatformStore
-  extends ConversationStore,
+  extends
+    ConversationStore,
     ConversationRetentionStore,
     PlatformFileStore,
     AgentRunStore,

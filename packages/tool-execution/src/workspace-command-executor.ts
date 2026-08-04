@@ -2,8 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import type { WorkspaceCommand } from "@vivd-catalyst/core";
 
-export const DEFAULT_WORKSPACE_COMMAND_PATH =
-  "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+export const DEFAULT_WORKSPACE_COMMAND_PATH = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
 export const DEFAULT_WORKSPACE_COMMAND_SHELL = "/bin/bash";
 
 export interface WorkspaceCommandProcessInput {

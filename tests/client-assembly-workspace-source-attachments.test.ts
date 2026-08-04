@@ -207,8 +207,8 @@ describe("execution workspace source attachments", () => {
         url: "/api/config"
       });
       expect(config.statusCode).toBe(200);
-      const accept = (config.json() as { features: { attachments: { accept: string } } })
-        .features.attachments.accept;
+      const accept = (config.json() as { features: { attachments: { accept: string } } }).features
+        .attachments.accept;
       expect(accept).toContain(".xlsx");
       expect(accept).toContain("application/pdf");
       expect(accept).toContain("image/png");
@@ -419,8 +419,9 @@ describe("execution workspace source attachments", () => {
         content: "PNG-preview"
       });
       expect(uploaded.statusCode).toBe(200);
-      const previewArtifactId = (uploaded.json() as { attachment: { artifactRefs: { preview?: string } } })
-        .attachment.artifactRefs.preview;
+      const previewArtifactId = (
+        uploaded.json() as { attachment: { artifactRefs: { preview?: string } } }
+      ).attachment.artifactRefs.preview;
       expect(previewArtifactId).toEqual(expect.any(String));
 
       const downloaded = await app.server.inject({
@@ -705,7 +706,8 @@ function createWorkspacePreviewArtifactSeedingCapability(root: string): ClientIn
                 conversationId: input.conversationId,
                 kind: "presentation.pptx",
                 filename: "deck.pptx",
-                mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                mimeType:
+                  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
                 bytes: new TextEncoder().encode("pptx-source"),
                 metadata: {
                   source: "execution_workspace",
@@ -1003,7 +1005,9 @@ function createStrictUploadCapability(): ClientInstanceCapability {
             },
             async deleteDraftAttachment(input) {
               const attachments = attachmentsByConversation.get(input.conversationId) ?? [];
-              const deleted = attachments.find((attachment) => attachment.id === input.attachmentId);
+              const deleted = attachments.find(
+                (attachment) => attachment.id === input.attachmentId
+              );
               if (!deleted) {
                 throw new AppError("NOT_FOUND", "Attachment is not available");
               }

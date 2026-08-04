@@ -131,7 +131,9 @@ describe("config asset bundle validation", () => {
       issue: /references unavailable tool 'disabled'/u
     }
   ])("rejects $label", ({ input, issue }) => {
-    expect(issueMessages(validationError(input))).toEqual(expect.arrayContaining([expect.stringMatching(issue)]));
+    expect(issueMessages(validationError(input))).toEqual(
+      expect.arrayContaining([expect.stringMatching(issue)])
+    );
   });
 });
 

@@ -23,14 +23,22 @@ describe("workspace tools", () => {
     expect(execTool?.description).toContain("Bash command from /workspace");
     expect(execTool?.description).toContain("Each call starts in /workspace");
     expect(execTool?.description).toContain("Files created or changed under /workspace persist");
-    expect(execTool?.description).toContain("standard project directories scripts, artifacts, previews, and tmp");
-    expect(execTool?.description).toContain("For multiline create-and-verify commands, put `set -e` on its own line");
-    expect(execTool?.description).toContain("`--view`, `--spec`, `--out`, `--range`, `--page`, or `--sheet`");
+    expect(execTool?.description).toContain(
+      "standard project directories scripts, artifacts, previews, and tmp"
+    );
+    expect(execTool?.description).toContain(
+      "For multiline create-and-verify commands, put `set -e` on its own line"
+    );
+    expect(execTool?.description).toContain(
+      "`--view`, `--spec`, `--out`, `--range`, `--page`, or `--sheet`"
+    );
     expect(execTool?.description).toContain("`cat`, `ls`, or `printf`");
     expect(execTool?.inputJsonSchema).toMatchObject({
       properties: {
         command: {
-          description: expect.stringMatching(/Complete Bash command[\s\S]*standard project directories scripts, artifacts, previews, and tmp[\s\S]*`cat`, `ls`, or `printf`/u)
+          description: expect.stringMatching(
+            /Complete Bash command[\s\S]*standard project directories scripts, artifacts, previews, and tmp[\s\S]*`cat`, `ls`, or `printf`/u
+          )
         },
         cwd: {
           description: expect.stringContaining("does not persist")
@@ -45,7 +53,9 @@ describe("workspace tools", () => {
     const previewTool = harness.tools.find((tool) => tool.name === "workspace.preview_images");
     expect(previewTool?.description).toContain("/workspace/previews");
     const importTool = harness.tools.find((tool) => tool.name === "workspace.import_files");
-    expect(importTool?.description).toContain("returns a shell-safe workspace path in importedFiles[].path");
+    expect(importTool?.description).toContain(
+      "returns a shell-safe workspace path in importedFiles[].path"
+    );
     expect(importTool?.description).toContain("use that exact path in workspace.exec");
     expect(importTool?.description).toContain("do not invent shortened filenames");
     const promoteTool = harness.tools.find((tool) => tool.name === "workspace.promote_artifact");
@@ -122,12 +132,7 @@ describe("workspace tools", () => {
     });
     expect(longScriptQueued.status).toBe("success");
 
-    await expectToolFailure(
-      "workspace.exec",
-      { command: "   " },
-      "validation_failed",
-      /blank/u
-    );
+    await expectToolFailure("workspace.exec", { command: "   " }, "validation_failed", /blank/u);
     await expectToolFailure(
       "workspace.exec",
       { command: "set -e -f" },
@@ -184,7 +189,7 @@ describe("workspace tools", () => {
     );
     await expectToolFailure(
       "workspace.exec",
-      { command: "ls --range \"Summary!A1:H30\" source.xlsx" },
+      { command: 'ls --range "Summary!A1:H30" source.xlsx' },
       "validation_failed",
       /Run the artifact helper directly/u
     );
@@ -227,13 +232,9 @@ describe("workspace tools", () => {
     await expectToolFailure(
       "workspace.apply_patch",
       {
-        patch: [
-          "--- a/../secret.txt",
-          "+++ b/../secret.txt",
-          "@@ -1 +1 @@",
-          "-old",
-          "+new"
-        ].join("\n")
+        patch: ["--- a/../secret.txt", "+++ b/../secret.txt", "@@ -1 +1 @@", "-old", "+new"].join(
+          "\n"
+        )
       },
       "validation_failed",
       /traverse/u
@@ -241,13 +242,7 @@ describe("workspace tools", () => {
     await expectToolFailure(
       "workspace.apply_patch",
       {
-        patch: [
-          "--- /etc/passwd",
-          "+++ /etc/passwd",
-          "@@ -1 +1 @@",
-          "-old",
-          "+new"
-        ].join("\n")
+        patch: ["--- /etc/passwd", "+++ /etc/passwd", "@@ -1 +1 @@", "-old", "+new"].join("\n")
       },
       "validation_failed",
       /under \/workspace/u
@@ -283,7 +278,7 @@ describe("workspace tools", () => {
         "mkdir -p scripts",
         "cat > scripts/notes.txt <<'EOF'",
         "cat --spec report.json --out report.pdf",
-        "ls --range \"Summary!A1:H30\" source.xlsx",
+        'ls --range "Summary!A1:H30" source.xlsx',
         "printf --spec report.json --out report.pdf",
         "EOF"
       ].join("\n")
@@ -618,7 +613,9 @@ describe("workspace tools", () => {
         return new Proxy(store, {
           get(target, property, receiver) {
             if (property === "requestWorkspaceCommandCancellation") {
-              return async (input: Parameters<typeof store.requestWorkspaceCommandCancellation>[0]) => {
+              return async (
+                input: Parameters<typeof store.requestWorkspaceCommandCancellation>[0]
+              ) => {
                 const claimed = await store.claimNextWorkspaceCommand({
                   clientInstanceId: input.clientInstanceId,
                   workerId: "race-worker",
@@ -780,7 +777,7 @@ describe("workspace tools", () => {
           "--- /dev/null",
           "+++ b/scripts/build.py",
           "@@ -0,0 +1,2 @@",
-          "+print(\"hello\")",
+          '+print("hello")',
           "+VALUE = 1"
         ].join("\n")
       });
@@ -804,7 +801,7 @@ describe("workspace tools", () => {
           "--- a/scripts/build.py",
           "+++ b/scripts/build.py",
           "@@ -1,2 +1,2 @@",
-          " print(\"hello\")",
+          ' print("hello")',
           "-VALUE = 1",
           "+VALUE = 2"
         ].join("\n")
@@ -821,7 +818,7 @@ describe("workspace tools", () => {
       expect(execRead.output).toMatchObject({
         status: "completed",
         exitCode: 0,
-        stdoutPreview: "print(\"hello\")\nVALUE = 2\n"
+        stdoutPreview: 'print("hello")\nVALUE = 2\n'
       });
 
       const deleted = await harness.runTool("workspace.apply_patch", {
@@ -829,7 +826,7 @@ describe("workspace tools", () => {
           "--- a/scripts/build.py",
           "+++ /dev/null",
           "@@ -1,2 +0,0 @@",
-          "-print(\"hello\")",
+          '-print("hello")',
           "-VALUE = 2"
         ].join("\n")
       });
@@ -907,13 +904,7 @@ describe("workspace tools", () => {
       mimeType: "application/octet-stream"
     });
     const binaryPatch = await binaryHarness.runTool("workspace.apply_patch", {
-      patch: [
-        "--- a/bin/blob.dat",
-        "+++ b/bin/blob.dat",
-        "@@ -1 +1 @@",
-        "-old",
-        "+new"
-      ].join("\n")
+      patch: ["--- a/bin/blob.dat", "+++ b/bin/blob.dat", "@@ -1 +1 @@", "-old", "+new"].join("\n")
     });
     expect(binaryPatch.status).toBe("failed");
     if (binaryPatch.status === "failed") {
@@ -931,12 +922,7 @@ describe("workspace tools", () => {
     });
 
     const partialDelete = await harness.runTool("workspace.apply_patch", {
-      patch: [
-        "--- a/notes.txt",
-        "+++ /dev/null",
-        "@@ -1,1 +0,0 @@",
-        "-delete-me"
-      ].join("\n")
+      patch: ["--- a/notes.txt", "+++ /dev/null", "@@ -1,1 +0,0 @@", "-delete-me"].join("\n")
     });
 
     expect(partialDelete.status).toBe("failed");
@@ -1154,10 +1140,12 @@ describe("workspace tools", () => {
       sourceChecksum: "sha256:reports/final.docx",
       sourceMimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     });
-    const promotedFile = (await harness.store.listWorkspaceFiles({
-      clientInstanceId: harness.clientInstanceId,
-      workspaceId: sourceFile.workspaceId
-    })).find((file) => file.path === "reports/final.docx");
+    const promotedFile = (
+      await harness.store.listWorkspaceFiles({
+        clientInstanceId: harness.clientInstanceId,
+        workspaceId: sourceFile.workspaceId
+      })
+    ).find((file) => file.path === "reports/final.docx");
     expect(promotedFile?.metadata).toMatchObject({
       purpose: "final",
       promotedArtifacts: [expect.objectContaining({ artifactId: artifact?.id })]
@@ -1314,12 +1302,7 @@ describe("workspace tools", () => {
   });
 });
 
-async function expectToolFailure(
-  toolName: string,
-  input: unknown,
-  code: string,
-  message: RegExp
-) {
+async function expectToolFailure(toolName: string, input: unknown, code: string, message: RegExp) {
   const harness = await createWorkspaceHarness();
   const result = await harness.runTool(toolName, input);
   expect(result.status).toBe("failed");

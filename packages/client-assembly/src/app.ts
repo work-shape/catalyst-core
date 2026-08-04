@@ -135,7 +135,7 @@ export async function createClientInstanceApp(
   });
   const managedObjects = resolveManagedObjectReaders([
     ...(workspaceManagedObjectReader ? [workspaceManagedObjectReader] : []),
-    ...capabilityContributions.flatMap((contribution) => contribution.managedObjects ?? []),
+    ...capabilityContributions.flatMap((contribution) => contribution.managedObjects ?? [])
   ]);
   const assetSource = createConfigAssetSource({
     store,
@@ -407,13 +407,18 @@ function createCompositeAttachmentService(
     acceptedFileTypes: [...new Set(handlers.flatMap((handler) => handler.acceptedFileTypes))],
     async listDraftAttachments(conversationId) {
       return uniqueById(
-        (await Promise.all(handlers.map((handler) => handler.listDraftAttachments(conversationId)))).flat()
+        (
+          await Promise.all(handlers.map((handler) => handler.listDraftAttachments(conversationId)))
+        ).flat()
       );
     },
     async uploadDraftAttachment(input) {
       const matchingHandlers = handlers.filter((handler) => handler.acceptsFile(input));
       if (matchingHandlers.length === 0) {
-        throw new AppError("BAD_REQUEST", "This file type is not supported for uploads in this chat");
+        throw new AppError(
+          "BAD_REQUEST",
+          "This file type is not supported for uploads in this chat"
+        );
       }
       if (matchingHandlers.length > 1) {
         throw new AppError(
@@ -430,10 +435,18 @@ function createCompositeAttachmentService(
       return handler.uploadDraftAttachment(input);
     },
     async retryDraftAttachment(input) {
-      return tryAttachmentHandlers(handlers, (handler) => handler.retryDraftAttachment(input), input.attachmentId);
+      return tryAttachmentHandlers(
+        handlers,
+        (handler) => handler.retryDraftAttachment(input),
+        input.attachmentId
+      );
     },
     async deleteDraftAttachment(input) {
-      return tryAttachmentHandlers(handlers, (handler) => handler.deleteDraftAttachment(input), input.attachmentId);
+      return tryAttachmentHandlers(
+        handlers,
+        (handler) => handler.deleteDraftAttachment(input),
+        input.attachmentId
+      );
     },
     async deleteConversationAttachments(input) {
       const deletions: Array<
@@ -446,11 +459,17 @@ function createCompositeAttachmentService(
       return {
         attachmentCount: deletions.reduce((count, deletion) => count + deletion.attachmentCount, 0),
         fileObjectKeys: uniqueStrings(deletions.flatMap((deletion) => deletion.fileObjectKeys)),
-        artifactObjectKeys: uniqueStrings(deletions.flatMap((deletion) => deletion.artifactObjectKeys))
+        artifactObjectKeys: uniqueStrings(
+          deletions.flatMap((deletion) => deletion.artifactObjectKeys)
+        )
       };
     },
     async readConversationFile(input) {
-      return tryAttachmentHandlers(handlers, (handler) => handler.readConversationFile(input), input.fileId);
+      return tryAttachmentHandlers(
+        handlers,
+        (handler) => handler.readConversationFile(input),
+        input.fileId
+      );
     },
     blockingDraftAttachmentMessage(attachments) {
       for (const handler of handlers) {
@@ -481,7 +500,11 @@ function createCompositeManagedObjectReader(
   return {
     name: "composite",
     async readArtifact(input) {
-      return tryManagedObjectReaders(readers, (reader) => reader.readArtifact(input), input.artifactId);
+      return tryManagedObjectReaders(
+        readers,
+        (reader) => reader.readArtifact(input),
+        input.artifactId
+      );
     },
     async readFile(input) {
       return tryManagedObjectReaders(readers, (reader) => reader.readFile(input), input.fileId);
@@ -541,8 +564,12 @@ function uniqueStrings(values: string[]): string[] {
   return [...new Set(values)];
 }
 
-function uniqueManifestEntries<T extends { kind: string; attachmentId: string }>(entries: T[]): T[] {
-  return [...new Map(entries.map((entry) => [`${entry.kind}:${entry.attachmentId}`, entry])).values()];
+function uniqueManifestEntries<T extends { kind: string; attachmentId: string }>(
+  entries: T[]
+): T[] {
+  return [
+    ...new Map(entries.map((entry) => [`${entry.kind}:${entry.attachmentId}`, entry])).values()
+  ];
 }
 
 async function closeCapabilityContributions(
@@ -553,7 +580,10 @@ async function closeCapabilityContributions(
   }
 }
 
-function resolveStoreMode(explicitMode: PlatformStoreMode | undefined, env: ClientInstanceEnv): PlatformStoreMode {
+function resolveStoreMode(
+  explicitMode: PlatformStoreMode | undefined,
+  env: ClientInstanceEnv
+): PlatformStoreMode {
   const value = explicitMode ?? env.STORE;
   if (!value) {
     return "postgres";

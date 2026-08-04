@@ -38,7 +38,9 @@ export interface CreateClientInstanceAuthInput {
   corsOrigin?: string | string[];
 }
 
-export async function createClientInstanceAuth(input: CreateClientInstanceAuthInput): Promise<ClientInstanceAuth> {
+export async function createClientInstanceAuth(
+  input: CreateClientInstanceAuthInput
+): Promise<ClientInstanceAuth> {
   const adapters: AuthAdapter[] = [];
   let standaloneAuth: ClientInstanceAuth["standaloneAuth"];
   let sessionToken: ClientInstanceAuth["sessionToken"];
@@ -94,9 +96,13 @@ export async function createClientInstanceAuth(input: CreateClientInstanceAuthIn
   }
 
   return {
-    authAdapter: new IdentityResolvingAuthAdapter(new CompositeAuthAdapter(adapters), input.userStore, {
-      linkByVerifiedEmail: input.config.auth.identityLinking.byVerifiedEmail
-    }),
+    authAdapter: new IdentityResolvingAuthAdapter(
+      new CompositeAuthAdapter(adapters),
+      input.userStore,
+      {
+        linkByVerifiedEmail: input.config.auth.identityLinking.byVerifiedEmail
+      }
+    ),
     standaloneAuth,
     sessionToken,
     serviceAccessToken
@@ -110,7 +116,10 @@ export async function createStandaloneAuthRuntimeForClientInstance(input: {
   corsOrigin?: string | string[];
 }): Promise<NonNullable<ClientInstanceAuth["standaloneAuth"]>> {
   if (!input.config.auth.standalone?.enabled) {
-    throw new AppError("VALIDATION_FAILED", "Standalone auth is not enabled for this client instance");
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "Standalone auth is not enabled for this client instance"
+    );
   }
 
   const databaseUrl = input.env.DATABASE_URL;
@@ -249,7 +258,9 @@ function resolveSeedPassword(
 ): string {
   const password =
     input.env[seedUser.passwordEnvName] ??
-    (input.config.clientInstance.environment === "development" ? seedUser.developmentPassword : undefined);
+    (input.config.clientInstance.environment === "development"
+      ? seedUser.developmentPassword
+      : undefined);
   if (!password) {
     throw new AppError(
       "VALIDATION_FAILED",

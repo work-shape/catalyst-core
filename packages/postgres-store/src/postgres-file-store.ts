@@ -1,14 +1,4 @@
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  inArray,
-  isNotNull,
-  isNull,
-  ne,
-  sql as drizzleSql
-} from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, sql as drizzleSql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import {
   AppError,
@@ -42,11 +32,7 @@ import {
   type WriteArtifactPreviewManifestInput,
   createPlatformId
 } from "@vivd-catalyst/core";
-import {
-  mapConversationAttachment,
-  mapManagedArtifact,
-  mapManagedFile
-} from "./rows";
+import { mapConversationAttachment, mapManagedArtifact, mapManagedFile } from "./rows";
 import {
   claimNextArtifactPreviewJob as claimNextPostgresArtifactPreviewJob,
   completeClaimedArtifactPreviewJob as completeClaimedPostgresArtifactPreviewJob,
@@ -72,7 +58,10 @@ import {
 type PostgresDatabase = PostgresJsDatabase<typeof schema>;
 
 export interface PostgresPlatformFileStoreCallbacks {
-  requireActiveConversation(clientInstanceId: ClientInstanceId, conversationId: ConversationId): Promise<void>;
+  requireActiveConversation(
+    clientInstanceId: ClientInstanceId,
+    conversationId: ConversationId
+  ): Promise<void>;
   touchConversation(
     clientInstanceId: ClientInstanceId,
     conversationId: ConversationId,
@@ -528,7 +517,11 @@ class PostgresPlatformFileStore implements PlatformFileStore {
         );
       return attachment;
     });
-    await this.callbacks.touchConversation(input.clientInstanceId, input.conversationId, row.updatedAt);
+    await this.callbacks.touchConversation(
+      input.clientInstanceId,
+      input.conversationId,
+      row.updatedAt
+    );
     return mapConversationAttachment(row);
   }
 
@@ -908,7 +901,8 @@ function managedArtifactMatchesEnsureInput(
   );
 }
 
-type PostgresFileStoreDatabase = PostgresDatabase | Parameters<Parameters<PostgresDatabase["transaction"]>[0]>[0];
+type PostgresFileStoreDatabase =
+  PostgresDatabase | Parameters<Parameters<PostgresDatabase["transaction"]>[0]>[0];
 
 async function collectConversationManagedObjectsForDeletion(
   db: PostgresFileStoreDatabase,

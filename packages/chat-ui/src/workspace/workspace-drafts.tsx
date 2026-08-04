@@ -31,20 +31,23 @@ export function WorkspaceDraftsProvider({ children }: { children: ReactNode }) {
     [draftsByTarget]
   );
 
-  const setDraft = useCallback(({ authScope, conversationId }: WorkspaceDraftTarget, value: string) => {
-    const draftKey = createDraftKey(authScope, conversationId);
-    setDraftsByTarget((currentDrafts) => {
-      if (value.length === 0) {
-        const remainingDrafts = { ...currentDrafts };
-        delete remainingDrafts[draftKey];
-        return remainingDrafts;
-      }
-      return {
-        ...currentDrafts,
-        [draftKey]: value
-      };
-    });
-  }, []);
+  const setDraft = useCallback(
+    ({ authScope, conversationId }: WorkspaceDraftTarget, value: string) => {
+      const draftKey = createDraftKey(authScope, conversationId);
+      setDraftsByTarget((currentDrafts) => {
+        if (value.length === 0) {
+          const remainingDrafts = { ...currentDrafts };
+          delete remainingDrafts[draftKey];
+          return remainingDrafts;
+        }
+        return {
+          ...currentDrafts,
+          [draftKey]: value
+        };
+      });
+    },
+    []
+  );
 
   const clearDraft = useCallback(
     (target: WorkspaceDraftTarget) => {
@@ -90,7 +93,9 @@ export function WorkspaceDraftsProvider({ children }: { children: ReactNode }) {
     [clearDraft, clearDrafts, draftFor, moveDraft, setDraft]
   );
 
-  return <WorkspaceDraftsContext.Provider value={value}>{children}</WorkspaceDraftsContext.Provider>;
+  return (
+    <WorkspaceDraftsContext.Provider value={value}>{children}</WorkspaceDraftsContext.Provider>
+  );
 }
 
 export function useWorkspaceDraftController(): WorkspaceDraftsContextValue {

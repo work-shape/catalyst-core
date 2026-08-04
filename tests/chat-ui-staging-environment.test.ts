@@ -2,7 +2,7 @@ import { createElement } from "../packages/chat-ui/node_modules/react";
 import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
 import { describe, expect, it } from "vitest";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
-import { WorkspaceChrome } from "../packages/chat-ui/src/workspace-chrome";
+import { WorkspaceChrome } from "../packages/chat-ui/src/workspace/workspace-chrome";
 import { createEnvironmentDocumentTitle } from "../packages/chat-ui/src/workspace-utils";
 
 const noop = () => undefined;

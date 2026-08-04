@@ -3,7 +3,12 @@ import { apiOperations } from "@vivd-catalyst/api-contract";
 import { requireAuthScope } from "@vivd-catalyst/core";
 import { ConversationWorkflow } from "../conversation-workflow";
 import type { ChatServerOptions } from "../types";
-import { authenticateRequest, getConversationId, parseBody, withRequestLocale } from "../request-context";
+import {
+  authenticateRequest,
+  getConversationId,
+  parseBody,
+  withRequestLocale
+} from "../request-context";
 
 export function registerConversationRoutes(app: FastifyInstance, options: ChatServerOptions): void {
   const conversations = new ConversationWorkflow(options);

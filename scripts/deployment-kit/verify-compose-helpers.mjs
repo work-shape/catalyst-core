@@ -38,8 +38,9 @@ export function extractServiceBlock(contents, serviceName) {
 export function workflowTagsImageSuffix(workflow, suffix) {
   const explicitTag = `\${{ env.IMAGE_REPOSITORY }}-${suffix}:`;
   const matrixTag = "${{ env.IMAGE_REPOSITORY }}-${{ matrix.image.suffix }}:";
-  return workflow.includes(explicitTag) || (
-    workflow.includes(`suffix: ${suffix}`) && workflow.includes(matrixTag)
+  return (
+    workflow.includes(explicitTag) ||
+    (workflow.includes(`suffix: ${suffix}`) && workflow.includes(matrixTag))
   );
 }
 

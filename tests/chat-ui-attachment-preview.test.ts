@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toAttachmentFilePart } from "../packages/chat-ui/src/assistant-ui-adapter";
+import { toAttachmentFilePart } from "../packages/chat-ui/src/assistant/assistant-ui-adapter";
 import { managedFileIdFromAttachmentContent } from "../packages/chat-ui/src/attachment-preview";
 
 describe("chat attachment previews", () => {

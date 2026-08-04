@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { createElement } from "../packages/chat-ui/node_modules/react";
 import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
-import { ContextIndicator } from "../packages/chat-ui/src/context-indicator";
-import { resolveContextUsage } from "../packages/chat-ui/src/context-usage";
+import { ContextIndicator } from "../packages/chat-ui/src/assistant/context-indicator";
+import { resolveContextUsage } from "../packages/chat-ui/src/assistant/context-usage";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
-import { UserSettingsPanel } from "../packages/chat-ui/src/user-settings-panel";
+import { UserSettingsPanel } from "../packages/chat-ui/src/control-plane/user-settings-panel";
 import {
   readStoredContextIndicatorPreference,
   writeStoredContextIndicatorPreference

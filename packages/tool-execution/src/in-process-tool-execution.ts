@@ -85,8 +85,7 @@ export class InProcessToolExecution implements ToolExecution {
       return this.auditAuthorizationDecision(
         {
           status: "requires_approval",
-          reason:
-            tool.permission.reason ?? `Tool '${request.toolName}' requires explicit approval`,
+          reason: tool.permission.reason ?? `Tool '${request.toolName}' requires explicit approval`,
           preview: toPreview(request.input)
         },
         request,
@@ -122,10 +121,16 @@ export class InProcessToolExecution implements ToolExecution {
             }
           : result;
 
-      await this.audit("tool.completed", validated.status === "success" ? "success" : "failed", request, context, {
-        resultStatus: validated.status,
-        ...toolAuditSummaryMetadata(validated.auditSummary)
-      });
+      await this.audit(
+        "tool.completed",
+        validated.status === "success" ? "success" : "failed",
+        request,
+        context,
+        {
+          resultStatus: validated.status,
+          ...toolAuditSummaryMetadata(validated.auditSummary)
+        }
+      );
       return validated;
     } catch (error) {
       const result =
@@ -137,7 +142,10 @@ export class InProcessToolExecution implements ToolExecution {
                 message: issue.message
               }))
             })
-          : failed("handler_failed", error instanceof Error ? error.message : "Tool handler failed");
+          : failed(
+              "handler_failed",
+              error instanceof Error ? error.message : "Tool handler failed"
+            );
 
       await this.audit("tool.failed", "failed", request, context, {
         code: result.error.code

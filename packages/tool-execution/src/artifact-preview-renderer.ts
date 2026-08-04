@@ -123,9 +123,7 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
         pages.push({
           bytes,
           mimeType: "image/png",
-          ...(input.sourceKind === "document" || input.sourceKind === "pdf"
-            ? { pageNumber }
-            : {}),
+          ...(input.sourceKind === "document" || input.sourceKind === "pdf" ? { pageNumber } : {}),
           ...(input.sourceKind === "presentation" ? { slideNumber: pageNumber } : {}),
           ...readPngDimensions(bytes)
         });
@@ -477,11 +475,7 @@ function decodeSpreadsheetRange(rangeText: string): XLSX.Range {
 function assertSpreadsheetRangeBounds(range: XLSX.Range): void {
   const rowCount = range.e.r - range.s.r + 1;
   const columnCount = range.e.c - range.s.c + 1;
-  if (
-    rowCount <= 0 ||
-    columnCount <= 0 ||
-    rowCount * columnCount > MAX_SPREADSHEET_PREVIEW_CELLS
-  ) {
+  if (rowCount <= 0 || columnCount <= 0 || rowCount * columnCount > MAX_SPREADSHEET_PREVIEW_CELLS) {
     throw previewFailure("page_limit_exceeded", false);
   }
 }
@@ -550,9 +544,7 @@ function copySpreadsheetRangeForPreview(
   }
   const sourceRows = sourceSheet["!rows"];
   if (sourceRows) {
-    outputSheet["!rows"] = sourceRows
-      .slice(range.s.r, range.e.r + 1)
-      .map((row) => ({ ...row }));
+    outputSheet["!rows"] = sourceRows.slice(range.s.r, range.e.r + 1).map((row) => ({ ...row }));
   }
   const merges = sourceSheet["!merges"] ?? [];
   const copiedMerges = merges.flatMap((merge) => {
