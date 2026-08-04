@@ -501,6 +501,9 @@
                     "welcomeMessage": {
                       "type": "string"
                     },
+                    "showAgentName": {
+                      "type": "boolean"
+                    },
                     "accentColor": {
                       "type": "string"
                     },
@@ -594,6 +597,7 @@
                     "logoInvertOnDark",
                     "title",
                     "welcomeMessage",
+                    "showAgentName",
                     "accentColor",
                     "theme",
                     "darkTheme",
@@ -954,6 +958,9 @@
                         "welcomeMessage": {
                           "type": "string"
                         },
+                        "showAgentName": {
+                          "type": "boolean"
+                        },
                         "accentColor": {
                           "type": "string"
                         },
@@ -1044,6 +1051,7 @@
                         "logoInvertOnDark",
                         "title",
                         "welcomeMessage",
+                        "showAgentName",
                         "accentColor",
                         "theme",
                         "darkTheme",

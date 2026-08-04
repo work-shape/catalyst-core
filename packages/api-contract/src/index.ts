@@ -427,6 +427,7 @@ const clientUiBrandingSchema = z.object({
   faviconUrl: z.string().optional(),
   title: z.string(),
   welcomeMessage: z.string(),
+  showAgentName: z.boolean(),
   accentColor: z.string(),
   theme: z.object({
     accentColor: z.string(),

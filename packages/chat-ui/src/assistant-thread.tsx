@@ -124,7 +124,7 @@ export function AssistantThread({
               </div>
             ) : null}
 
-            <ThreadPrimitive.ViewportFooter className="relative sticky bottom-0 z-10 mt-auto pb-4 pt-5 before:pointer-events-none before:absolute before:-top-11 before:inset-x-0 before:z-0 before:h-16 before:bg-gradient-to-t before:from-background before:to-background/0 before:content-[''] after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:top-5 after:z-0 after:bg-background after:content-['']">
+            <ThreadPrimitive.ViewportFooter className="relative sticky bottom-0 z-10 mt-auto pb-4 pt-5 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:top-5 after:z-0 after:bg-background after:content-['']">
               {messagesEnabled ? (
                 <AuiIf condition={(state) => !state.thread.isEmpty}>
                   <ThreadScrollToBottom />
@@ -212,11 +212,11 @@ function ThreadScrollToBottom() {
 
   return (
     <ThreadPrimitive.ScrollToBottom
-      className="absolute -top-5 left-1/2 z-10 grid size-9 -translate-x-1/2 place-items-center rounded-full border bg-background text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground disabled:invisible"
+      className="absolute -top-5 left-1/2 z-10 grid size-8 -translate-x-1/2 place-items-center rounded-full border bg-background text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground disabled:invisible"
       aria-label={t("scrollToBottom")}
       title={t("scrollToBottom")}
     >
-      <ArrowDown size={16} aria-hidden="true" />
+      <ArrowDown size={15} aria-hidden="true" />
     </ThreadPrimitive.ScrollToBottom>
   );
 }

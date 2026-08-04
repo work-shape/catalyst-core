@@ -103,6 +103,7 @@ body {
 }
 body {
   margin: 0;
+  padding: 0;
 }
 *,
 ::before,
@@ -136,6 +137,9 @@ type ResolvedShowViewToolConfig = z.output<typeof showViewConfigSchema>;
 const showViewColorGuidance =
   'Use theme tokens for structure/layout: bg-background text-foreground, bg-card text-card-foreground border-border, text-muted-foreground, bg-primary text-primary-foreground. Use semantic tokens for status/severity/priority: text-success, text-warning, text-destructive, text-info, including translucent fills/borders like bg-success/10 border-success/30. Example: <span class="rounded-md border border-warning/30 bg-warning/10 px-2 py-1 text-warning">needs review</span>. Do not make the view monochrome when status, severity, or priority matters. Never use color as the only signal -- pair it with labels or icons. Do not hard-code surfaces/text with bg-white, text-gray-*/text-slate-*, #fff, #ffffff, #111827, fixed dark backgrounds, or !important color overrides. For categorical or series data, use the ordered palette window.vivdCatalystTheme.chartPalette() (an array) or Tailwind classes text-chart-1 through text-chart-5 / bg-chart-2/20; window.vivdCatalystTheme.chartColors() returns a named object of theme colors, so never index it like an array. For canvas or Chart.js charts, read colors from window.vivdCatalystTheme.chartColors() (includes success, warning, info) or window.vivdCatalystTheme.color(\'foreground\') for text, grid, and borders.';
 
+const showViewLayoutGuidance =
+  "The view is embedded flush in the chat, so it must not frame itself: no outer page padding or margin (no p-*/px-*/py-*/m-* on the outermost element, no max-width wrapper, no centering container), and no heading that repeats the title. Start directly with the content and let it span the full width. The view grows to its full content height and never scrolls inside itself, so do not set h-screen, min-h-screen, fixed heights, or overflow-y-auto on the outermost element.";
+
 function createShowViewInputSchema(scriptSourceHint: string) {
   return z.object({
     html: z
@@ -143,7 +147,7 @@ function createShowViewInputSchema(scriptSourceHint: string) {
       .min(1)
       .max(200_000)
       .describe(
-        `Complete standalone HTML fragment or document to render for the user. ${showViewColorGuidance} Lucide icons are available with elements such as <i data-lucide="chart-column"></i>. ${scriptSourceHint}`
+        `Complete standalone HTML fragment or document to render for the user. ${showViewLayoutGuidance} ${showViewColorGuidance} Lucide icons are available with elements such as <i data-lucide="chart-column"></i>. ${scriptSourceHint}`
       ),
     mode: z
       .enum(["inline", "side_panel", "fullscreen"])
@@ -185,6 +189,7 @@ export function createShowViewTool(config: ShowViewToolConfig = showViewConfigSc
     description: [
       "Show model-authored HTML to the user as a visual view. Use this when a table, widget, chart, dashboard, or richer visual explanation would help.",
       "Tailwind CSS, Lucide icons, Chart.js-compatible inline scripts, and shadcn-style app theme classes are available in the rendered iframe.",
+      showViewLayoutGuidance,
       showViewColorGuidance,
       scriptSourceHint
     ].join(" "),

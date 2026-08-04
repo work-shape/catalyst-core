@@ -19,6 +19,7 @@ export interface ClientBranding {
   faviconUrl?: string;
   title: string;
   welcomeMessage: string;
+  showAgentName: boolean;
   accentColor: string;
   theme: {
     accentColor: string;
@@ -67,6 +68,7 @@ export function createClientBranding(
       locale,
       config.localization.defaultLocale
     ),
+    showAgentName: config.ui.showAgentName,
     accentColor,
     theme: {
       ...config.ui.theme,

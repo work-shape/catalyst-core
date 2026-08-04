@@ -78,6 +78,7 @@ export function WorkspaceChrome({
   environment,
   sidebarOpen,
   selectedAgentName,
+  showAgentName,
   themeMode,
   onSelectAgent,
   onToggleSidebar,
@@ -90,6 +91,7 @@ export function WorkspaceChrome({
   environment: SafeConfig["clientInstance"]["environment"] | undefined;
   sidebarOpen: boolean;
   selectedAgentName: string | undefined;
+  showAgentName: boolean;
   themeMode: ResolvedThemeMode;
   onSelectAgent: (agentName: string) => void;
   onToggleSidebar: () => void;
@@ -111,7 +113,7 @@ export function WorkspaceChrome({
 
       <header
         className={cn(
-          "pointer-events-auto absolute inset-x-0 z-40 flex h-16 min-w-0 items-center justify-between gap-3 border-b bg-background/95 px-4 backdrop-blur transition-[left,right,top] duration-200 lg:right-[var(--display-panel-width)]",
+          "pointer-events-none absolute inset-x-0 z-40 flex h-16 min-w-0 items-center justify-between gap-3 px-4 transition-[left,right,top] duration-200 lg:right-[var(--display-panel-width)]",
           isStaging ? "top-6" : "top-0",
           sidebarOpen && "max-md:hidden md:left-80"
         )}
@@ -121,7 +123,14 @@ export function WorkspaceChrome({
           } as CSSProperties
         }
       >
-        <div className="flex min-w-0 items-center gap-2">
+        {/* The chat scrolls all the way to the top, so the controls float over
+            it; this fade keeps them legible once messages pass underneath. */}
+        <div
+          className="pointer-events-none absolute inset-x-0 -top-px bottom-0 -z-10 bg-gradient-to-b from-background/25 via-background/3 to-transparent"
+          aria-hidden="true"
+        />
+
+        <div className="pointer-events-auto flex min-w-0 items-center gap-2">
           {!sidebarOpen ? (
             <button
               type="button"
@@ -142,11 +151,12 @@ export function WorkspaceChrome({
               agents={agents}
               contextLabel={contextLabel}
               selectedAgentName={selectedAgentName}
+              showName={showAgentName}
               onSelectAgent={onSelectAgent}
             />
           ) : null}
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="pointer-events-auto flex shrink-0 items-center gap-2">
           <ThemeToggle mode={themeMode} onToggle={onToggleTheme} />
         </div>
       </header>

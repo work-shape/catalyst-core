@@ -176,6 +176,7 @@ function ChatWorkspaceContent({
           environment={model.config.config.clientInstance.environment}
           sidebarOpen={model.chrome.sidebarOpen}
           selectedAgentName={model.config.activeAgentName}
+          showAgentName={model.config.config.ui.showAgentName}
           themeMode={model.config.resolvedThemeMode}
           onSelectAgent={model.config.selectAgentName}
           onToggleSidebar={model.chrome.toggleSidebar}

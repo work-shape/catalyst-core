@@ -157,6 +157,7 @@ export type GetBrandingResponses = {
         faviconUrl?: string;
         title: string;
         welcomeMessage: string;
+        showAgentName: boolean;
         accentColor: string;
         theme: {
             accentColor: string;
@@ -267,6 +268,7 @@ export type GetConfigResponses = {
             faviconUrl?: string;
             title: string;
             welcomeMessage: string;
+            showAgentName: boolean;
             accentColor: string;
             theme: {
                 accentColor: string;

@@ -1,7 +1,7 @@
 import { ComposerPrimitive, useAuiState, useComposer } from "@assistant-ui/react";
 import { CheckCircle2, FileText, ImageIcon, Paperclip, RotateCcw, Send, Square, X } from "lucide-react";
 import type { FormEvent, KeyboardEvent } from "react";
-import { useCallback, useLayoutEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
 import { AttachmentPreview } from "./attachment-preview";
 import { ContextIndicator } from "./context-indicator";
@@ -65,10 +65,16 @@ export function AssistantComposer({
 }) {
   const { t } = useTranslation();
   const currentText = useComposer((state) => state.text);
+  const composerShellRef = useRef<HTMLDivElement | null>(null);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const attachmentActionRef = useRef<HTMLButtonElement | null>(null);
+  const composerControlsRef = useRef<HTMLDivElement | null>(null);
+  const previousComposerLayoutRef = useRef<ComposerLayoutSnapshot | null>(null);
+  const composerLayoutAnimationsRef = useRef<Animation[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const hasAttachments = attachments.length > 0 || localUploadingAttachments.length > 0;
   const submitBlocked = Boolean(sendBlockedReason);
+  const [composerExpanded, setComposerExpanded] = useState(false);
   const handleSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
       if (submitBlocked) {
@@ -147,6 +153,79 @@ export function AssistantComposer({
     };
   }, [focusRequestId]);
 
+  useLayoutEffect(() => {
+    const shell = composerShellRef.current;
+    const input = composerInputRef.current;
+    const controls = composerControlsRef.current;
+    if (!shell || !input || !controls) {
+      return;
+    }
+
+    const updateExpandedState = () => {
+      const compactInputWidth = getCompactComposerInputWidth(
+        shell,
+        attachmentActionRef.current,
+        controls,
+        attachmentsEnabled
+      );
+      setComposerExpanded(
+        shouldExpandComposer(
+          currentText,
+          textareaWrapsAtWidth(input, compactInputWidth)
+        )
+      );
+    };
+
+    updateExpandedState();
+    const resizeObserver = new ResizeObserver(updateExpandedState);
+    resizeObserver.observe(shell);
+    resizeObserver.observe(controls);
+    return () => resizeObserver.disconnect();
+  }, [attachmentsEnabled, currentText]);
+
+  // Grid placement changes immediately; replay the previous screen position so
+  // the input and controls glide into their new rows instead of snapping.
+  useLayoutEffect(() => {
+    const input = composerInputRef.current;
+    const controls = composerControlsRef.current;
+    if (!input || !controls) {
+      return;
+    }
+
+    const nextLayout: ComposerLayoutSnapshot = {
+      expanded: composerExpanded,
+      input: input.getBoundingClientRect(),
+      attachment: attachmentActionRef.current?.getBoundingClientRect(),
+      controls: controls.getBoundingClientRect()
+    };
+    const previousLayout = previousComposerLayoutRef.current;
+    previousComposerLayoutRef.current = nextLayout;
+
+    if (
+      !previousLayout ||
+      previousLayout.expanded === composerExpanded ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+
+    for (const animation of composerLayoutAnimationsRef.current) {
+      animation.cancel();
+    }
+
+    composerLayoutAnimationsRef.current = [
+      animateComposerLayoutShift(input, previousLayout.input, nextLayout.input, composerExpanded),
+      attachmentActionRef.current && previousLayout.attachment && nextLayout.attachment
+        ? animateComposerLayoutShift(
+            attachmentActionRef.current,
+            previousLayout.attachment,
+            nextLayout.attachment
+          )
+        : undefined,
+      animateComposerLayoutShift(controls, previousLayout.controls, nextLayout.controls)
+    ].filter((animation): animation is Animation => Boolean(animation));
+  });
+
   return (
     <ComposerPrimitive.Root className="relative grid w-full gap-2" onSubmitCapture={handleSubmit}>
       <ComposerPrimitive.Attachments>
@@ -162,86 +241,99 @@ export function AssistantComposer({
       ) : null}
       <ComposerPrimitive.AttachmentDropzone disabled asChild>
         <div
+          ref={composerShellRef}
           className={cn(
-            "grid gap-2 rounded-lg border bg-background p-2 shadow-sm transition-colors",
+            "grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-1 rounded-2xl border bg-background p-1.5 shadow-sm transition-colors",
             "focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/30"
           )}
         >
+          {attachmentsEnabled ? (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="sr-only"
+                multiple
+                accept={attachmentAccept}
+                onChange={(event) => {
+                  const files = [...(event.currentTarget.files ?? [])];
+                  event.currentTarget.value = "";
+                  if (files.length > 0) {
+                    onFilesSelected(files);
+                  }
+                }}
+              />
+              <Button
+                ref={attachmentActionRef}
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "col-start-1 size-9 shrink-0 rounded-xl text-muted-foreground",
+                  composerExpanded ? "row-start-2" : "row-start-1"
+                )}
+                title={t("addAttachment")}
+                aria-label={t("addAttachment")}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Paperclip size={16} aria-hidden="true" />
+              </Button>
+            </>
+          ) : null}
           <ComposerPrimitive.Input
             ref={composerInputRef}
-            className="max-h-40 min-h-12 w-full resize-none bg-transparent px-2 py-1.5 text-sm leading-6 outline-none placeholder:text-muted-foreground"
+            className={cn(
+              "row-start-1 max-h-40 min-h-9 min-w-0 resize-none bg-transparent px-2 py-1.5 text-sm leading-6 outline-none placeholder:text-muted-foreground",
+              attachmentsEnabled ? "col-start-2" : "col-span-2 col-start-1",
+              composerExpanded && "col-span-3 col-start-1 min-h-12 w-full"
+            )}
             placeholder={t("messagePlaceholder")}
             rows={1}
             submitMode={onSubmitMessage ? "none" : "enter"}
             onKeyDown={handleKeyDown}
           />
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-1">
-              {attachmentsEnabled ? (
-                <>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="sr-only"
-                  multiple
-                  accept={attachmentAccept}
-                  onChange={(event) => {
-                    const files = [...(event.currentTarget.files ?? [])];
-                    event.currentTarget.value = "";
-                    if (files.length > 0) {
-                      onFilesSelected(files);
-                    }
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 text-muted-foreground"
-                  title={t("addAttachment")}
-                  aria-label={t("addAttachment")}
-                  onClick={() => fileInputRef.current?.click()}
+          <div
+            ref={composerControlsRef}
+            className={cn(
+              "col-start-3 flex min-w-0 items-end gap-1",
+              composerExpanded ? "row-start-2" : "row-start-1"
+            )}
+          >
+            {selectableModels.length > 1 ? (
+              <label className="min-w-0 shrink">
+                <span className="sr-only">{t("selectModel")}</span>
+                <select
+                  className="h-9 max-w-44 truncate rounded-full bg-transparent px-2 text-xs font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50"
+                  aria-label={t("selectModel")}
+                  value={selectedModelBindingId ?? ""}
+                  disabled={conversationRunning}
+                  onChange={(event) => onSelectModelBinding(event.target.value)}
                 >
-                  <Paperclip size={16} aria-hidden="true" />
-                </Button>
-                </>
-              ) : null}
-              {selectableModels.length > 1 ? (
-                <label className="min-w-0">
-                  <span className="sr-only">{t("selectModel")}</span>
-                  <select
-                    className="h-8 max-w-44 truncate rounded-md bg-transparent px-2 text-xs font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50"
-                    aria-label={t("selectModel")}
-                    value={selectedModelBindingId ?? ""}
-                    disabled={conversationRunning}
-                    onChange={(event) => onSelectModelBinding(event.target.value)}
-                  >
-                    {selectableModels.map((model) => (
-                      <option key={model.bindingId} value={model.bindingId}>
-                        {formatModelLabel(model.model)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              {showContextIndicator && contextSnapshot ? (
+                  {selectableModels.map((model) => (
+                    <option key={model.bindingId} value={model.bindingId}>
+                      {formatModelLabel(model.model)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {showContextIndicator && contextSnapshot ? (
+              <div className="flex h-9 shrink-0 items-center">
                 <ContextIndicator
                   inputTokens={contextSnapshot.inputTokens}
                   compactThresholdTokens={contextSnapshot.compactThresholdTokens}
                 />
-              ) : null}
-              <ComposerAction
-                disabled={Boolean(sendBlockedReason)}
-                disabledReason={sendBlockedReason}
-                conversationRunning={conversationRunning}
-                optimisticPending={optimisticPending}
-                currentText={currentText}
-                onCancelRun={onCancelRun}
-                onSubmitMessage={onSubmitMessage}
-              />
-            </div>
+              </div>
+            ) : null}
+            <ComposerAction
+              disabled={Boolean(sendBlockedReason)}
+              disabledReason={sendBlockedReason}
+              conversationRunning={conversationRunning}
+              optimisticPending={optimisticPending}
+              currentText={currentText}
+              onCancelRun={onCancelRun}
+              onSubmitMessage={onSubmitMessage}
+            />
           </div>
         </div>
       </ComposerPrimitive.AttachmentDropzone>
@@ -428,7 +520,7 @@ function ComposerAction({
     <Button
       type="button"
       size="icon"
-      className="absolute inset-0 size-9"
+      className="absolute inset-0 size-9 rounded-xl"
       aria-label={t("stopGenerating")}
       onClick={onCancelRun}
     >
@@ -449,7 +541,7 @@ function ComposerAction({
           <Button
             type="button"
             size="icon"
-            className="absolute inset-0 size-9"
+            className="absolute inset-0 size-9 rounded-xl"
             aria-label={t("sendMessage")}
             title={effectiveDisabledReason ?? t("sendMessage")}
             disabled={sendDisabled}
@@ -462,7 +554,7 @@ function ComposerAction({
             <Button
               type="button"
               size="icon"
-              className="absolute inset-0 size-9"
+              className="absolute inset-0 size-9 rounded-xl"
               aria-label={t("sendMessage")}
               title={effectiveDisabledReason ?? t("sendMessage")}
               disabled={sendDisabled}
@@ -496,4 +588,88 @@ export function formatModelLabel(model: string): string {
     .replace(/-(sol|terra|luna)$/iu, (_, tier: string) => {
       return ` ${tier.charAt(0).toUpperCase()}${tier.slice(1).toLowerCase()}`;
     });
+}
+
+export function shouldExpandComposer(text: string, wrapsAtCompactWidth = false): boolean {
+  return text.includes("\n") || wrapsAtCompactWidth;
+}
+
+function getCompactComposerInputWidth(
+  shell: HTMLDivElement,
+  attachment: HTMLButtonElement | null,
+  controls: HTMLDivElement,
+  attachmentsEnabled: boolean
+): number {
+  const style = window.getComputedStyle(shell);
+  const contentWidth = shell.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+  const gapCount = attachmentsEnabled ? 2 : 1;
+  const occupiedWidth = controls.offsetWidth + (attachmentsEnabled ? (attachment?.offsetWidth ?? 0) : 0);
+  return Math.max(1, contentWidth - occupiedWidth - parseFloat(style.columnGap) * gapCount);
+}
+
+function textareaWrapsAtWidth(input: HTMLTextAreaElement, width: number): boolean {
+  if (input.value.length === 0) {
+    return false;
+  }
+
+  const style = window.getComputedStyle(input);
+  const lineHeight = parseFloat(style.lineHeight);
+  const singleLineHeight = lineHeight + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+  const measurementInput = input.cloneNode() as HTMLTextAreaElement;
+  measurementInput.value = input.value;
+  measurementInput.tabIndex = -1;
+  measurementInput.setAttribute("aria-hidden", "true");
+  Object.assign(measurementInput.style, {
+    position: "fixed",
+    left: "-10000px",
+    top: "0",
+    width: `${width}px`,
+    height: "0",
+    minHeight: "0",
+    maxHeight: "none",
+    overflow: "hidden",
+    visibility: "hidden"
+  });
+  document.body.append(measurementInput);
+  const wraps = measurementInput.scrollHeight > singleLineHeight + 1;
+  measurementInput.remove();
+  return wraps;
+}
+
+interface ComposerLayoutSnapshot {
+  expanded: boolean;
+  input: DOMRect;
+  attachment: DOMRect | undefined;
+  controls: DOMRect;
+}
+
+function animateComposerLayoutShift(
+  element: HTMLElement,
+  previous: DOMRect,
+  next: DOMRect,
+  revealAddedWidth = false
+): Animation | undefined {
+  const x = previous.x - next.x;
+  const y = previous.y - next.y;
+  const clippedWidth = revealAddedWidth ? Math.max(0, next.width - previous.width) : 0;
+  if (Math.abs(x) < 0.5 && Math.abs(y) < 0.5 && clippedWidth < 0.5) {
+    return undefined;
+  }
+
+  return element.animate(
+    [
+      {
+        transform: `translate3d(${x}px, ${y}px, 0)`,
+        clipPath: `inset(0 ${clippedWidth}px 0 0)`
+      },
+      {
+        transform: "translate3d(0, 0, 0)",
+        clipPath: "inset(0)"
+      }
+    ],
+    {
+      duration: 180,
+      easing: "cubic-bezier(0.2, 0, 0, 1)"
+    }
+  );
 }

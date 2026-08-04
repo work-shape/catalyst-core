@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useTranslation } from "./i18n";
 import { renderStructuredDataResourceDisplay } from "./structured-data-resource-display";
+import { Spinner } from "./ui/spinner";
 
 const DISPLAY_HEIGHT_MESSAGE_TYPE = "vivd-catalyst:display-height";
 const RUNTIME_THEME_STYLE_ID = "vivd-catalyst-runtime-theme";
@@ -41,10 +43,17 @@ const THEME_CSS_VARIABLE_NAMES = [
   "--sidebar-ring"
 ] as const;
 
+/**
+ * The frame grows to its reported content height so the view never scrolls
+ * inside itself; only the chat scrolls. The ceiling is a runaway guard, not a
+ * layout constraint.
+ */
+const MAX_FRAME_HEIGHT = 20_000;
+
 const FRAME_HEIGHT_LIMITS = {
-  inline: { fallback: 512, min: 220, max: 1400 },
-  side_panel: { fallback: 640, min: 320, max: 1800 },
-  fullscreen: { fallback: 720, min: 420, max: 2400 }
+  inline: { fallback: 512, min: 220 },
+  side_panel: { fallback: 640, min: 320 },
+  fullscreen: { fallback: 720, min: 420 }
 } as const;
 
 export type ToolDisplayMode = "inline" | "side_panel" | "fullscreen";
@@ -112,27 +121,51 @@ function RenderedHtmlDisplay({
   mode: ToolDisplayMode;
   title: string;
 }) {
+  const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const htmlRef = useRef<string | undefined>(undefined);
+  const frameSourceRef = useRef<string | undefined>(undefined);
   const [frameDocument, setFrameDocument] = useState<{ key: number; srcDoc?: string }>({ key: 0 });
   const [contentHeight, setContentHeight] = useState<number | undefined>(undefined);
+  const [loading, setLoading] = useState(true);
   const heightLimit = FRAME_HEIGHT_LIMITS[mode];
-  const frameHeight = clampNumber(contentHeight ?? heightLimit.fallback, heightLimit.min, heightLimit.max);
+  const frameHeight = clampNumber(contentHeight ?? heightLimit.fallback, heightLimit.min, MAX_FRAME_HEIGHT);
   const frameStyle: CSSProperties = { height: `${frameHeight}px` };
 
-  useEffect(() => {
-    setContentHeight(undefined);
-  }, [html]);
-
-  useEffect(() => {
+  const refreshFrameDocument = useCallback(() => {
     const host = hostRef.current;
     const nextSrcDoc = host ? injectRuntimeThemeStyle(html, readThemeDeclarations(host)) : html;
-    setFrameDocument((currentDocument) =>
-      currentDocument.srcDoc === nextSrcDoc
-        ? currentDocument
-        : { key: currentDocument.key + 1, srcDoc: nextSrcDoc }
-    );
-  });
+    if (frameSourceRef.current === nextSrcDoc) {
+      return;
+    }
+    const htmlChanged = htmlRef.current !== html;
+    htmlRef.current = html;
+    frameSourceRef.current = nextSrcDoc;
+    if (htmlChanged) {
+      setContentHeight(undefined);
+    }
+    setLoading(true);
+    setFrameDocument((currentDocument) => ({
+      key: currentDocument.key + 1,
+      srcDoc: nextSrcDoc
+    }));
+  }, [html]);
+
+  useEffect(refreshFrameDocument);
+
+  useEffect(() => {
+    if (typeof MutationObserver === "undefined") {
+      return undefined;
+    }
+
+    const observer = new MutationObserver(refreshFrameDocument);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-vivd-theme"]
+    });
+    return () => observer.disconnect();
+  }, [refreshFrameDocument]);
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
@@ -155,17 +188,30 @@ function RenderedHtmlDisplay({
   }, []);
 
   return (
-    <div ref={hostRef} className="bg-background">
-      <div className="border-b px-3 py-2 text-xs font-medium text-muted-foreground">{title}</div>
+    <div ref={hostRef} className="relative bg-background">
+      {loading ? (
+        <div
+          className="absolute inset-0 z-10 flex items-center justify-center bg-[color-mix(in_srgb,var(--muted)_30%,var(--background))] text-sm text-muted-foreground"
+          style={frameStyle}
+          role="status"
+        >
+          <span className="inline-flex items-center gap-2 rounded-md border bg-card px-3 py-2 shadow-xs">
+            <Spinner size="sm" />
+            <span>{t("displayLoading")}</span>
+          </span>
+        </div>
+      ) : null}
       {frameDocument.srcDoc ? (
         <iframe
           key={frameDocument.key}
           ref={iframeRef}
           title={title}
+          scrolling="no"
           sandbox="allow-scripts"
           srcDoc={frameDocument.srcDoc}
-          className="w-full border-0 bg-background"
+          className="w-full overflow-hidden border-0 bg-background"
           style={frameStyle}
+          onLoad={() => setLoading(false)}
         />
       ) : (
         <div className="w-full bg-background" style={frameStyle} aria-hidden="true" />
