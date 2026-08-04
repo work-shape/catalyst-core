@@ -43,7 +43,7 @@ export function LoginPanel({
   const client = useMemo(() => createApiClient({ baseUrl: apiBaseUrl }), [apiBaseUrl]);
   const brandingQuery = useQuery({
     queryKey: workspaceQueryKeys.branding(apiBaseUrl, localePreference),
-    queryFn: () => client.branding(localePreference),
+    queryFn: () => client.branding.get(localePreference),
     retry: false
   });
   const branding = brandingQuery.data;

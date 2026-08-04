@@ -339,7 +339,7 @@ export function useControlPlaneModel({
           onSetDefaultAgent: (defaultInput) =>
             configAssetMutations.setDefaultAgent.mutateAsync(defaultInput),
           onRevertAsset: (revertInput) => configAssetMutations.revertAsset.mutateAsync(revertInput),
-          onLoadRevisions: (kind, name) => client.configAssetRevisions(kind, name),
+          onLoadRevisions: (kind, name) => client.configAssets.listRevisions(kind, name),
           onReload: () =>
             queryClient.invalidateQueries({
               queryKey: workspaceQueryKeys.configAssetsOverview(apiBaseUrl, authScope)

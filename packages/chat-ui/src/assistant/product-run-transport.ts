@@ -4,7 +4,7 @@ import { firstLineTitle } from "../conversation-title";
 
 export interface ProductRunTransportOptions {
   client: {
-    conversations: Pick<ApiClient["conversations"], "createRun" | "startRun">;
+    runs: Pick<ApiClient["runs"], "create" | "start">;
   };
   selectedConversationId?: string;
   locale: LocaleCode;
@@ -91,7 +91,7 @@ export async function startProductConversationRun({
   agentName?: string;
   modelBindingId?: string;
   client: {
-    conversations: Pick<ApiClient["conversations"], "createRun" | "startRun">;
+    runs: Pick<ApiClient["runs"], "create" | "start">;
   };
   conversationId?: string;
   idempotencyKey: string;
@@ -109,10 +109,10 @@ export async function startProductConversationRun({
   };
 
   if (conversationId) {
-    return client.conversations.startRun(conversationId, request);
+    return client.runs.start(conversationId, request);
   }
 
-  return client.conversations.createRun({
+  return client.runs.create({
     ...request,
     conversation: {
       title: firstLineTitle(text),

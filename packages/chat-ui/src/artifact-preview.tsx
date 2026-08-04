@@ -95,7 +95,7 @@ export function ArtifactPreview({
     client.browserManagedDownloads &&
     (previewKind === "pdf" || previewKind === "image")
   ) {
-    const url = client.conversationArtifactContentUrl(
+    const url = client.conversations.artifacts.contentUrl(
       conversationId,
       artifact.artifactId,
       true
@@ -145,7 +145,7 @@ function BlobArtifactPreview({
     let objectUrl: string | undefined;
     setState({ status: "loading" });
     void client
-      .conversationArtifactContent(conversationId, artifact.artifactId)
+      .conversations.artifacts.getContent(conversationId, artifact.artifactId)
       .then((blob) => {
         if (cancelled) {
           return;

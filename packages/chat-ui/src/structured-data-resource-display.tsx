@@ -44,7 +44,7 @@ function StructuredDataResourceDisplay({
     setResource(undefined);
     setFailed(false);
     void context.client
-      .structuredDataResource(
+      .conversations.resources.getStructuredData(
         context.selectedConversationId,
         structuredDataResourceId
       )

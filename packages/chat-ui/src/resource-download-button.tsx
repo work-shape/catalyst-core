@@ -31,11 +31,11 @@ export function ResourceDownloadButton({
     try {
       const blob =
         resource.download.kind === "artifact"
-          ? await client.conversationArtifactContent(
+          ? await client.conversations.artifacts.getContent(
               conversationId,
               resource.download.artifactId
             )
-          : await client.conversationFileContent(
+          : await client.conversations.files.getContent(
               conversationId,
               resource.download.fileId,
               true

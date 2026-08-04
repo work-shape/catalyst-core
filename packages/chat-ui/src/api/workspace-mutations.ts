@@ -57,14 +57,14 @@ export function useApiAccessMutations(
 
   const createPrincipal = useMutation({
     mutationFn: (mutationInput: CreateServicePrincipalRequest) =>
-      input.client.createServicePrincipal(mutationInput),
+      input.client.apiAccess.createServicePrincipal(mutationInput),
     onSuccess: invalidateApiAccess
   });
   const updatePrincipal = useMutation({
     mutationFn: (mutationInput: {
       principalId: string;
       update: UpdateServicePrincipalRequest;
-    }) => input.client.updateServicePrincipal(mutationInput.principalId, mutationInput.update),
+    }) => input.client.apiAccess.updateServicePrincipal(mutationInput.principalId, mutationInput.update),
     onSuccess: invalidateApiAccess
   });
   const createCredential = {
@@ -75,7 +75,7 @@ export function useApiAccessMutations(
       const originAuthority = revealControllerRef.current.captureAuthority();
       setCredentialCreationPending(true);
       try {
-        const response = await input.client.createApiCredential(
+        const response = await input.client.apiAccess.createCredential(
           mutationInput.principalId,
           mutationInput.credential
         );
@@ -95,7 +95,7 @@ export function useApiAccessMutations(
     }
   };
   const revokeCredential = useMutation({
-    mutationFn: (credentialId: string) => input.client.revokeApiCredential(credentialId),
+    mutationFn: (credentialId: string) => input.client.apiAccess.revokeCredential(credentialId),
     onSuccess: invalidateApiAccess
   });
 
@@ -127,7 +127,7 @@ export function useDeleteConversationMutation(
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (conversationId: string) => input.client.deleteConversation(conversationId),
+    mutationFn: (conversationId: string) => input.client.conversations.delete(conversationId),
     onSuccess: (deletedConversation) => {
       let nextSelectedConversationId: string | undefined;
       const deletedActiveConversation = input.selectedConversationId === deletedConversation.id;
@@ -174,7 +174,7 @@ export function useRenameConversationMutation(
 
   return useMutation({
     mutationFn: ({ conversationId, title }: { conversationId: string; title: string }) =>
-      input.client.renameConversation(conversationId, title),
+      input.client.conversations.rename(conversationId, title),
     onSuccess: (updatedConversation) => {
       queryClient.setQueryData<ConversationListItem[]>(
         workspaceQueryKeys.conversations(input.apiBaseUrl, input.authScope),
@@ -264,7 +264,7 @@ export function useUpdateCurrentUserMutation(input: WorkspaceMutationInput) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (mutationInput: UpdateCurrentUserRequest) => input.client.updateMe(mutationInput),
+    mutationFn: (mutationInput: UpdateCurrentUserRequest) => input.client.account.update(mutationInput),
     onSuccess: (updatedUser) => {
       queryClient.setQueryData(workspaceQueryKeys.me(input.apiBaseUrl), updatedUser);
       void queryClient.invalidateQueries({
@@ -279,7 +279,7 @@ export function useChangeCurrentUserPasswordMutation(input: WorkspaceMutationInp
 
   return useMutation({
     mutationFn: (mutationInput: ChangeCurrentUserPasswordRequest) =>
-      input.client.changeMyPassword(mutationInput),
+      input.client.account.changePassword(mutationInput),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: workspaceQueryKeys.auditEvents(input.apiBaseUrl, input.authScope)
@@ -296,7 +296,7 @@ export function useDeleteCurrentUserMutation(
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () => input.client.deleteMe(),
+    mutationFn: () => input.client.account.delete(),
     onSuccess: () => {
       input.onDeleted();
       queryClient.clear();
@@ -326,7 +326,7 @@ export function useConfigAssetMutations(input: WorkspaceMutationInput) {
       config: Record<string, unknown>;
       baseVersion?: number;
     }) =>
-      input.client.putConfigAsset(mutationInput.kind, mutationInput.name, {
+      input.client.configAssets.put(mutationInput.kind, mutationInput.name, {
         config: mutationInput.config,
         baseVersion: mutationInput.baseVersion
       }),
@@ -334,14 +334,14 @@ export function useConfigAssetMutations(input: WorkspaceMutationInput) {
   });
   const deleteAsset = useMutation({
     mutationFn: (mutationInput: { kind: ConfigAssetKind; name: string; baseVersion?: number }) =>
-      input.client.deleteConfigAsset(mutationInput.kind, mutationInput.name, {
+      input.client.configAssets.delete(mutationInput.kind, mutationInput.name, {
         baseVersion: mutationInput.baseVersion
       }),
     onSuccess: invalidateConfigAssets
   });
   const setDefaultAgent = useMutation({
     mutationFn: (mutationInput: { agentName?: string; baseVersion?: number }) =>
-      input.client.setDefaultConfigAgent(mutationInput),
+      input.client.configAssets.setDefaultAgent(mutationInput),
     onSuccess: () => invalidateConfigAssets()
   });
   const revertAsset = useMutation({
@@ -351,7 +351,7 @@ export function useConfigAssetMutations(input: WorkspaceMutationInput) {
       revision: number;
       baseVersion?: number;
     }) =>
-      input.client.revertConfigAsset(mutationInput.kind, mutationInput.name, {
+      input.client.configAssets.revert(mutationInput.kind, mutationInput.name, {
         revision: mutationInput.revision,
         baseVersion: mutationInput.baseVersion
       }),
@@ -383,7 +383,7 @@ export function useSuperadminUserMutations(input: WorkspaceMutationInput) {
   };
 
   const createUser = useMutation({
-    mutationFn: (mutationInput: CreateAdministeredUserRequest) => input.client.createUser(mutationInput),
+    mutationFn: (mutationInput: CreateAdministeredUserRequest) => input.client.users.create(mutationInput),
     onSuccess: () => {
       invalidateSuperadminUsers();
       invalidateAuditEvents();
@@ -391,14 +391,14 @@ export function useSuperadminUserMutations(input: WorkspaceMutationInput) {
   });
   const updateUser = useMutation({
     mutationFn: (mutationInput: { userId: string; update: UpdateAdministeredUserRequest }) =>
-      input.client.updateUser(mutationInput.userId, mutationInput.update),
+      input.client.users.update(mutationInput.userId, mutationInput.update),
     onSuccess: () => {
       invalidateSuperadminUsers();
       invalidateAuditEvents();
     }
   });
   const deleteUser = useMutation({
-    mutationFn: (userId: string) => input.client.deleteUser(userId),
+    mutationFn: (userId: string) => input.client.users.delete(userId),
     onSuccess: (deletedUser) => {
       queryClient.setQueryData<AdministeredUser[]>(
         workspaceQueryKeys.superadminUsers(input.apiBaseUrl, input.authScope),
@@ -412,7 +412,7 @@ export function useSuperadminUserMutations(input: WorkspaceMutationInput) {
     mutationFn: (mutationInput: {
       userId: string;
       identity: UpsertAdministeredUserIdentityRequest;
-    }) => input.client.upsertUserIdentity(mutationInput.userId, mutationInput.identity),
+    }) => input.client.users.upsertIdentity(mutationInput.userId, mutationInput.identity),
     onSuccess: () => {
       invalidateSuperadminUsers();
       invalidateAuditEvents();
@@ -420,7 +420,7 @@ export function useSuperadminUserMutations(input: WorkspaceMutationInput) {
   });
   const deleteUserIdentity = useMutation({
     mutationFn: (mutationInput: { userId: string; identity: AdministeredUserIdentity }) =>
-      input.client.deleteUserIdentity(
+      input.client.users.deleteIdentity(
         mutationInput.userId,
         mutationInput.identity.authSource,
         mutationInput.identity.externalUserId
@@ -432,7 +432,7 @@ export function useSuperadminUserMutations(input: WorkspaceMutationInput) {
   });
   const resetUserPassword = useMutation({
     mutationFn: (mutationInput: { userId: string; password: string }) =>
-      input.client.resetUserPassword(mutationInput.userId, { password: mutationInput.password }),
+      input.client.users.resetPassword(mutationInput.userId, { password: mutationInput.password }),
     onSuccess: () => {
       invalidateAuditEvents();
     }

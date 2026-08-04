@@ -563,7 +563,7 @@ function ImageFilePart({
     let active = true;
     let objectUrl: string | undefined;
     void attachmentClient
-      .conversationFileContent(selectedConversationId, fileId)
+      .conversations.files.getContent(selectedConversationId, fileId)
       .then((blob) => {
         if (!active) {
           return;

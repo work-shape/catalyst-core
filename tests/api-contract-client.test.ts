@@ -92,7 +92,7 @@ describe("api operation catalog and client", () => {
     });
     const operation = apiOperations.listConversationMessages;
 
-    await expect(client.conversations.messages("conversation/with space")).resolves.toEqual([]);
+    await expect(client.conversations.listMessages("conversation/with space")).resolves.toEqual([]);
 
     expect(calls).toHaveLength(1);
     const request = calls[0];
@@ -123,17 +123,17 @@ describe("api operation catalog and client", () => {
       fetchImpl
     });
 
-    const blob = await client.conversationArtifactContent("conv 1", "art/final");
+    const blob = await client.conversations.artifacts.getContent("conv 1", "art/final");
 
     expect(await blob.text()).toBe("artifact-bytes");
     expect(blob.type).toBe("application/json");
     expect(client.browserManagedDownloads).toBe(false);
-    expect(client.conversationArtifactContentUrl("conv 1", "art/final")).toBe(
+    expect(client.conversations.artifacts.contentUrl("conv 1", "art/final")).toBe(
       `https://chat.example${apiOperations.getConversationArtifactContent.buildPath({
         params: { conversationId: "conv 1", artifactId: "art/final" }
       })}`
     );
-    expect(client.conversationArtifactContentUrl("conv 1", "art/final", true)).toBe(
+    expect(client.conversations.artifacts.contentUrl("conv 1", "art/final", true)).toBe(
       `https://chat.example${apiOperations.getConversationArtifactContent.buildPath({
         params: { conversationId: "conv 1", artifactId: "art/final" }
       })}?inline=true`
@@ -155,7 +155,7 @@ describe("api operation catalog and client", () => {
       baseUrl: "https://chat.example/"
     });
 
-    expect(client.conversationFileContentUrl("conv 1", "file/image")).toBe(
+    expect(client.conversations.files.contentUrl("conv 1", "file/image")).toBe(
       `https://chat.example${apiOperations.getConversationFileContent.buildPath({
         params: { conversationId: "conv 1", fileId: "file/image" }
       })}`
@@ -171,7 +171,7 @@ describe("api operation catalog and client", () => {
         })
     });
 
-    const blob = await client.conversationFileContent("conv_1", "file_1");
+    const blob = await client.conversations.files.getContent("conv_1", "file_1");
 
     expect(blob).toBeInstanceOf(Blob);
     expect(blob.type).toBe("text/plain");
@@ -204,7 +204,7 @@ describe("api operation catalog and client", () => {
       fetchImpl
     });
 
-    await expect(client.conversationArtifactPreview("conv 1", "art/final")).resolves.toEqual({
+    await expect(client.conversations.artifacts.getPreview("conv 1", "art/final")).resolves.toEqual({
       status: "ready",
       artifactId: "art/final",
       type: "image_pages",
@@ -236,7 +236,7 @@ describe("api operation catalog and client", () => {
     });
 
     expect(client.browserManagedDownloads).toBe(true);
-    expect(client.conversationArtifactContentUrl("conversation/with space", "art/final")).toBe(
+    expect(client.conversations.artifacts.contentUrl("conversation/with space", "art/final")).toBe(
       "https://chat.example/api/conversations/conversation%2Fwith%20space/artifacts/art%2Ffinal/content"
     );
   });
@@ -251,7 +251,7 @@ describe("api operation catalog and client", () => {
     });
 
     expect(() => client.conversations.create({ title: "" })).toThrow();
-    expect(() => client.renameConversation("conv_1", "   ")).toThrow();
+    expect(() => client.conversations.rename("conv_1", "   ")).toThrow();
   });
 
   it("lets the generated SDK own multipart boundaries", async () => {
@@ -278,7 +278,7 @@ describe("api operation catalog and client", () => {
       }
     });
 
-    await client.uploadDraftAttachment(
+    await client.conversations.draftAttachments.upload(
       "conv_1",
       new File(["notes"], "notes.txt", { type: "text/plain" })
     );
@@ -446,11 +446,11 @@ describe("api operation catalog and client", () => {
       fetchImpl
     });
 
-    await client.conversations.startRun("conv 1", {
+    await client.runs.start("conv 1", {
       idempotencyKey: "idem_1",
       message: { text: "Hello" }
     });
-    await client.conversations.createRun({
+    await client.runs.create({
       idempotencyKey: "idem_2",
       message: { text: "Hello" }
     });

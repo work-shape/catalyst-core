@@ -44,7 +44,7 @@ export function useDraftAttachmentController(
       input.authScope,
       input.selectedConversationId
     ),
-    queryFn: () => input.client.draftAttachments(input.selectedConversationId ?? ""),
+    queryFn: () => input.client.conversations.draftAttachments.list(input.selectedConversationId ?? ""),
     enabled: input.enabled && input.isAuthenticated && Boolean(input.selectedConversationId),
     refetchInterval: (query) =>
       hasProcessingDraftAttachments((query.state.data as DraftAttachment[] | undefined) ?? [])
@@ -95,7 +95,7 @@ export function useDraftAttachmentController(
     };
     setLocalUploadingAttachments((currentAttachments) => [...currentAttachments, localAttachment]);
     void input.client
-      .uploadDraftAttachment(conversationId, file)
+      .conversations.draftAttachments.upload(conversationId, file)
       .then((response) => {
         queryClient.setQueryData(
           workspaceQueryKeys.draftAttachments(input.apiBaseUrl, input.authScope, conversationId),
@@ -123,7 +123,7 @@ export function useDraftAttachmentController(
       return;
     }
     void input.client
-      .deleteDraftAttachment(input.selectedConversationId, attachmentId)
+      .conversations.draftAttachments.delete(input.selectedConversationId, attachmentId)
       .then(() => {
         void queryClient.invalidateQueries({
           queryKey: workspaceQueryKeys.draftAttachments(
@@ -141,7 +141,7 @@ export function useDraftAttachmentController(
       return;
     }
     void input.client
-      .retryDraftAttachment(input.selectedConversationId, attachmentId)
+      .conversations.draftAttachments.retry(input.selectedConversationId, attachmentId)
       .then((response) => {
         queryClient.setQueryData(
           workspaceQueryKeys.draftAttachments(

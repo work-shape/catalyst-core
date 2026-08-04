@@ -98,7 +98,7 @@ export function useOpenSourceFilePreview(): (
             SOURCE_FILE_AUTH_SCOPE,
             conversationId
           ),
-          queryFn: () => client.conversationResources(conversationId)
+          queryFn: () => client.conversations.resources.list(conversationId)
         });
         const resource =
           "fileId" in input
@@ -225,7 +225,7 @@ export function SourceFilePreview({
   const office = previewKind === "office";
   const download = previewKind ? sourceFilePreviewRequiresDownload(previewKind) : false;
   const directUrl = client.browserManagedDownloads && (previewKind === "image" || previewKind === "pdf")
-    ? client.conversationFileContentUrl(conversationId, fileId)
+    ? client.conversations.files.contentUrl(conversationId, fileId)
     : undefined;
   const [url, setUrl] = useState<string | undefined>(directUrl);
   const [blob, setBlob] = useState<Blob | undefined>();
@@ -248,7 +248,7 @@ export function SourceFilePreview({
     setBlob(undefined);
     setFailed(false);
     void client
-      .conversationFileContent(conversationId, fileId, download)
+      .conversations.files.getContent(conversationId, fileId, download)
       .then((blob) => {
         if (active) {
           if (spreadsheet) {
@@ -366,7 +366,7 @@ function AttachmentOfficePreview({
     let active = true;
     setArtifactId(undefined);
     setFailed(false);
-    void client.conversationAttachmentPreview(conversationId, attachmentId)
+    void client.conversations.artifacts.getAttachmentPreview(conversationId, attachmentId)
       .then((preview) => {
         if (active) {
           setArtifactId(preview.artifactId);

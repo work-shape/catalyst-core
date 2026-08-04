@@ -187,7 +187,7 @@ export function ArtifactDownloadButton({
   const large = variant === "deliverable";
   const nativeDownloadUrl =
     downloadAvailable && client?.browserManagedDownloads && conversationId
-      ? client.conversationArtifactContentUrl(conversationId, artifact.artifactId)
+      ? client.conversations.artifacts.contentUrl(conversationId, artifact.artifactId)
       : undefined;
   const className = cn(
     "inline-flex shrink-0 items-center justify-center gap-2 rounded-md border bg-background font-medium text-foreground no-underline transition-colors",
@@ -202,7 +202,7 @@ export function ArtifactDownloadButton({
     }
     setDownloading(true);
     try {
-      const blob = await client.conversationArtifactContent(conversationId, artifact.artifactId);
+      const blob = await client.conversations.artifacts.getContent(conversationId, artifact.artifactId);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
