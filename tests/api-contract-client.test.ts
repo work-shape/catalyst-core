@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import {
   apiOperations,
@@ -586,10 +586,17 @@ describe("api operation catalog and client", () => {
   });
 
   it("does not keep the deleted legacy live chat stream path in the API contract", async () => {
-    const [contractSource, routeSource] = await Promise.all([
-      readFile("packages/api-contract/src/index.ts", "utf8"),
+    const contractSourceDirectory = "packages/api-contract/src";
+    const contractSourceFiles = (await readdir(contractSourceDirectory, { recursive: true }))
+      .filter((file) => file.endsWith(".ts"))
+      .sort();
+    const [contractSources, routeSource] = await Promise.all([
+      Promise.all(
+        contractSourceFiles.map((file) => readFile(`${contractSourceDirectory}/${file}`, "utf8"))
+      ),
       readFile("packages/chat-server/src/routes/agent-run-routes.ts", "utf8")
     ]);
+    const contractSource = contractSources.join("\n");
 
     expect(contractSource).not.toContain("chatStreamRoutePath");
     expect(contractSource).not.toContain("chatStreamRequestSchema");
