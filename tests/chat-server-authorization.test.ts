@@ -1,0 +1,474 @@
+import { describe, expect, it } from "vitest";
+import { createChatServer } from "@vivd-catalyst/chat-server";
+import { StoreBackedAuditRecorder, asClientInstanceId } from "@vivd-catalyst/core";
+import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+import { createTestConfig, createClientInstanceApp, createTestUser } from "./chat-server-harness";
+import { createMissingRuntime, createUnusedModelProvider } from "./chat-server-run-harness";
+
+describe("client instance app vertical slice", () => {
+  it("keeps chat session tokens scoped away from governance routes despite elevated roles", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        sessionToken: {
+          issuer: "demo-client-instance",
+          ttlSeconds: 900
+        },
+        developmentAuth: {
+          enabled: true,
+          defaultUserId: "superadmin-1",
+          users: [
+            {
+              id: "superadmin-1",
+              externalUserId: "superadmin-1",
+              displayLabel: "Superadmin",
+              roles: ["user", "admin", "superadmin"],
+              permissionRefs: ["demo-tools"]
+            }
+          ]
+        }
+      }),
+      env: {
+        CHAT_SESSION_TOKEN_SECRET: "a-development-session-token-secret",
+        CHAT_SERVER_CREDENTIAL: "server-credential"
+      },
+      storeMode: "memory",
+      tools: []
+    });
+
+    const issued = await app.server.inject({
+      method: "POST",
+      url: "/api/superadmin/session-tokens",
+      headers: {
+        "x-server-credential": "server-credential"
+      },
+      payload: {
+        externalUserId: "customer-admin",
+        displayLabel: "Customer Admin",
+        roles: ["user", "admin", "superadmin"],
+        permissionRefs: ["demo-tools"]
+      }
+    });
+    expect(issued.statusCode).toBe(200);
+    const token = (issued.json() as { chatSessionToken: string }).chatSessionToken;
+
+    const conversations = await app.server.inject({
+      method: "GET",
+      url: "/api/conversations",
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+    expect(conversations.statusCode).toBe(200);
+
+    const usage = await app.server.inject({
+      method: "GET",
+      url: "/api/superadmin/usage",
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+    expect(usage.statusCode).toBe(403);
+    expect((usage.json() as { error: { message: string } }).error.message).toContain(
+      "Missing auth scope 'governance:read'"
+    );
+
+    const audit = await app.server.inject({
+      method: "GET",
+      url: "/api/audit-events",
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+    expect(audit.statusCode).toBe(403);
+
+    await app.close();
+  });
+
+  it("honors explicit chat session token scopes for conversation writes", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        sessionToken: {
+          issuer: "demo-client-instance",
+          ttlSeconds: 900
+        }
+      }),
+      env: {
+        CHAT_SESSION_TOKEN_SECRET: "a-development-session-token-secret",
+        CHAT_SERVER_CREDENTIAL: "server-credential"
+      },
+      storeMode: "memory",
+      tools: []
+    });
+
+    const issued = await app.server.inject({
+      method: "POST",
+      url: "/api/superadmin/session-tokens",
+      headers: {
+        "x-server-credential": "server-credential"
+      },
+      payload: {
+        externalUserId: "read-only-user",
+        displayLabel: "Read Only User",
+        roles: ["user"],
+        permissionRefs: ["demo-tools"],
+        scopes: ["conversation:read"]
+      }
+    });
+    expect(issued.statusCode).toBe(200);
+    const token = (issued.json() as { chatSessionToken: string }).chatSessionToken;
+
+    const conversations = await app.server.inject({
+      method: "GET",
+      url: "/api/conversations",
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+    expect(conversations.statusCode).toBe(200);
+
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      payload: {
+        title: "Should not be created"
+      }
+    });
+    expect(created.statusCode).toBe(403);
+    expect((created.json() as { error: { message: string } }).error.message).toContain(
+      "Missing auth scope 'conversation:write'"
+    );
+
+    await app.close();
+  });
+
+  it("audits delegated service-principal conversation actions for the subject user", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        sessionToken: {
+          issuer: "demo-client-instance",
+          ttlSeconds: 900
+        },
+        developmentAuth: {
+          enabled: true,
+          defaultUserId: "superadmin-1",
+          users: [
+            {
+              id: "superadmin-1",
+              externalUserId: "superadmin-1",
+              displayLabel: "Superadmin",
+              roles: ["user", "admin", "superadmin"],
+              permissionRefs: ["demo-tools"]
+            }
+          ]
+        }
+      }),
+      env: {
+        CHAT_SESSION_TOKEN_SECRET: "a-development-session-token-secret",
+        CHAT_SERVER_CREDENTIAL: "server-credential"
+      },
+      storeMode: "memory",
+      tools: []
+    });
+
+    const issued = await app.server.inject({
+      method: "POST",
+      url: "/api/superadmin/session-tokens",
+      headers: {
+        "x-server-credential": "server-credential"
+      },
+      payload: {
+        externalUserId: "customer-jane",
+        displayLabel: "Jane Reviewer",
+        roles: ["user"],
+        permissionRefs: ["demo-tools"],
+        delegatedActor: {
+          kind: "service_principal",
+          id: "svc-customer-api",
+          displayLabel: "Customer API",
+          authSource: "customer-app"
+        }
+      }
+    });
+    expect(issued.statusCode).toBe(200);
+    const token = (issued.json() as { chatSessionToken: string }).chatSessionToken;
+
+    const createdConversation = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      payload: {
+        title: "Delegated action"
+      }
+    });
+    expect(createdConversation.statusCode).toBe(200);
+    const conversation = createdConversation.json() as {
+      id: string;
+      ownerUserId: string;
+      ownerExternalUserId: string;
+    };
+    expect(conversation.ownerExternalUserId).toBe("customer-jane");
+    expect(conversation.ownerUserId).not.toBe("svc-customer-api");
+
+    const audit = await app.server.inject({
+      method: "GET",
+      url: "/api/audit-events",
+      headers: {
+        "x-dev-user-id": "superadmin-1"
+      }
+    });
+    expect(audit.statusCode).toBe(200);
+    expect(audit.json()).toContainEqual(
+      expect.objectContaining({
+        type: "conversation.created",
+        subject: conversation.id,
+        actor: expect.objectContaining({
+          userId: conversation.ownerUserId,
+          principalKind: "service",
+          principalId: "svc-customer-api",
+          principalDisplayLabel: "Customer API",
+          subjectUserId: conversation.ownerUserId,
+          delegatedActor: expect.objectContaining({
+            kind: "service_principal",
+            id: "svc-customer-api",
+            authSource: "customer-app"
+          })
+        })
+      })
+    );
+
+    await app.close();
+  });
+
+  it("creates and resets standalone password sign-ins from superadmin user administration", async () => {
+    const clientInstanceId = asClientInstanceId("demo-local");
+    const store = new InMemoryPlatformStore();
+    const config = createTestConfig();
+    const usageGovernance = new ModelUsageGovernance({
+      store,
+      budget: config.usage.budget,
+      safeguards: config.usage.safeguards,
+      costs: config.usage.costs
+    });
+    const createdPasswordSignIns: Array<{
+      email: string;
+      displayLabel: string;
+      password: string;
+    }> = [];
+    const resetPasswords: Array<{ externalUserId: string; password: string }> = [];
+    const deletedPasswordSignIns: Array<{ externalUserId: string }> = [];
+    const server = await createChatServer({
+      config,
+      clientInstanceId,
+      authAdapter: {
+        id: "test-auth",
+        async authenticate() {
+          return createTestUser("superadmin-1", clientInstanceId);
+        }
+      },
+      conversationStore: store,
+      auditEventStore: store,
+      userStore: store,
+      usageGovernance,
+      auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store }),
+      agentRuntime: createMissingRuntime(),
+      modelProvider: createUnusedModelProvider(),
+      standaloneAuth: {
+        baseUrl: "http://127.0.0.1:4100/api/auth",
+        async handleRequest() {
+          return new Response(null, { status: 404 });
+        },
+        async setOrCreatePasswordSignIn(input) {
+          createdPasswordSignIns.push({
+            email: input.email,
+            displayLabel: input.displayLabel,
+            password: input.password
+          });
+          return {
+            externalUserId: `auth-${input.email}`,
+            displayLabel: input.displayLabel,
+            email: input.email.toLowerCase(),
+            emailVerified: true
+          };
+        },
+        async setPassword(input) {
+          resetPasswords.push(input);
+        },
+        async changePassword() {},
+        async deletePasswordSignIn(input) {
+          deletedPasswordSignIns.push(input);
+        }
+      }
+    });
+
+    const created = await server.inject({
+      method: "POST",
+      url: "/api/superadmin/users",
+      payload: {
+        displayLabel: "Jane Reviewer",
+        email: "Jane@Example.Test",
+        roles: ["user", "admin"],
+        permissionRefs: ["demo-tools"],
+        passwordSignIn: {
+          password: "initial-password"
+        }
+      }
+    });
+    expect(created.statusCode).toBe(200);
+    const createdUser = created.json() as {
+      id: string;
+      identities: Array<{ authSource: string; externalUserId: string; email?: string }>;
+    };
+    expect(createdPasswordSignIns).toEqual([
+      {
+        email: "Jane@Example.Test",
+        displayLabel: "Jane Reviewer",
+        password: "initial-password"
+      }
+    ]);
+    expect(createdUser.identities).toEqual([
+      expect.objectContaining({
+        authSource: "better-auth",
+        externalUserId: "auth-Jane@Example.Test",
+        email: "jane@example.test"
+      })
+    ]);
+
+    const reset = await server.inject({
+      method: "POST",
+      url: `/api/superadmin/users/${createdUser.id}/password`,
+      payload: {
+        password: "replacement-password"
+      }
+    });
+    expect(reset.statusCode).toBe(200);
+    expect(resetPasswords).toEqual([
+      {
+        externalUserId: "auth-Jane@Example.Test",
+        password: "replacement-password"
+      }
+    ]);
+
+    const profileOnly = await server.inject({
+      method: "POST",
+      url: "/api/superadmin/users",
+      payload: {
+        displayLabel: "Sam Reviewer",
+        email: "sam@example.test",
+        roles: ["user"]
+      }
+    });
+    expect(profileOnly.statusCode).toBe(200);
+    const profileOnlyUser = profileOnly.json() as { id: string };
+
+    const setFirstPassword = await server.inject({
+      method: "POST",
+      url: `/api/superadmin/users/${profileOnlyUser.id}/password`,
+      payload: {
+        password: "first-password"
+      }
+    });
+    expect(setFirstPassword.statusCode).toBe(200);
+    expect(createdPasswordSignIns).toContainEqual({
+      email: "sam@example.test",
+      displayLabel: "Sam Reviewer",
+      password: "first-password"
+    });
+
+    const listed = await server.inject({
+      method: "GET",
+      url: "/api/superadmin/users"
+    });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: profileOnlyUser.id,
+          identities: [
+            expect.objectContaining({
+              authSource: "better-auth",
+              externalUserId: "auth-sam@example.test"
+            })
+          ]
+        })
+      ])
+    );
+
+    const audit = await server.inject({
+      method: "GET",
+      url: "/api/audit-events"
+    });
+    expect(audit.statusCode).toBe(200);
+    expect((audit.json() as Array<{ type: string }>).map((event) => event.type)).toEqual(
+      expect.arrayContaining(["user.password_sign_in_created", "user.password_reset"])
+    );
+
+    const deleted = await server.inject({
+      method: "DELETE",
+      url: `/api/superadmin/users/${createdUser.id}`
+    });
+    expect(deleted.statusCode).toBe(200);
+    expect(deletedPasswordSignIns).toEqual([{ externalUserId: "auth-Jane@Example.Test" }]);
+
+    const listedAfterDelete = await server.inject({
+      method: "GET",
+      url: "/api/superadmin/users"
+    });
+    expect(listedAfterDelete.statusCode).toBe(200);
+    expect(listedAfterDelete.json()).not.toContainEqual(
+      expect.objectContaining({
+        id: createdUser.id
+      })
+    );
+
+    const auditAfterDelete = await server.inject({
+      method: "GET",
+      url: "/api/audit-events"
+    });
+    expect(auditAfterDelete.statusCode).toBe(200);
+    expect((auditAfterDelete.json() as Array<{ type: string }>).map((event) => event.type)).toEqual(
+      expect.arrayContaining(["governance.user_delete_authorized", "user.deleted"])
+    );
+
+    await server.close();
+  });
+
+  it("rejects password resets when standalone auth is not enabled", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig(),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/superadmin/users",
+      payload: {
+        displayLabel: "Jane Reviewer",
+        roles: ["user"]
+      }
+    });
+    expect(created.statusCode).toBe(200);
+    const administeredUser = created.json() as { id: string };
+
+    const reset = await app.server.inject({
+      method: "POST",
+      url: `/api/superadmin/users/${administeredUser.id}/password`,
+      payload: {
+        password: "replacement-password"
+      }
+    });
+    expect(reset.statusCode).toBe(422);
+    expect((reset.json() as { error: { message: string } }).error.message).toContain(
+      "standalone auth"
+    );
+
+    await app.close();
+  });
+});
