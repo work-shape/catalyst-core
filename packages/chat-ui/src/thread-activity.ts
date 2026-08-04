@@ -91,9 +91,7 @@ function isUnfinishedToolCall(part: ThreadActivityPart): boolean {
   return part.result === undefined && part.isError !== true;
 }
 
-function lastMeaningfulPart(
-  parts: readonly ThreadActivityPart[]
-): ThreadActivityPart | undefined {
+function lastMeaningfulPart(parts: readonly ThreadActivityPart[]): ThreadActivityPart | undefined {
   for (let index = parts.length - 1; index >= 0; index -= 1) {
     const part = parts[index];
     if (part && part.type !== "indicator" && part.type !== "step-start") {

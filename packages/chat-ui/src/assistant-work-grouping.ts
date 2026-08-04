@@ -79,7 +79,9 @@ export function createAssistantWorkTimelineItems(
   return items;
 }
 
-export function countAssistantWorkTimelineSteps(items: readonly AssistantWorkTimelineItem[]): number {
+export function countAssistantWorkTimelineSteps(
+  items: readonly AssistantWorkTimelineItem[]
+): number {
   return items.filter((item) => item.type !== "source-group").length;
 }
 
@@ -164,7 +166,11 @@ function isSourcePart(part: PartState): boolean {
   return part.type === "source";
 }
 
-function isVisibleFinalAssistantPart(part: { type: string; data?: unknown; name?: string }): boolean {
+function isVisibleFinalAssistantPart(part: {
+  type: string;
+  data?: unknown;
+  name?: string;
+}): boolean {
   if (part.type === "file" || part.type === "image") {
     return true;
   }
@@ -185,7 +191,10 @@ function isVisibleFinalAssistantPart(part: { type: string; data?: unknown; name?
   return false;
 }
 
-function isStandaloneToolCall(part: Extract<PartState, { type: "tool-call" }>, context: GroupByContext): boolean {
+function isStandaloneToolCall(
+  part: Extract<PartState, { type: "tool-call" }>,
+  context: GroupByContext
+): boolean {
   if (part.mcp?.app?.resourceUri?.startsWith("ui://")) {
     return true;
   }

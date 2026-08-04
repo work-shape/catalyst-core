@@ -1,10 +1,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 import type { LocaleCode } from "@vivd-catalyst/api-client";
 
-export type ToolActivityLabels = Record<
-  string,
-  string | Partial<Record<LocaleCode, string>>
->;
+export type ToolActivityLabels = Record<string, string | Partial<Record<LocaleCode, string>>>;
 
 const ToolActivityLabelsContext = createContext<ToolActivityLabels>({});
 

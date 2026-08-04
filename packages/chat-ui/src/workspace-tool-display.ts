@@ -43,10 +43,7 @@ export function projectWorkspaceToolDisplay(input: {
   }
 }
 
-export function isFailedWorkspaceExecResult(input: {
-  result: unknown;
-  toolName: string;
-}): boolean {
+export function isFailedWorkspaceExecResult(input: { result: unknown; toolName: string }): boolean {
   if (input.toolName !== "workspace.exec") {
     return false;
   }
@@ -79,8 +76,11 @@ function projectWorkspaceExec(args: unknown, result: unknown): WorkspaceToolDisp
   const container = isRecord(result) ? result : undefined;
   const output = isRecord(container?.output) ? container.output : undefined;
   const commandLabel =
-    typeof input?.command === "string" ? formatWorkspaceCommandActionLabel(input.command) : undefined;
-  const commandDisplay = typeof input?.command === "string" ? sanitizeWorkspaceCommandDisplay(input.command) : undefined;
+    typeof input?.command === "string"
+      ? formatWorkspaceCommandActionLabel(input.command)
+      : undefined;
+  const commandDisplay =
+    typeof input?.command === "string" ? sanitizeWorkspaceCommandDisplay(input.command) : undefined;
   const status = readString(output?.status) ?? readString(container?.status);
   const exitCode = readNumber(output?.exitCode);
   const durationMs = readNumber(output?.durationMs);
@@ -148,8 +148,16 @@ function workspaceExecFailurePreviewSections(
   truncated: Record<string, unknown> | undefined
 ): ToolDetailSection[] {
   return compactSections([
-    failurePreviewSection("Stdout preview", readString(output?.stdoutPreview), truncated?.stdout === true),
-    failurePreviewSection("Stderr preview", readString(output?.stderrPreview), truncated?.stderr === true),
+    failurePreviewSection(
+      "Stdout preview",
+      readString(output?.stdoutPreview),
+      truncated?.stdout === true
+    ),
+    failurePreviewSection(
+      "Stderr preview",
+      readString(output?.stderrPreview),
+      truncated?.stderr === true
+    ),
     error ? { label: "Error", value: sanitizeWorkspaceFailurePreview(error) } : undefined
   ]);
 }
@@ -165,8 +173,12 @@ function sanitizeWorkspaceCommandDisplay(command: string): string | undefined {
     .replaceAll(/\/Users\/[^\s"',;})]+/gu, "[redacted path]")
     .replaceAll(/\/tmp\/[^\s"',;})]+/gu, "[redacted path]")
     .replaceAll(/\/var\/folders\/[^\s"',;})]+/gu, "[redacted path]")
-    .replaceAll(/(?:^|[\s"',:])(?:scratch|\.artifact-previews|artifact-previews|execution-workspaces)\/[^\s"',;})]+/giu, (match) =>
-      match.slice(0, 1).match(/[\s"',:]/u) ? `${match.slice(0, 1)}[redacted path]` : "[redacted path]"
+    .replaceAll(
+      /(?:^|[\s"',:])(?:scratch|\.artifact-previews|artifact-previews|execution-workspaces)\/[^\s"',;})]+/giu,
+      (match) =>
+        match.slice(0, 1).match(/[\s"',:]/u)
+          ? `${match.slice(0, 1)}[redacted path]`
+          : "[redacted path]"
     )
     .replaceAll(/\b(?:art|ews|wcmd|file)_[a-z0-9_-]{6,}\b/giu, "[redacted id]");
   const bounded = boundText(sanitized, MAX_COMMAND_DISPLAY_CHARS).trim();
@@ -192,9 +204,10 @@ function failurePreviewSection(
 }
 
 function sanitizeWorkspaceFailurePreview(value: unknown): string {
-  const sanitized = typeof value === "string"
-    ? sanitizeFailurePreviewStringOrJson(value)
-    : stringifySanitizedFailureJson(value);
+  const sanitized =
+    typeof value === "string"
+      ? sanitizeFailurePreviewStringOrJson(value)
+      : stringifySanitizedFailureJson(value);
   return boundText(sanitized, MAX_FAILURE_PREVIEW_CHARS);
 }
 
@@ -221,7 +234,12 @@ function sanitizeFailureJsonValue(value: unknown, depth: number, key: string | u
   if (isBroadContentKey(key)) {
     return "[omitted broad content]";
   }
-  if (value === undefined || value === null || typeof value === "number" || typeof value === "boolean") {
+  if (
+    value === undefined ||
+    value === null ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
     return value ?? null;
   }
   if (typeof value === "string") {
@@ -300,8 +318,12 @@ function sanitizeFailureString(
       .replaceAll(/\/Users\/[^\s"',;})]+/gu, "[redacted path]")
       .replaceAll(/\/tmp\/[^\s"',;})]+/gu, "[redacted path]")
       .replaceAll(/\/var\/folders\/[^\s"',;})]+/gu, "[redacted path]")
-      .replaceAll(/(?:^|[\s"',:])(?:scratch|\.artifact-previews|artifact-previews|execution-workspaces)\/[^\s"',;})]+/giu, (match) =>
-        match.slice(0, 1).match(/[\s"',:]/u) ? `${match.slice(0, 1)}[redacted path]` : "[redacted path]"
+      .replaceAll(
+        /(?:^|[\s"',:])(?:scratch|\.artifact-previews|artifact-previews|execution-workspaces)\/[^\s"',;})]+/giu,
+        (match) =>
+          match.slice(0, 1).match(/[\s"',:]/u)
+            ? `${match.slice(0, 1)}[redacted path]`
+            : "[redacted path]"
       )
       .replaceAll(/\b(?:art|ews|wcmd|file)_[a-z0-9_-]{6,}\b/giu, "[redacted id]"),
     MAX_FAILURE_STRING_CHARS
@@ -326,14 +348,18 @@ function isSensitiveFailureKey(key: string): boolean {
 }
 
 function isBroadContentKey(key: string | undefined): boolean {
-  return Boolean(key && /^(?:content|body|raw|rawXml|xml|html|base64|bytes|data|document)$/iu.test(key));
+  return Boolean(
+    key && /^(?:content|body|raw|rawXml|xml|html|base64|bytes|data|document)$/iu.test(key)
+  );
 }
 
 function projectWorkspaceImport(result: unknown): WorkspaceToolDisplayProjection {
   const output = readOutput(result);
   const importedFiles = readRecords(output?.importedFiles);
   const totalBytes = sumNumbers(importedFiles, "byteSize");
-  const names = importedFiles.flatMap((file) => readDisplayFilenameList(file.filename ?? file.path));
+  const names = importedFiles.flatMap((file) =>
+    readDisplayFilenameList(file.filename ?? file.path)
+  );
   const count = importedFiles.length;
   const actionLabel = count > 0 ? `Imported ${formatCount(count, "file")}` : "Imported files";
   return {
@@ -379,14 +405,19 @@ function projectWorkspaceReadFile(args: unknown, result: unknown): WorkspaceTool
           filename,
           mimeType,
           byteSize !== undefined ? `file ${formatBytes(byteSize)}` : undefined,
-          output ? `preview ${formatBytes(previewBytes)}${truncated ? " (truncated)" : ""}` : undefined
+          output
+            ? `preview ${formatBytes(previewBytes)}${truncated ? " (truncated)" : ""}`
+            : undefined
         ])
       }
     ])
   };
 }
 
-function projectWorkspacePromoteArtifact(args: unknown, result: unknown): WorkspaceToolDisplayProjection {
+function projectWorkspacePromoteArtifact(
+  args: unknown,
+  result: unknown
+): WorkspaceToolDisplayProjection {
   const input = isRecord(args) ? args : undefined;
   const output = readOutput(result);
   const artifacts = readToolArtifacts(result);
@@ -449,7 +480,10 @@ function projectWorkspaceListFiles(result: unknown): WorkspaceToolDisplayProject
   };
 }
 
-function projectGenericWorkspaceTool(toolName: string, result: unknown): WorkspaceToolDisplayProjection {
+function projectGenericWorkspaceTool(
+  toolName: string,
+  result: unknown
+): WorkspaceToolDisplayProjection {
   const container = isRecord(result) ? result : undefined;
   const output = isRecord(container?.output) ? container.output : undefined;
   const status = readString(output?.status) ?? readString(container?.status);
@@ -482,8 +516,8 @@ function pushSection(sections: ToolDetailSection[], label: string, value: string
 }
 
 function compactSections(sections: Array<ToolDetailSection | undefined>): ToolDetailSection[] {
-  return sections.filter(
-    (section): section is ToolDetailSection => Boolean(section && section.value.trim().length > 0)
+  return sections.filter((section): section is ToolDetailSection =>
+    Boolean(section && section.value.trim().length > 0)
   );
 }
 
@@ -592,7 +626,8 @@ function boundText(value: string, maxChars: number): string {
 }
 
 function boundInlineText(value: string, maxChars: number): string {
-  const bounded = value.length > maxChars ? `${value.slice(0, maxChars).trimEnd()} [truncated]` : value;
+  const bounded =
+    value.length > maxChars ? `${value.slice(0, maxChars).trimEnd()} [truncated]` : value;
   return bounded.trim();
 }
 

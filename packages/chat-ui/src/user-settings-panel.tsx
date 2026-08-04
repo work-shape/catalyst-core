@@ -56,7 +56,8 @@ export function UserSettingsPanel({
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [deleteAccountError, setDeleteAccountError] = useState<string | undefined>();
   const normalizedDisplayLabel = displayLabel.trim();
-  const profileChanged = normalizedDisplayLabel.length > 0 && normalizedDisplayLabel !== user?.displayLabel;
+  const profileChanged =
+    normalizedDisplayLabel.length > 0 && normalizedDisplayLabel !== user?.displayLabel;
 
   useEffect(() => {
     setDisplayLabel(user?.displayLabel ?? "");
@@ -140,7 +141,11 @@ export function UserSettingsPanel({
               </CardHeader>
               <CardContent className="flex items-center justify-between gap-3 p-4 pt-2">
                 <span className="text-sm text-muted-foreground">{localeName(locale)}</span>
-                <LocaleSelector locales={locales} selectedLocale={locale} onSelectLocale={onSelectLocale} />
+                <LocaleSelector
+                  locales={locales}
+                  selectedLocale={locale}
+                  onSelectLocale={onSelectLocale}
+                />
               </CardContent>
             </Card>
             <Card>
@@ -247,7 +252,9 @@ export function UserSettingsPanel({
                     <div className="flex justify-end">
                       <Button
                         type="submit"
-                        disabled={changingPassword || !currentPassword || !newPassword || !confirmPassword}
+                        disabled={
+                          changingPassword || !currentPassword || !newPassword || !confirmPassword
+                        }
                       >
                         {changingPassword ? t("updating") : t("updatePassword")}
                       </Button>
@@ -329,13 +336,7 @@ export function UserSettingsPanel({
   );
 }
 
-function FormMessage({
-  message,
-  error
-}: {
-  message?: string;
-  error?: string;
-}) {
+function FormMessage({ message, error }: { message?: string; error?: string }) {
   if (error) {
     return (
       <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">

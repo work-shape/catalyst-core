@@ -69,7 +69,10 @@ export function AssistantThread({
 
   if (config && config.agents.length === 0) {
     return (
-      <section className="grid h-full min-h-0 place-items-center bg-background px-5" aria-label="Chat">
+      <section
+        className="grid h-full min-h-0 place-items-center bg-background px-5"
+        aria-label="Chat"
+      >
         <div className="inline-flex max-w-md items-center gap-2 rounded-md border px-4 py-3 text-sm text-muted-foreground">
           <CircleAlert size={17} aria-hidden="true" />
           <span>{t("instanceNotConfigured")}</span>
@@ -198,7 +201,11 @@ function ThreadWelcome({
               )}
             >
               <span className="font-medium">{initialPrompt.title}</span>
-              <Sparkles size={15} className="mt-2 text-muted-foreground group-hover/suggestion:text-primary" aria-hidden="true" />
+              <Sparkles
+                size={15}
+                className="mt-2 text-muted-foreground group-hover/suggestion:text-primary"
+                aria-hidden="true"
+              />
             </ThreadPrimitive.Suggestion>
           ))}
         </div>

@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  createSafeConfigView,
-  parseClientInstanceConfig
-} from "@vivd-catalyst/config-schema";
+import { createSafeConfigView, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 
 describe("resources config", () => {
   it("enables conversation resources by default", () => {
@@ -13,9 +10,7 @@ describe("resources config", () => {
   });
 
   it("allows a deployment to disable conversation resources explicitly", () => {
-    const config = parseClientInstanceConfig(
-      baseConfig({ ui: { resources: { enabled: false } } })
-    );
+    const config = parseClientInstanceConfig(baseConfig({ ui: { resources: { enabled: false } } }));
 
     expect(config.ui.resources.enabled).toBe(false);
     expect(createSafeConfigView(config, emptyAssets()).features.resources.enabled).toBe(false);

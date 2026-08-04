@@ -17,12 +17,7 @@ import {
   createUserId
 } from "@vivd-catalyst/core";
 import type { PostgresDatabase, PostgresTransaction } from "./postgres-database";
-import {
-  mapUserIdentity,
-  mapUserRecord,
-  type ProductUserRow,
-  type UserIdentityRow
-} from "./rows";
+import { mapUserIdentity, mapUserRecord, type ProductUserRow, type UserIdentityRow } from "./rows";
 import { productUsers, userIdentities } from "./schema";
 
 export async function resolveUserIdentity(
@@ -321,7 +316,10 @@ export async function updateUser(
     .update(productUsers)
     .set(set)
     .where(
-      and(eq(productUsers.clientInstanceId, input.clientInstanceId), eq(productUsers.id, input.userId))
+      and(
+        eq(productUsers.clientInstanceId, input.clientInstanceId),
+        eq(productUsers.id, input.userId)
+      )
     )
     .returning();
   if (!row) {
@@ -342,7 +340,10 @@ export async function deleteUser(
   const rows = await db
     .delete(productUsers)
     .where(
-      and(eq(productUsers.clientInstanceId, input.clientInstanceId), eq(productUsers.id, input.userId))
+      and(
+        eq(productUsers.clientInstanceId, input.clientInstanceId),
+        eq(productUsers.id, input.userId)
+      )
     )
     .returning();
   if (rows.length === 0) {
@@ -392,7 +393,10 @@ export async function upsertUserIdentity(
     .update(productUsers)
     .set({ updatedAt: now })
     .where(
-      and(eq(productUsers.clientInstanceId, input.clientInstanceId), eq(productUsers.id, input.userId))
+      and(
+        eq(productUsers.clientInstanceId, input.clientInstanceId),
+        eq(productUsers.id, input.userId)
+      )
     );
   return requireUserRecord(db, input.clientInstanceId, input.userId);
 }
@@ -424,7 +428,10 @@ export async function deleteUserIdentity(
     .update(productUsers)
     .set({ updatedAt: new Date() })
     .where(
-      and(eq(productUsers.clientInstanceId, input.clientInstanceId), eq(productUsers.id, input.userId))
+      and(
+        eq(productUsers.clientInstanceId, input.clientInstanceId),
+        eq(productUsers.id, input.userId)
+      )
     );
   return requireUserRecord(db, input.clientInstanceId, input.userId);
 }
@@ -445,7 +452,9 @@ export async function getUserRecord(
   const identityRows = await db
     .select()
     .from(userIdentities)
-    .where(and(eq(userIdentities.clientInstanceId, clientInstanceId), eq(userIdentities.userId, userId)));
+    .where(
+      and(eq(userIdentities.clientInstanceId, clientInstanceId), eq(userIdentities.userId, userId))
+    );
   return mapUserRecord(row, identityRows.map(mapUserIdentity));
 }
 
@@ -510,7 +519,9 @@ async function findSingleUserByVerifiedEmail(
   const [row] = await tx
     .select()
     .from(productUsers)
-    .where(and(eq(productUsers.clientInstanceId, clientInstanceId), eq(productUsers.id, candidateId)))
+    .where(
+      and(eq(productUsers.clientInstanceId, clientInstanceId), eq(productUsers.id, candidateId))
+    )
     .limit(1);
   return row;
 }
@@ -520,6 +531,8 @@ function identitiesForUser(user: ProductUserRow, identities: UserIdentityRow[]):
     .filter((identity) => identity.userId === user.id)
     .map(mapUserIdentity)
     .sort((left, right) =>
-      `${left.authSource}:${left.externalUserId}`.localeCompare(`${right.authSource}:${right.externalUserId}`)
+      `${left.authSource}:${left.externalUserId}`.localeCompare(
+        `${right.authSource}:${right.externalUserId}`
+      )
     );
 }

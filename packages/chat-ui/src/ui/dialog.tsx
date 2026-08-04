@@ -52,7 +52,9 @@ export function Dialog({
       }}
     >
       <div className="flex items-center justify-between gap-3 border-b px-5 py-3">
-        <h2 id={titleId} className="text-sm font-semibold">{title}</h2>
+        <h2 id={titleId} className="text-sm font-semibold">
+          {title}
+        </h2>
         <Button
           type="button"
           size="icon"

@@ -84,7 +84,10 @@ export function SuperadminPanel({
     userId: string,
     input: UpsertAdministeredUserIdentityRequest
   ): Promise<AdministeredUser>;
-  onDeleteUserIdentity(userId: string, identity: AdministeredUserIdentity): Promise<AdministeredUser>;
+  onDeleteUserIdentity(
+    userId: string,
+    identity: AdministeredUserIdentity
+  ): Promise<AdministeredUser>;
   onResetUserPassword(userId: string, password: string): Promise<unknown>;
   selectedTab: SuperadminRouteTab;
   onSelectTab(tab: SuperadminRouteTab): void;

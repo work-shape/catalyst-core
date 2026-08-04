@@ -209,8 +209,8 @@ function useAttachmentImageUrl(attachment: AttachmentSnapshot): string | undefin
 
     let active = true;
     let nextUrl: string | undefined;
-    void attachmentContent.client
-      .conversations.files.getContent(attachmentContent.selectedConversationId, fileId)
+    void attachmentContent.client.conversations.files
+      .getContent(attachmentContent.selectedConversationId, fileId)
       .then((blob) => {
         if (!active) {
           return;
@@ -230,7 +230,13 @@ function useAttachmentImageUrl(attachment: AttachmentSnapshot): string | undefin
         URL.revokeObjectURL(nextUrl);
       }
     };
-  }, [attachmentContent?.client, attachmentContent?.selectedConversationId, sourceFile, sourceKind, sourceUrl]);
+  }, [
+    attachmentContent?.client,
+    attachmentContent?.selectedConversationId,
+    sourceFile,
+    sourceKind,
+    sourceUrl
+  ]);
 
   return sourceKind === "direct" ? sourceUrl : objectUrl;
 }
@@ -253,7 +259,9 @@ function imageSourceFromAttachment(attachment: AttachmentSnapshot): AttachmentIm
   };
 }
 
-function imageSourceFromContent(content: AttachmentContentPart[] | undefined): AttachmentImageSource {
+function imageSourceFromContent(
+  content: AttachmentContentPart[] | undefined
+): AttachmentImageSource {
   for (const part of content ?? []) {
     const image = typeof part.image === "string" ? part.image : undefined;
     if (part.type === "image" && image) {
@@ -288,7 +296,11 @@ function imageSourceFromContent(content: AttachmentContentPart[] | undefined): A
 }
 
 function isImageAttachment(attachment: AttachmentSnapshot): boolean {
-  return attachment.type === "image" || isImageMimeType(attachment.contentType) || isImageFilename(attachment.name);
+  return (
+    attachment.type === "image" ||
+    isImageMimeType(attachment.contentType) ||
+    isImageFilename(attachment.name)
+  );
 }
 
 function isImageMimeType(value: string | undefined): boolean {

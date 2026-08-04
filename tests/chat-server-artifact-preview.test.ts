@@ -690,10 +690,12 @@ describe("artifact preview routes", () => {
   });
 });
 
-async function createPreviewServer(input: {
-  clientInstanceId?: ClientInstanceId;
-  owner?: AuthenticatedUser;
-} = {}) {
+async function createPreviewServer(
+  input: {
+    clientInstanceId?: ClientInstanceId;
+    owner?: AuthenticatedUser;
+  } = {}
+) {
   const clientInstanceId = input.clientInstanceId ?? asClientInstanceId("demo-local");
   const store = new InMemoryPlatformStore();
   const config = createPreviewConfig(clientInstanceId);

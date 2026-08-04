@@ -5,9 +5,13 @@ import {
   startProductConversationRun
 } from "../packages/chat-ui/src/assistant/product-run-transport";
 
-type ProductUiMessage = Parameters<ProductConversationRunTransport["sendMessages"]>[0]["messages"][number];
+type ProductUiMessage = Parameters<
+  ProductConversationRunTransport["sendMessages"]
+>[0]["messages"][number];
 type ProductUiMessageChunk =
-  Awaited<ReturnType<ProductConversationRunTransport["sendMessages"]>> extends ReadableStream<infer Chunk>
+  Awaited<ReturnType<ProductConversationRunTransport["sendMessages"]>> extends ReadableStream<
+    infer Chunk
+  >
     ? Chunk
     : never;
 
@@ -207,7 +211,9 @@ describe("chat UI product run transport", () => {
   });
 });
 
-async function drainStream(stream: ReadableStream<ProductUiMessageChunk>): Promise<ProductUiMessageChunk[]> {
+async function drainStream(
+  stream: ReadableStream<ProductUiMessageChunk>
+): Promise<ProductUiMessageChunk[]> {
   const reader = stream.getReader();
   const chunks: ProductUiMessageChunk[] = [];
   while (true) {

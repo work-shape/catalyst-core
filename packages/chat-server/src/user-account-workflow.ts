@@ -117,10 +117,7 @@ export class UserAccountWorkflow {
     context: RuntimeCallContext
   ): Promise<{ ok: true }> {
     if (actor.principal?.kind === "service" || actor.delegatedActor) {
-      throw new AppError(
-        "FORBIDDEN",
-        "Account deletion must be requested by the signed-in user"
-      );
+      throw new AppError("FORBIDDEN", "Account deletion must be requested by the signed-in user");
     }
 
     const existing = await this.getCurrentUserOrThrow(actor);

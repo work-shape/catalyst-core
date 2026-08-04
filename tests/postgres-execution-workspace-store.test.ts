@@ -494,8 +494,7 @@ describePostgres("Postgres execution workspace store", () => {
     });
 
     let cancellation:
-      | ReturnType<PostgresPlatformStore["requestWorkspaceCommandCancellation"]>
-      | undefined;
+      ReturnType<PostgresPlatformStore["requestWorkspaceCommandCancellation"]> | undefined;
     await rawSql.begin(async (tx) => {
       await tx`select id from workspace_commands where id = ${command.id} for update`;
       cancellation = store.requestWorkspaceCommandCancellation({

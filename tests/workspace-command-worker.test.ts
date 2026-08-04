@@ -23,7 +23,9 @@ import {
 const cleanupDirectories: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(cleanupDirectories.map((directory) => rm(directory, { recursive: true, force: true })));
+  await Promise.all(
+    cleanupDirectories.map((directory) => rm(directory, { recursive: true, force: true }))
+  );
   cleanupDirectories.length = 0;
 });
 
@@ -158,10 +160,7 @@ describe("workspace command worker", () => {
       reason: "Received SIGTERM"
     });
 
-    const stopResult = Promise.race([
-      stop.then(() => "stopped"),
-      sleep(100).then(() => "timeout")
-    ]);
+    const stopResult = Promise.race([stop.then(() => "stopped"), sleep(100).then(() => "timeout")]);
     await expect(stopResult).resolves.toBe("stopped");
     await loop;
 
@@ -253,7 +252,9 @@ describe("workspace command worker", () => {
   });
 });
 
-async function createWorkerHarness(input: { pollIntervalMs?: number; withAuditRecorder?: boolean } = {}) {
+async function createWorkerHarness(
+  input: { pollIntervalMs?: number; withAuditRecorder?: boolean } = {}
+) {
   const clientInstanceId = asClientInstanceId(`worker_${globalThis.crypto.randomUUID()}`);
   const ownerUserId = "user-1";
   const store = new InMemoryPlatformStore();

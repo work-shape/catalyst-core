@@ -55,7 +55,8 @@ const translations = {
     apiAccessReleaseGrantDescription: "Push managed configuration assets to this instance.",
     apiAccessRevoke: "Revoke",
     apiAccessRevokeCredential: "Revoke API key?",
-    apiAccessRevokeDescription: "This key will stop working immediately. This action cannot be undone.",
+    apiAccessRevokeDescription:
+      "This key will stop working immediately. This action cannot be undone.",
     apiAccessRevoked: "Revoked",
     apiAccessSave: "Save",
     apiAccessScopes: "Key scopes",
@@ -84,8 +85,7 @@ const translations = {
     configAgent: "Agent",
     configAgentCount: "{count} agent",
     configAgentCountPlural: "{count} agents",
-    configAgentNameHint:
-      "Stable identifier, letters/digits/underscores. Cannot be renamed later.",
+    configAgentNameHint: "Stable identifier, letters/digits/underscores. Cannot be renamed later.",
     configAgents: "Agents",
     configAppliesImmediately: "Applies to new conversations immediately.",
     configBehavior: "Behavior",
@@ -93,8 +93,7 @@ const translations = {
     configBehaviorDescriptionWithControls:
       "Core instructions and permitted runtime controls for this agent.",
     configCapabilities: "Capabilities",
-    configCapabilitiesDescription:
-      "Only tools enabled for this deployment can be assigned here.",
+    configCapabilitiesDescription: "Only tools enabled for this deployment can be assigned here.",
     configChangeSaveFailed: "The change could not be saved.",
     configChangedDescription:
       "Someone else — or a CLI push — modified the configuration since you loaded it. Reload to continue from the latest version. Unsaved edits in this editor will be lost.",
@@ -119,8 +118,7 @@ const translations = {
     configDisplayName: "Display name",
     configEnglishLanguage: "English",
     configGermanLanguage: "German",
-    configIdentityDescription:
-      "Names and messages shown to people when they start a conversation.",
+    configIdentityDescription: "Names and messages shown to people when they start a conversation.",
     configIdentityWelcome: "Identity and welcome",
     configInstructions: "Instructions",
     configInstanceDefault: "Instance default",
@@ -129,8 +127,7 @@ const translations = {
     configMakeDefault: "Make default",
     configMarkdown: "Markdown",
     configMaxSteps: "Max steps",
-    configMaxStepsHint:
-      "Maximum model and tool turns for one response. Empty uses release config.",
+    configMaxStepsHint: "Maximum model and tool turns for one response. Empty uses release config.",
     configModel: "Model",
     configModelDefault: "Model default",
     configModelHint: "Selects one of the model bindings approved in instance config.",
@@ -141,8 +138,7 @@ const translations = {
     configNoSkills: "No skills defined yet.",
     configNoTools: "No tools are enabled for this instance.",
     configNoneYet: "None yet.",
-    configOptionalPrompts:
-      "Optional suggestion cards shown on the empty conversation screen.",
+    configOptionalPrompts: "Optional suggestion cards shown on the empty conversation screen.",
     configPrompt: "Prompt",
     configPromptNumber: "Prompt {number}",
     configPrompts: "Prompts",
@@ -175,8 +171,7 @@ const translations = {
     configSkillsRequireReadSkill: "Skills require the read_skill tool to be selected above.",
     configSkillTitleHint: "Shown to the model in the skill list.",
     configStarterPrompts: "Starter prompts",
-    configStarterPromptsDescription:
-      "Suggestion cards shown before the first message is sent.",
+    configStarterPromptsDescription: "Suggestion cards shown before the first message is sent.",
     configSystemPrompt: "System prompt",
     configSystemPromptHint: "The agent's system prompt.",
     configTitle: "Title",
@@ -225,7 +220,7 @@ const translations = {
       "This will permanently delete your account data in this chat. This action cannot be undone.",
     deleteAccountDialogTitle: "Delete account?",
     deleteConversationDialogDescription:
-      "This will permanently delete \"{title}\", its messages, and all attached files.",
+      'This will permanently delete "{title}", its messages, and all attached files.',
     deleteConversationDialogTitle: "Delete conversation?",
     deleteConversationMenuItem: "Delete conversation",
     deleteFailed: "Delete failed",
@@ -328,8 +323,10 @@ const translations = {
     toolRunning: "Running",
     workHistory: "Work history",
     workspaceCommandCancelled: "The workspace step was cancelled before it completed.",
-    workspaceCommandFailed: "The workspace step did not finish successfully. The agent can adjust the file workflow and try again.",
-    workspaceCommandTimedOut: "The workspace step timed out. The agent can retry with a smaller or simpler step.",
+    workspaceCommandFailed:
+      "The workspace step did not finish successfully. The agent can adjust the file workflow and try again.",
+    workspaceCommandTimedOut:
+      "The workspace step timed out. The agent can retry with a smaller or simpler step.",
     update: "Update",
     updatePassword: "Update password",
     updating: "Updating",
@@ -364,14 +361,16 @@ const translations = {
     apiAccessCredentialNamePlaceholder: "Zum Beispiel: CI Produktion",
     apiAccessCredentialReady: "API-Schlüssel erstellt",
     apiAccessCredentials: "Zugangsdaten",
-    apiAccessDescription: "Nicht-menschliche Zugriffe für die Catalyst CLI und Automatisierung verwalten.",
+    apiAccessDescription:
+      "Nicht-menschliche Zugriffe für die Catalyst CLI und Automatisierung verwalten.",
     apiAccessDescriptionLabel: "Beschreibung",
     apiAccessDisabled: "Deaktiviert",
     apiAccessDone: "Fertig",
     apiAccessEdit: "Bearbeiten",
     apiAccessEditPrincipal: "Service Principal bearbeiten",
     apiAccessEmpty: "Noch keine Service Principals",
-    apiAccessEmptyDescription: "Erstelle einen Service Principal für eng begrenzten CLI- oder Automatisierungszugriff.",
+    apiAccessEmptyDescription:
+      "Erstelle einen Service Principal für eng begrenzten CLI- oder Automatisierungszugriff.",
     apiAccessExpired: "Abgelaufen",
     apiAccessExpires: "Gültig bis",
     apiAccessExpiresAt: "Gültig bis (optional)",
@@ -383,23 +382,29 @@ const translations = {
     apiAccessName: "Name",
     apiAccessNever: "Nie",
     apiAccessNeverExpires: "Läuft nie ab",
-    apiAccessNoCredentials: "Für diesen Service Principal wurden noch keine API-Schlüssel erstellt.",
+    apiAccessNoCredentials:
+      "Für diesen Service Principal wurden noch keine API-Schlüssel erstellt.",
     apiAccessNoDescription: "Keine Beschreibung",
     apiAccessNoGrants: "Keine Berechtigungen",
     apiAccessReadGrant: "Konfigurations-Assets lesen",
-    apiAccessReadGrantDescription: "Verwaltete Konfigurations-Assets abrufen, prüfen und vergleichen.",
+    apiAccessReadGrantDescription:
+      "Verwaltete Konfigurations-Assets abrufen, prüfen und vergleichen.",
     apiAccessReleaseGrant: "Konfigurations-Assets veröffentlichen",
-    apiAccessReleaseGrantDescription: "Verwaltete Konfigurations-Assets auf diese Instanz übertragen.",
+    apiAccessReleaseGrantDescription:
+      "Verwaltete Konfigurations-Assets auf diese Instanz übertragen.",
     apiAccessRevoke: "Widerrufen",
     apiAccessRevokeCredential: "API-Schlüssel widerrufen?",
-    apiAccessRevokeDescription: "Dieser Schlüssel funktioniert sofort nicht mehr. Dies kann nicht rückgängig gemacht werden.",
+    apiAccessRevokeDescription:
+      "Dieser Schlüssel funktioniert sofort nicht mehr. Dies kann nicht rückgängig gemacht werden.",
     apiAccessRevoked: "Widerrufen",
     apiAccessSave: "Speichern",
     apiAccessScopes: "Schlüsselberechtigungen",
-    apiAccessSecretOnce: "Kopiere diesen Schlüssel jetzt. Er wird nur einmal angezeigt und kann später nicht abgerufen werden.",
+    apiAccessSecretOnce:
+      "Kopiere diesen Schlüssel jetzt. Er wird nur einmal angezeigt und kann später nicht abgerufen werden.",
     apiAccessServerUrl: "Server-URL",
     apiAccessServicePrincipals: "Service Principals",
-    apiAccessServicePrincipalsDescription: "Maschinenidentitäten werden getrennt von Benutzern verwaltet.",
+    apiAccessServicePrincipalsDescription:
+      "Maschinenidentitäten werden getrennt von Benutzern verwaltet.",
     apiAccessStatus: "Status",
     apiAccessTitle: "API-Zugriff",
     agentFallback: "Agent",
@@ -411,7 +416,8 @@ const translations = {
     artifactPreviewRetry: "Vorschau erneut versuchen",
     artifactPreviewRetrying: "Versucht erneut",
     artifactPreviewUnavailable: "Vorschau nicht verfügbar",
-    artifactPreviewUnsupported: "Dieser Dateityp wird von der ersten Vorschauversion nicht unterstützt.",
+    artifactPreviewUnsupported:
+      "Dieser Dateityp wird von der ersten Vorschauversion nicht unterstützt.",
     attachmentsUnavailable: "Anhänge sind verfügbar, sobald die Dateierfassung implementiert ist",
     cancel: "Abbrechen",
     checkingSession: "Sitzung wird geprüft",
@@ -479,8 +485,7 @@ const translations = {
     configNoSkills: "Noch keine Fähigkeiten definiert.",
     configNoTools: "Für diese Instanz sind keine Werkzeuge aktiviert.",
     configNoneYet: "Noch keine.",
-    configOptionalPrompts:
-      "Optionale Vorschlagskarten auf der leeren Unterhaltungsansicht.",
+    configOptionalPrompts: "Optionale Vorschlagskarten auf der leeren Unterhaltungsansicht.",
     configPrompt: "Vorschlag",
     configPromptNumber: "Vorschlag {number}",
     configPrompts: "Vorschläge",
@@ -567,7 +572,7 @@ const translations = {
       "Deine Kontodaten in diesem Chat werden dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
     deleteAccountDialogTitle: "Konto löschen?",
     deleteConversationDialogDescription:
-      "\"{title}\", alle Nachrichten und alle angehängten Dateien werden dauerhaft gelöscht.",
+      '"{title}", alle Nachrichten und alle angehängten Dateien werden dauerhaft gelöscht.',
     deleteConversationDialogTitle: "Unterhaltung löschen?",
     deleteConversationMenuItem: "Unterhaltung löschen",
     deleteFailed: "Löschen fehlgeschlagen",
@@ -585,7 +590,8 @@ const translations = {
     language: "Sprache",
     localeDe: "Deutsch",
     localeEn: "English",
-    instanceNotConfigured: "Diese Instanz ist noch nicht konfiguriert. Es wurden noch keine Agenten veröffentlicht.",
+    instanceNotConfigured:
+      "Diese Instanz ist noch nicht konfiguriert. Es wurden noch keine Agenten veröffentlicht.",
     loadingConversation: "Unterhaltung wird geladen",
     loadingUser: "Lädt",
     messagePlaceholder: "Nachricht",
@@ -669,9 +675,12 @@ const translations = {
     toolOutput: "Ausgabe",
     toolRunning: "Läuft",
     workHistory: "Arbeitsverlauf",
-    workspaceCommandCancelled: "Der Workspace-Schritt wurde abgebrochen, bevor er abgeschlossen war.",
-    workspaceCommandFailed: "Der Workspace-Schritt wurde nicht erfolgreich abgeschlossen. Der Agent kann den Dateischritt anpassen und erneut versuchen.",
-    workspaceCommandTimedOut: "Der Workspace-Schritt hat das Zeitlimit erreicht. Der Agent kann es mit einem kleineren oder einfacheren Schritt erneut versuchen.",
+    workspaceCommandCancelled:
+      "Der Workspace-Schritt wurde abgebrochen, bevor er abgeschlossen war.",
+    workspaceCommandFailed:
+      "Der Workspace-Schritt wurde nicht erfolgreich abgeschlossen. Der Agent kann den Dateischritt anpassen und erneut versuchen.",
+    workspaceCommandTimedOut:
+      "Der Workspace-Schritt hat das Zeitlimit erreicht. Der Agent kann es mit einem kleineren oder einfacheren Schritt erneut versuchen.",
     update: "Aktualisieren",
     updatePassword: "Passwort aktualisieren",
     updating: "Aktualisiert",

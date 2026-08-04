@@ -43,8 +43,10 @@ export interface ArtifactPreviewContractReady {
   pages: ArtifactPreviewImagePageRef[];
 }
 
-export type ArtifactPreviewLifecycleStore = Pick<ArtifactPreviewStore,
-  "getArtifactPreviewJob" | "getArtifactPreviewManifest">;
+export type ArtifactPreviewLifecycleStore = Pick<
+  ArtifactPreviewStore,
+  "getArtifactPreviewJob" | "getArtifactPreviewManifest"
+>;
 
 export async function readArtifactPreviewLifecycle(
   store: ArtifactPreviewLifecycleStore,
@@ -183,9 +185,7 @@ function readPreviewFormat(value: unknown): ArtifactPreviewImageFormat | undefin
   return value === "png" || value === "jpeg" || value === "webp" ? value : undefined;
 }
 
-function readPreviewMimeType(
-  value: unknown
-): SupportedImageMimeType | undefined {
+function readPreviewMimeType(value: unknown): SupportedImageMimeType | undefined {
   return value === "image/png" ||
     value === "image/jpeg" ||
     value === "image/webp" ||

@@ -431,9 +431,7 @@ export class UserAdministrationWorkflow {
     });
     const remainingActiveSuperadmin = users.some(
       (user) =>
-        user.id !== deletedUser.id &&
-        user.status === "active" &&
-        user.roles.includes("superadmin")
+        user.id !== deletedUser.id && user.status === "active" && user.roles.includes("superadmin")
     );
     if (!remainingActiveSuperadmin) {
       throw new AppError("VALIDATION_FAILED", "At least one active superadmin must remain");

@@ -128,7 +128,10 @@ function StandaloneChatRouteBridge({ options }: { options: StandaloneChatRouterO
   const location = useLocation();
   const route = workspaceRouteFromPath(location.pathname);
 
-  function onRouteChange(nextRoute: WorkspaceRoute, navigationOptions?: WorkspaceRouteChangeOptions) {
+  function onRouteChange(
+    nextRoute: WorkspaceRoute,
+    navigationOptions?: WorkspaceRouteChangeOptions
+  ) {
     void router.navigate({
       ...workspaceRouteNavigation(nextRoute),
       replace: navigationOptions?.replace
@@ -204,10 +207,19 @@ function decodePathSegment(value: string): string {
 }
 
 function isSuperadminRouteTab(value: string): value is SuperadminRouteTab {
-  return value === "usage" || value === "users" || value === "api-access" || value === "audit" || value === "config";
+  return (
+    value === "usage" ||
+    value === "users" ||
+    value === "api-access" ||
+    value === "audit" ||
+    value === "config"
+  );
 }
 
-function resolveApiBaseUrl(apiBaseUrl: string | undefined, defaultApiPort: string | number | undefined): string {
+function resolveApiBaseUrl(
+  apiBaseUrl: string | undefined,
+  defaultApiPort: string | number | undefined
+): string {
   if (apiBaseUrl) {
     return apiBaseUrl;
   }

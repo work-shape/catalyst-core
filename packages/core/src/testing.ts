@@ -94,12 +94,12 @@ export class InMemoryPlatformStore
   private readonly conversations = new Map<string, Conversation>();
   private readonly messages = new Map<string, ChatMessage[]>();
   private readonly structuredDataResources = new Map<string, StructuredDataResourceRecord>();
-  private readonly fileStore: InMemoryPlatformFileStore =
-    createInMemoryPlatformFileStore({
-      requireActiveConversation: (clientInstanceId, conversationId) =>
-        this.requireActiveConversation(clientInstanceId, conversationId),
-      touchConversation: (conversationId, updatedAt) => this.touchConversation(conversationId, updatedAt)
-    });
+  private readonly fileStore: InMemoryPlatformFileStore = createInMemoryPlatformFileStore({
+    requireActiveConversation: (clientInstanceId, conversationId) =>
+      this.requireActiveConversation(clientInstanceId, conversationId),
+    touchConversation: (conversationId, updatedAt) =>
+      this.touchConversation(conversationId, updatedAt)
+  });
   private readonly auditEvents: AuditEvent[] = [];
   private readonly agentRuns = new Map<string, AgentRun>();
   private readonly runStartCommands = new Map<string, RunStartCommand>();
@@ -459,7 +459,11 @@ export class InMemoryPlatformStore
     input: PrepareConversationRunStartInput
   ): Promise<PreparedConversationRunStart> {
     const conversation = await this.getConversation(input.clientInstanceId, input.conversationId);
-    if (!conversation || conversation.status !== "active" || conversation.ownerUserId !== input.ownerUserId) {
+    if (
+      !conversation ||
+      conversation.status !== "active" ||
+      conversation.ownerUserId !== input.ownerUserId
+    ) {
       throw new AppError("NOT_FOUND", "Conversation is not available");
     }
     const activeRun = await this.getActiveConversationAgentRun({
@@ -482,7 +486,10 @@ export class InMemoryPlatformStore
       if (!command || command.status !== "pending") {
         throw new AppError("NOT_FOUND", "Run start command is not available");
       }
-      if (input.runStartCommand.claimedAt && command.updatedAt !== input.runStartCommand.claimedAt) {
+      if (
+        input.runStartCommand.claimedAt &&
+        command.updatedAt !== input.runStartCommand.claimedAt
+      ) {
         throw new AppError("NOT_FOUND", "Run start command is not available");
       }
     }
@@ -631,7 +638,9 @@ export class InMemoryPlatformStore
           isActiveAgentRunStatus(run.status) &&
           run.updatedAt < input.staleUpdatedBefore
       )
-      .sort((left, right) => `${left.updatedAt}:${left.id}`.localeCompare(`${right.updatedAt}:${right.id}`))
+      .sort((left, right) =>
+        `${left.updatedAt}:${left.id}`.localeCompare(`${right.updatedAt}:${right.id}`)
+      )
       .slice(0, input.limit);
   }
 
@@ -1090,7 +1099,10 @@ export class InMemoryPlatformStore
       }
     }
     for (const run of this.agentRuns.values()) {
-      if (run.clientInstanceId === input.clientInstanceId && run.conversationId === input.conversationId) {
+      if (
+        run.clientInstanceId === input.clientInstanceId &&
+        run.conversationId === input.conversationId
+      ) {
         this.agentRuns.delete(run.id);
         this.runObservations.delete(run.id);
       }
@@ -1487,12 +1499,9 @@ function runStartCommandKey(input: {
   commandKind: string;
   idempotencyKey: string;
 }): string {
-  return [
-    input.clientInstanceId,
-    input.ownerUserId,
-    input.commandKind,
-    input.idempotencyKey
-  ].join("\u0000");
+  return [input.clientInstanceId, input.ownerUserId, input.commandKind, input.idempotencyKey].join(
+    "\u0000"
+  );
 }
 
 function isActiveAgentRunStatus(status: AgentRun["status"]): boolean {
@@ -1554,7 +1563,9 @@ function replaceIdentity(identities: UserIdentity[], identity: UserIdentity): Us
     ),
     identity
   ].sort((left, right) =>
-    `${left.authSource}:${left.externalUserId}`.localeCompare(`${right.authSource}:${right.externalUserId}`)
+    `${left.authSource}:${left.externalUserId}`.localeCompare(
+      `${right.authSource}:${right.externalUserId}`
+    )
   );
 }
 

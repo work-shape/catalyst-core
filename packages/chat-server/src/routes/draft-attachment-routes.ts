@@ -5,7 +5,10 @@ import { ConversationWorkflow } from "../conversation-workflow";
 import { authenticateRequest, getConversationId } from "../request-context";
 import type { ChatServerOptions } from "../types";
 
-export function registerDraftAttachmentRoutes(app: FastifyInstance, options: ChatServerOptions): void {
+export function registerDraftAttachmentRoutes(
+  app: FastifyInstance,
+  options: ChatServerOptions
+): void {
   const conversations = new ConversationWorkflow(options);
 
   app.get(apiOperations.listDraftAttachments.path, async (request) => {

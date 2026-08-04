@@ -69,7 +69,10 @@ export async function resolveWorkspacePreviewImages(
     return failed("handler_failed", "workspace.preview_images requires an active tool request");
   }
   if (!input.artifactId) {
-    return failed("handler_failed", "workspace.preview_images requires artifactId for managed artifact previews");
+    return failed(
+      "handler_failed",
+      "workspace.preview_images requires artifactId for managed artifact previews"
+    );
   }
 
   const source = await options.store.getManagedArtifact({
@@ -110,7 +113,8 @@ export async function resolveWorkspacePreviewImages(
         warnings: [
           {
             code: "selection_not_applicable",
-            message: "The source artifact is already an image and does not have page, slide, sheet, or range selectors."
+            message:
+              "The source artifact is already an image and does not have page, slide, sheet, or range selectors."
           }
         ]
       });
@@ -302,7 +306,8 @@ async function previewStateFromReadyImages(
   if (selection.hasSelection && selected.length === 0) {
     warnings.push({
       code: "selection_empty",
-      message: "No ready preview images matched the requested page, slide, sheet, or range selectors."
+      message:
+        "No ready preview images matched the requested page, slide, sheet, or range selectors."
     });
   }
   if (selected.length > maxImages) {
@@ -327,13 +332,29 @@ async function previewStateFromReadyImages(
       clientInstanceId,
       artifactId: candidate.artifactId
     });
-    if (!imageArtifact || imageArtifact.conversationId !== source.conversationId || imageArtifact.status !== "available") {
-      warnings.push(previewImageWarning("preview_image_unavailable", "A selected preview image artifact is no longer available.", candidate));
+    if (
+      !imageArtifact ||
+      imageArtifact.conversationId !== source.conversationId ||
+      imageArtifact.status !== "available"
+    ) {
+      warnings.push(
+        previewImageWarning(
+          "preview_image_unavailable",
+          "A selected preview image artifact is no longer available.",
+          candidate
+        )
+      );
       continue;
     }
     const mimeType = readSupportedImageMimeType(imageArtifact.mimeType);
     if (!mimeType || mimeType !== candidate.mimeType) {
-      warnings.push(previewImageWarning("preview_image_mime_mismatch", "A selected preview image artifact has an unsupported or mismatched MIME type.", candidate));
+      warnings.push(
+        previewImageWarning(
+          "preview_image_mime_mismatch",
+          "A selected preview image artifact has an unsupported or mismatched MIME type.",
+          candidate
+        )
+      );
       continue;
     }
 
@@ -366,7 +387,8 @@ async function previewStateFromReadyImages(
   if (candidates.length > 0 && images.length === 0) {
     warnings.push({
       code: "no_attachable_preview_images",
-      message: "Ready preview metadata exists, but no selected image artifacts could be attached to model context."
+      message:
+        "Ready preview metadata exists, but no selected image artifacts could be attached to model context."
     });
   }
 
@@ -534,7 +556,10 @@ function quoteSpreadsheetSheetName(sheetName: string): string {
   return /^[A-Za-z0-9_]+$/u.test(sheetName) ? sheetName : `'${sheetName.replaceAll("'", "''")}'`;
 }
 
-function matchesSelection(candidate: PreviewImageCandidate, selection: NormalizedSelection): boolean {
+function matchesSelection(
+  candidate: PreviewImageCandidate,
+  selection: NormalizedSelection
+): boolean {
   if (!selection.hasSelection) {
     return true;
   }
@@ -594,13 +619,19 @@ function addSelectionMetadataWarnings(
   selection: NormalizedSelection,
   warnings: PreviewWarning[]
 ): void {
-  if (selection.pageNumbers && candidates.every((candidate) => candidate.pageNumber === undefined)) {
+  if (
+    selection.pageNumbers &&
+    candidates.every((candidate) => candidate.pageNumber === undefined)
+  ) {
     warnings.push({
       code: "page_metadata_unavailable",
       message: "Ready preview images do not include page-number metadata."
     });
   }
-  if (selection.slideNumbers && candidates.every((candidate) => candidate.slideNumber === undefined)) {
+  if (
+    selection.slideNumbers &&
+    candidates.every((candidate) => candidate.slideNumber === undefined)
+  ) {
     warnings.push({
       code: "slide_metadata_unavailable",
       message: "Ready preview images do not include slide-number metadata."
@@ -620,7 +651,10 @@ function addSelectionMetadataWarnings(
   }
 }
 
-function imageMetadata(sourceArtifactId: ManagedArtifactId, candidate: PreviewImageCandidate): JsonObject {
+function imageMetadata(
+  sourceArtifactId: ManagedArtifactId,
+  candidate: PreviewImageCandidate
+): JsonObject {
   return {
     sourceArtifactId,
     status: "ready",
@@ -661,5 +695,10 @@ function readSupportedImageMimeType(value: unknown): SupportedImageMimeType | un
 }
 
 function isSupportedImageMimeType(value: string): value is SupportedImageMimeType {
-  return value === "image/png" || value === "image/jpeg" || value === "image/webp" || value === "image/gif";
+  return (
+    value === "image/png" ||
+    value === "image/jpeg" ||
+    value === "image/webp" ||
+    value === "image/gif"
+  );
 }

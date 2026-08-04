@@ -21,8 +21,10 @@ export interface ToolDefinition<TInput = unknown, TOutput = unknown> {
   ): Promise<ToolHandlerResult<TOutput>> | ToolHandlerResult<TOutput>;
 }
 
-export type DefinedToolDefinition<TInput = unknown, TOutput = unknown> =
-  ToolDefinition<TInput, TOutput> & { inputJsonSchema: JsonObject };
+export type DefinedToolDefinition<TInput = unknown, TOutput = unknown> = ToolDefinition<
+  TInput,
+  TOutput
+> & { inputJsonSchema: JsonObject };
 export type AnyToolDefinition = DefinedToolDefinition<unknown, unknown>;
 
 export interface ConfiguredToolDefinition<TConfig = unknown> {
@@ -57,7 +59,10 @@ export function isConfiguredToolDefinition(
 
 export function toolSuccess<TOutput>(
   output: TOutput,
-  options: Omit<Extract<ToolHandlerResult<TOutput>, { status: "success" }>, "status" | "output"> = {}
+  options: Omit<
+    Extract<ToolHandlerResult<TOutput>, { status: "success" }>,
+    "status" | "output"
+  > = {}
 ): ToolHandlerResult<TOutput> {
   return {
     status: "success",
@@ -89,7 +94,12 @@ function deriveInputJsonSchema(schema: z.ZodType<unknown>): JsonObject {
 }
 
 function sanitizeJsonSchemaValue(value: unknown): JsonValue | undefined {
-  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
     return value;
   }
   if (Array.isArray(value)) {

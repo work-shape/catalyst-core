@@ -43,10 +43,7 @@ Environment:
   CHAT_SERVER_CREDENTIAL     Legacy fallback when CATALYST_SERVER_CREDENTIAL is unset
 `;
 
-export async function runCli(
-  argv: string[],
-  runtime: CliRuntimeOptions = {}
-): Promise<number> {
+export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): Promise<number> {
   const stdout = runtime.stdout ?? ((text: string) => process.stdout.write(text));
   const stderr = runtime.stderr ?? ((text: string) => process.stderr.write(text));
   if (argv.length === 0 || argv[0] === "--help" || argv[0] === "-h") {

@@ -41,7 +41,10 @@ export interface InMemoryExecutionWorkspaceStoreCallbacks {
     conversationId: ConversationId,
     ownerUserId: string
   ): Promise<void>;
-  isConversationActive(clientInstanceId: ClientInstanceId, conversationId: ConversationId): Promise<boolean>;
+  isConversationActive(
+    clientInstanceId: ClientInstanceId,
+    conversationId: ConversationId
+  ): Promise<boolean>;
 }
 
 export function createInMemoryExecutionWorkspaceStore(
@@ -131,7 +134,11 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
     const now = input.updatedAt ?? new Date().toISOString();
     const key = workspaceFileKey(input.workspaceId, input.path);
     const existing = this.workspaceFiles.get(key);
-    const metadata = workspaceFileMetadataForUpsert(input.metadata ?? {}, existing, input.objectKey);
+    const metadata = workspaceFileMetadataForUpsert(
+      input.metadata ?? {},
+      existing,
+      input.objectKey
+    );
     const file: WorkspaceFile = {
       workspaceId: input.workspaceId,
       clientInstanceId: input.clientInstanceId,
@@ -403,7 +410,9 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
     return cancelled;
   }
 
-  async heartbeatWorkspaceCommand(input: HeartbeatWorkspaceCommandInput): Promise<WorkspaceCommand> {
+  async heartbeatWorkspaceCommand(
+    input: HeartbeatWorkspaceCommandInput
+  ): Promise<WorkspaceCommand> {
     const command = this.requireClaimedWorkspaceCommand(input.commandId, input.leaseToken, [
       "running",
       "cancelling"
@@ -466,11 +475,13 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
         continue;
       }
       const hasWorkspaceFiles = [...this.workspaceFiles.values()].some(
-        (file) => file.clientInstanceId === input.clientInstanceId && file.workspaceId === workspace.id
+        (file) =>
+          file.clientInstanceId === input.clientInstanceId && file.workspaceId === workspace.id
       );
       const hasWorkspaceCommands = [...this.workspaceCommands.values()].some(
         (command) =>
-          command.clientInstanceId === input.clientInstanceId && command.workspaceId === workspace.id
+          command.clientInstanceId === input.clientInstanceId &&
+          command.workspaceId === workspace.id
       );
       const conversationActive = await this.callbacks.isConversationActive(
         input.clientInstanceId,
@@ -578,11 +589,7 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
     statuses: WorkspaceCommand["status"][]
   ): WorkspaceCommand {
     const command = this.workspaceCommands.get(commandId);
-    if (
-      !command ||
-      command.leaseToken !== leaseToken ||
-      !statuses.includes(command.status)
-    ) {
+    if (!command || command.leaseToken !== leaseToken || !statuses.includes(command.status)) {
       throw new AppError("CONFLICT", "Workspace command lease is no longer active");
     }
     return command;
@@ -602,7 +609,8 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
         .map((workspace) => workspace.id)
     );
     const files = [...this.workspaceFiles.values()].filter(
-      (file) => file.clientInstanceId === input.clientInstanceId && workspaceIds.has(file.workspaceId)
+      (file) =>
+        file.clientInstanceId === input.clientInstanceId && workspaceIds.has(file.workspaceId)
     );
     const commands = [...this.workspaceCommands.values()].filter(
       (command) =>
@@ -624,16 +632,16 @@ function workspaceFileKey(workspaceId: ExecutionWorkspaceId, path: string): stri
 
 function isTerminalWorkspaceCommand(command: WorkspaceCommand): boolean {
   return (
-    command.status === "completed" ||
-    command.status === "failed" ||
-    command.status === "cancelled"
+    command.status === "completed" || command.status === "failed" || command.status === "cancelled"
   );
 }
 
 function isActiveWorkspaceCommand(
   command: WorkspaceCommand
 ): command is WorkspaceCommand & { status: "queued" | "running" | "cancelling" } {
-  return command.status === "queued" || command.status === "running" || command.status === "cancelling";
+  return (
+    command.status === "queued" || command.status === "running" || command.status === "cancelling"
+  );
 }
 
 function uniqueStrings(values: string[]): string[] {
@@ -683,5 +691,7 @@ function workspaceFileObjectKeysForDeletion(file: WorkspaceFile): string[] {
 
 function retainedObjectKeys(metadata: WorkspaceFile["metadata"] | undefined): string[] {
   const value = metadata?.retainedObjectKeys;
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
 }

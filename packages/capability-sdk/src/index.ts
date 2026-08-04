@@ -148,10 +148,7 @@ export interface ClientInstanceManagedObjectReader {
     bytes: Uint8Array;
     mimeType: string;
   }>;
-  readFile(input: {
-    clientInstanceId: ClientInstanceId;
-    fileId: ManagedFileId;
-  }): Promise<{
+  readFile(input: { clientInstanceId: ClientInstanceId; fileId: ManagedFileId }): Promise<{
     bytes: Uint8Array;
     mimeType?: string;
   }>;
@@ -170,11 +167,7 @@ export interface ClientInstanceCapability {
 }
 
 export interface ManagedObjectByteStore {
-  putObject(input: {
-    key: string;
-    body: Uint8Array;
-    contentType?: string;
-  }): Promise<void>;
+  putObject(input: { key: string; body: Uint8Array; contentType?: string }): Promise<void>;
   getObject(key: string): Promise<Uint8Array>;
   deleteObject(key: string): Promise<void>;
 }
@@ -283,7 +276,9 @@ export function defineCapability(capability: ClientInstanceCapability): ClientIn
   return capability;
 }
 
-export function createManagedObjectAccess(input: CreateManagedObjectAccessInput): ManagedObjectAccess {
+export function createManagedObjectAccess(
+  input: CreateManagedObjectAccessInput
+): ManagedObjectAccess {
   return new DefaultManagedObjectAccess(input);
 }
 

@@ -2,24 +2,15 @@ import { Check, ClipboardCopy, FileSearch } from "lucide-react";
 import { useState } from "react";
 import type { StructuredDataResourceResponse } from "@vivd-catalyst/api-client";
 import { useTranslation } from "./i18n";
-import {
-  formatStructuredDataValue,
-  structuredDataToTsv
-} from "./resources-panel-model";
+import { formatStructuredDataValue, structuredDataToTsv } from "./resources-panel-model";
 import { Button } from "./ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableRow
-} from "./ui/table";
+import { Table, TableBody, TableCell, TableRow } from "./ui/table";
 import { TooltipIconButton } from "./tooltip-icon-button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 type StructuredDataSource =
   StructuredDataResourceResponse["sections"][number]["fields"][number]["sources"] extends
-    | Array<infer Source>
-    | undefined
+    Array<infer Source> | undefined
     ? Source
     : never;
 
@@ -72,15 +63,17 @@ export function StructuredDataCopyAllButton({
       size="sm"
       className="h-8 gap-1.5 text-xs"
       onClick={() => {
-        void navigator.clipboard
-          .writeText(structuredDataToTsv(resource, locale))
-          .then(() => {
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 1_500);
-          });
+        void navigator.clipboard.writeText(structuredDataToTsv(resource, locale)).then(() => {
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1_500);
+        });
       }}
     >
-      {copied ? <Check size={14} aria-hidden="true" /> : <ClipboardCopy size={14} aria-hidden="true" />}
+      {copied ? (
+        <Check size={14} aria-hidden="true" />
+      ) : (
+        <ClipboardCopy size={14} aria-hidden="true" />
+      )}
       <span>{copied ? t("copied") : t("resourcesCopyAll")}</span>
     </Button>
   );
@@ -156,7 +149,11 @@ function StructuredDataFieldRow({
               });
             }}
           >
-            {copied ? <Check size={13} aria-hidden="true" /> : <ClipboardCopy size={13} aria-hidden="true" />}
+            {copied ? (
+              <Check size={13} aria-hidden="true" />
+            ) : (
+              <ClipboardCopy size={13} aria-hidden="true" />
+            )}
           </TooltipIconButton>
         </div>
       </TableCell>

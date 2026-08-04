@@ -67,10 +67,9 @@ export class InMemoryConfigAssetStore implements ConfigAssetStore {
       [...this.assets].map(([key, asset]) => [key, cloneAsset(asset)] as const)
     );
     const revisions = new Map(
-      [...this.revisions].map(([assetId, records]) => [
-        assetId,
-        records.map(cloneRevision)
-      ] as const)
+      [...this.revisions].map(
+        ([assetId, records]) => [assetId, records.map(cloneRevision)] as const
+      )
     );
     const version = currentState.version + 1;
     let defaultAgentName = currentState.defaultAgentName;
@@ -143,8 +142,7 @@ export class InMemoryConfigAssetStore implements ConfigAssetStore {
       const revision = appendRevision({
         revisions,
         asset: existing,
-        operation:
-          mutation.operation ?? (existing.status === "deleted" ? "create" : "update"),
+        operation: mutation.operation ?? (existing.status === "deleted" ? "create" : "update"),
         config,
         actor: input.actor,
         globalVersion: version,
@@ -187,11 +185,7 @@ export class InMemoryConfigAssetStore implements ConfigAssetStore {
   }
 }
 
-function createAssetKey(input: {
-  clientInstanceId: string;
-  kind: string;
-  name: string;
-}): string {
+function createAssetKey(input: { clientInstanceId: string; kind: string; name: string }): string {
   return JSON.stringify([input.clientInstanceId, input.kind, input.name]);
 }
 
@@ -215,10 +209,7 @@ function appendRevision(input: {
     globalVersion: input.globalVersion,
     createdAt: input.createdAt
   };
-  input.revisions.set(input.asset.id, [
-    ...(input.revisions.get(input.asset.id) ?? []),
-    revision
-  ]);
+  input.revisions.set(input.asset.id, [...(input.revisions.get(input.asset.id) ?? []), revision]);
   return revision;
 }
 

@@ -74,9 +74,7 @@ export function readStoredResourcesPanelPreference(): ResourcesPanelPreference |
   return preference === "open" || preference === "closed" ? preference : undefined;
 }
 
-export function writeStoredResourcesPanelPreference(
-  preference: ResourcesPanelPreference
-): void {
+export function writeStoredResourcesPanelPreference(preference: ResourcesPanelPreference): void {
   window.localStorage.setItem(RESOURCES_PANEL_STORAGE_KEY, preference);
 }
 

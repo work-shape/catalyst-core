@@ -1,13 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import {
-  apiOperations,
-  type StructuredDataResourceResponse
-} from "@vivd-catalyst/api-contract";
-import {
-  AppError,
-  asStructuredDataResourceId,
-  requireAuthScope
-} from "@vivd-catalyst/core";
+import { apiOperations, type StructuredDataResourceResponse } from "@vivd-catalyst/api-contract";
+import { AppError, asStructuredDataResourceId, requireAuthScope } from "@vivd-catalyst/core";
 import { listConversationResources } from "../conversation-resources";
 import { ConversationWorkflow } from "../conversation-workflow";
 import { authenticateRequest, getConversationId } from "../request-context";
@@ -39,9 +32,7 @@ export function registerConversationResourceRoutes(
     const resource = await options.conversationStore.getStructuredDataResource({
       clientInstanceId: options.clientInstanceId,
       conversationId,
-      structuredDataResourceId: asStructuredDataResourceId(
-        getStructuredDataResourceId(request)
-      )
+      structuredDataResourceId: asStructuredDataResourceId(getStructuredDataResourceId(request))
     });
     if (!resource) {
       throw new AppError("NOT_FOUND", "Structured data resource is not available");

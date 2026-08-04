@@ -66,7 +66,8 @@ export function useConversationController({
         snapshotStatus: "error",
         error: {
           class: "stream_disconnected",
-          message: snapshotError instanceof Error ? snapshotError.message : "Conversation snapshot failed"
+          message:
+            snapshotError instanceof Error ? snapshotError.message : "Conversation snapshot failed"
         }
       });
       return;
@@ -87,10 +88,11 @@ export function useConversationController({
     const snapshotActiveRun = snapshot?.activeRun;
     const stateActiveRun = state.activeRun;
     const liveActiveRun =
-      snapshotActiveRun && stateActiveRun?.run.id === snapshotActiveRun.run.id &&
+      snapshotActiveRun &&
+      stateActiveRun?.run.id === snapshotActiveRun.run.id &&
       stateActiveRun.lastAppliedSequence >= snapshotActiveRun.projection.lastSequence
         ? stateActiveRun
-        : snapshotActiveRun ?? stateActiveRun;
+        : (snapshotActiveRun ?? stateActiveRun);
     if (!enabled || !conversationId || !liveActiveRun) {
       return undefined;
     }
@@ -135,9 +137,7 @@ export function useConversationController({
         return { refreshRequired };
       },
       completeStream: (completion) => {
-        setState((current) =>
-          completeRunObservationStreamInControllerState(current, completion)
-        );
+        setState((current) => completeRunObservationStreamInControllerState(current, completion));
       },
       failStream: (error) => {
         setState((current) => ({
@@ -157,13 +157,7 @@ export function useConversationController({
     return () => {
       manager.stop();
     };
-  }, [
-    activeRunConnection,
-    client,
-    onTerminalObservation,
-    onToolCallCompleted,
-    refreshSnapshot
-  ]);
+  }, [activeRunConnection, client, onTerminalObservation, onToolCallCompleted, refreshSnapshot]);
 
   return state;
 }

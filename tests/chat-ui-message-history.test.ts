@@ -379,7 +379,7 @@ describe("chat UI message history projection", () => {
         conversationId: "conv_test",
         clientInstanceId: "client_test",
         role: "tool",
-        text: "{\"displayed\":true}",
+        text: '{"displayed":true}',
         createdAt: "2026-06-15T00:00:02.000Z",
         metadata: createToolResultMetadata({
           runId: "run_test",
@@ -406,7 +406,7 @@ describe("chat UI message history projection", () => {
             }
           },
           modelOutput: {
-            text: "{\"displayed\":true}"
+            text: '{"displayed":true}'
           }
         })
       },
@@ -736,7 +736,8 @@ describe("chat UI message history projection", () => {
   });
 
   it("uses completed run projections to preserve work and final-answer chronology", () => {
-    const progressText = "Ich prüfe kurz die aktuellen offiziellen Regeln, damit die Antwort rechtlich sauber ist.";
+    const progressText =
+      "Ich prüfe kurz die aktuellen offiziellen Regeln, damit die Antwort rechtlich sauber ist.";
     const finalText = "Kurz: Nein. Supermärkte müssen nicht jegliches Pfand annehmen.";
     const messages: Message[] = [
       {
@@ -855,14 +856,17 @@ describe("chat UI message history projection", () => {
       toolCallId: "call_web",
       toolName: "web_search"
     });
-    expect(projected[0]?.parts).toContainEqual(expect.objectContaining({
-      type: "source-url",
-      sourceId: "web_source_1"
-    }));
+    expect(projected[0]?.parts).toContainEqual(
+      expect.objectContaining({
+        type: "source-url",
+        sourceId: "web_source_1"
+      })
+    );
   });
 
   it("falls back to persisted final text when a completed run projection is unavailable", () => {
-    const answerText = "Die Antwort hängt vom Pfandsystem ab. Kurz: Nein, nicht jedes Pfand muss angenommen werden.";
+    const answerText =
+      "Die Antwort hängt vom Pfandsystem ab. Kurz: Nein, nicht jedes Pfand muss angenommen werden.";
     const messages: Message[] = [
       {
         id: "msg_web_answer",
@@ -961,7 +965,8 @@ describe("chat UI message history projection", () => {
   });
 
   it("strips repeated progress text from legacy final run messages without completed projections", () => {
-    const progressText = "Ich prüfe kurz die aktuellen offiziellen Regeln, damit die Antwort rechtlich sauber ist.";
+    const progressText =
+      "Ich prüfe kurz die aktuellen offiziellen Regeln, damit die Antwort rechtlich sauber ist.";
     const finalText = "Kurz: Nein. Supermärkte müssen nicht jegliches Pfand annehmen.";
     const messages: Message[] = [
       {
@@ -989,7 +994,7 @@ describe("chat UI message history projection", () => {
         conversationId: "conv_test",
         clientInstanceId: "client_test",
         role: "tool",
-        text: "{\"ok\":true}",
+        text: '{"ok":true}',
         createdAt: "2026-07-01T00:00:02.000Z",
         metadata: createToolResultMetadata({
           runId: "run_web",
@@ -1082,7 +1087,7 @@ describe("chat UI message history projection", () => {
           workspaceId: "ews_private",
           status: "completed",
           exitCode: 0,
-          stdoutPreview: "{\"slides\":[{\"secret\":\"raw stdout json should stay hidden\"}]}",
+          stdoutPreview: '{"slides":[{"secret":"raw stdout json should stay hidden"}]}',
           stderrPreview: "raw stderr preview should stay hidden",
           durationMs: 1234,
           changedFiles: [
@@ -1103,11 +1108,13 @@ describe("chat UI message history projection", () => {
       }
     });
 
-    expect(readToolActionLabel({
-      args: toolPart.input,
-      result: toolPart.output,
-      toolName: "workspace.exec"
-    })).toBe("pptx_inspect --view summary [redacted path] && cat [redacted path]");
+    expect(
+      readToolActionLabel({
+        args: toolPart.input,
+        result: toolPart.output,
+        toolName: "workspace.exec"
+      })
+    ).toBe("pptx_inspect --view summary [redacted path] && cat [redacted path]");
     const detailSections = readToolDetailSections({
       args: toolPart.input,
       labels: { input: "Input", output: "Output" },
@@ -1212,21 +1219,27 @@ describe("chat UI message history projection", () => {
       }
     });
 
-    expect(readToolActionLabel({
-      args: imported.input,
-      result: imported.output,
-      toolName: "workspace.import_files"
-    })).toBe("Imported 1 file");
-    expect(readToolActionLabel({
-      args: read.input,
-      result: read.output,
-      toolName: "workspace.read_file"
-    })).toBe("Read large-result.json");
-    expect(readToolActionLabel({
-      args: promoted.input,
-      result: promoted.output,
-      toolName: "workspace.promote_artifact"
-    })).toBe("Promoted final-report.pdf");
+    expect(
+      readToolActionLabel({
+        args: imported.input,
+        result: imported.output,
+        toolName: "workspace.import_files"
+      })
+    ).toBe("Imported 1 file");
+    expect(
+      readToolActionLabel({
+        args: read.input,
+        result: read.output,
+        toolName: "workspace.read_file"
+      })
+    ).toBe("Read large-result.json");
+    expect(
+      readToolActionLabel({
+        args: promoted.input,
+        result: promoted.output,
+        toolName: "workspace.promote_artifact"
+      })
+    ).toBe("Promoted final-report.pdf");
     expect(readToolArtifactRefs(promoted.output)).toEqual([
       {
         artifactId: "art_final",
@@ -1306,62 +1319,68 @@ describe("chat UI message history projection", () => {
         }
       }
     });
-    expect(readToolActionLabel({
-      args: toolPart.input,
-      result: toolPart.output,
-      toolName: "workspace.exec"
-    })).toBe("xlsx_inspect --range Sheet1!A1:C10 [redacted path]");
+    expect(
+      readToolActionLabel({
+        args: toolPart.input,
+        result: toolPart.output,
+        toolName: "workspace.exec"
+      })
+    ).toBe("xlsx_inspect --range Sheet1!A1:C10 [redacted path]");
     expect(serializedDetails).toContain("reason handler_failed");
     expect(serializedDetails).toContain("Command failed while reading");
     expect(serializedDetails).not.toContain("/Users/felixpahlke");
     expect(serializedDetails).not.toContain("scratch/workbook.xlsx");
 
-    const timeoutDetails = JSON.stringify(readToolDetailSections({
-      args: {
-        command: "pptx_inspect --view summary scratch/deck.pptx"
-      },
-      labels: { input: "Input", output: "Output" },
-      result: {
-        status: "success",
-        output: {
-          status: "failed",
-          exitCode: 124,
-          stdoutPreview: "",
-          stderrPreview: "",
-          durationMs: 60000,
-          changedFiles: [],
-          promotedArtifacts: [],
-          truncated: {
-            stdout: false,
-            stderr: false
+    const timeoutDetails = JSON.stringify(
+      readToolDetailSections({
+        args: {
+          command: "pptx_inspect --view summary scratch/deck.pptx"
+        },
+        labels: { input: "Input", output: "Output" },
+        result: {
+          status: "success",
+          output: {
+            status: "failed",
+            exitCode: 124,
+            stdoutPreview: "",
+            stderrPreview: "",
+            durationMs: 60000,
+            changedFiles: [],
+            promotedArtifacts: [],
+            truncated: {
+              stdout: false,
+              stderr: false
+            }
           }
-        }
-      },
-      toolName: "workspace.exec"
-    }));
-    const cancelledDetails = JSON.stringify(readToolDetailSections({
-      args: {
-        command: "pptx_inspect --view summary scratch/deck.pptx"
-      },
-      labels: { input: "Input", output: "Output" },
-      result: {
-        status: "success",
-        output: {
-          status: "cancelled",
-          exitCode: null,
-          stdoutPreview: "",
-          stderrPreview: "",
-          durationMs: 50,
-          changedFiles: [],
-          promotedArtifacts: [],
-          truncated: {
-            stdout: false,
-            stderr: false
+        },
+        toolName: "workspace.exec"
+      })
+    );
+    const cancelledDetails = JSON.stringify(
+      readToolDetailSections({
+        args: {
+          command: "pptx_inspect --view summary scratch/deck.pptx"
+        },
+        labels: { input: "Input", output: "Output" },
+        result: {
+          status: "success",
+          output: {
+            status: "cancelled",
+            exitCode: null,
+            stdoutPreview: "",
+            stderrPreview: "",
+            durationMs: 50,
+            changedFiles: [],
+            promotedArtifacts: [],
+            truncated: {
+              stdout: false,
+              stderr: false
+            }
           }
-        }
-      },
-      toolName: "workspace.exec"
-    }));
+        },
+        toolName: "workspace.exec"
+      })
+    );
 
     expect(timeoutDetails).toContain("reason timeout");
     expect(cancelledDetails).toContain("reason cancelled");
@@ -1497,48 +1516,57 @@ describe("chat UI message history projection", () => {
 
     expect(detailSections).toEqual([
       { label: "Input", value: JSON.stringify({ text: "hello" }, null, 2) },
-      { label: "Output", value: JSON.stringify({ status: "success", output: "hello back" }, null, 2) }
+      {
+        label: "Output",
+        value: JSON.stringify({ status: "success", output: "hello back" }, null, 2)
+      }
     ]);
   });
 
   it("projects user-facing tool titles and call subjects", () => {
-    expect(readToolDisplayProjection({
-      args: { name: "pdf" },
-      locale: "en",
-      result: {
-        status: "success",
-        output: {
-          name: "pdf",
-          title: "PDF",
-          description: "Render and inspect PDF artifacts.",
-          content: "# PDF",
-          sourceVersion: "sha256:test"
-        }
-      },
-      toolName: "read_skill"
-    })).toEqual({
+    expect(
+      readToolDisplayProjection({
+        args: { name: "pdf" },
+        locale: "en",
+        result: {
+          status: "success",
+          output: {
+            name: "pdf",
+            title: "PDF",
+            description: "Render and inspect PDF artifacts.",
+            content: "# PDF",
+            sourceVersion: "sha256:test"
+          }
+        },
+        toolName: "read_skill"
+      })
+    ).toEqual({
       actionLabel: "PDF",
       technicalName: "read_skill",
       title: "Read instructions"
     });
 
-    expect(readToolDisplayProjection({
-      args: { name: "pdf" },
-      locale: "de",
-      result: undefined,
-      toolName: "read_skill"
-    })).toMatchObject({
+    expect(
+      readToolDisplayProjection({
+        args: { name: "pdf" },
+        locale: "de",
+        result: undefined,
+        toolName: "read_skill"
+      })
+    ).toMatchObject({
       actionLabel: "PDF",
       technicalName: "read_skill",
       title: "Anleitung lesen"
     });
 
-    expect(readToolDisplayProjection({
-      args: {},
-      locale: "en",
-      result: undefined,
-      toolName: "demo.workflow_summary"
-    })).toEqual({
+    expect(
+      readToolDisplayProjection({
+        args: {},
+        locale: "en",
+        result: undefined,
+        toolName: "demo.workflow_summary"
+      })
+    ).toEqual({
       actionLabel: undefined,
       technicalName: "demo.workflow_summary",
       title: "Workflow Summary"

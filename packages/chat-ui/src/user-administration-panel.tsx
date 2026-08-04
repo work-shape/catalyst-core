@@ -371,7 +371,9 @@ export function UserAdministrationPanel({
               >
                 <ChevronLeft size={15} aria-hidden="true" />
               </Button>
-              <span className="min-w-7 text-center text-sm font-semibold text-foreground">{currentPage}</span>
+              <span className="min-w-7 text-center text-sm font-semibold text-foreground">
+                {currentPage}
+              </span>
               <Button
                 type="button"
                 size="icon"
@@ -481,7 +483,12 @@ function CreateUserDialog({
                   value={createdResult.password}
                   onFocus={(event) => event.currentTarget.select()}
                 />
-                <Button type="button" variant="outline" className="shrink-0" onClick={() => void copyPassword()}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={() => void copyPassword()}
+                >
                   <Copy size={16} aria-hidden="true" />
                   Copy
                 </Button>
@@ -568,7 +575,13 @@ function UserDetail({
   return (
     <div className="grid content-start gap-4">
       <div>
-        <Button type="button" variant="ghost" size="sm" className="-ml-2 text-muted-foreground" onClick={onBack}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="-ml-2 text-muted-foreground"
+          onClick={onBack}
+        >
           <ArrowLeft size={15} aria-hidden="true" />
           All users
         </Button>
@@ -666,7 +679,9 @@ function ProfileCard({
             disabled={Boolean(disabledReason)}
             onChange={setForm}
           />
-          {disabledReason ? <p className="text-sm text-muted-foreground">{disabledReason}</p> : null}
+          {disabledReason ? (
+            <p className="text-sm text-muted-foreground">{disabledReason}</p>
+          ) : null}
           <div className="flex items-center gap-3">
             <Button
               type="submit"
@@ -771,9 +786,7 @@ function IdentitiesCard({
                 <div className="grid min-w-0 flex-1 gap-1">
                   <span className="flex flex-wrap items-center gap-2">
                     <Badge variant="outline">{identity.authSource}</Badge>
-                    {identity.emailVerified ? (
-                      <Badge variant="success">Verified</Badge>
-                    ) : null}
+                    {identity.emailVerified ? <Badge variant="success">Verified</Badge> : null}
                   </span>
                   <span className="truncate font-mono text-xs text-muted-foreground">
                     {identity.externalUserId}
@@ -942,7 +955,9 @@ function PasswordCard({
               This user has no password sign-in yet. Creating one uses their profile email.
             </p>
           ) : null}
-          {disabledReason ? <p className="text-sm text-muted-foreground">{disabledReason}</p> : null}
+          {disabledReason ? (
+            <p className="text-sm text-muted-foreground">{disabledReason}</p>
+          ) : null}
           <Field
             label={hasPasswordIdentity ? "New password" : "Initial password"}
             hint={
@@ -1118,7 +1133,10 @@ function AccountMetaCard({ user }: { user: AdministeredUser }) {
         <CardTitle className="text-base">Account</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-2 p-4 pt-2 text-sm">
-        <MetaRow label="User id" value={<span className="font-mono text-xs break-all">{user.id}</span>} />
+        <MetaRow
+          label="User id"
+          value={<span className="font-mono text-xs break-all">{user.id}</span>}
+        />
         <MetaRow label="Created" value={formatDateTime(user.createdAt) ?? "—"} />
         <MetaRow label="Updated" value={formatDateTime(user.updatedAt) ?? "—"} />
         <MetaRow label="Last active" value={formatDateTime(user.lastAuthenticatedAt) ?? "Never"} />
@@ -1215,7 +1233,10 @@ function CreateUserFields({
             onChange={(event) => onChange({ ...form, displayLabel: event.target.value })}
           />
         </Field>
-        <Field label="Email" hint={form.createPasswordSignIn ? "Required for password sign-in." : undefined}>
+        <Field
+          label="Email"
+          hint={form.createPasswordSignIn ? "Required for password sign-in." : undefined}
+        >
           <Input
             type="email"
             value={form.email}
@@ -1250,7 +1271,10 @@ function CreateUserFields({
         <span>Create password sign-in</span>
       </label>
       {form.createPasswordSignIn ? (
-        <Field label="Initial password" hint="At least 8 characters. Share it with the user securely.">
+        <Field
+          label="Initial password"
+          hint="At least 8 characters. Share it with the user securely."
+        >
           <div className="flex gap-2">
             <MaskedPasswordInput
               value={form.password}

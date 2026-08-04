@@ -62,7 +62,10 @@ export function UsageView({ usage }: { usage: UsageSummary | undefined }) {
         showWebSearchCosts={showWebSearchCosts}
       />
 
-      <MonthlyHistoryCard months={usage?.monthlyUsage ?? []} showWebSearchCosts={showWebSearchCosts} />
+      <MonthlyHistoryCard
+        months={usage?.monthlyUsage ?? []}
+        showWebSearchCosts={showWebSearchCosts}
+      />
 
       {showWebSearchCosts ? (
         <Card data-testid="web-search-usage">
@@ -316,7 +319,11 @@ function DailyUsageCard({
           <CalendarDays size={15} aria-hidden="true" className="text-muted-foreground" />
           Last {days.length || 30} days
         </CardTitle>
-        <div className="flex items-center gap-0.5 rounded-md border p-0.5" role="group" aria-label="Chart metric">
+        <div
+          className="flex items-center gap-0.5 rounded-md border p-0.5"
+          role="group"
+          aria-label="Chart metric"
+        >
           <MetricToggleButton active={metric === "cost"} onClick={() => setMetric("cost")}>
             Billable
           </MetricToggleButton>
@@ -346,7 +353,9 @@ function DailyUsageCard({
             </div>
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">No usage in the last {days.length || 30} days.</p>
+          <p className="text-sm text-muted-foreground">
+            No usage in the last {days.length || 30} days.
+          </p>
         )}
       </CardContent>
     </Card>
@@ -388,7 +397,9 @@ function DailyUsageBar({
       <div
         className={cn(
           "w-full rounded-sm transition-colors",
-          value > 0 ? "bg-primary/70 group-hover:bg-primary" : "h-[2px] bg-muted group-hover:bg-muted-foreground/40"
+          value > 0
+            ? "bg-primary/70 group-hover:bg-primary"
+            : "h-[2px] bg-muted group-hover:bg-muted-foreground/40"
         )}
         style={value > 0 ? { height: `${heightPercent}%` } : undefined}
       />
@@ -408,7 +419,8 @@ function DailyUsageBar({
           </span>
           {showWebSearchCosts && day.webSearchCallCount > 0 ? (
             <span className="text-muted-foreground">
-              {day.webSearchCallCount.toLocaleString()} searches · {formatWebSearchBillableCost(day.cost)}
+              {day.webSearchCallCount.toLocaleString()} searches ·{" "}
+              {formatWebSearchBillableCost(day.cost)}
             </span>
           ) : null}
         </div>
@@ -530,7 +542,9 @@ function UsageMetric({
   return (
     <Card className="grid content-start gap-1.5 p-4">
       <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="grid size-6 place-items-center rounded-md bg-accent text-primary">{icon}</span>
+        <span className="grid size-6 place-items-center rounded-md bg-accent text-primary">
+          {icon}
+        </span>
         {label}
       </span>
       <strong className="break-words text-2xl font-semibold">{value}</strong>
@@ -555,7 +569,11 @@ function UsageStat({
         {label}
       </dt>
       <dd className="mt-1 font-medium">
-        {value === undefined ? "Not configured" : typeof value === "number" ? value.toLocaleString() : value}
+        {value === undefined
+          ? "Not configured"
+          : typeof value === "number"
+            ? value.toLocaleString()
+            : value}
       </dd>
     </div>
   );
@@ -595,8 +613,7 @@ function shouldShowWebSearchCosts(usage: UsageSummary | undefined): boolean {
 
 function formatBillableCost(
   cost:
-    | Pick<UsageSummary["today"]["cost"], "currency" | "billableCostMicros" | "complete">
-    | undefined
+    Pick<UsageSummary["today"]["cost"], "currency" | "billableCostMicros" | "complete"> | undefined
 ): string {
   if (cost && !cost.complete) {
     return "Incomplete";
@@ -606,10 +623,7 @@ function formatBillableCost(
 
 function formatWebSearchBillableCost(
   cost:
-    | Pick<
-        UsageSummary["today"]["cost"],
-        "currency" | "webSearchBillableCostMicros" | "complete"
-      >
+    | Pick<UsageSummary["today"]["cost"], "currency" | "webSearchBillableCostMicros" | "complete">
     | undefined
 ): string {
   if (cost && !cost.complete) {

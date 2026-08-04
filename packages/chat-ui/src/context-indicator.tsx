@@ -12,10 +12,7 @@ export function ContextIndicator({
   const percentage =
     inputTokens === 0
       ? 0
-      : Math.min(
-          100,
-          Math.max(1, Math.round((inputTokens / compactThresholdTokens) * 100))
-        );
+      : Math.min(100, Math.max(1, Math.round((inputTokens / compactThresholdTokens) * 100)));
   const detail = t("contextTokensUsed", {
     used: formatCompactTokens(inputTokens),
     limit: formatCompactTokens(compactThresholdTokens)
@@ -35,11 +32,7 @@ export function ContextIndicator({
           aria-label={accessibleLabel}
           data-testid="context-indicator"
         >
-          <svg
-            viewBox="0 0 20 20"
-            className="size-5 -rotate-90"
-            aria-hidden="true"
-          >
+          <svg viewBox="0 0 20 20" className="size-5 -rotate-90" aria-hidden="true">
             <circle
               cx="10"
               cy="10"
@@ -64,12 +57,7 @@ export function ContextIndicator({
           </svg>
         </button>
       </HoverCardTrigger>
-      <HoverCardContent
-        side="top"
-        align="end"
-        sideOffset={8}
-        className="w-60 text-center"
-      >
+      <HoverCardContent side="top" align="end" sideOffset={8} className="w-60 text-center">
         <div className="text-sm text-muted-foreground">{t("contextWindow")}</div>
         <div className="mt-1 text-xl font-medium">
           {t("contextPercentFull", { percent: percentage })}

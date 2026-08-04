@@ -97,7 +97,11 @@ describe("model context projection", () => {
     const modelOutput = await createModelVisibleToolOutput(result, modelContextOptions());
     const messages = [
       createMessage("user", "Show me the account dashboard"),
-      createMessage("assistant", "", createAssistantToolCallsMetadata({ runId, toolCalls: [toolCall] })),
+      createMessage(
+        "assistant",
+        "",
+        createAssistantToolCallsMetadata({ runId, toolCalls: [toolCall] })
+      ),
       createMessage(
         "tool",
         modelOutput.text,
@@ -130,7 +134,9 @@ describe("model context projection", () => {
       role: "tool",
       toolCallId: "toolcall_projection"
     });
-    expect(modelContentText(projected[2]?.content ?? "")).toContain("Data has been displayed to the user.");
+    expect(modelContentText(projected[2]?.content ?? "")).toContain(
+      "Data has been displayed to the user."
+    );
     expect(JSON.stringify(messages[2]?.metadata)).toContain("Private Customer");
     expect(projectedJson).not.toContain("Private Customer");
     expect(projectedJson).not.toContain("1200000");
@@ -159,7 +165,11 @@ describe("model context projection", () => {
     const modelOutput = await createModelVisibleToolOutput(result, modelContextOptions());
     const projected = await projectAgentVisibleHistory(
       [
-        createMessage("assistant", "", createAssistantToolCallsMetadata({ runId, toolCalls: [toolCall] })),
+        createMessage(
+          "assistant",
+          "",
+          createAssistantToolCallsMetadata({ runId, toolCalls: [toolCall] })
+        ),
         createMessage(
           "tool",
           modelOutput.text,
@@ -226,7 +236,11 @@ describe("model context projection", () => {
     const modelOutput = await createModelVisibleToolOutput(result, modelContextOptions());
     const messages = [
       createMessage("user", "Earlier request"),
-      createMessage("assistant", "", createAssistantToolCallsMetadata({ runId, toolCalls: [toolCall] })),
+      createMessage(
+        "assistant",
+        "",
+        createAssistantToolCallsMetadata({ runId, toolCalls: [toolCall] })
+      ),
       createMessage(
         "tool",
         modelOutput.text,
@@ -466,7 +480,11 @@ describe("model context projection", () => {
     });
     const projected = await projectAgentVisibleHistory(
       [
-        createMessage("assistant", "", createAssistantToolCallsMetadata({ runId, toolCalls: [toolCall] })),
+        createMessage(
+          "assistant",
+          "",
+          createAssistantToolCallsMetadata({ runId, toolCalls: [toolCall] })
+        ),
         createMessage("tool", modelOutput.text, metadata)
       ],
       options

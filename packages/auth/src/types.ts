@@ -1,7 +1,4 @@
-import type {
-  AuthenticatedIdentity,
-  ClientInstanceId
-} from "@vivd-catalyst/core";
+import type { AuthenticatedIdentity, ClientInstanceId } from "@vivd-catalyst/core";
 
 export type AuthRequestHeaders = Record<string, string | string[] | undefined>;
 

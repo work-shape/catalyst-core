@@ -65,7 +65,9 @@ function WeatherForecastPreview({
         </span>
       </div>
       {forecast.advisory ? (
-        <p className="mt-3 text-sm leading-6 text-foreground [overflow-wrap:anywhere]">{forecast.advisory}</p>
+        <p className="mt-3 text-sm leading-6 text-foreground [overflow-wrap:anywhere]">
+          {forecast.advisory}
+        </p>
       ) : null}
       <div className="mt-3 grid gap-3 sm:grid-cols-3">
         {forecast.days.map((day) => {
@@ -74,10 +76,16 @@ function WeatherForecastPreview({
             <div key={day.date} className="min-w-0 border-l-2 border-primary/30 pl-3">
               <div className="flex items-center gap-2">
                 <DayIcon size={16} className="shrink-0 text-primary" aria-hidden="true" />
-                <p className="truncate text-sm font-medium">{formatForecastDate(day.date, locale)}</p>
+                <p className="truncate text-sm font-medium">
+                  {formatForecastDate(day.date, locale)}
+                </p>
               </div>
               <div className="mt-2 flex items-center gap-2 text-sm">
-                <ThermometerSun size={15} className="shrink-0 text-muted-foreground" aria-hidden="true" />
+                <ThermometerSun
+                  size={15}
+                  className="shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
                 <span>
                   {day.low}-{day.high} {unitLabel}
                 </span>

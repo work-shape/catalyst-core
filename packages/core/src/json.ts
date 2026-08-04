@@ -8,7 +8,12 @@ export function isJsonObject(value: JsonValue | undefined): value is JsonObject 
 }
 
 export function unknownToJsonValue(value: unknown): JsonValue {
-  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
     return Number.isFinite(value as number) || typeof value !== "number" ? value : String(value);
   }
   if (Array.isArray(value)) {
@@ -17,7 +22,11 @@ export function unknownToJsonValue(value: unknown): JsonValue {
   if (typeof value === "object" && value !== null) {
     const result: JsonObject = {};
     for (const [key, nested] of Object.entries(value)) {
-      if (typeof nested !== "undefined" && typeof nested !== "function" && typeof nested !== "symbol") {
+      if (
+        typeof nested !== "undefined" &&
+        typeof nested !== "function" &&
+        typeof nested !== "symbol"
+      ) {
         result[key] = unknownToJsonValue(nested);
       }
     }

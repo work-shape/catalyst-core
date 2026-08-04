@@ -6,11 +6,7 @@ import type { ChatShellProps } from "./chat-shell";
 import { ControlPlaneRoutes } from "./control-plane/control-plane-routes";
 import { TranslationProvider } from "./i18n";
 import { LoginPanel } from "./login-panel";
-import {
-  ResourcesPanel,
-  ResourcesPanelToggle,
-  useResourcesPanelState
-} from "./resources-panel";
+import { ResourcesPanel, ResourcesPanelToggle, useResourcesPanelState } from "./resources-panel";
 import { isResourcesPanelAvailable } from "./resources-panel-model";
 import { ToolDisplayPanel, useToolDisplayPanel } from "./tool-display-panel";
 import { cn } from "./ui/cn";
@@ -60,8 +56,7 @@ function ChatWorkspaceContent({
 }: Pick<ChatWorkspaceProps, "adminPanel" | "manageDocumentTitle" | "className">) {
   const model = useWorkspaceChatModel({ adminPanel, manageDocumentTitle });
   const [displayPanelWidth, setDisplayPanelWidth] = useState(0);
-  const resourcesEnabled =
-    model.config.config?.features.resources.enabled ?? false;
+  const resourcesEnabled = model.config.config?.features.resources.enabled ?? false;
   const resourcesConversationId = model.route.selectedConversationId;
   const resourcesAvailable = isResourcesPanelAvailable({
     enabled: resourcesEnabled,
@@ -123,7 +118,9 @@ function ChatWorkspaceContent({
       <main
         className={cn(
           "relative grid h-dvh w-full min-h-0 overflow-hidden bg-background text-foreground transition-colors md:grid-rows-[minmax(0,1fr)] max-md:grid-cols-1",
-          model.chrome.sidebarOpen ? "md:grid-cols-[20rem_minmax(0,1fr)]" : "md:grid-cols-[minmax(0,1fr)]",
+          model.chrome.sidebarOpen
+            ? "md:grid-cols-[20rem_minmax(0,1fr)]"
+            : "md:grid-cols-[minmax(0,1fr)]",
           isStaging && "pt-6",
           model.config.resolvedThemeMode === "dark" && "dark",
           className
@@ -168,8 +165,7 @@ function ChatWorkspaceContent({
         <WorkspaceChrome
           agents={model.config.config.agents}
           contextLabel={
-            model.config.config.ui.clientName ??
-            model.config.config.clientInstance.displayName
+            model.config.config.ui.clientName ?? model.config.config.clientInstance.displayName
           }
           displayPanelOpen={model.toolDisplay.open}
           displayPanelWidth={displayPanelWidth}

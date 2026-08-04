@@ -8,7 +8,16 @@ import {
   useAuiState,
   type PartState
 } from "@assistant-ui/react";
-import { Check, Copy, FileText, ImageIcon, ListRestart, Pencil, RefreshCw, User } from "lucide-react";
+import {
+  Check,
+  Copy,
+  FileText,
+  ImageIcon,
+  ListRestart,
+  Pencil,
+  RefreshCw,
+  User
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AttachmentPreview } from "./attachment-preview";
 import { managedFileIdFromUrl, useAttachmentContentContext } from "./attachment-content";
@@ -83,7 +92,8 @@ function AssistantMessage({
   );
   const completedRunId = useAuiState(
     (state) =>
-      (state.message.metadata.custom as AssistantUiMessageCustomMetadata | undefined)?.completedRunId
+      (state.message.metadata.custom as AssistantUiMessageCustomMetadata | undefined)
+        ?.completedRunId
   );
   const runDurationMs = useAuiState(
     (state) =>
@@ -198,14 +208,19 @@ function AssistantMessage({
                 autoPreviewSurfaces,
                 assistantPartComponents,
                 messageParts
-              })}
+              })
+            }
           </MessagePrimitive.GroupedParts>
         )}
         <MessageError />
       </div>
       {!messageRunning ? (
         <div className="mt-1 flex min-h-8 items-center gap-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
-          <ActionBarPrimitive.Copy className={tooltipIconButtonClassName} title={t("copy")} aria-label={t("copy")}>
+          <ActionBarPrimitive.Copy
+            className={tooltipIconButtonClassName}
+            title={t("copy")}
+            aria-label={t("copy")}
+          >
             <CopiedState />
           </ActionBarPrimitive.Copy>
           <TooltipIconButton tooltip={t("regenerateResponse")} disabled>
@@ -239,10 +254,7 @@ function createAssistantPartComponents(options: {
     File: FilePart,
     tools: {
       Override: (part) => (
-        <ToolCallPart
-          {...part}
-          displayPresentation={options.displayPresentation}
-        />
+        <ToolCallPart {...part} displayPresentation={options.displayPresentation} />
       )
     },
     data: {
@@ -274,7 +286,10 @@ function renderAssistantGroupedPart({
 }) {
   switch (part.type) {
     case ASSISTANT_WORK_GROUP:
-      const renderableIndices = createRenderableAssistantToolGroupIndices(messageParts, part.indices);
+      const renderableIndices = createRenderableAssistantToolGroupIndices(
+        messageParts,
+        part.indices
+      );
       return (
         <AssistantWorkGroup count={renderableIndices.length} summary={false}>
           {renderableIndices.map((index) => (
@@ -292,12 +307,10 @@ function renderAssistantGroupedPart({
       return part.toolUI ?? <ToolCallPart {...part} displayPresentation="full" />;
     case "data":
       return autoPreviewSurfaces && isWorkspacePromotedSurfacesData(part.data) ? (
-        <DataPart
-          {...part}
-          autoPreviewSurfaces={autoPreviewSurfaces}
-          displayPresentation="full"
-        />
-      ) : part.dataRendererUI ?? <DataPart {...part} displayPresentation="full" />;
+        <DataPart {...part} autoPreviewSurfaces={autoPreviewSurfaces} displayPresentation="full" />
+      ) : (
+        (part.dataRendererUI ?? <DataPart {...part} displayPresentation="full" />)
+      );
     case "reasoning":
       return <AssistantReasoningPart />;
     case "source":
@@ -324,7 +337,10 @@ function AssistantWorkTimeline({
     <div className="chat-work-timeline">
       {items.map((item) => {
         if (item.type === "tool-group") {
-          const renderableIndices = createRenderableAssistantToolGroupIndices(messageParts, item.indices);
+          const renderableIndices = createRenderableAssistantToolGroupIndices(
+            messageParts,
+            item.indices
+          );
           return (
             <AssistantWorkGroup
               key={`tool-group-${item.indices[0]}`}
@@ -333,7 +349,11 @@ function AssistantWorkTimeline({
               summary={false}
             >
               {renderableIndices.map((index) => (
-                <MessagePrimitive.PartByIndex key={`part-${index}`} index={index} components={partComponents} />
+                <MessagePrimitive.PartByIndex
+                  key={`part-${index}`}
+                  index={index}
+                  components={partComponents}
+                />
               ))}
             </AssistantWorkGroup>
           );
@@ -342,7 +362,11 @@ function AssistantWorkTimeline({
           return (
             <div key={`source-group-${item.indices[0]}`} className="chat-source-chip-group">
               {item.indices.map((index) => (
-                <MessagePrimitive.PartByIndex key={`part-${index}`} index={index} components={partComponents} />
+                <MessagePrimitive.PartByIndex
+                  key={`part-${index}`}
+                  index={index}
+                  components={partComponents}
+                />
               ))}
             </div>
           );
@@ -451,12 +475,20 @@ function UserMessage() {
       className="group/message mx-auto grid w-full max-w-3xl justify-items-end gap-1 animate-in fade-in slide-in-from-bottom-1 duration-150"
       data-role="user"
     >
-      <MessagePrimitive.Attachments>{() => <AttachmentPreview removable={false} />}</MessagePrimitive.Attachments>
+      <MessagePrimitive.Attachments>
+        {() => <AttachmentPreview removable={false} />}
+      </MessagePrimitive.Attachments>
       <div className="chat-user-message-bubble max-w-[min(42rem,88%)] rounded-2xl rounded-tr-md bg-primary px-4 py-2.5 text-sm leading-6 text-primary-foreground shadow-xs [overflow-wrap:anywhere]">
-        <MessagePrimitive.Parts components={{ Text: UserTextPart, File: FilePart, Image: ImagePart }} />
+        <MessagePrimitive.Parts
+          components={{ Text: UserTextPart, File: FilePart, Image: ImagePart }}
+        />
       </div>
       <div className="flex min-h-8 items-center gap-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
-        <ActionBarPrimitive.Copy className={tooltipIconButtonClassName} title={t("copy")} aria-label={t("copy")}>
+        <ActionBarPrimitive.Copy
+          className={tooltipIconButtonClassName}
+          title={t("copy")}
+          aria-label={t("copy")}
+        >
           <CopiedState />
         </ActionBarPrimitive.Copy>
         <TooltipIconButton tooltip={t("editMessage")} disabled>
@@ -562,8 +594,8 @@ function ImageFilePart({
 
     let active = true;
     let objectUrl: string | undefined;
-    void attachmentClient
-      .conversations.files.getContent(selectedConversationId, fileId)
+    void attachmentClient.conversations.files
+      .getContent(selectedConversationId, fileId)
       .then((blob) => {
         if (!active) {
           return;
@@ -596,8 +628,16 @@ function ImageFilePart({
 
   return (
     <figure className="my-2 grid gap-1 overflow-hidden rounded-md border bg-card p-1 shadow-xs">
-      <img src={imageUrl} alt={filename ?? "Attached image"} className="max-h-96 w-auto max-w-full rounded object-contain" />
-      {filename ? <figcaption className="truncate px-1 pb-1 text-xs text-muted-foreground">{filename}</figcaption> : null}
+      <img
+        src={imageUrl}
+        alt={filename ?? "Attached image"}
+        className="max-h-96 w-auto max-w-full rounded object-contain"
+      />
+      {filename ? (
+        <figcaption className="truncate px-1 pb-1 text-xs text-muted-foreground">
+          {filename}
+        </figcaption>
+      ) : null}
     </figure>
   );
 }
@@ -607,20 +647,19 @@ function isDirectImageUrl(value: string | undefined): value is string {
 }
 
 function isSupportedImageMimeType(value: string | undefined): value is string {
-  return value === "image/png" || value === "image/jpeg" || value === "image/webp" || value === "image/gif";
+  return (
+    value === "image/png" ||
+    value === "image/jpeg" ||
+    value === "image/webp" ||
+    value === "image/gif"
+  );
 }
 
-function filePartMimeType(file: {
-  mediaType?: string;
-  mimeType?: string;
-}): string | undefined {
+function filePartMimeType(file: { mediaType?: string; mimeType?: string }): string | undefined {
   return file.mediaType ?? file.mimeType;
 }
 
-function filePartUrl(file: {
-  url?: string;
-  data?: unknown;
-}): string {
+function filePartUrl(file: { url?: string; data?: unknown }): string {
   if (typeof file.url === "string") {
     return file.url;
   }

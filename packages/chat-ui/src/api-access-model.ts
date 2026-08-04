@@ -1,7 +1,4 @@
-import type {
-  ApiCredentialScope,
-  ServicePrincipalPermission
-} from "@vivd-catalyst/api-client";
+import type { ApiCredentialScope, ServicePrincipalPermission } from "@vivd-catalyst/api-client";
 
 export const DEFAULT_SERVICE_PRINCIPAL_PERMISSIONS: ServicePrincipalPermission[] = [
   "config_assets.read"
@@ -44,10 +41,13 @@ export function expiryInputToIso(value: string): string | undefined {
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
 
-export function isCredentialActive(input: {
-  revokedAt?: string;
-  expiresAt?: string;
-}, now = new Date()): boolean {
+export function isCredentialActive(
+  input: {
+    revokedAt?: string;
+    expiresAt?: string;
+  },
+  now = new Date()
+): boolean {
   if (input.revokedAt) {
     return false;
   }

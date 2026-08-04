@@ -14,9 +14,7 @@ export function createConversationsClient(transport: ApiClientTransport) {
         generatedSdk.listConversations({ client: transport.generatedClient }),
         apiOperations.listConversations.responseSchema
       ),
-    create: (
-      input: OperationRequestInput<typeof apiOperations.createConversation> = {}
-    ) =>
+    create: (input: OperationRequestInput<typeof apiOperations.createConversation> = {}) =>
       transport.unwrapJson(
         generatedSdk.createConversation({
           client: transport.generatedClient,

@@ -257,9 +257,7 @@ export class DirectWebFetcher {
         const text = extracted.text.slice(0, maxCharacters);
         const truncated = response.truncatedByBytes || extracted.text.length > text.length;
         const finalUrl = target.url.toString();
-        const contentHash = createHash("sha256")
-          .update(`${finalUrl}\n${text}`)
-          .digest("hex");
+        const contentHash = createHash("sha256").update(`${finalUrl}\n${text}`).digest("hex");
         const source: WebSourceMetadata = {
           id: `web_${contentHash.slice(0, 16)}`,
           url: finalUrl,
@@ -520,10 +518,16 @@ function createOperationAbort(input: {
   }
 
   const now = Date.now();
-  const timeoutAt = Math.min(now + input.timeoutMs, input.deadline?.getTime() ?? Number.POSITIVE_INFINITY);
+  const timeoutAt = Math.min(
+    now + input.timeoutMs,
+    input.deadline?.getTime() ?? Number.POSITIVE_INFINITY
+  );
   const timeoutDelay = timeoutAt - now;
   const timeout = Number.isFinite(timeoutDelay)
-    ? setTimeout(() => abort("timed_out", new Error("web_fetch timed out")), Math.max(0, timeoutDelay))
+    ? setTimeout(
+        () => abort("timed_out", new Error("web_fetch timed out")),
+        Math.max(0, timeoutDelay)
+      )
     : undefined;
 
   return {
@@ -603,7 +607,8 @@ function mapWebFetchError(
 ): WebFetchFailure {
   if (input.abortStatus) {
     return new WebFetchFailure({
-      message: input.abortStatus === "timed_out" ? "web_fetch timed out" : "web_fetch was cancelled",
+      message:
+        input.abortStatus === "timed_out" ? "web_fetch timed out" : "web_fetch was cancelled",
       resultStatus: input.abortStatus,
       code: input.abortStatus === "timed_out" ? "timed_out" : "cancelled",
       subject: input.subject,
@@ -677,7 +682,10 @@ function getHeader(headers: IncomingHttpHeaders, name: string): string | undefin
 }
 
 function normalizeHostname(hostname: string): string {
-  return hostname.toLowerCase().replace(/^\[|\]$/gu, "").replace(/\.+$/gu, "");
+  return hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/gu, "")
+    .replace(/\.+$/gu, "");
 }
 
 function redactWebFetchMetadata(metadata: JsonObject): JsonObject {

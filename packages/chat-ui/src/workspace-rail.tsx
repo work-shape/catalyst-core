@@ -180,7 +180,9 @@ export function WorkspaceRail({
             {t("noConversations")}
           </div>
         ) : filteredConversations.length === 0 ? (
-          <div className="px-3 py-4 text-sm text-muted-foreground">{t("noConversationMatches")}</div>
+          <div className="px-3 py-4 text-sm text-muted-foreground">
+            {t("noConversationMatches")}
+          </div>
         ) : (
           filteredConversations.map((conversation) => (
             <ConversationButton

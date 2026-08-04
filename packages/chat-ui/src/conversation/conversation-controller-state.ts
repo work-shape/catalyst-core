@@ -15,21 +15,11 @@ import {
 
 export type ConversationSnapshotStatus = "loading" | "ready" | "not_found" | "error";
 export type ConversationConnectionStatus =
-  | "idle"
-  | "connecting"
-  | "connected"
-  | "reconnecting"
-  | "caught_up"
-  | "disconnected";
+  "idle" | "connecting" | "connected" | "reconnecting" | "caught_up" | "disconnected";
 export type ConversationControllerErrorClass =
-  | "send_failed"
-  | "stream_disconnected"
-  | "run_failed"
-  | "run_cancelled"
-  | "auth_expired";
+  "send_failed" | "stream_disconnected" | "run_failed" | "run_cancelled" | "auth_expired";
 
-export interface ConversationControllerRunSummary
-  extends Omit<ActiveRunSummary, "status"> {
+export interface ConversationControllerRunSummary extends Omit<ActiveRunSummary, "status"> {
   status: AgentRun["status"];
 }
 
@@ -70,10 +60,7 @@ export function createControllerStateFromSnapshot(
 ): ConversationControllerState {
   const snapshotRun = activeRunForSnapshot(snapshot, previousState);
   const snapshotTerminalError = snapshotRun ? terminalErrorFromSnapshot(snapshotRun) : undefined;
-  const preservedTerminalError = preservedTerminalErrorForSnapshotRun(
-    snapshotRun,
-    previousState
-  );
+  const preservedTerminalError = preservedTerminalErrorForSnapshotRun(snapshotRun, previousState);
   const error = preservedTerminalError ?? snapshotTerminalError;
   return {
     snapshotStatus: "ready",
@@ -166,8 +153,7 @@ export function completeRunObservationStreamInControllerState(
 ): ConversationControllerState {
   if (input.streamCaughtUp || input.sawObservation) {
     const { error: currentError, ...rest } = state;
-    const preservedError =
-      currentError?.class === "stream_disconnected" ? undefined : currentError;
+    const preservedError = currentError?.class === "stream_disconnected" ? undefined : currentError;
     return {
       ...rest,
       connectionStatus: "caught_up",
@@ -214,10 +200,7 @@ function applyObservationToRunSummary(
   };
 }
 
-function applyObservationToMessages(
-  messages: Message[],
-  observation: RunObservation
-): Message[] {
+function applyObservationToMessages(messages: Message[], observation: RunObservation): Message[] {
   const event = observation.payload;
   if (event.type !== "message_completed") {
     return messages;

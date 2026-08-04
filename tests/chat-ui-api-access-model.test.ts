@@ -20,9 +20,7 @@ import {
 describe("API access model", () => {
   it("maps only current service-principal grants to credential scopes", () => {
     expect(DEFAULT_SERVICE_PRINCIPAL_PERMISSIONS).toEqual(["config_assets.read"]);
-    expect(scopesAllowedByPermissions(["config_assets.read"])).toEqual([
-      "config_assets:read"
-    ]);
+    expect(scopesAllowedByPermissions(["config_assets.read"])).toEqual(["config_assets:read"]);
     expect(
       constrainCredentialScopes(
         ["config_assets:read", "config_assets:release"],

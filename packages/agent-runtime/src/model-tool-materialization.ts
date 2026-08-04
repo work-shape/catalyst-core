@@ -26,14 +26,14 @@ export function materializeModelTools(input: ModelToolMaterializationInput): Mod
   const functionToolNames = input.agent.toolNames.filter(
     (toolName) => toolName !== WEB_SEARCH_MODEL_TOOL_NAME
   );
-  const functionTools = input.toolRegistry.listDescriptorsForAgent(functionToolNames).map(
-    (tool): ModelTool => ({
+  const functionTools = input.toolRegistry
+    .listDescriptorsForAgent(functionToolNames)
+    .map((tool): ModelTool => ({
       kind: "function",
       name: tool.name,
       description: tool.description,
       inputJsonSchema: tool.inputJsonSchema
-    })
-  );
+    }));
   const webSearch = resolveWebSearchModelTool(input);
   return webSearch.kind === "provider" ? [...functionTools, webSearch.tool] : functionTools;
 }
@@ -131,7 +131,10 @@ function createOpenAiWebSearchTool(): WebSearchResolution {
   };
 }
 
-function createManagedUnsupportedMessage(agentName: string, managedProvider: string | undefined): string {
+function createManagedUnsupportedMessage(
+  agentName: string,
+  managedProvider: string | undefined
+): string {
   return managedProvider
     ? `Agent '${agentName}' references ${WEB_SEARCH_MODEL_TOOL_NAME} with managed provider '${managedProvider}', but managed web search providers are not implemented`
     : `Agent '${agentName}' references ${WEB_SEARCH_MODEL_TOOL_NAME} with managed web search mode, but managed web search providers are not implemented`;

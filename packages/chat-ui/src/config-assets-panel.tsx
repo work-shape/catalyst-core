@@ -57,7 +57,11 @@ export interface ConfigAssetsPanelInput {
     config: Record<string, unknown>;
     baseVersion?: number;
   }): Promise<unknown>;
-  onDeleteAsset(input: { kind: ConfigAssetKind; name: string; baseVersion?: number }): Promise<unknown>;
+  onDeleteAsset(input: {
+    kind: ConfigAssetKind;
+    name: string;
+    baseVersion?: number;
+  }): Promise<unknown>;
   onSetDefaultAgent(input: { agentName?: string; baseVersion?: number }): Promise<unknown>;
   onRevertAsset(input: {
     kind: ConfigAssetKind;
@@ -218,154 +222,162 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
         </aside>
 
         <div className="min-w-0 overflow-hidden rounded-lg border bg-card text-card-foreground shadow-xs">
-        {selection === undefined ? (
-          <div className="grid min-h-[28rem] place-items-center p-6 text-center">
-            <div className="grid max-w-sm justify-items-center gap-3">
-              <span className="inline-flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                <Bot size={18} aria-hidden="true" />
-              </span>
-              <div className="grid gap-1">
-                <h2 className="text-base font-semibold">{t("configSelectItemTitle")}</h2>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  {t("configSelectItemDescription")}
-                </p>
+          {selection === undefined ? (
+            <div className="grid min-h-[28rem] place-items-center p-6 text-center">
+              <div className="grid max-w-sm justify-items-center gap-3">
+                <span className="inline-flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                  <Bot size={18} aria-hidden="true" />
+                </span>
+                <div className="grid gap-1">
+                  <h2 className="text-base font-semibold">{t("configSelectItemTitle")}</h2>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    {t("configSelectItemDescription")}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        ) : selection.kind === "agent" ? (
-          <AgentEditor
-            key={`${resetToken}:${selectionKey(selection)}:${selectedEntry ? "loaded" : "pending"}`}
-            initialForm={
-              selection.mode === "existing" && selectedEntry
-                ? agentConfigToForm(selectedEntry.config)
-                : emptyAgentForm()
-            }
-            isNew={selection.mode === "new"}
-            isDefault={selection.mode === "existing" && selection.name === defaultAgentName}
-            references={input.overview?.references}
-            editableAgentFields={input.editableAgentFields}
-            skillNames={skillNames}
-            mutating={input.mutating}
-            onSave={(form) =>
-              runMutation(() =>
-                input
-                  .onSaveAsset({
-                    kind: "agent",
-                    name: form.name.trim(),
-                    config: agentFormToConfig(form),
-                    baseVersion: version
-                  })
-                  .then(() => {
-                    if (selection.mode === "new") {
-                      setSelection({ mode: "existing", kind: "agent", name: form.name.trim() });
+          ) : selection.kind === "agent" ? (
+            <AgentEditor
+              key={`${resetToken}:${selectionKey(selection)}:${selectedEntry ? "loaded" : "pending"}`}
+              initialForm={
+                selection.mode === "existing" && selectedEntry
+                  ? agentConfigToForm(selectedEntry.config)
+                  : emptyAgentForm()
+              }
+              isNew={selection.mode === "new"}
+              isDefault={selection.mode === "existing" && selection.name === defaultAgentName}
+              references={input.overview?.references}
+              editableAgentFields={input.editableAgentFields}
+              skillNames={skillNames}
+              mutating={input.mutating}
+              onSave={(form) =>
+                runMutation(() =>
+                  input
+                    .onSaveAsset({
+                      kind: "agent",
+                      name: form.name.trim(),
+                      config: agentFormToConfig(form),
+                      baseVersion: version
+                    })
+                    .then(() => {
+                      if (selection.mode === "new") {
+                        setSelection({ mode: "existing", kind: "agent", name: form.name.trim() });
+                      }
+                    })
+                )
+              }
+              onDelete={
+                selection.mode === "existing" && input.allowAgentDeletion
+                  ? () =>
+                      runMutation(() =>
+                        input
+                          .onDeleteAsset({
+                            kind: "agent",
+                            name: selection.name,
+                            baseVersion: version
+                          })
+                          .then(() => setSelection(undefined))
+                      )
+                  : undefined
+              }
+              onMakeDefault={
+                selection.mode === "existing" &&
+                selection.name !== defaultAgentName &&
+                input.allowDefaultAgentChange
+                  ? () =>
+                      runMutation(() =>
+                        input.onSetDefaultAgent({ agentName: selection.name, baseVersion: version })
+                      )
+                  : undefined
+              }
+              revisions={
+                selection.mode === "existing" ? (
+                  <RevisionHistory
+                    kind="agent"
+                    name={selection.name}
+                    mutating={input.mutating}
+                    onLoadRevisions={input.onLoadRevisions}
+                    onRevert={(revision) =>
+                      runMutation(() =>
+                        input
+                          .onRevertAsset({
+                            kind: "agent",
+                            name: selection.name,
+                            revision,
+                            baseVersion: version
+                          })
+                          .then(() => setResetToken((token) => token + 1))
+                      )
                     }
-                  })
-              )
-            }
-            onDelete={
-              selection.mode === "existing" && input.allowAgentDeletion
-                ? () =>
-                    runMutation(() =>
-                      input
-                        .onDeleteAsset({ kind: "agent", name: selection.name, baseVersion: version })
-                        .then(() => setSelection(undefined))
-                    )
-                : undefined
-            }
-            onMakeDefault={
-              selection.mode === "existing" &&
-              selection.name !== defaultAgentName &&
-              input.allowDefaultAgentChange
-                ? () =>
-                    runMutation(() =>
-                      input.onSetDefaultAgent({ agentName: selection.name, baseVersion: version })
-                    )
-                : undefined
-            }
-            revisions={
-              selection.mode === "existing" ? (
-                <RevisionHistory
-                  kind="agent"
-                  name={selection.name}
-                  mutating={input.mutating}
-                  onLoadRevisions={input.onLoadRevisions}
-                  onRevert={(revision) =>
-                    runMutation(() =>
-                      input
-                        .onRevertAsset({
-                          kind: "agent",
-                          name: selection.name,
-                          revision,
-                          baseVersion: version
-                        })
-                        .then(() => setResetToken((token) => token + 1))
-                    )
-                  }
-                />
-              ) : null
-            }
-          />
-        ) : (
-          <SkillEditor
-            key={`${resetToken}:${selectionKey(selection)}:${selectedEntry ? "loaded" : "pending"}`}
-            initialForm={
-              selection.mode === "existing" && selectedEntry
-                ? skillConfigToForm(selectedEntry.config)
-                : emptySkillForm()
-            }
-            isNew={selection.mode === "new"}
-            editable={input.allowSkillEditing}
-            mutating={input.mutating}
-            onSave={(form) =>
-              runMutation(() =>
-                input
-                  .onSaveAsset({
-                    kind: "skill",
-                    name: form.name.trim(),
-                    config: skillFormToConfig(form),
-                    baseVersion: version
-                  })
-                  .then(() => {
-                    if (selection.mode === "new") {
-                      setSelection({ mode: "existing", kind: "skill", name: form.name.trim() });
+                  />
+                ) : null
+              }
+            />
+          ) : (
+            <SkillEditor
+              key={`${resetToken}:${selectionKey(selection)}:${selectedEntry ? "loaded" : "pending"}`}
+              initialForm={
+                selection.mode === "existing" && selectedEntry
+                  ? skillConfigToForm(selectedEntry.config)
+                  : emptySkillForm()
+              }
+              isNew={selection.mode === "new"}
+              editable={input.allowSkillEditing}
+              mutating={input.mutating}
+              onSave={(form) =>
+                runMutation(() =>
+                  input
+                    .onSaveAsset({
+                      kind: "skill",
+                      name: form.name.trim(),
+                      config: skillFormToConfig(form),
+                      baseVersion: version
+                    })
+                    .then(() => {
+                      if (selection.mode === "new") {
+                        setSelection({ mode: "existing", kind: "skill", name: form.name.trim() });
+                      }
+                    })
+                )
+              }
+              onDelete={
+                selection.mode === "existing" && input.allowSkillEditing
+                  ? () =>
+                      runMutation(() =>
+                        input
+                          .onDeleteAsset({
+                            kind: "skill",
+                            name: selection.name,
+                            baseVersion: version
+                          })
+                          .then(() => setSelection(undefined))
+                      )
+                  : undefined
+              }
+              revisions={
+                selection.mode === "existing" && input.allowSkillEditing ? (
+                  <RevisionHistory
+                    kind="skill"
+                    name={selection.name}
+                    mutating={input.mutating}
+                    onLoadRevisions={input.onLoadRevisions}
+                    onRevert={(revision) =>
+                      runMutation(() =>
+                        input
+                          .onRevertAsset({
+                            kind: "skill",
+                            name: selection.name,
+                            revision,
+                            baseVersion: version
+                          })
+                          .then(() => setResetToken((token) => token + 1))
+                      )
                     }
-                  })
-              )
-            }
-            onDelete={
-              selection.mode === "existing" && input.allowSkillEditing
-                ? () =>
-                    runMutation(() =>
-                      input
-                        .onDeleteAsset({ kind: "skill", name: selection.name, baseVersion: version })
-                        .then(() => setSelection(undefined))
-                    )
-                : undefined
-            }
-            revisions={
-              selection.mode === "existing" && input.allowSkillEditing ? (
-                <RevisionHistory
-                  kind="skill"
-                  name={selection.name}
-                  mutating={input.mutating}
-                  onLoadRevisions={input.onLoadRevisions}
-                  onRevert={(revision) =>
-                    runMutation(() =>
-                      input
-                        .onRevertAsset({
-                          kind: "skill",
-                          name: selection.name,
-                          revision,
-                          baseVersion: version
-                        })
-                        .then(() => setResetToken((token) => token + 1))
-                    )
-                  }
-                />
-              ) : null
-            }
-          />
-        )}
+                  />
+                ) : null
+              }
+            />
+          )}
         </div>
       </div>
 
@@ -375,9 +387,7 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
         onClose={() => setConflictOpen(false)}
       >
         <div className="grid gap-4 p-5">
-          <p className="text-sm text-muted-foreground">
-            {t("configChangedDescription")}
-          </p>
+          <p className="text-sm text-muted-foreground">{t("configChangedDescription")}</p>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setConflictOpen(false)}>
               {t("configKeepEditing")}
@@ -431,7 +441,8 @@ function AssetList({
               type="button"
               className={cn(
                 "flex h-9 w-full min-w-0 items-center justify-between gap-2 overflow-hidden rounded-md px-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground",
-                selectedName === name && "bg-primary/10 font-medium text-foreground hover:bg-primary/15"
+                selectedName === name &&
+                  "bg-primary/10 font-medium text-foreground hover:bg-primary/15"
               )}
               title={name}
               onClick={() => onSelect(name)}
@@ -490,9 +501,7 @@ function AgentEditor({
   const canEditReasoningEffort = canEdit("reasoningEffort");
   const canEditMaxSteps = canEdit("maxSteps");
   const modelBindings =
-    references?.modelBindings ??
-    references?.modelBindingIds.map((id) => ({ id, model: id })) ??
-    [];
+    references?.modelBindings ?? references?.modelBindingIds.map((id) => ({ id, model: id })) ?? [];
 
   const update = (patch: Partial<AgentFormState>) => setForm((value) => ({ ...value, ...patch }));
 
@@ -605,10 +614,7 @@ function AgentEditor({
             )}
           >
             {canEditModel ? (
-              <Field
-                label={t("configModel")}
-                hint={t("configModelHint")}
-              >
+              <Field label={t("configModel")} hint={t("configModelHint")}>
                 <Select
                   value={form.modelBindingId}
                   onChange={(event) =>
@@ -629,10 +635,7 @@ function AgentEditor({
               </Field>
             ) : null}
             {canEditReasoningEffort ? (
-              <Field
-                label={t("configReasoningEffort")}
-                hint={t("configReasoningEffortHint")}
-              >
+              <Field label={t("configReasoningEffort")} hint={t("configReasoningEffortHint")}>
                 <Select
                   value={form.reasoningEffort}
                   onChange={(event) => update({ reasoningEffort: event.target.value })}
@@ -647,10 +650,7 @@ function AgentEditor({
               </Field>
             ) : null}
             {canEditMaxSteps ? (
-              <Field
-                label={t("configMaxSteps")}
-                hint={t("configMaxStepsHint")}
-              >
+              <Field label={t("configMaxSteps")} hint={t("configMaxStepsHint")}>
                 <Input
                   type="number"
                   min={1}
@@ -1071,9 +1071,7 @@ function SaveBar({
         {mutating ? <Spinner className="size-4" /> : null}
         {label}
       </Button>
-      <span className="text-xs text-muted-foreground">
-        {t("configAppliesImmediately")}
-      </span>
+      <span className="text-xs text-muted-foreground">{t("configAppliesImmediately")}</span>
     </div>
   );
 }

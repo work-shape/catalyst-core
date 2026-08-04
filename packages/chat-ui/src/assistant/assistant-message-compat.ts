@@ -50,9 +50,7 @@ export function readCompatibleAssistantContextCompacted(
     : false;
 }
 
-export function readCompatibleMessageRunId(
-  message: Pick<Message, "metadata">
-): string | undefined {
+export function readCompatibleMessageRunId(message: Pick<Message, "metadata">): string | undefined {
   const runtime = readAgentRuntimeMessageMetadata(message.metadata);
   return runtime && "runId" in runtime ? runtime.runId : undefined;
 }
@@ -126,14 +124,17 @@ export function readCompatiblePersistedToolResult(
     };
   }
   if (
-    (result?.status === "failed" || result?.status === "cancelled" || result?.status === "timed_out") &&
+    (result?.status === "failed" ||
+      result?.status === "cancelled" ||
+      result?.status === "timed_out") &&
     isRecord(result.error)
   ) {
     return {
       status: "failed",
       toolCallId: runtime.toolCallId,
       toolName: runtime.toolName,
-      errorText: typeof result.error.message === "string" ? result.error.message : "Tool call failed",
+      errorText:
+        typeof result.error.message === "string" ? result.error.message : "Tool call failed",
       output: {
         status: result.status,
         error: persistedToolErrorSummary(runtime.toolName, result.error),

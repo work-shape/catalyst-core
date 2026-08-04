@@ -34,14 +34,16 @@ describe("config asset admin routes", () => {
     const fixture = await createFixture();
 
     await expect(mintToken(fixture.server)).resolves.toEqual(expect.any(String));
-    await expect(
-      mintToken(fixture.server, { endpoint: "/auth/session-token" })
-    ).resolves.toEqual(expect.any(String));
+    await expect(mintToken(fixture.server, { endpoint: "/auth/session-token" })).resolves.toEqual(
+      expect.any(String)
+    );
   });
 
   it("exchanges an API key for subjectless config access without creating a product user", async () => {
     const fixture = await createFixture({ serviceAccess: true });
-    expect(await fixture.store.listUsers({ clientInstanceId: fixture.clientInstanceId })).toEqual([]);
+    expect(await fixture.store.listUsers({ clientInstanceId: fixture.clientInstanceId })).toEqual(
+      []
+    );
 
     const exchange = await fixture.server.inject({
       method: "POST",
@@ -77,7 +79,9 @@ describe("config asset admin routes", () => {
       url: "/api/conversations"
     });
     expect(humanRoute.statusCode).toBe(403);
-    expect(await fixture.store.listUsers({ clientInstanceId: fixture.clientInstanceId })).toEqual([]);
+    expect(await fixture.store.listUsers({ clientInstanceId: fixture.clientInstanceId })).toEqual(
+      []
+    );
 
     const revisions = await request(fixture.server, token, {
       method: "GET",
@@ -784,11 +788,7 @@ async function createFixture(
         modelBindingIds: [],
         modelBindings: [],
         reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
-        enabledToolNames: [
-          "known.tool",
-          "read_skill",
-          ...(input.webSearch ? ["web_search"] : [])
-        ]
+        enabledToolNames: ["known.tool", "read_skill", ...(input.webSearch ? ["web_search"] : [])]
       },
       ...(input.webSearch
         ? {

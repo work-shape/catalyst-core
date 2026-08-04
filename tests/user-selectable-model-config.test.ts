@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  createSafeConfigView,
-  parseClientInstanceConfig
-} from "@vivd-catalyst/config-schema";
+import { createSafeConfigView, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 
 describe("user-selectable model config", () => {
   it("exposes only explicitly selectable bindings and the agent default", () => {

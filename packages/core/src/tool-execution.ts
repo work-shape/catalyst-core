@@ -98,8 +98,7 @@ export interface ToolHandlerFailureResult {
 }
 
 export type ToolHandlerResult<TOutput = unknown> =
-  | ToolHandlerSuccessResult<TOutput>
-  | ToolHandlerFailureResult;
+  ToolHandlerSuccessResult<TOutput> | ToolHandlerFailureResult;
 
 export type ToolExecutionResult = ToolHandlerResult<unknown>;
 

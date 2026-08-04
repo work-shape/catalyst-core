@@ -156,7 +156,9 @@ describe("API Access administration", () => {
     const credential = await superadminClient.apiAccess.createCredential(principal.principal.id, {
       name: "Superadmin key"
     });
-    await expect(managerClient.apiAccess.revokeCredential(credential.credential.id)).rejects.toMatchObject({
+    await expect(
+      managerClient.apiAccess.revokeCredential(credential.credential.id)
+    ).rejects.toMatchObject({
       status: 403
     });
   });

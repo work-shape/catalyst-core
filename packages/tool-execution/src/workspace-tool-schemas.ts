@@ -39,7 +39,7 @@ const workspaceCommandDescription =
 const workspaceCwdDescription =
   "Optional workspace-relative directory for this command only. It does not persist as the next command's cwd.";
 const workspaceExpectedOutputsDescription =
-  "Optional postconditions for files that should exist in /workspace after the command. Use kind \"directory\" only when checking that a rendered/generated directory contains tracked files. Use this for created outputs or verification steps that depend on an existing artifact. Set promote only when the command itself should promote the output.";
+  'Optional postconditions for files that should exist in /workspace after the command. Use kind "directory" only when checking that a rendered/generated directory contains tracked files. Use this for created outputs or verification steps that depend on an existing artifact. Set promote only when the command itself should promote the output.';
 const workspaceImportPathDescription =
   "Optional workspace-relative destination path override. Usually omit this and use the returned importedFiles[].path exactly in workspace.exec.";
 const workspaceApplyPatchDescription =
@@ -80,7 +80,11 @@ export const expectedOutputInputSchema = z
 
 export const workspaceExecInputSchema = z
   .object({
-    command: z.string().min(1).max(DEFAULT_LIMITS.maxCommandLength).describe(workspaceCommandDescription),
+    command: z
+      .string()
+      .min(1)
+      .max(DEFAULT_LIMITS.maxCommandLength)
+      .describe(workspaceCommandDescription),
     cwd: workspacePathSchema.describe(workspaceCwdDescription).optional(),
     timeoutSeconds: z.number().int().min(1).optional(),
     expectedOutputs: z
@@ -117,7 +121,11 @@ export const workspaceReadFileInputSchema = z
 
 export const workspaceApplyPatchInputSchema = z
   .object({
-    patch: z.string().min(1).max(DEFAULT_LIMITS.maxApplyPatchBytes).describe(workspaceApplyPatchDescription)
+    patch: z
+      .string()
+      .min(1)
+      .max(DEFAULT_LIMITS.maxApplyPatchBytes)
+      .describe(workspaceApplyPatchDescription)
   })
   .strict();
 
@@ -140,8 +148,12 @@ export const workspacePreviewImagesInputSchema = z
       .max(DEFAULT_LIMITS.maxPreviewImages)
       .describe(workspacePreviewPathsDescription)
       .optional(),
-    pages: workspacePreviewPositiveIntegerListSchema.describe(workspacePreviewPagesDescription).optional(),
-    slides: workspacePreviewPositiveIntegerListSchema.describe(workspacePreviewSlidesDescription).optional(),
+    pages: workspacePreviewPositiveIntegerListSchema
+      .describe(workspacePreviewPagesDescription)
+      .optional(),
+    slides: workspacePreviewPositiveIntegerListSchema
+      .describe(workspacePreviewSlidesDescription)
+      .optional(),
     sheets: workspacePreviewTextListSchema.describe(workspacePreviewSheetsDescription).optional(),
     ranges: workspacePreviewTextListSchema.describe(workspacePreviewRangesDescription).optional(),
     maxImages: z
@@ -154,14 +166,19 @@ export const workspacePreviewImagesInputSchema = z
   })
   .strict()
   .superRefine((input, context) => {
-    const sourceCount = [input.artifactId, input.path, input.paths].filter((value) => value !== undefined).length;
+    const sourceCount = [input.artifactId, input.path, input.paths].filter(
+      (value) => value !== undefined
+    ).length;
     if (sourceCount !== 1) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Provide exactly one preview source: artifactId, path, or paths"
       });
     }
-    if ((input.path || input.paths) && (input.pages || input.slides || input.sheets || input.ranges)) {
+    if (
+      (input.path || input.paths) &&
+      (input.pages || input.slides || input.sheets || input.ranges)
+    ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Page, slide, sheet, and range selectors apply only to artifactId previews"
@@ -216,9 +233,7 @@ export const workspaceListFilesOutputSchema = z.object({
       updatedAt: z.string(),
       lastCommandId: z.string().optional(),
       promotedArtifacts: z
-        .array(
-          z.object({ artifactId: z.string(), kind: z.string(), promotedAt: z.string() })
-        )
+        .array(z.object({ artifactId: z.string(), kind: z.string(), promotedAt: z.string() }))
         .optional()
     })
   )
@@ -341,11 +356,7 @@ export const workspaceExecInputJsonSchema: JsonObject = {
 export const workspacePreviewImagesInputJsonSchema: JsonObject = {
   type: "object",
   additionalProperties: false,
-  anyOf: [
-    { required: ["artifactId"] },
-    { required: ["path"] },
-    { required: ["paths"] }
-  ],
+  anyOf: [{ required: ["artifactId"] }, { required: ["path"] }, { required: ["paths"] }],
   properties: {
     artifactId: {
       type: "string",

@@ -400,7 +400,9 @@ export class PostgresPlatformStore
     return publishPostgresStructuredDataResource(this.db, input);
   }
 
-  async claimRunStartCommand(input: ClaimRunStartCommandInput): Promise<ClaimRunStartCommandResult> {
+  async claimRunStartCommand(
+    input: ClaimRunStartCommandInput
+  ): Promise<ClaimRunStartCommandResult> {
     return claimPostgresRunStartCommand(this.db, input);
   }
 
@@ -412,7 +414,9 @@ export class PostgresPlatformStore
     return releasePostgresRunStartCommand(this.db, input);
   }
 
-  async prepareConversationRunStart(input: Parameters<AgentRunStore["prepareConversationRunStart"]>[0]) {
+  async prepareConversationRunStart(
+    input: Parameters<AgentRunStore["prepareConversationRunStart"]>[0]
+  ) {
     return preparePostgresConversationRunStart(this.db, input);
   }
 

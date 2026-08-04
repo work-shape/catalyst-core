@@ -49,9 +49,9 @@ describe("api operation catalog and client", () => {
     expect(artifact).toEqual(openApiDocument);
     for (const operation of Object.values(apiOperations)) {
       const openApiPath = operation.path.replaceAll(/:([A-Za-z][A-Za-z0-9_]*)/gu, "{$1}");
-      const pathItem = (openApiDocument.paths as Record<string, Record<string, { operationId: string }>>)[
-        openApiPath
-      ];
+      const pathItem = (
+        openApiDocument.paths as Record<string, Record<string, { operationId: string }>>
+      )[openApiPath];
       expect(pathItem?.[operation.method.toLowerCase()]?.operationId).toBe(operation.operationId);
     }
   });
@@ -204,20 +204,22 @@ describe("api operation catalog and client", () => {
       fetchImpl
     });
 
-    await expect(client.conversations.artifacts.getPreview("conv 1", "art/final")).resolves.toEqual({
-      status: "ready",
-      artifactId: "art/final",
-      type: "image_pages",
-      format: "png",
-      pages: [
-        {
-          artifactId: "art/page-1",
-          mimeType: "image/png",
-          filename: "page-1.png",
-          pageNumber: 1
-        }
-      ]
-    });
+    await expect(client.conversations.artifacts.getPreview("conv 1", "art/final")).resolves.toEqual(
+      {
+        status: "ready",
+        artifactId: "art/final",
+        type: "image_pages",
+        format: "png",
+        pages: [
+          {
+            artifactId: "art/page-1",
+            mimeType: "image/png",
+            filename: "page-1.png",
+            pageNumber: 1
+          }
+        ]
+      }
+    );
     expect(calls).toHaveLength(1);
     const request = calls[0];
     expect(request?.url).toBe(
@@ -283,9 +285,7 @@ describe("api operation catalog and client", () => {
       new File(["notes"], "notes.txt", { type: "text/plain" })
     );
 
-    expect(request?.headers.get("content-type")).toMatch(
-      /^multipart\/form-data; boundary=/u
-    );
+    expect(request?.headers.get("content-type")).toMatch(/^multipart\/form-data; boundary=/u);
     expect(await request?.clone().text()).toContain('filename="notes.txt"');
   });
 
@@ -293,10 +293,7 @@ describe("api operation catalog and client", () => {
     const httpClient = createApiClient({
       baseUrl: "https://chat.example",
       fetchImpl: async () =>
-        Response.json(
-          { error: { message: "Conversation unavailable" } },
-          { status: 503 }
-        )
+        Response.json({ error: { message: "Conversation unavailable" } }, { status: 503 })
     });
     const networkFailure = new TypeError("offline");
     const networkClient = createApiClient({
@@ -461,14 +458,21 @@ describe("api operation catalog and client", () => {
       observed.push(observation);
     }
 
-    expect(calls.map((request) => `${request.method} ${new URL(request.url).pathname}${new URL(request.url).search}`)).toEqual([
+    expect(
+      calls.map(
+        (request) =>
+          `${request.method} ${new URL(request.url).pathname}${new URL(request.url).search}`
+      )
+    ).toEqual([
       "POST /api/conversations/conv%201/runs",
       "POST /api/conversations/runs",
       "POST /api/conversations/conv%201/runs/run%201/cancel",
       "POST /api/conversations/conv%201/runs/run%201/commands",
       "GET /api/conversations/conv_1/runs/run_1/events?after=7"
     ]);
-    expect(calls.every((request) => request.headers.get("authorization") === "Bearer test-token")).toBe(true);
+    expect(
+      calls.every((request) => request.headers.get("authorization") === "Bearer test-token")
+    ).toBe(true);
     expect(calls[4]?.headers.get("last-event-id")).toBeNull();
     expect(calls[4]?.headers.get("accept")).toBe("text/event-stream");
     expect(observed).toEqual([
@@ -503,9 +507,12 @@ describe("api operation catalog and client", () => {
       observed.push(observation);
     }
 
-    expect(calls.map((request) => `${request.method} ${new URL(request.url).pathname}${new URL(request.url).search}`)).toEqual([
-      "GET /api/conversations/conv_1/runs/run_1/events?after=7"
-    ]);
+    expect(
+      calls.map(
+        (request) =>
+          `${request.method} ${new URL(request.url).pathname}${new URL(request.url).search}`
+      )
+    ).toEqual(["GET /api/conversations/conv_1/runs/run_1/events?after=7"]);
     expect(observed).toEqual([]);
     expect(caughtUp).toBe(true);
   });
@@ -532,12 +539,8 @@ describe("api operation catalog and client", () => {
     const emoji = encoder.encode("🌍");
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(
-          new Uint8Array([...encoder.encode(prefix), ...emoji.slice(0, 2)])
-        );
-        controller.enqueue(
-          new Uint8Array([...emoji.slice(2), ...encoder.encode(suffix)])
-        );
+        controller.enqueue(new Uint8Array([...encoder.encode(prefix), ...emoji.slice(0, 2)]));
+        controller.enqueue(new Uint8Array([...emoji.slice(2), ...encoder.encode(suffix)]));
         controller.close();
       }
     });

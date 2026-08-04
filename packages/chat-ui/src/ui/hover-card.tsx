@@ -8,10 +8,7 @@ export const HoverCardTrigger = HoverCardPrimitive.Trigger;
 export const HoverCardContent = forwardRef<
   ElementRef<typeof HoverCardPrimitive.Content>,
   ComponentPropsWithoutRef<typeof HoverCardPrimitive.Content>
->(function HoverCardContent(
-  { className, align = "center", sideOffset = 6, ...props },
-  ref
-) {
+>(function HoverCardContent({ className, align = "center", sideOffset = 6, ...props }, ref) {
   return (
     <HoverCardPrimitive.Portal>
       <HoverCardPrimitive.Content

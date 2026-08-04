@@ -67,7 +67,12 @@ describe("config file extends", () => {
   it("resolves extends chains recursively", async () => {
     const root = await writeFixtures({
       "app.base.yaml": baseConfig,
-      "app.env.yaml": ["extends: ./app.base.yaml", "clientInstance:", "  environment: staging", ""].join("\n"),
+      "app.env.yaml": [
+        "extends: ./app.base.yaml",
+        "clientInstance:",
+        "  environment: staging",
+        ""
+      ].join("\n"),
       "app.yaml": ["extends: ./app.env.yaml", "clientInstance:", "  id: leaf-client", ""].join("\n")
     });
 
@@ -79,7 +84,13 @@ describe("config file extends", () => {
 
   it("lets an overlay switch the UI source without colliding with the base's choice", async () => {
     const root = await writeFixtures({
-      "ui.yaml": ["clientName: Base Co", "defaultLocale: de", "supportedLocales:", "  - de", ""].join("\n"),
+      "ui.yaml": [
+        "clientName: Base Co",
+        "defaultLocale: de",
+        "supportedLocales:",
+        "  - de",
+        ""
+      ].join("\n"),
       "app.base.yaml": `${baseConfig}uiFile: ./ui.yaml\n`,
       "app.yaml": [
         "extends: ./app.base.yaml",

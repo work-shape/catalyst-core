@@ -1,9 +1,7 @@
 import type { ModelProviderConfig, RuntimeAssetSnapshot } from "@vivd-catalyst/core";
 import type { ClientInstanceConfig } from "./schemas";
 import { createClientBranding } from "./branding";
-import {
-  getModelSelectionForAgent
-} from "./selectors";
+import { getModelSelectionForAgent } from "./selectors";
 import {
   resolveConfigLocale,
   resolveLocalizedString,
@@ -30,9 +28,7 @@ export function createSafeConfigView(
         config.modelProviders.find((provider) => provider.id === binding.providerId)!
       )
     }));
-  const selectableModelBindingIds = new Set(
-    selectableModels.map((model) => model.bindingId)
-  );
+  const selectableModelBindingIds = new Set(selectableModels.map((model) => model.bindingId));
 
   return {
     clientInstance: {
@@ -65,7 +61,11 @@ export function createSafeConfigView(
     selectableModels,
     agents: assets.agents.map((agent) => ({
       name: agent.name,
-      displayName: resolveLocalizedString(agent.displayName, locale, config.localization.defaultLocale),
+      displayName: resolveLocalizedString(
+        agent.displayName,
+        locale,
+        config.localization.defaultLocale
+      ),
       ...compactionThresholdView(getModelSelectionForAgent(config, agent).provider),
       ...(agent.modelBindingId && selectableModelBindingIds.has(agent.modelBindingId)
         ? { defaultModelBindingId: agent.modelBindingId }
@@ -81,17 +81,25 @@ export function createSafeConfigView(
         config.localization.defaultLocale
       ),
       initialPrompts: agent.initialPrompts.map((initialPrompt) => ({
-        title: resolveLocalizedString(initialPrompt.title, locale, config.localization.defaultLocale),
-        prompt: resolveLocalizedString(initialPrompt.prompt, locale, config.localization.defaultLocale)
+        title: resolveLocalizedString(
+          initialPrompt.title,
+          locale,
+          config.localization.defaultLocale
+        ),
+        prompt: resolveLocalizedString(
+          initialPrompt.prompt,
+          locale,
+          config.localization.defaultLocale
+        )
       }))
     })),
     ui
   };
 }
 
-function compactionThresholdView(
-  provider: ModelProviderConfig
-): { compactThresholdTokens?: number } {
+function compactionThresholdView(provider: ModelProviderConfig): {
+  compactThresholdTokens?: number;
+} {
   const compactThresholdTokens =
     provider.type === "openai-compatible"
       ? provider.contextManagement?.compaction?.compactThresholdTokens

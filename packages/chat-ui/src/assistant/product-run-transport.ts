@@ -1,5 +1,9 @@
 import type { ChatTransport, UIMessage, UIMessageChunk } from "ai";
-import type { ApiClient, LocaleCode, StartConversationRunResponse } from "@vivd-catalyst/api-client";
+import type {
+  ApiClient,
+  LocaleCode,
+  StartConversationRunResponse
+} from "@vivd-catalyst/api-client";
 import { firstLineTitle } from "../conversation-title";
 
 export interface ProductRunTransportOptions {
@@ -25,7 +29,9 @@ export class ProductConversationRunTransport implements ChatTransport<UIMessage>
     messageId,
     messages,
     trigger
-  }: Parameters<ChatTransport<UIMessage>["sendMessages"]>[0]): Promise<ReadableStream<UIMessageChunk>> {
+  }: Parameters<ChatTransport<UIMessage>["sendMessages"]>[0]): Promise<
+    ReadableStream<UIMessageChunk>
+  > {
     if (trigger !== "submit-message") {
       throw new Error("Only new message submission is supported by the product run transport.");
     }

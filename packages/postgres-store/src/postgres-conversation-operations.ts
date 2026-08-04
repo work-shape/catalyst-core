@@ -49,7 +49,12 @@ export async function getConversation(
   const [row] = await db
     .select()
     .from(conversations)
-    .where(and(eq(conversations.clientInstanceId, clientInstanceId), eq(conversations.id, conversationId)))
+    .where(
+      and(
+        eq(conversations.clientInstanceId, clientInstanceId),
+        eq(conversations.id, conversationId)
+      )
+    )
     .limit(1);
   return row ? mapConversation(row) : undefined;
 }
@@ -327,5 +332,10 @@ export async function touchConversation(
   await db
     .update(conversations)
     .set({ updatedAt })
-    .where(and(eq(conversations.clientInstanceId, clientInstanceId), eq(conversations.id, conversationId)));
+    .where(
+      and(
+        eq(conversations.clientInstanceId, clientInstanceId),
+        eq(conversations.id, conversationId)
+      )
+    );
 }

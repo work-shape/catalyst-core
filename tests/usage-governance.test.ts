@@ -6,10 +6,7 @@ import {
   type UsageRateCardConfig
 } from "@vivd-catalyst/core";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
-import {
-  ModelUsageGovernance,
-  calculateUsageCost
-} from "@vivd-catalyst/usage-governance";
+import { ModelUsageGovernance, calculateUsageCost } from "@vivd-catalyst/usage-governance";
 
 const customerRateCard: UsageRateCardConfig = {
   id: "customer",
@@ -148,13 +145,9 @@ describe("model usage governance", () => {
 
   it("does not expose persisted rate-card provenance through the customer summary", async () => {
     const { governance, clientInstanceId } = createGovernance();
-    await governance.recordModelUsage(
-      usageInput(clientInstanceId, { cachedInputTokens: 0 })
-    );
+    await governance.recordModelUsage(usageInput(clientInstanceId, { cachedInputTokens: 0 }));
 
-    const serialized = JSON.stringify(
-      await governance.createSafeSummary({ clientInstanceId })
-    );
+    const serialized = JSON.stringify(await governance.createSafeSummary({ clientInstanceId }));
     expect(serialized).not.toContain("customerBillableCost");
     expect(serialized).not.toContain("rateCardId");
     expect(serialized).not.toContain("appliedRates");
@@ -171,16 +164,12 @@ describe("model usage governance", () => {
       governance.runModelCall(clientInstanceId, async () => "blocked")
     ).rejects.toMatchObject({
       code: "FORBIDDEN",
-      message:
-        "Daily customer billable cost is incomplete; spend budget cannot be evaluated safely"
+      message: "Daily customer billable cost is incomplete; spend budget cannot be evaluated safely"
     });
   });
 
   it("reserves model calls so a daily call limit cannot be raced", async () => {
-    const { governance, clientInstanceId } = createGovernance(
-      {},
-      { modelCallsPerDay: 1 }
-    );
+    const { governance, clientInstanceId } = createGovernance({}, { modelCallsPerDay: 1 });
 
     const attempts = await Promise.allSettled([
       governance.runModelCall(clientInstanceId, async () => {

@@ -1,10 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  ApiError,
-  type ApiClient,
-  type DraftAttachment
-} from "@vivd-catalyst/api-client";
+import { ApiError, type ApiClient, type DraftAttachment } from "@vivd-catalyst/api-client";
 import { workspaceQueryKeys } from "./api/workspace-query-keys";
 import type { LocalUploadingAttachment } from "./assistant-composer";
 
@@ -44,14 +40,15 @@ export function useDraftAttachmentController(
       input.authScope,
       input.selectedConversationId
     ),
-    queryFn: () => input.client.conversations.draftAttachments.list(input.selectedConversationId ?? ""),
+    queryFn: () =>
+      input.client.conversations.draftAttachments.list(input.selectedConversationId ?? ""),
     enabled: input.enabled && input.isAuthenticated && Boolean(input.selectedConversationId),
     refetchInterval: (query) =>
       hasProcessingDraftAttachments((query.state.data as DraftAttachment[] | undefined) ?? [])
         ? 1000
         : false
   });
-  const draftAttachments = input.selectedConversationId ? draftAttachmentsQuery.data ?? [] : [];
+  const draftAttachments = input.selectedConversationId ? (draftAttachmentsQuery.data ?? []) : [];
   const visibleUploadingAttachments = input.selectedConversationId
     ? localUploadingAttachments.filter(
         (attachment) => attachment.conversationId === input.selectedConversationId
@@ -94,15 +91,19 @@ export function useDraftAttachmentController(
       status: "uploading"
     };
     setLocalUploadingAttachments((currentAttachments) => [...currentAttachments, localAttachment]);
-    void input.client
-      .conversations.draftAttachments.upload(conversationId, file)
+    void input.client.conversations.draftAttachments
+      .upload(conversationId, file)
       .then((response) => {
         queryClient.setQueryData(
           workspaceQueryKeys.draftAttachments(input.apiBaseUrl, input.authScope, conversationId),
           response.attachments
         );
         void queryClient.invalidateQueries({
-          queryKey: workspaceQueryKeys.draftAttachments(input.apiBaseUrl, input.authScope, conversationId)
+          queryKey: workspaceQueryKeys.draftAttachments(
+            input.apiBaseUrl,
+            input.authScope,
+            conversationId
+          )
         });
         void queryClient.invalidateQueries({
           queryKey: workspaceQueryKeys.conversations(input.apiBaseUrl, input.authScope)
@@ -122,8 +123,8 @@ export function useDraftAttachmentController(
     if (!input.selectedConversationId) {
       return;
     }
-    void input.client
-      .conversations.draftAttachments.delete(input.selectedConversationId, attachmentId)
+    void input.client.conversations.draftAttachments
+      .delete(input.selectedConversationId, attachmentId)
       .then(() => {
         void queryClient.invalidateQueries({
           queryKey: workspaceQueryKeys.draftAttachments(
@@ -140,8 +141,8 @@ export function useDraftAttachmentController(
     if (!input.selectedConversationId) {
       return;
     }
-    void input.client
-      .conversations.draftAttachments.retry(input.selectedConversationId, attachmentId)
+    void input.client.conversations.draftAttachments
+      .retry(input.selectedConversationId, attachmentId)
       .then((response) => {
         queryClient.setQueryData(
           workspaceQueryKeys.draftAttachments(
@@ -191,7 +192,11 @@ function getSendBlockedReason(
   if (draftAttachments.some((attachment) => attachment.status === "unsupported")) {
     return "Remove unsupported file attachments before sending.";
   }
-  if (draftAttachments.some((attachment) => attachment.status === "queued" || attachment.status === "preprocessing")) {
+  if (
+    draftAttachments.some(
+      (attachment) => attachment.status === "queued" || attachment.status === "preprocessing"
+    )
+  ) {
     return "Wait for file processing to finish before sending.";
   }
   return undefined;

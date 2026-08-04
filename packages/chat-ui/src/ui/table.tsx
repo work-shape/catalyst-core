@@ -1,4 +1,9 @@
-import { forwardRef, type HTMLAttributes, type TdHTMLAttributes, type ThHTMLAttributes } from "react";
+import {
+  forwardRef,
+  type HTMLAttributes,
+  type TdHTMLAttributes,
+  type ThHTMLAttributes
+} from "react";
 import { cn } from "./cn";
 
 export const Table = forwardRef<HTMLTableElement, HTMLAttributes<HTMLTableElement>>(function Table(
@@ -12,22 +17,28 @@ export const Table = forwardRef<HTMLTableElement, HTMLAttributes<HTMLTableElemen
   );
 });
 
-export const TableHeader = forwardRef<HTMLTableSectionElement, HTMLAttributes<HTMLTableSectionElement>>(
-  function TableHeader({ className, ...props }, ref) {
-    return <thead ref={ref} className={cn("[&_tr]:border-b", className)} {...props} />;
-  }
-);
+export const TableHeader = forwardRef<
+  HTMLTableSectionElement,
+  HTMLAttributes<HTMLTableSectionElement>
+>(function TableHeader({ className, ...props }, ref) {
+  return <thead ref={ref} className={cn("[&_tr]:border-b", className)} {...props} />;
+});
 
-export const TableBody = forwardRef<HTMLTableSectionElement, HTMLAttributes<HTMLTableSectionElement>>(
-  function TableBody({ className, ...props }, ref) {
-    return <tbody ref={ref} className={cn("[&_tr:last-child]:border-0", className)} {...props} />;
-  }
-);
+export const TableBody = forwardRef<
+  HTMLTableSectionElement,
+  HTMLAttributes<HTMLTableSectionElement>
+>(function TableBody({ className, ...props }, ref) {
+  return <tbody ref={ref} className={cn("[&_tr:last-child]:border-0", className)} {...props} />;
+});
 
 export const TableRow = forwardRef<HTMLTableRowElement, HTMLAttributes<HTMLTableRowElement>>(
   function TableRow({ className, ...props }, ref) {
     return (
-      <tr ref={ref} className={cn("border-b transition-colors hover:bg-muted/40", className)} {...props} />
+      <tr
+        ref={ref}
+        className={cn("border-b transition-colors hover:bg-muted/40", className)}
+        {...props}
+      />
     );
   }
 );

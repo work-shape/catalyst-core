@@ -29,7 +29,12 @@ export class DevelopmentAuthAdapter implements AuthAdapter {
   private readonly defaultUserId: string | undefined;
 
   constructor(options: DevelopmentAuthAdapterOptions) {
-    const users = options.users && options.users.length > 0 ? options.users : options.user ? [options.user] : [];
+    const users =
+      options.users && options.users.length > 0
+        ? options.users
+        : options.user
+          ? [options.user]
+          : [];
     this.enabled = options.enabled;
     this.usersById = new Map(users.map((user) => [user.id, user]));
     this.defaultUserId = options.defaultUserId ?? users[0]?.id;
@@ -38,7 +43,10 @@ export class DevelopmentAuthAdapter implements AuthAdapter {
       throw new AppError("VALIDATION_FAILED", "Development auth users must have unique ids");
     }
     if (this.defaultUserId && !this.usersById.has(this.defaultUserId)) {
-      throw new AppError("VALIDATION_FAILED", `Default development user '${this.defaultUserId}' is not configured`);
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `Default development user '${this.defaultUserId}' is not configured`
+      );
     }
   }
 

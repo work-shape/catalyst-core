@@ -13,12 +13,14 @@ import {
 
 describe("assistant work grouping", () => {
   it("uses the last non-empty text part as the visible final answer boundary", () => {
-    expect(findFinalAssistantTextPartIndex([
-      textPart("Working"),
-      toolPart("call_lookup"),
-      textPart("Final answer"),
-      dataPart()
-    ])).toBe(2);
+    expect(
+      findFinalAssistantTextPartIndex([
+        textPart("Working"),
+        toolPart("call_lookup"),
+        textPart("Final answer"),
+        dataPart()
+      ])
+    ).toBe(2);
   });
 
   it("keeps completed progress chronological and only groups tool work", () => {
@@ -49,12 +51,7 @@ describe("assistant work grouping", () => {
       toolPart("call_read")
     ];
 
-    expect(groupPaths(parts)).toEqual([
-      [],
-      [ASSISTANT_WORK_GROUP],
-      [],
-      [ASSISTANT_WORK_GROUP]
-    ]);
+    expect(groupPaths(parts)).toEqual([[], [ASSISTANT_WORK_GROUP], [], [ASSISTANT_WORK_GROUP]]);
   });
 
   it("does not collapse normal text-only assistant answers", () => {
@@ -62,10 +59,7 @@ describe("assistant work grouping", () => {
   });
 
   it("keeps source-only parts after the final text uncounted as work steps", () => {
-    const parts = [
-      textPart("Final answer."),
-      sourcePart("web_source_1")
-    ];
+    const parts = [textPart("Final answer."), sourcePart("web_source_1")];
     const workIndices = createCompletedAssistantWorkIndices(parts, 0);
     const items = createAssistantWorkTimelineItems(parts, workIndices);
 
@@ -106,7 +100,9 @@ describe("assistant work grouping", () => {
       textPart("Final answer.")
     ];
     const workIndices = createCompletedAssistantWorkIndices(parts, 5);
-    const toolGroup = createAssistantWorkTimelineItems(parts, workIndices).find((item) => item.type === "tool-group");
+    const toolGroup = createAssistantWorkTimelineItems(parts, workIndices).find(
+      (item) => item.type === "tool-group"
+    );
 
     expect(toolGroup).toEqual({ type: "tool-group", indices: [1, 2, 3] });
     expect(createRenderableAssistantToolGroupIndices(parts, [1, 2, 3])).toEqual([2, 3]);
@@ -132,14 +128,13 @@ describe("assistant work grouping", () => {
   });
 
   it("drops reasoning-only completed work instead of rendering an empty tool group", () => {
-    const parts = [
-      reasoningPart("Thinking."),
-      textPart("Final answer.")
-    ];
+    const parts = [reasoningPart("Thinking."), textPart("Final answer.")];
     const workIndices = createCompletedAssistantWorkIndices(parts, 1);
 
     expect(createAssistantWorkTimelineItems(parts, workIndices)).toEqual([]);
-    expect(countAssistantWorkTimelineSteps(createAssistantWorkTimelineItems(parts, workIndices))).toBe(0);
+    expect(
+      countAssistantWorkTimelineSteps(createAssistantWorkTimelineItems(parts, workIndices))
+    ).toBe(0);
     expect(createRenderableAssistantToolGroupIndices(parts, [0])).toEqual([]);
   });
 
@@ -155,7 +150,9 @@ describe("assistant work grouping", () => {
     expect(createAssistantWorkTimelineItems(parts, workIndices)).toEqual([
       { type: "tool-group", indices: [0, 2] }
     ]);
-    expect(countAssistantWorkTimelineSteps(createAssistantWorkTimelineItems(parts, workIndices))).toBe(1);
+    expect(
+      countAssistantWorkTimelineSteps(createAssistantWorkTimelineItems(parts, workIndices))
+    ).toBe(1);
     expect(createRenderableAssistantToolGroupIndices(parts, [0, 1, 2])).toEqual([0, 2]);
   });
 
@@ -186,16 +183,15 @@ describe("assistant work grouping", () => {
   });
 
   it("keeps standalone tool UIs outside the collapsed work group", () => {
-    const parts = [
-      toolPart("call_view", "show_view"),
-      textPart("Final answer.")
-    ];
+    const parts = [toolPart("call_view", "show_view"), textPart("Final answer.")];
 
-    expect(groupPaths(parts, {
-      toolUIs: {
-        show_view: [{ render: () => null, standalone: true }]
-      }
-    })).toEqual([[], []]);
+    expect(
+      groupPaths(parts, {
+        toolUIs: {
+          show_view: [{ render: () => null, standalone: true }]
+        }
+      })
+    ).toEqual([[], []]);
   });
 
   it("keeps tool-only messages grouped when there is no final text part yet", () => {
@@ -230,11 +226,13 @@ describe("assistant work grouping", () => {
       textPart("Final answer.")
     ];
 
-    expect(createAssistantWorkTimelineItems(parts, [0, 1, 2], {
-      toolUIs: {
-        show_view: [{ render: () => null, standalone: true }]
-      }
-    })).toEqual([
+    expect(
+      createAssistantWorkTimelineItems(parts, [0, 1, 2], {
+        toolUIs: {
+          show_view: [{ render: () => null, standalone: true }]
+        }
+      })
+    ).toEqual([
       { type: "part", index: 0 },
       { type: "part", index: 1 },
       { type: "tool-group", indices: [2] }

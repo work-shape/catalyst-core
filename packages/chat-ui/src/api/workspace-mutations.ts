@@ -61,10 +61,11 @@ export function useApiAccessMutations(
     onSuccess: invalidateApiAccess
   });
   const updatePrincipal = useMutation({
-    mutationFn: (mutationInput: {
-      principalId: string;
-      update: UpdateServicePrincipalRequest;
-    }) => input.client.apiAccess.updateServicePrincipal(mutationInput.principalId, mutationInput.update),
+    mutationFn: (mutationInput: { principalId: string; update: UpdateServicePrincipalRequest }) =>
+      input.client.apiAccess.updateServicePrincipal(
+        mutationInput.principalId,
+        mutationInput.update
+      ),
     onSuccess: invalidateApiAccess
   });
   const createCredential = {
@@ -145,10 +146,18 @@ export function useDeleteConversationMutation(
         }
       );
       queryClient.removeQueries({
-        queryKey: workspaceQueryKeys.thread(input.apiBaseUrl, input.authScope, deletedConversation.id)
+        queryKey: workspaceQueryKeys.thread(
+          input.apiBaseUrl,
+          input.authScope,
+          deletedConversation.id
+        )
       });
       queryClient.removeQueries({
-        queryKey: workspaceQueryKeys.draftAttachments(input.apiBaseUrl, input.authScope, deletedConversation.id)
+        queryKey: workspaceQueryKeys.draftAttachments(
+          input.apiBaseUrl,
+          input.authScope,
+          deletedConversation.id
+        )
       });
       input.clearConversationUploads(deletedConversation.id);
       if (deletedActiveConversation) {
@@ -209,10 +218,7 @@ export function useRenameConversationMutation(
   });
 }
 
-export function useWorkspaceSignOutMutation(input: {
-  apiBaseUrl: string;
-  onSignedOut(): void;
-}) {
+export function useWorkspaceSignOutMutation(input: { apiBaseUrl: string; onSignedOut(): void }) {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -264,7 +270,8 @@ export function useUpdateCurrentUserMutation(input: WorkspaceMutationInput) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (mutationInput: UpdateCurrentUserRequest) => input.client.account.update(mutationInput),
+    mutationFn: (mutationInput: UpdateCurrentUserRequest) =>
+      input.client.account.update(mutationInput),
     onSuccess: (updatedUser) => {
       queryClient.setQueryData(workspaceQueryKeys.me(input.apiBaseUrl), updatedUser);
       void queryClient.invalidateQueries({
@@ -364,7 +371,10 @@ export function useConfigAssetMutations(input: WorkspaceMutationInput) {
     setDefaultAgent,
     revertAsset,
     isPending:
-      putAsset.isPending || deleteAsset.isPending || setDefaultAgent.isPending || revertAsset.isPending
+      putAsset.isPending ||
+      deleteAsset.isPending ||
+      setDefaultAgent.isPending ||
+      revertAsset.isPending
   };
 }
 
@@ -383,7 +393,8 @@ export function useSuperadminUserMutations(input: WorkspaceMutationInput) {
   };
 
   const createUser = useMutation({
-    mutationFn: (mutationInput: CreateAdministeredUserRequest) => input.client.users.create(mutationInput),
+    mutationFn: (mutationInput: CreateAdministeredUserRequest) =>
+      input.client.users.create(mutationInput),
     onSuccess: () => {
       invalidateSuperadminUsers();
       invalidateAuditEvents();

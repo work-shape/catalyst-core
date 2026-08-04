@@ -46,7 +46,9 @@ export function localizedToPair(value: unknown): LocalizedPair {
   return { ...EMPTY_LOCALIZED_PAIR };
 }
 
-export function pairToLocalized(pair: LocalizedPair): string | { en?: string; de?: string } | undefined {
+export function pairToLocalized(
+  pair: LocalizedPair
+): string | { en?: string; de?: string } | undefined {
   const en = pair.en.trim();
   const de = pair.de.trim();
   if (!en && !de) {
@@ -176,7 +178,9 @@ function hasLocalizedContent(pair: LocalizedPair): boolean {
 }
 
 function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : [];
 }
 
 function readValidationIssueMessages(error: unknown): string[] {

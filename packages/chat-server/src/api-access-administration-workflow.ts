@@ -1,7 +1,4 @@
-import type {
-  ApiCredentialScope,
-  ServicePrincipalPermission
-} from "@vivd-catalyst/api-contract";
+import type { ApiCredentialScope, ServicePrincipalPermission } from "@vivd-catalyst/api-contract";
 import {
   AppError,
   asApiCredentialId,
@@ -199,9 +196,7 @@ export class ApiAccessAdministrationWorkflow {
   }
 
   private requireCredentialScopes(scopes: readonly string[] | undefined): void {
-    const invalid = scopes?.find(
-      (scope) => !CREDENTIAL_SCOPES.has(scope as ApiCredentialScope)
-    );
+    const invalid = scopes?.find((scope) => !CREDENTIAL_SCOPES.has(scope as ApiCredentialScope));
     if (invalid) {
       throw new AppError(
         "VALIDATION_FAILED",

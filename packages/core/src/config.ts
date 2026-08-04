@@ -35,8 +35,7 @@ export interface OpenAiCompatibleModelProviderConfig {
 }
 
 export type ModelProviderConfig =
-  | DeterministicModelProviderConfig
-  | OpenAiCompatibleModelProviderConfig;
+  DeterministicModelProviderConfig | OpenAiCompatibleModelProviderConfig;
 
 export type OpenAiCompatibleModelProviderApiConfig = "chat_completions" | "responses";
 export interface OpenAiCompatibleContextManagementConfig {

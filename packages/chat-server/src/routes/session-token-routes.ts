@@ -11,7 +11,10 @@ export function registerSessionTokenRoutes(app: FastifyInstance, options: ChatSe
       throw new AppError("NOT_FOUND", "Session token issuing is not configured");
     }
     const credential = request.headers["x-server-credential"];
-    if (typeof credential !== "string" || !safeEqual(credential, options.sessionToken.serverCredential)) {
+    if (
+      typeof credential !== "string" ||
+      !safeEqual(credential, options.sessionToken.serverCredential)
+    ) {
       throw new AppError("FORBIDDEN", "Invalid server credential");
     }
     const body = parseBody(apiOperations.issueSessionToken.requestSchema, request.body);

@@ -143,7 +143,8 @@ export const skillNameSchema = z
   .string()
   .min(1)
   .regex(/^[A-Za-z][A-Za-z0-9_.-]*$/u, {
-    message: "Skill name must start with a letter and contain only letters, numbers, dots, underscores, or hyphens"
+    message:
+      "Skill name must start with a letter and contain only letters, numbers, dots, underscores, or hyphens"
   });
 
 export const skillConfigSchema = z.object({
@@ -225,32 +226,34 @@ export const usageSafeguardsConfigSchema = z
   })
   .default({});
 
-export const usageRateCardConfigSchema = z
-  .object({
-    id: z.string().min(1),
-    version: z.string().min(1),
-    currency: z.string().regex(/^[A-Z]{3}$/u).default("USD"),
-    models: z
-      .array(
-        z.object({
-          providerId: z.string().min(1),
-          model: z.string().min(1),
-          uncachedInputPricePerMillionTokens: z.number().nonnegative(),
-          cachedInputPricePerMillionTokens: z.number().nonnegative(),
-          outputPricePerMillionTokens: z.number().nonnegative()
-        })
-      )
-      .default([]),
-    webSearch: z
-      .array(
-        z.object({
-          providerId: z.string().min(1),
-          model: z.string().min(1).optional(),
-          pricePerCall: z.number().nonnegative()
-        })
-      )
-      .default([])
-  });
+export const usageRateCardConfigSchema = z.object({
+  id: z.string().min(1),
+  version: z.string().min(1),
+  currency: z
+    .string()
+    .regex(/^[A-Z]{3}$/u)
+    .default("USD"),
+  models: z
+    .array(
+      z.object({
+        providerId: z.string().min(1),
+        model: z.string().min(1),
+        uncachedInputPricePerMillionTokens: z.number().nonnegative(),
+        cachedInputPricePerMillionTokens: z.number().nonnegative(),
+        outputPricePerMillionTokens: z.number().nonnegative()
+      })
+    )
+    .default([]),
+  webSearch: z
+    .array(
+      z.object({
+        providerId: z.string().min(1),
+        model: z.string().min(1).optional(),
+        pricePerCall: z.number().nonnegative()
+      })
+    )
+    .default([])
+});
 
 export const usageCostConfigSchema = z
   .object({
@@ -302,7 +305,9 @@ export const webAccessConfigSchema = z
     search: z
       .object({
         enabled: z.boolean().default(false),
-        mode: z.enum(["native_or_managed", "native_only", "managed_only"]).default("native_or_managed"),
+        mode: z
+          .enum(["native_or_managed", "native_only", "managed_only"])
+          .default("native_or_managed"),
         managedProvider: z.string().min(1).optional()
       })
       .default({
@@ -351,10 +356,7 @@ export const executionWorkspacesConfigSchema = z
     runner: z
       .object({
         mode: z.enum(["local", "docker"]).default("docker"),
-        image: z
-          .string()
-          .min(1)
-          .default("ghcr.io/vivd-solutions/catalyst-runner-base:placeholder"),
+        image: z.string().min(1).default("ghcr.io/vivd-solutions/catalyst-runner-base:placeholder"),
         networkMode: z.literal("none").default("none"),
         readOnlyRootFilesystem: z.boolean().default(true),
         cpuCount: z.number().positive().default(1),
@@ -375,9 +377,21 @@ export const executionWorkspacesConfigSchema = z
         defaultTimeoutSeconds: z.number().int().positive().default(60),
         maxTimeoutSeconds: z.number().int().positive().default(300),
         idleTimeoutSeconds: z.number().int().positive().default(30),
-        maxStdoutBytes: z.number().int().positive().default(64 * 1024),
-        maxStderrBytes: z.number().int().positive().default(64 * 1024),
-        maxWorkspaceBytes: z.number().int().positive().default(100 * 1024 * 1024)
+        maxStdoutBytes: z
+          .number()
+          .int()
+          .positive()
+          .default(64 * 1024),
+        maxStderrBytes: z
+          .number()
+          .int()
+          .positive()
+          .default(64 * 1024),
+        maxWorkspaceBytes: z
+          .number()
+          .int()
+          .positive()
+          .default(100 * 1024 * 1024)
       })
       .default({
         defaultTimeoutSeconds: 60,
@@ -391,7 +405,11 @@ export const executionWorkspacesConfigSchema = z
       .object({
         concurrency: z.number().int().positive().default(1),
         pollIntervalMs: z.number().int().positive().default(1000),
-        leaseDurationMs: z.number().int().positive().default(10 * 60 * 1000),
+        leaseDurationMs: z
+          .number()
+          .int()
+          .positive()
+          .default(10 * 60 * 1000),
         heartbeatIntervalMs: z.number().int().positive().default(5000),
         cancellationPollIntervalMs: z.number().int().positive().default(1000),
         staleRecoveryIntervalMs: z.number().int().positive().default(30000),
@@ -408,10 +426,22 @@ export const executionWorkspacesConfigSchema = z
       }),
     cleanup: z
       .object({
-        deletedWorkspaceCleanupIntervalMs: z.number().int().positive().default(60 * 60 * 1000),
+        deletedWorkspaceCleanupIntervalMs: z
+          .number()
+          .int()
+          .positive()
+          .default(60 * 60 * 1000),
         deletedWorkspaceCleanupBatchSize: z.number().int().positive().default(100),
-        tempStateCleanupIntervalMs: z.number().int().positive().default(10 * 60 * 1000),
-        hydratedWorkspaceIdleTtlMs: z.number().int().nonnegative().default(60 * 60 * 1000)
+        tempStateCleanupIntervalMs: z
+          .number()
+          .int()
+          .positive()
+          .default(10 * 60 * 1000),
+        hydratedWorkspaceIdleTtlMs: z
+          .number()
+          .int()
+          .nonnegative()
+          .default(60 * 60 * 1000)
       })
       .default({
         deletedWorkspaceCleanupIntervalMs: 60 * 60 * 1000,
@@ -518,9 +548,7 @@ export const uiConfigSchema = z
     faviconUrl: z.string().url().or(z.string().startsWith("/")).optional(),
     title: localizedStringSchema.default("Vivd Catalyst"),
     welcomeMessage: localizedStringSchema.default("How can I help?"),
-    resources: z
-      .object({ enabled: z.boolean().default(true) })
-      .default({ enabled: true }),
+    resources: z.object({ enabled: z.boolean().default(true) }).default({ enabled: true }),
     accentColor: z.string().min(1).default("#0f766e"),
     theme: lightUiThemeSchema,
     darkTheme: darkUiThemeSchema,
@@ -577,12 +605,8 @@ export const clientInstanceConfigSchema = z.object({
   }),
   auth: z
     .object({
-      standalone: z
-        .object(standaloneAuthConfigSchema.shape)
-        .optional(),
-      development: z
-        .object(developmentAuthConfigSchema.shape)
-        .optional(),
+      standalone: z.object(standaloneAuthConfigSchema.shape).optional(),
+      development: z.object(developmentAuthConfigSchema.shape).optional(),
       sessionToken: z
         .object({
           issuer: z.string().min(1).default("vivd-catalyst"),
@@ -633,9 +657,7 @@ export const clientInstanceConfigSchema = z.object({
       safeguards: {},
       costs: {}
     }),
-  tools: z
-    .array(toolInstanceConfigSchema)
-    .default([]),
+  tools: z.array(toolInstanceConfigSchema).default([]),
   dataSources: z.record(z.string(), dataSourceConfigSchema).default({}),
   ui: uiConfigSchema
 });

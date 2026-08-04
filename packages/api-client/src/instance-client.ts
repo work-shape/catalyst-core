@@ -1,8 +1,4 @@
-import {
-  apiOperations,
-  type ConfigAssetKind,
-  type LocaleCode
-} from "@vivd-catalyst/api-contract";
+import { apiOperations, type ConfigAssetKind, type LocaleCode } from "@vivd-catalyst/api-contract";
 import * as generatedSdk from "./generated/sdk.gen";
 import type { ApiClientTransport, OperationRequestInput } from "./transport";
 
@@ -122,9 +118,7 @@ function createConfigAssetsClient(transport: ApiClientTransport) {
         }),
         apiOperations.deleteConfigAsset.responseSchema
       ),
-    setDefaultAgent: (
-      input: OperationRequestInput<typeof apiOperations.setDefaultConfigAgent>
-    ) =>
+    setDefaultAgent: (input: OperationRequestInput<typeof apiOperations.setDefaultConfigAgent>) =>
       transport.unwrapJson(
         generatedSdk.setDefaultConfigAgent({
           client: transport.generatedClient,

@@ -113,10 +113,7 @@ export class LocalAgentRuntime implements AgentRuntime {
     this.options = options;
   }
 
-  async start(
-    input: StartAgentRunInput,
-    context: RuntimeCallContext
-  ): Promise<AgentRunHandle> {
+  async start(input: StartAgentRunInput, context: RuntimeCallContext): Promise<AgentRunHandle> {
     const runId = input.preparedRun?.id ?? createPlatformId<"AgentRunId">("run");
     if (this.runs.has(runId)) {
       throw new AppError("CONFLICT", "Agent run is already active");
@@ -197,10 +194,7 @@ export class LocalAgentRuntime implements AgentRuntime {
     return state.observe(options);
   }
 
-  async getStatus(
-    runId: AgentRunId,
-    context: RuntimeCallContext
-  ): Promise<AgentRunStatus> {
+  async getStatus(runId: AgentRunId, context: RuntimeCallContext): Promise<AgentRunStatus> {
     const state = this.runs.get(runId);
     if (state) {
       return state.getStatus();
@@ -234,9 +228,7 @@ export class LocalAgentRuntime implements AgentRuntime {
   ): Promise<void> {
     const state = this.getRun(runId);
     const partialText = state.beginCancellation();
-    this.runAbortControllers
-      .get(runId)
-      ?.abort(reason ?? "Agent run was cancelled");
+    this.runAbortControllers.get(runId)?.abort(reason ?? "Agent run was cancelled");
     await this.options.agentRunStore?.updateAgentRunStatus({
       clientInstanceId: context.clientInstanceId,
       runId,
@@ -254,7 +246,10 @@ export class LocalAgentRuntime implements AgentRuntime {
           })
         )?.conversationId;
       if (!conversationId) {
-        throw new AppError("INTERNAL", "Cannot persist cancelled assistant response without a conversation id");
+        throw new AppError(
+          "INTERNAL",
+          "Cannot persist cancelled assistant response without a conversation id"
+        );
       }
       partialMessage = await this.options.conversationHistory.appendMessage({
         clientInstanceId: context.clientInstanceId,
@@ -314,9 +309,8 @@ export class LocalAgentRuntime implements AgentRuntime {
     let runCompacted = false;
 
     for (let step = 0; step < maxSteps; step += 1) {
-      const { completion, emittedDeltas, reasoning } = await this.options.usageGovernance.runModelCall(
-        context.clientInstanceId,
-        async () => {
+      const { completion, emittedDeltas, reasoning } =
+        await this.options.usageGovernance.runModelCall(context.clientInstanceId, async () => {
           const modelResult = await this.completeWithProvider(
             {
               providerId: modelSelection.provider.id,
@@ -340,8 +334,7 @@ export class LocalAgentRuntime implements AgentRuntime {
             completion: modelResult.completion
           });
           return modelResult;
-        }
-      );
+        });
       providerContinuation = completion.continuation;
       const compactedThisCall = completion.contextManagement?.compacted === true;
       runCompacted ||= compactedThisCall;
@@ -425,7 +418,11 @@ export class LocalAgentRuntime implements AgentRuntime {
           toolCall,
           toolExecution: this.options.toolExecution,
           modelContext: this.modelContextOptions(context),
-          repeatedToolCall: this.registerToolCall(repeatedToolCalls, toolCall.input, toolCall.toolName)
+          repeatedToolCall: this.registerToolCall(
+            repeatedToolCalls,
+            toolCall.input,
+            toolCall.toolName
+          )
         });
         if (isCancellationRequested(state.getStatus())) {
           return;
@@ -535,16 +532,17 @@ export class LocalAgentRuntime implements AgentRuntime {
     return state;
   }
 
-  private getModelSelectionForAgent(agent: AgentConfig, userSelectedBindingId?: string): {
+  private getModelSelectionForAgent(
+    agent: AgentConfig,
+    userSelectedBindingId?: string
+  ): {
     provider: ModelProviderConfig;
     model: string;
     reasoningEffort?: ReasoningEffortConfig;
   } {
     const bindingId = userSelectedBindingId ?? agent.modelBindingId;
     if (bindingId) {
-      const binding = this.options.modelBindings?.find(
-        (candidate) => candidate.id === bindingId
-      );
+      const binding = this.options.modelBindings?.find((candidate) => candidate.id === bindingId);
       if (!binding) {
         throw new AppError("NOT_FOUND", `Model binding '${bindingId}' is not defined`);
       }
@@ -565,7 +563,9 @@ export class LocalAgentRuntime implements AgentRuntime {
       };
     }
 
-    const provider = this.getModelProvider(agent.modelProviderId ?? this.options.defaultModelProvider.id);
+    const provider = this.getModelProvider(
+      agent.modelProviderId ?? this.options.defaultModelProvider.id
+    );
     return {
       provider,
       model: provider.model,
@@ -611,10 +611,7 @@ export class LocalAgentRuntime implements AgentRuntime {
           this.options.historyMessageLimit ?? DEFAULT_CONVERSATION_HISTORY_LIMIT
         );
     return {
-      messages: await projectAgentVisibleHistory(
-        activeHistory,
-        this.modelContextOptions(context)
-      ),
+      messages: await projectAgentVisibleHistory(activeHistory, this.modelContextOptions(context)),
       ...(checkpoint
         ? {
             providerContinuation: {
@@ -760,7 +757,11 @@ export class LocalAgentRuntime implements AgentRuntime {
       throw new AppError("INTERNAL", "Model provider stream ended without a completion");
     }
 
-    const unstreamedText = getUnstreamedCompletionText(completion.text, streamedText, emittedDeltas);
+    const unstreamedText = getUnstreamedCompletionText(
+      completion.text,
+      streamedText,
+      emittedDeltas
+    );
     if (unstreamedText.length > 0) {
       emittedDeltas = true;
       state.emit({
@@ -790,10 +791,7 @@ function getProviderCompactionThreshold(provider: ModelProviderConfig): number |
     : undefined;
 }
 
-function findLatestCompactionCheckpointIndex(
-  messages: ChatMessage[],
-  providerId: string
-): number {
+function findLatestCompactionCheckpointIndex(messages: ChatMessage[], providerId: string): number {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const continuation = readAssistantProviderContinuation(messages[index]?.metadata);
     if (continuation?.providerId === providerId) {

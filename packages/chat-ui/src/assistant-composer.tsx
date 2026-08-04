@@ -1,5 +1,14 @@
 import { ComposerPrimitive, useAuiState, useComposer } from "@assistant-ui/react";
-import { CheckCircle2, FileText, ImageIcon, Paperclip, RotateCcw, Send, Square, X } from "lucide-react";
+import {
+  CheckCircle2,
+  FileText,
+  ImageIcon,
+  Paperclip,
+  RotateCcw,
+  Send,
+  Square,
+  X
+} from "lucide-react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { useCallback, useLayoutEffect, useRef } from "react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
@@ -179,31 +188,31 @@ export function AssistantComposer({
             <div className="flex min-w-0 items-center gap-1">
               {attachmentsEnabled ? (
                 <>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="sr-only"
-                  multiple
-                  accept={attachmentAccept}
-                  onChange={(event) => {
-                    const files = [...(event.currentTarget.files ?? [])];
-                    event.currentTarget.value = "";
-                    if (files.length > 0) {
-                      onFilesSelected(files);
-                    }
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 text-muted-foreground"
-                  title={t("addAttachment")}
-                  aria-label={t("addAttachment")}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Paperclip size={16} aria-hidden="true" />
-                </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="sr-only"
+                    multiple
+                    accept={attachmentAccept}
+                    onChange={(event) => {
+                      const files = [...(event.currentTarget.files ?? [])];
+                      event.currentTarget.value = "";
+                      if (files.length > 0) {
+                        onFilesSelected(files);
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 text-muted-foreground"
+                    title={t("addAttachment")}
+                    aria-label={t("addAttachment")}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Paperclip size={16} aria-hidden="true" />
+                  </Button>
                 </>
               ) : null}
               {selectableModels.length > 1 ? (
@@ -281,7 +290,9 @@ function DraftAttachmentList({
           failed={attachment.status === "failed"}
           unsupported={attachment.status === "unsupported"}
           onRemove={() => onRemoveAttachment(attachment.id)}
-          onRetry={attachment.status === "failed" ? () => onRetryAttachment(attachment.id) : undefined}
+          onRetry={
+            attachment.status === "failed" ? () => onRetryAttachment(attachment.id) : undefined
+          }
         />
       ))}
     </div>
@@ -313,8 +324,12 @@ function AttachmentChip({
     <span
       className={cn(
         "inline-flex max-w-full items-center gap-2 rounded-md border bg-background px-2 py-1 text-xs shadow-xs",
-        failed || unsupported ? "border-destructive/40 text-destructive" : "border-border text-foreground",
-        ready ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300" : undefined
+        failed || unsupported
+          ? "border-destructive/40 text-destructive"
+          : "border-border text-foreground",
+        ready
+          ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300"
+          : undefined
       )}
     >
       {isImageMimeType(mimeType) ? (
@@ -416,14 +431,13 @@ function ComposerAction({
     optimisticPending,
     threadRunning
   });
-  const effectiveDisabledReason = disabledReason ?? (activeRunBlocked ? t("conversationStillRunning") : undefined);
-  const sendDisabled = disabled || activeRunBlocked || Boolean(onSubmitMessage && currentText.trim().length === 0);
-  const handleSendClick = useCallback(
-    () => {
-      onSubmitMessage?.(currentText);
-    },
-    [currentText, onSubmitMessage]
-  );
+  const effectiveDisabledReason =
+    disabledReason ?? (activeRunBlocked ? t("conversationStillRunning") : undefined);
+  const sendDisabled =
+    disabled || activeRunBlocked || Boolean(onSubmitMessage && currentText.trim().length === 0);
+  const handleSendClick = useCallback(() => {
+    onSubmitMessage?.(currentText);
+  }, [currentText, onSubmitMessage]);
   const cancelButton = (
     <Button
       type="button"
@@ -444,8 +458,20 @@ function ComposerAction({
         ) : (
           cancelButton
         )
+      ) : onSubmitMessage ? (
+        <Button
+          type="button"
+          size="icon"
+          className="absolute inset-0 size-9"
+          aria-label={t("sendMessage")}
+          title={effectiveDisabledReason ?? t("sendMessage")}
+          disabled={sendDisabled}
+          onClick={handleSendClick}
+        >
+          <Send size={17} aria-hidden="true" />
+        </Button>
       ) : (
-        onSubmitMessage ? (
+        <ComposerPrimitive.Send asChild>
           <Button
             type="button"
             size="icon"
@@ -453,24 +479,10 @@ function ComposerAction({
             aria-label={t("sendMessage")}
             title={effectiveDisabledReason ?? t("sendMessage")}
             disabled={sendDisabled}
-            onClick={handleSendClick}
           >
             <Send size={17} aria-hidden="true" />
           </Button>
-        ) : (
-          <ComposerPrimitive.Send asChild>
-            <Button
-              type="button"
-              size="icon"
-              className="absolute inset-0 size-9"
-              aria-label={t("sendMessage")}
-              title={effectiveDisabledReason ?? t("sendMessage")}
-              disabled={sendDisabled}
-            >
-              <Send size={17} aria-hidden="true" />
-            </Button>
-          </ComposerPrimitive.Send>
-        )
+        </ComposerPrimitive.Send>
       )}
     </div>
   );
@@ -487,13 +499,16 @@ function formatFileSize(byteSize: number): string {
 }
 
 function isImageMimeType(mimeType: string | undefined): boolean {
-  return mimeType === "image/png" || mimeType === "image/jpeg" || mimeType === "image/webp" || mimeType === "image/gif";
+  return (
+    mimeType === "image/png" ||
+    mimeType === "image/jpeg" ||
+    mimeType === "image/webp" ||
+    mimeType === "image/gif"
+  );
 }
 
 export function formatModelLabel(model: string): string {
-  return model
-    .replace(/^gpt-/iu, "GPT-")
-    .replace(/-(sol|terra|luna)$/iu, (_, tier: string) => {
-      return ` ${tier.charAt(0).toUpperCase()}${tier.slice(1).toLowerCase()}`;
-    });
+  return model.replace(/^gpt-/iu, "GPT-").replace(/-(sol|terra|luna)$/iu, (_, tier: string) => {
+    return ` ${tier.charAt(0).toUpperCase()}${tier.slice(1).toLowerCase()}`;
+  });
 }

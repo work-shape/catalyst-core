@@ -16,8 +16,7 @@ export function resolveContextUsage(
     const snapshot = readAssistantModelContextSnapshot(messages[index]?.metadata);
     if (snapshot && snapshot.inputTokens > 0) {
       return {
-        inputTokens:
-          snapshot.inputTokens + estimateMessageTokens(messages.slice(index)),
+        inputTokens: snapshot.inputTokens + estimateMessageTokens(messages.slice(index)),
         compactThresholdTokens
       };
     }

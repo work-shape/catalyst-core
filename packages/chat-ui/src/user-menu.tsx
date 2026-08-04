@@ -86,7 +86,9 @@ export function UserMenu({
         >
           <div className="min-w-0 border-b px-2 pb-2">
             <p className="truncate text-sm font-medium">{label}</p>
-            {user?.email ? <p className="truncate text-xs text-muted-foreground">{user.email}</p> : null}
+            {user?.email ? (
+              <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+            ) : null}
           </div>
           <Button
             type="button"
@@ -120,10 +122,8 @@ export function UserMenu({
 }
 
 function getInitials(label: string): string {
-  const words = label
-    .trim()
-    .split(/\s+/u)
-    .filter(Boolean);
-  const initials = words.length > 1 ? `${words[0]?.[0] ?? ""}${words[1]?.[0] ?? ""}` : label.slice(0, 2);
+  const words = label.trim().split(/\s+/u).filter(Boolean);
+  const initials =
+    words.length > 1 ? `${words[0]?.[0] ?? ""}${words[1]?.[0] ?? ""}` : label.slice(0, 2);
   return initials.toUpperCase() || "U";
 }

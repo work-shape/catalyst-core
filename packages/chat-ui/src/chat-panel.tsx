@@ -112,7 +112,10 @@ export function ChatPanel({
 
   if (config && config.agents.length === 0) {
     return (
-      <section className="grid min-h-0 min-w-0 place-items-center overflow-hidden bg-background px-5" aria-label="Chat">
+      <section
+        className="grid min-h-0 min-w-0 place-items-center overflow-hidden bg-background px-5"
+        aria-label="Chat"
+      >
         <div className="inline-flex max-w-md items-center gap-2 rounded-md border px-4 py-3 text-sm text-muted-foreground">
           <CircleAlert size={17} aria-hidden="true" />
           <span>{t("instanceNotConfigured")}</span>
@@ -122,8 +125,14 @@ export function ChatPanel({
   }
 
   return (
-    <section className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden bg-background" aria-label="Chat">
-      <div className="grid min-h-0 content-start gap-4 overflow-auto bg-background px-5 pb-5 pt-20" aria-live="polite">
+    <section
+      className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden bg-background"
+      aria-label="Chat"
+    >
+      <div
+        className="grid min-h-0 content-start gap-4 overflow-auto bg-background px-5 pb-5 pt-20"
+        aria-live="polite"
+      >
         {notice ? (
           <div className="inline-flex w-fit max-w-[min(42rem,100%)] items-center gap-2 rounded-md border border-amber-300/70 bg-amber-50 px-3 py-2 text-sm text-amber-900">
             <CircleAlert size={17} aria-hidden="true" />
@@ -148,7 +157,11 @@ export function ChatPanel({
         ) : null}
       </div>
 
-      <form ref={composerFormRef} className="grid grid-cols-[minmax(0,1fr)_2.75rem] gap-2.5 border-t bg-background px-5 py-4" onSubmit={onSubmit}>
+      <form
+        ref={composerFormRef}
+        className="grid grid-cols-[minmax(0,1fr)_2.75rem] gap-2.5 border-t bg-background px-5 py-4"
+        onSubmit={onSubmit}
+      >
         <Textarea
           ref={composerInputRef}
           className="max-h-40 min-h-11 resize-none overflow-y-auto py-2.5"
@@ -157,7 +170,12 @@ export function ChatPanel({
           placeholder={t("messagePlaceholder")}
           rows={1}
         />
-        <Button type="submit" size="icon" disabled={!draft.trim() || sending} aria-label={t("sendMessage")}>
+        <Button
+          type="submit"
+          size="icon"
+          disabled={!draft.trim() || sending}
+          aria-label={t("sendMessage")}
+        >
           <Send size={18} aria-hidden="true" />
         </Button>
       </form>
@@ -166,5 +184,8 @@ export function ChatPanel({
 }
 
 function getDefaultAgent(config: SafeConfig | undefined): SafeConfig["agents"][number] | undefined {
-  return config?.agents.find((candidate) => candidate.name === config.defaultAgentName) ?? config?.agents[0];
+  return (
+    config?.agents.find((candidate) => candidate.name === config.defaultAgentName) ??
+    config?.agents[0]
+  );
 }

@@ -170,13 +170,16 @@ export class ArtifactPreviewWorker {
       HARD_MAX_RASTER_DIMENSION
     );
     this.conversionTimeoutMs = options.conversionTimeoutMs ?? DEFAULT_CONVERSION_TIMEOUT_MS;
-    this.rasterizationTimeoutMs = options.rasterizationTimeoutMs ?? DEFAULT_RASTERIZATION_TIMEOUT_MS;
+    this.rasterizationTimeoutMs =
+      options.rasterizationTimeoutMs ?? DEFAULT_RASTERIZATION_TIMEOUT_MS;
     this.previewDpi = options.previewDpi ?? DEFAULT_PREVIEW_DPI;
     this.outputFormat = options.outputFormat ?? DEFAULT_OUTPUT_FORMAT;
     this.now = options.now ?? (() => new Date().toISOString());
   }
 
-  async runOnce(input: { recoverStale?: boolean } = {}): Promise<ArtifactPreviewWorkerRunOnceResult> {
+  async runOnce(
+    input: { recoverStale?: boolean } = {}
+  ): Promise<ArtifactPreviewWorkerRunOnceResult> {
     if (input.recoverStale ?? true) {
       await this.recoverStaleJobs();
     }
@@ -292,7 +295,11 @@ export class ArtifactPreviewWorker {
       clientInstanceId: job.clientInstanceId,
       artifactId: job.sourceArtifactId
     });
-    if (!source || source.conversationId !== job.conversationId || source.checksum !== job.sourceChecksum) {
+    if (
+      !source ||
+      source.conversationId !== job.conversationId ||
+      source.checksum !== job.sourceChecksum
+    ) {
       return this.failClaimedJob(job, previewFailure("source_missing", false));
     }
 
@@ -372,10 +379,12 @@ export class ArtifactPreviewWorker {
         throw previewFailure("source_missing", false);
       }
       try {
-        return (await this.sourceReader.readArtifact({
-          clientInstanceId: source.clientInstanceId,
-          artifactId: source.id
-        })).bytes;
+        return (
+          await this.sourceReader.readArtifact({
+            clientInstanceId: source.clientInstanceId,
+            artifactId: source.id
+          })
+        ).bytes;
       } catch {
         void localError;
         throw previewFailure("source_missing", false);
@@ -383,18 +392,25 @@ export class ArtifactPreviewWorker {
     }
   }
 
-  private startLeaseRenewal(job: ArtifactPreviewJobRecord, controller: AbortController): () => void {
+  private startLeaseRenewal(
+    job: ArtifactPreviewJobRecord,
+    controller: AbortController
+  ): () => void {
     const timer = setInterval(() => {
       const renewedAt = this.now();
-      void this.store.renewClaimedArtifactPreviewJobLease({
-        clientInstanceId: job.clientInstanceId,
-        jobId: job.id,
-        leaseToken: requiredLeaseToken(job),
-        renewedAt,
-        leaseExpiresAt: addMilliseconds(renewedAt, this.leaseDurationMs)
-      }).catch((error: unknown) => {
-        controller.abort(error instanceof Error ? error.message : "Artifact preview lease was lost");
-      });
+      void this.store
+        .renewClaimedArtifactPreviewJobLease({
+          clientInstanceId: job.clientInstanceId,
+          jobId: job.id,
+          leaseToken: requiredLeaseToken(job),
+          renewedAt,
+          leaseExpiresAt: addMilliseconds(renewedAt, this.leaseDurationMs)
+        })
+        .catch((error: unknown) => {
+          controller.abort(
+            error instanceof Error ? error.message : "Artifact preview lease was lost"
+          );
+        });
     }, this.leaseRenewIntervalMs);
     timer.unref?.();
     return () => clearInterval(timer);
@@ -430,7 +446,12 @@ export class ArtifactPreviewWorker {
             : undefined;
         const slideNumber =
           input.sourceKind === "presentation" ? (page.slideNumber ?? index + 1) : undefined;
-        const filename = createPreviewFilename(input.source, input.sourceKind, index + 1, input.rendered.format);
+        const filename = createPreviewFilename(
+          input.source,
+          input.sourceKind,
+          index + 1,
+          input.rendered.format
+        );
         const previewRole = previewRoleForPage(input.sourceKind, page);
         previewArtifacts.push({
           sourceFileId: input.source.sourceFileId,
@@ -465,7 +486,9 @@ export class ArtifactPreviewWorker {
   }
 
   private async deleteStagedObjects(objectKeys: string[]): Promise<void> {
-    await Promise.allSettled(objectKeys.map((objectKey) => this.objectStore.deleteObject(objectKey)));
+    await Promise.allSettled(
+      objectKeys.map((objectKey) => this.objectStore.deleteObject(objectKey))
+    );
   }
 
   private markUnsupported(job: ArtifactPreviewJobRecord): Promise<ArtifactPreviewJobRecord> {

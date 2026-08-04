@@ -19,9 +19,7 @@ export type AuditEventId = Brand<string, "AuditEventId">;
 export type ModelUsageEventId = Brand<string, "ModelUsageEventId">;
 export type StructuredDataResourceId = Brand<string, "StructuredDataResourceId">;
 
-export function createPlatformId<TBrand extends string>(
-  prefix: string
-): Brand<string, TBrand> {
+export function createPlatformId<TBrand extends string>(prefix: string): Brand<string, TBrand> {
   const random = globalThis.crypto?.randomUUID?.() ?? fallbackRandomId();
   return `${prefix}_${random}` as Brand<string, TBrand>;
 }

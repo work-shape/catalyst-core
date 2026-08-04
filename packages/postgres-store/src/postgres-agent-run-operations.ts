@@ -121,9 +121,7 @@ export async function releaseRunStartCommand(
   db: PostgresDatabase,
   input: ReleaseRunStartCommandInput
 ): Promise<void> {
-  await db
-    .delete(runStartCommands)
-    .where(runStartCommandPendingClaimWhere(input));
+  await db.delete(runStartCommands).where(runStartCommandPendingClaimWhere(input));
 }
 
 export async function prepareConversationRunStart(
@@ -291,7 +289,9 @@ export async function getAgentRun(
   const [row] = await db
     .select()
     .from(agentRuns)
-    .where(and(eq(agentRuns.clientInstanceId, input.clientInstanceId), eq(agentRuns.id, input.runId)))
+    .where(
+      and(eq(agentRuns.clientInstanceId, input.clientInstanceId), eq(agentRuns.id, input.runId))
+    )
     .limit(1);
   return row ? mapAgentRun(row) : undefined;
 }
@@ -356,7 +356,9 @@ export async function updateAgentRunStatus(
       failedAt: input.failedAt ? new Date(input.failedAt) : undefined,
       error: input.error
     })
-    .where(and(eq(agentRuns.clientInstanceId, input.clientInstanceId), eq(agentRuns.id, input.runId)))
+    .where(
+      and(eq(agentRuns.clientInstanceId, input.clientInstanceId), eq(agentRuns.id, input.runId))
+    )
     .returning();
   if (!row) {
     throw new AppError("NOT_FOUND", "Agent run is not available");
@@ -509,7 +511,9 @@ export async function appendRunObservation(
         lastSequence: drizzleSql<number>`greatest(${agentRuns.lastSequence}, ${input.event.sequence})`,
         updatedAt: new Date(input.event.createdAt)
       })
-      .where(and(eq(agentRuns.clientInstanceId, input.clientInstanceId), eq(agentRuns.id, input.runId)));
+      .where(
+        and(eq(agentRuns.clientInstanceId, input.clientInstanceId), eq(agentRuns.id, input.runId))
+      );
 
     return mapRunObservation(row);
   });

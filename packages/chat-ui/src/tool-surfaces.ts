@@ -1,7 +1,4 @@
-import {
-  isToolDisplayPayload,
-  type ToolDisplayPayload
-} from "./domain-ui-widgets";
+import { isToolDisplayPayload, type ToolDisplayPayload } from "./domain-ui-widgets";
 
 export const WORKSPACE_PROMOTED_SURFACES_DATA_TYPE = "data-workspace-promoted-surfaces";
 

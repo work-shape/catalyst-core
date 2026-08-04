@@ -268,7 +268,9 @@ interface BuiltActivity {
 }
 
 function buildActivity(events: AuditEvent[]): BuiltActivity {
-  const ascending = [...events].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  const ascending = [...events].sort((left, right) =>
+    left.createdAt.localeCompare(right.createdAt)
+  );
   const headline = pickHeadline(ascending);
   const actorSource = headline.actor ? headline : ascending.find((event) => event.actor);
   const actor = resolveActor(actorSource?.actor);
@@ -324,9 +326,7 @@ function collapseRepeatedReads(built: BuiltActivity[]): AuditActivity[] {
 
 function isDefaultVisible(activity: AuditActivity): boolean {
   return (
-    activity.tier === "governance" ||
-    activity.tier === "workflow" ||
-    activity.outcome !== "success"
+    activity.tier === "governance" || activity.tier === "workflow" || activity.outcome !== "success"
   );
 }
 

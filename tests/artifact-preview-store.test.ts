@@ -36,20 +36,17 @@ describe("artifact preview store adapters", () => {
     await expectPreviewJobStaleRecoveryContract(new InMemoryPlatformStore());
   });
 
-  postgresIt(
-    "ensures one deterministic attachment preview source in Postgres",
-    async () => {
-      const store = await PostgresPlatformStore.connect({
-        databaseUrl: databaseUrl!,
-        runMigrations: true
-      });
-      try {
-        await expectManagedArtifactEnsureContract(store);
-      } finally {
-        await store.close();
-      }
+  postgresIt("ensures one deterministic attachment preview source in Postgres", async () => {
+    const store = await PostgresPlatformStore.connect({
+      databaseUrl: databaseUrl!,
+      runMigrations: true
+    });
+    try {
+      await expectManagedArtifactEnsureContract(store);
+    } finally {
+      await store.close();
     }
-  );
+  });
 
   postgresIt(
     "keeps Postgres preview job idempotency scoped to renderer settings identity",

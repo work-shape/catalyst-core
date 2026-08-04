@@ -30,7 +30,9 @@ export class DeterministicModelProvider implements ModelProvider {
       };
     }
 
-    const lastUserMessage = [...request.messages].reverse().find((message) => message.role === "user");
+    const lastUserMessage = [...request.messages]
+      .reverse()
+      .find((message) => message.role === "user");
     const content = modelContentText(lastUserMessage?.content ?? "").trim();
     if (isConversationTitleRequest(request)) {
       return {

@@ -7,7 +7,9 @@ import { vivdCatalystChatUiPlugin } from "@vivd-catalyst/chat-ui/vite";
 const cleanupDirectories: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(cleanupDirectories.map((directory) => rm(directory, { recursive: true, force: true })));
+  await Promise.all(
+    cleanupDirectories.map((directory) => rm(directory, { recursive: true, force: true }))
+  );
   cleanupDirectories.length = 0;
 });
 
@@ -29,7 +31,7 @@ describe("vivdCatalystChatUiPlugin", () => {
     const script = tags?.find((tag) => tag.tag === "script")?.children;
     const style = tags?.find((tag) => tag.tag === "style")?.children;
     expect(script).toContain("vivd-catalyst:theme");
-    expect(script).toContain("defaultMode=\"system\"");
+    expect(script).toContain('defaultMode="system"');
     expect(style).toContain(':root[data-vivd-theme="light"]');
     expect(style).toContain(':root[data-vivd-theme="dark"]');
     expect(style).toContain("--primary:#00a6e3;");
@@ -44,7 +46,9 @@ describe("vivdCatalystChatUiPlugin", () => {
     expect(style).toContain("--info:#38bdf8;");
     expect(style).toContain("--chart-1:#2dd4bf;");
     expect(style).toContain("--sidebar:#f7f9fb;");
-    expect(style).toContain("html,body,#root{background:var(--background);color:var(--foreground);}");
+    expect(style).toContain(
+      "html,body,#root{background:var(--background);color:var(--foreground);}"
+    );
   });
 
   it("skips the branding bootstrap when a default client config is not present", async () => {
@@ -102,24 +106,24 @@ async function createClientFixture(): Promise<string> {
     [
       "clientName: Test Client",
       "title: Test Chat",
-      "accentColor: \"#00a6e3\"",
+      'accentColor: "#00a6e3"',
       "defaultThemeMode: system",
       "theme:",
-      "  accentColor: \"#00a6e3\"",
-      "  accentStrongColor: \"#103258\"",
-      "  backgroundColor: \"#f7f9fb\"",
-      "  surfaceColor: \"#ffffff\"",
-      "  textColor: \"#17252a\"",
-      "  mutedTextColor: \"#5f6b76\"",
-      "  borderColor: \"#dce2e7\"",
+      '  accentColor: "#00a6e3"',
+      '  accentStrongColor: "#103258"',
+      '  backgroundColor: "#f7f9fb"',
+      '  surfaceColor: "#ffffff"',
+      '  textColor: "#17252a"',
+      '  mutedTextColor: "#5f6b76"',
+      '  borderColor: "#dce2e7"',
       "darkTheme:",
-      "  accentColor: \"#00a6e3\"",
-      "  accentStrongColor: \"#8adcf5\"",
-      "  backgroundColor: \"#101615\"",
-      "  surfaceColor: \"#171f1e\"",
-      "  textColor: \"#eef7f6\"",
-      "  mutedTextColor: \"#a5afad\"",
-      "  borderColor: \"#2b3634\"",
+      '  accentColor: "#00a6e3"',
+      '  accentStrongColor: "#8adcf5"',
+      '  backgroundColor: "#101615"',
+      '  surfaceColor: "#171f1e"',
+      '  textColor: "#eef7f6"',
+      '  mutedTextColor: "#a5afad"',
+      '  borderColor: "#2b3634"',
       ""
     ].join("\n"),
     "utf8"

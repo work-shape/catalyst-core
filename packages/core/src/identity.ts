@@ -136,10 +136,9 @@ export function normalizeAuthenticatedUser(user: AuthenticatedUser): Authenticat
   };
 }
 
-export function authContextFromUser(user: AuthenticatedUser): Pick<
-  RuntimeCallContext,
-  "principal" | "subjectUserId" | "delegatedActor" | "scopes"
-> {
+export function authContextFromUser(
+  user: AuthenticatedUser
+): Pick<RuntimeCallContext, "principal" | "subjectUserId" | "delegatedActor" | "scopes"> {
   const normalized = normalizeAuthenticatedUser(user);
   return {
     principal: normalized.principal,

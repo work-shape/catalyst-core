@@ -74,16 +74,27 @@ import {
 } from "./workspace-apply-patch";
 import { resolveWorkspacePreviewImages } from "./workspace-preview-images";
 
-export { shapeWorkspaceCommandOutput, type WorkspaceRawCommandOutput } from "./workspace-tool-results";
+export {
+  shapeWorkspaceCommandOutput,
+  type WorkspaceRawCommandOutput
+} from "./workspace-tool-results";
 export type { WorkspaceCommandServiceLimits } from "./workspace-tool-schemas";
 
 export type WorkspaceToolStore = Pick<
   PlatformStore,
-  | "ensureExecutionWorkspace" | "listWorkspaceFiles" | "upsertWorkspaceFile"
+  | "ensureExecutionWorkspace"
+  | "listWorkspaceFiles"
+  | "upsertWorkspaceFile"
   | "deleteWorkspaceFile"
-  | "enqueueWorkspaceCommand" | "getWorkspaceCommand" | "requestWorkspaceCommandCancellation"
-  | "countActiveWorkspaceCommands" | "createManagedArtifact" | "getManagedArtifact"
-  | "enqueueArtifactPreviewJob" | "getArtifactPreviewJob" | "getArtifactPreviewManifest"
+  | "enqueueWorkspaceCommand"
+  | "getWorkspaceCommand"
+  | "requestWorkspaceCommandCancellation"
+  | "countActiveWorkspaceCommands"
+  | "createManagedArtifact"
+  | "getManagedArtifact"
+  | "enqueueArtifactPreviewJob"
+  | "getArtifactPreviewJob"
+  | "getArtifactPreviewManifest"
 >;
 
 export interface WorkspaceSourceFileReader {
@@ -101,7 +112,10 @@ export interface WorkspaceSourceFileReader {
 }
 
 export interface WorkspaceCommandResultSource {
-  resolveWorkspaceCommand(input: { command: WorkspaceCommand; context: ToolExecutionContext }): Promise<WorkspaceCommand | undefined>;
+  resolveWorkspaceCommand(input: {
+    command: WorkspaceCommand;
+    context: ToolExecutionContext;
+  }): Promise<WorkspaceCommand | undefined>;
 }
 
 export interface WorkspaceCommandServiceOptions {
@@ -166,7 +180,10 @@ export class WorkspaceCommandService {
       return command.result;
     }
     await this.recordQueuedCommand(context, command.value);
-    const resolvedBySource = await this.commandResults?.resolveWorkspaceCommand({ command: command.value, context });
+    const resolvedBySource = await this.commandResults?.resolveWorkspaceCommand({
+      command: command.value,
+      context
+    });
     if (resolvedBySource && resolvedBySource.id !== command.value.id) {
       return failed("handler_failed", "Workspace command result source returned the wrong command");
     }
@@ -433,7 +450,9 @@ export class WorkspaceCommandService {
         mimeType: write.mimeType,
         metadata: {
           ...(write.existing?.metadata ?? {}),
-          ...(write.existing ? { modifiedBy: "workspace.apply_patch" } : { source: "workspace.apply_patch" })
+          ...(write.existing
+            ? { modifiedBy: "workspace.apply_patch" }
+            : { source: "workspace.apply_patch" })
         },
         lastCommandId: patchCommandId,
         updatedAt: this.now()
@@ -508,7 +527,7 @@ export class WorkspaceCommandService {
       filename,
       mimeType,
       byteSize: file.value.file.byteSize,
-      checksum: file.value.file.checksum,
+      checksum: file.value.file.checksum
     };
     return toolSuccess(output, {
       artifacts: [
@@ -555,7 +574,10 @@ export class WorkspaceCommandService {
     context: ToolExecutionContext
   ): Promise<ToolHandlerResult<z.infer<typeof workspacePreviewImagesOutputSchema>>> {
     const rawPaths = input.paths ?? (input.path ? [input.path] : []);
-    const maxImages = Math.min(input.maxImages ?? this.limits.maxPreviewImages, this.limits.maxPreviewImages);
+    const maxImages = Math.min(
+      input.maxImages ?? this.limits.maxPreviewImages,
+      this.limits.maxPreviewImages
+    );
     if (rawPaths.length > maxImages) {
       return failed("handler_failed", "workspace.preview_images path count exceeds maxImages", {
         pathCount: rawPaths.length,
@@ -668,9 +690,7 @@ export class WorkspaceCommandService {
     );
   }
 
-  private normalizeExecInput(
-    input: z.infer<typeof workspaceExecInputSchema>
-  ): ValidationResult<{
+  private normalizeExecInput(input: z.infer<typeof workspaceExecInputSchema>): ValidationResult<{
     command: string;
     cwd?: string;
     limits: WorkspaceCommandLimits;
@@ -715,7 +735,9 @@ export class WorkspaceCommandService {
     };
   }
 
-  private resolveCommandLimits(timeoutSeconds: number | undefined): ValidationResult<WorkspaceCommandLimits> {
+  private resolveCommandLimits(
+    timeoutSeconds: number | undefined
+  ): ValidationResult<WorkspaceCommandLimits> {
     const resolvedTimeout = timeoutSeconds ?? this.limits.defaultTimeoutSeconds;
     if (resolvedTimeout > this.limits.maxTimeoutSeconds) {
       return validationFailed("Workspace command timeout exceeds the configured maximum", {
@@ -820,7 +842,8 @@ export class WorkspaceCommandService {
       metadata: {
         timeoutSeconds: command.limits.timeoutSeconds,
         expectedOutputCount: command.expectedOutputs.length,
-        promotedExpectedOutputCount: command.expectedOutputs.filter((output) => output.promote).length,
+        promotedExpectedOutputCount: command.expectedOutputs.filter((output) => output.promote)
+          .length,
         cwdProvided: command.cwd !== undefined,
         ...(activeCounts ? { activeCounts: workspaceCommandCountsMetadata(activeCounts) } : {})
       }
@@ -1201,7 +1224,8 @@ export class WorkspaceCommandService {
     const existingBytes = existingFiles
       .filter((file) => !writePaths.has(file.path) && !deletePaths.has(file.path))
       .reduce((total, file) => total + file.byteSize, 0);
-    const totalBytes = existingBytes + changes.writes.reduce((total, file) => total + file.bytes.byteLength, 0);
+    const totalBytes =
+      existingBytes + changes.writes.reduce((total, file) => total + file.bytes.byteLength, 0);
     if (totalBytes > this.limits.maxWorkspaceBytes) {
       return validationFailed("Patched files would exceed the workspace size limit", {
         totalBytes,
@@ -1216,7 +1240,9 @@ export class WorkspaceCommandService {
 
   private async ensureWorkspace(
     context: ToolExecutionContext
-  ): Promise<ValidationResult<Awaited<ReturnType<WorkspaceToolStore["ensureExecutionWorkspace"]>>>> {
+  ): Promise<
+    ValidationResult<Awaited<ReturnType<WorkspaceToolStore["ensureExecutionWorkspace"]>>>
+  > {
     const conversationId = context.toolRequest?.conversationId;
     if (!conversationId) {
       return failedValidationResult("Workspace tools require an active tool request");
@@ -1231,11 +1257,12 @@ export class WorkspaceCommandService {
       })
     };
   }
-
 }
 
 function isTerminalWorkspaceCommand(command: WorkspaceCommand): boolean {
-  return command.status === "completed" || command.status === "failed" || command.status === "cancelled";
+  return (
+    command.status === "completed" || command.status === "failed" || command.status === "cancelled"
+  );
 }
 
 function earliestDefined(left: number | undefined, right: number | undefined): number | undefined {
@@ -1287,8 +1314,15 @@ function readPreviewImageMimeType(
   return undefined;
 }
 
-function isSupportedPreviewImageMimeType(value: string | undefined): value is SupportedImageMimeType {
-  return value === "image/png" || value === "image/jpeg" || value === "image/webp" || value === "image/gif";
+function isSupportedPreviewImageMimeType(
+  value: string | undefined
+): value is SupportedImageMimeType {
+  return (
+    value === "image/png" ||
+    value === "image/jpeg" ||
+    value === "image/webp" ||
+    value === "image/gif"
+  );
 }
 
 function previewImageKind(mimeType: SupportedImageMimeType): string {
@@ -1307,8 +1341,7 @@ function previewImageKind(mimeType: SupportedImageMimeType): string {
 export function createWorkspaceToolDefinitions(
   options: WorkspaceCommandServiceOptions | { service: WorkspaceCommandService }
 ): AnyToolDefinition[] {
-  const service =
-    "service" in options ? options.service : new WorkspaceCommandService(options);
+  const service = "service" in options ? options.service : new WorkspaceCommandService(options);
 
   return [
     defineTool({
@@ -1324,8 +1357,7 @@ export function createWorkspaceToolDefinitions(
     }),
     defineTool({
       name: "workspace.list_files",
-      description:
-        "List internal files currently tracked in the conversation execution workspace.",
+      description: "List internal files currently tracked in the conversation execution workspace.",
       inputSchema: workspaceListFilesInputSchema,
       outputSchema: workspaceListFilesOutputSchema,
       execute(input, context) {

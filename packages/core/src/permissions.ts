@@ -14,8 +14,7 @@ export const PERMISSIONS = [
 export type Permission = (typeof PERMISSIONS)[number];
 
 const ADMIN_PERMISSIONS = PERMISSIONS.filter(
-  (permission) =>
-    permission !== "config_assets.release" && permission !== "api_access.manage"
+  (permission) => permission !== "config_assets.release" && permission !== "api_access.manage"
 );
 
 const SUPERADMIN_PERMISSIONS = PERMISSIONS.filter(

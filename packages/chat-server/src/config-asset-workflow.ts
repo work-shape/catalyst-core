@@ -333,18 +333,22 @@ export class ConfigAssetWorkflow {
           .filter((asset) => !desiredKeys.has(assetKey(asset.kind, asset.name)))
           .map((asset) => ({ type: "delete", kind: asset.kind, name: asset.name }));
     mutations.push(
-      ...validated.agents.filter((agent) => providedAgentNames.has(agent.name)).map((agent) => ({
-        type: "upsert" as const,
-        kind: "agent" as const,
-        name: agent.name,
-        config: toJsonObject(agent)
-      })),
-      ...validated.skills.filter((skill) => providedSkillNames.has(skill.name)).map((skill) => ({
-        type: "upsert" as const,
-        kind: "skill" as const,
-        name: skill.name,
-        config: toJsonObject(skill)
-      }))
+      ...validated.agents
+        .filter((agent) => providedAgentNames.has(agent.name))
+        .map((agent) => ({
+          type: "upsert" as const,
+          kind: "agent" as const,
+          name: agent.name,
+          config: toJsonObject(agent)
+        })),
+      ...validated.skills
+        .filter((skill) => providedSkillNames.has(skill.name))
+        .map((skill) => ({
+          type: "upsert" as const,
+          kind: "skill" as const,
+          name: skill.name,
+          config: toJsonObject(skill)
+        }))
     );
     if (!merge || command.defaultAgentName !== undefined) {
       mutations.push({ type: "setDefaultAgent", agentName: command.defaultAgentName });

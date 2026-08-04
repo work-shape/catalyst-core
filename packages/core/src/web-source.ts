@@ -1,10 +1,5 @@
 export type WebSourceProvider =
-  | "openai-native"
-  | "serper"
-  | "tavily"
-  | "firecrawl"
-  | "browserbase"
-  | "direct";
+  "openai-native" | "serper" | "tavily" | "firecrawl" | "browserbase" | "direct";
 
 export interface WebSource {
   id: string;

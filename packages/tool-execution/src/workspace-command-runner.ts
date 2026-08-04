@@ -139,7 +139,8 @@ export class LocalWorkspaceCommandRunner {
     this.maxPathLength = options.maxPathLength ?? DEFAULT_MAX_PATH_LENGTH;
     this.reuseWorkspaceDirectories = options.reuseWorkspaceDirectories ?? false;
     this.processExecutor =
-      options.processExecutor ?? new LocalWorkspaceCommandProcessExecutor({ shellPath: options.shellPath });
+      options.processExecutor ??
+      new LocalWorkspaceCommandProcessExecutor({ shellPath: options.shellPath });
     this.auditRecorder = options.auditRecorder;
     this.telemetry = options.telemetry;
     this.now = options.now ?? (() => new Date().toISOString());

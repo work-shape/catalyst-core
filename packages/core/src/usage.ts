@@ -14,10 +14,7 @@ export interface ModelTokenUsage {
 export type UsageCostRecordSource = "rate_card" | "backfilled" | "provider_reconciled";
 export type UsageCostRecordStatus = "settled" | "incomplete" | "unpriced";
 export type UsageCostMissingMeter =
-  | "token_usage"
-  | "cached_input_tokens"
-  | "model_rate"
-  | "web_search_rate";
+  "token_usage" | "cached_input_tokens" | "model_rate" | "web_search_rate";
 
 export interface UsageCostAppliedRates {
   uncachedInputPricePerMillionTokens: number;

@@ -5,7 +5,10 @@ export interface ArtifactPreviewFailure {
   retryable: boolean;
 }
 
-export function previewFailure(code: ArtifactPreviewFailureCode, retryable: boolean): ArtifactPreviewFailure {
+export function previewFailure(
+  code: ArtifactPreviewFailureCode,
+  retryable: boolean
+): ArtifactPreviewFailure {
   return { code, retryable };
 }
 

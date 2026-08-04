@@ -29,14 +29,8 @@ import {
 } from "./artifact-preview-shell";
 import { useTranslation } from "./i18n";
 import { MarkdownArtifact } from "./markdown-text";
-import {
-  workbookToUniverPreview,
-  type SpreadsheetWorkbookPreview
-} from "./spreadsheet-preview";
-import {
-  SPREADSHEET_VISUAL_COMPONENT,
-  SpreadsheetVisualLayer
-} from "./spreadsheet-visual-layer";
+import { workbookToUniverPreview, type SpreadsheetWorkbookPreview } from "./spreadsheet-preview";
+import { SPREADSHEET_VISUAL_COMPONENT, SpreadsheetVisualLayer } from "./spreadsheet-visual-layer";
 import type { SpreadsheetVisual, SpreadsheetVisualAnchor } from "./spreadsheet-visuals";
 import { Spinner } from "./ui/spinner";
 import {
@@ -91,21 +85,14 @@ export function ArtifactPreview({
     );
   }
 
-  if (
-    client.browserManagedDownloads &&
-    (previewKind === "pdf" || previewKind === "image")
-  ) {
+  if (client.browserManagedDownloads && (previewKind === "pdf" || previewKind === "image")) {
     const url = client.conversations.artifacts.contentUrl(
       conversationId,
       artifact.artifactId,
       true
     );
     return (
-      <NativeFilePreview
-        kind={previewKind}
-        title={artifactDisplayFilename(artifact)}
-        url={url}
-      />
+      <NativeFilePreview kind={previewKind} title={artifactDisplayFilename(artifact)} url={url} />
     );
   }
 
@@ -144,8 +131,8 @@ function BlobArtifactPreview({
     let cancelled = false;
     let objectUrl: string | undefined;
     setState({ status: "loading" });
-    void client
-      .conversations.artifacts.getContent(conversationId, artifact.artifactId)
+    void client.conversations.artifacts
+      .getContent(conversationId, artifact.artifactId)
       .then((blob) => {
         if (cancelled) {
           return;
@@ -208,7 +195,9 @@ function BlobArtifactPreview({
     <ArtifactPreviewFrame>
       {previewKind === "markdown" ? <MarkdownArtifactPreview blob={state.blob} /> : null}
       {previewKind === "text" ? <TextArtifactPreview blob={state.blob} /> : null}
-      {previewKind === "document" ? <DocumentArtifactPreview blob={state.blob} fileType={fileType} /> : null}
+      {previewKind === "document" ? (
+        <DocumentArtifactPreview blob={state.blob} fileType={fileType} />
+      ) : null}
       {previewKind === "presentation" ? (
         <PresentationArtifactPreview blob={state.blob} fileType={fileType} />
       ) : null}
@@ -336,11 +325,14 @@ function DocumentArtifactPreview({ blob, fileType }: { blob: Blob; fileType: Art
 function hasRenderedDocxContent(container: HTMLElement): boolean {
   return Boolean(
     container.textContent?.trim() ||
-      container.querySelector("img, svg, table, canvas, object, embed")
+    container.querySelector("img, svg, table, canvas, object, embed")
   );
 }
 
-function observeDocxFit(container: HTMLElement, viewport: HTMLElement | null): ResizeObserver | undefined {
+function observeDocxFit(
+  container: HTMLElement,
+  viewport: HTMLElement | null
+): ResizeObserver | undefined {
   fitDocxToViewport(container, viewport);
   if (!viewport || typeof ResizeObserver === "undefined") {
     return undefined;
@@ -393,7 +385,13 @@ function contentBoxWidth(element: HTMLElement): number {
   return element.clientWidth - paddingLeft - paddingRight;
 }
 
-function PresentationArtifactPreview({ blob, fileType }: { blob: Blob; fileType: ArtifactFileType }) {
+function PresentationArtifactPreview({
+  blob,
+  fileType
+}: {
+  blob: Blob;
+  fileType: ArtifactFileType;
+}) {
   const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const fitViewportRef = useRef<HTMLDivElement | null>(null);
@@ -486,7 +484,10 @@ function PresentationArtifactPreview({ blob, fileType }: { blob: Blob; fileType:
   );
 }
 
-function observeElementFit(element: HTMLElement, viewport: HTMLElement | null): ResizeObserver | undefined {
+function observeElementFit(
+  element: HTMLElement,
+  viewport: HTMLElement | null
+): ResizeObserver | undefined {
   fitElementToViewport(element, viewport);
   if (!viewport || typeof ResizeObserver === "undefined") {
     return undefined;
@@ -527,7 +528,11 @@ function MarkdownArtifactPreview({ blob }: { blob: Blob }) {
 
   return (
     <div className="chat-scrollbar h-full overflow-auto bg-background px-5 py-6 text-foreground lg:px-7">
-      {text === undefined ? t("artifactPreviewLoading") : <MarkdownArtifact>{text}</MarkdownArtifact>}
+      {text === undefined ? (
+        t("artifactPreviewLoading")
+      ) : (
+        <MarkdownArtifact>{text}</MarkdownArtifact>
+      )}
     </div>
   );
 }
@@ -582,7 +587,12 @@ function SpreadsheetArtifactPreview({ blob }: { blob: Blob }) {
   if (error) {
     return (
       <ArtifactPreviewMessage
-        fileType={{ badge: "XLS", label: "Spreadsheet", className: "bg-emerald-700", extension: "xlsx" }}
+        fileType={{
+          badge: "XLS",
+          label: "Spreadsheet",
+          className: "bg-emerald-700",
+          extension: "xlsx"
+        }}
         title={t("artifactPreviewFailed")}
         detail={error}
       />
@@ -592,18 +602,18 @@ function SpreadsheetArtifactPreview({ blob }: { blob: Blob }) {
   if (!preview) {
     return (
       <ArtifactPreviewMessage
-        fileType={{ badge: "XLS", label: "Spreadsheet", className: "bg-emerald-700", extension: "xlsx" }}
+        fileType={{
+          badge: "XLS",
+          label: "Spreadsheet",
+          className: "bg-emerald-700",
+          extension: "xlsx"
+        }}
         title={t("artifactPreviewLoading")}
       />
     );
   }
 
-  return (
-    <UniverReadOnlyWorkbook
-      visuals={preview.visuals}
-      workbookData={preview.workbookData}
-    />
-  );
+  return <UniverReadOnlyWorkbook visuals={preview.visuals} workbookData={preview.workbookData} />;
 }
 
 function UniverReadOnlyWorkbook({
@@ -707,20 +717,17 @@ function visualPosition(
 ) {
   const startX = sheetSpan(sheet.columnData, sheet.defaultColumnWidth ?? 88, 0, anchor.startColumn);
   const startY = sheetSpan(sheet.rowData, sheet.defaultRowHeight ?? 24, 0, anchor.startRow);
-  const width = anchor.width
-    ?? sheetSpan(
+  const width =
+    anchor.width ??
+    sheetSpan(
       sheet.columnData,
       sheet.defaultColumnWidth ?? 88,
       anchor.startColumn,
       anchor.endColumn + 1
     );
-  const height = anchor.height
-    ?? sheetSpan(
-      sheet.rowData,
-      sheet.defaultRowHeight ?? 24,
-      anchor.startRow,
-      anchor.endRow + 1
-    );
+  const height =
+    anchor.height ??
+    sheetSpan(sheet.rowData, sheet.defaultRowHeight ?? 24, anchor.startRow, anchor.endRow + 1);
   return {
     startX,
     startY,
@@ -738,7 +745,7 @@ function sheetSpan(
   let size = 0;
   for (let index = start; index < end; index += 1) {
     const item = data?.[index];
-    size += item?.hd === BooleanNumber.TRUE ? 0 : item?.h ?? item?.w ?? defaultSize;
+    size += item?.hd === BooleanNumber.TRUE ? 0 : (item?.h ?? item?.w ?? defaultSize);
   }
   return size;
 }
@@ -747,10 +754,7 @@ function blockSpreadsheetEditingKeys(event: KeyboardEvent<HTMLDivElement>) {
   if ((event.metaKey || event.ctrlKey) && ["a", "c", "f"].includes(event.key.toLowerCase())) {
     return;
   }
-  if (
-    event.key.length === 1 ||
-    ["Backspace", "Delete", "Enter", "F2"].includes(event.key)
-  ) {
+  if (event.key.length === 1 || ["Backspace", "Delete", "Enter", "F2"].includes(event.key)) {
     event.preventDefault();
   }
 }

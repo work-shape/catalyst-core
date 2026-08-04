@@ -6,7 +6,9 @@ interface WorkspaceApiClientContextValue {
   client: ApiClient;
 }
 
-const WorkspaceApiClientContext = createContext<WorkspaceApiClientContextValue | undefined>(undefined);
+const WorkspaceApiClientContext = createContext<WorkspaceApiClientContextValue | undefined>(
+  undefined
+);
 
 export function WorkspaceApiClientProvider({
   apiBaseUrl,
@@ -19,16 +21,13 @@ export function WorkspaceApiClientProvider({
   getToken?: () => string | undefined | Promise<string | undefined>;
   children: ReactNode;
 }) {
-  const client = useMemo(
-    () => {
-      const resolvedGetToken = getToken ?? (token ? () => token : undefined);
-      return createApiClient({
-        baseUrl: apiBaseUrl,
-        ...(resolvedGetToken ? { getToken: resolvedGetToken } : {})
-      });
-    },
-    [apiBaseUrl, getToken, token]
-  );
+  const client = useMemo(() => {
+    const resolvedGetToken = getToken ?? (token ? () => token : undefined);
+    return createApiClient({
+      baseUrl: apiBaseUrl,
+      ...(resolvedGetToken ? { getToken: resolvedGetToken } : {})
+    });
+  }, [apiBaseUrl, getToken, token]);
   const value = useMemo<WorkspaceApiClientContextValue>(
     () => ({
       apiBaseUrl,
@@ -38,7 +37,9 @@ export function WorkspaceApiClientProvider({
   );
 
   return (
-    <WorkspaceApiClientContext.Provider value={value}>{children}</WorkspaceApiClientContext.Provider>
+    <WorkspaceApiClientContext.Provider value={value}>
+      {children}
+    </WorkspaceApiClientContext.Provider>
   );
 }
 

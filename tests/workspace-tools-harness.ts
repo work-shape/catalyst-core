@@ -20,26 +20,31 @@ import {
   type WorkspaceObjectStore
 } from "@vivd-catalyst/tool-execution";
 
-export async function createWorkspaceHarness(input: {
-  agentToolNames?: string[];
-  commandResults?: ConstructorParameters<typeof WorkspaceCommandService>[0]["commandResults"];
-  execResultWaitMs?: ConstructorParameters<typeof WorkspaceCommandService>[0]["execResultWaitMs"] | null;
-  execResultPollIntervalMs?: ConstructorParameters<typeof WorkspaceCommandService>[0]["execResultPollIntervalMs"];
-  limits?: ConstructorParameters<typeof WorkspaceCommandService>[0]["limits"];
-  serviceStore?: (
-    store: InMemoryPlatformStore
-  ) => ConstructorParameters<typeof WorkspaceCommandService>[0]["store"];
-  telemetry?: WorkspaceCommandTelemetry;
-  withAuditRecorder?: boolean;
-  sourceFiles?: Record<
-    string,
-    {
-      filename: string;
-      mimeType?: string;
-      bytes: Uint8Array;
-    }
-  >;
-} = {}) {
+export async function createWorkspaceHarness(
+  input: {
+    agentToolNames?: string[];
+    commandResults?: ConstructorParameters<typeof WorkspaceCommandService>[0]["commandResults"];
+    execResultWaitMs?:
+      ConstructorParameters<typeof WorkspaceCommandService>[0]["execResultWaitMs"] | null;
+    execResultPollIntervalMs?: ConstructorParameters<
+      typeof WorkspaceCommandService
+    >[0]["execResultPollIntervalMs"];
+    limits?: ConstructorParameters<typeof WorkspaceCommandService>[0]["limits"];
+    serviceStore?: (
+      store: InMemoryPlatformStore
+    ) => ConstructorParameters<typeof WorkspaceCommandService>[0]["store"];
+    telemetry?: WorkspaceCommandTelemetry;
+    withAuditRecorder?: boolean;
+    sourceFiles?: Record<
+      string,
+      {
+        filename: string;
+        mimeType?: string;
+        bytes: Uint8Array;
+      }
+    >;
+  } = {}
+) {
   const clientInstanceId = asClientInstanceId(`workspace_tools_${globalThis.crypto.randomUUID()}`);
   const ownerUserId = "user-1";
   const store = new InMemoryPlatformStore();
@@ -81,9 +86,7 @@ export async function createWorkspaceHarness(input: {
     ...(auditRecorder ? { auditRecorder } : {}),
     ...(input.telemetry ? { telemetry: input.telemetry } : {}),
     limits: input.limits,
-    ...(input.execResultWaitMs === null
-      ? {}
-      : { execResultWaitMs: input.execResultWaitMs ?? 0 }),
+    ...(input.execResultWaitMs === null ? {} : { execResultWaitMs: input.execResultWaitMs ?? 0 }),
     execResultPollIntervalMs: input.execResultPollIntervalMs,
     now: () => "2026-06-29T12:00:00.000Z"
   });
@@ -138,7 +141,8 @@ export async function createWorkspaceHarness(input: {
         ownerUserId,
         now: "2026-06-29T12:00:00.000Z"
       });
-      const bytes = typeof file.bytes === "string" ? new TextEncoder().encode(file.bytes) : file.bytes;
+      const bytes =
+        typeof file.bytes === "string" ? new TextEncoder().encode(file.bytes) : file.bytes;
       objectStore.putObject(file.objectKey, bytes);
       return store.upsertWorkspaceFile({
         clientInstanceId,

@@ -6,11 +6,7 @@ import {
   type MessageCitation,
   type WebSource
 } from "@vivd-catalyst/core";
-import type {
-  AgentRunProjection,
-  DraftAttachment,
-  Message
-} from "@vivd-catalyst/api-client";
+import type { AgentRunProjection, DraftAttachment, Message } from "@vivd-catalyst/api-client";
 import {
   readCompatibleAssistantFinalRunId,
   readCompatibleAssistantContextCompacted,
@@ -227,7 +223,12 @@ function toPersistedUiMessage(
     id: message.id,
     role: message.role as UIMessage["role"],
     ...(metadata ? { metadata } : {}),
-    parts: toUiMessageParts(message, toolResultsByToolCallId, surfacedArtifactsByRunId, surfacedSurfacesByRunId)
+    parts: toUiMessageParts(
+      message,
+      toolResultsByToolCallId,
+      surfacedArtifactsByRunId,
+      surfacedSurfacesByRunId
+    )
   };
 }
 
@@ -242,24 +243,31 @@ function toCombinedAssistantRunUiMessage(
     readCompatibleAssistantToolCalls(message).some((toolCall) => toolCall.toolName === "web_search")
   );
   const parts = messages.flatMap((message) =>
-    toUiMessageParts(message, toolResultsByToolCallId, surfacedArtifactsByRunId, surfacedSurfacesByRunId, {
-      includeSyntheticWebSearchTool: !runHasExplicitWebSearchTool
-    })
+    toUiMessageParts(
+      message,
+      toolResultsByToolCallId,
+      surfacedArtifactsByRunId,
+      surfacedSurfacesByRunId,
+      {
+        includeSyntheticWebSearchTool: !runHasExplicitWebSearchTool
+      }
+    )
   );
   const metadata = createPersistedUiMessageMetadata(group.finalMessage, group.messages);
   return {
     id: group.finalMessage.id,
     role: "assistant",
     ...(metadata ? { metadata } : {}),
-    parts: parts.length > 0
-      ? parts
-      : [
-          {
-            type: "text",
-            text: "",
-            state: "done"
-          } as UIMessage["parts"][number]
-        ]
+    parts:
+      parts.length > 0
+        ? parts
+        : [
+            {
+              type: "text",
+              text: "",
+              state: "done"
+            } as UIMessage["parts"][number]
+          ]
   };
 }
 
@@ -291,7 +299,10 @@ function toCompletedRunProjectionUiMessage(
   surfacedArtifactsByRunId: Map<string, ToolArtifactDownloadRef[]>,
   surfacedSurfacesByRunId: Map<string, ToolSurfaceRef[]>
 ): UIMessage {
-  const completedProjection = projectionWithPersistedFinalTextFallback(projection, finalMessage.text);
+  const completedProjection = projectionWithPersistedFinalTextFallback(
+    projection,
+    finalMessage.text
+  );
   const parts = toProjectionUiMessageParts(completedProjection, {
     run: {
       id: completedProjection.runId,
@@ -336,15 +347,16 @@ function toCompletedRunProjectionUiMessage(
     id: finalMessage.id,
     role: "assistant",
     metadata,
-    parts: parts.length > 0
-      ? parts
-      : [
-          {
-            type: "text",
-            text: "",
-            state: "done"
-          } as UIMessage["parts"][number]
-        ]
+    parts:
+      parts.length > 0
+        ? parts
+        : [
+            {
+              type: "text",
+              text: "",
+              state: "done"
+            } as UIMessage["parts"][number]
+          ]
   };
 }
 
@@ -356,7 +368,10 @@ function projectionWithPersistedFinalTextFallback(
     return projection;
   }
   const observedText = projection.parts
-    .filter((part): part is Extract<AgentRunProjection["parts"][number], { type: "text" }> => part.type === "text")
+    .filter(
+      (part): part is Extract<AgentRunProjection["parts"][number], { type: "text" }> =>
+        part.type === "text"
+    )
     .map((part) => part.text)
     .join("");
   if (
@@ -367,9 +382,10 @@ function projectionWithPersistedFinalTextFallback(
   ) {
     return projection;
   }
-  const missingText = observedText.length > 0 && finalText.startsWith(observedText)
-    ? finalText.slice(observedText.length)
-    : finalText;
+  const missingText =
+    observedText.length > 0 && finalText.startsWith(observedText)
+      ? finalText.slice(observedText.length)
+      : finalText;
   if (missingText.trim().length === 0) {
     return projection;
   }
@@ -386,7 +402,9 @@ function projectionWithPersistedFinalTextFallback(
   };
 }
 
-function createAssistantRunMessageGroups(messages: Message[]): Map<string, AssistantRunMessageGroup> {
+function createAssistantRunMessageGroups(
+  messages: Message[]
+): Map<string, AssistantRunMessageGroup> {
   const messagesByRunId = new Map<string, Message[]>();
   const finalMessageByRunId = new Map<string, Message>();
 
@@ -492,9 +510,8 @@ function toProjectionUiMessageParts(
     projection.status === "cancelled" ||
     projection.status === "failed";
   const projectionParts = projection.parts ?? [];
-  const orderedParts = projectionParts.length > 0
-    ? projectionParts
-    : legacyActiveRunParts(projection);
+  const orderedParts =
+    projectionParts.length > 0 ? projectionParts : legacyActiveRunParts(projection);
   const displayParts = activeRunPartsWithTextFallback(orderedParts, projection.text);
   const parts = displayParts.flatMap((part, index): UIMessage["parts"] => {
     if (part.type === "text") {
@@ -551,9 +568,7 @@ function activeRunPartsWithTextFallback(
   ];
 }
 
-function legacyActiveRunParts(
-  projection: AgentRunProjection
-): AgentRunProjection["parts"] {
+function legacyActiveRunParts(projection: AgentRunProjection): AgentRunProjection["parts"] {
   const parts: AgentRunProjection["parts"] = [
     ...projection.reasoning.map((entry) => ({
       type: "reasoning" as const,
@@ -598,13 +613,13 @@ function toToolCallUiPart(
           ...(toolCall.output !== undefined ? { output: toolCall.output } : {})
         }
       : toolCall.state === "output_error"
-      ? {
-          errorText: toolCall.errorText ?? "Tool call failed",
-          ...(toolCall.output !== undefined ? { output: toolCall.output } : {})
-        }
-      : toolCall.state === "output_available"
-        ? { output: toolCall.output }
-        : {})
+        ? {
+            errorText: toolCall.errorText ?? "Tool call failed",
+            ...(toolCall.output !== undefined ? { output: toolCall.output } : {})
+          }
+        : toolCall.state === "output_available"
+          ? { output: toolCall.output }
+          : {})
   } as UIMessage["parts"][number];
 }
 
@@ -661,13 +676,18 @@ function toUiMessageParts(
     const workspaceToolError = toolResult
       ? readWorkspaceToolErrorText({ result: toolResult.output, toolName: toolCall.toolName })
       : undefined;
-    const projectedErrorText = toolResult?.status === "failed" ? toolResult.errorText : workspaceToolError;
+    const projectedErrorText =
+      toolResult?.status === "failed" ? toolResult.errorText : workspaceToolError;
     parts.push({
       type: "dynamic-tool",
       toolName: toolCall.toolName,
       toolCallId: toolCall.toolCallId,
       title: toolCall.toolName,
-      state: projectedErrorText ? "output-error" : toolResult ? "output-available" : "input-available",
+      state: projectedErrorText
+        ? "output-error"
+        : toolResult
+          ? "output-available"
+          : "input-available",
       input: toolCall.input,
       ...(projectedErrorText
         ? {
@@ -695,11 +715,11 @@ function toUiMessageParts(
   const finalRunId = readCompatibleAssistantFinalRunId(message);
   appendWorkspacePromotedSurfacesPart(
     parts,
-    finalRunId ? surfacedSurfacesByRunId.get(finalRunId) ?? [] : []
+    finalRunId ? (surfacedSurfacesByRunId.get(finalRunId) ?? []) : []
   );
   appendWorkspacePromotedArtifactsPart(
     parts,
-    finalRunId ? surfacedArtifactsByRunId.get(finalRunId) ?? [] : []
+    finalRunId ? (surfacedArtifactsByRunId.get(finalRunId) ?? []) : []
   );
   return parts.length > 0
     ? parts
@@ -767,7 +787,10 @@ function appendAssistantWebSourceParts(
       url: source.url,
       ...(source.title ? { title: source.title } : {}),
       providerMetadata: {
-        vivdCatalyst: createWebSourceProviderMetadata(source, citationsBySourceId.get(source.id) ?? [])
+        vivdCatalyst: createWebSourceProviderMetadata(
+          source,
+          citationsBySourceId.get(source.id) ?? []
+        )
       }
     } as UIMessage["parts"][number]);
   }
@@ -778,9 +801,13 @@ function appendSyntheticWebSearchToolPart(
   message: Message,
   sources: WebSource[]
 ): void {
-  const queries = Array.from(new Set(
-    sources.map((source) => source.query?.trim()).filter((query): query is string => Boolean(query))
-  ));
+  const queries = Array.from(
+    new Set(
+      sources
+        .map((source) => source.query?.trim())
+        .filter((query): query is string => Boolean(query))
+    )
+  );
   const output = unknownToJsonValue({
     sourceCount: sources.length,
     sources: sources.map((source) => ({
@@ -803,7 +830,10 @@ function appendSyntheticWebSearchToolPart(
   } as UIMessage["parts"][number]);
 }
 
-function createWebSourceProviderMetadata(source: WebSource, citations: MessageCitation[]): JsonObject {
+function createWebSourceProviderMetadata(
+  source: WebSource,
+  citations: MessageCitation[]
+): JsonObject {
   const metadata = unknownToJsonValue({
     provider: source.provider,
     ...(source.query ? { query: source.query } : {}),

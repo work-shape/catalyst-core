@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  createSafeConfigView,
-  parseClientInstanceConfig
-} from "@vivd-catalyst/config-schema";
+import { createSafeConfigView, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 
 describe("administration config", () => {
   it("keeps config asset management disabled by default", () => {

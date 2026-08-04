@@ -35,9 +35,7 @@ export type JsonApiOperationWithRequest<
   readonly responseSchema: ResponseSchema;
 };
 
-export type JsonApiOperation =
-  | JsonApiOperationWithoutRequest
-  | JsonApiOperationWithRequest;
+export type JsonApiOperation = JsonApiOperationWithoutRequest | JsonApiOperationWithRequest;
 
 export type BlobApiOperation = ApiOperationBase & {
   readonly responseKind: "blob";
@@ -77,15 +75,13 @@ export function defineJsonApiOperation(
 ): JsonApiOperation {
   return {
     ...config,
-    requestKind: config.requestSchema ? "json" : config.requestKind ?? "none",
+    requestKind: config.requestSchema ? "json" : (config.requestKind ?? "none"),
     responseKind: "json",
     buildPath: (options) => buildOperationPath(config.path, config.queryParams, options)
   } as JsonApiOperation;
 }
 
-export function defineBlobApiOperation(
-  config: JsonApiOperationConfigBase
-): BlobApiOperation {
+export function defineBlobApiOperation(config: JsonApiOperationConfigBase): BlobApiOperation {
   return {
     ...config,
     requestKind: "none",

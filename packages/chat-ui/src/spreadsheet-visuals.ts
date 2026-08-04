@@ -91,9 +91,7 @@ export async function extractSpreadsheetVisuals(
         continue;
       }
       const drawingPath = resolvePartPath(sheetPath, drawingRelationship.target);
-      visuals.push(
-        ...(await drawingVisuals(zip, drawingPath, sheetName, workbook))
-      );
+      visuals.push(...(await drawingVisuals(zip, drawingPath, sheetName, workbook)));
     }
   }
 
@@ -118,19 +116,13 @@ async function drawingVisuals(
 
     return await Promise.all(
       anchors.map((anchor, index) =>
-        drawingVisual(
-          zip,
-          drawingPath,
-          drawingRelationships,
-          sheetName,
-          workbook,
-          anchor,
-          index
-        )
+        drawingVisual(zip, drawingPath, drawingRelationships, sheetName, workbook, anchor, index)
       )
     );
   } catch {
-    return [unsupported(sheetName, `drawing-${drawingPath}`, "Unreadable drawing", defaultAnchor())];
+    return [
+      unsupported(sheetName, `drawing-${drawingPath}`, "Unreadable drawing", defaultAnchor())
+    ];
   }
 }
 
@@ -146,11 +138,12 @@ async function drawingVisual(
   const anchor = parseAnchor(anchorNode);
   const frame = object(anchorNode.graphicFrame);
   const picture = object(anchorNode.pic);
-  const drawing = frame
-    ?? picture
-    ?? object(anchorNode.sp)
-    ?? object(anchorNode.grpSp)
-    ?? object(anchorNode.cxnSp);
+  const drawing =
+    frame ??
+    picture ??
+    object(anchorNode.sp) ??
+    object(anchorNode.grpSp) ??
+    object(anchorNode.cxnSp);
   const name = drawingName(drawing ?? anchorNode) || `Visual ${index + 1}`;
   const id = `${sheetName}-${name}-${index}`.replaceAll(/[^a-z0-9-]+/giu, "-");
 
@@ -230,11 +223,15 @@ function parseChart(
     return unsupported(sheetName, id, humanizeChartType(rawType), anchor, title);
   }
 
-  const series = asArray(chartNode?.ser).map((item, index) =>
-    chartSeries(item, workbook, index)
-  );
+  const series = asArray(chartNode?.ser).map((item, index) => chartSeries(item, workbook, index));
   if (series.length === 0 || series.every((item) => item.values.length === 0)) {
-    return unsupported(sheetName, id, `${humanizeChartType(rawType)} without preview data`, anchor, title);
+    return unsupported(
+      sheetName,
+      id,
+      `${humanizeChartType(rawType)} without preview data`,
+      anchor,
+      title
+    );
   }
 
   return {
@@ -258,14 +255,11 @@ function chartSeries(
 ): SpreadsheetChartSeries {
   const categoryReference = referenceFormula(series.cat);
   const valueReference = referenceFormula(series.val);
-  const categories = (
-    categoryReference ? referenceValues(workbook, categoryReference) : []
+  const categories = categoryReference ? referenceValues(workbook, categoryReference) : [];
+  const values = valueReference ? referenceValues(workbook, valueReference) : [];
+  const resolvedCategories = (categories.length > 0 ? categories : cachedValues(series.cat)).map(
+    categoryLabel
   );
-  const values = (
-    valueReference ? referenceValues(workbook, valueReference) : []
-  );
-  const resolvedCategories = (categories.length > 0 ? categories : cachedValues(series.cat))
-    .map(categoryLabel);
   const resolvedValues = (values.length > 0 ? values : cachedValues(series.val))
     .map(numericValue)
     .filter((value): value is number => value !== undefined);
@@ -275,8 +269,9 @@ function chartSeries(
     name: chartText(series.tx) || `Series ${index + 1}`,
     categories: resolvedCategories,
     values: resolvedValues,
-    color: colorValue(node(series, "spPr", "solidFill", "srgbClr"))
-      ?? colorValue(node(series, "spPr", "ln", "solidFill", "srgbClr")),
+    color:
+      colorValue(node(series, "spPr", "solidFill", "srgbClr")) ??
+      colorValue(node(series, "spPr", "ln", "solidFill", "srgbClr")),
     pointColors: points
       .sort((left, right) => numberValue(left.idx) - numberValue(right.idx))
       .map((point) => colorValue(node(point, "spPr", "solidFill", "srgbClr")) ?? "")
@@ -314,9 +309,9 @@ function referenceFormula(value: unknown): string | undefined {
 }
 
 function referenceValues(workbook: ExcelJS.Workbook, formula: string): unknown[] {
-  const match = formula.replace(/^=/u, "").match(
-    /^(?:'((?:[^']|'')+)'|([^!]+))!(\$?[A-Z]+\$?\d+)(?::(\$?[A-Z]+\$?\d+))?$/iu
-  );
+  const match = formula
+    .replace(/^=/u, "")
+    .match(/^(?:'((?:[^']|'')+)'|([^!]+))!(\$?[A-Z]+\$?\d+)(?::(\$?[A-Z]+\$?\d+))?$/iu);
   if (!match) {
     return [];
   }
@@ -342,11 +337,16 @@ function cachedValues(value: unknown): unknown[] {
   const container = object(value);
   for (const key of ["strRef", "numRef", "strLit", "numLit", "multiLvlStrRef"]) {
     const source = object(container?.[key]);
-    const cache = object(source?.strCache ?? source?.numCache ?? source?.multiLvlStrCache ?? source);
+    const cache = object(
+      source?.strCache ?? source?.numCache ?? source?.multiLvlStrCache ?? source
+    );
     const points = asArray(cache?.pt);
     if (points.length > 0) {
       return points
-        .sort((left, right) => numberValue(attribute(left, "idx")) - numberValue(attribute(right, "idx")))
+        .sort(
+          (left, right) =>
+            numberValue(attribute(left, "idx")) - numberValue(attribute(right, "idx"))
+        )
         .map((point) => point.v);
     }
   }
@@ -381,9 +381,9 @@ function parseAnchor(anchor: XmlNode): SpreadsheetVisualAnchor {
 
 function drawingName(value: XmlNode): string | undefined {
   return attribute(
-    node(value, "nvGraphicFramePr", "cNvPr")
-      ?? node(value, "nvPicPr", "cNvPr")
-      ?? node(value, "nvSpPr", "cNvPr"),
+    node(value, "nvGraphicFramePr", "cNvPr") ??
+      node(value, "nvPicPr", "cNvPr") ??
+      node(value, "nvSpPr", "cNvPr"),
     "name"
   );
 }
@@ -466,7 +466,7 @@ function at(value: unknown, ...path: string[]): unknown {
 
 function object(value: unknown): XmlNode | undefined {
   return value && typeof value === "object" && !Array.isArray(value)
-    ? value as XmlNode
+    ? (value as XmlNode)
     : undefined;
 }
 

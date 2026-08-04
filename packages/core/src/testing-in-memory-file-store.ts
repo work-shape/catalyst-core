@@ -41,7 +41,10 @@ export type InMemoryPlatformFileStore = PlatformFileStore & {
 };
 
 export interface InMemoryFileStoreCallbacks {
-  requireActiveConversation(clientInstanceId: ClientInstanceId, conversationId: ConversationId): Promise<void>;
+  requireActiveConversation(
+    clientInstanceId: ClientInstanceId,
+    conversationId: ConversationId
+  ): Promise<void>;
   touchConversation(conversationId: ConversationId, updatedAt: string): void;
 }
 
@@ -145,7 +148,11 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
     artifactId: ManagedArtifactId;
   }): Promise<ManagedArtifactRecord | undefined> {
     const artifact = this.managedArtifacts.get(input.artifactId);
-    if (!artifact || artifact.clientInstanceId !== input.clientInstanceId || artifact.status === "deleted") {
+    if (
+      !artifact ||
+      artifact.clientInstanceId !== input.clientInstanceId ||
+      artifact.status === "deleted"
+    ) {
       return undefined;
     }
     return artifact;
@@ -482,7 +489,10 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
     }
     const candidate = [...this.conversationAttachments.values()]
       .filter((attachment) => {
-        if (attachment.clientInstanceId !== input.clientInstanceId || attachment.status === "deleted") {
+        if (
+          attachment.clientInstanceId !== input.clientInstanceId ||
+          attachment.status === "deleted"
+        ) {
           return false;
         }
         if (
@@ -612,7 +622,8 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
     conversationId: ConversationId;
     deletedAt: string;
   }): Promise<ManagedObjectDeletionResult> {
-    const { attachments, files, artifacts } = this.collectConversationManagedObjectsForDeletion(input);
+    const { attachments, files, artifacts } =
+      this.collectConversationManagedObjectsForDeletion(input);
     for (const attachment of attachments) {
       this.conversationAttachments.set(attachment.id, {
         ...attachment,
@@ -648,7 +659,8 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
   }): Promise<ManagedObjectDeletionResult> {
-    const { attachments, files, artifacts } = this.collectConversationManagedObjectsForDeletion(input);
+    const { attachments, files, artifacts } =
+      this.collectConversationManagedObjectsForDeletion(input);
     return {
       attachmentCount: attachments.length,
       fileObjectKeys: uniqueStrings(files.map((file) => file.objectKey)),
@@ -750,33 +762,32 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
   }
 
   private activePreprocessingCount(clientInstanceId: ClientInstanceId, now: string): number {
-    return [...this.conversationAttachments.values()].filter(
-      (attachment) => {
-        const leaseExpiresAt = attachment.processingLeaseExpiresAt;
-        return (
-          attachment.clientInstanceId === clientInstanceId &&
-          attachment.status === "preprocessing" &&
-          Boolean(attachment.processingLeaseToken) &&
-          leaseExpiresAt !== undefined &&
-          leaseExpiresAt.localeCompare(now) > 0
-        );
-      }
-    ).length;
+    return [...this.conversationAttachments.values()].filter((attachment) => {
+      const leaseExpiresAt = attachment.processingLeaseExpiresAt;
+      return (
+        attachment.clientInstanceId === clientInstanceId &&
+        attachment.status === "preprocessing" &&
+        Boolean(attachment.processingLeaseToken) &&
+        leaseExpiresAt !== undefined &&
+        leaseExpiresAt.localeCompare(now) > 0
+      );
+    }).length;
   }
 
-  private activeConversationPreprocessingCount(conversationId: ConversationId, now: string): number {
-    return [...this.conversationAttachments.values()].filter(
-      (attachment) => {
-        const leaseExpiresAt = attachment.processingLeaseExpiresAt;
-        return (
-          attachment.conversationId === conversationId &&
-          attachment.status === "preprocessing" &&
-          Boolean(attachment.processingLeaseToken) &&
-          leaseExpiresAt !== undefined &&
-          leaseExpiresAt.localeCompare(now) > 0
-        );
-      }
-    ).length;
+  private activeConversationPreprocessingCount(
+    conversationId: ConversationId,
+    now: string
+  ): number {
+    return [...this.conversationAttachments.values()].filter((attachment) => {
+      const leaseExpiresAt = attachment.processingLeaseExpiresAt;
+      return (
+        attachment.conversationId === conversationId &&
+        attachment.status === "preprocessing" &&
+        Boolean(attachment.processingLeaseToken) &&
+        leaseExpiresAt !== undefined &&
+        leaseExpiresAt.localeCompare(now) > 0
+      );
+    }).length;
   }
 }
 

@@ -123,10 +123,7 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
     this.costs = options.costs ?? {};
   }
 
-  async runModelCall<T>(
-    clientInstanceId: ClientInstanceId,
-    execute: () => Promise<T>
-  ): Promise<T> {
+  async runModelCall<T>(clientInstanceId: ClientInstanceId, execute: () => Promise<T>): Promise<T> {
     const reservation = await this.reserveModelCall(clientInstanceId);
     try {
       return execute();
@@ -141,7 +138,12 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
       inputTokens: normalizeCount(input.inputTokens),
       ...(input.cachedInputTokens === undefined
         ? {}
-        : { cachedInputTokens: normalizeCachedInputTokens(input.cachedInputTokens, input.inputTokens) }),
+        : {
+            cachedInputTokens: normalizeCachedInputTokens(
+              input.cachedInputTokens,
+              input.inputTokens
+            )
+          }),
       outputTokens: normalizeCount(input.outputTokens),
       totalTokens: normalizeCount(input.totalTokens),
       webSearchCallCount: normalizeCount(input.webSearchCallCount ?? 0)
@@ -210,15 +212,13 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
       input.webSearchEnabled ??
       Boolean(
         this.costs.customer?.webSearch?.length ||
-          allEvents.some((event) => event.webSearchCallCount > 0)
+        allEvents.some((event) => event.webSearchCallCount > 0)
       );
 
     return {
       generatedAt: now.toISOString(),
       spendBudget: {
-        ...(this.costs.customer?.currency
-          ? { currency: this.costs.customer.currency }
-          : {}),
+        ...(this.costs.customer?.currency ? { currency: this.costs.customer.currency } : {}),
         ...(this.budget.dailySpendLimit === undefined
           ? {}
           : { dailyLimitMicros: toMicros(this.budget.dailySpendLimit) }),
@@ -248,12 +248,7 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
         this.costs.customer,
         showWebSearchCost
       ),
-      dailyUsage: summarizeSafeDailyBuckets(
-        allEvents,
-        now,
-        this.costs.customer,
-        showWebSearchCost
-      ),
+      dailyUsage: summarizeSafeDailyBuckets(allEvents, now, this.costs.customer, showWebSearchCost),
       monthlyUsage: summarizeSafeMonthlyBuckets(
         allEvents,
         now,
@@ -325,7 +320,9 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
     });
   }
 
-  private async settleModelCall(reservation: { clientInstanceId: ClientInstanceId }): Promise<void> {
+  private async settleModelCall(reservation: {
+    clientInstanceId: ClientInstanceId;
+  }): Promise<void> {
     await this.withClientLock(reservation.clientInstanceId, async () => {
       const nextCount = Math.max(0, this.countInFlightModelCalls(reservation.clientInstanceId) - 1);
       if (nextCount === 0) {
@@ -350,14 +347,12 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
       release = resolve;
     });
     this.clientLocks.set(clientInstanceId, current);
-    return previous
-      .then(execute)
-      .finally(() => {
-        release?.();
-        if (this.clientLocks.get(clientInstanceId) === current) {
-          this.clientLocks.delete(clientInstanceId);
-        }
-      });
+    return previous.then(execute).finally(() => {
+      release?.();
+      if (this.clientLocks.get(clientInstanceId) === current) {
+        this.clientLocks.delete(clientInstanceId);
+      }
+    });
   }
 }
 
@@ -384,8 +379,7 @@ export function calculateUsageCost(
   const missingMeters: UsageCostMissingMeter[] = [];
   const cachedInputTokens = event.cachedInputTokens;
   const cachePriceDiffers =
-    modelRate.cachedInputPricePerMillionTokens !==
-    modelRate.uncachedInputPricePerMillionTokens;
+    modelRate.cachedInputPricePerMillionTokens !== modelRate.uncachedInputPricePerMillionTokens;
   if (cachedInputTokens === undefined && cachePriceDiffers) {
     missingMeters.push("cached_input_tokens");
   }
@@ -433,8 +427,7 @@ function calculateKnownComponents(
 ): UsageCostComponents {
   const cachedInputTokens =
     event.cachedInputTokens ??
-    (modelRate.cachedInputPricePerMillionTokens ===
-    modelRate.uncachedInputPricePerMillionTokens
+    (modelRate.cachedInputPricePerMillionTokens === modelRate.uncachedInputPricePerMillionTokens
       ? 0
       : undefined);
   const inputKnown = cachedInputTokens !== undefined;
@@ -486,12 +479,10 @@ function findWebSearchRate(
   const rates = rateCard.webSearch ?? [];
   return (
     rates.find(
-      (candidate) =>
-        candidate.providerId === event.providerId && candidate.model === event.model
+      (candidate) => candidate.providerId === event.providerId && candidate.model === event.model
     ) ??
     rates.find(
-      (candidate) =>
-        candidate.providerId === event.providerId && candidate.model === undefined
+      (candidate) => candidate.providerId === event.providerId && candidate.model === undefined
     )
   );
 }
@@ -540,9 +531,7 @@ function summarizeSafeEvents(
     } => event.customerBillableCost.status === "settled"
   );
   const incomplete = events.length - settled.length;
-  const currencies = new Set(
-    settled.map((event) => event.customerBillableCost.currency)
-  );
+  const currencies = new Set(settled.map((event) => event.customerBillableCost.currency));
   const complete =
     incomplete === 0 &&
     currencies.size <= 1 &&
@@ -561,12 +550,11 @@ function summarizeSafeEvents(
   return {
     ...usage,
     cost: {
-      status:
-        complete
-          ? "settled"
-          : events.length === 0 && customerRateCard === undefined
-            ? "unpriced"
-            : "incomplete",
+      status: complete
+        ? "settled"
+        : events.length === 0 && customerRateCard === undefined
+          ? "unpriced"
+          : "incomplete",
       ...(currency ? { currency } : {}),
       ...(complete
         ? {
@@ -750,13 +738,9 @@ function filterEventsByWindow(
   );
 }
 
-function addComponents(
-  left: UsageCostComponents,
-  right: UsageCostComponents
-): UsageCostComponents {
+function addComponents(left: UsageCostComponents, right: UsageCostComponents): UsageCostComponents {
   return {
-    uncachedInputCostMicros:
-      left.uncachedInputCostMicros + right.uncachedInputCostMicros,
+    uncachedInputCostMicros: left.uncachedInputCostMicros + right.uncachedInputCostMicros,
     cachedInputCostMicros: left.cachedInputCostMicros + right.cachedInputCostMicros,
     outputCostMicros: left.outputCostMicros + right.outputCostMicros,
     webSearchCostMicros: left.webSearchCostMicros + right.webSearchCostMicros

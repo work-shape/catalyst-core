@@ -18,8 +18,7 @@ export function AgentSelector({
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const selectedAgent =
-    agents.find((agent) => agent.name === selectedAgentName) ?? agents[0];
+  const selectedAgent = agents.find((agent) => agent.name === selectedAgentName) ?? agents[0];
 
   useEffect(() => {
     if (!open) {
@@ -75,7 +74,10 @@ export function AgentSelector({
         </span>
         <ChevronDown
           size={15}
-          className={cn("shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
+          className={cn(
+            "shrink-0 text-muted-foreground transition-transform",
+            open && "rotate-180"
+          )}
           aria-hidden="true"
         />
       </button>

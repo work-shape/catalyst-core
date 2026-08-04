@@ -2,20 +2,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  asClientInstanceId,
-  asManagedFileId,
-  type RuntimeCallContext
-} from "@vivd-catalyst/core";
-import {
-  createStaticConfigAssetSource,
-  InMemoryPlatformStore
-} from "@vivd-catalyst/core/testing";
+import { asClientInstanceId, asManagedFileId, type RuntimeCallContext } from "@vivd-catalyst/core";
+import { createStaticConfigAssetSource, InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
-import {
-  modelContentText,
-  type ModelProvider
-} from "@vivd-catalyst/model-provider";
+import { modelContentText, type ModelProvider } from "@vivd-catalyst/model-provider";
 import {
   createLocalWorkspaceFileByteStore,
   createWorkspaceToolDefinitions,
@@ -168,17 +158,19 @@ describe("agent workspace file e2e", () => {
         }
       };
       const runtime = new LocalAgentRuntime({
-        assetSource: createStaticConfigAssetSource({ agents: [
-          {
-            name: "workspace_file_agent",
-            displayName: "Workspace File Agent",
-            instructions:
-              "Import uploaded files with workspace.import_files, inspect them with workspace.exec, and answer from stdout.",
-            modelProviderId: "test-provider",
-            toolNames: tools.map((tool) => tool.name),
-            initialPrompts: []
-          }
-        ] }),
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              name: "workspace_file_agent",
+              displayName: "Workspace File Agent",
+              instructions:
+                "Import uploaded files with workspace.import_files, inspect them with workspace.exec, and answer from stdout.",
+              modelProviderId: "test-provider",
+              toolNames: tools.map((tool) => tool.name),
+              initialPrompts: []
+            }
+          ]
+        }),
         modelProviders: [
           {
             id: "test-provider",

@@ -30,7 +30,9 @@ import {
 const cleanupDirectories: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(cleanupDirectories.map((directory) => rm(directory, { recursive: true, force: true })));
+  await Promise.all(
+    cleanupDirectories.map((directory) => rm(directory, { recursive: true, force: true }))
+  );
   cleanupDirectories.length = 0;
 });
 
@@ -106,7 +108,9 @@ describe("docker workspace command runner", () => {
     );
     const serializedArgs = invocation.args.join("\n");
     expect(serializedArgs).not.toContain("target=/workspace,rw");
-    expect(serializedArgs).not.toMatch(/DATABASE_URL|OPENAI_API_KEY|AWS_SECRET_ACCESS_KEY|DOCKER_HOST/u);
+    expect(serializedArgs).not.toMatch(
+      /DATABASE_URL|OPENAI_API_KEY|AWS_SECRET_ACCESS_KEY|DOCKER_HOST/u
+    );
     expect(serializedArgs).not.toContain("/var/run/docker.sock");
   });
 
@@ -276,7 +280,9 @@ class FakeDockerCommandClient implements DockerCommandClient {
   readonly runs: DockerCommandRunInput[] = [];
   readonly removedContainers: string[] = [];
 
-  constructor(private readonly fakeResult: (input: DockerCommandRunInput) => Promise<ProcessResult>) {}
+  constructor(
+    private readonly fakeResult: (input: DockerCommandRunInput) => Promise<ProcessResult>
+  ) {}
 
   async run(input: DockerCommandRunInput): Promise<ProcessResult> {
     this.runs.push(input);

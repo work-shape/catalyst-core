@@ -1,32 +1,14 @@
 import * as Collapsible from "@radix-ui/react-collapsible";
-import {
-  BarChart3,
-  ChevronDown,
-  Database,
-  Library,
-  X
-} from "lucide-react";
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  useState
-} from "react";
-import type {
-  ApiClient,
-  ConversationResourceListItem
-} from "@vivd-catalyst/api-client";
+import { BarChart3, ChevronDown, Database, Library, X } from "lucide-react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import type { ApiClient, ConversationResourceListItem } from "@vivd-catalyst/api-client";
 import { ArtifactDownloadButton, ArtifactFileIcon } from "./artifact-download-card";
 import { useWorkspaceApiClient } from "./api/workspace-api-client";
 import {
   useConversationResourcesQuery,
   useStructuredDataResourceQuery
 } from "./api/workspace-queries";
-import {
-  isToolDisplayPayload,
-  ToolDisplayWidgetNode
-} from "./domain-ui-widgets";
+import { isToolDisplayPayload, ToolDisplayWidgetNode } from "./domain-ui-widgets";
 import { useTranslation } from "./i18n";
 import {
   groupConversationResources,
@@ -34,22 +16,10 @@ import {
   type ResourceSectionType
 } from "./resources-panel-model";
 import { ResourceDownloadButton } from "./resource-download-button";
-import {
-  createSourceFilePreviewEntry,
-  type SourceFileResource
-} from "./source-file-preview";
-import {
-  StructuredDataCopyAllButton,
-  StructuredDataView
-} from "./structured-data-view";
-import {
-  displayPanelKey,
-  renderBuiltInDisplay
-} from "./tool-display-rendering";
-import {
-  useToolDisplayPanel,
-  type ToolDisplayPanelEntry
-} from "./tool-display-panel";
+import { createSourceFilePreviewEntry, type SourceFileResource } from "./source-file-preview";
+import { StructuredDataCopyAllButton, StructuredDataView } from "./structured-data-view";
+import { displayPanelKey, renderBuiltInDisplay } from "./tool-display-rendering";
+import { useToolDisplayPanel, type ToolDisplayPanelEntry } from "./tool-display-panel";
 import { getArtifactFileType, type ToolArtifactDownloadRef } from "./tool-artifacts";
 import { TooltipIconButton } from "./tooltip-icon-button";
 import { Spinner } from "./ui/spinner";
@@ -68,10 +38,7 @@ export function useResourcesPanelState({
   enabled: boolean;
 }) {
   const { apiBaseUrl, client } = useWorkspaceApiClient();
-  const {
-    resourcesPanelPreference,
-    setResourcesPanelPreference
-  } = useWorkspacePreferences();
+  const { resourcesPanelPreference, setResourcesPanelPreference } = useWorkspacePreferences();
   const [desktop, setDesktop] = useState(false);
   const query = useConversationResourcesQuery({
     apiBaseUrl,
@@ -180,11 +147,7 @@ export function ResourcesPanel({
               </div>
             }
           >
-            <ArtifactPreview
-              artifact={artifact}
-              client={client}
-              conversationId={conversationId}
-            />
+            <ArtifactPreview artifact={artifact} client={client} conversationId={conversationId} />
           </Suspense>
         )
       };
@@ -209,12 +172,13 @@ export function ResourcesPanel({
     }
     if (resource.resourceType === "analysis") {
       const display = resource.preview.display;
-      const fallback =
-        (isToolDisplayPayload(display) ? renderBuiltInDisplay(display) : undefined) ?? (
-          <pre className="overflow-auto whitespace-pre-wrap p-4 text-xs">
-            {JSON.stringify(display, null, 2)}
-          </pre>
-        );
+      const fallback = (isToolDisplayPayload(display)
+        ? renderBuiltInDisplay(display)
+        : undefined) ?? (
+        <pre className="overflow-auto whitespace-pre-wrap p-4 text-xs">
+          {JSON.stringify(display, null, 2)}
+        </pre>
+      );
       const node = isToolDisplayPayload(display) ? (
         <ToolDisplayWidgetNode
           display={display}
@@ -222,7 +186,9 @@ export function ResourcesPanel({
           locale={locale}
           source="message-metadata"
         />
-      ) : fallback;
+      ) : (
+        fallback
+      );
       showEntry({
         key: displayPanelKey(display, resource.resourceId),
         title: resource.title,
@@ -235,18 +201,14 @@ export function ResourcesPanel({
     const sourceResources = resources.filter(
       (
         candidate
-      ): candidate is Extract<
-        ConversationResourceListItem,
-        { resourceType: "source_file" }
-      > => candidate.resourceType === "source_file"
+      ): candidate is Extract<ConversationResourceListItem, { resourceType: "source_file" }> =>
+        candidate.resourceType === "source_file"
     );
     const detail = {
       conversationId,
       structuredDataResourceId: resource.preview.structuredDataResourceId,
       onSourceOpen: (attachmentId: string) => {
-        const source = sourceResources.find(
-          (candidate) => candidate.attachmentId === attachmentId
-        );
+        const source = sourceResources.find((candidate) => candidate.attachmentId === attachmentId);
         if (source) {
           showEntry(sourceEntry(source));
         }
@@ -272,11 +234,7 @@ export function ResourcesPanel({
     >
       <div className="flex h-11 shrink-0 items-center justify-between border-b px-3">
         <h2 className="text-sm font-semibold">{t("resourcesTitle")}</h2>
-        <TooltipIconButton
-          className="size-7"
-          tooltip={t("resourcesClose")}
-          onClick={onClose}
-        >
+        <TooltipIconButton className="size-7" tooltip={t("resourcesClose")} onClick={onClose}>
           <X size={15} aria-hidden="true" />
         </TooltipIconButton>
       </div>
@@ -304,9 +262,7 @@ export function ResourcesPanel({
                     className="transition-transform group-data-[state=closed]:-rotate-90"
                     aria-hidden="true"
                   />
-                  <span className="min-w-0 flex-1 truncate">
-                    {sectionLabel(section.type, t)}
-                  </span>
+                  <span className="min-w-0 flex-1 truncate">{sectionLabel(section.type, t)}</span>
                   <span className="font-normal tabular-nums">{section.resources.length}</span>
                 </Collapsible.Trigger>
                 <Collapsible.Content className="grid gap-0.5 pb-1">
@@ -364,8 +320,7 @@ function ResourceRow({
           })}
         </span>
       </span>
-      {resource.resourceType === "source_file" ||
-      resource.resourceType === "generated_file" ? (
+      {resource.resourceType === "source_file" || resource.resourceType === "generated_file" ? (
         <ResourceDownloadButton
           client={client}
           conversationId={conversationId}
@@ -430,10 +385,7 @@ function StructuredDataHeaderAction({
 }
 
 function ResourceRowIcon({ resource }: { resource: ConversationResourceListItem }) {
-  if (
-    resource.resourceType === "source_file" ||
-    resource.resourceType === "generated_file"
-  ) {
+  if (resource.resourceType === "source_file" || resource.resourceType === "generated_file") {
     const fileType = getArtifactFileType({
       artifactId: "",
       filename: resource.download.filename,

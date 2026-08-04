@@ -162,10 +162,7 @@ export function InitialPromptsEditor({
           size="sm"
           disabled={disabled}
           onClick={() =>
-            onChange([
-              ...prompts,
-              { title: { en: "", de: "" }, prompt: { en: "", de: "" } }
-            ])
+            onChange([...prompts, { title: { en: "", de: "" }, prompt: { en: "", de: "" } }])
           }
         >
           <Plus size={14} aria-hidden="true" />
@@ -173,9 +170,7 @@ export function InitialPromptsEditor({
         </Button>
       </div>
       {prompts.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          {t("configOptionalPrompts")}
-        </p>
+        <p className="text-xs text-muted-foreground">{t("configOptionalPrompts")}</p>
       ) : null}
       {prompts.map((prompt, index) => (
         <div key={index} className="grid gap-3 rounded-lg border bg-muted/10 p-3 sm:p-4">

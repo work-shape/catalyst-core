@@ -18,7 +18,11 @@ export function Spinner({
   return (
     <Loader
       aria-hidden="true"
-      className={cn("shrink-0 animate-spin text-current motion-reduce:animate-none", spinnerSizes[size], className)}
+      className={cn(
+        "shrink-0 animate-spin text-current motion-reduce:animate-none",
+        spinnerSizes[size],
+        className
+      )}
       {...props}
     />
   );

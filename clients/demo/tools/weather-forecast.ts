@@ -1,9 +1,6 @@
 import { z } from "zod";
 import { defineConfiguredTool, defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
-import {
-  weatherForecastOutputSchema,
-  type WeatherForecastOutput
-} from "./weather-forecast-schema";
+import { weatherForecastOutputSchema, type WeatherForecastOutput } from "./weather-forecast-schema";
 
 const toolConfigSchema = z
   .object({
@@ -86,15 +83,13 @@ function createInputSchema(config: z.infer<typeof toolConfigSchema>) {
 
 type WeatherLocale = "de" | "en";
 
-function createForecast(
-  input: WeatherForecastInput,
-  locale: WeatherLocale
-): WeatherForecastOutput {
+function createForecast(input: WeatherForecastInput, locale: WeatherLocale): WeatherForecastOutput {
   const seed = hashLocation(input.location);
   const startDate = parseStartDate(input.startDate);
   const unit = input.unit;
   const celsiusDays = Array.from({ length: input.days }, (_, index) => {
-    const condition = forecastConditions[(seed + index) % forecastConditions.length] ?? "partly_cloudy";
+    const condition =
+      forecastConditions[(seed + index) % forecastConditions.length] ?? "partly_cloudy";
     const lowCelsius = 8 + ((seed + index * 3) % 9);
     const highCelsius = lowCelsius + 5 + ((seed + index) % 5);
     const precipitationChance = precipitationFor(condition, seed + index);
@@ -152,10 +147,7 @@ function hashLocation(location: string): number {
   );
 }
 
-function precipitationFor(
-  condition: (typeof forecastConditions)[number],
-  seed: number
-): number {
+function precipitationFor(condition: (typeof forecastConditions)[number], seed: number): number {
   if (condition === "rain") {
     return 60 + (seed % 30);
   }
@@ -204,7 +196,10 @@ function createAdvisory(days: WeatherForecastOutput["days"], locale: WeatherLoca
     : "Conditions look stable for normal planning.";
 }
 
-function describeCondition(condition: (typeof forecastConditions)[number], locale: WeatherLocale): string {
+function describeCondition(
+  condition: (typeof forecastConditions)[number],
+  locale: WeatherLocale
+): string {
   if (locale === "de") {
     return (
       {

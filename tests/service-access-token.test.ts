@@ -17,7 +17,9 @@ describe("service access tokens", () => {
     });
 
     const issued = await fixture.exchange.exchange(fixture.apiKey);
-    const principal = await fixture.adapter.authenticate(authRequest(fixture.clientInstanceId, issued.accessToken));
+    const principal = await fixture.adapter.authenticate(
+      authRequest(fixture.clientInstanceId, issued.accessToken)
+    );
 
     expect(principal).toMatchObject({
       kind: "service",

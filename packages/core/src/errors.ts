@@ -40,4 +40,3 @@ export function isAppError(error: unknown): error is AppError {
 export function assertNever(value: never): never {
   throw new AppError("INTERNAL", `Unhandled value: ${String(value)}`);
 }
-

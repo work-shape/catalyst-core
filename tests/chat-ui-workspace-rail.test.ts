@@ -76,7 +76,7 @@ describe("workspace rail branding", () => {
       )
     );
 
-    expect(markup).toContain('>F</span>');
+    expect(markup).toContain(">F</span>");
     expect(markup).not.toContain("Vivd Catalyst");
     expect(markup).not.toContain("lucide-shield");
   });

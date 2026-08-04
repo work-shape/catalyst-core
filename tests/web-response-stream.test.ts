@@ -86,8 +86,7 @@ describe("web response bridge", () => {
         body: JSON.stringify({
           idempotencyKey: "streaming-deltas-run",
           message: {
-            text:
-              "hello streaming one two three four five six seven eight nine ten eleven twelve thirteen fourteen"
+            text: "hello streaming one two three four five six seven eight nine ten eleven twelve thirteen fourteen"
           }
         })
       });
@@ -100,10 +99,7 @@ describe("web response bridge", () => {
       expect(eventsResponse.ok).toBe(true);
       const reader = eventsResponse.body?.getReader();
       expect(reader).toBeDefined();
-      const firstChunk = await Promise.race([
-        readChunk(reader!),
-        delay(250).then(() => undefined)
-      ]);
+      const firstChunk = await Promise.race([readChunk(reader!), delay(250).then(() => undefined)]);
       expect(firstChunk).toContain('"type":"message_delta"');
 
       const streamText = `${firstChunk}${await readRemaining(reader!)}`;
@@ -196,13 +192,17 @@ function parseSseChunks(
     .filter((line) => line.startsWith("data:"))
     .map((line) => line.slice("data:".length).trim())
     .filter((line) => line !== "[DONE]")
-    .map((line) => JSON.parse(line) as { type?: string; payload?: { delta?: string; input?: unknown } });
+    .map(
+      (line) => JSON.parse(line) as { type?: string; payload?: { delta?: string; input?: unknown } }
+    );
 }
 
-function createTestConfig(input: {
-  toolNames?: string[];
-  tools?: Array<{ name: string; enabled?: boolean }>;
-} = {}) {
+function createTestConfig(
+  input: {
+    toolNames?: string[];
+    tools?: Array<{ name: string; enabled?: boolean }>;
+  } = {}
+) {
   const config = parseClientInstanceConfig({
     version: 1,
     clientInstance: {

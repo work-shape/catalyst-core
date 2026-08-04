@@ -64,13 +64,18 @@ function calculateDiff(oldLines: string[], newLines: string[]): DiffLine[] {
   let oldIndex = 0;
   let newIndex = 0;
   while (oldIndex < oldLines.length || newIndex < newLines.length) {
-    if (oldIndex < oldLines.length && newIndex < newLines.length && oldLines[oldIndex] === newLines[newIndex]) {
+    if (
+      oldIndex < oldLines.length &&
+      newIndex < newLines.length &&
+      oldLines[oldIndex] === newLines[newIndex]
+    ) {
       output.push({ kind: "context", text: oldLines[oldIndex]! });
       oldIndex += 1;
       newIndex += 1;
     } else if (
       oldIndex < oldLines.length &&
-      (newIndex === newLines.length || lengths[oldIndex + 1]![newIndex]! >= lengths[oldIndex]![newIndex + 1]!)
+      (newIndex === newLines.length ||
+        lengths[oldIndex + 1]![newIndex]! >= lengths[oldIndex]![newIndex + 1]!)
     ) {
       output.push({ kind: "delete", text: oldLines[oldIndex]! });
       oldIndex += 1;

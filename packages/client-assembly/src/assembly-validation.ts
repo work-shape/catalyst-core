@@ -76,7 +76,9 @@ function findModelProviderReferenceIssues(config: ClientInstanceConfig): string[
     config.conversationTitles.modelProviderId &&
     config.conversationTitles.modelBindingId
   ) {
-    issues.push("Conversation title generation must use either modelProviderId or modelBindingId, not both");
+    issues.push(
+      "Conversation title generation must use either modelProviderId or modelBindingId, not both"
+    );
   }
 
   if (
@@ -115,7 +117,9 @@ function findToolReferenceIssues(
       continue;
     }
     if (tool.enabled && !providedToolNames.has(tool.name)) {
-      issues.push(`Enabled tool '${tool.name}' has no implementation registered by the client assembly app`);
+      issues.push(
+        `Enabled tool '${tool.name}' has no implementation registered by the client assembly app`
+      );
     }
     if (tool.enabled && providedTools.get(tool.name)?.permission?.mode === "approval_required") {
       issues.push(

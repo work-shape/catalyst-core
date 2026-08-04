@@ -1,9 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-  asClientInstanceId,
-  createPlatformId,
-  type ConfigAssetStore
-} from "@vivd-catalyst/core";
+import { asClientInstanceId, createPlatformId, type ConfigAssetStore } from "@vivd-catalyst/core";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 import { PostgresPlatformStore } from "@vivd-catalyst/postgres-store";
 
@@ -83,9 +79,7 @@ function runConfigAssetStoreSuite(
       const result = await store.applyConfigAssetMutations({
         clientInstanceId,
         baseVersion: 1,
-        mutations: [
-          { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v2") }
-        ]
+        mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v2") }]
       });
 
       expect(result).toEqual({ version: 2 });
@@ -100,9 +94,7 @@ function runConfigAssetStoreSuite(
       await store.applyConfigAssetMutations({
         clientInstanceId,
         baseVersion: 0,
-        mutations: [
-          { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") }
-        ]
+        mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") }]
       });
 
       await expect(
@@ -137,9 +129,7 @@ function runConfigAssetStoreSuite(
       });
       await store.applyConfigAssetMutations({
         clientInstanceId,
-        mutations: [
-          { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v2") }
-        ]
+        mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v2") }]
       });
 
       const agentRevisions = await store.listConfigAssetRevisions({
@@ -163,9 +153,7 @@ function runConfigAssetStoreSuite(
       const clientInstanceId = createClientInstanceId();
       await store.applyConfigAssetMutations({
         clientInstanceId,
-        mutations: [
-          { type: "upsert", kind: "skill", name: "research", config: skillConfig("v1") }
-        ]
+        mutations: [{ type: "upsert", kind: "skill", name: "research", config: skillConfig("v1") }]
       });
       await store.applyConfigAssetMutations({
         clientInstanceId,
@@ -192,9 +180,7 @@ function runConfigAssetStoreSuite(
       const clientInstanceId = createClientInstanceId();
       await store.applyConfigAssetMutations({
         clientInstanceId,
-        mutations: [
-          { type: "upsert", kind: "skill", name: "research", config: skillConfig("v1") }
-        ]
+        mutations: [{ type: "upsert", kind: "skill", name: "research", config: skillConfig("v1") }]
       });
       await store.applyConfigAssetMutations({
         clientInstanceId,
@@ -202,9 +188,7 @@ function runConfigAssetStoreSuite(
       });
       await store.applyConfigAssetMutations({
         clientInstanceId,
-        mutations: [
-          { type: "upsert", kind: "skill", name: "research", config: skillConfig("v2") }
-        ]
+        mutations: [{ type: "upsert", kind: "skill", name: "research", config: skillConfig("v2") }]
       });
 
       await expect(
@@ -223,9 +207,7 @@ function runConfigAssetStoreSuite(
       const clientInstanceId = createClientInstanceId();
       await store.applyConfigAssetMutations({
         clientInstanceId,
-        mutations: [
-          { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") }
-        ]
+        mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") }]
       });
       await store.applyConfigAssetMutations({
         clientInstanceId,

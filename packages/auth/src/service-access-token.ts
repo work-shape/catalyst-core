@@ -148,7 +148,11 @@ export class HmacServiceAccessTokenAuthAdapter implements AuthAdapter {
       const permission = permissionForAuthScope(scope);
       return permission ? [permission] : [];
     });
-    return toAuthenticatedServicePrincipal(resolved, { scopes, permissions }, request.correlationId);
+    return toAuthenticatedServicePrincipal(
+      resolved,
+      { scopes, permissions },
+      request.correlationId
+    );
   }
 }
 
@@ -171,8 +175,9 @@ function deriveEffectiveServiceGrants(resolved: ResolvedApiCredential): Effectiv
     return entry;
   });
   const selectedScopes = restrictions ?? [...principalScopes.keys()];
-  const scopes = [...new Set(selectedScopes)]
-    .filter((scope) => scope !== "*" && principalScopes.has(scope)) as AuthScope[];
+  const scopes = [...new Set(selectedScopes)].filter(
+    (scope) => scope !== "*" && principalScopes.has(scope)
+  ) as AuthScope[];
   return {
     scopes,
     permissions: scopes.map((scope) => principalScopes.get(scope)!).filter(Boolean)
@@ -186,10 +191,7 @@ function assertCredentialUsable(resolved: ResolvedApiCredential): void {
   if (resolved.credential.revokedAt) {
     throw new AppError("UNAUTHENTICATED", "API credential is revoked");
   }
-  if (
-    resolved.credential.expiresAt &&
-    Date.parse(resolved.credential.expiresAt) <= Date.now()
-  ) {
+  if (resolved.credential.expiresAt && Date.parse(resolved.credential.expiresAt) <= Date.now()) {
     throw new AppError("UNAUTHENTICATED", "API credential is expired");
   }
 }
@@ -261,7 +263,9 @@ function verifyClaims(token: string, secret: string): ServiceAccessTokenClaims {
     throw new AppError("UNAUTHENTICATED", "Invalid service access token signature");
   }
   try {
-    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as ServiceAccessTokenClaims;
+    const claims = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8")
+    ) as ServiceAccessTokenClaims;
     if (
       !claims.sub ||
       !claims.credentialId ||

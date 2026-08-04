@@ -1,13 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
-import {
-  HmacSessionTokenAuthAdapter,
-  HmacSessionTokenIssuer
-} from "@vivd-catalyst/auth";
-import {
-  createChatServer,
-  type ChatAttachmentService
-} from "@vivd-catalyst/chat-server";
+import { HmacSessionTokenAuthAdapter, HmacSessionTokenIssuer } from "@vivd-catalyst/auth";
+import { createChatServer, type ChatAttachmentService } from "@vivd-catalyst/chat-server";
 import {
   AppError,
   NoopAuditRecorder,
@@ -66,9 +60,19 @@ describe("conversation resource store queries", () => {
       filename: "draft.txt"
     });
 
-    const firstArtifact = await createArtifact(store, clientInstanceId, conversation.id, "first.csv");
+    const firstArtifact = await createArtifact(
+      store,
+      clientInstanceId,
+      conversation.id,
+      "first.csv"
+    );
     await tick();
-    const secondArtifact = await createArtifact(store, clientInstanceId, conversation.id, "second.csv");
+    const secondArtifact = await createArtifact(
+      store,
+      clientInstanceId,
+      conversation.id,
+      "second.csv"
+    );
     await createArtifact(store, clientInstanceId, otherConversation.id, "other.csv");
 
     await expect(
@@ -84,7 +88,6 @@ describe("conversation resource store queries", () => {
       expect.objectContaining({ id: firstArtifact.id })
     ]);
   });
-
 });
 
 describe("conversation resource routes", () => {
@@ -513,7 +516,9 @@ describe("conversation resource routes", () => {
         `/api/conversations/${conversation.id}/files/${file.id}/content?download=true`
       );
       expect(download.statusCode).toBe(200);
-      expect(download.headers["content-disposition"]).toContain('attachment; filename="brief.docx"');
+      expect(download.headers["content-disposition"]).toContain(
+        'attachment; filename="brief.docx"'
+      );
       expect(download.rawPayload).toEqual(Buffer.from(sourceBytes));
 
       const otherUser = await request(
@@ -549,10 +554,7 @@ async function createFixture() {
     ttlSeconds: 900
   };
   const issuer = new HmacSessionTokenIssuer(authOptions);
-  const files = new Map<
-    string,
-    { filename: string; mimeType?: string; bytes: Uint8Array }
-  >();
+  const files = new Map<string, { filename: string; mimeType?: string; bytes: Uint8Array }>();
   const attachments: ChatAttachmentService = {
     maxFileBytes: 1024,
     acceptedFileTypes: [],
@@ -658,7 +660,9 @@ async function createAttachment(
   store: InMemoryPlatformStore,
   input: {
     clientInstanceId: ClientInstanceId;
-    conversationId: Parameters<InMemoryPlatformStore["createConversationAttachment"]>[0]["conversationId"];
+    conversationId: Parameters<
+      InMemoryPlatformStore["createConversationAttachment"]
+    >[0]["conversationId"];
     filename: string;
   }
 ) {

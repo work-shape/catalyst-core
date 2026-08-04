@@ -30,7 +30,12 @@ import {
 } from "@vivd-catalyst/core";
 import type { PostgresDatabase, PostgresTransaction } from "./postgres-database";
 import { mapExecutionWorkspace, mapWorkspaceCommand, mapWorkspaceFile } from "./rows";
-import { conversations, executionWorkspaceFiles, executionWorkspaces, workspaceCommands } from "./schema";
+import {
+  conversations,
+  executionWorkspaceFiles,
+  executionWorkspaces,
+  workspaceCommands
+} from "./schema";
 
 export async function ensureExecutionWorkspace(
   db: PostgresDatabase,
@@ -756,7 +761,11 @@ async function requireActiveWorkspace(
   if (input.ownerUserId !== undefined) {
     where.push(eq(executionWorkspaces.ownerUserId, input.ownerUserId));
   }
-  const [row] = await db.select().from(executionWorkspaces).where(and(...where)).limit(1);
+  const [row] = await db
+    .select()
+    .from(executionWorkspaces)
+    .where(and(...where))
+    .limit(1);
   if (!row) {
     throw new AppError("NOT_FOUND", "Execution workspace is not available");
   }
@@ -872,5 +881,7 @@ function preserveRetainedObjectKeys(
 
 function retainedObjectKeys(metadata: WorkspaceFile["metadata"] | undefined): string[] {
   const value = metadata?.retainedObjectKeys;
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
 }

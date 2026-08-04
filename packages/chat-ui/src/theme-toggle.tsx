@@ -3,13 +3,7 @@ import { useTranslation } from "./i18n";
 import type { ResolvedThemeMode } from "./theme";
 import { Button } from "./ui/button";
 
-export function ThemeToggle({
-  mode,
-  onToggle
-}: {
-  mode: ResolvedThemeMode;
-  onToggle: () => void;
-}) {
+export function ThemeToggle({ mode, onToggle }: { mode: ResolvedThemeMode; onToggle: () => void }) {
   const { t } = useTranslation();
   const nextMode = mode === "dark" ? "light" : "dark";
   const label = nextMode === "dark" ? t("switchToDarkTheme") : t("switchToLightTheme");
@@ -24,7 +18,11 @@ export function ThemeToggle({
       title={label}
       onClick={onToggle}
     >
-      {mode === "dark" ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
+      {mode === "dark" ? (
+        <Sun size={16} aria-hidden="true" />
+      ) : (
+        <Moon size={16} aria-hidden="true" />
+      )}
     </Button>
   );
 }

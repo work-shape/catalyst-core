@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  formatElapsedSeconds,
-  formatWorkHistoryLabel
-} from "../packages/chat-ui/src/elapsed-time";
+import { formatElapsedSeconds, formatWorkHistoryLabel } from "../packages/chat-ui/src/elapsed-time";
 import { createElement } from "../packages/chat-ui/node_modules/react";
 import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
 import { AssistantActivityStatus } from "../packages/chat-ui/src/assistant-activity-status";

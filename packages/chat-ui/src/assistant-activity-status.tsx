@@ -88,7 +88,8 @@ export function useAssistantActivityLabel({
   if (activity?.kind === "reasoning") {
     return t("thinkingActivity");
   }
-  const index = (stableVariantIndex(variationSeed) + fallbackRotation) % fallbackActivityKeys.length;
+  const index =
+    (stableVariantIndex(variationSeed) + fallbackRotation) % fallbackActivityKeys.length;
   return t(fallbackActivityKeys[index] ?? "preparing");
 }
 
@@ -133,7 +134,11 @@ function useElapsedSeconds(runKey: string | undefined): number {
   const lastRunKeyRef = useRef(runKey);
 
   useEffect(() => {
-    if (runKey !== undefined && lastRunKeyRef.current !== undefined && runKey !== lastRunKeyRef.current) {
+    if (
+      runKey !== undefined &&
+      lastRunKeyRef.current !== undefined &&
+      runKey !== lastRunKeyRef.current
+    ) {
       startedAtRef.current = Date.now();
       setElapsedSeconds(0);
     }

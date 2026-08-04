@@ -14,8 +14,8 @@ export default defineConfig({
             "getting-started/overview",
             "getting-started/operating-models",
             "getting-started/local-demo",
-            "getting-started/execution-workspaces-local",
-          ],
+            "getting-started/execution-workspaces-local"
+          ]
         },
         {
           label: "Configure A Client Instance",
@@ -23,12 +23,12 @@ export default defineConfig({
             "configure/client-assembly",
             "configure/release-config",
             "configure/config-assets",
-            "configure/chat-experience",
-          ],
+            "configure/chat-experience"
+          ]
         },
         {
           label: "Extend The Agent",
-          items: ["extend/custom-tools", "extend/openapi-tools"],
+          items: ["extend/custom-tools", "extend/openapi-tools"]
         },
         {
           label: "Run And Govern",
@@ -39,18 +39,14 @@ export default defineConfig({
             "operate/runner-security",
             "operate/auth-and-embedding",
             "operate/governance",
-            "operate/instance-brief",
-          ],
+            "operate/instance-brief"
+          ]
         },
         {
           label: "Reference",
-          items: [
-            "reference/current-status",
-            "reference/framework-choice",
-            "reference/glossary",
-          ],
-        },
-      ],
-    }),
-  ],
+          items: ["reference/current-status", "reference/framework-choice", "reference/glossary"]
+        }
+      ]
+    })
+  ]
 });

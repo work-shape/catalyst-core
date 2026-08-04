@@ -28,7 +28,9 @@ describe("system instructions", () => {
     expect(content).toContain("without pasting shell logs unless the user asks for details");
     expect(content).toContain("- User selected language: German (locale: de).");
     expect(content).toContain("- Current date: Freitag, 19. Juni 2026 (ISO: 2026-06-19).");
-    expect(content).not.toContain("Respond in German unless the user explicitly asks for another language.");
+    expect(content).not.toContain(
+      "Respond in German unless the user explicitly asks for another language."
+    );
     expect(content).toContain("Use customer workflow rules.");
   });
 

@@ -92,16 +92,13 @@ type StandaloneProfileRow = typeof standaloneAuthProfiles.$inferSelect;
 
 interface BetterAuthSessionApi {
   api: {
-    getSession(input: { headers: Headers }): Promise<
-      | {
-          user: {
-            id: string;
-            email: string;
-            emailVerified?: boolean;
-          };
-        }
-      | null
-    >;
+    getSession(input: { headers: Headers }): Promise<{
+      user: {
+        id: string;
+        email: string;
+        emailVerified?: boolean;
+      };
+    } | null>;
   };
 }
 

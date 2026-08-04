@@ -47,7 +47,10 @@ describe("API access panel", () => {
           mutating: false,
           onCreatePrincipal: noopResult,
           onUpdatePrincipal: noopResult,
-          onCreateCredential: async () => ({ credential: detail.credentials[0]!, secret: "never-rendered" }),
+          onCreateCredential: async () => ({
+            credential: detail.credentials[0]!,
+            secret: "never-rendered"
+          }),
           onRevokeCredential: async () => detail.credentials[0]!,
           onClearRevealedCredential: () => undefined
         })
@@ -78,7 +81,10 @@ describe("API access panel", () => {
           mutating: false,
           onCreatePrincipal: noopResult,
           onUpdatePrincipal: noopResult,
-          onCreateCredential: async () => ({ credential: detail.credentials[0]!, secret: "never-rendered" }),
+          onCreateCredential: async () => ({
+            credential: detail.credentials[0]!,
+            secret: "never-rendered"
+          }),
           onRevokeCredential: async () => detail.credentials[0]!,
           onClearRevealedCredential: () => undefined
         })
@@ -102,7 +108,10 @@ describe("API access panel", () => {
           mutating: false,
           onCreatePrincipal: noopResult,
           onUpdatePrincipal: noopResult,
-          onCreateCredential: async () => ({ credential: detail.credentials[0]!, secret: "never-rendered" }),
+          onCreateCredential: async () => ({
+            credential: detail.credentials[0]!,
+            secret: "never-rendered"
+          }),
           onRevokeCredential: async () => detail.credentials[0]!,
           onClearRevealedCredential: () => undefined
         })
@@ -135,7 +144,10 @@ describe("API access panel", () => {
           mutating: false,
           onCreatePrincipal: noopResult,
           onUpdatePrincipal: noopResult,
-          onCreateCredential: async () => ({ credential: detail.credentials[0]!, secret: "unused" }),
+          onCreateCredential: async () => ({
+            credential: detail.credentials[0]!,
+            secret: "unused"
+          }),
           onRevokeCredential: async () => detail.credentials[0]!,
           onClearRevealedCredential: () => undefined
         })

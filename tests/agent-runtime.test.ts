@@ -18,10 +18,7 @@ import {
   type ToolExecution,
   type ToolExecutionResult
 } from "@vivd-catalyst/core";
-import {
-  createStaticConfigAssetSource,
-  InMemoryPlatformStore
-} from "@vivd-catalyst/core/testing";
+import { createStaticConfigAssetSource, InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 import { LocalAgentRuntime, type LocalAgentRunFailureReport } from "@vivd-catalyst/agent-runtime";
 import {
   modelContentText,
@@ -216,16 +213,18 @@ describe("local agent runtime", () => {
       model: "test-model"
     };
     const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({ agents: [
-        {
-          name: "cursor_agent",
-          displayName: "Cursor Agent",
-          instructions: "Help the user.",
-          modelProviderId: "test-provider",
-          toolNames: [],
-          initialPrompts: []
-        }
-      ] }),
+      assetSource: createStaticConfigAssetSource({
+        agents: [
+          {
+            name: "cursor_agent",
+            displayName: "Cursor Agent",
+            instructions: "Help the user.",
+            modelProviderId: "test-provider",
+            toolNames: [],
+            initialPrompts: []
+          }
+        ]
+      }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -311,16 +310,18 @@ describe("local agent runtime", () => {
       releaseProvider = resolve;
     });
     const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({ agents: [
-        {
-          name: "cancel_prefix_agent",
-          displayName: "Cancel Prefix Agent",
-          instructions: "Help the user.",
-          modelProviderId: "test-provider",
-          toolNames: [],
-          initialPrompts: []
-        }
-      ] }),
+      assetSource: createStaticConfigAssetSource({
+        agents: [
+          {
+            name: "cancel_prefix_agent",
+            displayName: "Cancel Prefix Agent",
+            instructions: "Help the user.",
+            modelProviderId: "test-provider",
+            toolNames: [],
+            initialPrompts: []
+          }
+        ]
+      }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -390,9 +391,9 @@ describe("local agent runtime", () => {
       "message_completed",
       "run_cancelled"
     ]);
-    expect(events.filter((event) => event.type === "message_delta").map((event) => event.delta)).toEqual([
-      "Visible prefix"
-    ]);
+    expect(
+      events.filter((event) => event.type === "message_delta").map((event) => event.delta)
+    ).toEqual(["Visible prefix"]);
     expect(events.find((event) => event.type === "message_completed")).toMatchObject({
       message: {
         text: "Visible prefix",
@@ -413,10 +414,12 @@ describe("local agent runtime", () => {
       }
     });
 
-    const assistantMessages = (await store.listMessages({
-      clientInstanceId,
-      conversationId
-    })).filter((message) => message.role === "assistant");
+    const assistantMessages = (
+      await store.listMessages({
+        clientInstanceId,
+        conversationId
+      })
+    ).filter((message) => message.role === "assistant");
     expect(assistantMessages).toHaveLength(1);
     expect(assistantMessages[0]).toMatchObject({
       text: "Visible prefix",
@@ -465,16 +468,18 @@ describe("local agent runtime", () => {
     });
     let observedAbortReason: unknown;
     const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({ agents: [
-        {
-          name: "cancel_tool_agent",
-          displayName: "Cancel Tool Agent",
-          instructions: "Use the tool.",
-          modelProviderId: "test-provider",
-          toolNames: ["test.wait"],
-          initialPrompts: []
-        }
-      ] }),
+      assetSource: createStaticConfigAssetSource({
+        agents: [
+          {
+            name: "cancel_tool_agent",
+            displayName: "Cancel Tool Agent",
+            instructions: "Use the tool.",
+            modelProviderId: "test-provider",
+            toolNames: ["test.wait"],
+            initialPrompts: []
+          }
+        ]
+      }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -597,7 +602,9 @@ describe("local agent runtime", () => {
       async complete(request) {
         providerMessages = request.messages;
         const sawEarlierTurn = request.messages.some(
-          (message) => message.role === "user" && modelContentText(message.content).includes("favorite color is blue")
+          (message) =>
+            message.role === "user" &&
+            modelContentText(message.content).includes("favorite color is blue")
         );
         return {
           text: sawEarlierTurn ? "Your favorite color is blue." : "I do not know yet.",
@@ -613,16 +620,18 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({ agents: [
-        {
-          name: "history_agent",
-          displayName: "History Agent",
-          instructions: "Use conversation history.",
-          modelProviderId: "test-provider",
-          toolNames: [],
-          initialPrompts: []
-        }
-      ] }),
+      assetSource: createStaticConfigAssetSource({
+        agents: [
+          {
+            name: "history_agent",
+            displayName: "History Agent",
+            instructions: "Use conversation history.",
+            modelProviderId: "test-provider",
+            toolNames: [],
+            initialPrompts: []
+          }
+        ]
+      }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -703,16 +712,18 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({ agents: [
-        {
-          name: "observation_failure_agent",
-          displayName: "Observation Failure Agent",
-          instructions: "Help the user.",
-          modelProviderId: "test-provider",
-          toolNames: [],
-          initialPrompts: []
-        }
-      ] }),
+      assetSource: createStaticConfigAssetSource({
+        agents: [
+          {
+            name: "observation_failure_agent",
+            displayName: "Observation Failure Agent",
+            instructions: "Help the user.",
+            modelProviderId: "test-provider",
+            toolNames: [],
+            initialPrompts: []
+          }
+        ]
+      }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -806,17 +817,19 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({ agents: [
-        {
-          name: "binding_agent",
-          displayName: "Binding Agent",
-          instructions: "Use the configured model binding.",
-          modelBindingId: "primaryReasoning",
-          reasoningEffort: "xhigh",
-          toolNames: [],
-          initialPrompts: []
-        }
-      ] }),
+      assetSource: createStaticConfigAssetSource({
+        agents: [
+          {
+            name: "binding_agent",
+            displayName: "Binding Agent",
+            instructions: "Use the configured model binding.",
+            modelBindingId: "primaryReasoning",
+            reasoningEffort: "xhigh",
+            toolNames: [],
+            initialPrompts: []
+          }
+        ]
+      }),
       modelProviders: [providerConfig],
       modelBindings: [
         {
@@ -945,16 +958,18 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({ agents: [
-        {
-          name: "tool_history_agent",
-          displayName: "Tool History Agent",
-          instructions: "Use conversation history.",
-          modelProviderId: "test-provider",
-          toolNames: [],
-          initialPrompts: []
-        }
-      ] }),
+      assetSource: createStaticConfigAssetSource({
+        agents: [
+          {
+            name: "tool_history_agent",
+            displayName: "Tool History Agent",
+            instructions: "Use conversation history.",
+            modelProviderId: "test-provider",
+            toolNames: [],
+            initialPrompts: []
+          }
+        ]
+      }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -1042,16 +1057,18 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({ agents: [
-        {
-          name: "locale_agent",
-          displayName: "Locale Agent",
-          instructions: "Help the user.",
-          modelProviderId: "test-provider",
-          toolNames: [],
-          initialPrompts: []
-        }
-      ] }),
+      assetSource: createStaticConfigAssetSource({
+        agents: [
+          {
+            name: "locale_agent",
+            displayName: "Locale Agent",
+            instructions: "Help the user.",
+            modelProviderId: "test-provider",
+            toolNames: [],
+            initialPrompts: []
+          }
+        ]
+      }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -1171,16 +1188,18 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({ agents: [
-        {
-          name: "tool_stream_agent",
-          displayName: "Tool Stream Agent",
-          instructions: "Use tools when useful.",
-          modelProviderId: "test-provider",
-          toolNames: ["test.inspect"],
-          initialPrompts: []
-        }
-      ] }),
+      assetSource: createStaticConfigAssetSource({
+        agents: [
+          {
+            name: "tool_stream_agent",
+            displayName: "Tool Stream Agent",
+            instructions: "Use tools when useful.",
+            modelProviderId: "test-provider",
+            toolNames: ["test.inspect"],
+            initialPrompts: []
+          }
+        ]
+      }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -1251,19 +1270,18 @@ describe("local agent runtime", () => {
       }
     }
 
-    expect(textDeltas).toEqual([
-      "I will inspect page 2.",
-      "The page contains the invoice total."
-    ]);
+    expect(textDeltas).toEqual(["I will inspect page 2.", "The page contains the invoice total."]);
     expect(reasoningDeltas).toEqual(["I need to inspect the referenced page."]);
     expect(preparingTools).toEqual(["test.inspect"]);
     expect(startedToolInputs).toEqual([{ page: 2 }]);
     expect(completedMessages).toEqual(["The page contains the invoice total."]);
 
-    const assistantMessages = (await store.listMessages({
-      clientInstanceId,
-      conversationId
-    })).filter((message) => message.role === "assistant");
+    const assistantMessages = (
+      await store.listMessages({
+        clientInstanceId,
+        conversationId
+      })
+    ).filter((message) => message.role === "assistant");
     expect(assistantMessages.map((message) => message.text)).toEqual([
       "I will inspect page 2.",
       "The page contains the invoice total."
@@ -1337,16 +1355,18 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({ agents: [
-        {
-          name: "provider_tool_stream_agent",
-          displayName: "Provider Tool Stream Agent",
-          instructions: "Use provider tools when useful.",
-          modelProviderId: "test-provider",
-          toolNames: [],
-          initialPrompts: []
-        }
-      ] }),
+      assetSource: createStaticConfigAssetSource({
+        agents: [
+          {
+            name: "provider_tool_stream_agent",
+            displayName: "Provider Tool Stream Agent",
+            instructions: "Use provider tools when useful.",
+            modelProviderId: "test-provider",
+            toolNames: [],
+            initialPrompts: []
+          }
+        ]
+      }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -1475,16 +1495,18 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({ agents: [
-        {
-          name: "artifact_agent",
-          displayName: "Artifact Agent",
-          instructions: "Use tools when useful.",
-          modelProviderId: "test-provider",
-          toolNames: ["test.promote_artifact"],
-          initialPrompts: []
-        }
-      ] }),
+      assetSource: createStaticConfigAssetSource({
+        agents: [
+          {
+            name: "artifact_agent",
+            displayName: "Artifact Agent",
+            instructions: "Use tools when useful.",
+            modelProviderId: "test-provider",
+            toolNames: ["test.promote_artifact"],
+            initialPrompts: []
+          }
+        ]
+      }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -1557,10 +1579,12 @@ describe("local agent runtime", () => {
       }
     });
 
-    const toolMessage = (await store.listMessages({
-      clientInstanceId,
-      conversationId: conversation.id
-    })).find((message) => message.role === "tool");
+    const toolMessage = (
+      await store.listMessages({
+        clientInstanceId,
+        conversationId: conversation.id
+      })
+    ).find((message) => message.role === "tool");
     expect(readToolResultMetadata(toolMessage?.metadata)?.result).toMatchObject({
       status: "success",
       artifacts: [artifact]
@@ -1621,7 +1645,7 @@ describe("local agent runtime", () => {
                   inputParseError: {
                     code: "invalid_json",
                     message: "Tool input must be valid JSON",
-                    rawInput: "{\"page\":"
+                    rawInput: '{"page":'
                   }
                 }
               ],
@@ -1665,16 +1689,18 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({ agents: [
-        {
-          name: "invalid_tool_json_agent",
-          displayName: "Invalid Tool JSON Agent",
-          instructions: "Use tools when useful.",
-          modelProviderId: "test-provider",
-          toolNames: ["test.inspect"],
-          initialPrompts: []
-        }
-      ] }),
+      assetSource: createStaticConfigAssetSource({
+        agents: [
+          {
+            name: "invalid_tool_json_agent",
+            displayName: "Invalid Tool JSON Agent",
+            instructions: "Use tools when useful.",
+            modelProviderId: "test-provider",
+            toolNames: ["test.inspect"],
+            initialPrompts: []
+          }
+        ]
+      }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -1832,16 +1858,18 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({ agents: [
-        {
-          name: "compaction_agent",
-          displayName: "Compaction Agent",
-          instructions: "Help the user.",
-          modelProviderId: "test-provider",
-          toolNames: [],
-          initialPrompts: []
-        }
-      ] }),
+      assetSource: createStaticConfigAssetSource({
+        agents: [
+          {
+            name: "compaction_agent",
+            displayName: "Compaction Agent",
+            instructions: "Help the user.",
+            modelProviderId: "test-provider",
+            toolNames: [],
+            initialPrompts: []
+          }
+        ]
+      }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -1953,7 +1981,9 @@ describe("local agent runtime", () => {
       type: "deterministic",
       model: "test-model"
     };
-    const thrownError = new Error("Failed query: insert into messages params: secret document text");
+    const thrownError = new Error(
+      "Failed query: insert into messages params: secret document text"
+    );
     let reportedFailure: LocalAgentRunFailureReport | undefined;
     const modelProvider: ModelProvider = {
       id: "test-provider",
@@ -1962,16 +1992,18 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({ agents: [
-        {
-          name: "error_agent",
-          displayName: "Error Agent",
-          instructions: "Help the user.",
-          modelProviderId: "test-provider",
-          toolNames: [],
-          initialPrompts: []
-        }
-      ] }),
+      assetSource: createStaticConfigAssetSource({
+        agents: [
+          {
+            name: "error_agent",
+            displayName: "Error Agent",
+            instructions: "Help the user.",
+            modelProviderId: "test-provider",
+            toolNames: [],
+            initialPrompts: []
+          }
+        ]
+      }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
@@ -2043,16 +2075,18 @@ describe("local agent runtime", () => {
       }
     };
     const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({ agents: [
-        {
-          name: "app_error_agent",
-          displayName: "App Error Agent",
-          instructions: "Help the user.",
-          modelProviderId: "test-provider",
-          toolNames: [],
-          initialPrompts: []
-        }
-      ] }),
+      assetSource: createStaticConfigAssetSource({
+        agents: [
+          {
+            name: "app_error_agent",
+            displayName: "App Error Agent",
+            instructions: "Help the user.",
+            modelProviderId: "test-provider",
+            toolNames: [],
+            initialPrompts: []
+          }
+        ]
+      }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,

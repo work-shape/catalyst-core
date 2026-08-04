@@ -1,9 +1,6 @@
 import { Download } from "lucide-react";
 import { useState } from "react";
-import type {
-  ApiClient,
-  ConversationResourceListItem
-} from "@vivd-catalyst/api-client";
+import type { ApiClient, ConversationResourceListItem } from "@vivd-catalyst/api-client";
 import { useTranslation } from "./i18n";
 import { Button } from "./ui/button";
 import { Spinner } from "./ui/spinner";

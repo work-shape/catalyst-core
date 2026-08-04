@@ -64,11 +64,8 @@ export function createRunsClient(transport: ApiClientTransport) {
         }),
         apiOperations.commandConversationRun.responseSchema
       ),
-    observe: (
-      conversationId: string,
-      runId: string,
-      options: ObserveRunEventsOptions = {}
-    ) => observeRunEvents(transport, conversationId, runId, options)
+    observe: (conversationId: string, runId: string, options: ObserveRunEventsOptions = {}) =>
+      observeRunEvents(transport, conversationId, runId, options)
   };
 }
 
@@ -81,7 +78,8 @@ async function* observeRunEvents(
   const result = await transport.generatedClient.get<ReadableStream<Uint8Array>, unknown>({
     url: "/api/conversations/{conversationId}/runs/{runId}/events",
     path: { conversationId, runId },
-    query: options.afterSequence === undefined ? undefined : { after: String(options.afterSequence) },
+    query:
+      options.afterSequence === undefined ? undefined : { after: String(options.afterSequence) },
     headers: {
       accept: "text/event-stream"
     },

@@ -71,9 +71,7 @@ describe("config assets form model", () => {
     ];
 
     const config = agentFormToConfig(form);
-    expect(config.initialPrompts).toEqual([
-      { title: { en: "Keep" }, prompt: { en: "Do it" } }
-    ]);
+    expect(config.initialPrompts).toEqual([{ title: { en: "Keep" }, prompt: { en: "Do it" } }]);
   });
 
   it("round-trips a skill config", () => {

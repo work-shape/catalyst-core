@@ -27,10 +27,7 @@ import {
 import type { LocalUploadingAttachment } from "../assistant-composer";
 import type { ChatFileDropzoneController } from "../chat-file-dropzone";
 import type { ChatShellAdminPanel } from "../chat-shell";
-import {
-  useControlPlaneModel,
-  type ControlPlaneModel
-} from "../control-plane/control-plane-model";
+import { useControlPlaneModel, type ControlPlaneModel } from "../control-plane/control-plane-model";
 import { clearRunCursors } from "../conversation/run-connection-manager";
 import {
   isLiveRunStatus,
@@ -297,7 +294,7 @@ export function useWorkspaceChatModel({
       return selectedConversationId;
     }
     const title =
-      files.length === 1 ? files[0]?.name ?? "Attached file" : `${files.length} attached files`;
+      files.length === 1 ? (files[0]?.name ?? "Attached file") : `${files.length} attached files`;
     const conversation = await client.conversations.create({
       title,
       locale: activeLocale
@@ -379,7 +376,10 @@ export function useWorkspaceChatModel({
       if (currentAgentName && config.agents.some((agent) => agent.name === currentAgentName)) {
         return currentAgentName;
       }
-      return config.agents.find((agent) => agent.name === config.defaultAgentName)?.name ?? config.agents[0]?.name;
+      return (
+        config.agents.find((agent) => agent.name === config.defaultAgentName)?.name ??
+        config.agents[0]?.name
+      );
     });
   }, [config]);
 
@@ -459,7 +459,11 @@ export function useWorkspaceChatModel({
   });
 
   function cancelSelectedRun() {
-    if (!selectedConversationId || !controller.activeRun || !isLiveRunStatus(controller.activeRun.run.status)) {
+    if (
+      !selectedConversationId ||
+      !controller.activeRun ||
+      !isLiveRunStatus(controller.activeRun.run.status)
+    ) {
       return;
     }
     cancelRunMutation.mutate({
@@ -490,7 +494,9 @@ export function useWorkspaceChatModel({
 
   function runStarted(response: StartConversationRunResponse) {
     workspaceCache.cacheRunStarted(response);
-    routeState.showConversation(response.conversation.id, { replace: route.kind === "new-conversation" });
+    routeState.showConversation(response.conversation.id, {
+      replace: route.kind === "new-conversation"
+    });
     setNotice(undefined);
     runRequestAccepted(response.conversation.id);
   }

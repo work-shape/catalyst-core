@@ -66,7 +66,9 @@ function ToolSurfaceCard({
         })
       : undefined;
   const builtInDisplay =
-    isToolDisplayPayload(display) && !hasRenderedNode(renderedDisplay) ? renderBuiltInDisplay(display) : undefined;
+    isToolDisplayPayload(display) && !hasRenderedNode(renderedDisplay)
+      ? renderBuiltInDisplay(display)
+      : undefined;
   const displayNode = renderedDisplay ?? builtInDisplay;
   const panelDisplayNode = isToolDisplayPayload(display) ? (
     <ToolDisplayWidgetNode
@@ -77,8 +79,11 @@ function ToolSurfaceCard({
       toolCallId={surface.toolCallId}
       toolName={surface.toolName}
     />
-  ) : builtInDisplay;
-  const title = surface.title ?? displayPanelTitle(display, surface.toolName ?? t("displayPanelFallbackTitle"));
+  ) : (
+    builtInDisplay
+  );
+  const title =
+    surface.title ?? displayPanelTitle(display, surface.toolName ?? t("displayPanelFallbackTitle"));
   const panelEntry = displayNode
     ? surfacePanelEntry({
         display,

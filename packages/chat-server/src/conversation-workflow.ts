@@ -109,7 +109,9 @@ export class ConversationWorkflow {
         const runForList = recovered?.run ?? activeRun;
         return {
           ...conversation,
-          ...(runForList && isActiveRun(runForList) ? { activeRun: toActiveRunSummary(runForList) } : {})
+          ...(runForList && isActiveRun(runForList)
+            ? { activeRun: toActiveRunSummary(runForList) }
+            : {})
         };
       })
     );
@@ -126,7 +128,10 @@ export class ConversationWorkflow {
       ownerUserId: subjectUserId,
       ownerExternalUserId: user.externalUserId,
       title: command.title ?? "New conversation",
-      retainedUntil: addDays(new Date(), this.options.config.retention.conversationDays).toISOString()
+      retainedUntil: addDays(
+        new Date(),
+        this.options.config.retention.conversationDays
+      ).toISOString()
     });
 
     await this.options.auditRecorder.record({
@@ -238,13 +243,17 @@ export class ConversationWorkflow {
     user: AuthenticatedUser,
     activeRunId: AgentRunId | undefined
   ): Promise<Record<string, AgentRunProjection>> {
-    const runIds = Array.from(new Set(messages.flatMap((message): AgentRunId[] => {
-      if (message.role !== "assistant") {
-        return [];
-      }
-      const runId = readAssistantFinalMetadata(message.metadata)?.runId;
-      return runId && runId !== activeRunId ? [runId as AgentRunId] : [];
-    })));
+    const runIds = Array.from(
+      new Set(
+        messages.flatMap((message): AgentRunId[] => {
+          if (message.role !== "assistant") {
+            return [];
+          }
+          const runId = readAssistantFinalMetadata(message.metadata)?.runId;
+          return runId && runId !== activeRunId ? [runId as AgentRunId] : [];
+        })
+      )
+    );
     const projections: Record<string, AgentRunProjection> = {};
     for (const runId of runIds) {
       const run = await this.options.conversationStore.getConversationAgentRun({
@@ -411,7 +420,12 @@ export class ConversationWorkflow {
     user: AuthenticatedUser,
     context: RuntimeCallContext,
     command: SendConversationMessageCommand & CreateConversationCommand
-  ): Promise<{ conversation: Conversation; userMessage: ChatMessage; run: AgentRun; runId: AgentRunId }> {
+  ): Promise<{
+    conversation: Conversation;
+    userMessage: ChatMessage;
+    run: AgentRun;
+    runId: AgentRunId;
+  }> {
     this.assertUserSelectableModelBinding(command.modelBindingId);
     let runStartCommand: RunStartCommand | undefined;
     if (command.idempotencyKey) {
@@ -549,10 +563,7 @@ export class ConversationWorkflow {
     return this.options.agentRuntime.getStatus(runId, context);
   }
 
-  async getRunForUser(
-    runId: AgentRunId,
-    user: AuthenticatedUser
-  ): Promise<AgentRun | undefined> {
+  async getRunForUser(runId: AgentRunId, user: AuthenticatedUser): Promise<AgentRun | undefined> {
     const run = await this.options.conversationStore.getAgentRun({
       clientInstanceId: this.options.clientInstanceId,
       runId
@@ -579,7 +590,11 @@ export class ConversationWorkflow {
       this.options.clientInstanceId,
       conversationId
     );
-    if (!conversation || conversation.status !== "active" || conversation.ownerUserId !== subjectUserId) {
+    if (
+      !conversation ||
+      conversation.status !== "active" ||
+      conversation.ownerUserId !== subjectUserId
+    ) {
       return undefined;
     }
     return run;
@@ -840,7 +855,10 @@ export class ConversationWorkflow {
     context: RuntimeCallContext
   ): Promise<Conversation> {
     if (!this.options.config.retention.allowUserDelete) {
-      throw new AppError("FORBIDDEN", "User conversation deletion is disabled for this client instance");
+      throw new AppError(
+        "FORBIDDEN",
+        "User conversation deletion is disabled for this client instance"
+      );
     }
     await this.requireOwnedActiveConversation(conversationId, user);
     const deletedAt = new Date().toISOString();
@@ -989,7 +1007,6 @@ export class ConversationWorkflow {
     }
     return message;
   }
-
 }
 
 function toPublicChatMessage(message: ChatMessage): ChatMessage {
@@ -1014,7 +1031,9 @@ function temporaryAttachmentTitles(message: ChatMessage): string[] {
   }
 
   const filenames = attachments
-    .map((attachment) => (typeof attachment.filename === "string" ? attachment.filename : undefined))
+    .map((attachment) =>
+      typeof attachment.filename === "string" ? attachment.filename : undefined
+    )
     .filter((filename): filename is string => Boolean(filename));
 
   return [
@@ -1038,7 +1057,10 @@ function isJsonObject(value: unknown): value is JsonObject {
 
 function isActiveAgentRunStatus(
   status: AgentRunStatus
-): status is Extract<AgentRunStatus, "queued" | "running" | "waiting_for_permission" | "cancelling"> {
+): status is Extract<
+  AgentRunStatus,
+  "queued" | "running" | "waiting_for_permission" | "cancelling"
+> {
   return (
     status === "queued" ||
     status === "running" ||
@@ -1075,19 +1097,13 @@ function createTitlePrompt(firstUserMessage: ChatMessage): ModelMessage[] {
     },
     {
       role: "user",
-      content: [
-        "Initial user message:",
-        truncateTitleSource(firstUserMessage.text)
-      ].join("\n")
+      content: ["Initial user message:", truncateTitleSource(firstUserMessage.text)].join("\n")
     }
   ];
 }
 
 function truncateTitleSource(text: string): string {
-  const normalized = text
-    .split(/\s+/u)
-    .filter(Boolean)
-    .join(" ");
+  const normalized = text.split(/\s+/u).filter(Boolean).join(" ");
   return normalized.length > MAX_TITLE_SOURCE_CHARS
     ? `${normalized.slice(0, MAX_TITLE_SOURCE_CHARS).trimEnd()}...`
     : normalized;

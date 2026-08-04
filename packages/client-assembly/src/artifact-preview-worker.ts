@@ -66,17 +66,11 @@ export async function createClientInstanceArtifactPreviewWorker(
     concurrency: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_CONCURRENCY"),
     pollIntervalMs: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_POLL_INTERVAL_MS"),
     leaseDurationMs: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_LEASE_DURATION_MS"),
-    leaseRenewIntervalMs: readPositiveIntegerEnv(
-      env,
-      "ARTIFACT_PREVIEW_LEASE_RENEW_INTERVAL_MS"
-    ),
+    leaseRenewIntervalMs: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_LEASE_RENEW_INTERVAL_MS"),
     maxAttempts: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_ATTEMPTS"),
     maxPages: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_PAGES"),
     maxSourceBytes: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_SOURCE_BYTES"),
-    maxConvertedPdfBytes: readPositiveIntegerEnv(
-      env,
-      "ARTIFACT_PREVIEW_MAX_CONVERTED_PDF_BYTES"
-    ),
+    maxConvertedPdfBytes: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_CONVERTED_PDF_BYTES"),
     maxOutputBytes: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_OUTPUT_BYTES"),
     maxRasterDimension: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_RASTER_DIMENSION"),
     conversionTimeoutMs: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_CONVERSION_TIMEOUT_MS"),
@@ -169,10 +163,7 @@ function objectRoot(env: ClientInstanceEnv): string {
   return value;
 }
 
-function readPositiveIntegerEnv(
-  env: ClientInstanceEnv,
-  name: string
-): number | undefined {
+function readPositiveIntegerEnv(env: ClientInstanceEnv, name: string): number | undefined {
   const raw = env[name];
   if (!raw) {
     return undefined;

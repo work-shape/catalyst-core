@@ -351,15 +351,15 @@ describe("web access app assembly", () => {
 
   it("does not expose web_search when the top-level web access gate is disabled", () => {
     const config = createTestConfig({
-        webAccess: {
-          enabled: false,
-          search: {
-            enabled: true
-          }
-        },
-        toolNames: ["web_search"],
-        tools: [{ name: "web_search", enabled: true }]
-      });
+      webAccess: {
+        enabled: false,
+        search: {
+          enabled: true
+        }
+      },
+      toolNames: ["web_search"],
+      tools: [{ name: "web_search", enabled: true }]
+    });
     expectModelToolInvalid(
       config,
       "Agent 'test_agent' references web_search but web access is disabled"
@@ -368,15 +368,15 @@ describe("web access app assembly", () => {
 
   it("does not expose web_search when search is disabled", () => {
     const config = createTestConfig({
-        webAccess: {
-          enabled: true,
-          search: {
-            enabled: false
-          }
-        },
-        toolNames: ["web_search"],
-        tools: [{ name: "web_search", enabled: true }]
-      });
+      webAccess: {
+        enabled: true,
+        search: {
+          enabled: false
+        }
+      },
+      toolNames: ["web_search"],
+      tools: [{ name: "web_search", enabled: true }]
+    });
     expectModelToolInvalid(
       config,
       "Agent 'test_agent' references web_search but webAccess.search is disabled"
@@ -385,16 +385,16 @@ describe("web access app assembly", () => {
 
   it("fails closed when native web_search is requested for an unsupported provider", () => {
     const config = createTestConfig({
-        webAccess: {
+      webAccess: {
+        enabled: true,
+        search: {
           enabled: true,
-          search: {
-            enabled: true,
-            mode: "native_only"
-          }
-        },
-        toolNames: ["web_search"],
-        tools: [{ name: "web_search", enabled: true }]
-      });
+          mode: "native_only"
+        }
+      },
+      toolNames: ["web_search"],
+      tools: [{ name: "web_search", enabled: true }]
+    });
     expectModelToolInvalid(
       config,
       "Agent 'test_agent' references web_search but model provider 'local' does not support provider-native web search"
@@ -403,28 +403,28 @@ describe("web access app assembly", () => {
 
   it("fails closed when managed web_search is pinned before a managed provider exists", () => {
     const config = createTestConfig({
-        webAccess: {
+      webAccess: {
+        enabled: true,
+        search: {
           enabled: true,
-          search: {
-            enabled: true,
-            mode: "native_or_managed",
-            managedProvider: "serper"
-          }
-        },
-        modelProviders: [
-          {
-            id: "openai",
-            type: "openai-compatible",
-            api: "responses",
-            model: "gpt-test",
-            baseUrl: "https://api.openai.com/v1",
-            apiKeyEnvName: "OPENAI_API_KEY"
-          }
-        ],
-        modelProviderId: "openai",
-        toolNames: ["web_search"],
-        tools: [{ name: "web_search", enabled: true }]
-      });
+          mode: "native_or_managed",
+          managedProvider: "serper"
+        }
+      },
+      modelProviders: [
+        {
+          id: "openai",
+          type: "openai-compatible",
+          api: "responses",
+          model: "gpt-test",
+          baseUrl: "https://api.openai.com/v1",
+          apiKeyEnvName: "OPENAI_API_KEY"
+        }
+      ],
+      modelProviderId: "openai",
+      toolNames: ["web_search"],
+      tools: [{ name: "web_search", enabled: true }]
+    });
     expectModelToolInvalid(
       config,
       "Agent 'test_agent' references web_search with managed provider 'serper', but managed web search providers are not implemented"
@@ -528,7 +528,10 @@ const resolvePublicExample: WebFetchAddressResolver = async () => [
   }
 ];
 
-async function expectAppAssemblyInvalid(config: ReturnType<typeof createTestConfig>, message: string) {
+async function expectAppAssemblyInvalid(
+  config: ReturnType<typeof createTestConfig>,
+  message: string
+) {
   try {
     const app = await createClientInstanceApp({
       config,
@@ -575,13 +578,15 @@ function close(server: ReturnType<typeof createServer>): Promise<void> {
   });
 }
 
-function createTestConfig(input: {
-  webAccess?: Record<string, unknown>;
-  modelProviders?: Array<Record<string, unknown>>;
-  modelProviderId?: string;
-  toolNames?: string[];
-  tools?: Array<{ name: string; enabled?: boolean }>;
-} = {}) {
+function createTestConfig(
+  input: {
+    webAccess?: Record<string, unknown>;
+    modelProviders?: Array<Record<string, unknown>>;
+    modelProviderId?: string;
+    toolNames?: string[];
+    tools?: Array<{ name: string; enabled?: boolean }>;
+  } = {}
+) {
   const config = parseClientInstanceConfig({
     version: 1,
     clientInstance: {
@@ -602,7 +607,9 @@ function createTestConfig(input: {
       }
     },
     ...(input.webAccess ? { webAccess: input.webAccess } : {}),
-    modelProviders: input.modelProviders ?? [{ id: "local", type: "deterministic", model: "deterministic-local" }],
+    modelProviders: input.modelProviders ?? [
+      { id: "local", type: "deterministic", model: "deterministic-local" }
+    ],
     tools: input.tools ?? []
   });
   testAgentsByConfig.set(

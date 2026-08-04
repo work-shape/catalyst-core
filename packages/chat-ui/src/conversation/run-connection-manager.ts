@@ -111,11 +111,7 @@ export function clearRunCursors(): void {
   browserRunCursorStorage.clearCursors();
 }
 
-export function rememberRunCursor(
-  conversationId: string,
-  runId: string,
-  sequence: number
-): void {
+export function rememberRunCursor(conversationId: string, runId: string, sequence: number): void {
   browserRunCursorStorage.rememberCursor(conversationId, runId, sequence);
 }
 
@@ -145,5 +141,8 @@ const browserRunCursorStorage: RunCursorStorage = {
 };
 
 function isAbortLikeError(error: unknown): boolean {
-  return error instanceof Error && (error.name === "AbortError" || /abort/u.test(error.message.toLowerCase()));
+  return (
+    error instanceof Error &&
+    (error.name === "AbortError" || /abort/u.test(error.message.toLowerCase()))
+  );
 }

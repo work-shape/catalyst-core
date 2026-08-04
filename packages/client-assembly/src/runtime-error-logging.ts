@@ -5,9 +5,12 @@ const REDACTED = "[REDACTED]";
 const TRUNCATED = "[TRUNCATED]";
 const MAX_LOG_STRING_LENGTH = 4000;
 const MAX_REDACTION_DEPTH = 8;
-const SECRET_KEY_PATTERN = /(authorization|cookie|credential|password|secret|session|token|api[_-]?key)/iu;
+const SECRET_KEY_PATTERN =
+  /(authorization|cookie|credential|password|secret|session|token|api[_-]?key)/iu;
 
-export function createRuntimeFailureReporter(): NonNullable<LocalAgentRuntimeOptions["runFailureReporter"]> {
+export function createRuntimeFailureReporter(): NonNullable<
+  LocalAgentRuntimeOptions["runFailureReporter"]
+> {
   return (report) => {
     const payload = {
       type: "agent_runtime.run_failed",

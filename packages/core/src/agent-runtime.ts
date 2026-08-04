@@ -40,11 +40,7 @@ export type AgentRunStatus =
   | "failed";
 
 export type AgentRunFailureCategory =
-  | "app_error"
-  | "internal_error"
-  | "runtime_interrupted"
-  | "abort_error"
-  | "unknown_error";
+  "app_error" | "internal_error" | "runtime_interrupted" | "abort_error" | "unknown_error";
 
 export interface AgentRunError {
   code: string;
@@ -100,11 +96,7 @@ export type AgentRunProjectionPart =
       toolCallId: ToolCallId;
       toolName: string;
       input?: unknown;
-      state:
-        | "input_available"
-        | "waiting_for_permission"
-        | "output_available"
-        | "output_error";
+      state: "input_available" | "waiting_for_permission" | "output_available" | "output_error";
       output?: unknown;
       errorText?: string;
     };
@@ -129,11 +121,7 @@ export interface AgentRunProjection {
     toolCallId: ToolCallId;
     toolName: string;
     input?: unknown;
-    state:
-      | "input_available"
-      | "waiting_for_permission"
-      | "output_available"
-      | "output_error";
+    state: "input_available" | "waiting_for_permission" | "output_available" | "output_error";
     output?: unknown;
     errorText?: string;
   }>;
@@ -294,29 +282,19 @@ export type AgentRuntimeEvent =
     };
 
 export interface AgentRuntime {
-  start(
-    input: StartAgentRunInput,
-    context: RuntimeCallContext
-  ): Promise<AgentRunHandle>;
+  start(input: StartAgentRunInput, context: RuntimeCallContext): Promise<AgentRunHandle>;
   observe(
     runId: AgentRunId,
     context: RuntimeCallContext,
     options?: AgentRuntimeObserveOptions
   ): AsyncIterable<AgentRuntimeEvent>;
-  getStatus(
-    runId: AgentRunId,
-    context: RuntimeCallContext
-  ): Promise<AgentRunStatus>;
+  getStatus(runId: AgentRunId, context: RuntimeCallContext): Promise<AgentRunStatus>;
   resume(
     runId: AgentRunId,
     command: AgentRuntimeCommand,
     context: RuntimeCallContext
   ): Promise<void>;
-  cancel(
-    runId: AgentRunId,
-    reason: string | undefined,
-    context: RuntimeCallContext
-  ): Promise<void>;
+  cancel(runId: AgentRunId, reason: string | undefined, context: RuntimeCallContext): Promise<void>;
 }
 
 export interface CreateAgentRunInput {

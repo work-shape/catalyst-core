@@ -1,10 +1,5 @@
 import { AppError } from "./errors";
-import type {
-  ApiCredentialId,
-  ClientInstanceId,
-  ServicePrincipalId,
-  UserId
-} from "./ids";
+import type { ApiCredentialId, ClientInstanceId, ServicePrincipalId, UserId } from "./ids";
 import { asApiCredentialId, createPlatformId } from "./ids";
 import type { ISODateString } from "./time";
 

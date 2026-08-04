@@ -5,7 +5,5 @@ export function formatElapsedSeconds(seconds: number): string {
 }
 
 export function formatWorkHistoryLabel(label: string, durationMs?: number): string {
-  return durationMs === undefined
-    ? label
-    : `${label} · ${formatElapsedSeconds(durationMs / 1000)}`;
+  return durationMs === undefined ? label : `${label} · ${formatElapsedSeconds(durationMs / 1000)}`;
 }

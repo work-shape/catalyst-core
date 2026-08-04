@@ -73,7 +73,12 @@ export interface ChatShellProps {
   onRouteChange?: (route: WorkspaceRoute, options?: WorkspaceRouteChangeOptions) => void;
 }
 
-export function ChatShell({ displayWidgets, route, onRouteChange, ...workspaceProps }: ChatShellProps) {
+export function ChatShell({
+  displayWidgets,
+  route,
+  onRouteChange,
+  ...workspaceProps
+}: ChatShellProps) {
   const [queryClient] = useState(() => new QueryClient());
   const [localRoute, setLocalRoute] = useState<WorkspaceRoute>(() => defaultWorkspaceRoute());
   const resolvedRoute = route ?? localRoute;

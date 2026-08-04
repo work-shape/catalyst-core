@@ -56,7 +56,7 @@ describe("agent run projection", () => {
         toolCallId: asToolCallId("call_1"),
         toolName: "web_search",
         result: { status: "success", output: { sources: 1 } },
-        modelOutput: "{\"sources\":1}"
+        modelOutput: '{"sources":1}'
       }),
       observe({
         type: "message_completed",

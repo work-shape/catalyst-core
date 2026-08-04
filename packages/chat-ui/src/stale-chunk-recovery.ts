@@ -14,9 +14,7 @@ export interface StaleChunkRecoveryOptions {
  * referenced by the old page. The cooldown prevents a broken deployment from
  * causing a reload loop.
  */
-export function installStaleChunkRecovery(
-  options: StaleChunkRecoveryOptions = {}
-): () => void {
+export function installStaleChunkRecovery(options: StaleChunkRecoveryOptions = {}): () => void {
   const target = options.target ?? window;
   const storage = options.storage ?? window.sessionStorage;
   const reload = options.reload ?? (() => window.location.reload());

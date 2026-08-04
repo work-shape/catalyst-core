@@ -83,8 +83,10 @@ describe("chat UI spreadsheet preview import", () => {
     const dashboardSnapshot = snapshot.sheets[snapshot.sheetOrder[0]!]!;
     const titleCell = dashboardSnapshot.cellData?.[1]?.[1];
     const metricCell = dashboardSnapshot.cellData?.[3]?.[2];
-    const titleStyle = typeof titleCell?.s === "string" ? snapshot.styles[titleCell.s] : titleCell?.s;
-    const metricStyle = typeof metricCell?.s === "string" ? snapshot.styles[metricCell.s] : metricCell?.s;
+    const titleStyle =
+      typeof titleCell?.s === "string" ? snapshot.styles[titleCell.s] : titleCell?.s;
+    const metricStyle =
+      typeof metricCell?.s === "string" ? snapshot.styles[metricCell.s] : metricCell?.s;
 
     expect(snapshot.name).toBe("Styled workbook");
     expect(dashboardSnapshot).toMatchObject({
@@ -166,9 +168,8 @@ describe("chat UI spreadsheet preview import", () => {
     const snapshot = await workbookToUniverSnapshot(bytes);
     const sheetSnapshot = snapshot.sheets[snapshot.sheetOrder[0]!]!;
     const cellSnapshot = sheetSnapshot.cellData?.[0]?.[0];
-    const cellStyle = typeof cellSnapshot?.s === "string"
-      ? snapshot.styles[cellSnapshot.s]
-      : cellSnapshot?.s;
+    const cellStyle =
+      typeof cellSnapshot?.s === "string" ? snapshot.styles[cellSnapshot.s] : cellSnapshot?.s;
 
     expect(sheetSnapshot.tabColor).toBe("#1F4E78");
     expect(cellStyle).toMatchObject({
@@ -210,7 +211,10 @@ describe("chat UI spreadsheet preview import", () => {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(
       workbook,
-      XLSX.utils.aoa_to_sheet([["Planet", "Revenue"], ["Earth", 1165.95]]),
+      XLSX.utils.aoa_to_sheet([
+        ["Planet", "Revenue"],
+        ["Earth", 1165.95]
+      ]),
       "Orders"
     );
     const bytes = XLSX.write(workbook, { bookType: "biff8", type: "array" });
@@ -226,7 +230,11 @@ describe("chat UI spreadsheet preview import", () => {
   it("extracts supported charts and images while keeping unsupported charts visible", async () => {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Dashboard");
-    sheet.addRows([["Planet", "Revenue"], ["Earth", 12], ["Mars", 8]]);
+    sheet.addRows([
+      ["Planet", "Revenue"],
+      ["Earth", 12],
+      ["Mars", 8]
+    ]);
     const bytes = await workbook.xlsx.writeBuffer();
     const zip = await JSZip.loadAsync(bytes);
     const worksheetPath = "xl/worksheets/sheet1.xml";
@@ -235,15 +243,19 @@ describe("chat UI spreadsheet preview import", () => {
       worksheetPath,
       worksheetXml.replace("</worksheet>", '<drawing r:id="rId99"/></worksheet>')
     );
-    zip.file("xl/worksheets/_rels/sheet1.xml.rels", relationshipsXml([
-      ["rId99", "drawing", "../drawings/drawing1.xml"]
-    ]));
+    zip.file(
+      "xl/worksheets/_rels/sheet1.xml.rels",
+      relationshipsXml([["rId99", "drawing", "../drawings/drawing1.xml"]])
+    );
     zip.file("xl/drawings/drawing1.xml", drawingXml());
-    zip.file("xl/drawings/_rels/drawing1.xml.rels", relationshipsXml([
-      ["rId1", "chart", "../charts/chart1.xml"],
-      ["rId2", "chart", "../charts/chart2.xml"],
-      ["rId3", "image", "../media/image1.png"]
-    ]));
+    zip.file(
+      "xl/drawings/_rels/drawing1.xml.rels",
+      relationshipsXml([
+        ["rId1", "chart", "../charts/chart1.xml"],
+        ["rId2", "chart", "../charts/chart2.xml"],
+        ["rId3", "image", "../media/image1.png"]
+      ])
+    );
     zip.file("xl/charts/chart1.xml", chartXml("barChart"));
     zip.file("xl/charts/chart2.xml", chartXml("radarChart"));
     zip.file(
@@ -261,10 +273,12 @@ describe("chat UI spreadsheet preview import", () => {
       chartType: "column",
       title: "Revenue",
       anchor: { startRow: 4, startColumn: 1, endRow: 9, endColumn: 4 },
-      series: [{
-        categories: ["Earth", "Mars"],
-        values: [12, 8]
-      }]
+      series: [
+        {
+          categories: ["Earth", "Mars"],
+          values: [12, 8]
+        }
+      ]
     });
     expect(visuals[1]).toMatchObject({
       kind: "unsupported",
@@ -281,9 +295,13 @@ describe("chat UI spreadsheet preview import", () => {
 function relationshipsXml(entries: Array<[string, string, string]>): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
     <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-      ${entries.map(([id, type, target]) => `
+      ${entries
+        .map(
+          ([id, type, target]) => `
         <Relationship Id="${id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/${type}" Target="${target}"/>
-      `).join("")}
+      `
+        )
+        .join("")}
     </Relationships>`;
 }
 

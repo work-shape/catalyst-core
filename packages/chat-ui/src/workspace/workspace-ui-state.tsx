@@ -89,9 +89,12 @@ interface WorkspaceConversationActivityContextValue {
 
 const WorkspaceRouteContext = createContext<WorkspaceRouteContextValue | undefined>(undefined);
 const WorkspaceChromeContext = createContext<WorkspaceChromeContextValue | undefined>(undefined);
-const WorkspacePreferencesContext = createContext<WorkspacePreferencesContextValue | undefined>(undefined);
-const WorkspaceConversationActivityContext =
-  createContext<WorkspaceConversationActivityContextValue | undefined>(undefined);
+const WorkspacePreferencesContext = createContext<WorkspacePreferencesContextValue | undefined>(
+  undefined
+);
+const WorkspaceConversationActivityContext = createContext<
+  WorkspaceConversationActivityContextValue | undefined
+>(undefined);
 
 export function WorkspaceUiStateProvider({
   route,
@@ -107,15 +110,17 @@ export function WorkspaceUiStateProvider({
   const lastChatRouteRef = useRef<WorkspaceRoute>(defaultWorkspaceRoute());
   const backgroundActiveRunsRef = useRef<Set<string>>(new Set());
   const view = useMemo(() => workspaceRouteView(route), [route]);
-  const [locallyUnreadConversationIds, setLocallyUnreadConversationIds] = useState<ReadonlySet<string>>(
-    () => new Set()
-  );
+  const [locallyUnreadConversationIds, setLocallyUnreadConversationIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [composerFocusRequestId, setComposerFocusRequestId] = useState(0);
   const [browserLocale] = useState<LocaleCode | undefined>(() => readBrowserLocale());
-  const [localePreference, setLocalePreference] = useState<LocaleCode | undefined>(() => readStoredLocale());
-  const [showContextIndicator, setShowContextIndicatorState] = useState(
-    () => readStoredContextIndicatorPreference()
+  const [localePreference, setLocalePreference] = useState<LocaleCode | undefined>(() =>
+    readStoredLocale()
+  );
+  const [showContextIndicator, setShowContextIndicatorState] = useState(() =>
+    readStoredContextIndicatorPreference()
   );
   const [resourcesPanelPreference, setResourcesPanelPreferenceState] = useState<
     ResourcesPanelPreference | undefined
@@ -123,7 +128,9 @@ export function WorkspaceUiStateProvider({
   const [themeOverride, setThemeOverride] = useState<ResolvedThemeMode | undefined>(() =>
     readStoredThemeMode()
   );
-  const [systemThemeMode, setSystemThemeMode] = useState<ResolvedThemeMode>(() => readSystemThemeMode());
+  const [systemThemeMode, setSystemThemeMode] = useState<ResolvedThemeMode>(() =>
+    readSystemThemeMode()
+  );
 
   useEffect(() => {
     selectedConversationIdRef.current = selectedConversationId;
@@ -211,7 +218,10 @@ export function WorkspaceUiStateProvider({
 
       const completedBackgroundConversationIds: string[] = [];
       for (const conversationId of backgroundActiveRunsRef.current) {
-        if (!listedConversationIds.has(conversationId) || activeRunConversationIds.has(conversationId)) {
+        if (
+          !listedConversationIds.has(conversationId) ||
+          activeRunConversationIds.has(conversationId)
+        ) {
           continue;
         }
         if (selectedConversationIdRef.current !== conversationId) {
@@ -282,13 +292,10 @@ export function WorkspaceUiStateProvider({
     writeStoredContextIndicatorPreference(visible);
   }, []);
 
-  const setResourcesPanelPreference = useCallback(
-    (preference: ResourcesPanelPreference) => {
-      setResourcesPanelPreferenceState(preference);
-      writeStoredResourcesPanelPreference(preference);
-    },
-    []
-  );
+  const setResourcesPanelPreference = useCallback((preference: ResourcesPanelPreference) => {
+    setResourcesPanelPreferenceState(preference);
+    writeStoredResourcesPanelPreference(preference);
+  }, []);
 
   const routeValue = useMemo<WorkspaceRouteContextValue>(
     () => ({
@@ -385,11 +392,19 @@ export function WorkspaceUiStateProvider({
 }
 
 export function useWorkspaceRouteState(): WorkspaceRouteContextValue {
-  return useStrictContext(WorkspaceRouteContext, "useWorkspaceRouteState", "WorkspaceUiStateProvider");
+  return useStrictContext(
+    WorkspaceRouteContext,
+    "useWorkspaceRouteState",
+    "WorkspaceUiStateProvider"
+  );
 }
 
 export function useWorkspaceChromeState(): WorkspaceChromeContextValue {
-  return useStrictContext(WorkspaceChromeContext, "useWorkspaceChromeState", "WorkspaceUiStateProvider");
+  return useStrictContext(
+    WorkspaceChromeContext,
+    "useWorkspaceChromeState",
+    "WorkspaceUiStateProvider"
+  );
 }
 
 export function useWorkspacePreferences(): WorkspacePreferencesContextValue {

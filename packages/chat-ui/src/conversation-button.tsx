@@ -114,7 +114,10 @@ export function ConversationButton({
         )}
       >
         {selected ? (
-          <span className="absolute inset-y-2 left-0 w-0.5 rounded-r-full bg-primary" aria-hidden="true" />
+          <span
+            className="absolute inset-y-2 left-0 w-0.5 rounded-r-full bg-primary"
+            aria-hidden="true"
+          />
         ) : null}
         {editing ? (
           <form
@@ -147,7 +150,9 @@ export function ConversationButton({
               }}
             />
             <span className="truncate text-[0.8125rem] text-muted-foreground">
-              {saving ? t("saving") : formatConversationDate(conversation.updatedAt, locale, t("updatedRecently"))}
+              {saving
+                ? t("saving")
+                : formatConversationDate(conversation.updatedAt, locale, t("updatedRecently"))}
             </span>
           </form>
         ) : (
@@ -190,7 +195,10 @@ export function ConversationButton({
               </span>
               <span className="truncate text-[0.8125rem] text-muted-foreground">
                 {running ? (
-                  <span className="inline-flex min-w-0 items-center gap-1 text-primary" data-testid="conversation-running-indicator">
+                  <span
+                    className="inline-flex min-w-0 items-center gap-1 text-primary"
+                    data-testid="conversation-running-indicator"
+                  >
                     {t("conversationRunning")}
                   </span>
                 ) : unread ? (
@@ -305,11 +313,17 @@ function AnimatedConversationTitle({ title }: { title: string }) {
   const { text, typing } = useTypewriterTitle(title);
 
   return (
-    <span className="inline-flex min-w-0 max-w-full items-baseline text-sm font-medium leading-5" title={title} aria-label={title}>
+    <span
+      className="inline-flex min-w-0 max-w-full items-baseline text-sm font-medium leading-5"
+      title={title}
+      aria-label={title}
+    >
       <span className="truncate" aria-hidden="true">
         {text}
       </span>
-      {typing ? <span className="ml-0.5 h-3 w-px shrink-0 animate-pulse bg-current" aria-hidden="true" /> : null}
+      {typing ? (
+        <span className="ml-0.5 h-3 w-px shrink-0 animate-pulse bg-current" aria-hidden="true" />
+      ) : null}
     </span>
   );
 }

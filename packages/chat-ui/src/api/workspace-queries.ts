@@ -192,9 +192,7 @@ export interface WorkspaceCacheActions {
   invalidateStreamError(conversationId: string): void;
 }
 
-export function useWorkspaceCacheActions(
-  input: WorkspaceQueryInput
-): WorkspaceCacheActions {
+export function useWorkspaceCacheActions(input: WorkspaceQueryInput): WorkspaceCacheActions {
   const queryClient = useQueryClient();
   const { apiBaseUrl, authScope, client } = input;
 
@@ -229,11 +227,7 @@ export function useWorkspaceCacheActions(
   const invalidateConversationResources = useCallback(
     (conversationId: string) => {
       void queryClient.invalidateQueries({
-        queryKey: workspaceQueryKeys.conversationResources(
-          apiBaseUrl,
-          authScope,
-          conversationId
-        )
+        queryKey: workspaceQueryKeys.conversationResources(apiBaseUrl, authScope, conversationId)
       });
       void queryClient.invalidateQueries({
         queryKey: workspaceQueryKeys.structuredDataResourcesScope(
@@ -247,7 +241,9 @@ export function useWorkspaceCacheActions(
   );
 
   const invalidateUsage = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.usage(apiBaseUrl, authScope) });
+    void queryClient.invalidateQueries({
+      queryKey: workspaceQueryKeys.usage(apiBaseUrl, authScope)
+    });
   }, [apiBaseUrl, authScope, queryClient]);
 
   const invalidateAuditEvents = useCallback(() => {
@@ -281,10 +277,7 @@ export function useWorkspaceCacheActions(
   );
 
   const invalidateRunCompletion = useCallback(
-    (
-      conversationId: string,
-      options: { draftAttachmentsChanged?: boolean } = {}
-    ) => {
+    (conversationId: string, options: { draftAttachmentsChanged?: boolean } = {}) => {
       invalidateConversations();
       invalidateThread(conversationId);
       invalidateConversationResources(conversationId);
@@ -350,13 +343,17 @@ export function useWorkspaceCacheActions(
   const handleRunRequestAccepted = useCallback(
     (conversationId: string) => {
       invalidateConversations();
-      void client
-        .conversations.generateTitle(conversationId)
+      void client.conversations
+        .generateTitle(conversationId)
         .then((updatedConversation) => {
           queryClient.setQueryData<ConversationListItem[]>(
             workspaceQueryKeys.conversations(apiBaseUrl, authScope),
             (currentConversations = []) => {
-              if (currentConversations.some((conversation) => conversation.id === updatedConversation.id)) {
+              if (
+                currentConversations.some(
+                  (conversation) => conversation.id === updatedConversation.id
+                )
+              ) {
                 return currentConversations.map((conversation) =>
                   conversation.id === updatedConversation.id
                     ? { ...conversation, ...updatedConversation }

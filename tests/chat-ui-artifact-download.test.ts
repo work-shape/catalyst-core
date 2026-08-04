@@ -76,7 +76,9 @@ describe("chat UI artifact download cards", () => {
     const projected = toUiMessages(createPromotedArtifactMessages(artifacts));
     const finalParts = projected.at(-1)?.parts ?? [];
     const finalTextPart = finalParts.find((part) => part.type === "text");
-    const artifactPart = finalParts.find((part) => part.type === WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE);
+    const artifactPart = finalParts.find(
+      (part) => part.type === WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE
+    );
 
     expect(finalTextPart).toMatchObject({
       type: "text",
@@ -89,9 +91,15 @@ describe("chat UI artifact download cards", () => {
         artifacts
       }
     });
-    expect(
-      artifacts.map((artifact) => getArtifactFileType(artifact).badge)
-    ).toEqual(["PPT", "PDF", "DOC", "XLS", "CSV", "IMG", "ZIP"]);
+    expect(artifacts.map((artifact) => getArtifactFileType(artifact).badge)).toEqual([
+      "PPT",
+      "PDF",
+      "DOC",
+      "XLS",
+      "CSV",
+      "IMG",
+      "ZIP"
+    ]);
     expect(JSON.stringify(artifactPart)).not.toContain("scratch/");
     expect(JSON.stringify(artifactPart)).not.toContain("workspacePath");
     expect(JSON.stringify(artifactPart)).not.toContain("objectKey");
@@ -148,7 +156,9 @@ describe("chat UI artifact download cards", () => {
       text: "The rendered preview looks correct.",
       state: "done"
     });
-    expect(finalParts.some((part) => part.type === WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE)).toBe(false);
+    expect(finalParts.some((part) => part.type === WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE)).toBe(
+      false
+    );
   });
 
   it("sanitizes artifact card refs and never falls back to showing internal ids as filenames", () => {
@@ -320,13 +330,14 @@ describe("chat UI artifact download cards", () => {
       .at(-1)
       ?.parts.find((part) => part.type === WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE);
     const data = artifactPart && "data" in artifactPart ? artifactPart.data : undefined;
-    const projectedArtifact = data?.kind === "workspace.promoted_artifacts"
-      ? data.artifacts[0]
-      : undefined;
+    const projectedArtifact =
+      data?.kind === "workspace.promoted_artifacts" ? data.artifacts[0] : undefined;
 
     expect(projectedArtifact).toMatchObject(artifacts[0]!);
     expect(getArtifactPreviewKind(projectedArtifact!)).toBe("image-pages");
-    expect(readArtifactImagePagesPreview(projectedArtifact!)?.pages[0]?.artifactId).toBe("art_docx_page_1");
+    expect(readArtifactImagePagesPreview(projectedArtifact!)?.pages[0]?.artifactId).toBe(
+      "art_docx_page_1"
+    );
   });
 
   it("only treats workspace promotion outputs as surfaced download artifacts", () => {
@@ -357,7 +368,9 @@ describe("chat UI artifact download cards", () => {
     };
 
     expect(readSurfacedToolArtifactRefs(internalPreviewResult, "view_document_page")).toEqual([]);
-    expect(readSurfacedToolArtifactRefs(internalPreviewResult, "workspace.preview_images")).toEqual([]);
+    expect(readSurfacedToolArtifactRefs(internalPreviewResult, "workspace.preview_images")).toEqual(
+      []
+    );
     expect(readSurfacedToolArtifactRefs(promotedResult, "workspace.promote_artifact")).toEqual([
       {
         artifactId: "art_final_pdf",
@@ -423,10 +436,22 @@ describe("chat UI artifact download cards", () => {
   });
 
   it("classifies artifact badge types without proprietary assets", () => {
-    expectBadge("slides.pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "PPT");
+    expectBadge(
+      "slides.pptx",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "PPT"
+    );
     expectBadge("report.pdf", "application/pdf", "PDF");
-    expectBadge("letter.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "DOC");
-    expectBadge("workbook.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "XLS");
+    expectBadge(
+      "letter.docx",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "DOC"
+    );
+    expectBadge(
+      "workbook.xlsx",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "XLS"
+    );
     expectBadge("table.csv", "text/csv", "CSV");
     expectBadge("plot.webp", "image/webp", "IMG");
     expectBadge("exports.zip", "application/zip", "ZIP");
@@ -456,28 +481,22 @@ describe("chat UI artifact download cards", () => {
       "application/vnd.openxmlformats-officedocument.presentationml.presentation",
       "presentation"
     );
-    expect(getArtifactPreviewKind({
-      artifactId: "art_docx_previewable",
-      filename: "letter.docx",
-      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      metadata: {
-        preview: {
-          type: "image_pages",
-          format: "png",
-          pages: [{ artifactId: "art_page_1", mimeType: "image/png" }]
+    expect(
+      getArtifactPreviewKind({
+        artifactId: "art_docx_previewable",
+        filename: "letter.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        metadata: {
+          preview: {
+            type: "image_pages",
+            format: "png",
+            pages: [{ artifactId: "art_page_1", mimeType: "image/png" }]
+          }
         }
-      }
-    })).toBe("image-pages");
-    expectPreviewKind(
-      "legacy.doc",
-      "application/msword",
-      "document"
-    );
-    expectPreviewKind(
-      "legacy.ppt",
-      "application/vnd.ms-powerpoint",
-      "presentation"
-    );
+      })
+    ).toBe("image-pages");
+    expectPreviewKind("legacy.doc", "application/msword", "document");
+    expectPreviewKind("legacy.ppt", "application/vnd.ms-powerpoint", "presentation");
   });
 
   it("renders a download action in a file-backed preview header", () => {
@@ -519,19 +538,27 @@ describe("chat UI artifact download cards", () => {
 });
 
 function expectBadge(filename: string, mimeType: string, badge: string): void {
-  expect(getArtifactFileType({
-    artifactId: `art_${filename.replaceAll(/[^a-z0-9]/giu, "_")}`,
-    filename,
-    mimeType
-  }).badge).toBe(badge);
+  expect(
+    getArtifactFileType({
+      artifactId: `art_${filename.replaceAll(/[^a-z0-9]/giu, "_")}`,
+      filename,
+      mimeType
+    }).badge
+  ).toBe(badge);
 }
 
-function expectPreviewKind(filename: string, mimeType: string, kind: ReturnType<typeof getArtifactPreviewKind>): void {
-  expect(getArtifactPreviewKind({
-    artifactId: `art_${filename.replaceAll(/[^a-z0-9]/giu, "_")}`,
-    filename,
-    mimeType
-  })).toBe(kind);
+function expectPreviewKind(
+  filename: string,
+  mimeType: string,
+  kind: ReturnType<typeof getArtifactPreviewKind>
+): void {
+  expect(
+    getArtifactPreviewKind({
+      artifactId: `art_${filename.replaceAll(/[^a-z0-9]/giu, "_")}`,
+      filename,
+      mimeType
+    })
+  ).toBe(kind);
 }
 
 function createPromotedArtifactMessages(
@@ -635,7 +662,7 @@ function createToolResultMessage(input: {
     conversationId: "conv_test",
     clientInstanceId: "client_test",
     role: "tool",
-    text: "{\"status\":\"completed\"}",
+    text: '{"status":"completed"}',
     createdAt: "2026-06-30T00:00:02.000Z",
     metadata: createToolResultMetadata({
       runId: "run_test",
@@ -646,7 +673,7 @@ function createToolResultMessage(input: {
       },
       result: input.result,
       modelOutput: {
-        text: "{\"status\":\"completed\"}"
+        text: '{"status":"completed"}'
       }
     })
   };

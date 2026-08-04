@@ -57,7 +57,10 @@ export class HmacSessionTokenIssuer {
 
   constructor(options: HmacSessionTokenOptions) {
     if (options.secret.length < 24) {
-      throw new AppError("VALIDATION_FAILED", "Session token secret must be at least 24 characters");
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "Session token secret must be at least 24 characters"
+      );
     }
     this.options = options;
   }
@@ -175,9 +178,13 @@ function normalizeSessionTokenScopes(
   }
   const unsupported = normalizedScopes.filter((scope) => !isChatSessionAuthScope(scope));
   if (unsupported.length > 0) {
-    throw new AppError("VALIDATION_FAILED", "Chat session token scopes must be limited to chat API operations", {
-      unsupportedScopes: unsupported
-    });
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "Chat session token scopes must be limited to chat API operations",
+      {
+        unsupportedScopes: unsupported
+      }
+    );
   }
   return [...new Set(normalizedScopes)];
 }
