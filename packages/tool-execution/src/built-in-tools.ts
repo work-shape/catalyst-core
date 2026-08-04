@@ -126,10 +126,12 @@ const showViewScriptSourceSchema = z
   .transform((value) => normalizeVisualizationScriptSource(value) ?? value);
 
 const showViewConfigSchema = z.object({
-  allowedScriptSrc: z.array(showViewScriptSourceSchema).default(["*"])
+  allowedScriptSrc: z.array(showViewScriptSourceSchema).default(["*"]),
+  externalRuntime: z.boolean().default(true)
 });
 
-export type ShowViewToolConfig = z.infer<typeof showViewConfigSchema>;
+export type ShowViewToolConfig = z.input<typeof showViewConfigSchema>;
+type ResolvedShowViewToolConfig = z.output<typeof showViewConfigSchema>;
 
 const showViewColorGuidance =
   'Use theme tokens for structure/layout: bg-background text-foreground, bg-card text-card-foreground border-border, text-muted-foreground, bg-primary text-primary-foreground. Use semantic tokens for status/severity/priority: text-success, text-warning, text-destructive, text-info, including translucent fills/borders like bg-success/10 border-success/30. Example: <span class="rounded-md border border-warning/30 bg-warning/10 px-2 py-1 text-warning">needs review</span>. Do not make the view monochrome when status, severity, or priority matters. Never use color as the only signal -- pair it with labels or icons. Do not hard-code surfaces/text with bg-white, text-gray-*/text-slate-*, #fff, #ffffff, #111827, fixed dark backgrounds, or !important color overrides. For categorical or series data, use the ordered palette window.vivdCatalystTheme.chartPalette() (an array) or Tailwind classes text-chart-1 through text-chart-5 / bg-chart-2/20; window.vivdCatalystTheme.chartColors() returns a named object of theme colors, so never index it like an array. For canvas or Chart.js charts, read colors from window.vivdCatalystTheme.chartColors() (includes success, warning, info) or window.vivdCatalystTheme.color(\'foreground\') for text, grid, and borders.';
@@ -176,7 +178,7 @@ export const showViewTool = createShowViewTool();
 export function createShowViewTool(config: ShowViewToolConfig = showViewConfigSchema.parse({})): AnyToolDefinition {
   const parsedConfig = showViewConfigSchema.parse(config);
   const allowedScriptSrc = uniqueScriptSources(parsedConfig.allowedScriptSrc);
-  const scriptSourceHint = externalScriptSourceHint(allowedScriptSrc);
+  const scriptSourceHint = externalScriptSourceHint(allowedScriptSrc, parsedConfig.externalRuntime);
   const inputSchema = createShowViewInputSchema(scriptSourceHint);
   return defineTool({
     name: "show_view",
@@ -203,7 +205,10 @@ export function createShowViewTool(config: ShowViewToolConfig = showViewConfigSc
           displayId,
           ...(input.title ? { title: input.title } : {}),
           data: {
-            html: prepareVisualizationHtml(input.html, { allowedScriptSrc }),
+            html: prepareVisualizationHtml(input.html, {
+              allowedScriptSrc,
+              externalRuntime: parsedConfig.externalRuntime
+            }),
             ...(input.title ? { title: input.title } : {})
           }
         },
@@ -243,37 +248,51 @@ export function prepareVisualizationHtml(html: string, config: ShowViewToolConfi
   ].join("\n");
 }
 
-function createVisualizationRuntimeHead(config: ShowViewToolConfig, inlineScriptHashSources: string[]): string {
+function createVisualizationRuntimeHead(
+  config: ResolvedShowViewToolConfig,
+  inlineScriptHashSources: string[]
+): string {
   return [
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     `<meta http-equiv="Content-Security-Policy" content="${createVisualizationContentSecurityPolicy(config, inlineScriptHashSources)}">`,
     visualizationDefaultThemeStyle,
-    '<script src="https://cdn.tailwindcss.com"></script>',
-    `<script>${tailwindThemeBootstrapScript}</script>`,
-    '<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>',
-    `<script>${lucideBootstrapScript}</script>`,
+    ...(config.externalRuntime
+      ? [
+          '<script src="https://cdn.tailwindcss.com"></script>',
+          `<script>${tailwindThemeBootstrapScript}</script>`,
+          '<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>',
+          `<script>${lucideBootstrapScript}</script>`
+        ]
+      : []),
     `<script>${visualizationThemeHelperScript}</script>`,
     `<script>${displayHeightBootstrapScript}</script>`
   ].join("\n");
 }
 
-function createVisualizationContentSecurityPolicy(config: ShowViewToolConfig, inlineScriptHashSources: string[]): string {
-  const scriptSources = uniqueScriptSources([...defaultVisualizationScriptSources, ...config.allowedScriptSrc]);
+function createVisualizationContentSecurityPolicy(
+  config: ResolvedShowViewToolConfig,
+  inlineScriptHashSources: string[]
+): string {
+  const scriptSources = config.externalRuntime
+    ? uniqueScriptSources([...defaultVisualizationScriptSources, ...config.allowedScriptSrc])
+    : [];
   const scriptHashes = uniqueScriptHashes([
-    scriptHashSource(tailwindThemeBootstrapScript),
-    scriptHashSource(lucideBootstrapScript),
+    ...(config.externalRuntime
+      ? [scriptHashSource(tailwindThemeBootstrapScript), scriptHashSource(lucideBootstrapScript)]
+      : []),
     scriptHashSource(visualizationThemeHelperScript),
     scriptHashSource(displayHeightBootstrapScript),
     ...inlineScriptHashSources
   ]);
   return [
     "default-src 'none'",
-    `script-src ${scriptSources.join(" ")} 'unsafe-eval' ${scriptHashes.join(" ")}`,
+    `script-src ${[...scriptSources, ...(config.externalRuntime ? ["'unsafe-eval'"] : []), ...scriptHashes].join(" ")}`,
     "style-src 'unsafe-inline'",
     "img-src data: blob:",
     "font-src data:",
     "connect-src 'none'",
+    "navigate-to 'none'",
     "base-uri 'none'",
     "form-action 'none'"
   ].join("; ");
@@ -287,7 +306,10 @@ function uniqueScriptHashes(sources: string[]): string[] {
   return Array.from(new Set(sources));
 }
 
-function externalScriptSourceHint(allowedScriptSrc: string[]): string {
+function externalScriptSourceHint(allowedScriptSrc: string[], externalRuntime = true): string {
+  if (!externalRuntime) {
+    return "The external visualization runtime is disabled; use inline CSS, SVG, or canvas without external libraries.";
+  }
   if (allowedScriptSrc.length === 0) {
     return "No additional charting CDNs are configured; for charts, use inline SVG, CSS, or canvas without external libraries.";
   }

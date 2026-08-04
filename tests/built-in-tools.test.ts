@@ -79,6 +79,25 @@ describe("built-in platform tools", () => {
     expect(configuredTool.description).toContain("No additional charting CDNs are configured");
   });
 
+  it("provides a network-isolated visualization mode for private hydrated data", () => {
+    const html = prepareVisualizationHtml("<script>window.ready = true;</script>", {
+      allowedScriptSrc: [],
+      externalRuntime: false
+    });
+    const csp = readCsp(html);
+    const scriptSrc = readCspDirective(html, "script-src");
+
+    expect(html).not.toContain("cdn.tailwindcss.com");
+    expect(html).not.toContain("unpkg.com");
+    expect(scriptSrc).not.toContain("https:");
+    expect(scriptSrc).not.toContain("'unsafe-eval'");
+    expect(csp).toContain("default-src 'none'");
+    expect(csp).toContain("connect-src 'none'");
+    expect(csp).toContain("img-src data: blob:");
+    expect(csp).toContain("form-action 'none'");
+    expect(csp).toContain("navigate-to 'none'");
+  });
+
   it("adds configured script sources to the HTML display CSP", async () => {
     const configuredTool = showViewToolDefinition.create({
       allowedScriptSrc: ["https://cdn.jsdelivr.net"]
