@@ -47,6 +47,7 @@ import {
   workspaceCommandTelemetryEvent,
   type WorkspaceCommandTelemetry
 } from "./workspace-command-telemetry";
+import { createWorkspaceChecksum } from "./workspace-tool-results";
 
 const DEFAULT_MAX_PATH_LENGTH = 512;
 const DEFAULT_LEASE_DURATION_MS = 10 * 60 * 1000;
@@ -829,10 +830,6 @@ function terminalCommandAuditMetadata(command: WorkspaceCommand): JsonObject {
         }
       : {})
   };
-}
-
-function createWorkspaceChecksum(bytes: Uint8Array): string {
-  return createHash("sha256").update(bytes).digest("hex");
 }
 
 function inferWorkspaceMimeType(path: string): string | undefined {
