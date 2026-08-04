@@ -1,10 +1,10 @@
 import { Plus } from "lucide-react";
 import type { AgentFormState, LocalizedPair } from "./config-assets-model";
-import { useTranslation } from "./i18n";
-import { Button } from "./ui/button";
-import { cn } from "./ui/cn";
-import { Dialog } from "./ui/dialog";
-import { Input } from "./ui/input";
+import { useTranslation } from "../i18n";
+import { Button } from "../ui/button";
+import { cn } from "../ui/cn";
+import { Dialog } from "../ui/dialog";
+import { Input } from "../ui/input";
 
 export function Field({
   label,

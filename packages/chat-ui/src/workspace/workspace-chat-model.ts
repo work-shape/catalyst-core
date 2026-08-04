@@ -9,7 +9,7 @@ import type {
   SafeConfig,
   StartConversationRunResponse
 } from "@vivd-catalyst/api-client";
-import { resolveContextUsage } from "../context-usage";
+import { resolveContextUsage } from "../assistant/context-usage";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import {
   useCancelRunMutation,
@@ -24,7 +24,7 @@ import {
   useWorkspaceMeQuery,
   useWorkspaceThreadQuery
 } from "../api/workspace-queries";
-import type { LocalUploadingAttachment } from "../assistant-composer";
+import type { LocalUploadingAttachment } from "../assistant/assistant-composer";
 import type { ChatFileDropzoneController } from "../chat-file-dropzone";
 import type { ChatShellAdminPanel } from "../chat-shell";
 import { useControlPlaneModel, type ControlPlaneModel } from "../control-plane/control-plane-model";
@@ -34,12 +34,12 @@ import {
   type ConversationControllerState
 } from "../conversation/conversation-controller-state";
 import { useConversationController } from "../conversation/use-conversation-controller";
-import { useDraftAttachmentController } from "../draft-attachment-controller";
+import { useDraftAttachmentController } from "../conversation/draft-attachment-controller";
 import { useChatFileDropzone } from "../chat-file-dropzone";
 import { useToolDisplayPanel } from "../tool-display-panel";
 import type { ResolvedThemeMode } from "../theme";
-import type { WorkspaceView } from "../workspace-rail";
-import type { WorkspaceRoute } from "../workspace-route";
+import type { WorkspaceView } from "./workspace-rail";
+import type { WorkspaceRoute } from "./workspace-route";
 import {
   apiErrorMessage,
   apiErrorStatus,

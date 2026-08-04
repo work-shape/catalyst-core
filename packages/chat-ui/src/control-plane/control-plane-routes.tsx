@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { ChatShellAdminPanel } from "../chat-shell";
-import { UserSettingsPanel } from "../user-settings-panel";
+import { UserSettingsPanel } from "./user-settings-panel";
 import type { ControlPlaneModel } from "./control-plane-model";
 
 export function ControlPlaneRoutes({

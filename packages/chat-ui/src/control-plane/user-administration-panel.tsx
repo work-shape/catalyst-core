@@ -22,13 +22,13 @@ import type {
   UpdateAdministeredUserRequest,
   UpsertAdministeredUserIdentityRequest
 } from "@vivd-catalyst/api-client";
-import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { Dialog } from "./ui/dialog";
-import { Input } from "./ui/input";
-import { Select } from "./ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Dialog } from "../ui/dialog";
+import { Input } from "../ui/input";
+import { Select } from "../ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import {
   DEFAULT_ROWS_PER_PAGE,
   STANDALONE_AUTH_SOURCE,
@@ -54,7 +54,7 @@ import {
   type UserStatusFilter
 } from "./user-administration-model";
 import { Field, FormNotice, StatusBadge, UserAvatar } from "./user-administration-primitives";
-import { ControlPlanePage } from "./control-plane/control-plane-page";
+import { ControlPlanePage } from "./control-plane-page";
 
 interface UserAdministrationPanelProps {
   users: AdministeredUser[];

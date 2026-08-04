@@ -6,12 +6,15 @@ import {
   isCredentialActive,
   optionalTrimmedValue,
   scopesAllowedByPermissions
-} from "../packages/chat-ui/src/api-access-model";
+} from "../packages/chat-ui/src/control-plane/api-access-model";
 import {
   createApiAccessAuthorityKey,
   createApiAccessRevealController
-} from "../packages/chat-ui/src/api-access-reveal-controller";
-import { canManageApiAccess, canViewAdministrationPanel } from "../packages/chat-ui/src/governance";
+} from "../packages/chat-ui/src/control-plane/api-access-reveal-controller";
+import {
+  canManageApiAccess,
+  canViewAdministrationPanel
+} from "../packages/chat-ui/src/control-plane/governance";
 import {
   workspaceRouteFromPath,
   workspaceRouteNavigation

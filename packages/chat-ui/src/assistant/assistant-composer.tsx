@@ -12,13 +12,13 @@ import {
 import type { FormEvent, KeyboardEvent } from "react";
 import { useCallback, useLayoutEffect, useRef } from "react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
-import { AttachmentPreview } from "./attachment-preview";
+import { AttachmentPreview } from "../attachment-preview";
 import { ContextIndicator } from "./context-indicator";
-import { useTranslation } from "./i18n";
+import { useTranslation } from "../i18n";
 import { isComposerBlockedByActiveRun, shouldShowCancelAction } from "./thread-activity";
-import { Button } from "./ui/button";
-import { cn } from "./ui/cn";
-import { Spinner } from "./ui/spinner";
+import { Button } from "../ui/button";
+import { cn } from "../ui/cn";
+import { Spinner } from "../ui/spinner";
 
 export interface LocalUploadingAttachment {
   id: string;

@@ -1,5 +1,5 @@
-import { useTranslation } from "./i18n";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "./ui/hover-card";
+import { useTranslation } from "../i18n";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "../ui/hover-card";
 
 export function ContextIndicator({
   inputTokens,

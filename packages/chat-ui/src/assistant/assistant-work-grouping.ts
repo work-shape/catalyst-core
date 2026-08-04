@@ -2,11 +2,11 @@ import { groupPartByType, type GroupByContext, type PartState } from "@assistant
 import {
   isWorkspacePromotedArtifactsData,
   WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE
-} from "./tool-artifacts";
+} from "../tool-artifacts";
 import {
   isWorkspacePromotedSurfacesData,
   WORKSPACE_PROMOTED_SURFACES_DATA_TYPE
-} from "./tool-surfaces";
+} from "../tool-surfaces";
 
 export const ASSISTANT_WORK_GROUP = "group-work" as const;
 

@@ -19,8 +19,8 @@ import {
   User
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { AttachmentPreview } from "./attachment-preview";
-import { managedFileIdFromUrl, useAttachmentContentContext } from "./attachment-content";
+import { AttachmentPreview } from "../attachment-preview";
+import { managedFileIdFromUrl, useAttachmentContentContext } from "../attachment-content";
 import {
   ASSISTANT_WORK_GROUP,
   countAssistantWorkTimelineSteps,
@@ -34,15 +34,15 @@ import {
 } from "./assistant-work-grouping";
 import type { AssistantUiMessageCustomMetadata } from "./assistant-ui-adapter";
 import { AssistantSourcePart } from "./assistant-source-part";
-import { useTranslation } from "./i18n";
-import { MarkdownText } from "./markdown-text";
-import { DataPart, ToolCallPart } from "./tool-call";
+import { useTranslation } from "../i18n";
+import { MarkdownText } from "../markdown-text";
+import { DataPart, ToolCallPart } from "../tool-call";
 import { ToolGroupContent, ToolGroupRoot, ToolGroupTrigger } from "./assistant-tool-group";
-import { TooltipIconButton, tooltipIconButtonClassName } from "./tooltip-icon-button";
-import { Button } from "./ui/button";
-import { cn } from "./ui/cn";
+import { TooltipIconButton, tooltipIconButtonClassName } from "../ui/tooltip-icon-button";
+import { Button } from "../ui/button";
+import { cn } from "../ui/cn";
 import { formatWorkHistoryLabel } from "./elapsed-time";
-import { isWorkspacePromotedSurfacesData } from "./tool-surfaces";
+import { isWorkspacePromotedSurfacesData } from "../tool-surfaces";
 
 const chronologicalAssistantMessageGroupBy = createAssistantMessageGroupBy();
 const recentlyActiveAssistantRunIds = new Set<string>();

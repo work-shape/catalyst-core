@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { formatElapsedSeconds } from "./elapsed-time";
-import { useTranslation } from "./i18n";
+import { useTranslation } from "../i18n";
 import type { RunActivity } from "./thread-activity";
 import { useToolActivityLabel } from "./tool-activity";
-import { Spinner } from "./ui/spinner";
+import { Spinner } from "../ui/spinner";
 
 const fallbackActivityKeys = [
   "preparing",

@@ -1,6 +1,6 @@
 import { forwardRef, type ButtonHTMLAttributes } from "react";
-import { cn } from "./ui/cn";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { cn } from "./cn";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip";
 
 export interface TooltipIconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   tooltip: string;

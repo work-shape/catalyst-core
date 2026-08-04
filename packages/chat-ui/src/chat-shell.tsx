@@ -11,8 +11,8 @@ import type {
   UsageSummary
 } from "@vivd-catalyst/api-client";
 import { ChatWorkspace } from "./chat-workspace";
-import type { ConfigAssetsPanelInput } from "./config-assets-panel";
-import type { ApiAccessPanelInput } from "./api-access-panel";
+import type { ConfigAssetsPanelInput } from "./control-plane/config-assets-panel";
+import type { ApiAccessPanelInput } from "./control-plane/api-access-panel";
 import {
   ToolDisplayActionsProvider,
   ToolDisplayWidgetProvider,
@@ -23,7 +23,7 @@ import {
   type SuperadminRouteTab,
   type WorkspaceRoute,
   type WorkspaceRouteChangeOptions
-} from "./workspace-route";
+} from "./workspace/workspace-route";
 
 export interface ChatShellAdminPanel {
   canView(user: ApiUser | undefined): boolean;

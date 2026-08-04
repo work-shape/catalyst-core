@@ -21,7 +21,7 @@ import { StructuredDataCopyAllButton, StructuredDataView } from "./structured-da
 import { displayPanelKey, renderBuiltInDisplay } from "./tool-display-rendering";
 import { useToolDisplayPanel, type ToolDisplayPanelEntry } from "./tool-display-panel";
 import { getArtifactFileType, type ToolArtifactDownloadRef } from "./tool-artifacts";
-import { TooltipIconButton } from "./tooltip-icon-button";
+import { TooltipIconButton } from "./ui/tooltip-icon-button";
 import { Spinner } from "./ui/spinner";
 import { useWorkspacePreferences } from "./workspace/workspace-ui-state";
 

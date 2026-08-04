@@ -23,17 +23,17 @@ import type {
   UpsertAdministeredUserIdentityRequest,
   UsageSummary
 } from "@vivd-catalyst/api-client";
-import { Badge } from "./ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { cn } from "./ui/cn";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { Badge } from "../ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { cn } from "../ui/cn";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import { ConfigAssetsPanel, type ConfigAssetsPanelInput } from "./config-assets-panel";
 import { ApiAccessPanel, type ApiAccessPanelInput } from "./api-access-panel";
-import { ControlPlanePage } from "./control-plane/control-plane-page";
-import { useTranslation } from "./i18n";
+import { ControlPlanePage } from "./control-plane-page";
+import { useTranslation } from "../i18n";
 import { UsageView } from "./usage-view";
 import { UserAdministrationPanel } from "./user-administration-panel";
-import type { SuperadminRouteTab } from "./workspace-route";
+import type { SuperadminRouteTab } from "../workspace/workspace-route";
 
 export function SuperadminPanel({
   usage,

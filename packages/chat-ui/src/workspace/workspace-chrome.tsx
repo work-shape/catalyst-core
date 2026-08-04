@@ -2,10 +2,10 @@ import { PanelLeft } from "lucide-react";
 import { type SafeConfig } from "@vivd-catalyst/api-client";
 import type { CSSProperties } from "react";
 import { AgentSelector } from "./agent-selector";
-import { useTranslation } from "./i18n";
-import { type ResolvedThemeMode } from "./theme";
+import { useTranslation } from "../i18n";
+import { type ResolvedThemeMode } from "../theme";
 import { ThemeToggle } from "./theme-toggle";
-import { cn } from "./ui/cn";
+import { cn } from "../ui/cn";
 
 export function SessionCheckPanel({
   className,

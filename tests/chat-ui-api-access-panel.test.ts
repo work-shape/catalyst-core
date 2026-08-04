@@ -2,7 +2,7 @@ import { createElement } from "../packages/chat-ui/node_modules/react";
 import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
 import type { ServicePrincipalDetail } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
-import { ApiAccessPanel } from "../packages/chat-ui/src/api-access-panel";
+import { ApiAccessPanel } from "../packages/chat-ui/src/control-plane/api-access-panel";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 
 const detail: ServicePrincipalDetail = {

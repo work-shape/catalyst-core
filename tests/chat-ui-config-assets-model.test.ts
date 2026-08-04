@@ -7,7 +7,7 @@ import {
   pairToLocalized,
   skillConfigToForm,
   skillFormToConfig
-} from "../packages/chat-ui/src/config-assets-model";
+} from "../packages/chat-ui/src/control-plane/config-assets-model";
 
 describe("config assets form model", () => {
   it("round-trips a full agent config through the form state", () => {

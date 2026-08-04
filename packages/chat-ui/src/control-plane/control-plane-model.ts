@@ -32,15 +32,15 @@ import {
   canManageUsers,
   canViewAudit,
   canViewUsageGovernance
-} from "../governance";
+} from "./governance";
 import type {
   SuperadminRouteTab,
   WorkspaceRoute,
   WorkspaceRouteChangeOptions,
   WorkspaceRouteView
-} from "../workspace-route";
+} from "../workspace/workspace-route";
 import { apiErrorMessage, STANDALONE_AUTH_SOURCE } from "../workspace-utils";
-import { createApiAccessAuthorityKey } from "../api-access-reveal-controller";
+import { createApiAccessAuthorityKey } from "./api-access-reveal-controller";
 
 export interface ControlPlaneModelInput {
   apiBaseUrl: string;

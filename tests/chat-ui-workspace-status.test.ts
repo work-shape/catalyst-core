@@ -2,7 +2,7 @@ import { createElement } from "../packages/chat-ui/node_modules/react";
 import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
 import { describe, expect, it } from "vitest";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
-import { ConfigCheckPanel } from "../packages/chat-ui/src/workspace-chrome";
+import { ConfigCheckPanel } from "../packages/chat-ui/src/workspace/workspace-chrome";
 
 describe("workspace config status", () => {
   it("keeps the loading state neutral until customer config is available", () => {

@@ -1,10 +1,10 @@
 import { ChevronLeft, PanelLeft, Plus, Search, Shield } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import type { ConversationListItem, SafeConfig } from "@vivd-catalyst/api-client";
-import { ConversationButton } from "./conversation-button";
-import { useTranslation } from "./i18n";
-import { Button } from "./ui/button";
-import { cn } from "./ui/cn";
+import { ConversationButton } from "../conversation/conversation-button";
+import { useTranslation } from "../i18n";
+import { Button } from "../ui/button";
+import { cn } from "../ui/cn";
 
 export type WorkspaceView = "chat" | "settings" | "superadmin";
 

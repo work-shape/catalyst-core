@@ -23,16 +23,16 @@ import {
   InitialPromptsEditor,
   LocalizedField
 } from "./config-asset-form-fields";
-import { ControlPlanePage } from "./control-plane/control-plane-page";
-import { useTranslation } from "./i18n";
-import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
-import { cn } from "./ui/cn";
-import { Dialog } from "./ui/dialog";
-import { Input, Textarea } from "./ui/input";
-import { Select } from "./ui/select";
-import { Spinner } from "./ui/spinner";
-import { apiErrorMessage, apiErrorStatus } from "./workspace-utils";
+import { ControlPlanePage } from "./control-plane-page";
+import { useTranslation } from "../i18n";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
+import { cn } from "../ui/cn";
+import { Dialog } from "../ui/dialog";
+import { Input, Textarea } from "../ui/input";
+import { Select } from "../ui/select";
+import { Spinner } from "../ui/spinner";
+import { apiErrorMessage, apiErrorStatus } from "../workspace-utils";
 
 export interface ConfigAssetBundleEntry {
   name: string;

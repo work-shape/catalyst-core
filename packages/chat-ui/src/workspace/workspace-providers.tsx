@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { WorkspaceApiClientProvider } from "../api/workspace-api-client";
 import { ToolDisplayPanelProvider } from "../tool-display-panel";
-import type { WorkspaceRoute, WorkspaceRouteChangeOptions } from "../workspace-route";
+import type { WorkspaceRoute, WorkspaceRouteChangeOptions } from "./workspace-route";
 import { WorkspaceDraftsProvider } from "./workspace-drafts";
 import { WorkspaceUiStateProvider } from "./workspace-ui-state";
 

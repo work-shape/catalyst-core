@@ -16,13 +16,13 @@ import type {
   UpdateCurrentUserRequest,
   UpsertAdministeredUserIdentityRequest
 } from "@vivd-catalyst/api-client";
-import { signOut } from "../auth-client";
+import { signOut } from "./auth-client";
 import { apiErrorMessage } from "../workspace-utils";
 import { workspaceQueryKeys } from "./workspace-query-keys";
 import {
   createApiAccessRevealController,
   type RevealedApiCredential
-} from "../api-access-reveal-controller";
+} from "../control-plane/api-access-reveal-controller";
 
 interface WorkspaceMutationInput {
   apiBaseUrl: string;

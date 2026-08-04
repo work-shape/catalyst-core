@@ -5,9 +5,9 @@ import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
 import { AssistantActivityStatus } from "./assistant-activity-status";
 import { AssistantComposer, type LocalUploadingAttachment } from "./assistant-composer";
 import { ThreadMessage } from "./assistant-message";
-import { useTranslation } from "./i18n";
+import { useTranslation } from "../i18n";
 import { findRunActivity, shouldShowRunActivity } from "./thread-activity";
-import { cn } from "./ui/cn";
+import { cn } from "../ui/cn";
 
 export function AssistantThread({
   config,

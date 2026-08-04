@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom
 import type { SafeConfig } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
-import { WorkspaceRail } from "../packages/chat-ui/src/workspace-rail";
+import { WorkspaceRail } from "../packages/chat-ui/src/workspace/workspace-rail";
 
 const noop = () => undefined;
 

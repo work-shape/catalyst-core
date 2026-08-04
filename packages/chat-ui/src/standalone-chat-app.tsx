@@ -11,13 +11,13 @@ import {
 } from "@tanstack/react-router";
 import { ChatShell, type ChatShellAdminPanel } from "./chat-shell";
 import type { ToolDisplayWidgetRegistry } from "./domain-ui-widgets";
-import { ToolActivityLabelsProvider, type ToolActivityLabels } from "./tool-activity";
+import { ToolActivityLabelsProvider, type ToolActivityLabels } from "./assistant/tool-activity";
 import { installStaleChunkRecovery } from "./stale-chunk-recovery";
 import type {
   SuperadminRouteTab,
   WorkspaceRoute,
   WorkspaceRouteChangeOptions
-} from "./workspace-route";
+} from "./workspace/workspace-route";
 
 export interface StandaloneChatAppOptions {
   apiBaseUrl?: string;

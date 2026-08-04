@@ -1,10 +1,10 @@
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { AdministeredUser } from "@vivd-catalyst/api-client";
-import { avatarGradient } from "./avatar-gradient";
+import { avatarGradient } from "../ui/avatar-gradient";
 import type { FormNoticeState } from "./user-administration-model";
-import { Badge } from "./ui/badge";
-import { cn } from "./ui/cn";
+import { Badge } from "../ui/badge";
+import { cn } from "../ui/cn";
 
 export function Field({
   label,

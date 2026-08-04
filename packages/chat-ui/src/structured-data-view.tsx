@@ -5,7 +5,7 @@ import { useTranslation } from "./i18n";
 import { formatStructuredDataValue, structuredDataToTsv } from "./resources-panel-model";
 import { Button } from "./ui/button";
 import { Table, TableBody, TableCell, TableRow } from "./ui/table";
-import { TooltipIconButton } from "./tooltip-icon-button";
+import { TooltipIconButton } from "./ui/tooltip-icon-button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 type StructuredDataSource =

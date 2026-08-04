@@ -5,11 +5,11 @@ import type {
   ModelUsageMonthlyBucket,
   UsageSummary
 } from "@vivd-catalyst/api-client";
-import { ControlPlanePage } from "./control-plane/control-plane-page";
-import { Badge } from "./ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { cn } from "./ui/cn";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { ControlPlanePage } from "./control-plane-page";
+import { Badge } from "../ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { cn } from "../ui/cn";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 
 export function UsageView({ usage }: { usage: UsageSummary | undefined }) {
   const recentEvents = usage?.recentEvents ?? [];

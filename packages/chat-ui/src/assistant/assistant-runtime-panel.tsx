@@ -10,12 +10,12 @@ import {
   toAttachmentFilePart,
   toUiMessages,
   type AssistantUiActiveRun
-} from "../assistant-ui-adapter";
+} from "./assistant-ui-adapter";
 import { createToolSurfacePanelEntry } from "../tool-surface-card";
 import { useToolDisplayPanel } from "../tool-display-panel";
 import { dedupeToolSurfaceRefs, readToolSurfaceRefs } from "../tool-surfaces";
-import { AssistantThread } from "../assistant-thread";
-import { AssistantToolRegistry } from "../assistant-tool-registry";
+import { AssistantThread } from "./assistant-thread";
+import { AssistantToolRegistry } from "./assistant-tool-registry";
 import { useRegisterToolDisplayActions } from "../domain-ui-widgets";
 import { useTranslation } from "../i18n";
 import { useOpenSourceFilePreview } from "../source-file-preview";

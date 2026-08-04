@@ -16,22 +16,22 @@ import {
   readCompatiblePersistedToolResult,
   readCompatibleUserAttachmentRefs,
   type PersistedToolResult
-} from "./assistant/assistant-message-compat";
+} from "./assistant-message-compat";
 import {
   WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE,
   createWorkspacePromotedArtifactsData,
   dedupeToolArtifactRefs,
   readSurfacedToolArtifactRefs,
   type ToolArtifactDownloadRef
-} from "./tool-artifacts";
+} from "../tool-artifacts";
 import {
   WORKSPACE_PROMOTED_SURFACES_DATA_TYPE,
   createWorkspacePromotedSurfacesData,
   dedupeToolSurfaceRefs,
   readToolSurfaceRefs,
   type ToolSurfaceRef
-} from "./tool-surfaces";
-import { readWorkspaceToolErrorText } from "./workspace-tool-display";
+} from "../tool-surfaces";
+import { readWorkspaceToolErrorText } from "../workspace-tool-display";
 
 export interface AssistantUiActiveRun {
   run: {

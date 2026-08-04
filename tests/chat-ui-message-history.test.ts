@@ -8,8 +8,8 @@ import {
   createAssistantToolCallsMetadata,
   createToolResultMetadata
 } from "@vivd-catalyst/core";
-import { toUiMessages } from "../packages/chat-ui/src/assistant-ui-adapter";
-import { AssistantSourcePart } from "../packages/chat-ui/src/assistant-source-part";
+import { toUiMessages } from "../packages/chat-ui/src/assistant/assistant-ui-adapter";
+import { AssistantSourcePart } from "../packages/chat-ui/src/assistant/assistant-source-part";
 import { ToolDisplayPanelProvider } from "../packages/chat-ui/src/tool-display-panel";
 import { ToolSurfaceList } from "../packages/chat-ui/src/tool-surface-card";
 import { dedupeToolSurfaceRefs } from "../packages/chat-ui/src/tool-surfaces";

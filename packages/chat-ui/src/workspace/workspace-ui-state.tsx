@@ -38,7 +38,7 @@ import {
   type WorkspaceRoute,
   type WorkspaceRouteChangeOptions,
   type WorkspaceRouteView
-} from "../workspace-route";
+} from "./workspace-route";
 
 interface WorkspaceRouteContextValue {
   route: WorkspaceRoute;

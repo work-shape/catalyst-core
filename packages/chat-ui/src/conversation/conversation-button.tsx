@@ -2,11 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ThreadListItemMorePrimitive } from "@assistant-ui/react";
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import type { ConversationListItem } from "@vivd-catalyst/api-client";
-import { useTranslation } from "./i18n";
-import { Button } from "./ui/button";
-import { cn } from "./ui/cn";
-import { Dialog } from "./ui/dialog";
-import { Spinner } from "./ui/spinner";
+import { useTranslation } from "../i18n";
+import { Button } from "../ui/button";
+import { cn } from "../ui/cn";
+import { Dialog } from "../ui/dialog";
+import { Spinner } from "../ui/spinner";
 
 export function ConversationButton({
   conversation,

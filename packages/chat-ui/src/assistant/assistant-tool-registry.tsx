@@ -1,6 +1,6 @@
 import { AuiProvider, Tools, defineToolkit, useAui } from "@assistant-ui/react";
 import type { ReactNode } from "react";
-import { ToolCallPart } from "./tool-call";
+import { ToolCallPart } from "../tool-call";
 
 const backendToolUi = {
   type: "backend",

@@ -1,7 +1,7 @@
 import { Moon, Sun } from "lucide-react";
-import { useTranslation } from "./i18n";
-import type { ResolvedThemeMode } from "./theme";
-import { Button } from "./ui/button";
+import { useTranslation } from "../i18n";
+import type { ResolvedThemeMode } from "../theme";
+import { Button } from "../ui/button";
 
 export function ThemeToggle({ mode, onToggle }: { mode: ResolvedThemeMode; onToggle: () => void }) {
   const { t } = useTranslation();

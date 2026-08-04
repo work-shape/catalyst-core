@@ -10,10 +10,10 @@ import { ResourcesPanel, ResourcesPanelToggle, useResourcesPanelState } from "./
 import { isResourcesPanelAvailable } from "./resources-panel-model";
 import { ToolDisplayPanel, useToolDisplayPanel } from "./tool-display-panel";
 import { cn } from "./ui/cn";
-import { UserMenu } from "./user-menu";
-import { ConfigCheckPanel, SessionCheckPanel, WorkspaceChrome } from "./workspace-chrome";
-import { WorkspaceRail } from "./workspace-rail";
-import { type WorkspaceRoute, type WorkspaceRouteChangeOptions } from "./workspace-route";
+import { UserMenu } from "./workspace/user-menu";
+import { ConfigCheckPanel, SessionCheckPanel, WorkspaceChrome } from "./workspace/workspace-chrome";
+import { WorkspaceRail } from "./workspace/workspace-rail";
+import { type WorkspaceRoute, type WorkspaceRouteChangeOptions } from "./workspace/workspace-route";
 import { useWorkspaceChatModel } from "./workspace/workspace-chat-model";
 import { WorkspaceProviders } from "./workspace/workspace-providers";
 

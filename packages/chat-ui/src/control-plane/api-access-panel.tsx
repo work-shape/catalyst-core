@@ -18,15 +18,15 @@ import {
   optionalTrimmedValue,
   scopesAllowedByPermissions
 } from "./api-access-model";
-import { ControlPlanePage } from "./control-plane/control-plane-page";
-import { useTranslation } from "./i18n";
-import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { Dialog } from "./ui/dialog";
-import { Input, Textarea } from "./ui/input";
-import { Select } from "./ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { ControlPlanePage } from "./control-plane-page";
+import { useTranslation } from "../i18n";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Dialog } from "../ui/dialog";
+import { Input, Textarea } from "../ui/input";
+import { Select } from "../ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 
 export interface ApiAccessPanelInput {
   canMutate: boolean;
