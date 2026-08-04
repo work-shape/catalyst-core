@@ -127,13 +127,15 @@ export function AssistantThread({
               </div>
             ) : null}
 
-            <ThreadPrimitive.ViewportFooter className="relative sticky bottom-0 z-10 mt-auto pb-4 pt-5 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:top-5 after:z-0 after:bg-background after:content-['']">
-              {messagesEnabled ? (
-                <AuiIf condition={(state) => !state.thread.isEmpty}>
-                  <ThreadScrollToBottom />
-                </AuiIf>
-              ) : null}
-              <div className="relative z-10">
+            <ThreadPrimitive.ViewportFooter
+              className="sticky bottom-0 z-10 mt-auto h-16 shrink-0 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-0 after:h-16 after:bg-gradient-to-t after:from-background after:via-background after:to-transparent after:content-['']"
+            >
+              <div className="absolute inset-x-0 bottom-4 z-10">
+                {messagesEnabled ? (
+                  <AuiIf condition={(state) => !state.thread.isEmpty}>
+                    <ThreadScrollToBottom />
+                  </AuiIf>
+                ) : null}
                 <AssistantComposer
                   attachments={draftAttachments}
                   localUploadingAttachments={localUploadingAttachments}
