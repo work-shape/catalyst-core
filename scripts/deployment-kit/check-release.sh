@@ -110,6 +110,21 @@ log_step "Verify committed build lockfile"
   --deployment-root "$deployment_root" \
   --check
 
+corepack_shim_dir=""
+status_snapshot_dir=""
+cleanup() {
+  for path in "$corepack_shim_dir" "$status_snapshot_dir"; do
+    [[ -z "$path" ]] || rm -rf -- "$path"
+  done
+}
+trap cleanup EXIT
+
+if ! command -v pnpm >/dev/null 2>&1 && command -v corepack >/dev/null 2>&1; then
+  corepack_shim_dir="$(mktemp -d)"
+  corepack enable --install-directory "$corepack_shim_dir" pnpm
+  export PATH="$corepack_shim_dir:$PATH"
+fi
+
 pnpm_cmd=(pnpm)
 if command -v corepack >/dev/null 2>&1; then
   pnpm_cmd=(corepack pnpm)
@@ -119,7 +134,6 @@ run_pnpm() {
 }
 
 status_snapshot_dir="$(mktemp -d)"
-trap 'rm -rf "$status_snapshot_dir"' EXIT
 
 capture_git_status() {
   git -C "$2" status --porcelain=v1 --untracked-files=all | LC_ALL=C sort \
