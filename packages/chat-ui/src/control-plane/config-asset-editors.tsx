@@ -417,7 +417,7 @@ export function SkillEditor({
               )}
               onClick={() => setSelectedResource("root")}
             >
-              <FileText size={14} aria-hidden="true" />
+              <FileText className="shrink-0" size={14} aria-hidden="true" />
               <span className="truncate">SKILL.md</span>
             </button>
             {form.resources.length || editable ? (
@@ -432,7 +432,7 @@ export function SkillEditor({
                     )}
                     onClick={() => setSelectedResource(index)}
                   >
-                    <FileText size={14} aria-hidden="true" />
+                    <FileText className="shrink-0" size={14} aria-hidden="true" />
                     <span className="truncate">{resource.path}</span>
                   </button>
                 ))}
