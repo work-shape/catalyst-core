@@ -320,6 +320,17 @@ describe("conversation resource routes", () => {
         }
       );
       await tick();
+      await appendToolResult(fixture.store, fixture.clientInstanceId, conversation.id, {
+        status: "success",
+        structuredResult: {
+          key: "credit-report",
+          kind: "demo.unrelated_result",
+          schemaVersion: 1,
+          title: "Wrong kind",
+          data: { value: "ignored" }
+        }
+      });
+      await tick();
       const newest = await appendToolResult(
         fixture.store,
         fixture.clientInstanceId,

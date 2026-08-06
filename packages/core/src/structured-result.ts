@@ -66,6 +66,9 @@ export function currentStructuredResults(
       continue;
     }
     const existing = current.get(publication.key);
+    if (existing && existing.kind !== publication.kind) {
+      continue;
+    }
     const firstPublishedAt = existing?.firstPublishedAt ?? message.createdAt;
     current.set(publication.key, {
       ...publication,
@@ -76,7 +79,10 @@ export function currentStructuredResults(
     });
   }
   return [...current.values()]
-    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+    .sort(
+      (left, right) =>
+        right.updatedAt.localeCompare(left.updatedAt) || left.key.localeCompare(right.key)
+    )
     .map(({ firstPublishedAt: _firstPublishedAt, ...result }) => result);
 }
 

@@ -188,7 +188,7 @@ export async function listMessages(
         eq(messages.conversationId, input.conversationId)
       )
     )
-    .orderBy(asc(messages.createdAt));
+    .orderBy(asc(messages.createdAt), asc(messages.storageOrdinal));
   return rows.map(mapMessage);
 }
 

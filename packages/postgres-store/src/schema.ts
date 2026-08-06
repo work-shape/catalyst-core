@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   bigint,
+  bigserial,
   boolean,
   check,
   foreignKey,
@@ -190,6 +191,7 @@ export const messages = pgTable(
       .references(() => conversations.id, { onDelete: "cascade" }),
     role: text("role").$type<ChatMessage["role"]>().notNull(),
     text: text("text").notNull(),
+    storageOrdinal: bigserial("storage_ordinal", { mode: "number" }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     metadata: jsonb("metadata").$type<NonNullable<ChatMessage["metadata"]>>().notNull()
   },

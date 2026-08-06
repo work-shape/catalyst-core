@@ -125,7 +125,12 @@ return toolSuccess(
 
 The platform derives the typed side-panel display from this single payload and exposes its current
 revision through `structured_result.read`. The resource is projected from immutable tool history;
-domain tools remain responsible for validating and replacing their complete result.
+domain tools remain responsible for validating and replacing their complete result. The first valid
+publication fixes the `kind` for a key. A later same-key publication with another `kind` remains in
+the immutable message history but is ignored by the current-resource projection, rather than
+silently reinterpreting the resource. Publications are resolved by message creation time and then
+their persisted insertion ordinal, so equal timestamps still produce a deterministic revision and
+snapshot.
 
 Built-in HTML displays provide Tailwind CSS, Lucide icons, external HTTPS chart scripts, and
 runtime theme variables inside the rendered iframe. For ordinary model-authored HTML, use
