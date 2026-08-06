@@ -28,6 +28,13 @@ export interface SkillFormState {
   title: string;
   description: string;
   content: string;
+  resources: SkillResourceFormState[];
+}
+
+export interface SkillResourceFormState {
+  path: string;
+  mediaType: string;
+  content: string;
 }
 
 export const EMPTY_LOCALIZED_PAIR: LocalizedPair = { en: "", de: "" };
@@ -138,11 +145,23 @@ export function emptyAgentForm(): AgentFormState {
 }
 
 export function skillConfigToForm(config: Record<string, unknown>): SkillFormState {
+  const resources = Array.isArray(config.resources) ? config.resources : [];
   return {
     name: typeof config.name === "string" ? config.name : "",
     title: typeof config.title === "string" ? config.title : "",
     description: typeof config.description === "string" ? config.description : "",
-    content: typeof config.content === "string" ? config.content : ""
+    content: typeof config.content === "string" ? config.content : "",
+    resources: resources.flatMap((resource) => {
+      if (!resource || typeof resource !== "object" || Array.isArray(resource)) {
+        return [];
+      }
+      const record = resource as Record<string, unknown>;
+      return typeof record.path === "string" &&
+        typeof record.mediaType === "string" &&
+        typeof record.content === "string"
+        ? [{ path: record.path, mediaType: record.mediaType, content: record.content }]
+        : [];
+    })
   };
 }
 
@@ -151,12 +170,13 @@ export function skillFormToConfig(form: SkillFormState): Record<string, unknown>
     name: form.name.trim(),
     title: form.title.trim(),
     description: form.description.trim(),
-    content: form.content
+    content: form.content,
+    ...(form.resources.length ? { resources: form.resources } : {})
   };
 }
 
 export function emptySkillForm(): SkillFormState {
-  return { name: "", title: "", description: "", content: "" };
+  return { name: "", title: "", description: "", content: "", resources: [] };
 }
 
 export function configAssetMutationErrorMessage(

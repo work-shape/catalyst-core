@@ -79,7 +79,14 @@ describe("config assets form model", () => {
       name: "review",
       title: "Review",
       description: "How to review",
-      content: "# Steps\n1. Read."
+      content: "# Steps\n1. Read.",
+      resources: [
+        {
+          path: "references/checks.md",
+          mediaType: "text/markdown",
+          content: "# Checks"
+        }
+      ]
     };
     expect(skillFormToConfig(skillConfigToForm(config))).toEqual(config);
   });

@@ -5,9 +5,11 @@ import yaml from "js-yaml";
 import {
   agentConfigSchema,
   parseSkillMarkdown,
+  skillResourceMediaTypeForPath,
   skillConfigSchema,
   type AgentConfig,
-  type SkillConfig
+  type SkillConfig,
+  type SkillResourceConfig
 } from "@vivd-catalyst/config-schema";
 
 export const MANIFEST_FILENAME = "catalyst.yaml";
@@ -170,7 +172,12 @@ export async function readWorkingCopy(
     try {
       const contents = await readFile(path, "utf8");
       const parsedMarkdown = parseSkillMarkdown(contents, file, path);
-      const parsed = skillConfigSchema.safeParse(parsedMarkdown);
+      const resources = await readSkillResources(path);
+      const parsed = skillConfigSchema.safeParse(
+        isRecord(parsedMarkdown)
+          ? { ...parsedMarkdown, ...(resources.length ? { resources } : {}) }
+          : parsedMarkdown
+      );
       if (parsed.success) {
         skills.push(parsed.data);
       } else {
@@ -230,6 +237,37 @@ export function skillAssetPath(workingDir: string, name: string): string {
   return resolve(workingDir, "skills", name, "SKILL.md");
 }
 
+export async function readSkillResources(skillFilePath: string): Promise<SkillResourceConfig[]> {
+  const skillDirectory = dirname(skillFilePath);
+  const files: string[] = [];
+  await walkFiles(skillDirectory, skillDirectory, files);
+  const resources: SkillResourceConfig[] = [];
+  for (const path of files.sort((left, right) => left.localeCompare(right))) {
+    if (path === skillFilePath) {
+      continue;
+    }
+    const resourcePath = toRelativePath(skillDirectory, path);
+    const mediaType = skillResourceMediaTypeForPath(resourcePath);
+    if (!mediaType) {
+      throw new Error(
+        `Unsupported skill resource '${resourcePath}'; supported extensions are .md, .txt, .json, .yaml, and .yml`
+      );
+    }
+    const bytes = await readFile(path);
+    let content: string;
+    try {
+      content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch {
+      throw new Error(`Skill resource '${resourcePath}' is not valid UTF-8 text`);
+    }
+    if (content.includes("\0")) {
+      throw new Error(`Skill resource '${resourcePath}' contains binary data`);
+    }
+    resources.push({ path: resourcePath, mediaType, content });
+  }
+  return resources;
+}
+
 export async function removeStaleManifestAssets(
   workingDir: string,
   manifest: CatalystManifest,
@@ -238,6 +276,10 @@ export async function removeStaleManifestAssets(
   const existing = await matchManifestFiles(workingDir, [...manifest.agents, ...manifest.skills]);
   for (const path of existing) {
     if (desiredPaths.has(path)) {
+      continue;
+    }
+    if (path.endsWith("/SKILL.md")) {
+      await rm(dirname(path), { recursive: true, force: true });
       continue;
     }
     await rm(path);

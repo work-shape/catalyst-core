@@ -10,7 +10,7 @@ This gives config assets a different lifecycle than release config:
 - **Release config** (`app.yaml`) ships with a deployment and owns infrastructure: auth, model providers and bindings, usage budgets, tool enablement, workspaces.
 - **Config assets** change at runtime — through the admin UI's Config tab or a `catalyst config push` — and apply to new conversations immediately, without a deployment. A running conversation keeps the agent snapshot it started with.
 
-Skill content is read on demand by the `read_skill` tool, so edits are visible to reads after the edit even within an already-running conversation; the agent's system prompt, model selection, and tool list remain on the run's snapshot.
+Skill content is read on demand by the `read_skill` tool, so edits are visible to reads after the edit even within an already-running conversation; the agent's system prompt, model selection, and tool list remain on the run's snapshot. A skill is one atomic package: its required `SKILL.md` root may include selectively readable UTF-8 text resources. The root read returns a compact resource manifest, and a second `read_skill` call can load one exact listed path.
 
 Every mutation is validated against the full resulting asset set before it is stored (unknown tool or skill references, missing default agent, duplicate names, and skill use without the `read_skill` tool are all rejected), appended to a per-asset revision history, and audited. A fresh instance boots with zero assets; the chat UI shows a "not configured" notice until the first push.
 
@@ -26,6 +26,18 @@ catalyst config push        # replace the live assets with the working copy
 ```
 
 A `catalyst.yaml` manifest in the working-copy root names instances and the asset file globs; `.catalyst-state.json` (gitignored) records the config version you last pulled. `push` sends that version and is rejected with a conflict when the live configuration moved — pull, re-apply, and push again, exactly like a rejected git push. `push --force` overwrites deliberately.
+
+The canonical skill package layout is:
+
+```text
+skills/support_review/
+├── SKILL.md
+└── references/
+    ├── escalation.md
+    └── response-format.json
+```
+
+The CLI recursively includes `.md`, `.txt`, `.json`, `.yaml`, and `.yml` resources below each matched skill directory. It validates them as UTF-8 text, includes them in pull/diff/push, and rejects unsupported files instead of silently dropping them. Resource paths are normalized relative paths; absolute paths, traversal, duplicate paths, and a second `SKILL.md` resource are invalid. Binary assets do not belong in config assets.
 
 The server URL can come from a named `catalyst.yaml` instance or directly from `--instance https://catalyst.example.com`. Authentication is environment-only for now:
 
@@ -62,6 +74,8 @@ administration:
 ```
 
 Fields outside `editableAgentFields` are owned by the CLI workflow: the UI shows them read-only and the server rejects interactive writes that change them. `catalyst config push` requires the separate `config_assets.release` permission and may change everything.
+
+Set `enabled: true`, leave `editableAgentFields` empty, and set all interactive mutation flags (including `allowSkillEditing`) to `false` for a readable, release-controlled Config tab. Agents, complete skill packages, and revision history remain inspectable while create, save, delete, default-change, and restore controls are hidden. Enabling skill editing later exposes the same atomic package through a root/reference editor; no storage migration is required.
 
 Optimistic concurrency protects both surfaces: UI saves carry the loaded config version, and a save after a concurrent CLI push surfaces a conflict dialog instead of silently overwriting.
 

@@ -13,15 +13,46 @@ const skillNameSchema = z
   .min(1)
   .regex(/^[A-Za-z][A-Za-z0-9_.-]*$/u);
 
+const skillResourcePathSchema = z
+  .string()
+  .min(1)
+  .superRefine((path, context) => {
+    const segments = path.split("/");
+    if (
+      path.startsWith("/") ||
+      path.includes("\\") ||
+      path.includes("\0") ||
+      segments.some((segment) => segment === "" || segment === "." || segment === "..")
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Skill resource path must be a normalized relative path"
+      });
+    }
+  });
+
 const readSkillInputSchema = z.object({
-  name: skillNameSchema.describe("The skill name from the available client skills list.")
+  name: skillNameSchema.describe("The skill name from the available client skills list."),
+  resourcePath: skillResourcePathSchema
+    .optional()
+    .describe("An exact resource path from the root skill read's resource manifest.")
 });
 
 const readSkillOutputSchema = z.object({
   name: skillNameSchema,
-  title: z.string(),
-  description: z.string(),
+  title: z.string().optional(),
+  description: z.string().optional(),
   content: z.string(),
+  resourcePath: skillResourcePathSchema.optional(),
+  mediaType: z.string().optional(),
+  resources: z
+    .array(
+      z.object({
+        path: skillResourcePathSchema,
+        mediaType: z.string()
+      })
+    )
+    .optional(),
   sourceVersion: z.string()
 });
 
@@ -33,7 +64,7 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
   return defineTool({
     name: "read_skill",
     description:
-      "Read the full Markdown instructions for one available client skill. Use this before applying a listed skill whose title and description match the user's task.",
+      "Read the root instructions or one listed text resource for an available client skill. Read the root first, then load only relevant resources from its manifest.",
     inputSchema: readSkillInputSchema,
     outputSchema: readSkillOutputSchema,
     async execute(input, context) {
@@ -58,12 +89,47 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
       }
 
       const sourceVersion = createSkillSourceVersion(skill);
+      if (input.resourcePath) {
+        const resource = (skill.resources ?? []).find(
+          (candidate) => candidate.path === input.resourcePath
+        );
+        if (!resource) {
+          return toolFailed(
+            "validation_failed",
+            `Skill '${input.name}' does not define resource '${input.resourcePath}'`
+          );
+        }
+        return toolSuccess(
+          {
+            name: skill.name,
+            resourcePath: resource.path,
+            mediaType: resource.mediaType,
+            content: resource.content,
+            sourceVersion
+          },
+          {
+            auditSummary: {
+              action: "read_skill",
+              subject: skill.name,
+              metadata: {
+                agentName,
+                sourceVersion,
+                resourcePath: resource.path
+              }
+            }
+          }
+        );
+      }
+      const resources = [...(skill.resources ?? [])]
+        .sort((left, right) => left.path.localeCompare(right.path))
+        .map((resource) => ({ path: resource.path, mediaType: resource.mediaType }));
       return toolSuccess(
         {
           name: skill.name,
           title: skill.title,
           description: skill.description,
           content: skill.content,
+          ...(resources.length ? { resources } : {}),
           sourceVersion
         },
         {
@@ -89,7 +155,18 @@ function createSkillSourceVersion(skill: SkillConfig): string {
     .update("\0")
     .update(skill.description)
     .update("\0")
-    .update(skill.content)
-    .digest("hex");
-  return `sha256:${hash}`;
+    .update(skill.content);
+  for (const resource of [...(skill.resources ?? [])].sort((left, right) =>
+    left.path.localeCompare(right.path)
+  )) {
+    hash
+      .update("\0")
+      .update(resource.path)
+      .update("\0")
+      .update(resource.mediaType)
+      .update("\0")
+      .update(resource.content);
+  }
+  const digest = hash.digest("hex");
+  return `sha256:${digest}`;
 }

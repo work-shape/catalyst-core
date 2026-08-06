@@ -193,6 +193,8 @@ description: Use when the user asks to review support case details and plan next
 
 The model sees only the allowed skill name, title, and description. It calls `read_skill` to load the full Markdown body when a skill matches the task.
 
+A skill directory may also contain UTF-8 text resources such as `references/policy.md`. The root `read_skill({ name })` response lists these paths without loading their content; the agent can then call `read_skill({ name, resourcePath })` for one relevant resource. The CLI synchronizes the entire directory as one revisioned skill package. Supported resource file extensions are `.md`, `.txt`, `.json`, `.yaml`, and `.yml`; binary files are intentionally excluded.
+
 ## UI Branding
 
 Clients own their favicon and should serve it from `public/`, reference it from `index.html`, and set `ui.faviconUrl` so runtime branding stays explicit. The platform includes `packages/chat-ui/assets/favicon.svg` as an optional fallback asset; pass it as `faviconPath` to `vivdCatalystChatUiPlugin()` when a client intentionally wants that default copied into its build. `ui.faviconUrl` may be an absolute URL or a root-relative path served by the client.

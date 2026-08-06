@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import {
   agentConfigSchema,
@@ -8,7 +8,11 @@ import {
 } from "@vivd-catalyst/config-schema";
 import { ConfigApiError, createConfigApi } from "./api";
 import { createUnifiedDiff } from "./diff";
-import { serializeAgentYaml, serializeSkillMarkdown } from "./serialization";
+import {
+  serializeAgentYaml,
+  serializeSkillMarkdown,
+  serializeSkillPackageForDisplay
+} from "./serialization";
 import {
   MANIFEST_FILENAME,
   STATE_FILENAME,
@@ -99,8 +103,14 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
     await writeFile(path, serializeAgentYaml(agent, provenance), "utf8");
   }
   for (const { skill, path } of skillTargets) {
+    await rm(dirname(path), { recursive: true, force: true });
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, serializeSkillMarkdown(skill, provenance), "utf8");
+    for (const resource of skill.resources ?? []) {
+      const resourcePath = resolve(dirname(path), resource.path);
+      await mkdir(dirname(resourcePath), { recursive: true });
+      await writeFile(resourcePath, resource.content, "utf8");
+    }
   }
   if (selectors.length === 0) {
     await removeStaleManifestAssets(workingDir, manifest, desiredPaths);
@@ -293,7 +303,7 @@ export async function showConfig(options: ConfigCommandOptions): Promise<number>
     options,
     (options.assetKind === "agent"
       ? serializeAgentYaml(config)
-      : serializeSkillMarkdown(config)
+      : serializeSkillPackageForDisplay(config)
     ).trimEnd()
   );
   return 0;
@@ -312,6 +322,9 @@ export function canonicalBundleFiles(bundle: WorkingCopyBundle): Map<string, str
   }
   for (const skill of [...bundle.skills].sort(byName)) {
     setUnique(files, `skills/${skill.name}/SKILL.md`, serializeSkillMarkdown(skill));
+    for (const resource of skill.resources ?? []) {
+      setUnique(files, `skills/${skill.name}/${resource.path}`, resource.content);
+    }
   }
   return files;
 }

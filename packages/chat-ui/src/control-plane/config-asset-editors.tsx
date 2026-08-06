@@ -1,10 +1,11 @@
-import { ChevronDown, History, Star, Trash2 } from "lucide-react";
+import { ChevronDown, FileText, History, Plus, Star, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import type {
   ConfigAssetKind,
   ConfigAssetRevision,
   ConfigAssetsOverview
 } from "@vivd-catalyst/api-client";
+import { SKILL_RESOURCE_MEDIA_TYPES } from "@vivd-catalyst/core";
 import {
   CheckboxGroup,
   DeleteDialog,
@@ -265,11 +266,12 @@ export function AgentEditor({
 
       {revisions}
 
-      <SaveBar
-        label={isNew ? t("configCreateAgent") : t("configSaveChanges")}
-        mutating={mutating}
-        disabled={editableAgentFields.length === 0}
-      />
+      {editableAgentFields.length > 0 ? (
+        <SaveBar
+          label={isNew ? t("configCreateAgent") : t("configSaveChanges")}
+          mutating={mutating}
+        />
+      ) : null}
 
       {onDelete ? (
         <DeleteDialog
@@ -318,6 +320,7 @@ export function SkillEditor({
   const [form, setForm] = useState(initialForm);
   const [error, setError] = useState<string | undefined>(undefined);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [selectedResource, setSelectedResource] = useState<"root" | number>("root");
 
   const update = (patch: Partial<SkillFormState>) => setForm((value) => ({ ...value, ...patch }));
 
@@ -387,27 +390,105 @@ export function SkillEditor({
         title={t("configInstructions")}
         description={t("configSkillInstructionsDescription")}
       >
-        <Field label={t("configContent")} hint={t("configSkillContentHint")}>
-          <EditorTextarea
-            label={t("configMarkdown")}
-            value={form.content}
-            required
-            disabled={!editable}
-            className="min-h-96"
-            onChange={(event) => update({ content: event.target.value })}
-          />
-        </Field>
+        <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(10rem,14rem)_minmax(0,1fr)]">
+          <div className="grid min-w-0 content-start gap-2">
+            <button
+              type="button"
+              className={cn(
+                "flex min-w-0 items-center gap-2 rounded-md border px-3 py-2 text-left text-sm",
+                selectedResource === "root" && "border-primary bg-muted"
+              )}
+              onClick={() => setSelectedResource("root")}
+            >
+              <FileText size={14} aria-hidden="true" />
+              <span className="truncate">SKILL.md</span>
+            </button>
+            {form.resources.map((resource, index) => (
+              <button
+                key={`${index}:${resource.path}`}
+                type="button"
+                className={cn(
+                  "flex min-w-0 items-center gap-2 rounded-md border px-3 py-2 text-left text-sm",
+                  selectedResource === index && "border-primary bg-muted"
+                )}
+                onClick={() => setSelectedResource(index)}
+              >
+                <FileText size={14} aria-hidden="true" />
+                <span className="truncate">{resource.path}</span>
+              </button>
+            ))}
+            {editable ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const used = new Set(form.resources.map((resource) => resource.path));
+                  let number = 1;
+                  let path = "references/reference.md";
+                  while (used.has(path)) {
+                    number += 1;
+                    path = `references/reference-${number}.md`;
+                  }
+                  const index = form.resources.length;
+                  update({
+                    resources: [
+                      ...form.resources,
+                      { path, mediaType: "text/markdown", content: "" }
+                    ]
+                  });
+                  setSelectedResource(index);
+                }}
+              >
+                <Plus size={14} aria-hidden="true" />
+                {t("configAddResource")}
+              </Button>
+            ) : null}
+          </div>
+
+          {selectedResource === "root" || !form.resources[selectedResource] ? (
+            <Field label={t("configContent")} hint={t("configSkillContentHint")}>
+              <EditorTextarea
+                label={t("configMarkdown")}
+                value={form.content}
+                required
+                disabled={!editable}
+                className="min-h-96"
+                onChange={(event) => update({ content: event.target.value })}
+              />
+            </Field>
+          ) : (
+            <SkillResourceEditor
+              resource={form.resources[selectedResource]}
+              editable={editable}
+              onChange={(resource) =>
+                update({
+                  resources: form.resources.map((candidate, index) =>
+                    index === selectedResource ? resource : candidate
+                  )
+                })
+              }
+              onRemove={() => {
+                update({
+                  resources: form.resources.filter((_, index) => index !== selectedResource)
+                });
+                setSelectedResource("root");
+              }}
+            />
+          )}
+        </div>
       </EditorSection>
 
       {error ? <p className="px-5 py-3 text-sm text-destructive">{error}</p> : null}
 
       {revisions}
 
-      <SaveBar
-        label={isNew ? t("configCreateSkill") : t("configSaveChanges")}
-        mutating={mutating}
-        disabled={!editable}
-      />
+      {editable ? (
+        <SaveBar
+          label={isNew ? t("configCreateSkill") : t("configSaveChanges")}
+          mutating={mutating}
+        />
+      ) : null}
 
       {onDelete ? (
         <DeleteDialog
@@ -425,6 +506,66 @@ export function SkillEditor({
   );
 }
 
+function SkillResourceEditor({
+  resource,
+  editable,
+  onChange,
+  onRemove
+}: {
+  resource: SkillFormState["resources"][number];
+  editable: boolean;
+  onChange(resource: SkillFormState["resources"][number]): void;
+  onRemove(): void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="grid min-w-0 content-start gap-4">
+      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem_auto]">
+        <Field label={t("configResourcePath")}>
+          <Input
+            value={resource.path}
+            required
+            disabled={!editable}
+            onChange={(event) => onChange({ ...resource, path: event.target.value })}
+          />
+        </Field>
+        <Field label={t("configResourceType")}>
+          <Select
+            value={resource.mediaType}
+            disabled={!editable}
+            onChange={(event) => onChange({ ...resource, mediaType: event.target.value })}
+          >
+            {SKILL_RESOURCE_MEDIA_TYPES.map((mediaType) => (
+              <option key={mediaType} value={mediaType}>
+                {mediaType}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        {editable ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="self-end text-muted-foreground"
+            onClick={onRemove}
+          >
+            <X size={14} aria-hidden="true" />
+            {t("configRemove")}
+          </Button>
+        ) : null}
+      </div>
+      <EditorTextarea
+        label={t("configResourceContent")}
+        value={resource.content}
+        disabled={!editable}
+        className="min-h-96"
+        onChange={(event) => onChange({ ...resource, content: event.target.value })}
+      />
+    </div>
+  );
+}
+
 export function RevisionHistory({
   kind,
   name,
@@ -436,7 +577,7 @@ export function RevisionHistory({
   name: string;
   mutating: boolean;
   onLoadRevisions(kind: ConfigAssetKind, name: string): Promise<ConfigAssetRevision[]>;
-  onRevert(revision: number): Promise<MutationOutcome>;
+  onRevert?: (revision: number) => Promise<MutationOutcome>;
 }) {
   const { locale, t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -507,7 +648,7 @@ export function RevisionHistory({
                     {new Date(revision.createdAt).toLocaleString(locale)}
                     {revision.actor ? ` · ${revision.actor.displayLabel}` : ""}
                   </span>
-                  {revision.revision !== currentRevision && revision.config !== null ? (
+                  {onRevert && revision.revision !== currentRevision && revision.config !== null ? (
                     <Button
                       type="button"
                       variant="outline"

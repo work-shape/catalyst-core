@@ -8,6 +8,7 @@ import {
   asClientInstanceId,
   asConversationId,
   asToolCallId,
+  type SkillConfig,
   type ToolExecutionContext,
   type ToolExecutionRequest
 } from "@vivd-catalyst/core";
@@ -24,6 +25,22 @@ const supportSkill = {
   title: "Support Review",
   description: "Use when reviewing support case details.",
   content: "# Support Review\n\nCheck facts, gaps, and next questions."
+};
+
+const packagedSkill: SkillConfig = {
+  ...supportSkill,
+  resources: [
+    {
+      path: "references/escalation.md",
+      mediaType: "text/markdown",
+      content: "# Escalation\n\nEscalate uncertain cases."
+    },
+    {
+      path: "references/schema.json",
+      mediaType: "application/json",
+      content: '{"status":"reviewed"}'
+    }
+  ]
 };
 
 describe("client skills", () => {
@@ -105,6 +122,86 @@ describe("client skills", () => {
       }
     });
   });
+
+  it("lists packaged resources and selectively reads one exact resource", async () => {
+    const execution = createExecution({
+      agents: [agent("allowed_agent", ["support_review"])],
+      skills: [packagedSkill]
+    });
+
+    const root = await executeReadSkill(execution, request("allowed_agent", "support_review"));
+    expect(root).toMatchObject({
+      status: "success",
+      output: {
+        content: supportSkill.content,
+        resources: [
+          { path: "references/escalation.md", mediaType: "text/markdown" },
+          { path: "references/schema.json", mediaType: "application/json" }
+        ]
+      }
+    });
+    const sourceVersion =
+      root.status === "success" && typeof root.output.sourceVersion === "string"
+        ? root.output.sourceVersion
+        : undefined;
+
+    const selected = await executeReadSkill(
+      execution,
+      request("allowed_agent", "support_review", "references/escalation.md")
+    );
+    expect(selected).toMatchObject({
+      status: "success",
+      output: {
+        name: "support_review",
+        resourcePath: "references/escalation.md",
+        mediaType: "text/markdown",
+        content: "# Escalation\n\nEscalate uncertain cases.",
+        sourceVersion
+      }
+    });
+    expect(selected.status === "success" ? selected.output : {}).not.toHaveProperty("resources");
+    expect(selected.status === "success" ? selected.output : {}).not.toHaveProperty("title");
+
+    const changedExecution = createExecution({
+      agents: [agent("allowed_agent", ["support_review"])],
+      skills: [
+        {
+          ...packagedSkill,
+          resources: packagedSkill.resources?.map((resource) =>
+            resource.path === "references/escalation.md"
+              ? { ...resource, content: `${resource.content}\nChanged.` }
+              : resource
+          )
+        }
+      ]
+    });
+    const changed = await executeReadSkill(
+      changedExecution,
+      request("allowed_agent", "support_review")
+    );
+    expect(changed.status === "success" ? changed.output.sourceVersion : undefined).not.toBe(
+      sourceVersion
+    );
+  });
+
+  it("rejects unknown and traversing resource paths", async () => {
+    const execution = createExecution({
+      agents: [agent("allowed_agent", ["support_review"])],
+      skills: [packagedSkill]
+    });
+
+    const unknown = await executeReadSkill(
+      execution,
+      request("allowed_agent", "support_review", "references/missing.md")
+    );
+    expect(unknown).toMatchObject({ status: "failed", error: { code: "validation_failed" } });
+
+    const traversal = await executeReadSkill(
+      execution,
+      request("allowed_agent", "support_review", "../secret.md")
+    );
+    expect(traversal).toMatchObject({ status: "failed", error: { code: "validation_failed" } });
+  });
 });
 
 function agent(name: string, skillNames: string[]) {
@@ -118,10 +215,7 @@ function agent(name: string, skillNames: string[]) {
   };
 }
 
-function createExecution(input: {
-  agents: ReturnType<typeof agent>[];
-  skills: (typeof supportSkill)[];
-}) {
+function createExecution(input: { agents: ReturnType<typeof agent>[]; skills: SkillConfig[] }) {
   const tool = createReadSkillTool({
     assetSource: createStaticConfigAssetSource(input)
   });
@@ -133,14 +227,18 @@ function createExecution(input: {
   });
 }
 
-function request(agentName: string, skillName: string): ToolExecutionRequest {
+function request(
+  agentName: string,
+  skillName: string,
+  resourcePath?: string
+): ToolExecutionRequest {
   return {
     toolName: "read_skill",
     toolCallId: asToolCallId(`toolcall_${agentName}_${skillName}`),
     agentRunId: asAgentRunId("run_1"),
     conversationId: asConversationId("conv_1"),
     agentName,
-    input: { name: skillName }
+    input: { name: skillName, ...(resourcePath ? { resourcePath } : {}) }
   };
 }
 

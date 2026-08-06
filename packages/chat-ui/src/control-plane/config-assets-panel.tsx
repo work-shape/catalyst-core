@@ -286,17 +286,20 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
                     name={selection.name}
                     mutating={input.mutating}
                     onLoadRevisions={input.onLoadRevisions}
-                    onRevert={(revision) =>
-                      runMutation(() =>
-                        input
-                          .onRevertAsset({
-                            kind: "agent",
-                            name: selection.name,
-                            revision,
-                            baseVersion: version
-                          })
-                          .then(() => setResetToken((token) => token + 1))
-                      )
+                    onRevert={
+                      input.editableAgentFields.length > 0
+                        ? (revision) =>
+                            runMutation(() =>
+                              input
+                                .onRevertAsset({
+                                  kind: "agent",
+                                  name: selection.name,
+                                  revision,
+                                  baseVersion: version
+                                })
+                                .then(() => setResetToken((token) => token + 1))
+                            )
+                        : undefined
                     }
                   />
                 ) : null
@@ -344,23 +347,26 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
                   : undefined
               }
               revisions={
-                selection.mode === "existing" && input.allowSkillEditing ? (
+                selection.mode === "existing" ? (
                   <RevisionHistory
                     kind="skill"
                     name={selection.name}
                     mutating={input.mutating}
                     onLoadRevisions={input.onLoadRevisions}
-                    onRevert={(revision) =>
-                      runMutation(() =>
-                        input
-                          .onRevertAsset({
-                            kind: "skill",
-                            name: selection.name,
-                            revision,
-                            baseVersion: version
-                          })
-                          .then(() => setResetToken((token) => token + 1))
-                      )
+                    onRevert={
+                      input.allowSkillEditing
+                        ? (revision) =>
+                            runMutation(() =>
+                              input
+                                .onRevertAsset({
+                                  kind: "skill",
+                                  name: selection.name,
+                                  revision,
+                                  baseVersion: version
+                                })
+                                .then(() => setResetToken((token) => token + 1))
+                            )
+                        : undefined
                     }
                   />
                 ) : null

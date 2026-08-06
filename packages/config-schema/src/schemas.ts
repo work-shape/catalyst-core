@@ -10,13 +10,19 @@ import type {
   ModelBindingConfig,
   ModelProviderConfig,
   SkillConfig,
+  SkillResourceConfig,
+  SkillResourceMediaType,
   UsageBudgetConfig,
   UsageCostConfig,
   UsageRateCardConfig,
   UsageSafeguardsConfig,
   WebAccessConfig
 } from "@vivd-catalyst/core";
-import { AGENT_EDITABLE_FIELDS, REASONING_EFFORTS } from "@vivd-catalyst/core";
+import {
+  AGENT_EDITABLE_FIELDS,
+  REASONING_EFFORTS,
+  SKILL_RESOURCE_MEDIA_TYPES
+} from "@vivd-catalyst/core";
 import { localizationConfigSchema, localizedStringSchema } from "./localization";
 
 const DEFAULT_EXECUTION_WORKSPACE_MEMORY_BYTES = 4 * 1024 * 1024 * 1024;
@@ -147,16 +153,99 @@ export const skillNameSchema = z
       "Skill name must start with a letter and contain only letters, numbers, dots, underscores, or hyphens"
   });
 
-export const skillConfigSchema = z.object({
+export const skillResourcePathSchema = z
+  .string()
+  .min(1)
+  .superRefine((path, context) => {
+    const segments = path.split("/");
+    if (
+      path.startsWith("/") ||
+      path.includes("\\") ||
+      path.includes("\0") ||
+      segments.some((segment) => segment === "" || segment === "." || segment === "..")
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Skill resource path must be a normalized relative path"
+      });
+    }
+    if (path.toLowerCase() === "skill.md" || path.toLowerCase().endsWith("/skill.md")) {
+      context.addIssue({
+        code: "custom",
+        message: "SKILL.md is the skill root and cannot also be a resource"
+      });
+    }
+  });
+
+export function skillResourceMediaTypeForPath(path: string): SkillResourceMediaType | undefined {
+  const extension = path.slice(path.lastIndexOf(".")).toLowerCase();
+  switch (extension) {
+    case ".md":
+      return "text/markdown";
+    case ".txt":
+      return "text/plain";
+    case ".json":
+      return "application/json";
+    case ".yaml":
+    case ".yml":
+      return "application/yaml";
+    default:
+      return undefined;
+  }
+}
+
+export const skillResourceConfigSchema = z
+  .object({
+    path: skillResourcePathSchema,
+    mediaType: z.enum(SKILL_RESOURCE_MEDIA_TYPES),
+    content: z.string().refine((content) => !content.includes("\0"), {
+      message: "Skill resources must contain text, not binary data"
+    })
+  })
+  .superRefine((resource, context) => {
+    const expectedMediaType = skillResourceMediaTypeForPath(resource.path);
+    if (!expectedMediaType) {
+      context.addIssue({
+        code: "custom",
+        path: ["path"],
+        message: "Unsupported skill resource extension"
+      });
+    } else if (resource.mediaType !== expectedMediaType) {
+      context.addIssue({
+        code: "custom",
+        path: ["mediaType"],
+        message: `Skill resource '${resource.path}' must use media type '${expectedMediaType}'`
+      });
+    }
+  });
+
+const skillConfigObjectSchema = z.object({
   name: skillNameSchema,
   title: z.string().min(1),
   description: z.string().min(1),
-  content: z.string().min(1)
+  content: z.string().min(1),
+  resources: z.array(skillResourceConfigSchema).optional()
 });
 
-export const skillFileFrontmatterSchema = skillConfigSchema
+export const skillConfigSchema = skillConfigObjectSchema.superRefine((skill, context) => {
+  const seen = new Set<string>();
+  for (const [index, resource] of (skill.resources ?? []).entries()) {
+    const pathKey = resource.path.toLowerCase();
+    if (seen.has(pathKey)) {
+      context.addIssue({
+        code: "custom",
+        path: ["resources", index, "path"],
+        message: `Duplicate skill resource path: ${resource.path}`
+      });
+    }
+    seen.add(pathKey);
+  }
+});
+
+export const skillFileFrontmatterSchema = skillConfigObjectSchema
   .omit({
-    content: true
+    content: true,
+    resources: true
   })
   .extend({
     name: skillNameSchema.optional()
@@ -712,6 +801,8 @@ export type {
   ModelBindingConfig,
   ModelProviderConfig,
   SkillConfig,
+  SkillResourceConfig,
+  SkillResourceMediaType,
   UsageBudgetConfig,
   AgentRuntimeConfig,
   ModelContextConfig,

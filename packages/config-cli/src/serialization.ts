@@ -50,8 +50,22 @@ export function parseSkillFile(contents: string, skillFile = "SKILL.md"): SkillC
   return skillConfigSchema.parse(parseSkillMarkdown(contents, skillFile, skillFile));
 }
 
-export function serializeSkillMarkdown(input: unknown, provenance?: AssetProvenance): string {
+export function canonicalizeSkillConfig(input: unknown): SkillConfig {
   const skill = skillConfigSchema.parse(input);
+  const resources = skill.resources
+    ? [...skill.resources].sort((left, right) => left.path.localeCompare(right.path))
+    : undefined;
+  return {
+    name: skill.name,
+    title: skill.title,
+    description: skill.description,
+    content: skill.content,
+    ...(resources?.length ? { resources } : {})
+  };
+}
+
+export function serializeSkillMarkdown(input: unknown, provenance?: AssetProvenance): string {
+  const skill = canonicalizeSkillConfig(input);
   const frontmatter = yaml.dump(
     {
       name: skill.name,
@@ -62,6 +76,16 @@ export function serializeSkillMarkdown(input: unknown, provenance?: AssetProvena
   );
   const comments = provenance ? provenanceComments(provenance) : "";
   return `---\n${comments}${frontmatter}---\n\n${skill.content.trim()}\n`;
+}
+
+export function serializeSkillPackageForDisplay(input: unknown): string {
+  const skill = canonicalizeSkillConfig(input);
+  const root = serializeSkillMarkdown(skill).trimEnd();
+  const resources = (skill.resources ?? []).map(
+    (resource) =>
+      `===== ${resource.path} (${resource.mediaType}) =====\n\n${resource.content.trimEnd()}`
+  );
+  return [root, ...resources].join("\n\n");
 }
 
 function provenanceComments(provenance: AssetProvenance): string {

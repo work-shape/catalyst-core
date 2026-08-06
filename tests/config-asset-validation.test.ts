@@ -4,9 +4,19 @@ import { validateConfigAssetBundle } from "@vivd-catalyst/config-schema";
 
 describe("config asset bundle validation", () => {
   it("parses a valid agent and skill bundle", () => {
+    const researchSkill = {
+      ...skill(),
+      resources: [
+        {
+          path: "references/sources.md",
+          mediaType: "text/markdown",
+          content: "# Sources"
+        }
+      ]
+    };
     const result = validateConfigAssetBundle({
       agents: [agent({ skillNames: ["research"], toolNames: ["search", "read_skill"] })],
-      skills: [skill()],
+      skills: [researchSkill],
       defaultAgentName: "assistant",
       refs: refs()
     });
@@ -20,7 +30,40 @@ describe("config asset bundle validation", () => {
         initialPrompts: []
       }
     ]);
-    expect(result.skills).toEqual([skill()]);
+    expect(result.skills).toEqual([researchSkill]);
+  });
+
+  it.each([
+    {
+      label: "traversal",
+      resources: [{ path: "../secret.md", mediaType: "text/markdown", content: "no" }],
+      issue: /normalized relative path/u
+    },
+    {
+      label: "absolute paths",
+      resources: [{ path: "/secret.md", mediaType: "text/markdown", content: "no" }],
+      issue: /normalized relative path/u
+    },
+    {
+      label: "duplicate paths",
+      resources: [
+        { path: "references/a.md", mediaType: "text/markdown", content: "one" },
+        { path: "references/a.md", mediaType: "text/markdown", content: "two" }
+      ],
+      issue: /Duplicate skill resource path/u
+    },
+    {
+      label: "unsupported media types",
+      resources: [{ path: "references/a.html", mediaType: "text/html", content: "no" }],
+      issue: /Invalid option/u
+    }
+  ])("rejects skill resource $label", ({ resources, issue }) => {
+    const error = validationError({
+      agents: [],
+      skills: [{ ...skill(), resources }],
+      refs: refs()
+    });
+    expect(issueMessages(error)).toEqual(expect.arrayContaining([expect.stringMatching(issue)]));
   });
 
   it("aggregates zod issues with per-asset context", () => {

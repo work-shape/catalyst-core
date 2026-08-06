@@ -32,6 +32,8 @@ import {
   parseAgentYaml,
   parseManifest,
   parseSkillFile,
+  readManifest,
+  readWorkingCopy,
   readStateFile,
   resolveInstance,
   runCli,
@@ -165,6 +167,81 @@ describe("config CLI diff", () => {
 });
 
 describe("config CLI command flows", () => {
+  it("round-trips complete skill packages and rejects unsupported local resources", async () => {
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    const skillDirectory = resolve(directory, "skills", "review");
+    await mkdir(resolve(skillDirectory, "references"), { recursive: true });
+    await writeFile(
+      resolve(skillDirectory, "SKILL.md"),
+      serializeSkillMarkdown(skillConfig("review", "Review")),
+      "utf8"
+    );
+    await writeFile(resolve(skillDirectory, "references", "checks.md"), "# Checks\n", "utf8");
+    await writeFile(
+      resolve(skillDirectory, "references", "schema.json"),
+      '{"status":"ok"}\n',
+      "utf8"
+    );
+
+    const local = await readWorkingCopy(directory, await readManifest(directory));
+    expect(local.skills).toEqual([
+      {
+        ...skillConfig("review", "Review"),
+        resources: [
+          {
+            path: "references/checks.md",
+            mediaType: "text/markdown",
+            content: "# Checks\n"
+          },
+          {
+            path: "references/schema.json",
+            mediaType: "application/json",
+            content: '{"status":"ok"}\n'
+          }
+        ]
+      }
+    ]);
+    expect(canonicalBundleFiles(local).get("skills/review/references/checks.md")).toBe(
+      "# Checks\n"
+    );
+
+    await writeStateFile(resolve(directory, STATE_FILENAME), {
+      instances: { local: { lastPulledVersion: 0 } }
+    });
+    const pushed: unknown[] = [];
+    expect(
+      await runConfigCommand("push", {
+        cwd: directory,
+        env: { CATALYST_API_KEY: "cat_package" },
+        fetchImpl: configApiFetch({ version: 0, agents: [], skills: [] }, pushed, 1)
+      })
+    ).toBe(0);
+    expect(pushed.at(-1)).toMatchObject({ skills: local.skills });
+
+    await writeFile(resolve(skillDirectory, "references", "stale.md"), "stale", "utf8");
+    expect(
+      await runConfigCommand("pull", {
+        cwd: directory,
+        env: { CATALYST_API_KEY: "cat_package" },
+        fetchImpl: configApiFetch({ version: 2, agents: [], skills: local.skills })
+      })
+    ).toBe(0);
+    await expect(
+      readFile(resolve(skillDirectory, "references", "stale.md"), "utf8")
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await readFile(resolve(skillDirectory, "references", "checks.md"), "utf8")).toBe(
+      "# Checks\n"
+    );
+
+    await writeFile(resolve(skillDirectory, "references", "binary.pdf"), "%PDF", "utf8");
+    await expect(readWorkingCopy(directory, await readManifest(directory))).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        expect.objectContaining({ message: expect.stringContaining("Unsupported skill resource") })
+      ])
+    });
+  });
+
   it("prefers API-key exchange, then pulls, pushes, and reports a stale-version conflict", async () => {
     const fixture = await createFixture();
     await fixture.store.applyConfigAssetMutations({

@@ -90,6 +90,22 @@ export interface SkillConfig {
   title: string;
   description: string;
   content: string;
+  resources?: SkillResourceConfig[];
+}
+
+export const SKILL_RESOURCE_MEDIA_TYPES = [
+  "text/markdown",
+  "text/plain",
+  "application/json",
+  "application/yaml"
+] as const;
+
+export type SkillResourceMediaType = (typeof SKILL_RESOURCE_MEDIA_TYPES)[number];
+
+export interface SkillResourceConfig {
+  path: string;
+  mediaType: SkillResourceMediaType;
+  content: string;
 }
 
 export type { LocalizationConfig, LocalizedStringConfig };
