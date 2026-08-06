@@ -69,6 +69,7 @@ export function useResourcesPanelState({
   return {
     client,
     error: Boolean(query.error),
+    hasResources: resources.length > 0,
     loading: query.isLoading,
     open,
     resources,

@@ -189,7 +189,7 @@ describe("Resources panel model", () => {
     ]);
   });
 
-  it("resolves defaults without overriding explicit preferences", () => {
+  it("opens only populated panels while respecting explicit preferences", () => {
     expect(
       resolveResourcesPanelOpen({
         preference: undefined,
@@ -199,11 +199,18 @@ describe("Resources panel model", () => {
     ).toBe(true);
     expect(
       resolveResourcesPanelOpen({
-        preference: undefined,
+        preference: "open",
         desktop: true,
         hasResources: false
       })
     ).toBe(false);
+    expect(
+      resolveResourcesPanelOpen({
+        preference: "open",
+        desktop: true,
+        hasResources: true
+      })
+    ).toBe(true);
     expect(
       resolveResourcesPanelOpen({
         preference: "closed",

@@ -40,10 +40,13 @@ export function resolveResourcesPanelOpen(input: {
   desktop: boolean;
   hasResources: boolean;
 }): boolean {
+  if (!input.hasResources) {
+    return false;
+  }
   if (input.preference) {
     return input.preference === "open";
   }
-  return input.desktop && input.hasResources;
+  return input.desktop;
 }
 
 export function formatStructuredDataValue(

@@ -200,7 +200,7 @@ function ChatWorkspaceContent({
                 >
                   <AssistantRuntimePanel chat={chat} />
                   {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
-                  {resourcesAvailable && resourcesConversationId ? (
+                  {resourcesAvailable && resourcesConversationId && resourcesPanel.hasResources ? (
                     resourcesVisible ? (
                       <ResourcesPanel
                         client={resourcesPanel.client}
