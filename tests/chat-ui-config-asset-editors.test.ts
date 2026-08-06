@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom
 import { describe, expect, it } from "vitest";
 import {
   AgentEditor,
-  configRevisionAction
+  configRevisionAction,
+  SkillEditor
 } from "../packages/chat-ui/src/control-plane/config-asset-editors";
 import { agentConfigToForm } from "../packages/chat-ui/src/control-plane/config-assets-model";
 
@@ -77,6 +78,38 @@ describe("config asset editors", () => {
     expect(markup).toContain('value="azure-eu"');
     expect(markup).toContain("disabled");
     expect(markup).not.toContain("reasoning");
+  });
+
+  it("keeps a read-only skill package navigable without mutation controls", () => {
+    const markup = renderToStaticMarkup(
+      createElement(SkillEditor, {
+        initialForm: {
+          name: "document_review",
+          title: "Document review",
+          description: "Review submitted documents.",
+          content: "# Review",
+          resources: [
+            {
+              path: "references/checks.md",
+              mediaType: "text/markdown",
+              content: "# Checks"
+            }
+          ]
+        },
+        isNew: false,
+        editable: false,
+        mutating: false,
+        onSave: async () => ({ ok: true }),
+        revisions: null
+      })
+    );
+
+    expect(markup).toContain("SKILL.md");
+    expect(markup).toContain("references/checks.md");
+    expect(markup).toContain("border-l");
+    expect(markup).toContain("readOnly");
+    expect(markup).not.toContain("Add reference");
+    expect(markup).not.toContain("Save changes");
   });
 
   it("labels only the latest revision as current when restoration is unavailable", () => {

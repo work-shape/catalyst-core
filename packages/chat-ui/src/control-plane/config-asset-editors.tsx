@@ -407,9 +407,8 @@ export function SkillEditor({
       <EditorSection
         title={t("configInstructions")}
         description={t("configSkillInstructionsDescription")}
-      >
-        <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(10rem,14rem)_minmax(0,1fr)]">
-          <div className="grid min-w-0 content-start gap-2">
+        sidebar={
+          <div className="grid min-w-0 content-start gap-2 pt-2">
             <button
               type="button"
               className={cn(
@@ -421,80 +420,84 @@ export function SkillEditor({
               <FileText size={14} aria-hidden="true" />
               <span className="truncate">SKILL.md</span>
             </button>
-            {form.resources.map((resource, index) => (
-              <button
-                key={`${index}:${resource.path}`}
-                type="button"
-                className={cn(
-                  "flex min-w-0 items-center gap-2 rounded-md border px-3 py-2 text-left text-sm",
-                  selectedResource === index && "border-primary bg-muted"
-                )}
-                onClick={() => setSelectedResource(index)}
-              >
-                <FileText size={14} aria-hidden="true" />
-                <span className="truncate">{resource.path}</span>
-              </button>
-            ))}
-            {editable ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const used = new Set(form.resources.map((resource) => resource.path));
-                  let number = 1;
-                  let path = "references/reference.md";
-                  while (used.has(path)) {
-                    number += 1;
-                    path = `references/reference-${number}.md`;
-                  }
-                  const index = form.resources.length;
-                  update({
-                    resources: [
-                      ...form.resources,
-                      { path, mediaType: "text/markdown", content: "" }
-                    ]
-                  });
-                  setSelectedResource(index);
-                }}
-              >
-                <Plus size={14} aria-hidden="true" />
-                {t("configAddResource")}
-              </Button>
+            {form.resources.length || editable ? (
+              <div className="ml-3 grid min-w-0 gap-2 border-l pl-3">
+                {form.resources.map((resource, index) => (
+                  <button
+                    key={`${index}:${resource.path}`}
+                    type="button"
+                    className={cn(
+                      "flex min-w-0 items-center gap-2 rounded-md border px-3 py-2 text-left text-sm",
+                      selectedResource === index && "border-primary bg-muted"
+                    )}
+                    onClick={() => setSelectedResource(index)}
+                  >
+                    <FileText size={14} aria-hidden="true" />
+                    <span className="truncate">{resource.path}</span>
+                  </button>
+                ))}
+                {editable ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const used = new Set(form.resources.map((resource) => resource.path));
+                      let number = 1;
+                      let path = "references/reference.md";
+                      while (used.has(path)) {
+                        number += 1;
+                        path = `references/reference-${number}.md`;
+                      }
+                      const index = form.resources.length;
+                      update({
+                        resources: [
+                          ...form.resources,
+                          { path, mediaType: "text/markdown", content: "" }
+                        ]
+                      });
+                      setSelectedResource(index);
+                    }}
+                  >
+                    <Plus size={14} aria-hidden="true" />
+                    {t("configAddResource")}
+                  </Button>
+                ) : null}
+              </div>
             ) : null}
           </div>
-
-          {selectedResource === "root" || !form.resources[selectedResource] ? (
-            <Field label={t("configContent")} hint={t("configSkillContentHint")}>
-              <EditorTextarea
-                label={t("configMarkdown")}
-                value={form.content}
-                required
-                disabled={!editable}
-                className="min-h-96"
-                onChange={(event) => update({ content: event.target.value })}
-              />
-            </Field>
-          ) : (
-            <SkillResourceEditor
-              resource={form.resources[selectedResource]}
-              editable={editable}
-              onChange={(resource) =>
-                update({
-                  resources: form.resources.map((candidate, index) =>
-                    index === selectedResource ? resource : candidate
-                  )
-                })
-              }
-              onRemove={() => {
-                update({
-                  resources: form.resources.filter((_, index) => index !== selectedResource)
-                });
-                setSelectedResource("root");
-              }}
+        }
+      >
+        {selectedResource === "root" || !form.resources[selectedResource] ? (
+          <Field label={t("configContent")} hint={t("configSkillContentHint")}>
+            <EditorTextarea
+              label={t("configMarkdown")}
+              value={form.content}
+              required
+              readOnly={!editable}
+              className="min-h-96"
+              onChange={(event) => update({ content: event.target.value })}
             />
-          )}
-        </div>
+          </Field>
+        ) : (
+          <SkillResourceEditor
+            resource={form.resources[selectedResource]}
+            editable={editable}
+            onChange={(resource) =>
+              update({
+                resources: form.resources.map((candidate, index) =>
+                  index === selectedResource ? resource : candidate
+                )
+              })
+            }
+            onRemove={() => {
+              update({
+                resources: form.resources.filter((_, index) => index !== selectedResource)
+              });
+              setSelectedResource("root");
+            }}
+          />
+        )}
       </EditorSection>
 
       {error ? <p className="px-5 py-3 text-sm text-destructive">{error}</p> : null}
@@ -538,27 +541,40 @@ function SkillResourceEditor({
   const { t } = useTranslation();
   return (
     <div className="grid min-w-0 content-start gap-4">
-      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem_auto]">
+      <div
+        className={cn(
+          "grid gap-4",
+          editable ? "sm:grid-cols-[minmax(0,1fr)_12rem_auto]" : "sm:grid-cols-[minmax(0,1fr)_auto]"
+        )}
+      >
         <Field label={t("configResourcePath")}>
-          <Input
-            value={resource.path}
-            required
-            disabled={!editable}
-            onChange={(event) => onChange({ ...resource, path: event.target.value })}
-          />
+          {editable ? (
+            <Input
+              value={resource.path}
+              required
+              onChange={(event) => onChange({ ...resource, path: event.target.value })}
+            />
+          ) : (
+            <code className="block min-w-0 truncate py-2 text-sm" title={resource.path}>
+              {resource.path}
+            </code>
+          )}
         </Field>
         <Field label={t("configResourceType")}>
-          <Select
-            value={resource.mediaType}
-            disabled={!editable}
-            onChange={(event) => onChange({ ...resource, mediaType: event.target.value })}
-          >
-            {SKILL_RESOURCE_MEDIA_TYPES.map((mediaType) => (
-              <option key={mediaType} value={mediaType}>
-                {mediaType}
-              </option>
-            ))}
-          </Select>
+          {editable ? (
+            <Select
+              value={resource.mediaType}
+              onChange={(event) => onChange({ ...resource, mediaType: event.target.value })}
+            >
+              {SKILL_RESOURCE_MEDIA_TYPES.map((mediaType) => (
+                <option key={mediaType} value={mediaType}>
+                  {mediaType}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <span className="block py-2 text-sm">{resource.mediaType}</span>
+          )}
         </Field>
         {editable ? (
           <Button
@@ -576,7 +592,7 @@ function SkillResourceEditor({
       <EditorTextarea
         label={t("configResourceContent")}
         value={resource.content}
-        disabled={!editable}
+        readOnly={!editable}
         className="min-h-96"
         onChange={(event) => onChange({ ...resource, content: event.target.value })}
       />
@@ -753,17 +769,25 @@ function EditorHeader({
 function EditorSection({
   title,
   description,
+  sidebar,
   children
 }: {
   title: string;
   description: string;
+  sidebar?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <section className="grid min-w-0 gap-4 border-b px-5 py-6 xl:grid-cols-[11rem_minmax(0,1fr)] xl:gap-6">
+    <section
+      className={cn(
+        "grid min-w-0 gap-4 border-b px-5 py-6 xl:grid-cols-[11rem_minmax(0,1fr)] xl:gap-6",
+        sidebar && "xl:grid-cols-[16rem_minmax(0,1fr)]"
+      )}
+    >
       <div className="grid content-start gap-1">
         <h3 className="text-sm font-semibold">{title}</h3>
         <p className="text-xs leading-5 text-muted-foreground">{description}</p>
+        {sidebar}
       </div>
       <div className="grid min-w-0 gap-5">{children}</div>
     </section>
