@@ -213,9 +213,10 @@ export const agentConfigSchema = z.object({
 export const usageBudgetConfigSchema = z
   .object({
     dailySpendLimit: z.number().positive().optional(),
-    monthlySpendLimit: z.number().positive().optional()
+    monthlySpendLimit: z.number().positive().optional(),
+    costSafetyMultiplier: z.number().min(1).default(1)
   })
-  .default({});
+  .default({ costSafetyMultiplier: 1 });
 
 export const usageSafeguardsConfigSchema = z
   .object({
@@ -629,7 +630,7 @@ export const clientInstanceConfigSchema = z.object({
       costs: usageCostConfigSchema
     })
     .default({
-      budget: {},
+      budget: { costSafetyMultiplier: 1 },
       safeguards: {},
       costs: {}
     }),

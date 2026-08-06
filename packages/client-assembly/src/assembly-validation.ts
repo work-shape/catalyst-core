@@ -34,11 +34,26 @@ export function findConfigAssetAgentValidationIssues(
       return [];
     }
     try {
-      return findModelToolMaterializationIssues({
+      const selection = getModelSelectionForAgent(config, agent);
+      const materializationIssues = findModelToolMaterializationIssues({
         agent,
-        modelProvider: getModelSelectionForAgent(config, agent).provider,
+        modelProvider: selection.provider,
         webAccess: config.webAccess
       });
+      if (materializationIssues.length > 0) {
+        return materializationIssues;
+      }
+
+      const hasCustomerRate = config.usage.costs.customer?.webSearch.some(
+        (rate) =>
+          rate.providerId === selection.provider.id &&
+          (rate.model === undefined || rate.model === selection.model)
+      );
+      return hasCustomerRate
+        ? []
+        : [
+            `Agent '${agent.name}' references web_search but customer pricing is missing for ${selection.provider.id}/${selection.model}`
+          ];
     } catch {
       // Unknown model references are rejected by config-asset validation first.
       return [];

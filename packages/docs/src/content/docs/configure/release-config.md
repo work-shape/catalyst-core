@@ -71,6 +71,7 @@ usage:
   budget:
     dailySpendLimit: 50
     monthlySpendLimit: 400
+    costSafetyMultiplier: 1.3
   safeguards:
     modelCallsPerDay: 1000
     tokensPerDay: 2500000
@@ -88,6 +89,8 @@ usage:
 ```
 
 Daily and monthly spend limits use `usage.costs.customer.currency`. Set it to the invoice currency and express every configured model and web-search price in that same currency.
+
+`costSafetyMultiplier` is a private enforcement buffer. Budget checks multiply the persisted customer billable total by this value, while stored usage records and customer-facing billable costs remain unchanged. It defaults to `1`.
 
 The customer rate card uses exact `providerId` and `model` rows and prices uncached and cached input separately. Its `version` must change when any rate changes. Usage Governance persists the applied rates and billable amount with every new usage event, so changing the active card affects only future usage.
 

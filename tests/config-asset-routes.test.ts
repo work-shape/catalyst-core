@@ -529,7 +529,7 @@ describe("config asset admin routes", () => {
     expect(priced.statusCode).toBe(200);
   });
 
-  it("rejects web_search when materialization is disabled and accepts a capable provider", async () => {
+  it("rejects web_search when materialization or customer pricing is missing", async () => {
     const disabledFixture = await createFixture({ webSearch: "disabled" });
     const disabledToken = await mintToken(disabledFixture.server);
     const disabled = await request(disabledFixture.server, disabledToken, {
@@ -568,7 +568,34 @@ describe("config asset admin routes", () => {
         })
       }
     });
-    expect(enabled.statusCode).toBe(200);
+    expect(enabled.statusCode).toBe(422);
+    expect(enabled.json()).toMatchObject({
+      error: {
+        code: "VALIDATION_FAILED",
+        details: {
+          issues: [
+            {
+              message:
+                "Agent 'assistant' references web_search but customer pricing is missing for openai/gpt-test"
+            }
+          ]
+        }
+      }
+    });
+
+    const pricedFixture = await createFixture({ webSearch: "enabled", webSearchPricing: true });
+    const pricedToken = await mintToken(pricedFixture.server);
+    const priced = await request(pricedFixture.server, pricedToken, {
+      method: "PUT",
+      url: "/api/admin/config/assets/agent/assistant",
+      payload: {
+        config: agentConfig("Search", {
+          modelProviderId: "openai",
+          toolNames: ["web_search"]
+        })
+      }
+    });
+    expect(priced.statusCode).toBe(200);
   });
 
   it.each([
@@ -628,6 +655,7 @@ async function createFixture(
     agentConfiguration?: Record<string, unknown>;
     pricingCoverage?: boolean;
     webSearch?: "disabled" | "enabled";
+    webSearchPricing?: boolean;
     serviceAccess?: boolean;
   } = {}
 ) {
@@ -713,7 +741,22 @@ async function createFixture(
           webAccess: {
             enabled: input.webSearch === "enabled",
             search: { enabled: input.webSearch === "enabled" }
-          }
+          },
+          ...(input.webSearchPricing
+            ? {
+                usage: {
+                  costs: {
+                    customer: {
+                      id: "test-customer",
+                      version: "1",
+                      currency: "EUR",
+                      models: [],
+                      webSearch: [{ providerId: "openai", pricePerCall: 0.01 }]
+                    }
+                  }
+                }
+              }
+            : {})
         }
       : {}),
     tools: [
