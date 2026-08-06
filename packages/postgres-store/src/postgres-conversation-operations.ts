@@ -214,7 +214,7 @@ export async function listRecentMessages(
         eq(messages.conversationId, input.conversationId)
       )
     )
-    .orderBy(desc(messages.createdAt))
+    .orderBy(desc(messages.createdAt), desc(messages.storageOrdinal))
     .limit(input.limit);
   return rows.map(mapMessage).reverse();
 }
