@@ -108,6 +108,7 @@ describe("config asset editors", () => {
     expect(markup).toContain("references/checks.md");
     expect(markup).toContain("border-l");
     expect(markup).toContain("readOnly");
+    expect(markup).toContain("flex-1 resize-y");
     expect(markup).not.toContain("Add reference");
     expect(markup).not.toContain("Save changes");
   });

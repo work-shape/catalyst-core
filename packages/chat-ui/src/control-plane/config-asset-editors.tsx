@@ -800,14 +800,14 @@ function EditorTextarea({
   ...props
 }: React.ComponentProps<typeof Textarea> & { label: string }) {
   return (
-    <div className="overflow-hidden rounded-lg border bg-muted/15 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
+    <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border bg-muted/15 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
       <div className="flex h-9 items-center border-b bg-muted/20 px-3 text-xs font-medium text-muted-foreground">
         {label}
       </div>
       <Textarea
         {...props}
         className={cn(
-          "resize-y rounded-none border-0 bg-transparent p-4 font-mono text-[13px] leading-6 shadow-none focus-visible:border-0 focus-visible:ring-0 dark:[color-scheme:dark]",
+          "min-h-0 flex-1 resize-y rounded-none border-0 bg-transparent p-4 font-mono text-[13px] leading-6 shadow-none focus-visible:border-0 focus-visible:ring-0 dark:[color-scheme:dark]",
           className
         )}
       />
