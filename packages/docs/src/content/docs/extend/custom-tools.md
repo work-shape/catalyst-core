@@ -105,7 +105,27 @@ Use `output` for data the model should see in later agent-visible history.
 
 Use `privateOutput` for data the platform may store, hydrate, or render but must never send to the model.
 
-Use `display` for typed UI outputs.
+Use `display` for transient typed UI outputs. For a keyed domain result that should also appear
+as a current, revisioned conversation resource, return `structuredResult` instead:
+
+```ts
+return toolSuccess(
+  { key: "review", message: "Review replaced." },
+  {
+    structuredResult: {
+      key: "review",
+      kind: "support.review",
+      schemaVersion: 1,
+      title: "Support review",
+      data: review,
+    },
+  },
+);
+```
+
+The platform derives the typed side-panel display from this single payload and exposes its current
+revision through `structured_result.read`. The resource is projected from immutable tool history;
+domain tools remain responsible for validating and replacing their complete result.
 
 Built-in HTML displays provide Tailwind CSS, Lucide icons, external HTTPS chart scripts, and
 runtime theme variables inside the rendered iframe. For ordinary model-authored HTML, use

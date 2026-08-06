@@ -1,4 +1,4 @@
-import { Check, ClipboardCopy, FileSearch } from "lucide-react";
+import { Check, ClipboardCopy, FileSearch, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import type { StructuredDataResourceResponse } from "@vivd-catalyst/api-client";
 import { useTranslation } from "./i18n";
@@ -101,6 +101,35 @@ function StructuredDataFieldRow({
         <div className="flex min-w-0 items-start gap-1.5">
           <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{value}</span>
           <span className="flex shrink-0 items-center gap-0.5">
+            {field.attention ? (
+              <Tooltip delayDuration={100}>
+                <TooltipTrigger asChild>
+                  <span
+                    role="img"
+                    tabIndex={0}
+                    aria-label={
+                      field.attention.message ??
+                      t(
+                        field.attention.reason === "conflicting"
+                          ? "resourcesAttentionConflicting"
+                          : "resourcesAttentionUncertain"
+                      )
+                    }
+                    className="inline-flex size-6 items-center justify-center rounded-md text-warning outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 [&_svg]:size-3.5"
+                  >
+                    <TriangleAlert aria-hidden="true" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {field.attention.message ??
+                    t(
+                      field.attention.reason === "conflicting"
+                        ? "resourcesAttentionConflicting"
+                        : "resourcesAttentionUncertain"
+                    )}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
             {field.sources?.map((source) => {
               const sourceLabel = source.page
                 ? t("resourcesSourceWithPage", {

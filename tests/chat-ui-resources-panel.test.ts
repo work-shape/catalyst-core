@@ -101,7 +101,12 @@ const structuredData: StructuredDataResourceResponse = {
       key: "identity",
       label: "Identität",
       fields: [
-        { key: "name", label: "Name", value: "Ada Lovelace" },
+        {
+          key: "name",
+          label: "Name",
+          value: "Ada Lovelace",
+          attention: { reason: "uncertain", message: "Scan is unclear" }
+        },
         { key: "revenue", label: "Umsatz", value: 1234.5 },
         { key: "active", label: "Aktiv", value: true }
       ]
@@ -180,7 +185,7 @@ describe("Resources panel model", () => {
 
     expect(grouped.map((section) => section.type)).toEqual([
       "structured_data",
-      "analysis",
+      "structured_result",
       "source_file"
     ]);
     expect(grouped[1]?.resources.map((resource) => resource.resourceId)).toEqual([
@@ -286,6 +291,7 @@ describe("Resources panel rendering", () => {
     expect(markup).toContain("Umsatz");
     expect(markup).toContain("1.234,5");
     expect(markup).toContain("Ja");
+    expect(markup).toContain("Scan is unclear");
   });
 
   it("renders structured-data sources as buttons when document opening is available", () => {

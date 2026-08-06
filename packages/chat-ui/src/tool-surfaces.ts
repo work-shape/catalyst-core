@@ -1,4 +1,8 @@
-import { isToolDisplayPayload, type ToolDisplayPayload } from "./domain-ui-widgets";
+import {
+  isToolDisplayPayload,
+  readToolDisplayPayloadFromToolResult,
+  type ToolDisplayPayload
+} from "./domain-ui-widgets";
 
 export const WORKSPACE_PROMOTED_SURFACES_DATA_TYPE = "data-workspace-promoted-surfaces";
 
@@ -53,8 +57,7 @@ export function readToolSurfaceRefs(
     toolName?: string;
   } = {}
 ): ToolSurfaceRef[] {
-  const container = isRecord(result) ? result : undefined;
-  const display = isToolDisplayPayload(container?.display) ? container.display : undefined;
+  const display = readToolDisplayPayloadFromToolResult(result);
   if (!display) {
     return [];
   }

@@ -2,6 +2,7 @@ import type { AgentRunId, ConversationId, ToolCallId } from "./ids";
 import type { JsonObject, JsonValue } from "./json";
 import type { ISODateString } from "./time";
 import type { AuditSafeSummary, ManagedArtifactRef, ToolDisplayOutput } from "./files";
+import type { StructuredResultPublication } from "./structured-result";
 import type { RuntimeCallContext } from "./identity";
 
 export type ToolPermissionMode = "allow" | "deny" | "approval_required";
@@ -87,6 +88,7 @@ export interface ToolHandlerSuccessResult<TOutput = unknown> {
   output?: TOutput;
   privateOutput?: unknown;
   display?: ToolDisplayOutput;
+  structuredResult?: StructuredResultPublication;
   artifacts?: ManagedArtifactRef[];
   auditSummary?: AuditSafeSummary;
 }

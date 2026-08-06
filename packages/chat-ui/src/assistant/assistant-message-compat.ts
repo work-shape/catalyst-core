@@ -118,6 +118,7 @@ export function readCompatiblePersistedToolResult(
         status: "success",
         output: result.output,
         display: result.display,
+        structuredResult: result.structuredResult,
         artifacts: result.artifacts,
         projectionNotice: runtime.projectionNotice
       }

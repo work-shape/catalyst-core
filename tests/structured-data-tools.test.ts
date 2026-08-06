@@ -4,6 +4,7 @@ import {
   asClientInstanceId,
   asMessageId,
   asToolCallId,
+  createToolResultMetadata,
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
@@ -148,6 +149,81 @@ describe("structured_data.publish", () => {
         ]
       }
     ]);
+  });
+
+  it("publishes, updates, clears, and reads optional field attention", async () => {
+    const harness = await createHarness();
+    const attachment = await createSentAttachment(
+      harness.store,
+      harness.clientInstanceId,
+      harness.conversation.id
+    );
+    await harness.run({
+      resourceKey: "claim_data",
+      title: "Claim data",
+      operation: "replace",
+      sections: [
+        {
+          key: "person",
+          label: "Person",
+          fields: [
+            {
+              key: "name",
+              label: "Name",
+              value: "Ada",
+              sources: [{ fileId: attachment.fileId, page: 2 }],
+              attention: { reason: "uncertain", message: "Scan is hard to read" }
+            }
+          ]
+        }
+      ]
+    });
+
+    await expect(
+      harness.run({ resourceKey: "claim_data" }, "structured_data.read")
+    ).resolves.toMatchObject({
+      status: "success",
+      output: {
+        resourceKey: "claim_data",
+        revision: 1,
+        sections: [
+          {
+            fields: [
+              {
+                value: "Ada",
+                attention: { reason: "uncertain", message: "Scan is hard to read" },
+                sources: [{ fileId: attachment.fileId, filename: "source.pdf", page: 2 }]
+              }
+            ]
+          }
+        ]
+      }
+    });
+
+    await harness.run({
+      resourceKey: "claim_data",
+      operation: "patch",
+      set: [
+        {
+          sectionKey: "person",
+          fieldKey: "name",
+          value: "Ada",
+          attention: { reason: "conflicting" }
+        }
+      ]
+    });
+    expect((await harness.resources())[0]?.state.sections[0]?.fields[0]?.attention).toEqual({
+      reason: "conflicting"
+    });
+
+    await harness.run({
+      resourceKey: "claim_data",
+      operation: "patch",
+      set: [{ sectionKey: "person", fieldKey: "name", value: "Ada", attention: null }]
+    });
+    expect((await harness.resources())[0]?.state.sections[0]?.fields[0]).not.toHaveProperty(
+      "attention"
+    );
   });
 
   it("rejects patches for unknown resources and sections", async () => {
@@ -317,6 +393,51 @@ describe("structured_data.publish", () => {
   });
 });
 
+describe("structured_result.read", () => {
+  it("reads the current revision and includes legacy analysis publications", async () => {
+    const harness = await createHarness();
+    await appendResult(harness, {
+      status: "success",
+      output: { legacy: true },
+      display: {
+        kind: "example.review",
+        version: 1,
+        title: "Review",
+        resource: { category: "analysis", key: "review-key" },
+        data: { status: "old" }
+      }
+    });
+    await appendResult(harness, {
+      status: "success",
+      output: { revision: 2 },
+      structuredResult: {
+        key: "review-key",
+        kind: "example.review",
+        schemaVersion: 2,
+        title: "Current review",
+        data: { status: "current" }
+      }
+    });
+
+    await expect(
+      harness.run({ resourceKey: "review-key" }, "structured_result.read")
+    ).resolves.toMatchObject({
+      status: "success",
+      output: {
+        key: "review-key",
+        kind: "example.review",
+        schemaVersion: 2,
+        title: "Current review",
+        revision: 2,
+        data: { status: "current" }
+      }
+    });
+    await expect(
+      harness.run({ resourceKey: "missing" }, "structured_result.read")
+    ).resolves.toMatchObject({ status: "failed", error: { code: "validation_failed" } });
+  });
+});
+
 async function createHarness() {
   const clientInstanceId = asClientInstanceId(`structured_data_${globalThis.crypto.randomUUID()}`);
   const store = new InMemoryPlatformStore();
@@ -330,7 +451,7 @@ async function createHarness() {
   const tools = createStructuredDataToolDefinitions({ store });
   const execution = new InProcessToolExecution({
     registry: new ToolRegistry({ tools }),
-    getAgentToolNames: () => ["structured_data.publish"]
+    getAgentToolNames: () => tools.map((tool) => tool.name)
   });
   const context: ToolExecutionContext = {
     clientInstanceId,
@@ -354,9 +475,9 @@ async function createHarness() {
         clientInstanceId,
         conversationId: conversation.id
       }),
-    async run(input: unknown) {
+    async run(input: unknown, toolName = "structured_data.publish") {
       const request = {
-        toolName: "structured_data.publish",
+        toolName,
         toolCallId: asToolCallId(`call_${globalThis.crypto.randomUUID()}`),
         agentRunId: asAgentRunId(`run_${globalThis.crypto.randomUUID()}`),
         conversationId: conversation.id,
@@ -370,6 +491,28 @@ async function createHarness() {
       return execution.execute({ ...request, authorization }, context);
     }
   };
+}
+
+function appendResult(
+  harness: Awaited<ReturnType<typeof createHarness>>,
+  result: Parameters<typeof createToolResultMetadata>[0]["result"]
+) {
+  return harness.store.appendMessage({
+    clientInstanceId: harness.clientInstanceId,
+    conversationId: harness.conversation.id,
+    role: "tool",
+    text: JSON.stringify({ status: result.status }),
+    metadata: createToolResultMetadata({
+      runId: "run_structured_result",
+      toolCall: {
+        toolCallId: "call_structured_result",
+        toolName: "test.result",
+        input: {}
+      },
+      result,
+      modelOutput: { text: JSON.stringify({ status: result.status }) }
+    })
+  });
 }
 
 async function createSentAttachment(

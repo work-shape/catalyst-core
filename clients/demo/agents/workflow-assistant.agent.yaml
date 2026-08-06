@@ -17,6 +17,8 @@ toolNames:
   - read_skill
   - show_view
   - structured_data.publish
+  - structured_data.read
+  - structured_result.read
   - demo.workflow_summary
   - demo.weather_forecast
 skillNames:

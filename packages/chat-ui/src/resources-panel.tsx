@@ -171,7 +171,7 @@ export function ResourcesPanel({
       showEntry(artifactEntry(resource, resource.preview.artifactId));
       return;
     }
-    if (resource.resourceType === "analysis") {
+    if (resource.resourceType === "analysis" || resource.resourceType === "structured_result") {
       const display = resource.preview.display;
       const fallback = (isToolDisplayPayload(display)
         ? renderBuiltInDisplay(display)
@@ -415,7 +415,7 @@ function sectionLabel(
   if (type === "structured_data") {
     return t("resourcesCustomerData");
   }
-  if (type === "analysis") {
+  if (type === "structured_result") {
     return t("resourcesAnalyses");
   }
   if (type === "generated_file") {

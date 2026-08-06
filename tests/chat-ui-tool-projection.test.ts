@@ -3,17 +3,130 @@ import type { Message } from "@vivd-catalyst/api-client";
 import {
   createAssistantFinalMetadata,
   createAssistantToolCallsMetadata,
-  createToolResultMetadata
+  createToolResultMetadata,
+  type ToolExecutionResult
 } from "@vivd-catalyst/core";
 import { toUiMessages } from "../packages/chat-ui/src/assistant/assistant-ui-adapter";
+import { readToolDisplayPayloadFromToolResult } from "../packages/chat-ui/src/domain-ui-widgets";
 import {
   readToolActionLabel,
   readToolDetailSections,
   readToolDisplayProjection
 } from "../packages/chat-ui/src/tool-call";
 import { readToolArtifactRefs } from "../packages/chat-ui/src/tool-artifacts";
+import { readToolSurfaceRefs } from "../packages/chat-ui/src/tool-surfaces";
 
 describe("chat UI message history projection", () => {
+  it("uses one structured result payload for live and persisted display surfaces", () => {
+    const structuredResult = {
+      key: "review",
+      kind: "demo.review",
+      schemaVersion: 2,
+      title: "Current review",
+      data: { status: "complete" }
+    };
+    const result: ToolExecutionResult = {
+      status: "success",
+      output: { saved: true },
+      structuredResult
+    };
+
+    expect(readToolDisplayPayloadFromToolResult(result)).toEqual({
+      kind: "demo.review",
+      version: 2,
+      mode: "side_panel",
+      title: "Current review",
+      data: { status: "complete" }
+    });
+    expect(
+      readToolSurfaceRefs(result, { toolCallId: "call_review", toolName: "demo.review" })
+    ).toEqual([
+      {
+        surfaceId: "tool:call_review",
+        toolCallId: "call_review",
+        toolName: "demo.review",
+        title: "Current review",
+        display: {
+          kind: "demo.review",
+          version: 2,
+          mode: "side_panel",
+          title: "Current review",
+          data: { status: "complete" }
+        }
+      }
+    ]);
+
+    const messages: Message[] = [
+      {
+        id: "msg_tool_call_review",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "assistant",
+        text: "",
+        createdAt: "2026-06-15T00:00:01.000Z",
+        metadata: createAssistantToolCallsMetadata({
+          runId: "run_review",
+          toolCalls: [
+            {
+              toolCallId: "call_review",
+              toolName: "demo.review",
+              input: {}
+            }
+          ]
+        })
+      },
+      {
+        id: "msg_tool_result_review",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "tool",
+        text: '{"saved":true}',
+        createdAt: "2026-06-15T00:00:02.000Z",
+        metadata: createToolResultMetadata({
+          runId: "run_review",
+          toolCall: {
+            toolCallId: "call_review",
+            toolName: "demo.review",
+            input: {}
+          },
+          result,
+          modelOutput: { text: '{"saved":true}' }
+        })
+      },
+      {
+        id: "msg_final_review",
+        conversationId: "conv_test",
+        clientInstanceId: "client_test",
+        role: "assistant",
+        text: "Review saved.",
+        createdAt: "2026-06-15T00:00:03.000Z",
+        metadata: createAssistantFinalMetadata({ runId: "run_review" })
+      }
+    ];
+
+    expect(toUiMessages(messages)[0]?.parts).toContainEqual({
+      type: "data-workspace-promoted-surfaces",
+      data: {
+        kind: "workspace.promoted_surfaces",
+        surfaces: [
+          {
+            surfaceId: "tool:call_review",
+            toolCallId: "call_review",
+            toolName: "demo.review",
+            title: "Current review",
+            display: {
+              kind: "demo.review",
+              version: 2,
+              mode: "side_panel",
+              title: "Current review",
+              data: { status: "complete" }
+            }
+          }
+        ]
+      }
+    });
+  });
+
   it("replays persisted tool displays as completed dynamic tool parts", () => {
     const messages: Message[] = [
       {

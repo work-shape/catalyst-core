@@ -208,6 +208,17 @@ export const conversationResourceListItemSchema = z.discriminatedUnion("resource
     })
   }),
   conversationResourceBaseSchema.extend({
+    resourceType: z.literal("structured_result"),
+    key: z.string(),
+    kind: z.string(),
+    schemaVersion: z.number().int().positive(),
+    revision: z.number().int().positive(),
+    preview: z.object({
+      kind: z.literal("typed_display"),
+      display: z.record(z.string(), z.unknown())
+    })
+  }),
+  conversationResourceBaseSchema.extend({
     resourceType: z.literal("structured_data"),
     preview: z.object({
       kind: z.literal("structured_data"),
@@ -238,6 +249,12 @@ export const structuredDataResourceResponseSchema = z.object({
           key: z.string(),
           label: z.string(),
           value: structuredDataValueSchema,
+          attention: z
+            .object({
+              reason: z.enum(["uncertain", "conflicting"]),
+              message: z.string().optional()
+            })
+            .optional(),
           sources: z
             .array(
               z.object({

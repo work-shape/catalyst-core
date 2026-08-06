@@ -13,11 +13,17 @@ export type StructuredDataFieldSource = {
   page?: number;
 };
 
+export type StructuredDataFieldAttention = {
+  reason: "uncertain" | "conflicting";
+  message?: string;
+};
+
 export type StructuredDataField = {
   key: string;
   label: string;
   value: string | number | boolean | null;
   sources?: StructuredDataFieldSource[];
+  attention?: StructuredDataFieldAttention;
 };
 
 export type StructuredDataSection = {

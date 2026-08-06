@@ -827,6 +827,23 @@ export type ListConversationResourcesResponses = {
             subtitle?: string;
             createdAt: string;
             updatedAt: string;
+            resourceType: 'structured_result';
+            key: string;
+            kind: string;
+            schemaVersion: number;
+            revision: number;
+            preview: {
+                kind: 'typed_display';
+                display: {
+                    [key: string]: unknown;
+                };
+            };
+        } | {
+            resourceId: string;
+            title: string;
+            subtitle?: string;
+            createdAt: string;
+            updatedAt: string;
             resourceType: 'structured_data';
             preview: {
                 kind: 'structured_data';
@@ -866,6 +883,10 @@ export type GetStructuredDataResourceResponses = {
                 key: string;
                 label: string;
                 value: string | number | boolean | null;
+                attention?: {
+                    reason: 'uncertain' | 'conflicting';
+                    message?: string;
+                };
                 sources?: Array<{
                     attachmentId: string;
                     page?: number;

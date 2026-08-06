@@ -16,3 +16,4 @@ export * from "./config";
 export * from "./config-assets";
 export * from "./web-source";
 export * from "./structured-data";
+export * from "./structured-result";

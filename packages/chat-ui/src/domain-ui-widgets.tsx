@@ -252,7 +252,29 @@ export function readToolDisplayPayloadFromToolResult(
   if (!isRecord(result)) {
     return undefined;
   }
-  return isToolDisplayPayload(result.display) ? result.display : undefined;
+  if (isToolDisplayPayload(result.display)) {
+    return result.display;
+  }
+  const structuredResult = isRecord(result.structuredResult) ? result.structuredResult : undefined;
+  if (
+    typeof structuredResult?.kind !== "string" ||
+    structuredResult.kind.length === 0 ||
+    typeof structuredResult.schemaVersion !== "number" ||
+    !Number.isInteger(structuredResult.schemaVersion) ||
+    structuredResult.schemaVersion < 1 ||
+    typeof structuredResult.title !== "string" ||
+    structuredResult.title.length === 0 ||
+    !isRecord(structuredResult.data)
+  ) {
+    return undefined;
+  }
+  return {
+    kind: structuredResult.kind,
+    version: structuredResult.schemaVersion,
+    mode: "side_panel",
+    title: structuredResult.title,
+    data: structuredResult.data
+  };
 }
 
 export function isToolDisplayPayload(value: unknown): value is ToolDisplayPayload {

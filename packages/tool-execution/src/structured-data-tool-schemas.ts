@@ -20,13 +20,20 @@ const sourcesSchema = z
   .array(sourceSchema)
   .max(8)
   .describe("Optional source references using the file ids visible to the model.");
+const attentionSchema = z
+  .object({
+    reason: z.enum(["uncertain", "conflicting"]),
+    message: z.string().min(1).optional()
+  })
+  .strict();
 
 const replaceFieldSchema = z
   .object({
     key: keySchema.describe("Stable field key to reuse in later patches."),
     label: labelSchema,
     value: valueSchema,
-    sources: sourcesSchema.optional()
+    sources: sourcesSchema.optional(),
+    attention: attentionSchema.optional()
   })
   .strict();
 
@@ -74,7 +81,8 @@ const patchSetSchema = z
     fieldKey: keySchema.describe("Existing or new field key."),
     value: valueSchema,
     label: labelSchema.optional(),
-    sources: sourcesSchema.optional()
+    sources: sourcesSchema.optional(),
+    attention: attentionSchema.nullable().optional()
   })
   .strict();
 
@@ -110,4 +118,52 @@ export const structuredDataPublishOutputSchema = z.object({
   revision: z.number().int().positive(),
   operation: z.enum(["replace", "patch"]),
   message: z.string()
+});
+
+export const structuredDataReadInputSchema = z
+  .object({
+    resourceKey: keySchema.describe("Stable key of the current structured-data resource.")
+  })
+  .strict();
+
+const modelSourceSchema = z.object({
+  fileId: z.string(),
+  filename: z.string(),
+  page: z.number().int().positive().optional()
+});
+
+export const structuredDataReadOutputSchema = z.object({
+  resourceKey: z.string(),
+  title: z.string(),
+  revision: z.number().int().positive(),
+  sections: z.array(
+    z.object({
+      key: z.string(),
+      label: z.string(),
+      fields: z.array(
+        z.object({
+          key: z.string(),
+          label: z.string(),
+          value: valueSchema,
+          sources: z.array(modelSourceSchema).optional(),
+          attention: attentionSchema.optional()
+        })
+      )
+    })
+  )
+});
+
+export const structuredResultReadInputSchema = z
+  .object({
+    resourceKey: z.string().min(1).describe("Stable key of the current structured result.")
+  })
+  .strict();
+
+export const structuredResultReadOutputSchema = z.object({
+  key: z.string(),
+  kind: z.string(),
+  schemaVersion: z.number().int().positive(),
+  title: z.string(),
+  revision: z.number().int().positive(),
+  data: z.record(z.string(), z.json())
 });

@@ -5,9 +5,8 @@ import type {
 } from "@vivd-catalyst/api-contract";
 import {
   ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_REF,
+  currentStructuredResults,
   isImageFileFormat,
-  isJsonObject,
-  readToolResultMetadata,
   resolveFilePreviewCapability,
   type ChatMessage,
   type ClientInstanceId,
@@ -25,7 +24,10 @@ type GeneratedFileResource = Extract<
   ConversationResourceListItem,
   { resourceType: "generated_file" }
 >;
-type AnalysisResource = Extract<ConversationResourceListItem, { resourceType: "analysis" }>;
+type StructuredResultResource = Extract<
+  ConversationResourceListItem,
+  { resourceType: "structured_result" }
+>;
 type StructuredDataResource = Extract<
   ConversationResourceListItem,
   { resourceType: "structured_data" }
@@ -46,7 +48,7 @@ export async function listConversationResources(input: {
   const resources: ConversationResourceListItem[] = [
     ...attachments.map((attachment) => sourceFileResource(attachment, artifactsById)),
     ...generatedFileResources(artifacts),
-    ...analysisResources(messages),
+    ...structuredResultResources(messages),
     ...structuredDataResources(structuredData)
   ];
   resources.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
@@ -146,37 +148,26 @@ function generatedFileResources(
   });
 }
 
-function analysisResources(messages: readonly ChatMessage[]): AnalysisResource[] {
-  const newestByKey = new Map<string, AnalysisResource>();
-  for (const message of messages) {
-    if (message.role !== "tool") {
-      continue;
+function structuredResultResources(messages: readonly ChatMessage[]): StructuredResultResource[] {
+  return currentStructuredResults(messages).map((resource) => ({
+    resourceType: "structured_result",
+    resourceId: `structured_result:${resource.key}`,
+    key: resource.key,
+    kind: resource.kind,
+    schemaVersion: resource.schemaVersion,
+    revision: resource.revision,
+    title: resource.title,
+    createdAt: resource.createdAt,
+    updatedAt: resource.updatedAt,
+    preview: {
+      kind: "typed_display",
+      display: {
+        kind: resource.kind,
+        version: resource.schemaVersion,
+        mode: "side_panel",
+        title: resource.title,
+        data: resource.data
+      }
     }
-    const result = readToolResultMetadata(message.metadata)?.result;
-    if (!isJsonObject(result) || result.status !== "success" || !isJsonObject(result.display)) {
-      continue;
-    }
-    const display = result.display;
-    const resource = isJsonObject(display.resource) ? display.resource : undefined;
-    if (
-      resource?.category !== "analysis" ||
-      typeof resource.key !== "string" ||
-      resource.key.length === 0
-    ) {
-      continue;
-    }
-    const existing = newestByKey.get(resource.key);
-    if (existing && existing.updatedAt > message.createdAt) {
-      continue;
-    }
-    newestByKey.set(resource.key, {
-      resourceType: "analysis",
-      resourceId: `analysis:${resource.key}`,
-      title: typeof display.title === "string" ? display.title : resource.key,
-      createdAt: message.createdAt,
-      updatedAt: message.createdAt,
-      preview: { kind: "typed_display", display }
-    });
-  }
-  return [...newestByKey.values()];
+  }));
 }

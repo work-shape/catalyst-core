@@ -3124,6 +3124,80 @@
                               },
                               "resourceType": {
                                 "type": "string",
+                                "const": "structured_result"
+                              },
+                              "key": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string"
+                              },
+                              "schemaVersion": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "revision": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "preview": {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "typed_display"
+                                  },
+                                  "display": {
+                                    "type": "object",
+                                    "propertyNames": {
+                                      "type": "string"
+                                    },
+                                    "additionalProperties": {}
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "display"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "resourceId",
+                              "title",
+                              "createdAt",
+                              "updatedAt",
+                              "resourceType",
+                              "key",
+                              "kind",
+                              "schemaVersion",
+                              "revision",
+                              "preview"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "resourceId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "subtitle": {
+                                "type": "string"
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              },
+                              "updatedAt": {
+                                "type": "string"
+                              },
+                              "resourceType": {
+                                "type": "string",
                                 "const": "structured_data"
                               },
                               "preview": {
@@ -3255,6 +3329,25 @@
                                       "type": "null"
                                     }
                                   ]
+                                },
+                                "attention": {
+                                  "type": "object",
+                                  "properties": {
+                                    "reason": {
+                                      "type": "string",
+                                      "enum": [
+                                        "uncertain",
+                                        "conflicting"
+                                      ]
+                                    },
+                                    "message": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "reason"
+                                  ],
+                                  "additionalProperties": false
                                 },
                                 "sources": {
                                   "type": "array",

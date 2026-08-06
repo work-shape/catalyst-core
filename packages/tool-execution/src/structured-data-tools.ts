@@ -1,5 +1,6 @@
 import {
   STRUCTURED_DATA_RESOURCE_DISPLAY_KIND,
+  currentStructuredResults,
   type PlatformStore,
   type StructuredDataFieldSource,
   type StructuredDataState
@@ -12,7 +13,11 @@ import {
 } from "@vivd-catalyst/tool-sdk";
 import {
   structuredDataPublishInputSchema,
-  structuredDataPublishOutputSchema
+  structuredDataPublishOutputSchema,
+  structuredDataReadInputSchema,
+  structuredDataReadOutputSchema,
+  structuredResultReadInputSchema,
+  structuredResultReadOutputSchema
 } from "./structured-data-tool-schemas";
 
 type StructuredDataToolStore = Pick<
@@ -20,6 +25,7 @@ type StructuredDataToolStore = Pick<
   | "publishStructuredDataResource"
   | "getStructuredDataResource"
   | "listStructuredDataResources"
+  | "listMessages"
   | "listSentConversationAttachments"
 >;
 
@@ -130,12 +136,20 @@ export function createStructuredDataToolDefinitions(input: {
               if (set.sources !== undefined) {
                 field.sources = mapSources(set.sources, sourceAttachmentIds);
               }
+              if (set.attention !== undefined) {
+                if (set.attention === null) {
+                  delete field.attention;
+                } else {
+                  field.attention = set.attention;
+                }
+              }
             } else {
               section.fields.push({
                 key: set.fieldKey,
                 label: set.label ?? set.fieldKey,
                 value: set.value,
-                sources: mapSources(set.sources, sourceAttachmentIds)
+                sources: mapSources(set.sources, sourceAttachmentIds),
+                ...(set.attention ? { attention: set.attention } : {})
               });
             }
           }
@@ -206,6 +220,108 @@ export function createStructuredDataToolDefinitions(input: {
             }
           }
         );
+      }
+    }),
+    defineTool({
+      name: "structured_data.read",
+      description:
+        "Read the current structured-data resource for this conversation when the existing facts are useful. Sources are returned as model-visible file ids, filenames, and pages.",
+      inputSchema: structuredDataReadInputSchema,
+      outputSchema: structuredDataReadOutputSchema,
+      async execute(toolInput, context) {
+        const conversationId = context.toolRequest?.conversationId;
+        if (!conversationId) {
+          return toolFailed(
+            "handler_failed",
+            "structured_data.read requires an active tool request"
+          );
+        }
+        const current = (
+          await input.store.listStructuredDataResources({
+            clientInstanceId: context.clientInstanceId,
+            conversationId
+          })
+        ).find((resource) => resource.resourceKey === toolInput.resourceKey);
+        if (!current) {
+          return toolFailed(
+            "validation_failed",
+            `Structured data resource '${toolInput.resourceKey}' does not exist`
+          );
+        }
+        const attachments = await input.store.listSentConversationAttachments({
+          clientInstanceId: context.clientInstanceId,
+          conversationId
+        });
+        const attachmentsById = new Map(
+          attachments.map((attachment) => [attachment.id, attachment])
+        );
+        return toolSuccess({
+          resourceKey: current.resourceKey,
+          title: current.title,
+          revision: current.revision,
+          sections: current.state.sections.map((section) => ({
+            key: section.key,
+            label: section.label,
+            fields: section.fields.map((field) => ({
+              key: field.key,
+              label: field.label,
+              value: field.value,
+              ...(field.attention ? { attention: field.attention } : {}),
+              ...(field.sources
+                ? {
+                    sources: field.sources.flatMap((source) => {
+                      const attachment = attachmentsById.get(source.attachmentId);
+                      return attachment
+                        ? [
+                            {
+                              fileId: attachment.fileId,
+                              filename: attachment.filename,
+                              ...(source.page !== undefined ? { page: source.page } : {})
+                            }
+                          ]
+                        : [];
+                    })
+                  }
+                : {})
+            }))
+          }))
+        });
+      }
+    }),
+    defineTool({
+      name: "structured_result.read",
+      description:
+        "Read the current revision of a keyed structured result for this conversation. Use it when continuing or revising an existing domain result.",
+      inputSchema: structuredResultReadInputSchema,
+      outputSchema: structuredResultReadOutputSchema,
+      async execute(toolInput, context) {
+        const conversationId = context.toolRequest?.conversationId;
+        if (!conversationId) {
+          return toolFailed(
+            "handler_failed",
+            "structured_result.read requires an active tool request"
+          );
+        }
+        const current = currentStructuredResults(
+          await input.store.listMessages({
+            clientInstanceId: context.clientInstanceId,
+            conversationId
+          })
+        ).find((resource) => resource.key === toolInput.resourceKey);
+        if (!current) {
+          return toolFailed(
+            "validation_failed",
+            `Structured result '${toolInput.resourceKey}' does not exist`
+          );
+        }
+        return toolSuccess({
+          key: current.key,
+          kind: current.kind,
+          schemaVersion: current.schemaVersion,
+          title: current.title,
+          revision: current.revision,
+          data: current.data
+        });
       }
     })
   ];

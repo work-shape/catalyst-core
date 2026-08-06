@@ -127,6 +127,7 @@ describe("conversation resource routes", () => {
                   key: "name",
                   label: "Name",
                   value: "Ada",
+                  attention: { reason: "uncertain", message: "Scan is unclear" },
                   sources: [{ attachmentId: attachment.id, page: 2 }]
                 }
               ]
@@ -183,6 +184,7 @@ describe("conversation resource routes", () => {
                 key: "name",
                 label: "Name",
                 value: "Ada",
+                attention: { reason: "uncertain", message: "Scan is unclear" },
                 sources: [
                   {
                     attachmentId: attachment.id,
@@ -207,7 +209,7 @@ describe("conversation resource routes", () => {
     }
   });
 
-  it("publishes only the newest successful marked display per analysis key", async () => {
+  it("normalizes legacy analysis displays into the current structured result", async () => {
     const fixture = await createFixture();
     try {
       const conversation = await createConversation(
@@ -215,10 +217,15 @@ describe("conversation resource routes", () => {
         fixture.clientInstanceId,
         `${fixture.clientInstanceId}:owner`
       );
-      await appendToolResult(fixture.store, fixture.clientInstanceId, conversation.id, {
-        status: "success",
-        display: analysisDisplay("report", "Old report", "old")
-      });
+      const first = await appendToolResult(
+        fixture.store,
+        fixture.clientInstanceId,
+        conversation.id,
+        {
+          status: "success",
+          display: analysisDisplay("report", "Old report", "old")
+        }
+      );
       await tick();
       await appendToolResult(fixture.store, fixture.clientInstanceId, conversation.id, {
         status: "success",
@@ -262,15 +269,140 @@ describe("conversation resource routes", () => {
       expect(response.json()).toEqual({
         resources: [
           {
-            resourceType: "analysis",
-            resourceId: "analysis:report",
+            resourceType: "structured_result",
+            resourceId: "structured_result:report",
+            key: "report",
+            kind: "chart",
+            schemaVersion: 1,
+            revision: 2,
             title: "Current report",
-            createdAt: newest.createdAt,
+            createdAt: first.createdAt,
             updatedAt: newest.createdAt,
             preview: {
               kind: "typed_display",
-              display: analysisDisplay("report", "Current report", "new")
+              display: {
+                kind: "chart",
+                version: 1,
+                mode: "side_panel",
+                title: "Current report",
+                data: { value: "new" }
+              }
             }
+          }
+        ]
+      });
+    } finally {
+      await fixture.server.close();
+    }
+  });
+
+  it("projects native structured result revisions with a synthesized display", async () => {
+    const fixture = await createFixture();
+    try {
+      const conversation = await createConversation(
+        fixture.store,
+        fixture.clientInstanceId,
+        `${fixture.clientInstanceId}:owner`
+      );
+      const first = await appendToolResult(
+        fixture.store,
+        fixture.clientInstanceId,
+        conversation.id,
+        {
+          status: "success",
+          structuredResult: {
+            key: "credit-report",
+            kind: "demo.credit_report",
+            schemaVersion: 2,
+            title: "Old report",
+            data: { value: "old" }
+          }
+        }
+      );
+      await tick();
+      const newest = await appendToolResult(
+        fixture.store,
+        fixture.clientInstanceId,
+        conversation.id,
+        {
+          status: "success",
+          structuredResult: {
+            key: "credit-report",
+            kind: "demo.credit_report",
+            schemaVersion: 2,
+            title: "Current report",
+            data: { value: "new" }
+          }
+        }
+      );
+
+      const response = await request(
+        fixture.server,
+        fixture.ownerToken,
+        `/api/conversations/${conversation.id}/resources`
+      );
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        resources: [
+          {
+            resourceType: "structured_result",
+            resourceId: "structured_result:credit-report",
+            key: "credit-report",
+            kind: "demo.credit_report",
+            schemaVersion: 2,
+            revision: 2,
+            title: "Current report",
+            createdAt: first.createdAt,
+            updatedAt: newest.createdAt,
+            preview: {
+              kind: "typed_display",
+              display: {
+                kind: "demo.credit_report",
+                version: 2,
+                mode: "side_panel",
+                title: "Current report",
+                data: { value: "new" }
+              }
+            }
+          }
+        ]
+      });
+    } finally {
+      await fixture.server.close();
+    }
+  });
+
+  it("keeps legacy analysis resources whose display omitted data", async () => {
+    const fixture = await createFixture();
+    try {
+      const conversation = await createConversation(
+        fixture.store,
+        fixture.clientInstanceId,
+        `${fixture.clientInstanceId}:owner`
+      );
+      await appendToolResult(fixture.store, fixture.clientInstanceId, conversation.id, {
+        status: "success",
+        display: {
+          kind: "demo.legacy",
+          version: 1,
+          mode: "side_panel",
+          title: "Legacy report",
+          resource: { category: "analysis", key: "legacy-report" }
+        }
+      });
+
+      const response = await request(
+        fixture.server,
+        fixture.ownerToken,
+        `/api/conversations/${conversation.id}/resources`
+      );
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        resources: [
+          {
+            resourceType: "structured_result",
+            key: "legacy-report",
+            preview: { kind: "typed_display", display: { data: {} } }
           }
         ]
       });

@@ -7,7 +7,7 @@ import type { ResourcesPanelPreference } from "./workspace-utils";
 
 export const RESOURCE_SECTION_ORDER = [
   "structured_data",
-  "analysis",
+  "structured_result",
   "generated_file",
   "source_file"
 ] as const;
@@ -30,7 +30,11 @@ export function groupConversationResources(
   resources: readonly ConversationResourceListItem[]
 ): ResourceSection[] {
   return RESOURCE_SECTION_ORDER.flatMap((type) => {
-    const grouped = resources.filter((resource) => resource.resourceType === type);
+    const grouped = resources.filter((resource) =>
+      type === "structured_result"
+        ? resource.resourceType === "structured_result" || resource.resourceType === "analysis"
+        : resource.resourceType === type
+    );
     return grouped.length > 0 ? [{ type, resources: grouped }] : [];
   });
 }

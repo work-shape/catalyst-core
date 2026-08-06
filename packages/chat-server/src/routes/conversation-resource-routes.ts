@@ -58,6 +58,7 @@ export function registerConversationResourceRoutes(
           key: field.key,
           label: field.label,
           value: field.value,
+          ...(field.attention ? { attention: field.attention } : {}),
           ...(field.sources
             ? {
                 sources: field.sources.flatMap((source) => {

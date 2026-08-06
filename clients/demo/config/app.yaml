@@ -137,6 +137,10 @@ tools:
         - "*"
   - name: structured_data.publish
     enabled: true
+  - name: structured_data.read
+    enabled: true
+  - name: structured_result.read
+    enabled: true
   - name: demo.workflow_summary
     enabled: true
     config:

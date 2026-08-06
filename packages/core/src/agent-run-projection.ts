@@ -233,6 +233,7 @@ function toToolOutput(event: Extract<AgentRuntimeEvent, { type: "tool_call_compl
         status: "success",
         output: event.result.output,
         display: event.result.display,
+        structuredResult: event.result.structuredResult,
         artifacts: event.result.artifacts,
         projectionNotice: event.projectionNotice
       }
