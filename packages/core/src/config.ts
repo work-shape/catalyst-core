@@ -97,6 +97,7 @@ export type { LocalizationConfig, LocalizedStringConfig };
 export interface UsageBudgetConfig {
   dailySpendLimit?: number;
   monthlySpendLimit?: number;
+  costSafetyMultiplier?: number;
 }
 
 export interface UsageSafeguardsConfig {

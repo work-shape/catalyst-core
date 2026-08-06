@@ -282,7 +282,12 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
         clientInstanceId,
         start: todayStart
       });
-      assertSpendBudget(todayEvents, this.budget.dailySpendLimit, "Daily");
+      assertSpendBudget(
+        todayEvents,
+        this.budget.dailySpendLimit,
+        this.budget.costSafetyMultiplier ?? 1,
+        "Daily"
+      );
     }
 
     if (this.safeguards.tokensPerMonth || this.budget.monthlySpendLimit) {
@@ -302,7 +307,12 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
           clientInstanceId,
           start: currentMonthStart
         });
-        assertSpendBudget(currentMonthEvents, this.budget.monthlySpendLimit, "Monthly");
+        assertSpendBudget(
+          currentMonthEvents,
+          this.budget.monthlySpendLimit,
+          this.budget.costSafetyMultiplier ?? 1,
+          "Monthly"
+        );
       }
     }
   }
@@ -706,6 +716,7 @@ function assertDailySafeguards(
 function assertSpendBudget(
   events: ModelUsageEvent[],
   limit: number,
+  costSafetyMultiplier: number,
   label: "Daily" | "Monthly"
 ): void {
   const incomplete = events.find((event) => event.customerBillableCost.status !== "settled");
@@ -723,7 +734,7 @@ function assertSpendBudget(
         : 0),
     0
   );
-  if (total >= toMicros(limit)) {
+  if (total * costSafetyMultiplier >= toMicros(limit)) {
     throw new AppError("FORBIDDEN", `${label} model spend budget has been reached`);
   }
 }
