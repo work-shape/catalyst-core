@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -35,6 +35,7 @@ import {
   readManifest,
   readWorkingCopy,
   readStateFile,
+  resolveSkillResourceTarget,
   resolveInstance,
   runCli,
   runConfigCommand,
@@ -140,6 +141,22 @@ skills:
       url: "https://catalyst.example.test"
     });
   });
+
+  it("keeps resolved skill resources inside their package", () => {
+    const skillDirectory = resolve("/tmp", "skills", "review");
+    expect(resolveSkillResourceTarget(skillDirectory, "references/checks.md")).toBe(
+      resolve(skillDirectory, "references/checks.md")
+    );
+    expect(() => resolveSkillResourceTarget(skillDirectory, "../outside.md")).toThrow(
+      "must stay within its package"
+    );
+    expect(() => resolveSkillResourceTarget(skillDirectory, "C:/outside.md")).toThrow(
+      "must stay within its package"
+    );
+    expect(() => resolveSkillResourceTarget(skillDirectory, "references/bad\u0001.md")).toThrow(
+      "must stay within its package"
+    );
+  });
 });
 
 describe("config CLI diff", () => {
@@ -240,6 +257,76 @@ describe("config CLI command flows", () => {
         expect.objectContaining({ message: expect.stringContaining("Unsupported skill resource") })
       ])
     });
+  });
+
+  it("preserves the existing package and cleans temporary files when a package write fails", async () => {
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    const skillDirectory = resolve(directory, "skills", "review");
+    await mkdir(skillDirectory, { recursive: true });
+    await writeFile(resolve(skillDirectory, "SKILL.md"), "existing package\n", "utf8");
+    const conflictingPackage = {
+      ...skillConfig("review", "Replacement"),
+      resources: [
+        { path: "conflict.md", mediaType: "text/markdown", content: "file" },
+        {
+          path: "conflict.md/nested.txt",
+          mediaType: "text/plain",
+          content: "nested"
+        }
+      ]
+    };
+    const stderr: string[] = [];
+
+    expect(
+      await runConfigCommand("pull", {
+        cwd: directory,
+        env: { CATALYST_API_KEY: "cat_package_failure" },
+        fetchImpl: configApiFetch({ version: 2, agents: [], skills: [conflictingPackage] }),
+        stderr: (text) => stderr.push(text)
+      })
+    ).toBe(1);
+    expect(stderr.join("")).toBeTruthy();
+    expect(await readFile(resolve(skillDirectory, "SKILL.md"), "utf8")).toBe("existing package\n");
+    expect((await readdir(resolve(directory, "skills"))).sort()).toEqual(["review"]);
+  });
+
+  it("reports resource-only skill changes as updates in the push plan", async () => {
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    const skillDirectory = resolve(directory, "skills", "review");
+    await mkdir(resolve(skillDirectory, "references"), { recursive: true });
+    await writeFile(
+      resolve(skillDirectory, "SKILL.md"),
+      serializeSkillMarkdown(skillConfig("review", "Same root")),
+      "utf8"
+    );
+    await writeFile(resolve(skillDirectory, "references", "checks.md"), "local\n", "utf8");
+    await writeStateFile(resolve(directory, STATE_FILENAME), {
+      instances: { local: { lastPulledVersion: 4 } }
+    });
+    const remoteSkill = {
+      ...skillConfig("review", "Same root"),
+      resources: [
+        {
+          path: "references/checks.md",
+          mediaType: "text/markdown",
+          content: "remote\n"
+        }
+      ]
+    };
+    const stdout: string[] = [];
+
+    expect(
+      await runConfigCommand("push", {
+        cwd: directory,
+        env: { CATALYST_API_KEY: "cat_resource_plan" },
+        fetchImpl: configApiFetch({ version: 4, agents: [], skills: [remoteSkill] }),
+        stdout: (text) => stdout.push(text)
+      })
+    ).toBe(0);
+    expect(stdout.join("")).toContain("Updated: 1");
+    expect(stdout.join("")).toContain("Unchanged: 0");
   });
 
   it("prefers API-key exchange, then pulls, pushes, and reports a stale-version conflict", async () => {

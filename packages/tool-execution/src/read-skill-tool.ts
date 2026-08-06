@@ -20,8 +20,9 @@ const skillResourcePathSchema = z
     const segments = path.split("/");
     if (
       path.startsWith("/") ||
+      /^[A-Za-z]:/u.test(path) ||
       path.includes("\\") ||
-      path.includes("\0") ||
+      /[\u0000-\u001f\u007f]/u.test(path) ||
       segments.some((segment) => segment === "" || segment === "." || segment === "..")
     ) {
       context.addIssue({

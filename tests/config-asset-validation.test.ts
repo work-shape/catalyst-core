@@ -45,6 +45,18 @@ describe("config asset bundle validation", () => {
       issue: /normalized relative path/u
     },
     {
+      label: "Windows drive paths",
+      resources: [{ path: "C:/outside.md", mediaType: "text/markdown", content: "no" }],
+      issue: /normalized relative path/u
+    },
+    {
+      label: "control characters",
+      resources: [
+        { path: "references/secret\u0001.md", mediaType: "text/markdown", content: "no" }
+      ],
+      issue: /normalized relative path/u
+    },
+    {
       label: "duplicate paths",
       resources: [
         { path: "references/a.md", mediaType: "text/markdown", content: "one" },

@@ -1,5 +1,5 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
+import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import {
   agentConfigSchema,
   skillConfigSchema,
@@ -9,6 +9,7 @@ import {
 import { ConfigApiError, createConfigApi } from "./api";
 import { createUnifiedDiff } from "./diff";
 import {
+  canonicalizeSkillConfig,
   serializeAgentYaml,
   serializeSkillMarkdown,
   serializeSkillPackageForDisplay
@@ -103,14 +104,7 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
     await writeFile(path, serializeAgentYaml(agent, provenance), "utf8");
   }
   for (const { skill, path } of skillTargets) {
-    await rm(dirname(path), { recursive: true, force: true });
-    await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, serializeSkillMarkdown(skill, provenance), "utf8");
-    for (const resource of skill.resources ?? []) {
-      const resourcePath = resolve(dirname(path), resource.path);
-      await mkdir(dirname(resourcePath), { recursive: true });
-      await writeFile(resourcePath, resource.content, "utf8");
-    }
+    await replaceSkillPackage(path, skill, provenance);
   }
   if (selectors.length === 0) {
     await removeStaleManifestAssets(workingDir, manifest, desiredPaths);
@@ -419,9 +413,99 @@ function assetEntries(bundle: WorkingCopyBundle): Array<{
       key: `skill:${skill.name}`,
       kind: "skill" as const,
       name: skill.name,
-      contents: serializeSkillMarkdown(skill)
+      contents: JSON.stringify(canonicalizeSkillConfig(skill))
     }))
   ];
+}
+
+async function replaceSkillPackage(
+  skillFilePath: string,
+  skill: SkillConfig,
+  provenance: { instance: string; version: number }
+): Promise<void> {
+  const targetDirectory = dirname(skillFilePath);
+  const parentDirectory = dirname(targetDirectory);
+  await mkdir(parentDirectory, { recursive: true });
+  const temporaryDirectory = await mkdtemp(
+    resolve(parentDirectory, `.${basename(targetDirectory)}.pull-`)
+  );
+  const backupDirectory = `${temporaryDirectory}.previous`;
+  let previousMoved = false;
+
+  try {
+    await writeSkillPackage(temporaryDirectory, skill, provenance);
+    try {
+      await rename(targetDirectory, backupDirectory);
+      previousMoved = true;
+    } catch (error) {
+      if (!isNodeError(error) || error.code !== "ENOENT") {
+        throw error;
+      }
+    }
+
+    try {
+      await rename(temporaryDirectory, targetDirectory);
+    } catch (error) {
+      if (previousMoved) {
+        try {
+          await rename(backupDirectory, targetDirectory);
+          previousMoved = false;
+        } catch (restoreError) {
+          throw new AggregateError(
+            [error, restoreError],
+            `Failed to install and restore skill package '${skill.name}'`
+          );
+        }
+      }
+      throw error;
+    }
+
+    if (previousMoved) {
+      await rm(backupDirectory, { recursive: true, force: true });
+      previousMoved = false;
+    }
+  } finally {
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+}
+
+async function writeSkillPackage(
+  directory: string,
+  skill: SkillConfig,
+  provenance: { instance: string; version: number }
+): Promise<void> {
+  await mkdir(directory, { recursive: true });
+  await writeFile(
+    resolve(directory, "SKILL.md"),
+    serializeSkillMarkdown(skill, provenance),
+    "utf8"
+  );
+  for (const resource of skill.resources ?? []) {
+    const resourcePath = resolveSkillResourceTarget(directory, resource.path);
+    await mkdir(dirname(resourcePath), { recursive: true });
+    await writeFile(resourcePath, resource.content, "utf8");
+  }
+}
+
+export function resolveSkillResourceTarget(skillDirectory: string, resourcePath: string): string {
+  if (/^[A-Za-z]:/u.test(resourcePath) || /[\u0000-\u001f\u007f]/u.test(resourcePath)) {
+    throw new Error(`Skill resource path must stay within its package: ${resourcePath}`);
+  }
+  const target = resolve(skillDirectory, resourcePath);
+  const relativeTarget = relative(skillDirectory, target);
+  if (
+    relativeTarget === "" ||
+    isAbsolute(relativeTarget) ||
+    relativeTarget === ".." ||
+    relativeTarget.startsWith(`..${sep}`)
+  ) {
+    throw new Error(`Skill resource path must stay within its package: ${resourcePath}`);
+  }
+  return target;
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
 }
 
 function createPushPlan(local: WorkingCopyBundle, remote: WorkingCopyBundle): PushPlan {

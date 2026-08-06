@@ -58,11 +58,23 @@ export function AgentEditor({
   const [error, setError] = useState<string | undefined>(undefined);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const canEdit = (field: string) => editableAgentFields.includes(field);
-  const canEditModel = canEdit("modelBindingId");
+  const canEditModel = canEdit("modelBindingId") || canEdit("modelProviderId");
   const canEditReasoningEffort = canEdit("reasoningEffort");
   const canEditMaxSteps = canEdit("maxSteps");
   const modelBindings =
     references?.modelBindings ?? references?.modelBindingIds.map((id) => ({ id, model: id })) ?? [];
+  const showModel = canEditModel || Boolean(form.modelBindingId || form.modelProviderId);
+  const showReasoningEffort = canEditReasoningEffort || Boolean(form.reasoningEffort);
+  const showMaxSteps = canEditMaxSteps || Boolean(form.maxSteps);
+  const configuredModelLabel = form.modelBindingId
+    ? modelBindingLabel(
+        modelBindings.find((binding) => binding.id === form.modelBindingId) ?? {
+          id: form.modelBindingId,
+          model: form.modelBindingId
+        },
+        modelBindings
+      )
+    : form.modelProviderId;
 
   const update = (patch: Partial<AgentFormState>) => setForm((value) => ({ ...value, ...patch }));
 
@@ -166,39 +178,44 @@ export function AgentEditor({
             onChange={(event) => update({ instructions: event.target.value })}
           />
         </Field>
-        {canEditModel || canEditReasoningEffort || canEditMaxSteps ? (
+        {showModel || showReasoningEffort || showMaxSteps ? (
           <div
             className={cn(
               "grid gap-5",
-              [canEditModel, canEditReasoningEffort, canEditMaxSteps].filter(Boolean).length > 1 &&
+              [showModel, showReasoningEffort, showMaxSteps].filter(Boolean).length > 1 &&
                 "sm:grid-cols-2"
             )}
           >
-            {canEditModel ? (
+            {showModel ? (
               <Field label={t("configModel")} hint={t("configModelHint")}>
-                <Select
-                  value={form.modelBindingId}
-                  onChange={(event) =>
-                    update({ modelBindingId: event.target.value, modelProviderId: "" })
-                  }
-                >
-                  <option value="">{t("configInstanceDefault")}</option>
-                  {modelBindings.length ? (
-                    <optgroup label={t("configConfiguredBindings")}>
-                      {modelBindings.map((binding) => (
-                        <option key={binding.id} value={binding.id}>
-                          {modelBindingLabel(binding, modelBindings)}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ) : null}
-                </Select>
+                {canEditModel ? (
+                  <Select
+                    value={form.modelBindingId}
+                    onChange={(event) =>
+                      update({ modelBindingId: event.target.value, modelProviderId: "" })
+                    }
+                  >
+                    <option value="">{t("configInstanceDefault")}</option>
+                    {modelBindings.length ? (
+                      <optgroup label={t("configConfiguredBindings")}>
+                        {modelBindings.map((binding) => (
+                          <option key={binding.id} value={binding.id}>
+                            {modelBindingLabel(binding, modelBindings)}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                  </Select>
+                ) : (
+                  <Input value={configuredModelLabel || t("configInstanceDefault")} disabled />
+                )}
               </Field>
             ) : null}
-            {canEditReasoningEffort ? (
+            {showReasoningEffort ? (
               <Field label={t("configReasoningEffort")} hint={t("configReasoningEffortHint")}>
                 <Select
                   value={form.reasoningEffort}
+                  disabled={!canEditReasoningEffort}
                   onChange={(event) => update({ reasoningEffort: event.target.value })}
                 >
                   <option value="">{t("configModelDefault")}</option>
@@ -210,12 +227,13 @@ export function AgentEditor({
                 </Select>
               </Field>
             ) : null}
-            {canEditMaxSteps ? (
+            {showMaxSteps ? (
               <Field label={t("configMaxSteps")} hint={t("configMaxStepsHint")}>
                 <Input
                   type="number"
                   min={1}
                   value={form.maxSteps}
+                  disabled={!canEditMaxSteps}
                   onChange={(event) => update({ maxSteps: event.target.value })}
                 />
               </Field>
@@ -627,57 +645,75 @@ export function RevisionHistory({
             <p className="text-sm text-muted-foreground">{t("configNoRevisions")}</p>
           ) : (
             <ul className="divide-y overflow-hidden rounded-lg border bg-background">
-              {[...revisions].reverse().map((revision) => (
-                <li
-                  key={revision.revision}
-                  className="grid min-w-0 items-center gap-2 px-3 py-2.5 text-xs sm:grid-cols-[auto_auto_minmax(0,1fr)_auto]"
-                >
-                  <span className="font-mono font-medium">#{revision.revision}</span>
-                  <Badge variant="outline" className="w-fit capitalize">
-                    {t(
-                      revision.operation === "create"
-                        ? "configRevisionCreate"
-                        : revision.operation === "update"
-                          ? "configRevisionUpdate"
-                          : revision.operation === "delete"
-                            ? "configRevisionDelete"
-                            : "configRevisionRevert"
-                    )}
-                  </Badge>
-                  <span className="min-w-0 text-muted-foreground">
-                    {new Date(revision.createdAt).toLocaleString(locale)}
-                    {revision.actor ? ` · ${revision.actor.displayLabel}` : ""}
-                  </span>
-                  {onRevert && revision.revision !== currentRevision && revision.config !== null ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 w-fit px-2 text-xs"
-                      disabled={mutating}
-                      onClick={async () => {
-                        const outcome = await onRevert(revision.revision);
-                        if (outcome.ok) {
-                          setRevisions(undefined);
-                          setOpen(false);
-                        } else if (outcome.error) {
-                          setError(outcome.error);
-                        }
-                      }}
-                    >
-                      {t("configRestore")}
-                    </Button>
-                  ) : (
-                    <span className="text-right text-muted-foreground">{t("configCurrent")}</span>
-                  )}
-                </li>
-              ))}
+              {[...revisions].reverse().map((revision) => {
+                const action = configRevisionAction(
+                  revision.revision,
+                  currentRevision,
+                  Boolean(onRevert && revision.config !== null)
+                );
+                return (
+                  <li
+                    key={revision.revision}
+                    className="grid min-w-0 items-center gap-2 px-3 py-2.5 text-xs sm:grid-cols-[auto_auto_minmax(0,1fr)_auto]"
+                  >
+                    <span className="font-mono font-medium">#{revision.revision}</span>
+                    <Badge variant="outline" className="w-fit capitalize">
+                      {t(
+                        revision.operation === "create"
+                          ? "configRevisionCreate"
+                          : revision.operation === "update"
+                            ? "configRevisionUpdate"
+                            : revision.operation === "delete"
+                              ? "configRevisionDelete"
+                              : "configRevisionRevert"
+                      )}
+                    </Badge>
+                    <span className="min-w-0 text-muted-foreground">
+                      {new Date(revision.createdAt).toLocaleString(locale)}
+                      {revision.actor ? ` · ${revision.actor.displayLabel}` : ""}
+                    </span>
+                    {action === "current" ? (
+                      <span className="text-right text-muted-foreground">{t("configCurrent")}</span>
+                    ) : action === "restore" && onRevert ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 w-fit px-2 text-xs"
+                        disabled={mutating}
+                        onClick={async () => {
+                          const outcome = await onRevert(revision.revision);
+                          if (outcome.ok) {
+                            setRevisions(undefined);
+                            setOpen(false);
+                          } else if (outcome.error) {
+                            setError(outcome.error);
+                          }
+                        }}
+                      >
+                        {t("configRestore")}
+                      </Button>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
       ) : null}
     </section>
   );
+}
+
+export function configRevisionAction(
+  revision: number,
+  currentRevision: number | undefined,
+  canRevert: boolean
+): "current" | "restore" | undefined {
+  if (revision === currentRevision) {
+    return "current";
+  }
+  return canRevert ? "restore" : undefined;
 }
 
 function EditorHeader({
