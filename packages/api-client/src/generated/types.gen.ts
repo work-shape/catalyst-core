@@ -230,7 +230,7 @@ export type GetConfigResponses = {
             };
             configAssets: {
                 enabled: boolean;
-                editableAgentFields: Array<'displayName' | 'welcomeMessage' | 'welcomeSubtitle' | 'instructions' | 'modelProviderId' | 'modelBindingId' | 'reasoningEffort' | 'maxSteps' | 'toolNames' | 'skillNames' | 'initialPrompts'>;
+                editableAgentFields: Array<'displayName' | 'welcomeMessage' | 'welcomeSubtitle' | 'instructions' | 'modelBindingId' | 'reasoningEffort' | 'maxSteps' | 'toolNames' | 'skillNames' | 'initialPrompts'>;
                 allowAgentCreation: boolean;
                 allowAgentDeletion: boolean;
                 allowDefaultAgentChange: boolean;

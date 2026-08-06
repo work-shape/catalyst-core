@@ -702,7 +702,6 @@ async function createFixture(
         editableAgentFields: [
           "displayName",
           "instructions",
-          "modelProviderId",
           "modelBindingId",
           "reasoningEffort",
           "toolNames",

@@ -58,7 +58,7 @@ export function AgentEditor({
   const [error, setError] = useState<string | undefined>(undefined);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const canEdit = (field: string) => editableAgentFields.includes(field);
-  const canEditModel = canEdit("modelBindingId") || canEdit("modelProviderId");
+  const canEditModel = canEdit("modelBindingId");
   const canEditReasoningEffort = canEdit("reasoningEffort");
   const canEditMaxSteps = canEdit("maxSteps");
   const modelBindings =

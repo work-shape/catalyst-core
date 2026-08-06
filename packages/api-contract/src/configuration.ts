@@ -16,7 +16,6 @@ export const agentEditableFieldSchema = z.enum([
   "welcomeMessage",
   "welcomeSubtitle",
   "instructions",
-  "modelProviderId",
   "modelBindingId",
   "reasoningEffort",
   "maxSteps",

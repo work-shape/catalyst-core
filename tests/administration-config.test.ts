@@ -40,6 +40,21 @@ describe("administration config", () => {
       allowSkillEditing: false
     });
   });
+
+  it("rejects legacy provider editing as an interactive policy", () => {
+    expect(() =>
+      parseClientInstanceConfig(
+        baseConfig({
+          administration: {
+            agentConfiguration: {
+              enabled: true,
+              editableAgentFields: ["modelProviderId"]
+            }
+          }
+        })
+      )
+    ).toThrow();
+  });
 });
 
 function baseConfig(overrides: Record<string, unknown> = {}) {

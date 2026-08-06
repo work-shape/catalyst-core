@@ -778,7 +778,6 @@
                                   "welcomeMessage",
                                   "welcomeSubtitle",
                                   "instructions",
-                                  "modelProviderId",
                                   "modelBindingId",
                                   "reasoningEffort",
                                   "maxSteps",

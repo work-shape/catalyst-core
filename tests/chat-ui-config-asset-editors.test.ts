@@ -45,6 +45,40 @@ describe("config asset editors", () => {
     expect(markup).not.toContain("Save changes");
   });
 
+  it("does not expose a model binding control for a legacy provider-only edit policy", () => {
+    const markup = renderToStaticMarkup(
+      createElement(AgentEditor, {
+        initialForm: agentConfigToForm({
+          name: "assistant",
+          displayName: "Assistant",
+          instructions: "Help the user.",
+          modelProviderId: "azure-eu",
+          toolNames: [],
+          skillNames: [],
+          initialPrompts: []
+        }),
+        isNew: false,
+        isDefault: true,
+        references: {
+          modelProviderIds: ["azure-eu"],
+          modelBindingIds: ["reasoning"],
+          modelBindings: [{ id: "reasoning", model: "gpt-5" }],
+          reasoningEfforts: [],
+          enabledToolNames: []
+        },
+        editableAgentFields: ["modelProviderId"],
+        skillNames: [],
+        mutating: false,
+        onSave: async () => ({ ok: true }),
+        revisions: null
+      })
+    );
+
+    expect(markup).toContain('value="azure-eu"');
+    expect(markup).toContain("disabled");
+    expect(markup).not.toContain("reasoning");
+  });
+
   it("labels only the latest revision as current when restoration is unavailable", () => {
     expect(configRevisionAction(3, 3, false)).toBe("current");
     expect(configRevisionAction(2, 3, false)).toBeUndefined();

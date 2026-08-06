@@ -51,7 +51,6 @@ export const AGENT_EDITABLE_FIELDS = [
   "welcomeMessage",
   "welcomeSubtitle",
   "instructions",
-  "modelProviderId",
   "modelBindingId",
   "reasoningEffort",
   "maxSteps",
