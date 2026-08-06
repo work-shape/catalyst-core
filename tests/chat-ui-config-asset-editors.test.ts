@@ -110,6 +110,7 @@ describe("config asset editors", () => {
     expect(markup).toContain("lucide-file-text shrink-0");
     expect(markup).toContain("readOnly");
     expect(markup).toContain("flex-1 resize-y");
+    expect(markup).toContain("grid-rows-[auto_minmax(24rem,1fr)_auto]");
     expect(markup).not.toContain("Add reference");
     expect(markup).not.toContain("Save changes");
   });

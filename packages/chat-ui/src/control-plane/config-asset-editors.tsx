@@ -469,7 +469,11 @@ export function SkillEditor({
         }
       >
         {selectedResource === "root" || !form.resources[selectedResource] ? (
-          <Field label={t("configContent")} hint={t("configSkillContentHint")}>
+          <Field
+            label={t("configContent")}
+            hint={t("configSkillContentHint")}
+            className="h-full grid-rows-[auto_minmax(24rem,1fr)_auto]"
+          >
             <EditorTextarea
               label={t("configMarkdown")}
               value={form.content}
@@ -540,7 +544,7 @@ function SkillResourceEditor({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="grid min-w-0 content-start gap-4">
+    <div className="grid h-full min-w-0 grid-rows-[auto_minmax(24rem,1fr)] gap-4">
       <div
         className={cn(
           "grid gap-4",
@@ -789,7 +793,7 @@ function EditorSection({
         <p className="text-xs leading-5 text-muted-foreground">{description}</p>
         {sidebar}
       </div>
-      <div className="grid min-w-0 gap-5">{children}</div>
+      <div className="grid h-full min-w-0 gap-5">{children}</div>
     </section>
   );
 }

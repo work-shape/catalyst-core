@@ -9,14 +9,16 @@ import { Input } from "../ui/input";
 export function Field({
   label,
   hint,
+  className,
   children
 }: {
   label: string;
   hint?: string;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <label className="grid gap-1.5">
+    <label className={cn("grid gap-1.5", className)}>
       <span className="text-sm font-medium">{label}</span>
       {children}
       {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
