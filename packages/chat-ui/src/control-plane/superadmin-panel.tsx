@@ -10,89 +10,180 @@ import {
   User as UserIcon,
   Users
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type {
-  AdministeredUser,
-  AdministeredUserIdentity,
   AuditActivity,
   AuditActivityActor,
   AuditActivityTarget,
-  AuditEvent,
-  CreateAdministeredUserRequest,
-  UpdateAdministeredUserRequest,
-  UpsertAdministeredUserIdentityRequest,
-  UsageSummary
+  AuditEvent
 } from "@vivd-catalyst/api-client";
+import {
+  useApiAccessMutations,
+  useConfigAssetMutations,
+  useSuperadminUserMutations
+} from "../api/workspace-mutations";
+import {
+  useConfigAssetsExportQuery,
+  useConfigAssetsOverviewQuery,
+  useServicePrincipalsQuery,
+  useWorkspaceAuditActivitiesQuery,
+  useWorkspaceUsageQuery,
+  useWorkspaceUsersQuery
+} from "../api/workspace-queries";
+import { workspaceQueryKeys } from "../api/workspace-query-keys";
+import type {
+  ChatShellAdminPanelInput,
+  ChatShellAdminRouteInput,
+  ChatShellAdminRouteState
+} from "../chat-shell";
 import { Badge } from "../ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { cn } from "../ui/cn";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import { ConfigAssetsPanel, type ConfigAssetsPanelInput } from "./config-assets-panel";
 import { ApiAccessPanel, type ApiAccessPanelInput } from "./api-access-panel";
+import { createApiAccessAuthorityKey } from "./api-access-reveal-controller";
 import { ControlPlanePage } from "./control-plane-page";
+import {
+  canEditConfigAssets,
+  canManageApiAccess,
+  canManageUsers,
+  canViewAudit,
+  canViewUsageGovernance
+} from "./governance";
 import { useTranslation } from "../i18n";
 import { UsageView } from "./usage-view";
 import { UserAdministrationPanel } from "./user-administration-panel";
 import type { SuperadminRouteTab } from "../workspace/workspace-route";
+import { apiErrorMessage } from "../workspace-utils";
 
 export function SuperadminPanel({
-  usage,
-  auditActivities,
-  users,
-  apiAccess,
-  loading,
-  usersLoading,
-  canViewUsageGovernance,
-  canManageUsers,
-  canManageApiAccess,
-  canViewAudit,
-  canManageSuperadminAccess,
-  canEditConfigAssets,
-  configAssets,
-  error,
-  usersError,
-  usersMutating,
-  onCreateUser,
-  onUpdateUser,
-  onDeleteUser,
-  onUpsertUserIdentity,
-  onDeleteUserIdentity,
-  onResetUserPassword,
+  apiBaseUrl,
+  authScope,
+  client,
+  user,
+  configAssetManagement,
   selectedTab,
   onSelectTab
-}: {
-  usage: UsageSummary | undefined;
-  auditActivities: AuditActivity[];
-  users: AdministeredUser[];
-  apiAccess: ApiAccessPanelInput;
-  loading: boolean;
-  usersLoading: boolean;
-  canViewUsageGovernance: boolean;
-  canManageUsers: boolean;
-  canManageApiAccess: boolean;
-  canViewAudit: boolean;
-  canManageSuperadminAccess: boolean;
-  canEditConfigAssets: boolean;
-  configAssets: ConfigAssetsPanelInput;
-  error?: string;
-  usersError?: string;
-  usersMutating: boolean;
-  onCreateUser(input: CreateAdministeredUserRequest): Promise<AdministeredUser>;
-  onUpdateUser(userId: string, input: UpdateAdministeredUserRequest): Promise<AdministeredUser>;
-  onDeleteUser(userId: string): Promise<AdministeredUser>;
-  onUpsertUserIdentity(
-    userId: string,
-    input: UpsertAdministeredUserIdentityRequest
-  ): Promise<AdministeredUser>;
-  onDeleteUserIdentity(
-    userId: string,
-    identity: AdministeredUserIdentity
-  ): Promise<AdministeredUser>;
-  onResetUserPassword(userId: string, password: string): Promise<unknown>;
-  selectedTab: SuperadminRouteTab;
-  onSelectTab(tab: SuperadminRouteTab): void;
-}) {
+}: ChatShellAdminPanelInput) {
   const { t } = useTranslation();
+  const access = administrationAccess(user, configAssetManagement);
+  const showUsage = access.canViewUsageGovernance;
+  const manageUsers = access.canManageUsers;
+  const manageApiAccess = access.canManageApiAccess;
+  const showAudit = access.canViewAudit;
+  const editConfigAssets = access.canEditConfigAssets;
+  const canManageSuperadminAccess = user.roles.includes("superadmin");
+  const usageQuery = useWorkspaceUsageQuery({
+    apiBaseUrl,
+    authScope,
+    client,
+    enabled: showUsage
+  });
+  const auditQuery = useWorkspaceAuditActivitiesQuery({
+    apiBaseUrl,
+    authScope,
+    client,
+    enabled: showAudit
+  });
+  const usersQuery = useWorkspaceUsersQuery({
+    apiBaseUrl,
+    authScope,
+    client,
+    enabled: manageUsers
+  });
+  const servicePrincipalsQuery = useServicePrincipalsQuery({
+    apiBaseUrl,
+    authScope,
+    client,
+    enabled: manageApiAccess
+  });
+  const userMutations = useSuperadminUserMutations({ apiBaseUrl, authScope, client });
+  const apiAccessMutations = useApiAccessMutations({
+    apiBaseUrl,
+    authScope,
+    client,
+    authorityKey: createApiAccessAuthorityKey({
+      apiBaseUrl,
+      principalId: user.id,
+      canManageSuperadminAccess
+    })
+  });
+  const configAssetsOverviewQuery = useConfigAssetsOverviewQuery({
+    apiBaseUrl,
+    authScope,
+    client,
+    enabled: editConfigAssets
+  });
+  const configAssetsExportQuery = useConfigAssetsExportQuery({
+    apiBaseUrl,
+    authScope,
+    client,
+    enabled: editConfigAssets
+  });
+  const configAssetMutations = useConfigAssetMutations({ apiBaseUrl, authScope, client });
+  const queryClient = useQueryClient();
+  const users = usersQuery.data ?? [];
+  const auditActivities = auditQuery.data ?? [];
+  const error = usageQuery.error
+    ? apiErrorMessage(usageQuery.error, undefined)
+    : auditQuery.error
+      ? apiErrorMessage(auditQuery.error, undefined)
+      : undefined;
+  const usersError = usersQuery.error ? apiErrorMessage(usersQuery.error, undefined) : undefined;
+  const apiAccess: ApiAccessPanelInput = {
+    canMutate: canManageSuperadminAccess,
+    principals: servicePrincipalsQuery.data ?? [],
+    revealedCredential: apiAccessMutations.revealedCredential,
+    loading: servicePrincipalsQuery.isLoading,
+    error: servicePrincipalsQuery.error
+      ? apiErrorMessage(servicePrincipalsQuery.error, undefined)
+      : undefined,
+    mutating: apiAccessMutations.isPending,
+    onCreatePrincipal: (input) => apiAccessMutations.createPrincipal.mutateAsync(input),
+    onUpdatePrincipal: (principalId, update) =>
+      apiAccessMutations.updatePrincipal.mutateAsync({ principalId, update }),
+    onCreateCredential: (principalId, credential) =>
+      apiAccessMutations.createCredential.mutateAsync({ principalId, credential }),
+    onRevokeCredential: (credentialId) =>
+      apiAccessMutations.revokeCredential.mutateAsync(credentialId),
+    onClearRevealedCredential: apiAccessMutations.clearRevealedCredential
+  };
+  const configAssets: ConfigAssetsPanelInput = {
+    editableAgentFields: configAssetManagement?.editableAgentFields ?? [],
+    allowAgentCreation: configAssetManagement?.allowAgentCreation ?? false,
+    allowAgentDeletion: configAssetManagement?.allowAgentDeletion ?? false,
+    allowDefaultAgentChange: configAssetManagement?.allowDefaultAgentChange ?? false,
+    allowSkillEditing: configAssetManagement?.allowSkillEditing ?? false,
+    overview: configAssetsOverviewQuery.data,
+    agents: namedBundleEntries(configAssetsExportQuery.data?.agents),
+    skills: namedBundleEntries(configAssetsExportQuery.data?.skills),
+    loading: configAssetsOverviewQuery.isLoading || configAssetsExportQuery.isLoading,
+    error:
+      configAssetsOverviewQuery.error || configAssetsExportQuery.error
+        ? apiErrorMessage(
+            configAssetsOverviewQuery.error ?? configAssetsExportQuery.error,
+            undefined
+          )
+        : undefined,
+    mutating: configAssetMutations.isPending,
+    onSaveAsset: (input) => configAssetMutations.putAsset.mutateAsync(input),
+    onDeleteAsset: (input) => configAssetMutations.deleteAsset.mutateAsync(input),
+    onSetDefaultAgent: (input) => configAssetMutations.setDefaultAgent.mutateAsync(input),
+    onRevertAsset: (input) => configAssetMutations.revertAsset.mutateAsync(input),
+    onLoadRevisions: (kind, name) => client.configAssets.listRevisions(kind, name),
+    onReload: () =>
+      queryClient.invalidateQueries({
+        queryKey: workspaceQueryKeys.configAssetsOverview(apiBaseUrl, authScope)
+      })
+  };
+
+  useEffect(() => {
+    if (!canManageSuperadminAccess) {
+      apiAccessMutations.clearRevealedCredential();
+    }
+  }, [apiAccessMutations.clearRevealedCredential, canManageSuperadminAccess]);
 
   return (
     <section
@@ -111,7 +202,7 @@ export function SuperadminPanel({
           className="flex items-end gap-1 overflow-x-auto"
           aria-label={t("administrationSections")}
         >
-          {canManageUsers ? (
+          {manageUsers ? (
             <TabButton
               active={selectedTab === "users"}
               icon={<Users size={15} aria-hidden="true" />}
@@ -120,7 +211,7 @@ export function SuperadminPanel({
               onClick={() => onSelectTab("users")}
             />
           ) : null}
-          {canManageApiAccess ? (
+          {manageApiAccess ? (
             <TabButton
               active={selectedTab === "api-access"}
               icon={<KeyRound size={15} aria-hidden="true" />}
@@ -129,7 +220,7 @@ export function SuperadminPanel({
               onClick={() => onSelectTab("api-access")}
             />
           ) : null}
-          {canEditConfigAssets ? (
+          {editConfigAssets ? (
             <TabButton
               active={selectedTab === "config"}
               icon={<Settings2 size={15} aria-hidden="true" />}
@@ -137,7 +228,7 @@ export function SuperadminPanel({
               onClick={() => onSelectTab("config")}
             />
           ) : null}
-          {canViewUsageGovernance ? (
+          {showUsage ? (
             <TabButton
               active={selectedTab === "usage"}
               icon={<Activity size={15} aria-hidden="true" />}
@@ -145,7 +236,7 @@ export function SuperadminPanel({
               onClick={() => onSelectTab("usage")}
             />
           ) : null}
-          {canViewAudit ? (
+          {showAudit ? (
             <TabButton
               active={selectedTab === "audit"}
               icon={<ScrollText size={15} aria-hidden="true" />}
@@ -159,34 +250,111 @@ export function SuperadminPanel({
       <div className="grid min-h-0 content-start gap-4 overflow-auto bg-background p-5">
         {selectedTab !== "users" && error ? <ErrorBanner message={error} /> : null}
 
-        {selectedTab === "usage" && canViewUsageGovernance ? <UsageView usage={usage} /> : null}
-        {selectedTab === "users" && canManageUsers ? (
+        {selectedTab === "usage" && showUsage ? <UsageView usage={usageQuery.data} /> : null}
+        {selectedTab === "users" && manageUsers ? (
           <UserAdministrationPanel
             users={users}
-            loading={usersLoading}
+            loading={usersQuery.isLoading}
             error={usersError}
             canManageSuperadminAccess={canManageSuperadminAccess}
-            mutating={usersMutating}
-            onCreateUser={onCreateUser}
-            onUpdateUser={onUpdateUser}
-            onDeleteUser={onDeleteUser}
-            onUpsertIdentity={onUpsertUserIdentity}
-            onDeleteIdentity={onDeleteUserIdentity}
-            onResetPassword={onResetUserPassword}
+            mutating={userMutations.isPending}
+            onCreateUser={(input) => userMutations.createUser.mutateAsync(input)}
+            onUpdateUser={(userId, update) =>
+              userMutations.updateUser.mutateAsync({ userId, update })
+            }
+            onDeleteUser={(userId) => userMutations.deleteUser.mutateAsync(userId)}
+            onUpsertIdentity={(userId, identity) =>
+              userMutations.upsertUserIdentity.mutateAsync({ userId, identity })
+            }
+            onDeleteIdentity={(userId, identity) =>
+              userMutations.deleteUserIdentity.mutateAsync({ userId, identity })
+            }
+            onResetPassword={(userId, password) =>
+              userMutations.resetUserPassword.mutateAsync({ userId, password })
+            }
           />
         ) : null}
-        {selectedTab === "api-access" && canManageApiAccess ? (
-          <ApiAccessPanel {...apiAccess} />
-        ) : null}
-        {selectedTab === "config" && canEditConfigAssets ? (
+        {selectedTab === "api-access" && manageApiAccess ? <ApiAccessPanel {...apiAccess} /> : null}
+        {selectedTab === "config" && editConfigAssets ? (
           <ConfigAssetsPanel {...configAssets} />
         ) : null}
-        {selectedTab === "audit" && canViewAudit ? (
+        {selectedTab === "audit" && showAudit ? (
           <AuditView auditActivities={auditActivities} />
         ) : null}
       </div>
     </section>
   );
+}
+
+export function resolveAdministrationRoute(
+  input: ChatShellAdminRouteInput
+): ChatShellAdminRouteState {
+  const access = administrationAccess(input.user, input.configAssetManagement);
+  const pending =
+    input.requestedTab === "config" &&
+    input.configAssetManagement === undefined &&
+    canEditConfigAssets(input.user);
+  const defaultTab = firstAvailableAdministrationTab(access);
+  const selectedTab = pending
+    ? "config"
+    : input.requestedTab && canViewAdministrationTab(input.requestedTab, access)
+      ? input.requestedTab
+      : defaultTab;
+
+  return {
+    canView: defaultTab !== undefined,
+    pending,
+    selectedTab
+  };
+}
+
+interface AdministrationAccess {
+  canViewUsageGovernance: boolean;
+  canManageUsers: boolean;
+  canManageApiAccess: boolean;
+  canViewAudit: boolean;
+  canEditConfigAssets: boolean;
+}
+
+function administrationAccess(
+  user: ChatShellAdminRouteInput["user"],
+  configAssetManagement: ChatShellAdminRouteInput["configAssetManagement"]
+): AdministrationAccess {
+  return {
+    canViewUsageGovernance: canViewUsageGovernance(user),
+    canManageUsers: canManageUsers(user),
+    canManageApiAccess: canManageApiAccess(user),
+    canViewAudit: canViewAudit(user),
+    canEditConfigAssets: configAssetManagement?.enabled === true && canEditConfigAssets(user)
+  };
+}
+
+function firstAvailableAdministrationTab(
+  access: AdministrationAccess
+): SuperadminRouteTab | undefined {
+  if (access.canManageUsers) return "users";
+  if (access.canManageApiAccess) return "api-access";
+  if (access.canEditConfigAssets) return "config";
+  if (access.canViewUsageGovernance) return "usage";
+  if (access.canViewAudit) return "audit";
+  return undefined;
+}
+
+function canViewAdministrationTab(tab: SuperadminRouteTab, access: AdministrationAccess): boolean {
+  if (tab === "usage") return access.canViewUsageGovernance;
+  if (tab === "users") return access.canManageUsers;
+  if (tab === "api-access") return access.canManageApiAccess;
+  if (tab === "config") return access.canEditConfigAssets;
+  return access.canViewAudit;
+}
+
+function namedBundleEntries(
+  configs: Array<Record<string, unknown>> | undefined
+): Array<{ name: string; config: Record<string, unknown> }> {
+  return (configs ?? []).flatMap((config) => {
+    const name = config.name;
+    return typeof name === "string" ? [{ name, config }] : [];
+  });
 }
 
 function TabButton({

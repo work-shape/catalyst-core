@@ -15,6 +15,7 @@ import {
   canManageApiAccess,
   canViewAdministrationPanel
 } from "../packages/chat-ui/src/control-plane/governance";
+import { resolveAdministrationRoute } from "../packages/chat-ui/src/control-plane/superadmin-panel";
 import {
   workspaceRouteFromPath,
   workspaceRouteNavigation
@@ -71,6 +72,62 @@ describe("API access model", () => {
     expect(workspaceRouteNavigation({ kind: "superadmin", tab: "api-access" })).toEqual({
       to: "/admin/api-access"
     });
+  });
+
+  it("resolves administration availability and tabs inside the optional module", () => {
+    const manager = {
+      id: "user-1",
+      clientInstanceId: "client-1",
+      authSource: "standalone",
+      externalUserId: "manager",
+      displayLabel: "Manager",
+      roles: ["admin"],
+      permissionRefs: [],
+      permissions: ["users.manage"]
+    } as Parameters<typeof canManageApiAccess>[0];
+
+    expect(
+      resolveAdministrationRoute({
+        user: manager,
+        configAssetManagement: undefined,
+        requestedTab: "audit"
+      })
+    ).toEqual({ canView: true, pending: false, selectedTab: "users" });
+    expect(
+      resolveAdministrationRoute({
+        user: { ...manager!, permissions: ["config_assets.read"] },
+        configAssetManagement: undefined,
+        requestedTab: "config"
+      })
+    ).toEqual({ canView: false, pending: true, selectedTab: "config" });
+    expect(
+      resolveAdministrationRoute({
+        user: { ...manager!, permissions: ["config_assets.read"] },
+        configAssetManagement: {
+          enabled: true,
+          editableAgentFields: [],
+          allowAgentCreation: false,
+          allowAgentDeletion: false,
+          allowDefaultAgentChange: false,
+          allowSkillEditing: false
+        },
+        requestedTab: "config"
+      })
+    ).toEqual({ canView: true, pending: false, selectedTab: "config" });
+    expect(
+      resolveAdministrationRoute({
+        user: { ...manager!, permissions: ["config_assets.read"] },
+        configAssetManagement: {
+          enabled: false,
+          editableAgentFields: [],
+          allowAgentCreation: false,
+          allowAgentDeletion: false,
+          allowDefaultAgentChange: false,
+          allowSkillEditing: false
+        },
+        requestedTab: "config"
+      })
+    ).toEqual({ canView: false, pending: false, selectedTab: undefined });
   });
 
   it.each(["changed", "lost"] as const)(

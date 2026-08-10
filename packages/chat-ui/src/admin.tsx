@@ -1,6 +1,5 @@
 import type { ChatShellAdminPanel } from "./chat-shell";
-import { canViewAdministrationPanel } from "./control-plane/governance";
-import { SuperadminPanel } from "./control-plane/superadmin-panel";
+import { resolveAdministrationRoute, SuperadminPanel } from "./control-plane/superadmin-panel";
 
 export {
   canEditConfigAssets,
@@ -14,6 +13,6 @@ export {
 export { SuperadminPanel } from "./control-plane/superadmin-panel";
 
 export const superadminPanel: ChatShellAdminPanel = {
-  canView: canViewAdministrationPanel,
-  renderPanel: (props) => <SuperadminPanel {...props} />
+  resolveRoute: resolveAdministrationRoute,
+  Panel: SuperadminPanel
 };

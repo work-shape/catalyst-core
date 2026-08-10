@@ -1,18 +1,7 @@
-import { useState, type ReactNode } from "react";
+import { useState, type ComponentType } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type {
-  AdministeredUser,
-  AdministeredUserIdentity,
-  ApiUser,
-  AuditActivity,
-  CreateAdministeredUserRequest,
-  UpdateAdministeredUserRequest,
-  UpsertAdministeredUserIdentityRequest,
-  UsageSummary
-} from "@vivd-catalyst/api-client";
+import type { ApiClient, ApiUser, SafeConfig } from "@vivd-catalyst/api-client";
 import { ChatWorkspace } from "./chat-workspace";
-import type { ConfigAssetsPanelInput } from "./control-plane/config-assets-panel";
-import type { ApiAccessPanelInput } from "./control-plane/api-access-panel";
 import {
   ToolDisplayActionsProvider,
   ToolDisplayWidgetProvider,
@@ -26,39 +15,30 @@ import {
 } from "./workspace/workspace-route";
 
 export interface ChatShellAdminPanel {
-  canView(user: ApiUser | undefined): boolean;
-  renderPanel(input: {
-    usage: UsageSummary | undefined;
-    auditActivities: AuditActivity[];
-    users: AdministeredUser[];
-    apiAccess: ApiAccessPanelInput;
-    loading: boolean;
-    usersLoading: boolean;
-    canViewUsageGovernance: boolean;
-    canManageUsers: boolean;
-    canManageApiAccess: boolean;
-    canViewAudit: boolean;
-    canManageSuperadminAccess: boolean;
-    canEditConfigAssets: boolean;
-    configAssets: ConfigAssetsPanelInput;
-    error?: string;
-    usersError?: string;
-    usersMutating: boolean;
-    onCreateUser(input: CreateAdministeredUserRequest): Promise<AdministeredUser>;
-    onUpdateUser(userId: string, input: UpdateAdministeredUserRequest): Promise<AdministeredUser>;
-    onDeleteUser(userId: string): Promise<AdministeredUser>;
-    onUpsertUserIdentity(
-      userId: string,
-      input: UpsertAdministeredUserIdentityRequest
-    ): Promise<AdministeredUser>;
-    onDeleteUserIdentity(
-      userId: string,
-      identity: AdministeredUserIdentity
-    ): Promise<AdministeredUser>;
-    onResetUserPassword(userId: string, password: string): Promise<unknown>;
-    selectedTab: SuperadminRouteTab;
-    onSelectTab(tab: SuperadminRouteTab): void;
-  }): ReactNode;
+  resolveRoute(input: ChatShellAdminRouteInput): ChatShellAdminRouteState;
+  Panel: ComponentType<ChatShellAdminPanelInput>;
+}
+
+export interface ChatShellAdminRouteInput {
+  user: ApiUser | undefined;
+  configAssetManagement: SafeConfig["features"]["configAssets"] | undefined;
+  requestedTab: SuperadminRouteTab | undefined;
+}
+
+export interface ChatShellAdminRouteState {
+  canView: boolean;
+  pending: boolean;
+  selectedTab: SuperadminRouteTab | undefined;
+}
+
+export interface ChatShellAdminPanelInput {
+  apiBaseUrl: string;
+  authScope: string;
+  client: ApiClient;
+  user: ApiUser;
+  configAssetManagement: SafeConfig["features"]["configAssets"] | undefined;
+  selectedTab: SuperadminRouteTab;
+  onSelectTab(tab: SuperadminRouteTab): void;
 }
 
 export interface ChatShellProps {

@@ -15,7 +15,8 @@ export function ControlPlaneRoutes({
   const { settings, superadmin } = controlPlane;
 
   if (superadmin.shouldRender) {
-    return <>{adminPanel?.renderPanel(superadmin.panelInput)}</>;
+    const AdminPanel = adminPanel?.Panel;
+    return AdminPanel ? <AdminPanel {...superadmin.panelInput} /> : null;
   }
 
   if (settings.shouldRender) {
