@@ -253,7 +253,7 @@ test("new turns anchor below the top chrome and retain response runway", async (
     const bubble = anchoredMessage.locator(".chat-user-message-bubble");
     const reserve = chat.locator("[data-aui-top-anchor-reserve]");
     const expectedAnchorOffset = await page.evaluate(() =>
-      Math.round(Math.min(160, Math.max(120, window.innerHeight * 0.15)))
+      Math.round(Math.min(250, Math.max(100, window.innerHeight * 0.2)))
     );
 
     await expect(anchoredMessage).toHaveCount(1);

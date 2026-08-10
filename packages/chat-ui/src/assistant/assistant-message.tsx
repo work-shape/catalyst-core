@@ -494,7 +494,7 @@ function UserMessage() {
       <div
         ref={anchorMarkerRef}
         className="pointer-events-none absolute inset-x-0 h-full"
-        style={{ top: "calc(-1 * clamp(7.5rem, 15dvh, 10rem))" }}
+        style={{ top: "calc(-1 * clamp(100px, 20dvh, 250px))" }}
         data-message-id={messageId}
         aria-hidden="true"
       />
