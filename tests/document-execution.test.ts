@@ -110,7 +110,38 @@ process.stdout.write("converted");
     expect(await readFile(result.outputPath!, "utf8")).toBe("converted");
     expect(
       (await readdir(outputDirectory)).some((entry) =>
-        entry.startsWith(".catalyst-office-profile-")
+        entry.startsWith(".catalyst-office-operation-")
+      )
+    ).toBe(false);
+  });
+
+  it("does not return stale office output when conversion produces no file", async () => {
+    const directory = await temporaryDirectory("office-no-output-");
+    const outputDirectory = join(directory, "output");
+    await mkdir(outputDirectory);
+    const sourcePath = join(outputDirectory, "proposal.docx");
+    const staleOutput = join(outputDirectory, "proposal.pdf");
+    await writeFile(sourcePath, "source");
+    await writeFile(staleOutput, "stale");
+    const command = await writeExecutable(
+      directory,
+      "fake-office-no-output",
+      `process.stdout.write("no output");`
+    );
+
+    await expect(
+      convertOfficeDocument({
+        command,
+        sourcePath,
+        outputDirectory,
+        outputFormat: "pdf",
+        timeoutMs: 1_000
+      })
+    ).resolves.toEqual({ stdout: "no output" });
+    expect(await readFile(staleOutput, "utf8")).toBe("stale");
+    expect(
+      (await readdir(outputDirectory)).some((entry) =>
+        entry.startsWith(".catalyst-office-operation-")
       )
     ).toBe(false);
   });
@@ -159,6 +190,30 @@ writeFileSync(args.at(-1) + ".png", Buffer.from("rendered page"));
       })
     ).resolves.toEqual(Buffer.from("rendered page"));
     expect((await readdir(directory)).some((entry) => entry.endsWith(".png"))).toBe(false);
+  });
+
+  it("rejects stale render output when the renderer produces no file", async () => {
+    const directory = await temporaryDirectory("pdf-render-no-output-");
+    const pdfPath = join(directory, "source.pdf");
+    const staleOutput = join(directory, "page-3.png");
+    await writeFile(pdfPath, "%PDF fixture");
+    await writeFile(staleOutput, "stale");
+    const command = await writeExecutable(directory, "fake-pdftoppm-no-output", "");
+
+    await expect(
+      renderPdfPage({
+        command,
+        pdfPath,
+        outputDirectory: directory,
+        pageNumber: 3,
+        resolution: { dpi: 160 },
+        timeoutMs: 1_000
+      })
+    ).rejects.toThrow();
+    expect(await readFile(staleOutput, "utf8")).toBe("stale");
+    expect(
+      (await readdir(directory)).some((entry) => entry.startsWith(".catalyst-pdf-render-"))
+    ).toBe(false);
   });
 
   it("uses a typed error when a native command is unavailable", async () => {

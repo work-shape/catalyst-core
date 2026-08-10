@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -98,8 +98,11 @@ export async function convertOfficeDocument(
     outputFormat: "odt" | "pdf";
   }
 ): Promise<{ outputPath?: string; stdout: string }> {
-  const profile = await mkdtemp(join(input.outputDirectory, ".catalyst-office-profile-"));
+  const operation = await mkdtemp(join(input.outputDirectory, ".catalyst-office-operation-"));
+  const profile = join(operation, ".catalyst-office-profile-");
+  const operationOutput = join(operation, "output");
   try {
+    await Promise.all([mkdir(profile), mkdir(operationOutput)]);
     const { stdout } = await runNativeProcess({
       command: input.command,
       args: [
@@ -110,23 +113,24 @@ export async function convertOfficeDocument(
         "--convert-to",
         input.outputFormat,
         "--outdir",
-        input.outputDirectory,
+        operationOutput,
         input.sourcePath
       ],
       timeoutMs: input.timeoutMs,
       signal: input.signal,
       env: officeEnvironment(profile)
     });
-    return {
-      stdout,
-      outputPath: await convertedFile(
-        input.outputDirectory,
-        input.sourcePath,
-        `.${input.outputFormat}`
-      )
-    };
+    const converted = await convertedFile(
+      operationOutput,
+      input.sourcePath,
+      `.${input.outputFormat}`
+    );
+    if (!converted) return { stdout };
+    const outputPath = join(input.outputDirectory, basename(converted));
+    await copyFile(converted, outputPath);
+    return { stdout, outputPath };
   } finally {
-    await rm(profile, { force: true, recursive: true });
+    await rm(operation, { force: true, recursive: true });
   }
 }
 
@@ -168,7 +172,8 @@ export async function renderPdfPage(
     resolution: { dpi?: number; maxLongEdgePixels?: number };
   }
 ): Promise<Uint8Array> {
-  const prefix = join(input.outputDirectory, `page-${input.pageNumber}`);
+  const operationOutput = await mkdtemp(join(input.outputDirectory, ".catalyst-pdf-render-"));
+  const prefix = join(operationOutput, `page-${input.pageNumber}`);
   const output = `${prefix}.png`;
   try {
     await runNativeProcess({
@@ -192,7 +197,7 @@ export async function renderPdfPage(
     });
     return await readFile(output);
   } finally {
-    await rm(output, { force: true });
+    await rm(operationOutput, { force: true, recursive: true });
   }
 }
 
