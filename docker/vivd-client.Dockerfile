@@ -104,6 +104,12 @@ RUN pnpm --filter "${APP_PACKAGE}^..." build \
     && pnpm --filter "${APP_PACKAGE}" exec node --input-type=module -e "const module = await import('@vivd-catalyst/client-assembly'); if (typeof module.runClientInstanceArtifactPreviewWorker !== 'function') throw new Error('artifact preview worker runtime export is missing');"; \
   fi
 
+FROM deps AS api-dev
+
+ENV NODE_ENV=development
+
+EXPOSE 4100
+
 FROM deps AS ui-build
 
 ARG UI_PACKAGE
@@ -135,6 +141,11 @@ FROM api AS workspace-command-worker
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 RUN docker --version
 
+FROM api-dev AS workspace-command-worker-dev
+
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
+RUN docker --version
+
 FROM workspace-artifact-runtime AS artifact-preview-runtime
 
 WORKDIR /app
@@ -150,6 +161,12 @@ RUN test -n "${ARTIFACT_PREVIEW_WORKER_ENTRY}" \
   && test -f "${ARTIFACT_PREVIEW_WORKER_ENTRY}"
 
 CMD ["sh", "-c", "node ${ARTIFACT_PREVIEW_WORKER_ENTRY}"]
+
+FROM artifact-preview-runtime AS artifact-preview-worker-dev
+
+ENV NODE_ENV=development
+
+COPY --from=deps /app ./
 
 FROM nginx:1.27-alpine AS ui
 
