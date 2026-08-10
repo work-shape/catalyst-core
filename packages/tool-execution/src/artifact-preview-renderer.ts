@@ -1,13 +1,18 @@
-import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, extname, join } from "node:path";
+import { extname, join } from "node:path";
 import * as XLSX from "xlsx";
 import type {
   ArtifactPreviewFailureCode,
   ArtifactPreviewImageFormat,
   ArtifactPreviewSourceKind
 } from "@vivd-catalyst/core";
+import {
+  convertOfficeDocument,
+  inspectPdf,
+  NativeProcessError,
+  renderPdfPage
+} from "@vivd-catalyst/document-execution";
 import { previewFailure } from "./artifact-preview-failures";
 import {
   formatSpreadsheetRangeSelector,
@@ -113,11 +118,10 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
       const pageNumbers = rasterPageNumbers(input, pageCount);
       const pages: ArtifactPreviewRenderedPage[] = [];
       let outputBytes = 0;
-      for (const [index, pageNumber] of pageNumbers.entries()) {
+      for (const pageNumber of pageNumbers) {
         const bytes = await this.rasterizePdfPage({
           input,
           outputDirectory,
-          pageIndex: index,
           pageNumber,
           pdfPath
         });
@@ -174,7 +178,6 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
       const bytes = await this.rasterizePdfPage({
         input,
         outputDirectory,
-        pageIndex: index,
         pageNumber: 1,
         pdfPath
       });
@@ -197,41 +200,28 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
   private async rasterizePdfPage(input: {
     input: ArtifactPreviewRenderInput;
     outputDirectory: string;
-    pageIndex: number;
     pageNumber: number;
     pdfPath: string;
   }): Promise<Uint8Array> {
-    const prefix = join(input.outputDirectory, `page-${input.pageIndex + 1}`);
-    const outputPath = `${prefix}.png`;
     try {
-      await runProcess({
+      const bytes = await renderPdfPage({
         command: this.pdfToPpmCommand,
-        args: [
-          "-png",
-          "-singlefile",
-          "-r",
-          String(input.input.previewDpi),
-          "-scale-to",
-          String(input.input.maxRasterDimension),
-          "-f",
-          String(input.pageNumber),
-          "-l",
-          String(input.pageNumber),
-          input.pdfPath,
-          prefix
-        ],
+        pdfPath: input.pdfPath,
+        outputDirectory: input.outputDirectory,
+        pageNumber: input.pageNumber,
+        resolution: {
+          dpi: input.input.previewDpi,
+          maxLongEdgePixels: input.input.maxRasterDimension
+        },
         timeoutMs: input.input.rasterizationTimeoutMs,
-        timeoutCode: "rasterization_failed",
-        failureCode: "rasterization_failed",
         signal: input.input.signal
       });
-      const bytes = await readFile(outputPath);
       if (bytes.byteLength > input.input.maxOutputBytes) {
         throw previewFailure("output_too_large", false);
       }
       return bytes;
-    } finally {
-      await rm(outputPath, { force: true });
+    } catch (error) {
+      throw mapNativePreviewFailure(error, "rasterization_failed", "rasterization_failed");
     }
   }
 
@@ -241,38 +231,22 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
     timeoutMs: number;
     signal?: AbortSignal;
   }): Promise<string> {
-    await runProcess({
-      command: this.sofficeCommand,
-      args: [
-        "--headless",
-        "--nologo",
-        "--nofirststartwizard",
-        "--nodefault",
-        "--nolockcheck",
-        "--convert-to",
-        "pdf",
-        "--outdir",
-        input.outputDirectory,
-        input.sourcePath
-      ],
-      timeoutMs: input.timeoutMs,
-      timeoutCode: "conversion_timeout",
-      failureCode: "conversion_failed",
-      signal: input.signal
-    });
-    const expected = join(
-      input.outputDirectory,
-      `${basename(input.sourcePath, extname(input.sourcePath))}.pdf`
-    );
-    const entries: string[] = await readdir(input.outputDirectory).catch((): string[] => []);
-    if (entries.includes(basename(expected))) {
-      return expected;
+    try {
+      const result = await convertOfficeDocument({
+        command: this.sofficeCommand,
+        sourcePath: input.sourcePath,
+        outputDirectory: input.outputDirectory,
+        outputFormat: "pdf",
+        timeoutMs: input.timeoutMs,
+        signal: input.signal
+      });
+      if (!result.outputPath) {
+        throw previewFailure("conversion_failed", true);
+      }
+      return result.outputPath;
+    } catch (error) {
+      throw mapNativePreviewFailure(error, "conversion_timeout", "conversion_failed");
     }
-    const fallback = entries.find((entry) => entry.toLowerCase().endsWith(".pdf"));
-    if (!fallback) {
-      throw previewFailure("conversion_failed", true);
-    }
-    return join(input.outputDirectory, fallback);
   }
 
   private async readPageCount(input: {
@@ -280,20 +254,32 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
     timeoutMs: number;
     signal?: AbortSignal;
   }): Promise<number> {
-    const result = await runProcess({
-      command: this.pdfInfoCommand,
-      args: [input.pdfPath],
-      timeoutMs: input.timeoutMs,
-      timeoutCode: "rasterization_failed",
-      failureCode: "rasterization_failed",
-      signal: input.signal
-    });
-    const match = /^Pages:\s+(\d+)\s*$/imu.exec(result.stdout);
-    if (!match?.[1]) {
-      throw previewFailure("rasterization_failed", true);
+    try {
+      const result = await inspectPdf({
+        command: this.pdfInfoCommand,
+        pdfPath: input.pdfPath,
+        timeoutMs: input.timeoutMs,
+        signal: input.signal
+      });
+      if (!result.pageCount) {
+        throw previewFailure("rasterization_failed", true);
+      }
+      return result.pageCount;
+    } catch (error) {
+      throw mapNativePreviewFailure(error, "rasterization_failed", "rasterization_failed");
     }
-    return Number(match[1]);
   }
+}
+
+function mapNativePreviewFailure(
+  error: unknown,
+  timeoutCode: ArtifactPreviewFailureCode,
+  failureCode: ArtifactPreviewFailureCode
+): unknown {
+  if (error instanceof NativeProcessError) {
+    return previewFailure(error.reason === "timeout" ? timeoutCode : failureCode, true);
+  }
+  return error ?? previewFailure(failureCode, true);
 }
 
 async function assertFileSizeAtMost(path: string, maxBytes: number): Promise<void> {
@@ -552,49 +538,6 @@ function spreadsheetPreviewCell(sourceCell: XLSX.CellObject): XLSX.CellObject {
 function previewSheetName(sheetName: string): string {
   const cleaned = sheetName.replaceAll(/[:\\/?*\[\]]/gu, " ").trim();
   return (cleaned || "Preview").slice(0, 31);
-}
-
-async function runProcess(input: {
-  command: string;
-  args: string[];
-  timeoutMs: number;
-  timeoutCode: ArtifactPreviewFailureCode;
-  failureCode: ArtifactPreviewFailureCode;
-  signal?: AbortSignal;
-}): Promise<{ stdout: string }> {
-  return new Promise((resolve, reject) => {
-    let timedOut = false;
-    let stdout = "";
-    const child = spawn(input.command, input.args, {
-      stdio: ["ignore", "pipe", "pipe"],
-      signal: input.signal
-    });
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill("SIGKILL");
-    }, input.timeoutMs);
-    child.stdout.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => {
-      stdout = `${stdout}${chunk}`.slice(-65536);
-    });
-    child.stderr.on("data", () => undefined);
-    child.on("error", () => {
-      clearTimeout(timer);
-      reject(previewFailure(input.failureCode, true));
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      if (timedOut) {
-        reject(previewFailure(input.timeoutCode, true));
-        return;
-      }
-      if (code !== 0) {
-        reject(previewFailure(input.failureCode, true));
-        return;
-      }
-      resolve({ stdout });
-    });
-  });
 }
 
 function readPngDimensions(bytes: Uint8Array): { width?: number; height?: number } {
