@@ -7,6 +7,8 @@ import {
   asConversationId,
   asToolCallId,
   type AuditEvent,
+  type ModelUsageEvent,
+  type ModelUsageEventInput,
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
 import { InProcessToolExecution, ToolRegistry } from "@vivd-catalyst/tool-execution";
@@ -24,7 +26,16 @@ describe("in-process tool execution", () => {
         requiredPermissionRefs: ["demo-tools"]
       },
       async execute(input) {
-        return toolSuccess({ echoed: input.text });
+        return toolSuccess({ echoed: input.text }, {
+          modelUsage: [{
+            providerId: "document-provider",
+            model: "document-model",
+            inputTokens: 100,
+            outputTokens: 20,
+            totalTokens: 120,
+            source: "provider_reported"
+          }]
+        });
       }
     });
     const context: ToolExecutionContext = {
@@ -41,6 +52,7 @@ describe("in-process tool execution", () => {
       }
     };
     const auditEvents: Array<{ type: string; status: string; metadata?: unknown }> = [];
+    const modelUsageEvents: ModelUsageEventInput[] = [];
     const auditRecorder: AuditRecorder = {
       async record(input) {
         auditEvents.push(input);
@@ -55,7 +67,24 @@ describe("in-process tool execution", () => {
     const execution = new InProcessToolExecution({
       registry: new ToolRegistry({ tools: [tool] }),
       getAgentToolNames: () => ["demo.echo"],
-      auditRecorder
+      auditRecorder,
+      usageRecorder: {
+        async recordModelUsage(input) {
+          modelUsageEvents.push(input);
+          return {
+            ...input,
+            id: "usage_1",
+            createdAt: new Date().toISOString(),
+            webSearchCallCount: 0,
+            customerBillableCost: {
+              status: "unpriced",
+              source: "rate_card",
+              calculationVersion: 1,
+              missingMeters: ["model_rate"]
+            }
+          } as ModelUsageEvent;
+        }
+      }
     });
     const request = {
       toolName: "demo.echo",
@@ -76,7 +105,23 @@ describe("in-process tool execution", () => {
     expect(result.status).toBe("success");
     if (result.status === "success") {
       expect(result.output).toEqual({ echoed: "hello" });
+      expect(result).not.toHaveProperty("modelUsage");
     }
+    expect(modelUsageEvents).toEqual([
+      expect.objectContaining({
+        clientInstanceId: context.clientInstanceId,
+        conversationId: request.conversationId,
+        agentRunId: request.agentRunId,
+        agentName: request.agentName,
+        providerId: "document-provider",
+        model: "document-model",
+        inputTokens: 100,
+        outputTokens: 20,
+        totalTokens: 120,
+        source: "provider_reported",
+        correlationId: context.correlationId
+      })
+    ]);
     expect(auditEvents.map((event) => event.type)).toEqual([
       "tool.authorization_checked",
       "tool.started",

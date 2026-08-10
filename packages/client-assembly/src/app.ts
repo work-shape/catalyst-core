@@ -200,7 +200,8 @@ export async function createClientInstanceApp(
       const agent = assets.agents.find((candidate) => candidate.name === agentName);
       return agent?.toolNames ?? [];
     },
-    auditRecorder
+    auditRecorder,
+    usageRecorder: usageGovernance
   });
   const modelProvider = createModelProviderRegistry({
     configs: config.modelProviders,

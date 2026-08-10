@@ -4,6 +4,7 @@ import type { ISODateString } from "./time";
 import type { AuditSafeSummary, ManagedArtifactRef, ToolDisplayOutput } from "./files";
 import type { StructuredResultPublication } from "./structured-result";
 import type { RuntimeCallContext } from "./identity";
+import type { ModelTokenUsage } from "./usage";
 
 export type ToolPermissionMode = "allow" | "deny" | "approval_required";
 
@@ -91,6 +92,13 @@ export interface ToolHandlerSuccessResult<TOutput = unknown> {
   structuredResult?: StructuredResultPublication;
   artifacts?: ManagedArtifactRef[];
   auditSummary?: AuditSafeSummary;
+  modelUsage?: ToolModelUsageReport[];
+}
+
+export interface ToolModelUsageReport extends ModelTokenUsage {
+  providerId: string;
+  model: string;
+  webSearchCallCount?: number;
 }
 
 export interface ToolHandlerFailureResult {

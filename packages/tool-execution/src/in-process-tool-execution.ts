@@ -2,6 +2,7 @@ import { ZodError } from "zod";
 import {
   type ApprovedToolExecutionRequest,
   type JsonObject,
+  type ModelUsageRecorder,
   type ToolAuthorizationDecision,
   type ToolExecution,
   type ToolExecutionContext,
@@ -16,6 +17,7 @@ export interface InProcessToolExecutionOptions {
   registry: ToolRegistry;
   getAgentToolNames(agentName: string): readonly string[] | Promise<readonly string[]>;
   auditRecorder?: AuditRecorder;
+  usageRecorder?: ModelUsageRecorder;
 }
 
 export class InProcessToolExecution implements ToolExecution {
@@ -24,11 +26,13 @@ export class InProcessToolExecution implements ToolExecution {
     agentName: string
   ) => readonly string[] | Promise<readonly string[]>;
   private readonly auditRecorder?: AuditRecorder;
+  private readonly usageRecorder?: ModelUsageRecorder;
 
   constructor(options: InProcessToolExecutionOptions) {
     this.registry = options.registry;
     this.getAgentToolNames = options.getAgentToolNames;
     this.auditRecorder = options.auditRecorder;
+    this.usageRecorder = options.usageRecorder;
   }
 
   async authorize(
@@ -121,17 +125,19 @@ export class InProcessToolExecution implements ToolExecution {
             }
           : result;
 
+      const publicResult = await this.recordAndRemoveModelUsage(validated, request, context);
+
       await this.audit(
         "tool.completed",
-        validated.status === "success" ? "success" : "failed",
+        publicResult.status === "success" ? "success" : "failed",
         request,
         context,
         {
-          resultStatus: validated.status,
-          ...toolAuditSummaryMetadata(validated.auditSummary)
+          resultStatus: publicResult.status,
+          ...toolAuditSummaryMetadata(publicResult.auditSummary)
         }
       );
-      return validated;
+      return publicResult;
     } catch (error) {
       const result =
         error instanceof ZodError
@@ -152,6 +158,41 @@ export class InProcessToolExecution implements ToolExecution {
       });
       return result;
     }
+  }
+
+  private async recordAndRemoveModelUsage(
+    result: ToolExecutionResult,
+    request: ToolExecutionRequest,
+    context: ToolExecutionContext
+  ): Promise<ToolExecutionResult> {
+    if (result.status !== "success" || !result.modelUsage) {
+      return result;
+    }
+    const usageRecorder = this.usageRecorder;
+    if (!usageRecorder) {
+      throw new Error("Tool-reported model usage requires a configured usage recorder");
+    }
+    const { modelUsage, ...publicResult } = result;
+    await Promise.all(modelUsage.map((usage) => usageRecorder.recordModelUsage({
+      clientInstanceId: context.clientInstanceId,
+      conversationId: request.conversationId,
+      agentRunId: request.agentRunId,
+      agentName: request.agentName,
+      providerId: usage.providerId,
+      model: usage.model,
+      inputTokens: usage.inputTokens,
+      ...(usage.cachedInputTokens !== undefined
+        ? { cachedInputTokens: usage.cachedInputTokens }
+        : {}),
+      outputTokens: usage.outputTokens,
+      totalTokens: usage.totalTokens,
+      source: usage.source,
+      ...(usage.webSearchCallCount !== undefined
+        ? { webSearchCallCount: usage.webSearchCallCount }
+        : {}),
+      correlationId: context.correlationId
+    })));
+    return publicResult;
   }
 
   private async audit(
