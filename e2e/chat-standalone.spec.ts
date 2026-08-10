@@ -269,6 +269,18 @@ test("new turns anchor below the top chrome and retain response runway", async (
       .poll(() => reserve.evaluate((element) => element.getBoundingClientRect().height))
       .toBeGreaterThan(0);
 
+    const previousAssistant = chat.locator('[data-role="assistant"]').first();
+    await expect
+      .poll(async () => {
+        const [assistantBox, bubbleBox] = await Promise.all([
+          previousAssistant.boundingBox(),
+          bubble.boundingBox()
+        ]);
+        if (!assistantBox || !bubbleBox) return Number.POSITIVE_INFINITY;
+        return Math.round(bubbleBox.y - (assistantBox.y + assistantBox.height));
+      })
+      .toBeLessThanOrEqual(32);
+
     const anchoredPositions: number[] = [];
     for (let sample = 0; sample < 8; sample += 1) {
       anchoredPositions.push(await bubble.evaluate((element) => element.getBoundingClientRect().y));

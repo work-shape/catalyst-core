@@ -167,24 +167,11 @@
     transition: padding-right 300ms ease-out;
   }
 
-  /* assistant-ui anchors the active user message wrapper to the viewport top.
-     Keep the bubble below the floating chrome and leave more of the incoming
-     response visible than the library's flush-top default. */
-  .chat-thread-inset [data-aui-top-anchor-user] {
-    padding-top: 5rem;
-  }
-
   /* The activity row is a sibling of the messages. Keep the dynamic reserve
      after it visually, even though assistant-ui inserts the reserve directly
      after the active assistant message in the DOM. */
   .chat-thread-inset [data-aui-top-anchor-reserve] {
     order: 1;
-  }
-
-  @media (min-width: 48rem) {
-    .chat-thread-inset [data-aui-top-anchor-user] {
-      padding-top: 6rem;
-    }
   }
 
   .chat-markdown > :first-child {

@@ -6,6 +6,8 @@ import {
   MessagePartPrimitive,
   MessagePrimitive,
   useAuiState,
+  useThreadViewport,
+  useThreadViewportStore,
   type PartState
 } from "@assistant-ui/react";
 import {
@@ -18,7 +20,7 @@ import {
   RefreshCw,
   User
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AttachmentPreview } from "../attachment-preview";
 import { managedFileIdFromUrl, useAttachmentContentContext } from "../attachment-content";
 import {
@@ -472,12 +474,29 @@ export function acknowledgeRecentlyActiveAssistantRunId(runId: string | undefine
 
 function UserMessage() {
   const { t } = useTranslation();
+  const messageId = useAuiState((state) => state.message.id);
+  const activeAnchorId = useThreadViewport((state) => state.topAnchorTurn?.anchorId);
+  const viewportStore = useThreadViewportStore();
+  const anchorMarkerRef = useRef<HTMLDivElement>(null);
+
+  // Offset the viewport's scroll target without adding space between turns.
+  useLayoutEffect(() => {
+    const marker = anchorMarkerRef.current;
+    if (!marker || messageId !== activeAnchorId) return;
+    return viewportStore.getState().registerAnchorElement(marker);
+  }, [activeAnchorId, messageId, viewportStore]);
 
   return (
     <MessagePrimitive.Root
       className="group/message relative mx-auto grid w-full max-w-3xl justify-items-end gap-1 animate-in fade-in slide-in-from-bottom-1 duration-150"
       data-role="user"
     >
+      <div
+        ref={anchorMarkerRef}
+        className="pointer-events-none absolute inset-x-0 -top-20 h-full md:-top-24"
+        data-message-id={messageId}
+        aria-hidden="true"
+      />
       <MessagePrimitive.Attachments>
         {() => <AttachmentPreview removable={false} />}
       </MessagePrimitive.Attachments>
