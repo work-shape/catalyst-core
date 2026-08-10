@@ -1,6 +1,12 @@
-import { AuiIf, ThreadPrimitive, useAuiState } from "@assistant-ui/react";
+import {
+  AuiIf,
+  ThreadPrimitive,
+  useAuiEvent,
+  useAuiState,
+  useThreadViewportStore
+} from "@assistant-ui/react";
 import { ArrowDown, Bot, CircleAlert, Sparkles } from "lucide-react";
-import { useMemo } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
 import { AssistantActivityStatus } from "./assistant-activity-status";
 import { AssistantComposer, type LocalUploadingAttachment } from "./assistant-composer";
@@ -90,7 +96,15 @@ export function AssistantThread({
         className="grid h-full min-h-0 min-w-0 overflow-hidden"
         style={{ ["--thread-max-width" as string]: "52rem" }}
       >
-        <ThreadPrimitive.Viewport className="chat-scrollbar chat-thread-inset relative flex min-h-0 flex-col overflow-y-auto overflow-x-hidden scroll-smooth">
+        <ThreadPrimitive.Viewport
+          turnAnchor="top"
+          topAnchorMessageClamp={{ tallerThan: "16rem", visibleHeight: "12rem" }}
+          scrollToBottomOnRunStart={false}
+          scrollToBottomOnInitialize={!activeRunId}
+          scrollToBottomOnThreadSwitch={!activeRunId}
+          className="chat-scrollbar chat-thread-inset relative flex min-h-0 flex-col overflow-y-auto overflow-x-hidden scroll-smooth"
+        >
+          <ConversationRunTopAnchor activeRunId={activeRunId} />
           <div className="mx-auto flex min-h-full w-full max-w-[var(--thread-max-width)] flex-1 flex-col px-5 pt-20">
             {notice ? (
               <div className="mb-4 inline-flex w-fit max-w-full items-center gap-2 rounded-md border border-amber-300/70 bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -108,7 +122,7 @@ export function AssistantThread({
             </AuiIf>
 
             {messagesEnabled ? (
-              <div className="flex flex-col gap-6 pb-8 empty:hidden">
+              <div className="flex flex-col gap-6 pb-12 empty:hidden md:pb-16">
                 <ThreadPrimitive.Messages>
                   {() => (
                     <ThreadMessage
@@ -161,6 +175,58 @@ export function AssistantThread({
       </ThreadPrimitive.Root>
     </section>
   );
+}
+
+/**
+ * The product run continues after the short assistant-ui transport has closed,
+ * so assistant-ui's built-in run state cannot discover the eventual projected
+ * assistant message. Register that real user/assistant pair with the viewport
+ * while retaining the library's reserve and scroll behavior.
+ */
+function ConversationRunTopAnchor({ activeRunId }: { activeRunId?: string }) {
+  const viewportStore = useThreadViewportStore();
+  const messages = useAuiState((state) => state.thread.messages);
+  const retainedTurnRef = useRef<{ anchorId: string; targetId: string } | null>(null);
+  const turn = useMemo(() => {
+    const target = messages.at(-1);
+    const anchor = messages.at(-2);
+    if (anchor?.role !== "user" || target?.role !== "assistant") {
+      return null;
+    }
+    const currentTurn = viewportStore.getState().topAnchorTurn;
+    const startsActiveTurn = activeRunId !== undefined && target.id === activeRunId;
+    const continuesActiveTurn =
+      currentTurn?.anchorId === anchor.id || retainedTurnRef.current?.anchorId === anchor.id;
+    if (!startsActiveTurn && !continuesActiveTurn) return null;
+    return { anchorId: anchor.id, targetId: target.id };
+  }, [activeRunId, messages, viewportStore]);
+  if (turn) retainedTurnRef.current = turn;
+
+  useLayoutEffect(() => {
+    if (!turn) return;
+    const state = viewportStore.getState();
+    if (
+      state.topAnchorTurn?.anchorId === turn.anchorId &&
+      state.topAnchorTurn.targetId === turn.targetId
+    ) {
+      return;
+    }
+    state.setTopAnchorTurn(turn);
+  }, [turn, viewportStore]);
+
+  useAuiEvent("thread.initialize", () => {
+    const retainedTurn = retainedTurnRef.current;
+    if (!retainedTurn) return;
+    // RuntimeMessagesBridge imports every product-run projection as external
+    // state. assistant-ui clears its top anchor on each import; restore it in
+    // the same frame so those projections cannot pull the viewport downward.
+    queueMicrotask(() => {
+      const state = viewportStore.getState();
+      if (state.turnAnchor === "top") state.setTopAnchorTurn(retainedTurn);
+    });
+  });
+
+  return null;
 }
 
 function ThreadWelcome({

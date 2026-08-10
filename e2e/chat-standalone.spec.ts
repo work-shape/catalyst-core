@@ -231,6 +231,74 @@ test("links in user messages keep the bubble foreground contrast", async ({ page
   await expect(bubble).toBeVisible();
 });
 
+test("new turns anchor below the top chrome and retain response runway", async ({ page }) => {
+  await signInViaApi(page, normalUser);
+  await page.goto("/");
+
+  const input = page.getByPlaceholder("Message");
+  await input.fill(`Anchor warmup ${Date.now()}`);
+  await input.press("Enter");
+  await expect(page).toHaveURL(/\/c\/[^/]+$/u);
+  await expect(page.getByText(/Local agent response:/u)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Send message" })).toBeEnabled();
+
+  const messageText = `/tool demo.weather_forecast {"location":"Berlin","days":5,"unit":"celsius"}`;
+  try {
+    await input.fill(messageText);
+    await input.press("Enter");
+
+    const chat = page.getByRole("region", { name: "Chat" });
+    const viewport = chat.locator(".chat-thread-inset");
+    const anchoredMessage = chat.locator("[data-aui-top-anchor-user]");
+    const bubble = anchoredMessage.locator(".chat-user-message-bubble");
+    const reserve = chat.locator("[data-aui-top-anchor-reserve]");
+
+    await expect(anchoredMessage).toHaveCount(1);
+    await expect(reserve).toHaveCount(1);
+    await expect
+      .poll(async () => {
+        const [viewportBox, bubbleBox] = await Promise.all([
+          viewport.boundingBox(),
+          bubble.boundingBox()
+        ]);
+        if (!viewportBox || !bubbleBox) return 0;
+        return Math.round(bubbleBox.y - viewportBox.y);
+      })
+      .toBe(96);
+    await expect
+      .poll(() => reserve.evaluate((element) => element.getBoundingClientRect().height))
+      .toBeGreaterThan(0);
+
+    const anchoredPositions: number[] = [];
+    for (let sample = 0; sample < 8; sample += 1) {
+      anchoredPositions.push(await bubble.evaluate((element) => element.getBoundingClientRect().y));
+      await page.waitForTimeout(75);
+    }
+    expect(Math.max(...anchoredPositions) - Math.min(...anchoredPositions)).toBeLessThanOrEqual(1);
+
+    const activity = page.getByTestId("run-activity");
+    await expect(activity).toBeVisible();
+    const activityBeforeReserve = await Promise.all([
+      activity.boundingBox(),
+      reserve.boundingBox()
+    ]);
+    expect(activityBeforeReserve[0]?.y).toBeLessThan(activityBeforeReserve[1]?.y ?? 0);
+
+    const transcriptPadding = await anchoredMessage.evaluate((element) => {
+      const transcript = element.parentElement;
+      return transcript ? Number.parseFloat(getComputedStyle(transcript).paddingBottom) : 0;
+    });
+    expect(transcriptPadding).toBe(64);
+
+    await expect(page.getByText(/Tool work completed:/u)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Send message" })).toBeEnabled();
+    await expect(anchoredMessage).toHaveCount(1);
+    await expect(reserve).toHaveCount(1);
+  } finally {
+    await stopActiveRun(page);
+  }
+});
+
 test("new conversation action opens an unsaved draft screen", async ({ page }) => {
   await signInViaUi(page, normalUser);
   let createConversationRequests = 0;
