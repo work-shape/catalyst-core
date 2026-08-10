@@ -212,9 +212,12 @@
   }
 
   .chat-assistant-text + .chat-tool-work,
-  .chat-tool-part + .chat-assistant-text,
-  .chat-tool-work + .chat-assistant-text {
+  .chat-tool-part + .chat-assistant-text {
     margin-top: 1.5rem;
+  }
+
+  .chat-tool-work + .chat-assistant-text {
+    margin-top: 1.25rem;
   }
 
   .chat-assistant-text + .chat-tool-work-nested,

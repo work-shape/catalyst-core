@@ -177,7 +177,7 @@ function AssistantMessage({
           <span>{t("contextAutomaticallyCompacted")}</span>
         </div>
       ) : null}
-      <div className="min-w-0 rounded-md px-1 py-1 text-sm leading-6">
+      <div className="min-w-0 rounded-md px-1 pb-1 pt-5 text-sm leading-6">
         {completedWorkSummary ? (
           <>
             <AssistantWorkGroup
@@ -421,9 +421,12 @@ function AssistantWorkGroup({
 
   return (
     <ToolGroupRoot
-      // Top margin only: whatever follows a group owns the spacing below it,
-      // via the adjacency rules in styles.css or its own offset.
-      className={cn("chat-tool-work max-w-5xl", nested ? "chat-tool-work-nested my-0" : "mt-4")}
+      // A leading group uses the message container's uniform top spacing.
+      // Later groups own their top margin; whatever follows owns the spacing below.
+      className={cn(
+        "chat-tool-work max-w-5xl",
+        nested ? "chat-tool-work-nested my-0" : "mt-4 first:mt-0"
+      )}
       open={open}
       onOpenChange={setOpen}
       variant="ghost"
