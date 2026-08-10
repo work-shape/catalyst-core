@@ -604,6 +604,21 @@ export class InMemoryPlatformStore
     );
   }
 
+  async getLatestConversationAgentRun(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    ownerUserId: string;
+  }): Promise<AgentRun | undefined> {
+    return [...this.agentRuns.values()]
+      .filter(
+        (run) =>
+          run.clientInstanceId === input.clientInstanceId &&
+          run.conversationId === input.conversationId &&
+          run.ownerUserId === input.ownerUserId
+      )
+      .sort((left, right) => right.startedAt.localeCompare(left.startedAt))[0];
+  }
+
   async updateAgentRunStatus(input: UpdateAgentRunStatusInput): Promise<AgentRun> {
     const run = await this.getAgentRun({
       clientInstanceId: input.clientInstanceId,

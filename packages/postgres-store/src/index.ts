@@ -77,6 +77,7 @@ import {
   getAgentRun as getPostgresAgentRun,
   getActiveConversationAgentRun as getPostgresActiveConversationAgentRun,
   getConversationAgentRun as getPostgresConversationAgentRun,
+  getLatestConversationAgentRun as getPostgresLatestConversationAgentRun,
   listRunObservations as listPostgresRunObservations,
   prepareConversationRunStart as preparePostgresConversationRunStart,
   listStaleActiveAgentRuns as listPostgresStaleActiveAgentRuns,
@@ -445,6 +446,12 @@ export class PostgresPlatformStore
     ownerUserId: string;
   }): Promise<AgentRun | undefined> {
     return getPostgresActiveConversationAgentRun(this.db, input);
+  }
+
+  async getLatestConversationAgentRun(
+    input: Parameters<AgentRunStore["getLatestConversationAgentRun"]>[0]
+  ): Promise<AgentRun | undefined> {
+    return getPostgresLatestConversationAgentRun(this.db, input);
   }
 
   async updateAgentRunStatus(input: UpdateAgentRunStatusInput): Promise<AgentRun> {

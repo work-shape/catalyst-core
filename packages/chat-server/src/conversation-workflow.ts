@@ -174,7 +174,16 @@ export class ConversationWorkflow {
       ownerUserId: getSubjectUserId(user)
     });
     const recovered = activeRun ? await recoverStaleRun(this.options, activeRun) : undefined;
-    const runForSnapshot = recovered?.run ?? activeRun;
+    const latestRun = activeRun
+      ? undefined
+      : await this.options.conversationStore.getLatestConversationAgentRun({
+          clientInstanceId: this.options.clientInstanceId,
+          conversationId,
+          ownerUserId: getSubjectUserId(user)
+        });
+    const latestVisibleTerminalRun =
+      latestRun?.status === "failed" || latestRun?.status === "cancelled" ? latestRun : undefined;
+    const runForSnapshot = recovered?.run ?? activeRun ?? latestVisibleTerminalRun;
     const serverTime = new Date().toISOString();
     const completedRunProjections = await this.createCompletedRunProjections(
       conversationId,

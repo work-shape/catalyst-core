@@ -101,6 +101,127 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
+  it("keeps the latest failed run in the thread snapshot after refresh", async () => {
+    const clientInstanceId = asClientInstanceId("demo-local");
+    const owner = createTestUser("user-1", clientInstanceId);
+    const store = new InMemoryPlatformStore();
+    const config = createTestConfig();
+    const usageGovernance = new ModelUsageGovernance({
+      store,
+      budget: config.usage.budget,
+      safeguards: config.usage.safeguards,
+      costs: config.usage.costs
+    });
+    const conversation = await store.createConversation({
+      clientInstanceId,
+      ownerUserId: owner.id,
+      ownerExternalUserId: owner.externalUserId,
+      title: "Failed projection test",
+      retainedUntil: "2030-01-01T00:00:00.000Z"
+    });
+    const userMessage = await store.appendMessage({
+      clientInstanceId,
+      conversationId: conversation.id,
+      role: "user",
+      text: "process these documents"
+    });
+    const run = await store.createAgentRun({
+      id: createPlatformId<"AgentRunId">("run"),
+      clientInstanceId,
+      conversationId: conversation.id,
+      ownerUserId: owner.id,
+      inputMessageId: userMessage.id,
+      agentName: "test_agent",
+      correlationId: "failed-projection",
+      startedAt: "2026-08-11T00:00:00.000Z"
+    });
+    await store.appendRunObservation({
+      clientInstanceId,
+      runId: run.id,
+      conversationId: conversation.id,
+      ownerUserId: owner.id,
+      event: {
+        type: "message_delta",
+        runId: run.id,
+        sequence: 1,
+        delta: "Seven documents were processed before the failure.",
+        createdAt: "2026-08-11T00:00:01.000Z"
+      }
+    });
+    const error = {
+      code: "FORBIDDEN",
+      message: "Daily customer billable cost is incomplete",
+      category: "app_error"
+    };
+    await store.appendRunObservation({
+      clientInstanceId,
+      runId: run.id,
+      conversationId: conversation.id,
+      ownerUserId: owner.id,
+      event: {
+        type: "run_failed",
+        runId: run.id,
+        sequence: 2,
+        error,
+        createdAt: "2026-08-11T00:00:02.000Z"
+      }
+    });
+    await store.updateAgentRunStatus({
+      clientInstanceId,
+      runId: run.id,
+      status: "failed",
+      updatedAt: "2026-08-11T00:00:02.000Z",
+      failedAt: "2026-08-11T00:00:02.000Z",
+      lastSequence: 2,
+      error
+    });
+
+    const server = await createChatServer({
+      config,
+      clientInstanceId,
+      authAdapter: {
+        id: "test-auth",
+        async authenticate() {
+          return owner;
+        }
+      },
+      conversationStore: store,
+      auditEventStore: store,
+      userStore: store,
+      usageGovernance,
+      auditRecorder: new NoopAuditRecorder(),
+      agentRuntime: createMissingRuntime(),
+      modelProvider: createUnusedModelProvider(),
+      runRecovery: {
+        staleActiveRunMs: 60_000,
+        runOnStartup: false,
+        watchdogIntervalMs: 60_000
+      }
+    });
+
+    const snapshot = await server.inject({
+      method: "GET",
+      url: `/api/conversations/${conversation.id}/thread`
+    });
+
+    expect(snapshot.statusCode).toBe(200);
+    expect(snapshot.json()).toMatchObject({
+      activeRun: {
+        run: {
+          id: run.id,
+          status: "failed"
+        },
+        projection: {
+          runId: run.id,
+          status: "failed",
+          text: "Seven documents were processed before the failure.",
+          error
+        }
+      }
+    });
+    await server.close();
+  });
+
   it("exposes completed run projections in recorded observation order", async () => {
     const clientInstanceId = asClientInstanceId("demo-local");
     const owner = createTestUser("user-1", clientInstanceId);

@@ -106,13 +106,6 @@ export function AssistantThread({
         >
           <ConversationRunTopAnchor activeRunId={activeRunId} />
           <div className="mx-auto flex min-h-full w-full max-w-[var(--thread-max-width)] flex-1 flex-col px-5 pt-20">
-            {notice ? (
-              <div className="mb-4 inline-flex w-fit max-w-full items-center gap-2 rounded-md border border-amber-300/70 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                <CircleAlert size={17} aria-hidden="true" />
-                <span>{notice}</span>
-              </div>
-            ) : null}
-
             <AuiIf condition={(state) => state.thread.isEmpty && !conversationRunning}>
               <ThreadWelcome
                 agent={agent}
@@ -141,33 +134,44 @@ export function AssistantThread({
               </div>
             ) : null}
 
-            <ThreadPrimitive.ViewportFooter className="sticky bottom-0 z-10 mt-auto h-16 shrink-0 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-0 after:h-16 after:bg-gradient-to-t after:from-background after:via-background after:to-transparent after:content-['']">
-              <div className="absolute inset-x-0 bottom-4 z-10">
-                {messagesEnabled ? (
-                  <AuiIf condition={(state) => !state.thread.isEmpty}>
-                    <ThreadScrollToBottom />
-                  </AuiIf>
+            <ThreadPrimitive.ViewportFooter className="sticky bottom-0 z-10 mt-auto shrink-0 pb-4 pt-2 after:pointer-events-none after:absolute after:inset-0 after:z-0 after:bg-gradient-to-t after:from-background after:via-background after:to-transparent after:content-['']">
+              <div className="relative z-10">
+                {notice ? (
+                  <div
+                    role="alert"
+                    className="mb-2 inline-flex w-fit max-w-full items-center gap-2 rounded-md border border-amber-300/70 bg-amber-50 px-3 py-2 text-sm text-amber-900 shadow-sm"
+                  >
+                    <CircleAlert size={17} className="shrink-0" aria-hidden="true" />
+                    <span>{notice}</span>
+                  </div>
                 ) : null}
-                <AssistantComposer
-                  attachments={draftAttachments}
-                  localUploadingAttachments={localUploadingAttachments}
-                  sendBlockedReason={sendBlockedReason}
-                  conversationRunning={conversationRunning}
-                  optimisticPending={optimisticPending}
-                  attachmentsEnabled={attachmentsEnabled}
-                  attachmentAccept={attachmentAccept}
-                  selectableModels={config?.selectableModels ?? []}
-                  selectedModelBindingId={selectedModelBindingId}
-                  showContextIndicator={showContextIndicator}
-                  contextSnapshot={contextSnapshot}
-                  focusRequestId={composerFocusRequestId}
-                  onCancelRun={onCancelRun}
-                  onSelectModelBinding={onSelectModelBinding}
-                  onFilesSelected={onFilesSelected}
-                  onRemoveAttachment={onRemoveDraftAttachment}
-                  onRetryAttachment={onRetryDraftAttachment}
-                  onSubmitMessage={onSubmitMessage}
-                />
+                <div className="relative">
+                  {messagesEnabled ? (
+                    <AuiIf condition={(state) => !state.thread.isEmpty}>
+                      <ThreadScrollToBottom />
+                    </AuiIf>
+                  ) : null}
+                  <AssistantComposer
+                    attachments={draftAttachments}
+                    localUploadingAttachments={localUploadingAttachments}
+                    sendBlockedReason={sendBlockedReason}
+                    conversationRunning={conversationRunning}
+                    optimisticPending={optimisticPending}
+                    attachmentsEnabled={attachmentsEnabled}
+                    attachmentAccept={attachmentAccept}
+                    selectableModels={config?.selectableModels ?? []}
+                    selectedModelBindingId={selectedModelBindingId}
+                    showContextIndicator={showContextIndicator}
+                    contextSnapshot={contextSnapshot}
+                    focusRequestId={composerFocusRequestId}
+                    onCancelRun={onCancelRun}
+                    onSelectModelBinding={onSelectModelBinding}
+                    onFilesSelected={onFilesSelected}
+                    onRemoveAttachment={onRemoveDraftAttachment}
+                    onRetryAttachment={onRetryDraftAttachment}
+                    onSubmitMessage={onSubmitMessage}
+                  />
+                </div>
               </div>
             </ThreadPrimitive.ViewportFooter>
           </div>
