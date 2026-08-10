@@ -585,7 +585,11 @@ export function useWorkspaceChatModel({
       selectedAgentName: activeAgentName,
       selectedModelBindingId,
       showContextIndicator: preferences.showContextIndicator,
-      contextSnapshot: resolveContextUsage(messages, configuredCompactThresholdTokens),
+      contextSnapshot: resolveContextUsage(
+        messages,
+        configuredCompactThresholdTokens,
+        controller.activeRun?.projection
+      ),
       selectModelBindingId: setSelectedModelBindingId,
       draftAttachments: draftAttachmentController.draftAttachments,
       localUploadingAttachments: draftAttachmentController.visibleUploadingAttachments,

@@ -9,10 +9,12 @@ export function ContextIndicator({
   compactThresholdTokens: number;
 }) {
   const { t } = useTranslation();
-  const percentage =
+  const exactPercentage =
     inputTokens === 0
       ? 0
-      : Math.min(100, Math.max(1, Math.round((inputTokens / compactThresholdTokens) * 100)));
+      : Math.min(100, Math.max(0, (inputTokens / compactThresholdTokens) * 100));
+  const ringPercentage = inputTokens === 0 ? 0 : Math.max(1, exactPercentage);
+  const percentage = formatPercentage(exactPercentage);
   const detail = t("contextTokensUsed", {
     used: formatCompactTokens(inputTokens),
     limit: formatCompactTokens(compactThresholdTokens)
@@ -52,7 +54,7 @@ export function ContextIndicator({
               strokeLinecap="round"
               pathLength="100"
               strokeDasharray="100"
-              strokeDashoffset={100 - percentage}
+              strokeDashoffset={100 - ringPercentage}
             />
           </svg>
         </button>
@@ -73,7 +75,15 @@ function formatCompactTokens(tokens: number): string {
     return `${Number((tokens / 1_000_000).toFixed(1))}m`;
   }
   if (tokens >= 1_000) {
-    return `${Number((tokens / 1_000).toFixed(0))}k`;
+    const digits = tokens < 10_000 ? 1 : 0;
+    return `${Number((tokens / 1_000).toFixed(digits))}k`;
   }
   return tokens.toLocaleString();
+}
+
+function formatPercentage(percentage: number): string {
+  if (percentage > 0 && percentage < 0.1) {
+    return "<0.1";
+  }
+  return String(Number(percentage.toFixed(percentage < 10 ? 1 : 0)));
 }
