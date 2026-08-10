@@ -869,6 +869,45 @@ skills:
 });
 
 describe("config CLI API transport", () => {
+  it("reports invalid JSON during API-key exchange without exposing the response body", async () => {
+    const responseBody = "upstream response body must stay private";
+    const failure = await createConfigApi({
+      baseUrl: "https://catalyst.example.test",
+      apiKey: "cat_invalid_json_secret",
+      fetchImpl: async () => new Response(responseBody, { status: 502 })
+    }).catch((error: unknown) => error);
+
+    expect(failure).toMatchObject({
+      name: "ApiKeyExchangeError",
+      message: "API key exchange failed: Catalyst API returned invalid JSON (HTTP 502)"
+    });
+    expect(String(failure)).not.toContain(responseBody);
+  });
+
+  it("reports invalid JSON from an authenticated config request without exposing its body", async () => {
+    const responseBody = "upstream config response body must stay private";
+    let requestCount = 0;
+    const api = await createConfigApi({
+      baseUrl: "https://catalyst.example.test",
+      apiKey: "cat_invalid_config_json_secret",
+      fetchImpl: async () => {
+        requestCount += 1;
+        return requestCount === 1
+          ? jsonResponse(200, {
+              accessToken: "short-lived-access-token",
+              expiresAt: "2030-01-01T00:00:00.000Z"
+            })
+          : new Response(responseBody, { status: 503 });
+      }
+    });
+
+    const failure = await api.exportAssets().catch((error: unknown) => error);
+    expect(failure).toMatchObject({
+      message: "Catalyst API returned invalid JSON (HTTP 503)"
+    });
+    expect(String(failure)).not.toContain(responseBody);
+  });
+
   it("rejects unsupported API-key URL schemes before fetching", async () => {
     let fetchCount = 0;
 
@@ -1013,7 +1052,8 @@ function configApiFetch(
   pushedVersion = remote.version + 1
 ): typeof fetch {
   return async (input, init) => {
-    const url = new URL(input instanceof Request ? input.url : String(input));
+    const request = input instanceof Request ? input : new Request(input, init);
+    const url = new URL(request.url);
     if (url.pathname.endsWith("/api/auth/access-token")) {
       return jsonResponse(200, {
         accessToken: "short-lived-access-token",
@@ -1024,7 +1064,7 @@ function configApiFetch(
       return jsonResponse(200, remote);
     }
     if (url.pathname.endsWith("/api/admin/config/import")) {
-      requests.push(JSON.parse(String(init?.body)));
+      requests.push(JSON.parse(await request.clone().text()));
       return jsonResponse(200, { version: pushedVersion });
     }
     return jsonResponse(404, { error: { code: "NOT_FOUND", message: "Not found" } });
@@ -1036,8 +1076,15 @@ function recordFetch(
   requests: Array<{ url: string; init?: RequestInit }>
 ): typeof fetch {
   return async (input, init) => {
-    const url = input instanceof Request ? input.url : String(input);
-    requests.push({ url, ...(init === undefined ? {} : { init }) });
+    const request = input instanceof Request ? input : new Request(input, init);
+    requests.push({
+      url: request.url,
+      init: {
+        method: request.method,
+        headers: request.headers,
+        ...(request.body === null ? {} : { body: await request.clone().text() })
+      }
+    });
     return fetchImpl(input, init);
   };
 }
@@ -1098,7 +1145,7 @@ function createFastifyFetch(server: FastifyInstance): typeof fetch {
     const url = new URL(request?.url ?? String(input));
     const headers = new Headers(request?.headers);
     new Headers(init?.headers).forEach((value, key) => headers.set(key, value));
-    const body = init?.body;
+    const body = init?.body ?? (request?.body === null ? undefined : await request?.clone().text());
     const response = await server.inject({
       method: (init?.method ?? request?.method ?? "GET") as "GET" | "POST" | "PUT",
       url: `${url.pathname}${url.search}`,

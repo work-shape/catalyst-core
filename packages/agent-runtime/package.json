@@ -18,9 +18,7 @@
   },
   "dependencies": {
     "@vivd-catalyst/core": "workspace:*",
-    "@vivd-catalyst/model-provider": "workspace:*",
-    "@vivd-catalyst/tool-execution": "workspace:*",
-    "@vivd-catalyst/usage-governance": "workspace:*"
+    "@vivd-catalyst/model-provider": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.13.1",

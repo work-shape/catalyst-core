@@ -4,6 +4,13 @@ import type { ApiClientTransport, OperationRequestInput } from "./transport";
 
 export function createInstanceClients(transport: ApiClientTransport) {
   return {
+    authentication: {
+      exchangeApiKey: () =>
+        transport.unwrapJson(
+          generatedSdk.exchangeApiKey({ client: transport.generatedClient }),
+          apiOperations.exchangeApiKey.responseSchema
+        )
+    },
     account: {
       get: () =>
         transport.unwrapJson(

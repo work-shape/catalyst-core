@@ -1,4 +1,5 @@
 import { apiOperations } from "@vivd-catalyst/api-contract";
+import { ApiError, createApiClient } from "@vivd-catalyst/api-client";
 
 interface SchemaParser<Output> {
   parse(input: unknown): Output;
@@ -48,44 +49,25 @@ export async function createConfigApi(options: ConfigApiOptions) {
   if (options.apiKey) {
     assertSafeApiKeyExchangeUrl(baseUrl);
   }
-  const authorization = options.apiKey
+  const accessToken = options.apiKey
     ? await exchangeApiKey(fetchImpl, baseUrl, options.apiKey)
     : await issueLegacySessionToken(fetchImpl, baseUrl, requireServerCredential(options));
+  const client = createApiClient({
+    baseUrl,
+    getToken: () => accessToken,
+    fetchImpl
+  });
 
   return {
-    exportAssets: () =>
-      requestJson(
-        fetchImpl,
-        `${baseUrl}${apiOperations.exportConfigAssets.buildPath()}`,
-        apiOperations.exportConfigAssets.responseSchema,
-        { headers: { authorization } }
+    exportAssets: () => asConfigApiRequest(() => client.configAssets.export()),
+    replaceAssets: (input: unknown) =>
+      asConfigApiRequest(() =>
+        client.configAssets.replace(apiOperations.replaceConfigAssets.requestSchema.parse(input))
       ),
-    replaceAssets: (input: unknown) => {
-      const body = apiOperations.replaceConfigAssets.requestSchema.parse(input);
-      return requestJson(
-        fetchImpl,
-        `${baseUrl}${apiOperations.replaceConfigAssets.buildPath()}`,
-        apiOperations.replaceConfigAssets.responseSchema,
-        {
-          method: apiOperations.replaceConfigAssets.method,
-          headers: { authorization, "content-type": "application/json" },
-          body: JSON.stringify(body)
-        }
-      );
-    },
-    validateAssets: (input: unknown) => {
-      const body = apiOperations.validateConfigAssets.requestSchema.parse(input);
-      return requestJson(
-        fetchImpl,
-        `${baseUrl}${apiOperations.validateConfigAssets.buildPath()}`,
-        apiOperations.validateConfigAssets.responseSchema,
-        {
-          method: apiOperations.validateConfigAssets.method,
-          headers: { authorization, "content-type": "application/json" },
-          body: JSON.stringify(body)
-        }
-      );
-    }
+    validateAssets: (input: unknown) =>
+      asConfigApiRequest(() =>
+        client.configAssets.validate(apiOperations.validateConfigAssets.requestSchema.parse(input))
+      )
   };
 }
 
@@ -122,19 +104,36 @@ async function exchangeApiKey(
   apiKey: string
 ): Promise<string> {
   try {
-    const issued = await requestJson(
-      fetchImpl,
-      `${baseUrl}${apiOperations.exchangeApiKey.buildPath()}`,
-      apiOperations.exchangeApiKey.responseSchema,
-      {
-        method: apiOperations.exchangeApiKey.method,
-        headers: { authorization: `Bearer ${apiKey}` }
-      }
-    );
-    return `Bearer ${issued.accessToken}`;
+    const issued = await createApiClient({
+      baseUrl,
+      getToken: () => apiKey,
+      fetchImpl
+    }).authentication.exchangeApiKey();
+    return issued.accessToken;
   } catch (error) {
-    throw new ApiKeyExchangeError(error, apiKey);
+    throw new ApiKeyExchangeError(toConfigApiError(error), apiKey);
   }
+}
+
+async function asConfigApiRequest<Output>(request: () => Promise<Output>): Promise<Output> {
+  try {
+    return await request();
+  } catch (error) {
+    throw toConfigApiError(error);
+  }
+}
+
+function toConfigApiError(error: unknown): unknown {
+  if (!(error instanceof ApiError)) {
+    return error;
+  }
+  if (error.status === 0) {
+    return error.payload;
+  }
+  if (error.payload instanceof SyntaxError || typeof error.payload === "string") {
+    return new Error(`Catalyst API returned invalid JSON (HTTP ${error.status})`);
+  }
+  return new ConfigApiError(error.status, error.payload);
 }
 
 async function issueLegacySessionToken(
@@ -166,7 +165,7 @@ async function issueLegacySessionToken(
       body: JSON.stringify(sessionRequest)
     }
   );
-  return `Bearer ${issued.chatSessionToken}`;
+  return issued.chatSessionToken;
 }
 
 function requireServerCredential(options: ConfigApiOptions): string {

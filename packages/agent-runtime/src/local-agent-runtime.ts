@@ -11,11 +11,13 @@ import {
   type AgentRuntimeEvent,
   type AgentRuntimeObserveOptions,
   type ChatMessage,
+  type ClientInstanceId,
   type Clock,
   type ConversationHistoryStore,
   type LocaleCode,
   type ModelBindingConfig,
   type ModelProviderConfig,
+  type ModelUsageRecorder,
   type ReasoningEffortConfig,
   type RuntimeCallContext,
   type RunObservationStore,
@@ -39,8 +41,6 @@ import {
   type ModelProvider,
   type ModelToolCall
 } from "@vivd-catalyst/model-provider";
-import type { ToolRegistry } from "@vivd-catalyst/tool-execution";
-import type { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { RunState, toRunFailureError, type RunFailureError } from "./run-state";
 import { createSystemInstructions } from "./system-instructions";
 import { executeToolCall } from "./tool-call-execution";
@@ -61,7 +61,11 @@ import {
   type ModelContextProjectionOptions,
   type StoredReasoningSummary
 } from "./model-context-projection";
-import { materializeModelTools } from "./model-tool-materialization";
+import { materializeModelTools, type ModelToolRegistryView } from "./model-tool-materialization";
+
+export interface ModelCallGovernance extends ModelUsageRecorder {
+  runModelCall<T>(clientInstanceId: ClientInstanceId, execute: () => Promise<T>): Promise<T>;
+}
 
 export interface LocalAgentRuntimeOptions {
   assetSource: ConfigAssetSource;
@@ -72,9 +76,9 @@ export interface LocalAgentRuntimeOptions {
   agentRunStore?: AgentRunStore;
   runObservationStore?: RunObservationStore;
   modelProvider: ModelProvider;
-  toolRegistry: ToolRegistry;
+  toolRegistry: ModelToolRegistryView;
   toolExecution: ToolExecution;
-  usageGovernance: ModelUsageGovernance;
+  usageGovernance: ModelCallGovernance;
   webAccess?: WebAccessConfig;
   historyMessageLimit?: number;
   maxSteps?: number;

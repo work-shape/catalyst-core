@@ -105,12 +105,6 @@ importers:
       '@vivd-catalyst/model-provider':
         specifier: workspace:*
         version: link:../model-provider
-      '@vivd-catalyst/tool-execution':
-        specifier: workspace:*
-        version: link:../tool-execution
-      '@vivd-catalyst/usage-governance':
-        specifier: workspace:*
-        version: link:../usage-governance
     devDependencies:
       '@types/node':
         specifier: ^24.13.1
@@ -508,6 +502,9 @@ importers:
 
   packages/config-cli:
     dependencies:
+      '@vivd-catalyst/api-client':
+        specifier: workspace:*
+        version: link:../api-client
       '@vivd-catalyst/api-contract':
         specifier: workspace:*
         version: link:../api-contract
