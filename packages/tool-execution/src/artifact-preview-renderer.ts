@@ -9,6 +9,11 @@ import type {
   ArtifactPreviewSourceKind
 } from "@vivd-catalyst/core";
 import { previewFailure } from "./artifact-preview-failures";
+import {
+  formatSpreadsheetRangeSelector,
+  parseSpreadsheetRangeSelector,
+  resolveSpreadsheetSheetName
+} from "./spreadsheet-preview-selectors";
 
 const MAX_SPREADSHEET_PREVIEW_CELLS = 5000;
 
@@ -396,8 +401,8 @@ function spreadsheetSelectionFromRange(
   rangeText: string,
   fallbackSheetName: string | undefined
 ): SpreadsheetRenderSelection {
-  const parsed = splitQualifiedSpreadsheetRange(rangeText);
-  const sheetName = resolveSpreadsheetSheetName(workbook, parsed.sheetName ?? fallbackSheetName);
+  const parsed = parseSpreadsheetRangeSelector(rangeText);
+  const sheetName = requireSpreadsheetSheetName(workbook, parsed.sheetName ?? fallbackSheetName);
   const range = decodeSpreadsheetRange(parsed.rangeText);
   assertSpreadsheetRangeBounds(range);
   return {
@@ -411,7 +416,7 @@ function spreadsheetSelectionFromSheet(
   workbook: XLSX.WorkBook,
   requestedSheetName: string
 ): SpreadsheetRenderSelection {
-  const sheetName = resolveSpreadsheetSheetName(workbook, requestedSheetName);
+  const sheetName = requireSpreadsheetSheetName(workbook, requestedSheetName);
   const worksheet = workbook.Sheets[sheetName];
   const ref = typeof worksheet?.["!ref"] === "string" ? worksheet["!ref"] : "A1:A1";
   const range = decodeSpreadsheetRange(ref);
@@ -419,49 +424,15 @@ function spreadsheetSelectionFromSheet(
   return { sheetName, range };
 }
 
-function resolveSpreadsheetSheetName(
+function requireSpreadsheetSheetName(
   workbook: XLSX.WorkBook,
   requestedSheetName: string | undefined
 ): string {
-  const name = requestedSheetName?.trim() || workbook.SheetNames[0];
-  const match = workbook.SheetNames.find(
-    (sheetName) => sheetName.toLowerCase() === name?.toLowerCase()
-  );
+  const match = resolveSpreadsheetSheetName(workbook.SheetNames, requestedSheetName);
   if (!match) {
     throw previewFailure("conversion_failed", false);
   }
   return match;
-}
-
-function splitQualifiedSpreadsheetRange(input: string): { sheetName?: string; rangeText: string } {
-  const trimmed = input.trim();
-  let inQuotedSheet = false;
-  for (let index = 0; index < trimmed.length; index += 1) {
-    const char = trimmed[index];
-    if (char === "'") {
-      if (inQuotedSheet && trimmed[index + 1] === "'") {
-        index += 1;
-        continue;
-      }
-      inQuotedSheet = !inQuotedSheet;
-      continue;
-    }
-    if (char === "!" && !inQuotedSheet) {
-      return {
-        sheetName: unquoteSpreadsheetSheetName(trimmed.slice(0, index)),
-        rangeText: trimmed.slice(index + 1)
-      };
-    }
-  }
-  return { rangeText: trimmed };
-}
-
-function unquoteSpreadsheetSheetName(value: string): string {
-  const trimmed = value.trim();
-  if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
-    return trimmed.slice(1, -1).replaceAll("''", "'");
-  }
-  return trimmed;
 }
 
 function decodeSpreadsheetRange(rangeText: string): XLSX.Range {
@@ -481,11 +452,7 @@ function assertSpreadsheetRangeBounds(range: XLSX.Range): void {
 }
 
 function formatSpreadsheetRange(sheetName: string, range: XLSX.Range): string {
-  return `${quoteSpreadsheetSheetName(sheetName)}!${XLSX.utils.encode_range(range)}`;
-}
-
-function quoteSpreadsheetSheetName(sheetName: string): string {
-  return /^[A-Za-z0-9_]+$/u.test(sheetName) ? sheetName : `'${sheetName.replaceAll("'", "''")}'`;
+  return formatSpreadsheetRangeSelector(sheetName, XLSX.utils.encode_range(range));
 }
 
 function createSpreadsheetPreviewWorkbookBytes(

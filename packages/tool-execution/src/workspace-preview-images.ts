@@ -20,6 +20,11 @@ import type {
   workspacePreviewImagesOutputSchema
 } from "./workspace-tool-schemas";
 import { createArtifactPreviewSettingsHash } from "./artifact-preview-settings";
+import {
+  formatSpreadsheetRangeSelector,
+  parseSpreadsheetRangeSelector,
+  spreadsheetSelectorKey
+} from "./spreadsheet-preview-selectors";
 import { failed } from "./workspace-tool-results";
 
 export type WorkspacePreviewImagesInput = z.infer<typeof workspacePreviewImagesInputSchema>;
@@ -460,8 +465,8 @@ function normalizePreviewImagesInput(
   const canonicalRanges: string[] = [];
   const rangeSheets = new Set<string>();
   for (const range of input.ranges) {
-    const parsed = splitSpreadsheetRangeSelector(range);
-    const sheet = parsed.sheet ?? singleSheetSelector(input.sheets);
+    const parsed = parseSpreadsheetRangeSelector(range);
+    const sheet = parsed.sheetName ?? singleSheetSelector(input.sheets);
     if (!sheet) {
       return {
         ok: false,
@@ -476,9 +481,9 @@ function normalizePreviewImagesInput(
         }
       };
     }
-    const canonical = `${quoteSpreadsheetSheetName(sheet)}!${parsed.range}`;
+    const canonical = formatSpreadsheetRangeSelector(sheet, parsed.rangeText);
     canonicalRanges.push(canonical);
-    rangeSheets.add(normalizeSelector(sheet));
+    rangeSheets.add(spreadsheetSelectorKey(sheet));
   }
 
   const requestedSheets = input.sheets ? normalizedStringSet(input.sheets) : undefined;
@@ -517,43 +522,8 @@ function countRequestedPreviewImages(input: WorkspacePreviewImagesInput): number
   );
 }
 
-function splitSpreadsheetRangeSelector(range: string): { sheet?: string; range: string } {
-  const trimmed = range.trim();
-  let inQuotedSheet = false;
-  for (let index = 0; index < trimmed.length; index += 1) {
-    const char = trimmed[index];
-    if (char === "'") {
-      if (inQuotedSheet && trimmed[index + 1] === "'") {
-        index += 1;
-        continue;
-      }
-      inQuotedSheet = !inQuotedSheet;
-      continue;
-    }
-    if (char === "!" && !inQuotedSheet) {
-      return {
-        sheet: unquoteSpreadsheetSheetName(trimmed.slice(0, index)),
-        range: trimmed.slice(index + 1).trim()
-      };
-    }
-  }
-  return { range: trimmed };
-}
-
 function singleSheetSelector(sheets: readonly string[] | undefined): string | undefined {
   return sheets?.length === 1 ? sheets[0]?.trim() : undefined;
-}
-
-function unquoteSpreadsheetSheetName(value: string): string {
-  const trimmed = value.trim();
-  if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
-    return trimmed.slice(1, -1).replaceAll("''", "'");
-  }
-  return trimmed;
-}
-
-function quoteSpreadsheetSheetName(sheetName: string): string {
-  return /^[A-Za-z0-9_]+$/u.test(sheetName) ? sheetName : `'${sheetName.replaceAll("'", "''")}'`;
 }
 
 function matchesSelection(
@@ -566,8 +536,10 @@ function matchesSelection(
   return (
     (candidate.pageNumber !== undefined && selection.pageNumbers?.has(candidate.pageNumber)) ||
     (candidate.slideNumber !== undefined && selection.slideNumbers?.has(candidate.slideNumber)) ||
-    (candidate.sheet !== undefined && selection.sheets?.has(normalizeSelector(candidate.sheet))) ||
-    (candidate.range !== undefined && selection.ranges?.has(normalizeSelector(candidate.range))) ||
+    (candidate.sheet !== undefined &&
+      selection.sheets?.has(spreadsheetSelectorKey(candidate.sheet))) ||
+    (candidate.range !== undefined &&
+      selection.ranges?.has(spreadsheetSelectorKey(candidate.range))) ||
     false
   );
 }
@@ -609,7 +581,7 @@ function coversAllStrings(
   return [...values].every((value) =>
     candidates.some((candidate) => {
       const candidateValue = candidate[key];
-      return candidateValue !== undefined && normalizeSelector(candidateValue) === value;
+      return candidateValue !== undefined && spreadsheetSelectorKey(candidateValue) === value;
     })
   );
 }
@@ -683,11 +655,7 @@ function previewImageWarning(
 }
 
 function normalizedStringSet(values: readonly string[]): Set<string> {
-  return new Set(values.map(normalizeSelector));
-}
-
-function normalizeSelector(value: string): string {
-  return value.trim().toLowerCase();
+  return new Set(values.map(spreadsheetSelectorKey));
 }
 
 function readSupportedImageMimeType(value: unknown): SupportedImageMimeType | undefined {

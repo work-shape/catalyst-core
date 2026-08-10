@@ -281,7 +281,7 @@ describe("workspace.preview_images", () => {
     expect(JSON.stringify(result)).not.toContain("artifact-previews/private");
   });
 
-  it("canonicalizes unqualified spreadsheet ranges with a single sheet selector", async () => {
+  it("canonicalizes a single-sheet range and matches manifest casing", async () => {
     const harness = await createWorkspaceHarness();
     const source = await harness.store.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
@@ -296,7 +296,7 @@ describe("workspace.preview_images", () => {
 
     const pending = await harness.runTool("workspace.preview_images", {
       artifactId: source.id,
-      sheets: ["Summary"],
+      sheets: ["summary"],
       ranges: ["A1:B4"],
       maxImages: 1
     });
@@ -313,8 +313,8 @@ describe("workspace.preview_images", () => {
 
     const previewBytes = encode("summary-a1-b4-png");
     const settingsHash = createArtifactPreviewSettingsHash({
-      sheets: ["Summary"],
-      ranges: ["Summary!A1:B4"],
+      sheets: ["summary"],
+      ranges: ["summary!A1:B4"],
       maxImages: 1
     });
     harness.objectStore.putObject(
@@ -359,7 +359,7 @@ describe("workspace.preview_images", () => {
 
     const ready = await harness.runTool("workspace.preview_images", {
       artifactId: source.id,
-      sheets: ["Summary"],
+      sheets: ["summary"],
       ranges: ["A1:B4"],
       maxImages: 1
     });

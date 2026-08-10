@@ -480,6 +480,28 @@ describe("ArtifactPreviewWorker", () => {
     });
   });
 
+  it("reports a conversion failure for a missing spreadsheet sheet", async () => {
+    const renderer = new LibreOfficeArtifactPreviewRenderer();
+
+    await expect(
+      renderer.render({
+        sourceKind: "spreadsheet",
+        filename: "preview.xlsx",
+        mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        bytes: createDistinctWorkbookBytes(),
+        ranges: ["Missing!A1:B4"],
+        maxPages: 1,
+        maxConvertedPdfBytes: 1024 * 1024,
+        maxOutputBytes: 1024 * 1024,
+        maxRasterDimension: 4096,
+        previewDpi: 96,
+        outputFormat: "png",
+        conversionTimeoutMs: 60_000,
+        rasterizationTimeoutMs: 60_000
+      })
+    ).rejects.toEqual({ code: "conversion_failed", retryable: false });
+  });
+
   it("renders selected spreadsheet ranges with production pixels", async () => {
     if (!hasPreviewRendererDependencies()) {
       return;
