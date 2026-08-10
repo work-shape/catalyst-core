@@ -294,6 +294,28 @@ test("new turns anchor below the top chrome and retain response runway", async (
     await expect(page.getByRole("button", { name: "Send message" })).toBeEnabled();
     await expect(anchoredMessage).toHaveCount(1);
     await expect(reserve).toHaveCount(1);
+    await expect
+      .poll(async () => {
+        const [viewportBox, bubbleBox] = await Promise.all([
+          viewport.boundingBox(),
+          bubble.boundingBox()
+        ]);
+        if (!viewportBox || !bubbleBox) return 0;
+        return Math.round(bubbleBox.y - viewportBox.y);
+      })
+      .toBe(96);
+
+    await page.reload();
+    await expect(page.getByPlaceholder("Message")).toBeVisible();
+    await expect(anchoredMessage).toHaveCount(0);
+    await expect(reserve).toHaveCount(0);
+    await expect
+      .poll(() =>
+        viewport.evaluate((element) =>
+          Math.abs(element.scrollHeight - element.scrollTop - element.clientHeight)
+        )
+      )
+      .toBeLessThanOrEqual(1);
   } finally {
     await stopActiveRun(page);
   }
