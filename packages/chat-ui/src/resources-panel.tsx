@@ -1,13 +1,20 @@
 import * as Collapsible from "@radix-ui/react-collapsible";
 import { BarChart3, ChevronDown, Database, Library, X } from "lucide-react";
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ApiClient, ConversationResourceListItem } from "@vivd-catalyst/api-client";
-import { ArtifactDownloadButton, ArtifactFileIcon } from "./artifact-download-card";
+import { ArtifactFileIcon } from "./artifact-download-card";
 import { useWorkspaceApiClient } from "./api/workspace-api-client";
 import {
   useConversationResourcesQuery,
   useStructuredDataResourceQuery
 } from "./api/workspace-queries";
+import {
+  ConversationFileDownloadButton,
+  conversationFileFromResource,
+  createConversationFilePanelEntry,
+  isConversationFileResource,
+  type ConversationFileResource
+} from "./conversation-file-presentation";
 import { isToolDisplayPayload, ToolDisplayWidgetNode } from "./domain-ui-widgets";
 import { useTranslation } from "./i18n";
 import {
@@ -15,20 +22,15 @@ import {
   resolveResourcesPanelOpen,
   type ResourceSectionType
 } from "./resources-panel-model";
-import { ResourceDownloadButton } from "./resource-download-button";
-import { createSourceFilePreviewEntry, type SourceFileResource } from "./source-file-preview";
 import { StructuredDataCopyAllButton, StructuredDataView } from "./structured-data-view";
 import { displayPanelKey, renderBuiltInDisplay } from "./tool-display-rendering";
 import { useToolDisplayPanel, type ToolDisplayPanelEntry } from "./tool-display-panel";
-import { getArtifactFileType, type ToolArtifactDownloadRef } from "./tool-artifacts";
+import { getArtifactFileType } from "./tool-artifacts";
 import { TooltipIconButton } from "./ui/tooltip-icon-button";
 import { Spinner } from "./ui/spinner";
 import { useWorkspacePreferences } from "./workspace/workspace-ui-state";
 
 const AUTH_SCOPE = "standalone";
-const ArtifactPreview = lazy(() =>
-  import("./artifact-preview").then((module) => ({ default: module.ArtifactPreview }))
-);
 
 export function useResourcesPanelState({
   conversationId,
@@ -119,56 +121,19 @@ export function ResourcesPanel({
     [displayPanel]
   );
 
-  const artifactEntry = useCallback(
-    (
-      resource: Extract<ConversationResourceListItem, { resourceType: "generated_file" }>,
-      artifactId: string
-    ): ToolDisplayPanelEntry => {
-      const artifact: ToolArtifactDownloadRef = {
-        artifactId,
-        filename: resource.download.filename
-      };
-      return {
-        key: `resource:${resource.resourceId}`,
-        title: resource.title,
-        subtitle: resource.subtitle,
-        headerActions: (
-          <ArtifactDownloadButton
-            artifact={artifact}
-            client={client}
-            conversationId={conversationId}
-            variant="panel"
-          />
-        ),
-        node: (
-          <Suspense
-            fallback={
-              <div className="flex min-h-64 items-center justify-center">
-                <Spinner size="sm" />
-              </div>
-            }
-          >
-            <ArtifactPreview artifact={artifact} client={client} conversationId={conversationId} />
-          </Suspense>
-        )
-      };
-    },
-    [client, conversationId]
-  );
-
-  const sourceEntry = useCallback(
-    (resource: SourceFileResource): ToolDisplayPanelEntry =>
-      createSourceFilePreviewEntry({ client, conversationId, resource }),
+  const fileEntry = useCallback(
+    (resource: ConversationFileResource): ToolDisplayPanelEntry =>
+      createConversationFilePanelEntry({
+        client,
+        conversationId,
+        file: conversationFileFromResource(resource)
+      }),
     [client, conversationId]
   );
 
   function previewResource(resource: ConversationResourceListItem) {
-    if (resource.resourceType === "source_file") {
-      showEntry(sourceEntry(resource));
-      return;
-    }
-    if (resource.resourceType === "generated_file") {
-      showEntry(artifactEntry(resource, resource.preview.artifactId));
+    if (isConversationFileResource(resource)) {
+      showEntry(fileEntry(resource));
       return;
     }
     if (resource.resourceType === "analysis" || resource.resourceType === "structured_result") {
@@ -202,7 +167,7 @@ export function ResourcesPanel({
     const sourceResources = resources.filter(
       (
         candidate
-      ): candidate is Extract<ConversationResourceListItem, { resourceType: "source_file" }> =>
+      ): candidate is Extract<ConversationFileResource, { resourceType: "source_file" }> =>
         candidate.resourceType === "source_file"
     );
     const detail = {
@@ -211,7 +176,7 @@ export function ResourcesPanel({
       onSourceOpen: (attachmentId: string) => {
         const source = sourceResources.find((candidate) => candidate.attachmentId === attachmentId);
         if (source) {
-          showEntry(sourceEntry(source));
+          showEntry(fileEntry(source));
         }
       }
     };
@@ -321,11 +286,12 @@ function ResourceRow({
           })}
         </span>
       </span>
-      {resource.resourceType === "source_file" || resource.resourceType === "generated_file" ? (
-        <ResourceDownloadButton
+      {isConversationFileResource(resource) ? (
+        <ConversationFileDownloadButton
           client={client}
           conversationId={conversationId}
-          resource={resource}
+          file={conversationFileFromResource(resource)}
+          variant="icon"
         />
       ) : null}
     </div>

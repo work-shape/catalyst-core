@@ -25,6 +25,7 @@ import {
   ArtifactPreviewMessage,
   NativeFilePreview
 } from "./artifact-preview-shell";
+import { useConversationFileBlob } from "./conversation-file-content";
 import { useTranslation } from "./i18n";
 import { MarkdownArtifact } from "./markdown-text";
 import { workbookToUniverPreview, type SpreadsheetWorkbookPreview } from "./spreadsheet-preview";
@@ -119,41 +120,12 @@ function BlobArtifactPreview({
   previewKind: Exclude<ReturnType<typeof getArtifactPreviewKind>, undefined | "image-pages">;
 }) {
   const { t } = useTranslation();
-  const [state, setState] = useState<
-    | { status: "loading" }
-    | { status: "ready"; blob: Blob; url: string }
-    | { status: "failed"; message: string }
-  >({ status: "loading" });
-
-  useEffect(() => {
-    let cancelled = false;
-    let objectUrl: string | undefined;
-    setState({ status: "loading" });
-    void client.conversations.artifacts
-      .getContent(conversationId, artifact.artifactId)
-      .then((blob) => {
-        if (cancelled) {
-          return;
-        }
-        objectUrl = URL.createObjectURL(blob);
-        setState({ status: "ready", blob, url: objectUrl });
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          setState({
-            status: "failed",
-            message: error instanceof Error ? error.message : t("artifactPreviewFailed")
-          });
-        }
-      });
-
-    return () => {
-      cancelled = true;
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
-    };
-  }, [artifact.artifactId, client, conversationId, previewKind, t]);
+  const state = useConversationFileBlob({
+    client,
+    conversationId,
+    content: { kind: "artifact", artifactId: artifact.artifactId },
+    createObjectUrl: previewKind === "pdf" || previewKind === "image"
+  });
 
   if (state.status === "loading") {
     return (
@@ -170,7 +142,7 @@ function BlobArtifactPreview({
       <ArtifactPreviewMessage
         fileType={fileType}
         title={t("artifactPreviewFailed")}
-        detail={state.message}
+        detail={state.error instanceof Error ? state.error.message : t("artifactPreviewFailed")}
       />
     );
   }
@@ -179,12 +151,22 @@ function BlobArtifactPreview({
     return <SpreadsheetFilePreview blob={state.blob} />;
   }
 
-  if (previewKind === "pdf" || previewKind === "image") {
+  if ((previewKind === "pdf" || previewKind === "image") && state.url) {
     return (
       <NativeFilePreview
         kind={previewKind}
         title={artifactDisplayFilename(artifact)}
         url={state.url}
+      />
+    );
+  }
+
+  if (previewKind === "pdf" || previewKind === "image") {
+    return (
+      <ArtifactPreviewMessage
+        fileType={fileType}
+        title={t("artifactPreviewFailed")}
+        detail={artifactDisplayFilename(artifact)}
       />
     );
   }

@@ -1,32 +1,21 @@
-import { Download, FileText } from "lucide-react";
-import type { ApiClient } from "@vivd-catalyst/api-client";
-import {
-  Component,
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  useState,
-  type MouseEvent,
-  type ReactNode
-} from "react";
+import { FileText } from "lucide-react";
+import { useCallback, useEffect } from "react";
 import { useAttachmentContentContext } from "./attachment-content";
+import {
+  ConversationFileDownloadButton,
+  conversationFileFromArtifact,
+  conversationFilePreviewAvailable,
+  createConversationFilePanelEntry
+} from "./conversation-file-presentation";
 import { useTranslation } from "./i18n";
 import { useToolDisplayPanel, type ToolDisplayPanelEntry } from "./tool-display-panel";
-import { Spinner } from "./ui/spinner";
 import { cn } from "./ui/cn";
 import {
   artifactDisplayFilename,
-  artifactDownloadFilename,
   getArtifactFileType,
-  getArtifactPreviewKind,
   type ArtifactFileType,
   type ToolArtifactDownloadRef
 } from "./tool-artifacts";
-
-const ArtifactPreview = lazy(() =>
-  import("./artifact-preview").then((module) => ({ default: module.ArtifactPreview }))
-);
 
 export function ToolArtifactList({
   autoPreview = false,
@@ -48,59 +37,23 @@ export function ToolArtifactList({
 
   const previewPanelEntry = useCallback(
     (artifact: ToolArtifactDownloadRef): ToolDisplayPanelEntry | undefined => {
-      if (!client || !conversationId || !getArtifactPreviewKind(artifact)) {
+      const fileType = getArtifactFileType(artifact);
+      const file = conversationFileFromArtifact(artifact, artifactDetail(fileType, artifact));
+      if (!client || !conversationId || !conversationFilePreviewAvailable(file)) {
         return undefined;
       }
-      const filename = artifactDisplayFilename(artifact);
-      const fileType = getArtifactFileType(artifact);
-      return {
-        key: artifactPreviewPanelKey(artifact),
-        title: filename,
-        subtitle: artifactDetail(fileType, artifact),
-        headerActions: (
-          <ArtifactDownloadButton
-            artifact={artifact}
-            client={client}
-            conversationId={conversationId}
-            variant="panel"
-          />
-        ),
-        node: (
-          <ArtifactPreviewErrorBoundary
-            key={artifact.artifactId}
-            fallback={
-              <ArtifactPreviewPanelMessage
-                title={t("artifactPreviewFailed")}
-                detail={t("artifactPreviewUnsupported")}
-              />
-            }
-          >
-            <Suspense
-              fallback={
-                <div className="flex min-h-64 items-center justify-center gap-2 text-sm text-muted-foreground">
-                  <Spinner size="sm" />
-                  <span>{t("artifactPreviewLoading")}</span>
-                </div>
-              }
-            >
-              <ArtifactPreview
-                artifact={artifact}
-                client={client}
-                conversationId={conversationId}
-              />
-            </Suspense>
-          </ArtifactPreviewErrorBoundary>
-        )
-      };
+      return createConversationFilePanelEntry({ client, conversationId, file });
     },
-    [client, conversationId, t]
+    [client, conversationId]
   );
 
   useEffect(() => {
     if (!autoPreview) {
       return;
     }
-    const artifact = artifacts.find((candidate) => getArtifactPreviewKind(candidate));
+    const artifact = artifacts.find((candidate) =>
+      conversationFilePreviewAvailable(conversationFileFromArtifact(candidate))
+    );
     const entry = artifact ? previewPanelEntry(artifact) : undefined;
     if (entry) {
       showOnce(entry);
@@ -123,7 +76,8 @@ export function ToolArtifactList({
       {artifacts.map((artifact) => {
         const filename = artifactDisplayFilename(artifact);
         const fileType = getArtifactFileType(artifact);
-        const previewAvailable = downloadAvailable && Boolean(getArtifactPreviewKind(artifact));
+        const file = conversationFileFromArtifact(artifact, artifactDetail(fileType, artifact));
+        const previewAvailable = downloadAvailable && conversationFilePreviewAvailable(file);
         const cardClassName = cn(
           "flex w-full min-w-0 items-center gap-3 rounded-md border bg-background text-left text-sm text-foreground shadow-xs transition-colors",
           variant === "deliverable" ? "min-h-20 px-4 py-3" : "min-h-10 px-3 py-2",
@@ -167,107 +121,16 @@ export function ToolArtifactList({
                 {artifactDetail(fileType, artifact)}
               </span>
             </span>
-            <ArtifactDownloadButton
-              artifact={artifact}
+            <ConversationFileDownloadButton
               client={client}
               conversationId={conversationId}
+              file={file}
               variant={variant}
             />
           </div>
         );
       })}
     </div>
-  );
-}
-
-export function ArtifactDownloadButton({
-  artifact,
-  client,
-  conversationId,
-  variant = "compact"
-}: {
-  artifact: ToolArtifactDownloadRef;
-  client: ApiClient | undefined;
-  conversationId: string | undefined;
-  variant?: "compact" | "deliverable" | "panel";
-}) {
-  const { t } = useTranslation();
-  const [downloading, setDownloading] = useState(false);
-  const filename = artifactDisplayFilename(artifact);
-  const downloadFilename = artifactDownloadFilename(artifact);
-  const downloadAvailable = Boolean(client && conversationId);
-  const large = variant === "deliverable";
-  const nativeDownloadUrl =
-    downloadAvailable && client?.browserManagedDownloads && conversationId
-      ? client.conversations.artifacts.contentUrl(conversationId, artifact.artifactId)
-      : undefined;
-  const className = cn(
-    "inline-flex shrink-0 items-center justify-center gap-2 rounded-md border bg-background font-medium text-foreground no-underline transition-colors",
-    "hover:bg-muted focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40",
-    large ? "h-10 px-4 text-sm" : "h-8 px-3 text-xs",
-    (!downloadAvailable || downloading) && "pointer-events-none opacity-60"
-  );
-
-  async function downloadArtifact() {
-    if (!client || !conversationId) {
-      return;
-    }
-    setDownloading(true);
-    try {
-      const blob = await client.conversations.artifacts.getContent(
-        conversationId,
-        artifact.artifactId
-      );
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = downloadFilename;
-      document.body.append(anchor);
-      anchor.click();
-      anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } finally {
-      setDownloading(false);
-    }
-  }
-
-  if (nativeDownloadUrl) {
-    return (
-      <a
-        href={nativeDownloadUrl}
-        download={downloadFilename}
-        title={t("downloadArtifact", { filename })}
-        aria-label={t("downloadArtifact", { filename })}
-        className={className}
-        onClick={stopCardPreview}
-      >
-        <Download size={large ? 16 : 14} aria-hidden="true" />
-        <span>{t("downloadArtifactButton")}</span>
-      </a>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      disabled={!downloadAvailable || downloading}
-      title={downloadAvailable ? t("downloadArtifact", { filename }) : t("downloadUnavailable")}
-      aria-label={
-        downloadAvailable ? t("downloadArtifact", { filename }) : t("downloadUnavailable")
-      }
-      onClick={(event) => {
-        stopCardPreview(event);
-        void downloadArtifact();
-      }}
-      className={className}
-    >
-      {downloading ? (
-        <Spinner size="sm" className="text-muted-foreground" />
-      ) : (
-        <Download size={large ? 16 : 14} aria-hidden="true" />
-      )}
-      <span>{t("downloadArtifactButton")}</span>
-    </button>
   );
 }
 
@@ -296,38 +159,4 @@ export function ArtifactFileIcon({
 function artifactDetail(fileType: ArtifactFileType, artifact: ToolArtifactDownloadRef): string {
   const detail = artifact.kind ?? artifact.mimeType;
   return detail ? `${fileType.label} · ${detail}` : fileType.label;
-}
-
-function artifactPreviewPanelKey(artifact: ToolArtifactDownloadRef): string {
-  return `artifact-preview:${artifact.artifactId}`;
-}
-
-function stopCardPreview(event: MouseEvent<HTMLElement>) {
-  event.stopPropagation();
-}
-
-class ArtifactPreviewErrorBoundary extends Component<
-  { children: ReactNode; fallback: ReactNode },
-  { failed: boolean }
-> {
-  override state = { failed: false };
-
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-
-  override render() {
-    return this.state.failed ? this.props.fallback : this.props.children;
-  }
-}
-
-function ArtifactPreviewPanelMessage({ detail, title }: { detail?: string; title: string }) {
-  return (
-    <div className="flex min-h-64 items-center justify-center">
-      <div className="max-w-sm rounded-md border bg-card px-4 py-3 text-sm shadow-xs">
-        <p className="font-medium">{title}</p>
-        {detail ? <p className="mt-1 text-xs text-muted-foreground">{detail}</p> : null}
-      </div>
-    </div>
-  );
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { detectArtifactPreviewSourceKind, resolveFilePreviewCapability } from "@vivd-catalyst/core";
-import { getSourceFilePreviewKind } from "../packages/chat-ui/src/source-file-preview";
+import { getSourceFilePreviewKind } from "../packages/chat-ui/src/conversation-file-presentation";
 
 describe("file preview policy", () => {
   it.each([

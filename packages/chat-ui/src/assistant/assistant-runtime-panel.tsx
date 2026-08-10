@@ -18,7 +18,7 @@ import { AssistantThread } from "./assistant-thread";
 import { AssistantToolRegistry } from "./assistant-tool-registry";
 import { useRegisterToolDisplayActions } from "../domain-ui-widgets";
 import { useTranslation } from "../i18n";
-import { useOpenSourceFilePreview } from "../source-file-preview";
+import { useOpenConversationFile } from "../conversation-file-presentation";
 import {
   createRunIdempotencyKey,
   ProductConversationRunTransport,
@@ -239,7 +239,7 @@ function AssistantRuntimePane({
     }
   });
 
-  const openSourceFilePreview = useOpenSourceFilePreview();
+  const openConversationFile = useOpenConversationFile();
   const canSend = !sendDisabledReason;
   useRegisterToolDisplayActions(
     useMemo(
@@ -256,7 +256,7 @@ function AssistantRuntimePane({
                   }
                 : {}),
               openSourceFile(input: { fileId: string; filename?: string }) {
-                void openSourceFilePreview({
+                void openConversationFile({
                   client,
                   conversationId: selectedConversationId,
                   ...input
@@ -264,7 +264,7 @@ function AssistantRuntimePane({
               }
             }
           : undefined,
-      [canSend, client, openSourceFilePreview, runtime, selectedConversationId]
+      [canSend, client, openConversationFile, runtime, selectedConversationId]
     )
   );
 

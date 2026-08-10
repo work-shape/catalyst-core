@@ -19,7 +19,10 @@ import {
   readSurfacedToolArtifactRefs,
   readToolArtifactRefs
 } from "../packages/chat-ui/src/tool-artifacts";
-import { ArtifactDownloadButton } from "../packages/chat-ui/src/artifact-download-card";
+import {
+  ConversationFileDownloadButton,
+  conversationFileFromArtifact
+} from "../packages/chat-ui/src/conversation-file-presentation";
 import { ToolCallPart } from "../packages/chat-ui/src/tool-call";
 import {
   ToolDisplayPanelFrame,
@@ -516,10 +519,10 @@ describe("chat UI artifact download cards", () => {
           key: "artifact-preview:art_workbook",
           title: artifact.filename,
           subtitle: "Spreadsheet · spreadsheet.workbook",
-          headerActions: createElement(ArtifactDownloadButton, {
-            artifact,
+          headerActions: createElement(ConversationFileDownloadButton, {
             client,
             conversationId: "conv_test",
+            file: conversationFileFromArtifact(artifact),
             variant: "panel"
           }),
           node: createElement("div")

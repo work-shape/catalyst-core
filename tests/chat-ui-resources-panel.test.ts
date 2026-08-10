@@ -15,13 +15,13 @@ import {
 } from "../packages/chat-ui/src/resources-panel-model";
 import { ResourcesPanel } from "../packages/chat-ui/src/resources-panel";
 import {
-  createSourceFilePreviewEntry,
+  conversationFileFromResource,
+  createConversationFilePanelEntry,
   findSourceFileResource,
   findSourceFileResourceByAttachmentId,
   getSourceFilePreviewKind,
-  sourceFilePreviewRequiresDownload,
   SourceFilePreview
-} from "../packages/chat-ui/src/source-file-preview";
+} from "../packages/chat-ui/src/conversation-file-presentation";
 import { StructuredDataView } from "../packages/chat-ui/src/structured-data-view";
 import { ToolDisplayPanelProvider } from "../packages/chat-ui/src/tool-display-panel";
 
@@ -135,9 +135,6 @@ describe("Resources panel model", () => {
     expect(getSourceFilePreviewKind("legacy.xls", "application/vnd.ms-excel")).toBe("spreadsheet");
     expect(getSourceFilePreviewKind("macros.xlsm")).toBe("spreadsheet");
     expect(getSourceFilePreviewKind("archive.zip", "application/zip")).toBeUndefined();
-    expect(sourceFilePreviewRequiresDownload("spreadsheet")).toBe(true);
-    expect(sourceFilePreviewRequiresDownload("pdf")).toBe(true);
-    expect(sourceFilePreviewRequiresDownload("image")).toBe(false);
 
     const workbookResource: ConversationResourceListItem = {
       resourceId: "source-workbook",
@@ -154,10 +151,10 @@ describe("Resources panel model", () => {
         filename: "Cosmic_Cafe_REPAIRED.xlsx"
       }
     };
-    const entry = createSourceFilePreviewEntry({
+    const entry = createConversationFilePanelEntry({
       client: createApiClient({ baseUrl: "https://example.test" }),
       conversationId: "conversation_1",
-      resource: workbookResource
+      file: conversationFileFromResource(workbookResource)
     });
     const markup = renderToStaticMarkup(
       createElement(TranslationProvider, { locale: "de" }, entry.node)
@@ -176,6 +173,35 @@ describe("Resources panel model", () => {
       "source"
     );
     expect(findSourceFileResourceByAttachmentId(resources, "missing")).toBeUndefined();
+  });
+
+  it("keeps an uploaded original as the download when its preview is an artifact", () => {
+    const file = conversationFileFromResource({
+      resourceId: "uploaded-office",
+      resourceType: "source_file",
+      attachmentId: "attachment_docx",
+      title: "Proposal.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      createdAt: "2026-08-03T09:00:00.000Z",
+      updatedAt: "2026-08-03T09:00:00.000Z",
+      preview: {
+        kind: "artifact",
+        artifactId: "artifact_preview",
+        mimeType: "application/pdf"
+      },
+      download: {
+        kind: "source_file",
+        fileId: "file_original",
+        filename: "Proposal.docx"
+      }
+    });
+
+    expect(file.preview).toMatchObject({
+      kind: "artifact",
+      artifact: { artifactId: "artifact_preview" }
+    });
+    expect(file.download).toEqual({ kind: "source_file", fileId: "file_original" });
+    expect(file.filename).toBe("Proposal.docx");
   });
 
   it("groups in product order, hides empty sections, and preserves server order", () => {
@@ -343,6 +369,7 @@ describe("Resources panel rendering", () => {
         createElement(SourceFilePreview, {
           client,
           conversationId: "conversation/1",
+          attachmentId: "attachment 1",
           fileId: "file 1",
           filename: "Screenshot.png",
           mimeType: "image/png"
@@ -366,6 +393,7 @@ describe("Resources panel rendering", () => {
         createElement(SourceFilePreview, {
           client,
           conversationId: "conversation/1",
+          attachmentId: "attachment 1",
           fileId: "file 1",
           filename: "Input.pdf",
           mimeType: "application/pdf"

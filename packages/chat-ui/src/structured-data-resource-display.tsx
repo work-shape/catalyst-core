@@ -2,8 +2,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { StructuredDataResourceResponse } from "@vivd-catalyst/api-client";
 import { STRUCTURED_DATA_RESOURCE_DISPLAY_KIND } from "@vivd-catalyst/core";
 import { useAttachmentContentContext } from "./attachment-content";
+import { useOpenConversationFile } from "./conversation-file-presentation";
 import { useTranslation } from "./i18n";
-import { useOpenSourceFilePreview } from "./source-file-preview";
 import { StructuredDataCopyAllButton, StructuredDataView } from "./structured-data-view";
 import { Spinner } from "./ui/spinner";
 
@@ -24,7 +24,7 @@ function StructuredDataResourceDisplay({
 }) {
   const context = useAttachmentContentContext();
   const conversationId = context?.selectedConversationId;
-  const openSourceFilePreview = useOpenSourceFilePreview();
+  const openConversationFile = useOpenConversationFile();
   const { t } = useTranslation();
   const [resource, setResource] = useState<StructuredDataResourceResponse | undefined>();
   const [failed, setFailed] = useState(false);
@@ -77,7 +77,7 @@ function StructuredDataResourceDisplay({
         onSourceOpen={
           context && conversationId
             ? (source) => {
-                void openSourceFilePreview({
+                void openConversationFile({
                   client: context.client,
                   conversationId,
                   attachmentId: source.attachmentId,

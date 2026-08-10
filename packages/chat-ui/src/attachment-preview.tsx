@@ -2,8 +2,8 @@ import { AttachmentPrimitive, useAuiState } from "@assistant-ui/react";
 import { ImageIcon, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { managedFileIdFromUrl, useAttachmentContentContext } from "./attachment-content";
+import { useOpenConversationFile } from "./conversation-file-presentation";
 import { useTranslation } from "./i18n";
-import { useOpenSourceFilePreview } from "./source-file-preview";
 import { cn } from "./ui/cn";
 import { Spinner } from "./ui/spinner";
 
@@ -12,7 +12,7 @@ export function AttachmentPreview({ removable }: { removable: boolean }) {
   const imageUrl = useAttachmentImageUrl(attachment);
   const managedFileId = managedFileIdFromAttachmentContent(attachment.content);
   const attachmentContent = useAttachmentContentContext();
-  const openSourceFilePreview = useOpenSourceFilePreview();
+  const openConversationFile = useOpenConversationFile();
   const { t } = useTranslation();
   const [opening, setOpening] = useState(false);
   const mounted = useRef(true);
@@ -35,7 +35,7 @@ export function AttachmentPreview({ removable }: { removable: boolean }) {
     }
     setOpening(true);
     try {
-      await openSourceFilePreview({ client, conversationId, fileId: managedFileId, filename });
+      await openConversationFile({ client, conversationId, fileId: managedFileId, filename });
     } finally {
       if (mounted.current) {
         setOpening(false);
