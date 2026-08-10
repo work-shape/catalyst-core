@@ -8,6 +8,9 @@ describe("execution workspaces config", () => {
 
     expect(config.executionWorkspaces).toMatchObject({
       enabled: false,
+      sourceFiles: {
+        maxFileBytes: 25 * 1024 * 1024
+      },
       runner: {
         mode: "docker",
         networkMode: "none",
@@ -43,6 +46,9 @@ describe("execution workspaces config", () => {
       baseConfig({
         executionWorkspaces: {
           enabled: true,
+          sourceFiles: {
+            maxFileBytes: 128 * 1024 * 1024
+          },
           runner: {
             mode: "docker",
             image: "ghcr.io/example/catalyst-runner-base:v1",
@@ -75,6 +81,9 @@ describe("execution workspaces config", () => {
 
     expect(config.executionWorkspaces).toMatchObject({
       enabled: true,
+      sourceFiles: {
+        maxFileBytes: 128 * 1024 * 1024
+      },
       runner: {
         image: "ghcr.io/example/catalyst-runner-base:v1",
         networkMode: "none",

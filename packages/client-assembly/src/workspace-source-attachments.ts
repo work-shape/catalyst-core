@@ -1,5 +1,5 @@
 import { posix as posixPath } from "node:path";
-import { createManagedObjectChecksum } from "@vivd-catalyst/capability-sdk";
+import { resolveUploadFileContent } from "@vivd-catalyst/capability-sdk";
 import {
   AppError,
   asConversationAttachmentId,
@@ -130,7 +130,10 @@ export function createExecutionWorkspaceSourceAttachmentHandler(
     },
     async uploadDraftAttachment(file) {
       return {
-        attachment: await service.uploadDraftAttachment(file),
+        attachment: await service.uploadDraftAttachment({
+          ...file,
+          content: resolveUploadFileContent(file)
+        }),
         outcome: "created"
       };
     },
@@ -318,9 +321,14 @@ class ExecutionWorkspaceSourceAttachmentService {
     ownerUserId: string;
     filename: string;
     mimeType?: string;
-    bytes: Uint8Array;
+    content: {
+      byteSize: number;
+      checksum: string;
+      headerBytes: Uint8Array;
+      openStream(): AsyncIterable<Uint8Array>;
+    };
   }): Promise<DraftAttachment> {
-    if (input.bytes.byteLength > this.maxFileBytes) {
+    if (input.content.byteSize > this.maxFileBytes) {
       throw new AppError(
         "VALIDATION_FAILED",
         "File exceeds the configured workspace source upload size limit"
@@ -334,7 +342,7 @@ class ExecutionWorkspaceSourceAttachmentService {
       );
     }
 
-    const checksum = createManagedObjectChecksum(input.bytes);
+    const checksum = input.content.checksum;
     const objectKey = createSourceObjectKey({
       clientInstanceId: this.clientInstanceId,
       conversationId: input.conversationId,
@@ -343,14 +351,15 @@ class ExecutionWorkspaceSourceAttachmentService {
     });
     await this.objectStore.putObject({
       key: objectKey,
-      body: input.bytes,
-      contentType: input.mimeType
+      body: input.content.openStream(),
+      contentType: input.mimeType,
+      contentLength: input.content.byteSize
     });
     const file = await this.files.createManagedFile({
       clientInstanceId: this.clientInstanceId,
       ownerUserId: input.ownerUserId,
       filename: input.filename,
-      byteSize: input.bytes.byteLength,
+      byteSize: input.content.byteSize,
       checksum,
       objectKey,
       ...(input.mimeType ? { mimeType: input.mimeType } : {})
@@ -360,7 +369,7 @@ class ExecutionWorkspaceSourceAttachmentService {
       conversationId: input.conversationId,
       fileId: file.id,
       filename: input.filename,
-      byteSize: input.bytes.byteLength,
+      byteSize: input.content.byteSize,
       checksum,
       status: "ready",
       format,

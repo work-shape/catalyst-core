@@ -115,6 +115,7 @@ export async function createClientInstanceApp(
         clientInstanceId,
         files: store,
         objectRootDirectory: executionWorkspaceObjectRoot,
+        maxFileBytes: config.executionWorkspaces.sourceFiles.maxFileBytes,
         markDeletedOnDelete: capabilityAttachmentHandlers.length === 0
       })
     : undefined;

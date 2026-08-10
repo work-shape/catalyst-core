@@ -598,12 +598,13 @@ function createWorkspaceArtifactSeedingCapability(root: string): ClientInstanceC
               });
             },
             async uploadDraftAttachment(input) {
+              const bytes = await readUploadBytes(input);
               const file = await managedObjects.createFile({
                 ownerUserId: input.ownerUserId,
                 conversationId: input.conversationId,
                 filename: input.filename,
                 mimeType: "text/x-workspace-artifact-test",
-                bytes: input.bytes
+                bytes
               });
               const artifact = await managedObjects.createArtifact({
                 conversationId: input.conversationId,
@@ -611,7 +612,7 @@ function createWorkspaceArtifactSeedingCapability(root: string): ClientInstanceC
                 kind: "text/csv",
                 filename: "final.csv",
                 mimeType: "text/csv",
-                bytes: input.bytes,
+                bytes,
                 metadata: {
                   source: "execution_workspace",
                   workspacePath: "scratch/final.csv"
@@ -623,7 +624,7 @@ function createWorkspaceArtifactSeedingCapability(root: string): ClientInstanceC
                 fileId: file.id,
                 filename: input.filename,
                 mimeType: "text/x-workspace-artifact-test",
-                byteSize: input.bytes.byteLength,
+                byteSize: bytes.byteLength,
                 checksum: file.checksum,
                 status: "ready",
                 artifactRefs: {
@@ -695,12 +696,13 @@ function createWorkspacePreviewArtifactSeedingCapability(root: string): ClientIn
               });
             },
             async uploadDraftAttachment(input) {
+              const bytes = await readUploadBytes(input);
               const file = await managedObjects.createFile({
                 ownerUserId: input.ownerUserId,
                 conversationId: input.conversationId,
                 filename: input.filename,
                 mimeType: "text/x-workspace-preview-test",
-                bytes: input.bytes
+                bytes
               });
               const source = await managedObjects.createArtifact({
                 conversationId: input.conversationId,
@@ -720,7 +722,7 @@ function createWorkspacePreviewArtifactSeedingCapability(root: string): ClientIn
                 kind: "presentation.preview_slide_image",
                 filename: "deck-slide-1.png",
                 mimeType: "image/png",
-                bytes: input.bytes,
+                bytes,
                 metadata: {
                   sourceArtifactId: source.id,
                   previewRole: "slide",
@@ -734,7 +736,7 @@ function createWorkspacePreviewArtifactSeedingCapability(root: string): ClientIn
                 fileId: file.id,
                 filename: input.filename,
                 mimeType: "text/x-workspace-preview-test",
-                byteSize: input.bytes.byteLength,
+                byteSize: bytes.byteLength,
                 checksum: file.checksum,
                 status: "ready",
                 artifactRefs: {
@@ -961,7 +963,8 @@ function createStrictUploadCapability(): ClientInstanceCapability {
               return attachmentsByConversation.get(conversationId) ?? [];
             },
             async uploadDraftAttachment(input) {
-              if (input.bytes.byteLength > maxFileBytes) {
+              const bytes = await readUploadBytes(input);
+              if (bytes.byteLength > maxFileBytes) {
                 throw new AppError(
                   "VALIDATION_FAILED",
                   "File exceeds the configured document preprocessing size limit"
@@ -975,7 +978,7 @@ function createStrictUploadCapability(): ClientInstanceCapability {
                 fileId,
                 filename: input.filename,
                 ...(input.mimeType ? { mimeType: input.mimeType } : {}),
-                byteSize: input.bytes.byteLength,
+                byteSize: bytes.byteLength,
                 checksum: "test-checksum",
                 status: "ready",
                 format: formatForMimeType(input.mimeType),
@@ -992,7 +995,7 @@ function createStrictUploadCapability(): ClientInstanceCapability {
               files.set(fileId, {
                 filename: input.filename,
                 ...(input.mimeType ? { mimeType: input.mimeType } : {}),
-                bytes: input.bytes
+                bytes
               });
               const conversationAttachments =
                 attachmentsByConversation.get(input.conversationId) ?? [];
@@ -1131,6 +1134,23 @@ async function uploadFile(
     headers: multipart.headers,
     payload: multipart.payload
   });
+}
+
+async function readUploadBytes(input: {
+  bytes?: Uint8Array;
+  content?: { openStream(): AsyncIterable<Uint8Array> };
+}): Promise<Uint8Array> {
+  if (input.bytes) {
+    return input.bytes;
+  }
+  if (!input.content) {
+    throw new Error("Upload content is missing");
+  }
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of input.content.openStream()) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
 }
 
 function createMultipartFilePayload(input: {

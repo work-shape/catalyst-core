@@ -94,12 +94,13 @@ export function createManagedObjectTestAttachmentCapability(): {
                 });
               },
               async uploadDraftAttachment(input) {
+                const bytes = await readUploadBytes(input);
                 const file = await managedObjects.createFile({
                   ownerUserId: input.ownerUserId,
                   conversationId: input.conversationId,
                   filename: input.filename,
                   mimeType: input.mimeType,
-                  bytes: input.bytes
+                  bytes
                 });
                 const attachment = await context.files.createConversationAttachment({
                   clientInstanceId: context.clientInstanceId,
@@ -107,7 +108,7 @@ export function createManagedObjectTestAttachmentCapability(): {
                   fileId: file.id,
                   filename: input.filename,
                   mimeType: input.mimeType,
-                  byteSize: input.bytes.byteLength,
+                  byteSize: bytes.byteLength,
                   checksum: file.checksum,
                   status: "ready"
                 });
@@ -191,6 +192,7 @@ export function createTestAttachmentCapability(
               return attachmentsByConversation.get(conversationId) ?? [];
             },
             async uploadDraftAttachment(input) {
+              const bytes = await readUploadBytes(input);
               const fileId = createPlatformId<"ManagedFileId">("file");
               const attachment: DraftAttachment = {
                 id: createPlatformId<"ConversationAttachmentId">("att"),
@@ -199,7 +201,7 @@ export function createTestAttachmentCapability(
                 fileId,
                 filename: input.filename,
                 mimeType: input.mimeType,
-                byteSize: input.bytes.byteLength,
+                byteSize: bytes.byteLength,
                 checksum: "test-checksum",
                 status: "ready",
                 format: formatForMimeType(input.mimeType),
@@ -214,7 +216,7 @@ export function createTestAttachmentCapability(
               files.set(fileId, {
                 filename: input.filename,
                 mimeType: input.mimeType,
-                bytes: input.bytes
+                bytes
               });
               const conversationAttachments =
                 attachmentsByConversation.get(input.conversationId) ?? [];
@@ -386,4 +388,21 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+async function readUploadBytes(input: {
+  bytes?: Uint8Array;
+  content?: { openStream(): AsyncIterable<Uint8Array> };
+}): Promise<Uint8Array> {
+  if (input.bytes) {
+    return input.bytes;
+  }
+  if (!input.content) {
+    throw new Error("Upload content is missing");
+  }
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of input.content.openStream()) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
 }

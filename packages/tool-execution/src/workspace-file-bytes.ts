@@ -1,6 +1,9 @@
+import { createWriteStream } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
 import { posix as posixPath } from "node:path";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import type {
   ClientInstanceId,
   ConversationId,
@@ -31,7 +34,12 @@ export interface PutWorkspaceFileBytesInput {
 }
 
 export interface WorkspaceObjectStorage {
-  putObject(input: { key: string; body: Uint8Array; contentType?: string }): Promise<void>;
+  putObject(input: {
+    key: string;
+    body: Uint8Array | AsyncIterable<Uint8Array>;
+    contentType?: string;
+    contentLength?: number;
+  }): Promise<void>;
   getObject(key: string): Promise<Uint8Array>;
   deleteObject?(key: string): Promise<void>;
 }
@@ -154,11 +162,26 @@ class LocalWorkspaceFileByteStore implements WorkspaceFileByteStore {
 class LocalWorkspaceObjectStorage implements WorkspaceObjectStorage {
   constructor(private readonly rootDirectory: string) {}
 
-  async putObject(input: { key: string; body: Uint8Array; contentType?: string }): Promise<void> {
+  async putObject(input: {
+    key: string;
+    body: Uint8Array | AsyncIterable<Uint8Array>;
+    contentType?: string;
+    contentLength?: number;
+  }): Promise<void> {
     const objectPath = this.resolveObjectPath(input.key);
     await mkdir(dirname(objectPath), { recursive: true });
-    await writeFile(objectPath, input.body);
+    if (input.body instanceof Uint8Array) {
+      await writeFile(objectPath, input.body);
+    } else {
+      try {
+        await pipeline(Readable.from(input.body), createWriteStream(objectPath));
+      } catch (error) {
+        await rm(objectPath, { force: true });
+        throw error;
+      }
+    }
     void input.contentType;
+    void input.contentLength;
   }
 
   async getObject(key: string): Promise<Uint8Array> {

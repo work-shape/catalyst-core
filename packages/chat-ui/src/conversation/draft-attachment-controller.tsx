@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, type ApiClient, type DraftAttachment } from "@vivd-catalyst/api-client";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
@@ -26,11 +26,13 @@ export interface DraftAttachmentController {
 }
 
 type LocalUploadingConversationAttachment = LocalUploadingAttachment & { conversationId: string };
+const MAX_CONCURRENT_UPLOADS = 2;
 
 export function useDraftAttachmentController(
   input: DraftAttachmentControllerInput
 ): DraftAttachmentController {
   const queryClient = useQueryClient();
+  const uploadLimiter = useRef(createConcurrencyLimiter(MAX_CONCURRENT_UPLOADS));
   const [localUploadingAttachments, setLocalUploadingAttachments] = useState<
     LocalUploadingConversationAttachment[]
   >([]);
@@ -73,14 +75,14 @@ export function useDraftAttachmentController(
         shouldUploadFile(file, draftAttachments, localUploadingAttachments)
       );
       for (const file of acceptedFiles) {
-        startUpload(conversationId, file);
+        void startUpload(conversationId, file);
       }
     } catch (error) {
       input.onError(error instanceof ApiError ? error.message : "File upload failed");
     }
   }
 
-  function startUpload(conversationId: string, file: File) {
+  async function startUpload(conversationId: string, file: File): Promise<void> {
     const localId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}:${file.name}`;
     const localAttachment: LocalUploadingConversationAttachment = {
       id: localId,
@@ -91,8 +93,8 @@ export function useDraftAttachmentController(
       status: "uploading"
     };
     setLocalUploadingAttachments((currentAttachments) => [...currentAttachments, localAttachment]);
-    void input.client.conversations.draftAttachments
-      .upload(conversationId, file)
+    await uploadLimiter
+      .current(() => input.client.conversations.draftAttachments.upload(conversationId, file))
       .then((response) => {
         queryClient.setQueryData(
           workspaceQueryKeys.draftAttachments(input.apiBaseUrl, input.authScope, conversationId),
@@ -170,6 +172,24 @@ export function useDraftAttachmentController(
     onRemoveDraftAttachment,
     onRetryDraftAttachment,
     clearConversationUploads
+  };
+}
+
+function createConcurrencyLimiter(maxConcurrency: number) {
+  let activeCount = 0;
+  const pending: Array<() => void> = [];
+
+  return async function run<T>(task: () => Promise<T>): Promise<T> {
+    if (activeCount >= maxConcurrency) {
+      await new Promise<void>((resolve) => pending.push(resolve));
+    }
+    activeCount += 1;
+    try {
+      return await task();
+    } finally {
+      activeCount -= 1;
+      pending.shift()?.();
+    }
   };
 }
 

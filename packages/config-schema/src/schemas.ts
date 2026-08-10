@@ -444,6 +444,17 @@ export const webAccessConfigSchema = z
 export const executionWorkspacesConfigSchema = z
   .object({
     enabled: z.boolean().default(false),
+    sourceFiles: z
+      .object({
+        maxFileBytes: z
+          .number()
+          .int()
+          .positive()
+          .default(25 * 1024 * 1024)
+      })
+      .default({
+        maxFileBytes: 25 * 1024 * 1024
+      }),
     runner: z
       .object({
         mode: z.enum(["local", "docker"]).default("docker"),
@@ -559,6 +570,9 @@ export const executionWorkspacesConfigSchema = z
   })
   .default({
     enabled: false,
+    sourceFiles: {
+      maxFileBytes: 25 * 1024 * 1024
+    },
     runner: {
       mode: "docker",
       image: "ghcr.io/vivd-solutions/catalyst-runner-base:placeholder",

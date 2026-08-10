@@ -94,7 +94,14 @@ export interface UploadDraftAttachmentInput {
   ownerUserId: string;
   filename: string;
   mimeType?: string;
-  bytes: Uint8Array;
+  content: UploadFileContent;
+}
+
+export interface UploadFileContent {
+  byteSize: number;
+  checksum: string;
+  headerBytes: Uint8Array;
+  openStream(): AsyncIterable<Uint8Array>;
 }
 
 export interface UploadDraftAttachmentResult {
@@ -119,7 +126,9 @@ export interface ClientInstanceAttachmentHandler {
   name: string;
   maxFileBytes: number;
   acceptedFileTypes: string[];
-  acceptsFile(input: Pick<UploadDraftAttachmentInput, "filename" | "mimeType" | "bytes">): boolean;
+  acceptsFile(
+    input: Pick<UploadDraftAttachmentInput, "filename" | "mimeType" | "content">
+  ): boolean;
   listDraftAttachments(conversationId: ConversationId): Promise<DraftAttachment[]>;
   uploadDraftAttachment(input: UploadDraftAttachmentInput): Promise<UploadDraftAttachmentResult>;
   retryDraftAttachment(input: {
@@ -167,7 +176,12 @@ export interface ClientInstanceCapability {
 }
 
 export interface ManagedObjectByteStore {
-  putObject(input: { key: string; body: Uint8Array; contentType?: string }): Promise<void>;
+  putObject(input: {
+    key: string;
+    body: Uint8Array | AsyncIterable<Uint8Array>;
+    contentType?: string;
+    contentLength?: number;
+  }): Promise<void>;
   getObject(key: string): Promise<Uint8Array>;
   deleteObject(key: string): Promise<void>;
 }
@@ -213,6 +227,16 @@ export interface CreateManagedObjectFileInput {
   keyContext?: JsonObject;
 }
 
+export interface CreateManagedObjectStreamedFileInput {
+  ownerUserId: string;
+  conversationId?: ConversationId;
+  filename: string;
+  mimeType?: string;
+  content: UploadFileContent;
+  extension?: string;
+  keyContext?: JsonObject;
+}
+
 export interface CreateManagedObjectArtifactInput {
   conversationId: ConversationId;
   sourceFileId?: ManagedFileId;
@@ -247,6 +271,7 @@ export interface ManagedObjectArtifactRead {
 
 export interface ManagedObjectAccess {
   createFile(input: CreateManagedObjectFileInput): Promise<ManagedFileRecord>;
+  createStreamedFile(input: CreateManagedObjectStreamedFileInput): Promise<ManagedFileRecord>;
   createArtifact(input: CreateManagedObjectArtifactInput): Promise<ManagedArtifactRecord>;
   readFile(input: ReadManagedObjectFileInput): Promise<ManagedObjectFileRead>;
   readArtifact(input: ReadManagedObjectArtifactInput): Promise<ManagedObjectArtifactRead>;
@@ -320,6 +345,37 @@ class DefaultManagedObjectAccess implements ManagedObjectAccess {
       mimeType: input.mimeType,
       byteSize: input.bytes.byteLength,
       checksum,
+      objectKey
+    });
+  }
+
+  async createStreamedFile(
+    input: CreateManagedObjectStreamedFileInput
+  ): Promise<ManagedFileRecord> {
+    const objectKey = this.keyFactory.createFileObjectKey({
+      clientInstanceId: this.clientInstanceId,
+      ownerUserId: input.ownerUserId,
+      conversationId: input.conversationId,
+      filename: input.filename,
+      mimeType: input.mimeType,
+      byteSize: input.content.byteSize,
+      checksum: input.content.checksum,
+      extension: input.extension,
+      keyContext: input.keyContext
+    });
+    await this.byteStore.putObject({
+      key: objectKey,
+      body: input.content.openStream(),
+      contentType: input.mimeType,
+      contentLength: input.content.byteSize
+    });
+    return this.files.createManagedFile({
+      clientInstanceId: this.clientInstanceId,
+      ownerUserId: input.ownerUserId,
+      filename: input.filename,
+      mimeType: input.mimeType,
+      byteSize: input.content.byteSize,
+      checksum: input.content.checksum,
       objectKey
     });
   }
@@ -411,4 +467,27 @@ class DefaultManagedObjectAccess implements ManagedObjectAccess {
 
 export function createManagedObjectChecksum(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+export function createUploadFileContent(bytes: Uint8Array): UploadFileContent {
+  return {
+    byteSize: bytes.byteLength,
+    checksum: createManagedObjectChecksum(bytes),
+    headerBytes: bytes.slice(0, 16),
+    async *openStream() {
+      yield bytes;
+    }
+  };
+}
+
+export function resolveUploadFileContent(
+  input: { content?: UploadFileContent; bytes?: Uint8Array }
+): UploadFileContent {
+  if (input.content) {
+    return input.content;
+  }
+  if (input.bytes) {
+    return createUploadFileContent(input.bytes);
+  }
+  throw new AppError("VALIDATION_FAILED", "Uploaded file content is missing");
 }

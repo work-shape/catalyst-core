@@ -12,7 +12,14 @@ export interface UploadDraftAttachmentInput {
   ownerUserId: string;
   filename: string;
   mimeType?: string;
-  bytes: Uint8Array;
+  content: UploadFileContent;
+}
+
+export interface UploadFileContent {
+  byteSize: number;
+  checksum: string;
+  headerBytes: Uint8Array;
+  openStream(): AsyncIterable<Uint8Array>;
 }
 
 export interface ReadConversationFileInput {
