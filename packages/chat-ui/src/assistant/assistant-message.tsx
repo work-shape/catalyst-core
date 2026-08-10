@@ -472,7 +472,7 @@ function UserMessage() {
 
   return (
     <MessagePrimitive.Root
-      className="group/message mx-auto grid w-full max-w-3xl justify-items-end gap-1 animate-in fade-in slide-in-from-bottom-1 duration-150"
+      className="group/message relative mx-auto grid w-full max-w-3xl justify-items-end gap-1 animate-in fade-in slide-in-from-bottom-1 duration-150"
       data-role="user"
     >
       <MessagePrimitive.Attachments>
@@ -483,7 +483,7 @@ function UserMessage() {
           components={{ Text: UserTextPart, File: FilePart, Image: ImagePart }}
         />
       </div>
-      <div className="flex min-h-8 items-center gap-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
+      <div className="flex min-h-8 items-center gap-1 opacity-100 md:absolute md:right-0 md:top-full md:opacity-0 md:transition-opacity md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
         <ActionBarPrimitive.Copy
           className={tooltipIconButtonClassName}
           title={t("copy")}
