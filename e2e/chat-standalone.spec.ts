@@ -252,6 +252,9 @@ test("new turns anchor below the top chrome and retain response runway", async (
     const anchoredMessage = chat.locator("[data-aui-top-anchor-user]");
     const bubble = anchoredMessage.locator(".chat-user-message-bubble");
     const reserve = chat.locator("[data-aui-top-anchor-reserve]");
+    const expectedAnchorOffset = await page.evaluate(() =>
+      Math.round(Math.min(160, Math.max(120, window.innerHeight * 0.15)))
+    );
 
     await expect(anchoredMessage).toHaveCount(1);
     await expect(reserve).toHaveCount(1);
@@ -264,7 +267,7 @@ test("new turns anchor below the top chrome and retain response runway", async (
         if (!viewportBox || !bubbleBox) return 0;
         return Math.round(bubbleBox.y - viewportBox.y);
       })
-      .toBe(96);
+      .toBe(expectedAnchorOffset);
     await expect
       .poll(() => reserve.evaluate((element) => element.getBoundingClientRect().height))
       .toBeGreaterThan(0);
@@ -315,7 +318,7 @@ test("new turns anchor below the top chrome and retain response runway", async (
         if (!viewportBox || !bubbleBox) return 0;
         return Math.round(bubbleBox.y - viewportBox.y);
       })
-      .toBe(96);
+      .toBe(expectedAnchorOffset);
 
     await page.reload();
     await expect(page.getByPlaceholder("Message")).toBeVisible();
