@@ -195,6 +195,32 @@ describe("model usage governance", () => {
     });
   });
 
+  it("uses the private safety multiplier for budgets without changing billable costs", async () => {
+    const { governance, clientInstanceId } = createGovernance({
+      dailySpendLimit: 5,
+      costSafetyMultiplier: 1.3
+    });
+    await governance.recordModelUsage(
+      usageInput(clientInstanceId, {
+        inputTokens: 0,
+        cachedInputTokens: 0,
+        outputTokens: 100_000,
+        totalTokens: 100_000,
+        webSearchCallCount: 1
+      })
+    );
+
+    const summary = await governance.createSafeSummary({ clientInstanceId });
+    expect(summary.today.cost.billableCostMicros).toBe(4_000_000);
+    expect(summary).not.toHaveProperty("costSafetyMultiplier");
+    await expect(
+      governance.runModelCall(clientInstanceId, async () => "blocked")
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "Daily model spend budget has been reached"
+    });
+  });
+
   it("reserves model calls so a daily call limit cannot be raced", async () => {
     const { governance, clientInstanceId } = createGovernance({}, { modelCallsPerDay: 1 });
 
