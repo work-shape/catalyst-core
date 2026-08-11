@@ -26,16 +26,21 @@ describe("in-process tool execution", () => {
         requiredPermissionRefs: ["demo-tools"]
       },
       async execute(input) {
-        return toolSuccess({ echoed: input.text }, {
-          modelUsage: [{
-            providerId: "document-provider",
-            model: "document-model",
-            inputTokens: 100,
-            outputTokens: 20,
-            totalTokens: 120,
-            source: "provider_reported"
-          }]
-        });
+        return toolSuccess(
+          { echoed: input.text },
+          {
+            modelUsage: [
+              {
+                providerId: "document-provider",
+                model: "document-model",
+                inputTokens: 100,
+                outputTokens: 20,
+                totalTokens: 120,
+                source: "provider_reported"
+              }
+            ]
+          }
+        );
       }
     });
     const context: ToolExecutionContext = {

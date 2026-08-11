@@ -480,9 +480,10 @@ export function createUploadFileContent(bytes: Uint8Array): UploadFileContent {
   };
 }
 
-export function resolveUploadFileContent(
-  input: { content?: UploadFileContent; bytes?: Uint8Array }
-): UploadFileContent {
+export function resolveUploadFileContent(input: {
+  content?: UploadFileContent;
+  bytes?: Uint8Array;
+}): UploadFileContent {
   if (input.content) {
     return input.content;
   }
