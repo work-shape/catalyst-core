@@ -196,7 +196,7 @@ export function ResourcesPanel({
   return (
     <aside
       aria-label={t("resourcesTitle")}
-      className="animate-in fade-in zoom-in-95 absolute top-20 right-6 z-[45] flex max-h-[calc(100%-8rem)] w-[min(22rem,calc(100%-3rem))] flex-col overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-lg duration-200"
+      className="animate-in fade-in zoom-in-95 absolute top-20 right-6 z-[45] flex max-h-[calc(100%-10rem)] w-[min(22rem,calc(100%-3rem))] flex-col overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-lg duration-200"
     >
       <div className="flex h-11 shrink-0 items-center justify-between border-b px-3">
         <h2 className="text-sm font-semibold">{t("resourcesTitle")}</h2>
