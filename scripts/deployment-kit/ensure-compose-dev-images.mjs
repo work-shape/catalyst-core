@@ -119,8 +119,7 @@ function collectPackageManifests(path, paths) {
 
 function shouldIgnoreDirectory(entry) {
   return (
-    entry.isDirectory() &&
-    [".cache", ".git", ".venv", "dist", "node_modules"].includes(entry.name)
+    entry.isDirectory() && [".cache", ".git", ".venv", "dist", "node_modules"].includes(entry.name)
   );
 }
 
