@@ -1273,6 +1273,44 @@ describe("workspace tools", () => {
     ]);
   });
 
+  it("does not register a ready preview artifact when workspace bytes are missing", async () => {
+    const harness = await createWorkspaceHarness();
+    const workspace = await harness.store.ensureExecutionWorkspace({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      ownerUserId: harness.ownerUserId,
+      now: "2026-06-29T12:00:00.000Z"
+    });
+    await harness.store.upsertWorkspaceFile({
+      clientInstanceId: harness.clientInstanceId,
+      workspaceId: workspace.id,
+      path: "previews/missing/page-1.png",
+      objectKey: "execution-workspaces/missing/page-1.png",
+      byteSize: 123,
+      checksum: "sha256:missing-preview",
+      mimeType: "image/png",
+      updatedAt: "2026-06-29T12:01:00.000Z"
+    });
+
+    const previewed = await harness.runTool("workspace.preview_images", {
+      path: "previews/missing/page-1.png"
+    });
+
+    expect(previewed).toMatchObject({
+      status: "failed",
+      error: {
+        code: "handler_failed",
+        message: expect.stringContaining("not available in durable storage")
+      }
+    });
+    expect(
+      await harness.store.listConversationManagedArtifacts({
+        clientInstanceId: harness.clientInstanceId,
+        conversationId: harness.conversation.id
+      })
+    ).toEqual([]);
+  });
+
   it("shapes command stdout and stderr to configured bounds", () => {
     const output = shapeWorkspaceCommandOutput(
       {

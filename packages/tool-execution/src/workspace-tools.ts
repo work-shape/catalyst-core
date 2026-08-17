@@ -573,6 +573,9 @@ export class WorkspaceCommandService {
     input: z.infer<typeof workspacePreviewImagesInputSchema>,
     context: ToolExecutionContext
   ): Promise<ToolHandlerResult<z.infer<typeof workspacePreviewImagesOutputSchema>>> {
+    if (!this.objectStore) {
+      return failed("handler_failed", "Workspace preview image bytes are not available");
+    }
     const rawPaths = input.paths ?? (input.path ? [input.path] : []);
     const maxImages = Math.min(
       input.maxImages ?? this.limits.maxPreviewImages,
@@ -626,6 +629,30 @@ export class WorkspaceCommandService {
           ...(file.mimeType ? { mimeType: file.mimeType } : {}),
           supportedMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/gif"]
         });
+      }
+      let bytes: Uint8Array;
+      try {
+        bytes = await this.objectStore.getObject(file.objectKey);
+      } catch (error) {
+        if (isAppError(error) && error.code !== "NOT_FOUND") {
+          throw error;
+        }
+        return failed(
+          "handler_failed",
+          `Workspace preview image '${file.path}' is not available in durable storage. Recreate the preview before inspecting it.`,
+          { path: file.path }
+        );
+      }
+      if (bytes.byteLength !== file.byteSize) {
+        return failed(
+          "handler_failed",
+          `Workspace preview image '${file.path}' does not match its stored metadata. Recreate the preview before inspecting it.`,
+          {
+            path: file.path,
+            expectedByteSize: file.byteSize,
+            actualByteSize: bytes.byteLength
+          }
+        );
       }
       const artifact = await this.store.createManagedArtifact({
         clientInstanceId: context.clientInstanceId,
