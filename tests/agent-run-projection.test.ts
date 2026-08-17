@@ -40,6 +40,29 @@ describe("agent run projection", () => {
     expect(projection.preparingTool).toBeUndefined();
   });
 
+  it("clears a preparing tool when its model attempt is retried", () => {
+    const run = createRun();
+    const projection = projectAgentRun(run, [
+      observe({
+        type: "tool_call_preparing",
+        runId: run.id,
+        sequence: 1,
+        createdAt: at(1),
+        toolCallId: asToolCallId("call_interrupted"),
+        toolName: "workspace.exec"
+      }),
+      observe({
+        type: "tool_call_preparation_cancelled",
+        runId: run.id,
+        sequence: 2,
+        createdAt: at(2),
+        toolCallId: asToolCallId("call_interrupted")
+      })
+    ]);
+
+    expect(projection.preparingTool).toBeUndefined();
+  });
+
   it("uses the same ordered projection for replay and incremental observations", () => {
     const run = createRun();
     const observations = [

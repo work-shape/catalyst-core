@@ -80,6 +80,8 @@ export {
 } from "./workspace-tool-results";
 export type { WorkspaceCommandServiceLimits } from "./workspace-tool-schemas";
 
+export const EXECUTION_WORKSPACE_ARTIFACT_METADATA_SOURCE = "execution_workspace";
+
 export type WorkspaceToolStore = Pick<
   PlatformStore,
   | "ensureExecutionWorkspace"
@@ -664,7 +666,7 @@ export class WorkspaceCommandService {
         byteSize: file.byteSize,
         checksum: file.checksum,
         metadata: {
-          source: "execution_workspace_preview",
+          source: EXECUTION_WORKSPACE_ARTIFACT_METADATA_SOURCE,
           workspaceId: workspace.value.id,
           workspacePath: file.path
         }

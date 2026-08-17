@@ -56,6 +56,12 @@ export function applyAgentRunObservation(
       toolName: event.toolName
     };
   }
+  if (
+    event.type === "tool_call_preparation_cancelled" &&
+    preparingTool?.toolCallId === event.toolCallId
+  ) {
+    preparingTool = undefined;
+  }
   if (event.type === "tool_call_started") {
     if (preparingTool?.toolCallId === event.toolCallId) {
       preparingTool = undefined;

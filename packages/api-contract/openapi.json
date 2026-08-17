@@ -7006,6 +7006,35 @@
                           "properties": {
                             "type": {
                               "type": "string",
+                              "const": "tool_call_preparation_cancelled"
+                            },
+                            "runId": {
+                              "type": "string"
+                            },
+                            "sequence": {
+                              "type": "number"
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            },
+                            "toolCallId": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "runId",
+                            "sequence",
+                            "createdAt",
+                            "toolCallId"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
                               "const": "tool_call_started"
                             },
                             "runId": {

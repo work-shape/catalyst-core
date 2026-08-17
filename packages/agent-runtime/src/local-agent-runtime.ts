@@ -316,36 +316,34 @@ export class LocalAgentRuntime implements AgentRuntime {
     let runCompacted = false;
 
     for (let step = 0; step < maxSteps; step += 1) {
-      const { completion, emittedDeltas, reasoning } = await this.withTransientModelRetry(
-        context,
-        (attempt) =>
-          this.options.usageGovernance.runModelCall(context.clientInstanceId, async () => {
-            const modelResult = await this.completeWithProvider(
-              {
-                providerId: modelSelection.provider.id,
-                model: modelSelection.model,
-                reasoningEffort: modelSelection.reasoningEffort,
-                continuation: providerContinuation,
-                messages,
-                tools
-              },
-              context,
-              state,
-              true,
-              attempt
-            );
-            await recordModelUsage({
-              usageStore: this.options.usageGovernance,
-              runId,
-              startInput: input,
-              context,
-              provider: modelSelection.provider,
+      const modelResult = await this.withTransientModelRetry(context, state, (attempt) =>
+        this.options.usageGovernance.runModelCall(context.clientInstanceId, () =>
+          this.completeWithProvider(
+            {
+              providerId: modelSelection.provider.id,
               model: modelSelection.model,
-              completion: modelResult.completion
-            });
-            return modelResult;
-          })
+              reasoningEffort: modelSelection.reasoningEffort,
+              continuation: providerContinuation,
+              messages,
+              tools
+            },
+            context,
+            state,
+            true,
+            attempt
+          )
+        )
       );
+      await recordModelUsage({
+        usageStore: this.options.usageGovernance,
+        runId,
+        startInput: input,
+        context,
+        provider: modelSelection.provider,
+        model: modelSelection.model,
+        completion: modelResult.completion
+      });
+      const { completion, emittedDeltas, reasoning } = modelResult;
       providerContinuation = completion.continuation;
       const compactedThisCall = completion.contextManagement?.compacted === true;
       runCompacted ||= compactedThisCall;
@@ -693,8 +691,10 @@ export class LocalAgentRuntime implements AgentRuntime {
     reasoning: StoredReasoningSummary[];
   }> {
     if (!streamText || !this.options.modelProvider.stream) {
+      const completion = await this.options.modelProvider.complete(request, context);
+      attempt.retrySafe = false;
       return {
-        completion: await this.options.modelProvider.complete(request, context),
+        completion,
         emittedDeltas: false,
         reasoning: []
       };
@@ -732,10 +732,12 @@ export class LocalAgentRuntime implements AgentRuntime {
         continue;
       }
       if (event.type === "tool_call_preparing") {
+        const toolCallId = asToolCallId(event.toolCallId);
+        attempt.preparingToolCallIds.push(toolCallId);
         state.emit({
           type: "tool_call_preparing",
           runId: state.runId,
-          toolCallId: asToolCallId(event.toolCallId),
+          toolCallId,
           toolName: event.toolName
         });
         continue;
@@ -766,6 +768,7 @@ export class LocalAgentRuntime implements AgentRuntime {
         });
         continue;
       }
+      attempt.retrySafe = false;
       completion = event.completion;
     }
 
@@ -779,6 +782,7 @@ export class LocalAgentRuntime implements AgentRuntime {
       emittedDeltas
     );
     if (unstreamedText.length > 0) {
+      attempt.retrySafe = false;
       emittedDeltas = true;
       state.emit({
         type: "message_delta",
@@ -798,10 +802,11 @@ export class LocalAgentRuntime implements AgentRuntime {
 
   private async withTransientModelRetry<T>(
     context: RuntimeCallContext,
+    state: RunState,
     execute: (attempt: ModelProviderAttempt) => Promise<T>
   ): Promise<T> {
     for (let attempt = 1; attempt <= MODEL_PROVIDER_MAX_ATTEMPTS; attempt += 1) {
-      const progress: ModelProviderAttempt = { retrySafe: true };
+      const progress: ModelProviderAttempt = { retrySafe: true, preparingToolCallIds: [] };
       try {
         return await execute(progress);
       } catch (error) {
@@ -812,6 +817,13 @@ export class LocalAgentRuntime implements AgentRuntime {
           !isTransientModelProviderError(error)
         ) {
           throw error;
+        }
+        for (const toolCallId of progress.preparingToolCallIds) {
+          state.emit({
+            type: "tool_call_preparation_cancelled",
+            runId: state.runId,
+            toolCallId
+          });
         }
         try {
           await delay(MODEL_PROVIDER_RETRY_DELAY_MS, undefined, { signal: context.signal });
@@ -826,6 +838,7 @@ export class LocalAgentRuntime implements AgentRuntime {
 
 interface ModelProviderAttempt {
   retrySafe: boolean;
+  preparingToolCallIds: ReturnType<typeof asToolCallId>[];
 }
 
 function isTransientModelProviderError(error: unknown): boolean {

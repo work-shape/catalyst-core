@@ -1731,6 +1731,12 @@ export type ObserveConversationRunResponses = {
             toolCallId: string;
             toolName: string;
         } | {
+            type: 'tool_call_preparation_cancelled';
+            runId: string;
+            sequence: number;
+            createdAt: string;
+            toolCallId: string;
+        } | {
             type: 'tool_call_started';
             runId: string;
             sequence: number;
