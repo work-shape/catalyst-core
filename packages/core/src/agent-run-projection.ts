@@ -97,6 +97,7 @@ export function applyAgentRunObservation(
     error = event.error;
   }
   if (isTerminalEvent(event)) {
+    preparingTool = undefined;
     for (const entry of reasoning) {
       entry.open = false;
     }

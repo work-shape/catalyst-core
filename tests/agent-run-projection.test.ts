@@ -13,6 +13,33 @@ import {
 } from "@vivd-catalyst/core";
 
 describe("agent run projection", () => {
+  it("clears an unfinished preparing tool when the run becomes terminal", () => {
+    const run = createRun();
+    const projection = projectAgentRun(run, [
+      observe({
+        type: "tool_call_preparing",
+        runId: run.id,
+        sequence: 1,
+        createdAt: at(1),
+        toolCallId: asToolCallId("call_interrupted"),
+        toolName: "workspace.exec"
+      }),
+      observe({
+        type: "run_failed",
+        runId: run.id,
+        sequence: 2,
+        createdAt: at(2),
+        error: {
+          code: "INTERNAL",
+          message: "Agent run failed",
+          category: "internal_error"
+        }
+      })
+    ]);
+
+    expect(projection.preparingTool).toBeUndefined();
+  });
+
   it("uses the same ordered projection for replay and incremental observations", () => {
     const run = createRun();
     const observations = [

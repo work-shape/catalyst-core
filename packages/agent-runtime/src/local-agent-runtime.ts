@@ -41,6 +41,7 @@ import {
   type ModelProvider,
   type ModelToolCall
 } from "@vivd-catalyst/model-provider";
+import { setTimeout as delay } from "node:timers/promises";
 import { RunState, toRunFailureError, type RunFailureError } from "./run-state";
 import { createSystemInstructions } from "./system-instructions";
 import { executeToolCall } from "./tool-call-execution";
@@ -101,6 +102,8 @@ export interface LocalAgentRunFailureReport {
 const DEFAULT_CONVERSATION_HISTORY_LIMIT = 20;
 const DEFAULT_MAX_STEPS = 64;
 const DEFAULT_REPEATED_TOOL_CALL_LIMIT = 3;
+const MODEL_PROVIDER_MAX_ATTEMPTS = 2;
+const MODEL_PROVIDER_RETRY_DELAY_MS = 250;
 const DEFAULT_MODEL_CONTEXT: ModelContextProjectionOptions = {
   toolOutput: {
     maxTokens: 60000
@@ -313,32 +316,36 @@ export class LocalAgentRuntime implements AgentRuntime {
     let runCompacted = false;
 
     for (let step = 0; step < maxSteps; step += 1) {
-      const { completion, emittedDeltas, reasoning } =
-        await this.options.usageGovernance.runModelCall(context.clientInstanceId, async () => {
-          const modelResult = await this.completeWithProvider(
-            {
-              providerId: modelSelection.provider.id,
+      const { completion, emittedDeltas, reasoning } = await this.withTransientModelRetry(
+        context,
+        (attempt) =>
+          this.options.usageGovernance.runModelCall(context.clientInstanceId, async () => {
+            const modelResult = await this.completeWithProvider(
+              {
+                providerId: modelSelection.provider.id,
+                model: modelSelection.model,
+                reasoningEffort: modelSelection.reasoningEffort,
+                continuation: providerContinuation,
+                messages,
+                tools
+              },
+              context,
+              state,
+              true,
+              attempt
+            );
+            await recordModelUsage({
+              usageStore: this.options.usageGovernance,
+              runId,
+              startInput: input,
+              context,
+              provider: modelSelection.provider,
               model: modelSelection.model,
-              reasoningEffort: modelSelection.reasoningEffort,
-              continuation: providerContinuation,
-              messages,
-              tools
-            },
-            context,
-            state,
-            true
-          );
-          await recordModelUsage({
-            usageStore: this.options.usageGovernance,
-            runId,
-            startInput: input,
-            context,
-            provider: modelSelection.provider,
-            model: modelSelection.model,
-            completion: modelResult.completion
-          });
-          return modelResult;
-        });
+              completion: modelResult.completion
+            });
+            return modelResult;
+          })
+      );
       providerContinuation = completion.continuation;
       const compactedThisCall = completion.contextManagement?.compacted === true;
       runCompacted ||= compactedThisCall;
@@ -678,7 +685,8 @@ export class LocalAgentRuntime implements AgentRuntime {
     request: Parameters<ModelProvider["complete"]>[0],
     context: RuntimeCallContext,
     state: RunState,
-    streamText: boolean
+    streamText: boolean,
+    attempt: ModelProviderAttempt
   ): Promise<{
     completion: ModelCompletion;
     emittedDeltas: boolean;
@@ -699,6 +707,7 @@ export class LocalAgentRuntime implements AgentRuntime {
     for await (const event of this.options.modelProvider.stream(request, context)) {
       if (event.type === "text_delta") {
         if (event.delta.length > 0) {
+          attempt.retrySafe = false;
           emittedDeltas = true;
           streamedText += event.delta;
           state.emit({
@@ -711,6 +720,7 @@ export class LocalAgentRuntime implements AgentRuntime {
       }
       if (event.type === "reasoning_delta") {
         if (event.delta.length > 0) {
+          attempt.retrySafe = false;
           reasoningById.set(event.id, `${reasoningById.get(event.id) ?? ""}${event.delta}`);
           state.emit({
             type: "reasoning_delta",
@@ -731,6 +741,7 @@ export class LocalAgentRuntime implements AgentRuntime {
         continue;
       }
       if (event.type === "provider_tool_started") {
+        attempt.retrySafe = false;
         state.emit({
           type: "tool_call_started",
           runId: state.runId,
@@ -741,6 +752,7 @@ export class LocalAgentRuntime implements AgentRuntime {
         continue;
       }
       if (event.type === "provider_tool_completed") {
+        attempt.retrySafe = false;
         state.emit({
           type: "tool_call_completed",
           runId: state.runId,
@@ -783,6 +795,81 @@ export class LocalAgentRuntime implements AgentRuntime {
         .filter((summary) => summary.text.length > 0)
     };
   }
+
+  private async withTransientModelRetry<T>(
+    context: RuntimeCallContext,
+    execute: (attempt: ModelProviderAttempt) => Promise<T>
+  ): Promise<T> {
+    for (let attempt = 1; attempt <= MODEL_PROVIDER_MAX_ATTEMPTS; attempt += 1) {
+      const progress: ModelProviderAttempt = { retrySafe: true };
+      try {
+        return await execute(progress);
+      } catch (error) {
+        if (
+          attempt === MODEL_PROVIDER_MAX_ATTEMPTS ||
+          !progress.retrySafe ||
+          context.signal?.aborted ||
+          !isTransientModelProviderError(error)
+        ) {
+          throw error;
+        }
+        try {
+          await delay(MODEL_PROVIDER_RETRY_DELAY_MS, undefined, { signal: context.signal });
+        } catch {
+          throw error;
+        }
+      }
+    }
+    throw new AppError("INTERNAL", "Model provider retry loop ended unexpectedly");
+  }
+}
+
+interface ModelProviderAttempt {
+  retrySafe: boolean;
+}
+
+function isTransientModelProviderError(error: unknown): boolean {
+  let candidate = error;
+  for (let depth = 0; depth < 4 && candidate; depth += 1) {
+    if (candidate instanceof AppError) {
+      if (candidate.code === "TIMEOUT") {
+        return true;
+      }
+      const details = isRecord(candidate.details) ? candidate.details : undefined;
+      const status = typeof details?.status === "number" ? details.status : undefined;
+      if (status === 408 || status === 429 || (status !== undefined && status >= 500)) {
+        return true;
+      }
+    }
+    if (candidate instanceof Error) {
+      const code = readErrorCode(candidate);
+      if (
+        code === "ECONNRESET" ||
+        code === "ECONNREFUSED" ||
+        code === "EPIPE" ||
+        code === "ETIMEDOUT" ||
+        code === "UND_ERR_SOCKET"
+      ) {
+        return true;
+      }
+      if (/\b(?:fetch failed|socket hang up|terminated|timed out)\b/iu.test(candidate.message)) {
+        return true;
+      }
+      candidate = candidate.cause;
+      continue;
+    }
+    break;
+  }
+  return false;
+}
+
+function readErrorCode(error: Error): string | undefined {
+  const code = (error as Error & { code?: unknown }).code;
+  return typeof code === "string" ? code : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isCancellationRequested(status: AgentRunStatus): boolean {
