@@ -446,27 +446,31 @@ function DraftAttachmentList({
           ) : null}
         </div>
       ) : null}
-      <div
-        ref={listRef}
-        className="grid max-h-36 gap-1.5 overflow-y-auto sm:grid-cols-2"
-        style={{
-          scrollbarWidth: "thin",
-          scrollbarColor: "var(--border) transparent",
-          maskImage: attachmentFadeMask(overflow),
-          WebkitMaskImage: attachmentFadeMask(overflow)
-        }}
-        onScroll={syncOverflow}
-      >
-        {items.map((item) => (
-          <AttachmentChip
-            key={item.id}
-            filename={item.filename}
-            byteSize={item.byteSize}
-            status={item.status}
-            onRemove={item.removable ? () => onRemoveAttachment(item.id) : undefined}
-            onRetry={item.retryable ? () => onRetryAttachment(item.id) : undefined}
-          />
-        ))}
+      {/* Paint containment keeps offscreen grid rows out of the thread's
+          scrollable overflow while this nested list remains scrollable. */}
+      <div className="max-h-36 overflow-hidden [contain:paint]">
+        <div
+          ref={listRef}
+          className="grid max-h-36 gap-1.5 overflow-y-auto sm:grid-cols-2"
+          style={{
+            scrollbarWidth: "thin",
+            scrollbarColor: "var(--border) transparent",
+            maskImage: attachmentFadeMask(overflow),
+            WebkitMaskImage: attachmentFadeMask(overflow)
+          }}
+          onScroll={syncOverflow}
+        >
+          {items.map((item) => (
+            <AttachmentChip
+              key={item.id}
+              filename={item.filename}
+              byteSize={item.byteSize}
+              status={item.status}
+              onRemove={item.removable ? () => onRemoveAttachment(item.id) : undefined}
+              onRetry={item.retryable ? () => onRetryAttachment(item.id) : undefined}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
