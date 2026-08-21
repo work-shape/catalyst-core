@@ -3,6 +3,7 @@ import {
   currentStructuredResults,
   type PlatformStore,
   type StructuredDataFieldSource,
+  type StructuredDataPublicationValidator,
   type StructuredDataState
 } from "@vivd-catalyst/core";
 import {
@@ -31,6 +32,7 @@ type StructuredDataToolStore = Pick<
 
 export function createStructuredDataToolDefinitions(input: {
   store: StructuredDataToolStore;
+  publicationValidator?: StructuredDataPublicationValidator;
 }): AnyToolDefinition[] {
   return [
     defineTool({
@@ -61,13 +63,19 @@ export function createStructuredDataToolDefinitions(input: {
                 )
           )
         ];
-        const sourceAttachmentIds = new Map<string, StructuredDataFieldSource["attachmentId"]>();
-        if (sourceFileIds.length > 0) {
-          const sentAttachments = await input.store.listSentConversationAttachments({
+        let sentAttachments:
+          | Awaited<ReturnType<StructuredDataToolStore["listSentConversationAttachments"]>>
+          | undefined;
+        const getSentAttachments = async () => {
+          sentAttachments ??= await input.store.listSentConversationAttachments({
             clientInstanceId: context.clientInstanceId,
             conversationId
           });
-          for (const attachment of sentAttachments) {
+          return sentAttachments;
+        };
+        const sourceAttachmentIds = new Map<string, StructuredDataFieldSource["attachmentId"]>();
+        if (sourceFileIds.length > 0) {
+          for (const attachment of await getSentAttachments()) {
             sourceAttachmentIds.set(attachment.fileId, attachment.id);
           }
           const invalidSourceFileId = sourceFileIds.find(
@@ -165,6 +173,28 @@ export function createStructuredDataToolDefinitions(input: {
               "validation_failed",
               "Structured data sections may contain at most 64 fields"
             );
+          }
+        }
+
+        if (input.publicationValidator) {
+          const validation = await input.publicationValidator({
+            clientInstanceId: context.clientInstanceId,
+            conversationId,
+            resourceKey: toolInput.resourceKey,
+            title,
+            state,
+            messages: await input.store.listMessages({
+              clientInstanceId: context.clientInstanceId,
+              conversationId
+            }),
+            attachments: (await getSentAttachments()).map(({ id, fileId, filename }) => ({
+              id,
+              fileId,
+              filename
+            }))
+          });
+          if (validation.status === "rejected") {
+            return toolFailed("validation_failed", validation.message);
           }
         }
 

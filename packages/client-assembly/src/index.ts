@@ -1,4 +1,5 @@
 export type { ClientInstanceEnv } from "./env";
+export type { StructuredDataPublicationValidator } from "@vivd-catalyst/core";
 export type {
   ClientInstanceCapability,
   ClientInstanceCapabilityContext,

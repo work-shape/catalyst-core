@@ -5,6 +5,7 @@ import {
   asMessageId,
   asToolCallId,
   createToolResultMetadata,
+  type StructuredDataPublicationValidator,
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
@@ -15,6 +16,118 @@ import {
 } from "@vivd-catalyst/tool-execution";
 
 describe("structured_data.publish", () => {
+  it("validates a fully materialized replacement before writing a revision", async () => {
+    let proposal: Parameters<StructuredDataPublicationValidator>[0] | undefined;
+    const harness = await createHarness((input) => {
+      proposal = input;
+      return { status: "rejected", message: "Reconcile the proposed value" };
+    });
+    const attachment = await createSentAttachment(
+      harness.store,
+      harness.clientInstanceId,
+      harness.conversation.id
+    );
+    await harness.store.appendMessage({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      role: "assistant",
+      text: "Durable evidence"
+    });
+
+    await expect(
+      harness.run({
+        resourceKey: "claim_data",
+        title: "Claim data",
+        operation: "replace",
+        sections: [
+          {
+            key: "person",
+            label: "Person",
+            fields: [
+              {
+                key: "name",
+                label: "Name",
+                value: "Ada",
+                sources: [{ fileId: attachment.fileId, page: 2 }]
+              }
+            ]
+          }
+        ]
+      })
+    ).resolves.toMatchObject({
+      status: "failed",
+      error: { code: "validation_failed", message: "Reconcile the proposed value" }
+    });
+    expect(proposal).toMatchObject({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      resourceKey: "claim_data",
+      title: "Claim data",
+      state: {
+        title: "Claim data",
+        sections: [
+          {
+            fields: [
+              {
+                value: "Ada",
+                sources: [{ attachmentId: attachment.id, page: 2 }]
+              }
+            ]
+          }
+        ]
+      },
+      attachments: [{ id: attachment.id, fileId: attachment.fileId, filename: "source.pdf" }]
+    });
+    expect(proposal?.messages.some((message) => message.text === "Durable evidence")).toBe(true);
+    await expect(harness.resources()).resolves.toEqual([]);
+  });
+
+  it("validates a materialized patch and preserves the prior revision when rejected", async () => {
+    const proposals: Parameters<StructuredDataPublicationValidator>[0][] = [];
+    const harness = await createHarness((input) => {
+      proposals.push(input);
+      return input.state.sections[0]?.fields[0]?.value === "Grace"
+        ? { status: "rejected", message: "Conflicting value" }
+        : { status: "accepted" };
+    });
+    await harness.run({
+      resourceKey: "claim_data",
+      title: "Claim data",
+      operation: "replace",
+      sections: [
+        {
+          key: "person",
+          label: "Person",
+          fields: [{ key: "name", label: "Full name", value: "Ada" }]
+        }
+      ]
+    });
+
+    await expect(
+      harness.run({
+        resourceKey: "claim_data",
+        operation: "patch",
+        set: [{ sectionKey: "person", fieldKey: "name", value: "Grace" }]
+      })
+    ).resolves.toMatchObject({
+      status: "failed",
+      error: { code: "validation_failed", message: "Conflicting value" }
+    });
+    expect(proposals.at(-1)?.state.sections[0]?.fields[0]?.value).toBe("Grace");
+    await expect(harness.resources()).resolves.toEqual([
+      expect.objectContaining({
+        revision: 1,
+        state: expect.objectContaining({
+          sections: [
+            expect.objectContaining({
+              fields: [expect.objectContaining({ value: "Ada" })]
+            })
+          ]
+        })
+      })
+    ]);
+  });
+
   it("creates and fully replaces a resource with server-owned revisions", async () => {
     const harness = await createHarness();
     const first = await harness.run({
@@ -438,7 +551,7 @@ describe("structured_result.read", () => {
   });
 });
 
-async function createHarness() {
+async function createHarness(publicationValidator?: StructuredDataPublicationValidator) {
   const clientInstanceId = asClientInstanceId(`structured_data_${globalThis.crypto.randomUUID()}`);
   const store = new InMemoryPlatformStore();
   const conversation = await store.createConversation({
@@ -448,7 +561,7 @@ async function createHarness() {
     title: "Structured data",
     retainedUntil: "2030-01-01T00:00:00.000Z"
   });
-  const tools = createStructuredDataToolDefinitions({ store });
+  const tools = createStructuredDataToolDefinitions({ store, publicationValidator });
   const execution = new InProcessToolExecution({
     registry: new ToolRegistry({ tools }),
     getAgentToolNames: () => tools.map((tool) => tool.name)
