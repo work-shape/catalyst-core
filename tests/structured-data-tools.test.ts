@@ -5,7 +5,7 @@ import {
   asMessageId,
   asToolCallId,
   createToolResultMetadata,
-  type StructuredDataPublicationValidator,
+  type StructuredDataPublicationReviewer,
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
@@ -16,11 +16,11 @@ import {
 } from "@vivd-catalyst/tool-execution";
 
 describe("structured_data.publish", () => {
-  it("validates a fully materialized replacement before writing a revision", async () => {
-    let proposal: Parameters<StructuredDataPublicationValidator>[0] | undefined;
+  it("reviews a fully materialized replacement and publishes with model-visible warnings", async () => {
+    let proposal: Parameters<StructuredDataPublicationReviewer>[0] | undefined;
     const harness = await createHarness((input) => {
       proposal = input;
-      return { status: "rejected", message: "Reconcile the proposed value" };
+      return ["Reconcile the proposed value"];
     });
     const attachment = await createSentAttachment(
       harness.store,
@@ -55,8 +55,12 @@ describe("structured_data.publish", () => {
         ]
       })
     ).resolves.toMatchObject({
-      status: "failed",
-      error: { code: "validation_failed", message: "Reconcile the proposed value" }
+      status: "success",
+      output: {
+        revision: 1,
+        warnings: ["Reconcile the proposed value"],
+        message: expect.stringContaining("Reconcile the proposed value")
+      }
     });
     expect(proposal).toMatchObject({
       clientInstanceId: harness.clientInstanceId,
@@ -79,16 +83,25 @@ describe("structured_data.publish", () => {
       attachments: [{ id: attachment.id, fileId: attachment.fileId, filename: "source.pdf" }]
     });
     expect(proposal?.messages.some((message) => message.text === "Durable evidence")).toBe(true);
-    await expect(harness.resources()).resolves.toEqual([]);
+    await expect(harness.resources()).resolves.toEqual([
+      expect.objectContaining({
+        revision: 1,
+        state: expect.objectContaining({
+          sections: [
+            expect.objectContaining({
+              fields: [expect.objectContaining({ value: "Ada" })]
+            })
+          ]
+        })
+      })
+    ]);
   });
 
-  it("validates a materialized patch and preserves the prior revision when rejected", async () => {
-    const proposals: Parameters<StructuredDataPublicationValidator>[0][] = [];
+  it("reviews a materialized patch and persists it despite warnings", async () => {
+    const proposals: Parameters<StructuredDataPublicationReviewer>[0][] = [];
     const harness = await createHarness((input) => {
       proposals.push(input);
-      return input.state.sections[0]?.fields[0]?.value === "Grace"
-        ? { status: "rejected", message: "Conflicting value" }
-        : { status: "accepted" };
+      return input.state.sections[0]?.fields[0]?.value === "Grace" ? ["Conflicting value"] : [];
     });
     await harness.run({
       resourceKey: "claim_data",
@@ -110,17 +123,21 @@ describe("structured_data.publish", () => {
         set: [{ sectionKey: "person", fieldKey: "name", value: "Grace" }]
       })
     ).resolves.toMatchObject({
-      status: "failed",
-      error: { code: "validation_failed", message: "Conflicting value" }
+      status: "success",
+      output: {
+        revision: 2,
+        warnings: ["Conflicting value"],
+        message: expect.stringContaining("Conflicting value")
+      }
     });
     expect(proposals.at(-1)?.state.sections[0]?.fields[0]?.value).toBe("Grace");
     await expect(harness.resources()).resolves.toEqual([
       expect.objectContaining({
-        revision: 1,
+        revision: 2,
         state: expect.objectContaining({
           sections: [
             expect.objectContaining({
-              fields: [expect.objectContaining({ value: "Ada" })]
+              fields: [expect.objectContaining({ value: "Grace" })]
             })
           ]
         })
@@ -168,6 +185,9 @@ describe("structured_data.publish", () => {
         }
       }
     });
+    if (first.status === "success") {
+      expect(first.output).not.toHaveProperty("warnings");
+    }
 
     const second = await harness.run({
       resourceKey: "claim_data",
@@ -551,7 +571,7 @@ describe("structured_result.read", () => {
   });
 });
 
-async function createHarness(publicationValidator?: StructuredDataPublicationValidator) {
+async function createHarness(publicationReviewer?: StructuredDataPublicationReviewer) {
   const clientInstanceId = asClientInstanceId(`structured_data_${globalThis.crypto.randomUUID()}`);
   const store = new InMemoryPlatformStore();
   const conversation = await store.createConversation({
@@ -561,7 +581,7 @@ async function createHarness(publicationValidator?: StructuredDataPublicationVal
     title: "Structured data",
     retainedUntil: "2030-01-01T00:00:00.000Z"
   });
-  const tools = createStructuredDataToolDefinitions({ store, publicationValidator });
+  const tools = createStructuredDataToolDefinitions({ store, publicationReviewer });
   const execution = new InProcessToolExecution({
     registry: new ToolRegistry({ tools }),
     getAgentToolNames: () => tools.map((tool) => tool.name)

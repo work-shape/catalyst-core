@@ -64,11 +64,7 @@ export type StructuredDataPublicationAttachment = Pick<
   "id" | "fileId" | "filename"
 >;
 
-export type StructuredDataPublicationValidationResult =
-  | { status: "accepted" }
-  | { status: "rejected"; message: string };
-
-export type StructuredDataPublicationValidator = (input: {
+export type StructuredDataPublicationReviewer = (input: {
   clientInstanceId: ClientInstanceId;
   conversationId: ConversationId;
   resourceKey: string;
@@ -76,9 +72,7 @@ export type StructuredDataPublicationValidator = (input: {
   state: StructuredDataState;
   messages: readonly ChatMessage[];
   attachments: readonly StructuredDataPublicationAttachment[];
-}) =>
-  | StructuredDataPublicationValidationResult
-  | Promise<StructuredDataPublicationValidationResult>;
+}) => readonly string[] | Promise<readonly string[]>;
 
 export interface StructuredDataStore {
   getStructuredDataResource(input: {

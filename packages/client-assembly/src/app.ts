@@ -3,7 +3,7 @@ import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
 import {
   REASONING_EFFORTS,
   StoreBackedAuditRecorder,
-  type StructuredDataPublicationValidator
+  type StructuredDataPublicationReviewer
 } from "@vivd-catalyst/core";
 import { createChatServer } from "@vivd-catalyst/chat-server";
 import type { ChatAttachmentService } from "@vivd-catalyst/chat-server";
@@ -63,7 +63,7 @@ export interface CreateClientInstanceAppInput {
   storeMode?: PlatformStoreMode;
   tools: ToolAssemblyDefinition[];
   capabilities?: ClientInstanceCapability[];
-  structuredDataPublicationValidator?: StructuredDataPublicationValidator;
+  structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
   corsOrigin?: string | string[];
 }
 
@@ -178,7 +178,7 @@ export async function createClientInstanceApp(
       ...workspaceTools,
       ...createStructuredDataToolDefinitions({
         store,
-        publicationValidator: input.structuredDataPublicationValidator
+        publicationReviewer: input.structuredDataPublicationReviewer
       }),
       ...webAccessTools,
       ...createDataSourceTools({ dataSources }),

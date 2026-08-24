@@ -3,7 +3,7 @@ import {
   currentStructuredResults,
   type PlatformStore,
   type StructuredDataFieldSource,
-  type StructuredDataPublicationValidator,
+  type StructuredDataPublicationReviewer,
   type StructuredDataState
 } from "@vivd-catalyst/core";
 import {
@@ -32,7 +32,7 @@ type StructuredDataToolStore = Pick<
 
 export function createStructuredDataToolDefinitions(input: {
   store: StructuredDataToolStore;
-  publicationValidator?: StructuredDataPublicationValidator;
+  publicationReviewer?: StructuredDataPublicationReviewer;
 }): AnyToolDefinition[] {
   return [
     defineTool({
@@ -176,27 +176,32 @@ export function createStructuredDataToolDefinitions(input: {
           }
         }
 
-        if (input.publicationValidator) {
-          const validation = await input.publicationValidator({
-            clientInstanceId: context.clientInstanceId,
-            conversationId,
-            resourceKey: toolInput.resourceKey,
-            title,
-            state,
-            messages: await input.store.listMessages({
-              clientInstanceId: context.clientInstanceId,
-              conversationId
-            }),
-            attachments: (await getSentAttachments()).map(({ id, fileId, filename }) => ({
-              id,
-              fileId,
-              filename
-            }))
-          });
-          if (validation.status === "rejected") {
-            return toolFailed("validation_failed", validation.message);
-          }
-        }
+        const warnings = input.publicationReviewer
+          ? [
+              ...new Set(
+                (
+                  await input.publicationReviewer({
+                    clientInstanceId: context.clientInstanceId,
+                    conversationId,
+                    resourceKey: toolInput.resourceKey,
+                    title,
+                    state,
+                    messages: await input.store.listMessages({
+                      clientInstanceId: context.clientInstanceId,
+                      conversationId
+                    }),
+                    attachments: (await getSentAttachments()).map(({ id, fileId, filename }) => ({
+                      id,
+                      fileId,
+                      filename
+                    }))
+                  })
+                )
+                  .map((warning) => warning.trim())
+                  .filter(Boolean)
+              )
+            ]
+          : [];
 
         const resource = await input.store.publishStructuredDataResource({
           clientInstanceId: context.clientInstanceId,
@@ -223,7 +228,10 @@ export function createStructuredDataToolDefinitions(input: {
             resourceKey: resource.resourceKey,
             revision: resource.revision,
             operation: toolInput.operation,
-            message: `Published structured data resource '${resource.resourceKey}' revision ${resource.revision}.`
+            message:
+              `Published structured data resource '${resource.resourceKey}' revision ${resource.revision}.` +
+              (warnings.length > 0 ? ` Review warnings: ${warnings.join(" | ")}` : ""),
+            ...(warnings.length > 0 ? { warnings } : {})
           },
           {
             display: {

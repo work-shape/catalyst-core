@@ -117,7 +117,8 @@ export const structuredDataPublishOutputSchema = z.object({
   resourceKey: z.string(),
   revision: z.number().int().positive(),
   operation: z.enum(["replace", "patch"]),
-  message: z.string()
+  message: z.string(),
+  warnings: z.array(z.string().min(1)).optional()
 });
 
 export const structuredDataReadInputSchema = z
