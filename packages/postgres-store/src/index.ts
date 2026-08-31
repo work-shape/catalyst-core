@@ -135,6 +135,7 @@ import {
   expireConversation as expirePostgresConversation,
   getConversation as getPostgresConversation,
   listConversationsForWorkspace as listPostgresConversationsForWorkspace,
+  moveConversation as movePostgresConversation,
   listExpiredConversations as listPostgresExpiredConversations,
   listMessages as listPostgresMessages,
   listRecentMessages as listPostgresRecentMessages,
@@ -485,6 +486,12 @@ export class PostgresPlatformStore
     input: Parameters<ConversationStore["listConversationsForWorkspace"]>[0]
   ): Promise<Conversation[]> {
     return listPostgresConversationsForWorkspace(this.db, input);
+  }
+
+  async moveConversation(
+    input: Parameters<ConversationStore["moveConversation"]>[0]
+  ): Promise<Conversation> {
+    return movePostgresConversation(this.db, input);
   }
 
   async listExpiredConversations(input: {

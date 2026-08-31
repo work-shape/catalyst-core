@@ -5,6 +5,7 @@ export * from "./api-operations";
 export * from "./configuration";
 export * from "./collaboration-workspaces";
 export * from "./conversations";
+export * from "./errors";
 export * from "./governance";
 export * from "./http-operation";
 export * from "./identity";

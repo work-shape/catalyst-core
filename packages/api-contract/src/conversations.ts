@@ -15,6 +15,10 @@ export const conversationSchema = z.object({
   deletedAt: z.string().optional()
 });
 
+export const moveConversationRequestSchema = z.object({
+  collaborationWorkspaceId: z.string().min(1)
+});
+
 export const messageMetadataVersionSchema = z.literal(1);
 
 export const storedReasoningSummarySchema = z.object({

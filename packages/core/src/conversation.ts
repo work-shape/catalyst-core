@@ -92,6 +92,13 @@ export interface UpdateConversationTitleInput {
   updatedAt: ISODateString;
 }
 
+export interface MoveConversationInput {
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  fromCollaborationWorkspaceId: CollaborationWorkspaceId;
+  toCollaborationWorkspaceId: CollaborationWorkspaceId;
+}
+
 export interface ConversationStore {
   createConversation(input: CreateConversationInput): Promise<Conversation>;
   getConversation(
@@ -102,6 +109,7 @@ export interface ConversationStore {
     clientInstanceId: ClientInstanceId;
     collaborationWorkspaceId: CollaborationWorkspaceId;
   }): Promise<Conversation[]>;
+  moveConversation(input: MoveConversationInput): Promise<Conversation>;
   updateConversationTitle(input: UpdateConversationTitleInput): Promise<Conversation>;
   appendMessage(input: CreateMessageInput): Promise<ChatMessage>;
   listMessages(input: {

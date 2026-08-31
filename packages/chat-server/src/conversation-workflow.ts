@@ -65,6 +65,10 @@ export interface SendConversationMessageCommand {
   text: string;
 }
 
+export interface MoveConversationCommand {
+  collaborationWorkspaceId: CollaborationWorkspaceId;
+}
+
 export interface StartedConversationMessageRun {
   userMessage: ChatMessage;
   run: AgentRun;
@@ -258,6 +262,38 @@ export class ConversationWorkflow {
       }
     });
     return updated;
+  }
+
+  async moveConversation(
+    conversationId: ConversationId,
+    user: AuthenticatedUser,
+    context: RuntimeCallContext,
+    command: MoveConversationCommand
+  ): Promise<Conversation> {
+    const conversation = await this.requireActiveConversationMembership(conversationId, user);
+    await this.workspaces.requireActiveMembership(user, command.collaborationWorkspaceId);
+    if (conversation.collaborationWorkspaceId === command.collaborationWorkspaceId) {
+      throw new AppError("VALIDATION_FAILED", "Conversation already belongs to this workspace");
+    }
+    await this.workspaces.assertConversationIdle(conversationId);
+    const moved = await this.options.conversationStore.moveConversation({
+      clientInstanceId: this.options.clientInstanceId,
+      conversationId,
+      fromCollaborationWorkspaceId: conversation.collaborationWorkspaceId,
+      toCollaborationWorkspaceId: command.collaborationWorkspaceId
+    });
+    await this.options.auditRecorder.record({
+      type: "conversation.moved",
+      status: "success",
+      actor: auditActorFromUser(user),
+      subject: conversationId,
+      correlationId: context.correlationId,
+      metadata: {
+        fromCollaborationWorkspaceId: conversation.collaborationWorkspaceId,
+        toCollaborationWorkspaceId: command.collaborationWorkspaceId
+      }
+    });
+    return moved;
   }
 
   private async createCompletedRunProjections(

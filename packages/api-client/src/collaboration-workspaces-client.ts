@@ -44,6 +44,23 @@ export function createCollaborationWorkspacesClient(transport: ApiClientTranspor
         }),
         apiOperations.updateCollaborationWorkspace.responseSchema
       ),
+    deletionImpact: (collaborationWorkspaceId: string) =>
+      transport.unwrapJson(
+        generatedSdk.getCollaborationWorkspaceDeletionImpact({
+          client: transport.generatedClient,
+          path: { collaborationWorkspaceId }
+        }),
+        apiOperations.getCollaborationWorkspaceDeletionImpact.responseSchema
+      ),
+    delete: (collaborationWorkspaceId: string, confirmName: string) =>
+      transport.unwrapJson(
+        generatedSdk.deleteCollaborationWorkspace({
+          client: transport.generatedClient,
+          path: { collaborationWorkspaceId },
+          body: apiOperations.deleteCollaborationWorkspace.requestSchema.parse({ confirmName })
+        }),
+        apiOperations.deleteCollaborationWorkspace.responseSchema
+      ),
     members: {
       list: (collaborationWorkspaceId: string) =>
         transport.unwrapJson(

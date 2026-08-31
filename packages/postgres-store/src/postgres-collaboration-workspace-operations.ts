@@ -144,24 +144,70 @@ export async function deleteWorkspace(
   db: PostgresDatabase,
   input: Parameters<CollaborationWorkspaceStore["deleteWorkspace"]>[0]
 ): Promise<CollaborationWorkspace> {
-  const workspace = await requireWorkspace(
-    db,
-    input.clientInstanceId,
-    input.collaborationWorkspaceId
-  );
-  if (workspace.kind === "personal") {
-    throw new AppError("VALIDATION_FAILED", "A Personal Workspace cannot be deleted");
-  }
-  const [row] = await db
-    .delete(collaborationWorkspaces)
-    .where(
-      and(
-        eq(collaborationWorkspaces.clientInstanceId, input.clientInstanceId),
-        eq(collaborationWorkspaces.id, input.collaborationWorkspaceId)
+  return db.transaction(async (tx) => {
+    const workspace = await requireWorkspace(
+      tx,
+      input.clientInstanceId,
+      input.collaborationWorkspaceId
+    );
+    if (workspace.kind === "personal") {
+      throw new AppError("VALIDATION_FAILED", "A Personal Workspace cannot be deleted");
+    }
+    const [activeConversation] = await tx
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.clientInstanceId, input.clientInstanceId),
+          eq(conversations.collaborationWorkspaceId, input.collaborationWorkspaceId),
+          eq(conversations.status, "active")
+        )
       )
-    )
-    .returning();
-  return mapCollaborationWorkspace(row);
+      .limit(1);
+    if (activeConversation) {
+      throw new AppError("CONFLICT", "Workspace still contains conversations");
+    }
+    await tx
+      .delete(conversations)
+      .where(
+        and(
+          eq(conversations.clientInstanceId, input.clientInstanceId),
+          eq(conversations.collaborationWorkspaceId, input.collaborationWorkspaceId)
+        )
+      );
+    await tx
+      .delete(collaborationWorkspaceAccessRequests)
+      .where(
+        and(
+          eq(collaborationWorkspaceAccessRequests.clientInstanceId, input.clientInstanceId),
+          eq(
+            collaborationWorkspaceAccessRequests.collaborationWorkspaceId,
+            input.collaborationWorkspaceId
+          )
+        )
+      );
+    await tx
+      .delete(collaborationWorkspaceMemberships)
+      .where(
+        and(
+          eq(collaborationWorkspaceMemberships.clientInstanceId, input.clientInstanceId),
+          eq(
+            collaborationWorkspaceMemberships.collaborationWorkspaceId,
+            input.collaborationWorkspaceId
+          )
+        )
+      );
+    const [row] = await tx
+      .delete(collaborationWorkspaces)
+      .where(
+        and(
+          eq(collaborationWorkspaces.clientInstanceId, input.clientInstanceId),
+          eq(collaborationWorkspaces.id, input.collaborationWorkspaceId)
+        )
+      )
+      .returning();
+    return mapCollaborationWorkspace(row);
+  });
 }
 
 export async function ensurePersonalWorkspace(

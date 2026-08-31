@@ -8,6 +8,7 @@ import {
   type CollaborationWorkspace,
   type CollaborationWorkspaceId,
   type CollaborationWorkspaceWithRole,
+  type ConversationId,
   type RuntimeCallContext,
   type UserRecord,
   type WorkspaceAccentColor,
@@ -16,6 +17,7 @@ import {
   type WorkspaceVisibility
 } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "./types";
+import { deleteConversationAggregate } from "./user-deletion";
 
 const MAX_WORKSPACE_NAME_LENGTH = 120;
 const MAX_WORKSPACE_DESCRIPTION_LENGTH = 500;
@@ -49,6 +51,19 @@ export interface WorkspaceAccessRequestItem {
   displayLabel: string;
   email: string | null;
   createdAt: string;
+}
+
+export interface WorkspaceDeletionImpact {
+  conversationCount: number;
+  memberCount: number;
+  pendingAccessRequestCount: number;
+}
+
+export interface WorkspaceDeletionResult {
+  collaborationWorkspaceId: CollaborationWorkspaceId;
+  conversationCount: number;
+  fileCount: number;
+  memberCount: number;
 }
 
 export interface CreateSharedWorkspaceCommand {
@@ -141,6 +156,146 @@ export class CollaborationWorkspaceWorkflow {
           ).length
         : 0;
     return { ...workspace, role: membership.role, pendingAccessRequestCount };
+  }
+
+  async getDeletionImpact(
+    user: AuthenticatedUser,
+    collaborationWorkspaceId: CollaborationWorkspaceId
+  ): Promise<WorkspaceDeletionImpact> {
+    const membership = await this.requireActiveMembership(user, collaborationWorkspaceId);
+    requireOwner(membership);
+    await this.requireSharedWorkspace(collaborationWorkspaceId);
+    const [conversations, memberships, accessRequests] = await Promise.all([
+      this.options.conversationStore.listConversationsForWorkspace({
+        clientInstanceId: this.options.clientInstanceId,
+        collaborationWorkspaceId
+      }),
+      this.options.userStore.listMemberships({
+        clientInstanceId: this.options.clientInstanceId,
+        collaborationWorkspaceId
+      }),
+      this.options.userStore.listAccessRequestsForWorkspace({
+        clientInstanceId: this.options.clientInstanceId,
+        collaborationWorkspaceId
+      })
+    ]);
+    return {
+      conversationCount: conversations.length,
+      memberCount: memberships.length,
+      pendingAccessRequestCount: accessRequests.length
+    };
+  }
+
+  async deleteSharedWorkspace(
+    user: AuthenticatedUser,
+    context: RuntimeCallContext,
+    collaborationWorkspaceId: CollaborationWorkspaceId,
+    confirmName: string
+  ): Promise<WorkspaceDeletionResult> {
+    const membership = await this.requireActiveMembership(user, collaborationWorkspaceId);
+    requireOwner(membership);
+    const workspace = await this.requireSharedWorkspace(collaborationWorkspaceId);
+    if (confirmName !== workspace.name) {
+      throw new AppError("VALIDATION_FAILED", "Workspace name confirmation does not match");
+    }
+
+    const conversations = await this.options.conversationStore.listConversationsForWorkspace({
+      clientInstanceId: this.options.clientInstanceId,
+      collaborationWorkspaceId
+    });
+    for (const conversation of conversations) {
+      await this.assertConversationIdle(conversation.id);
+    }
+    const memberships = await this.options.userStore.listMemberships({
+      clientInstanceId: this.options.clientInstanceId,
+      collaborationWorkspaceId
+    });
+
+    let fileCount = 0;
+    for (const conversation of conversations) {
+      await this.assertConversationIdle(conversation.id);
+      const deletedAt = new Date().toISOString();
+      const deletion = await deleteConversationAggregate(this.options, conversation.id, deletedAt);
+      fileCount += deletion.fileCount + deletion.artifactCount + deletion.workspaceFileCount;
+      await this.options.auditRecorder.record({
+        type: "conversation.deleted",
+        status: "success",
+        actor: auditActorFromUser(user),
+        subject: conversation.id,
+        correlationId: context.correlationId,
+        metadata: {
+          requestedBy: "workspace_deletion",
+          ...deletion
+        }
+      });
+    }
+
+    await this.options.userStore.deleteWorkspace({
+      clientInstanceId: this.options.clientInstanceId,
+      collaborationWorkspaceId
+    });
+    const result = {
+      collaborationWorkspaceId,
+      conversationCount: conversations.length,
+      fileCount,
+      memberCount: memberships.length
+    };
+    await this.options.auditRecorder.record({
+      type: "collaboration_workspace.deleted",
+      status: "success",
+      actor: auditActorFromUser(user),
+      subject: collaborationWorkspaceId,
+      correlationId: context.correlationId,
+      metadata: {
+        conversationCount: result.conversationCount,
+        fileCount: result.fileCount,
+        memberCount: result.memberCount
+      }
+    });
+    return result;
+  }
+
+  async assertConversationIdle(conversationId: ConversationId): Promise<void> {
+    const [activeRun, draftAttachments, activeCommands, artifacts] = await Promise.all([
+      this.options.conversationStore.getActiveConversationAgentRun({
+        clientInstanceId: this.options.clientInstanceId,
+        conversationId
+      }),
+      this.options.attachments?.listDraftAttachments(conversationId) ?? [],
+      this.options.conversationStore.countActiveWorkspaceCommands({
+        clientInstanceId: this.options.clientInstanceId,
+        conversationId
+      }),
+      this.options.conversationStore.listConversationManagedArtifacts({
+        clientInstanceId: this.options.clientInstanceId,
+        conversationId
+      })
+    ]);
+    const previewJobs = await Promise.all(
+      artifacts.map((artifact) =>
+        this.options.conversationStore.getArtifactPreviewJob({
+          clientInstanceId: this.options.clientInstanceId,
+          sourceArtifactId: artifact.id
+        })
+      )
+    );
+    const busyStates = [
+      ...(activeRun ? ["active_agent_run"] : []),
+      ...(draftAttachments.some(
+        (attachment) => attachment.status === "queued" || attachment.status === "preprocessing"
+      )
+        ? ["attachment_processing"]
+        : []),
+      ...(activeCommands.total > 0 ? ["execution_workspace_command"] : []),
+      ...(previewJobs.some((job) => job?.status === "pending" || job?.status === "processing")
+        ? ["artifact_preview"]
+        : [])
+    ];
+    if (busyStates.length > 0) {
+      throw new AppError("CONFLICT", "Conversation has mutable background work in progress", {
+        busyStates
+      });
+    }
   }
 
   async updateSettings(
@@ -630,6 +785,12 @@ export class CollaborationWorkspaceWorkflow {
 function requireOwnerOrAdmin(membership: WorkspaceMembership): void {
   if (membership.role !== "owner" && membership.role !== "admin") {
     throw new AppError("FORBIDDEN", "Workspace Owner or Admin access is required");
+  }
+}
+
+function requireOwner(membership: WorkspaceMembership): void {
+  if (membership.role !== "owner") {
+    throw new AppError("FORBIDDEN", "Workspace Owner access is required");
   }
 }
 

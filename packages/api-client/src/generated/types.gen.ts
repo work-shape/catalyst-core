@@ -385,6 +385,31 @@ export type ListCollaborationWorkspaceDirectoryResponses = {
 
 export type ListCollaborationWorkspaceDirectoryResponse = ListCollaborationWorkspaceDirectoryResponses[keyof ListCollaborationWorkspaceDirectoryResponses];
 
+export type DeleteCollaborationWorkspaceData = {
+    body: {
+        confirmName: string;
+    };
+    path: {
+        collaborationWorkspaceId: string;
+    };
+    query?: never;
+    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}';
+};
+
+export type DeleteCollaborationWorkspaceResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        collaborationWorkspaceId: string;
+        conversationCount: number;
+        fileCount: number;
+        memberCount: number;
+    };
+};
+
+export type DeleteCollaborationWorkspaceResponse = DeleteCollaborationWorkspaceResponses[keyof DeleteCollaborationWorkspaceResponses];
+
 export type GetCollaborationWorkspaceData = {
     body?: never;
     path: {
@@ -454,6 +479,28 @@ export type UpdateCollaborationWorkspaceResponses = {
 };
 
 export type UpdateCollaborationWorkspaceResponse = UpdateCollaborationWorkspaceResponses[keyof UpdateCollaborationWorkspaceResponses];
+
+export type GetCollaborationWorkspaceDeletionImpactData = {
+    body?: never;
+    path: {
+        collaborationWorkspaceId: string;
+    };
+    query?: never;
+    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/deletion-impact';
+};
+
+export type GetCollaborationWorkspaceDeletionImpactResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        conversationCount: number;
+        memberCount: number;
+        pendingAccessRequestCount: number;
+    };
+};
+
+export type GetCollaborationWorkspaceDeletionImpactResponse = GetCollaborationWorkspaceDeletionImpactResponses[keyof GetCollaborationWorkspaceDeletionImpactResponses];
 
 export type ListCollaborationWorkspaceMembersData = {
     body?: never;
@@ -815,6 +862,38 @@ export type GenerateConversationTitleResponses = {
 };
 
 export type GenerateConversationTitleResponse = GenerateConversationTitleResponses[keyof GenerateConversationTitleResponses];
+
+export type MoveConversationData = {
+    body: {
+        collaborationWorkspaceId: string;
+    };
+    path: {
+        conversationId: string;
+    };
+    query?: never;
+    url: '/api/conversations/{conversationId}/move';
+};
+
+export type MoveConversationResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        id: string;
+        clientInstanceId: string;
+        collaborationWorkspaceId: string;
+        createdByUserId: string;
+        createdByExternalUserId: string;
+        title: string;
+        status: string;
+        createdAt: string;
+        updatedAt: string;
+        retainedUntil: string;
+        deletedAt?: string;
+    };
+};
+
+export type MoveConversationResponse = MoveConversationResponses[keyof MoveConversationResponses];
 
 export type GetConversationThreadData = {
     body?: never;

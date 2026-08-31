@@ -25,7 +25,7 @@ export interface UserDeletionTotals {
   sharedMembershipCount: number;
 }
 
-type ConversationDataDeletionTotals = Omit<
+export type ConversationDataDeletionTotals = Omit<
   UserDeletionTotals,
   "conversationCount" | "accessRequestCount" | "sharedMembershipCount"
 >;
@@ -96,7 +96,7 @@ export async function cleanupProductUserData(input: {
 
   for (const conversation of conversations) {
     const deletedAt = new Date().toISOString();
-    const deletion = await deleteConversationData(options, conversation.id, deletedAt);
+    const deletion = await deleteConversationAggregate(options, conversation.id, deletedAt);
     totals.conversationCount += 1;
     totals.attachmentCount += deletion.attachmentCount;
     totals.fileCount += deletion.fileCount;
@@ -134,7 +134,7 @@ export async function cleanupProductUserData(input: {
   return totals;
 }
 
-async function deleteConversationData(
+export async function deleteConversationAggregate(
   options: ChatServerOptions,
   conversationId: ConversationId,
   deletedAt: string

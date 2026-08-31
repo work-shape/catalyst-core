@@ -7,6 +7,7 @@ import {
   type ConversationId,
   type CreateConversationInput,
   type CreateMessageInput,
+  type MoveConversationInput,
   createPlatformId
 } from "@vivd-catalyst/core";
 import type { PostgresDatabase } from "./postgres-database";
@@ -79,6 +80,28 @@ export async function listConversationsForWorkspace(
     )
     .orderBy(desc(conversations.updatedAt));
   return rows.map(mapConversation);
+}
+
+export async function moveConversation(
+  db: PostgresDatabase,
+  input: MoveConversationInput
+): Promise<Conversation> {
+  const [row] = await db
+    .update(conversations)
+    .set({ collaborationWorkspaceId: input.toCollaborationWorkspaceId })
+    .where(
+      and(
+        eq(conversations.clientInstanceId, input.clientInstanceId),
+        eq(conversations.id, input.conversationId),
+        eq(conversations.status, "active"),
+        eq(conversations.collaborationWorkspaceId, input.fromCollaborationWorkspaceId)
+      )
+    )
+    .returning();
+  if (!row) {
+    throw new AppError("CONFLICT", "Conversation workspace changed during the move");
+  }
+  return mapConversation(row);
 }
 
 export async function listExpiredConversations(

@@ -375,10 +375,17 @@ export class InMemoryPlatformStore
     }
     if (
       [...this.conversations.values()].some(
-        (conversation) => conversation.collaborationWorkspaceId === workspace.id
+        (conversation) =>
+          conversation.collaborationWorkspaceId === workspace.id && conversation.status === "active"
       )
     ) {
       throw new AppError("CONFLICT", "Workspace still contains conversations");
+    }
+    for (const [id, conversation] of this.conversations) {
+      if (conversation.collaborationWorkspaceId === workspace.id) {
+        this.conversations.delete(id);
+        this.messages.delete(id);
+      }
     }
     this.deleteWorkspaceRecords(workspace.id);
     return workspace;
@@ -685,6 +692,29 @@ export class InMemoryPlatformStore
           conversation.status === "active"
       )
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  }
+
+  async moveConversation(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    fromCollaborationWorkspaceId: CollaborationWorkspaceId;
+    toCollaborationWorkspaceId: CollaborationWorkspaceId;
+  }): Promise<Conversation> {
+    this.requireWorkspace(input.clientInstanceId, input.toCollaborationWorkspaceId);
+    const conversation = await this.getConversation(input.clientInstanceId, input.conversationId);
+    if (
+      !conversation ||
+      conversation.status !== "active" ||
+      conversation.collaborationWorkspaceId !== input.fromCollaborationWorkspaceId
+    ) {
+      throw new AppError("CONFLICT", "Conversation workspace changed during the move");
+    }
+    const moved = {
+      ...conversation,
+      collaborationWorkspaceId: input.toCollaborationWorkspaceId
+    };
+    this.conversations.set(input.conversationId, moved);
+    return moved;
   }
 
   async listExpiredConversations(input: {
@@ -1920,7 +1950,6 @@ export class InMemoryPlatformStore
   }
 
   private deleteWorkspaceRecords(collaborationWorkspaceId: CollaborationWorkspaceId): void {
-    this.collaborationWorkspaces.delete(collaborationWorkspaceId);
     for (const [key, membership] of this.workspaceMemberships) {
       if (membership.collaborationWorkspaceId === collaborationWorkspaceId) {
         this.workspaceMemberships.delete(key);
@@ -1931,6 +1960,7 @@ export class InMemoryPlatformStore
         this.workspaceAccessRequests.delete(key);
       }
     }
+    this.collaborationWorkspaces.delete(collaborationWorkspaceId);
   }
 
   private getIdentitiesForUser(user: UserRecord): UserIdentity[] {

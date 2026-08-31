@@ -53,6 +53,24 @@ export function registerCollaborationWorkspaceRoutes(
     );
   });
 
+  app.get(apiOperations.getCollaborationWorkspaceDeletionImpact.path, async (request) => {
+    const { user } = await authenticateRequest(options, request);
+    requireAuthScope(user, "collaboration_workspace:manage");
+    return workspaces.getDeletionImpact(user, getCollaborationWorkspaceId(request.params));
+  });
+
+  app.delete(apiOperations.deleteCollaborationWorkspace.path, async (request) => {
+    const { user, context } = await authenticateRequest(options, request);
+    requireAuthScope(user, "collaboration_workspace:manage");
+    const body = parseBody(apiOperations.deleteCollaborationWorkspace.requestSchema, request.body);
+    return workspaces.deleteSharedWorkspace(
+      user,
+      context,
+      getCollaborationWorkspaceId(request.params),
+      body.confirmName
+    );
+  });
+
   app.get(apiOperations.listCollaborationWorkspaceMembers.path, async (request) => {
     const { user } = await authenticateRequest(options, request);
     requireAuthScope(user, "collaboration_workspace:read");

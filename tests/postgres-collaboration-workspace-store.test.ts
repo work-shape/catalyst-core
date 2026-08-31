@@ -157,6 +157,65 @@ describePostgres("Postgres Collaboration Workspace store", () => {
       await cleanupClient(sql, clientInstanceId);
     }
   });
+
+  it("moves with an expected source and hard-deletes cleaned conversation rows", async () => {
+    const clientInstanceId = testClientInstanceId("conversation-lifecycle");
+    try {
+      const owner = await store.createUser({ clientInstanceId, displayLabel: "Owner" });
+      const source = await store.createWorkspace({
+        clientInstanceId,
+        kind: "shared",
+        name: "Source",
+        creatorUserId: owner.id
+      });
+      const destination = await store.createWorkspace({
+        clientInstanceId,
+        kind: "shared",
+        name: "Destination",
+        creatorUserId: owner.id
+      });
+      const conversation = await store.createConversation({
+        clientInstanceId,
+        collaborationWorkspaceId: source.id,
+        createdByUserId: owner.id,
+        createdByExternalUserId: "owner",
+        title: "Movable",
+        retainedUntil: "2030-01-01T00:00:00.000Z"
+      });
+
+      await expect(
+        store.moveConversation({
+          clientInstanceId,
+          conversationId: conversation.id,
+          fromCollaborationWorkspaceId: source.id,
+          toCollaborationWorkspaceId: destination.id
+        })
+      ).resolves.toMatchObject({ collaborationWorkspaceId: destination.id });
+      await expect(
+        store.moveConversation({
+          clientInstanceId,
+          conversationId: conversation.id,
+          fromCollaborationWorkspaceId: source.id,
+          toCollaborationWorkspaceId: destination.id
+        })
+      ).rejects.toMatchObject({ code: "CONFLICT" });
+
+      await store.deleteConversation({
+        clientInstanceId,
+        conversationId: conversation.id,
+        deletedAt: new Date().toISOString()
+      });
+      await store.deleteWorkspace({
+        clientInstanceId,
+        collaborationWorkspaceId: destination.id
+      });
+      await expect(
+        store.getConversation(clientInstanceId, conversation.id)
+      ).resolves.toBeUndefined();
+    } finally {
+      await cleanupClient(sql, clientInstanceId);
+    }
+  });
 });
 
 function testClientInstanceId(label: string): ClientInstanceId {

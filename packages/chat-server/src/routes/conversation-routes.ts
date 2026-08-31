@@ -62,6 +62,15 @@ export function registerConversationRoutes(app: FastifyInstance, options: ChatSe
     return conversations.renameConversation(getConversationId(request), body.title, user, context);
   });
 
+  app.post(apiOperations.moveConversation.path, async (request) => {
+    const { user, context } = await authenticateRequest(options, request);
+    requireAuthScope(user, "conversation:write");
+    const body = parseBody(apiOperations.moveConversation.requestSchema, request.body);
+    return conversations.moveConversation(getConversationId(request), user, context, {
+      collaborationWorkspaceId: asCollaborationWorkspaceId(body.collaborationWorkspaceId)
+    });
+  });
+
   app.delete(apiOperations.deleteConversation.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
     requireAuthScope(user, "conversation:write");

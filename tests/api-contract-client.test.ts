@@ -6,7 +6,7 @@ import {
   buildApiPath,
   openApiDocument
 } from "@vivd-catalyst/api-contract";
-import { createApiClient } from "@vivd-catalyst/api-client";
+import { ApiError, createApiClient } from "@vivd-catalyst/api-client";
 
 describe("api operation catalog and client", () => {
   it("accepts assistant final metadata with normalized web sources and citations", () => {
@@ -112,6 +112,28 @@ describe("api operation catalog and client", () => {
     expect(request?.method).toBe(operation.method);
     expect(request?.credentials).toBe("include");
     expect(request?.headers.get("authorization")).toBe("Bearer test-token");
+  });
+
+  it("exposes the stable server error code on ApiError", async () => {
+    const client = createApiClient({
+      baseUrl: "https://chat.example/",
+      fetchImpl: async () =>
+        Response.json(
+          { error: { code: "VALIDATION_FAILED", message: "Workspace name does not match" } },
+          { status: 422 }
+        )
+    });
+
+    const error = await client.collaborationWorkspaces
+      .delete("workspace_1", "wrong")
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({
+      code: "VALIDATION_FAILED",
+      message: "Workspace name does not match",
+      status: 422
+    });
   });
 
   it("forces promoted managed artifact content to a blob regardless of content type", async () => {

@@ -103,6 +103,23 @@ export const updateWorkspaceMemberRoleRequestSchema = z.object({
   role: workspaceMembershipRoleSchema
 });
 
+export const deleteCollaborationWorkspaceRequestSchema = z.object({
+  confirmName: z.string().min(1)
+});
+
+export const collaborationWorkspaceDeletionImpactSchema = z.object({
+  conversationCount: z.number().int().nonnegative(),
+  memberCount: z.number().int().nonnegative(),
+  pendingAccessRequestCount: z.number().int().nonnegative()
+});
+
+export const collaborationWorkspaceDeletionResultSchema = z.object({
+  collaborationWorkspaceId: z.string(),
+  conversationCount: z.number().int().nonnegative(),
+  fileCount: z.number().int().nonnegative(),
+  memberCount: z.number().int().nonnegative()
+});
+
 export type CollaborationWorkspace = z.infer<typeof collaborationWorkspaceSchema>;
 export type CollaborationWorkspaceWithRole = z.infer<typeof collaborationWorkspaceWithRoleSchema>;
 export type CollaborationWorkspaceDirectoryItem = z.infer<

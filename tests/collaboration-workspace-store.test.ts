@@ -126,4 +126,64 @@ describe("InMemoryPlatformStore Collaboration Workspaces", () => {
       })
     ).resolves.toEqual(request);
   });
+
+  it("moves only from the expected workspace and finalizes cleaned shared workspaces", async () => {
+    const store = new InMemoryPlatformStore();
+    const clientInstanceId = asClientInstanceId("workspace-unit-lifecycle");
+    const owner = await store.createUser({ clientInstanceId, displayLabel: "Owner" });
+    const requester = await store.createUser({ clientInstanceId, displayLabel: "Requester" });
+    const source = await store.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Source",
+      creatorUserId: owner.id
+    });
+    const destination = await store.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Destination",
+      creatorUserId: owner.id
+    });
+    await store.createAccessRequest({
+      clientInstanceId,
+      collaborationWorkspaceId: source.id,
+      userId: requester.id
+    });
+    const conversation = await store.createConversation({
+      clientInstanceId,
+      collaborationWorkspaceId: source.id,
+      createdByUserId: owner.id,
+      createdByExternalUserId: "owner",
+      title: "Movable",
+      retainedUntil: "2030-01-01T00:00:00.000Z"
+    });
+
+    await expect(
+      store.moveConversation({
+        clientInstanceId,
+        conversationId: conversation.id,
+        fromCollaborationWorkspaceId: source.id,
+        toCollaborationWorkspaceId: destination.id
+      })
+    ).resolves.toMatchObject({ collaborationWorkspaceId: destination.id });
+    await expect(
+      store.moveConversation({
+        clientInstanceId,
+        conversationId: conversation.id,
+        fromCollaborationWorkspaceId: source.id,
+        toCollaborationWorkspaceId: destination.id
+      })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    await store.deleteConversation({
+      clientInstanceId,
+      conversationId: conversation.id,
+      deletedAt: new Date().toISOString()
+    });
+    await store.deleteWorkspace({
+      clientInstanceId,
+      collaborationWorkspaceId: destination.id
+    });
+    await expect(store.getWorkspace(clientInstanceId, destination.id)).resolves.toBeUndefined();
+  });
 });

@@ -22,6 +22,9 @@ import {
   collaborationWorkspaceDirectoryItemSchema,
   collaborationWorkspaceWithRoleSchema,
   createCollaborationWorkspaceRequestSchema,
+  deleteCollaborationWorkspaceRequestSchema,
+  collaborationWorkspaceDeletionImpactSchema,
+  collaborationWorkspaceDeletionResultSchema,
   updateCollaborationWorkspaceRequestSchema,
   updateWorkspaceMemberRoleRequestSchema,
   workspaceAccessRequestItemSchema,
@@ -42,6 +45,7 @@ import {
   draftAttachmentSchema,
   draftAttachmentUploadResponseSchema,
   messageSchema,
+  moveConversationRequestSchema,
   renameConversationRequestSchema,
   retryArtifactPreviewResponseSchema,
   retryDraftAttachmentResponseSchema,
@@ -149,6 +153,19 @@ export const apiOperations = {
     requestSchema: updateCollaborationWorkspaceRequestSchema,
     responseSchema: collaborationWorkspaceWithRoleSchema
   }),
+  getCollaborationWorkspaceDeletionImpact: defineJsonApiOperation({
+    operationId: "getCollaborationWorkspaceDeletionImpact",
+    method: "GET",
+    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/deletion-impact",
+    responseSchema: collaborationWorkspaceDeletionImpactSchema
+  }),
+  deleteCollaborationWorkspace: defineJsonApiOperation({
+    operationId: "deleteCollaborationWorkspace",
+    method: "DELETE",
+    path: "/api/collaboration-workspaces/:collaborationWorkspaceId",
+    requestSchema: deleteCollaborationWorkspaceRequestSchema,
+    responseSchema: collaborationWorkspaceDeletionResultSchema
+  }),
   listCollaborationWorkspaceMembers: defineJsonApiOperation({
     operationId: "listCollaborationWorkspaceMembers",
     method: "GET",
@@ -231,6 +248,13 @@ export const apiOperations = {
     method: "PATCH",
     path: "/api/conversations/:conversationId/title",
     requestSchema: renameConversationRequestSchema,
+    responseSchema: conversationSchema
+  }),
+  moveConversation: defineJsonApiOperation({
+    operationId: "moveConversation",
+    method: "POST",
+    path: "/api/conversations/:conversationId/move",
+    requestSchema: moveConversationRequestSchema,
     responseSchema: conversationSchema
   }),
   getConversationThread: defineJsonApiOperation({
