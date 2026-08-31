@@ -377,7 +377,7 @@ const translations = {
     loadingUser: "Loading",
     messagePlaceholder: "Message",
     moveConversationDescription:
-      'Choose the workspace "{title}" moves to. Everyone in that workspace can then read it.',
+      'Choose the workspace "{title}" moves to. Everyone in that workspace can then read it, and everyone in the current workspace who is not a member there loses access to it.',
     moveConversationDestinationLabel: "Move to",
     moveConversationMenuItem: "Move to workspace…",
     moveConversationNoDestinations: "There is no other workspace to move this conversation to.",
@@ -883,7 +883,7 @@ const translations = {
     loadingUser: "Lädt",
     messagePlaceholder: "Nachricht",
     moveConversationDescription:
-      "Wähle den Arbeitsbereich, in den „{title}“ verschoben wird. Alle darin können die Unterhaltung danach lesen.",
+      "Wähle den Arbeitsbereich, in den „{title}“ verschoben wird. Alle darin können die Unterhaltung danach lesen; alle im aktuellen Arbeitsbereich, die dort kein Mitglied sind, verlieren den Zugriff darauf.",
     moveConversationDestinationLabel: "Verschieben nach",
     moveConversationMenuItem: "In Arbeitsbereich verschieben…",
     moveConversationNoDestinations:

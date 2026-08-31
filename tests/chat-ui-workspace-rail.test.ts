@@ -1,8 +1,9 @@
-import { createElement } from "../packages/chat-ui/node_modules/react";
+import { createElement, type ReactNode } from "../packages/chat-ui/node_modules/react";
 import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
 import type { SafeConfig } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
+import { CollaborationWorkspaceSelector } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-selector";
 import { WorkspaceRail } from "../packages/chat-ui/src/workspace/workspace-rail";
 
 const noop = () => undefined;
@@ -81,5 +82,66 @@ describe("workspace rail branding", () => {
     expect(markup).toContain(">F</span>");
     expect(markup).not.toContain("Vivd Catalyst");
     expect(markup).not.toContain("lucide-shield");
+  });
+});
+
+describe("workspace rail collaboration workspace slot", () => {
+  const config = {
+    ui: { clientName: "Musterfinanz", title: "Musterfinanz Chat" }
+  } as SafeConfig;
+
+  function renderRail(collaborationWorkspaceSelector?: ReactNode): string {
+    return renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { locale: "en" },
+        createElement(WorkspaceRail, {
+          config,
+          collaborationWorkspaceSelector,
+          conversations: [],
+          selectedConversationId: undefined,
+          canViewAdministration: false,
+          view: "chat",
+          creatingConversation: false,
+          deletingConversation: false,
+          canMoveConversation: false,
+          userMenu: null,
+          onToggleSidebar: noop,
+          onViewChange: noop,
+          onCreateConversation: noop,
+          onSelectConversation: noop,
+          onRenameConversation: async () => undefined,
+          onMoveConversation: noop,
+          onDeleteConversation: noop
+        })
+      )
+    );
+  }
+
+  const selector = createElement(CollaborationWorkspaceSelector, {
+    collaborationWorkspaces: [],
+    activeCollaborationWorkspaceId: undefined,
+    userLabel: "Felix Pahlke",
+    loading: false,
+    loadFailed: false,
+    onSelectCollaborationWorkspace: noop,
+    onOpenCollaborationWorkspaceSettings: noop,
+    onBrowseCollaborationWorkspaces: noop,
+    onCreateCollaborationWorkspace: noop
+  });
+
+  it("falls back to the pre-feature layout when no selector is supplied", () => {
+    const markup = renderRail();
+
+    expect(markup).toContain("grid-rows-[auto_auto_minmax(0,1fr)_auto]");
+    expect(markup).not.toContain("grid-rows-[auto_auto_auto_minmax(0,1fr)_auto]");
+    expect(markup).not.toContain('aria-label="Switch workspace"');
+  });
+
+  it("keeps the selector row for a first-party session", () => {
+    const markup = renderRail(selector);
+
+    expect(markup).toContain("grid-rows-[auto_auto_auto_minmax(0,1fr)_auto]");
+    expect(markup).toContain('aria-label="Switch workspace"');
   });
 });

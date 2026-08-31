@@ -24,6 +24,17 @@ interface ChatWorkspaceProps extends ChatShellProps {
   onRouteChange(route: WorkspaceRoute, options?: WorkspaceRouteChangeOptions): void;
 }
 
+/**
+ * An embedded session authenticates with a host-issued token whose scope is
+ * capped below `collaboration_workspace:read`, so every Collaboration Workspace
+ * surface is first-party only and the widget stays fixed-context.
+ */
+export function collaborationWorkspacesAvailableFor(
+  auth: Pick<ChatShellProps, "token" | "getToken">
+): boolean {
+  return !auth.token && !auth.getToken;
+}
+
 export function ChatWorkspace({
   apiBaseUrl,
   token,
@@ -34,6 +45,8 @@ export function ChatWorkspace({
   route,
   onRouteChange
 }: ChatWorkspaceProps) {
+  const workspacesAvailable = collaborationWorkspacesAvailableFor({ token, getToken });
+
   return (
     <WorkspaceProviders
       apiBaseUrl={apiBaseUrl}
@@ -46,6 +59,7 @@ export function ChatWorkspace({
         adminPanel={adminPanel}
         manageDocumentTitle={manageDocumentTitle}
         className={className}
+        collaborationWorkspacesAvailable={workspacesAvailable}
       />
     </WorkspaceProviders>
   );
@@ -54,9 +68,16 @@ export function ChatWorkspace({
 function ChatWorkspaceContent({
   adminPanel,
   manageDocumentTitle,
-  className
-}: Pick<ChatWorkspaceProps, "adminPanel" | "manageDocumentTitle" | "className">) {
-  const model = useWorkspaceChatModel({ adminPanel, manageDocumentTitle });
+  className,
+  collaborationWorkspacesAvailable
+}: Pick<ChatWorkspaceProps, "adminPanel" | "manageDocumentTitle" | "className"> & {
+  collaborationWorkspacesAvailable: boolean;
+}) {
+  const model = useWorkspaceChatModel({
+    adminPanel,
+    manageDocumentTitle,
+    collaborationWorkspacesAvailable
+  });
   const [displayPanelWidth, setDisplayPanelWidth] = useState(0);
   const resourcesEnabled = model.config.config?.features.resources.enabled ?? false;
   const resourcesConversationId = model.route.selectedConversationId;
@@ -116,7 +137,7 @@ function ChatWorkspaceContent({
   const isStaging = model.config.config.clientInstance.environment === "staging";
   const collaborationWorkspace = model.collaborationWorkspace;
   const userLabel = model.auth.user.displayLabel || (model.auth.user.email ?? "");
-  const collaborationWorkspaceSelector = (
+  const collaborationWorkspaceSelector = collaborationWorkspacesAvailable ? (
     <CollaborationWorkspaceSelector
       collaborationWorkspaces={collaborationWorkspace.collaborationWorkspaces}
       activeCollaborationWorkspaceId={collaborationWorkspace.activeCollaborationWorkspaceId}
@@ -128,7 +149,7 @@ function ChatWorkspaceContent({
       onBrowseCollaborationWorkspaces={collaborationWorkspace.openBrowseDialog}
       onCreateCollaborationWorkspace={collaborationWorkspace.openCreateDialog}
     />
-  );
+  ) : undefined;
 
   return (
     <TranslationProvider locale={model.config.activeLocale}>
@@ -199,20 +220,22 @@ function ChatWorkspaceContent({
           onToggleTheme={model.config.toggleTheme}
         />
 
-        <CollaborationWorkspacePanel
-          apiBaseUrl={model.auth.apiBaseUrl}
-          authScope={WORKSPACE_AUTH_SCOPE}
-          client={chat.client}
-          currentUserId={model.auth.user.id}
-          userLabel={userLabel}
-          collaborationWorkspaces={collaborationWorkspace.collaborationWorkspaces}
-          activeCollaborationWorkspaceId={collaborationWorkspace.activeCollaborationWorkspaceId}
-          dialog={collaborationWorkspace.dialog}
-          onClose={collaborationWorkspace.closeDialog}
-          onCollaborationWorkspaceCreated={collaborationWorkspace.selectCollaborationWorkspace}
-          onConversationMoved={collaborationWorkspace.conversationMoved}
-          onCollaborationWorkspaceDeleted={collaborationWorkspace.collaborationWorkspaceDeleted}
-        />
+        {collaborationWorkspacesAvailable ? (
+          <CollaborationWorkspacePanel
+            apiBaseUrl={model.auth.apiBaseUrl}
+            authScope={WORKSPACE_AUTH_SCOPE}
+            client={chat.client}
+            currentUserId={model.auth.user.id}
+            userLabel={userLabel}
+            collaborationWorkspaces={collaborationWorkspace.collaborationWorkspaces}
+            activeCollaborationWorkspaceId={collaborationWorkspace.activeCollaborationWorkspaceId}
+            dialog={collaborationWorkspace.dialog}
+            onClose={collaborationWorkspace.closeDialog}
+            onCollaborationWorkspaceCreated={collaborationWorkspace.selectCollaborationWorkspace}
+            onConversationMoved={collaborationWorkspace.conversationMoved}
+            onCollaborationWorkspaceDeleted={collaborationWorkspace.collaborationWorkspaceDeleted}
+          />
+        ) : null}
 
         <ControlPlaneRoutes adminPanel={adminPanel} controlPlane={model.controlPlane}>
           <section className="relative h-full min-h-0 min-w-0">

@@ -38,15 +38,54 @@ export interface CollaborationWorkspaceModel {
   collaborationWorkspaceDeleted(collaborationWorkspaceId: string): void;
 }
 
+/**
+ * A conversation's own Collaboration Workspace decides its canonical URL. A
+ * legacy `/c/:conversationId` link carries no workspace at all, and a
+ * `/w/:collaborationWorkspaceId/c/:conversationId` link saved before the
+ * conversation moved names one that no longer owns it — both resolve to the
+ * workspace the loaded thread reports.
+ */
+export function canonicalConversationRedirect(input: {
+  route: WorkspaceRoute;
+  loadedConversationCollaborationWorkspaceId: string | undefined;
+}): { collaborationWorkspaceId: string; conversationId: string } | undefined {
+  const { route, loadedConversationCollaborationWorkspaceId } = input;
+  if (!loadedConversationCollaborationWorkspaceId) {
+    return undefined;
+  }
+  if (route.kind === "legacy-conversation") {
+    return {
+      collaborationWorkspaceId: loadedConversationCollaborationWorkspaceId,
+      conversationId: route.conversationId
+    };
+  }
+  if (
+    route.kind === "conversation" &&
+    route.collaborationWorkspaceId !== loadedConversationCollaborationWorkspaceId
+  ) {
+    return {
+      collaborationWorkspaceId: loadedConversationCollaborationWorkspaceId,
+      conversationId: route.conversationId
+    };
+  }
+  return undefined;
+}
+
 export interface CollaborationWorkspaceModelInput {
   apiBaseUrl: string;
   authScope: string;
   client: ApiClient;
   isAuthenticated: boolean;
+  /**
+   * Off for embedded token sessions: their scope is capped below
+   * `collaboration_workspace:read`, so the widget stays fixed-context and never
+   * asks for a workspace list it cannot be granted.
+   */
+  enabled: boolean;
   userId: string | undefined;
   route: WorkspaceRoute;
-  /** Owning workspace of a legacy `/c/:conversationId` link, once resolved. */
-  legacyConversationCollaborationWorkspaceId: string | undefined;
+  /** Owning workspace of the routed conversation, once its thread is loaded. */
+  loadedConversationCollaborationWorkspaceId: string | undefined;
   legacyConversationUnavailable: boolean;
   goToCollaborationWorkspace(collaborationWorkspaceId: string, options?: { replace?: true }): void;
   showConversation(
@@ -64,9 +103,10 @@ export function useCollaborationWorkspaceModel(
     authScope,
     client,
     isAuthenticated,
+    enabled,
     userId,
     route,
-    legacyConversationCollaborationWorkspaceId,
+    loadedConversationCollaborationWorkspaceId,
     legacyConversationUnavailable,
     goToCollaborationWorkspace,
     showConversation
@@ -76,7 +116,7 @@ export function useCollaborationWorkspaceModel(
     apiBaseUrl,
     authScope,
     client,
-    enabled: isAuthenticated
+    enabled: isAuthenticated && enabled
   });
   const collaborationWorkspaces = useMemo(
     () => collaborationWorkspacesQuery.data ?? [],
@@ -119,25 +159,30 @@ export function useCollaborationWorkspaceModel(
     userId
   ]);
 
-  // Legacy `/c/:conversationId` links keep working by resolving the owning
-  // workspace and replacing the URL with its canonical form.
+  // Legacy `/c/:conversationId` links and stale `/w/:other/c/:id` links both
+  // keep working by replacing the URL with the conversation's canonical form.
   useEffect(() => {
-    if (route.kind !== "legacy-conversation") {
-      return;
-    }
-    if (legacyConversationCollaborationWorkspaceId) {
-      showConversation(legacyConversationCollaborationWorkspaceId, route.conversationId, {
+    const redirect = canonicalConversationRedirect({
+      route,
+      loadedConversationCollaborationWorkspaceId
+    });
+    if (redirect) {
+      showConversation(redirect.collaborationWorkspaceId, redirect.conversationId, {
         replace: true
       });
       return;
     }
-    if (legacyConversationUnavailable && fallbackCollaborationWorkspaceId) {
+    if (
+      route.kind === "legacy-conversation" &&
+      legacyConversationUnavailable &&
+      fallbackCollaborationWorkspaceId
+    ) {
       goToCollaborationWorkspace(fallbackCollaborationWorkspaceId, { replace: true });
     }
   }, [
     fallbackCollaborationWorkspaceId,
     goToCollaborationWorkspace,
-    legacyConversationCollaborationWorkspaceId,
+    loadedConversationCollaborationWorkspaceId,
     legacyConversationUnavailable,
     route,
     showConversation
@@ -238,10 +283,10 @@ export function useCollaborationWorkspaceModel(
     activeCollaborationWorkspaceId,
     activeCollaborationWorkspace,
     personalCollaborationWorkspaceId,
-    loading: collaborationWorkspacesQuery.isPending && isAuthenticated,
+    loading: collaborationWorkspacesQuery.isPending && isAuthenticated && enabled,
     loadFailed: Boolean(collaborationWorkspacesQuery.error),
     dialog,
-    canMoveConversation: collaborationWorkspaces.length > 1,
+    canMoveConversation: enabled && collaborationWorkspaces.length > 1,
     selectCollaborationWorkspace,
     openCreateDialog,
     openBrowseDialog,

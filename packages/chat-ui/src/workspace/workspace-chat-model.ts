@@ -65,6 +65,8 @@ export const WORKSPACE_AUTH_SCOPE = "standalone";
 export interface WorkspaceChatModelInput {
   adminPanel: ChatShellAdminPanel | undefined;
   manageDocumentTitle: boolean | undefined;
+  /** False for embedded token sessions, which stay fixed-context. */
+  collaborationWorkspacesAvailable: boolean;
 }
 
 export interface WorkspaceChatModel {
@@ -183,7 +185,8 @@ export interface ToolDisplayModel {
 
 export function useWorkspaceChatModel({
   adminPanel,
-  manageDocumentTitle
+  manageDocumentTitle,
+  collaborationWorkspacesAvailable
 }: WorkspaceChatModelInput): WorkspaceChatModel {
   const [notice, setNotice] = useState<string | undefined>();
   const [selectedAgentName, setSelectedAgentName] = useState<string | undefined>();
@@ -217,17 +220,23 @@ export function useWorkspaceChatModel({
     conversationId: selectedConversationId,
     enabled: isAuthenticated && Boolean(selectedConversationId)
   });
+  // Only a settled thread for the conversation actually on screen may decide
+  // the canonical URL. A snapshot left over from another conversation, or one
+  // still being refetched after a move, would redirect back to a workspace the
+  // conversation has already left.
+  const loadedConversation =
+    threadQuery.data?.conversation.id === selectedConversationId && !threadQuery.isFetching
+      ? threadQuery.data?.conversation
+      : undefined;
   const collaborationWorkspace = useCollaborationWorkspaceModel({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
     client,
     isAuthenticated,
+    enabled: collaborationWorkspacesAvailable,
     userId: meQuery.data?.id,
     route,
-    legacyConversationCollaborationWorkspaceId:
-      route.kind === "legacy-conversation"
-        ? threadQuery.data?.conversation.collaborationWorkspaceId
-        : undefined,
+    loadedConversationCollaborationWorkspaceId: loadedConversation?.collaborationWorkspaceId,
     legacyConversationUnavailable:
       route.kind === "legacy-conversation" && Boolean(threadQuery.error),
     goToCollaborationWorkspace: routeState.goToDefaultChat,

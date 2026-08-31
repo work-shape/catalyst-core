@@ -1,4 +1,4 @@
-import { ApiError } from "@vivd-catalyst/api-client";
+import { ApiError, type Conversation } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
 import {
   workspaceRouteFromPath,
@@ -8,7 +8,11 @@ import {
   routeCollaborationWorkspaceId,
   workspaceRouteView
 } from "../packages/chat-ui/src/workspace/workspace-route";
+import { canonicalConversationRedirect } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-model";
 import { collaborationWorkspaceErrorKey } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-errors";
+import { collaborationWorkspacesAvailableFor } from "../packages/chat-ui/src/chat-workspace";
+import { conversationListCacheKey } from "../packages/chat-ui/src/api/workspace-queries";
+import { workspaceQueryKeys } from "../packages/chat-ui/src/api/workspace-query-keys";
 
 describe("collaboration workspace routes", () => {
   it("reads the workspace home and its conversations from the path", () => {
@@ -71,6 +75,124 @@ describe("collaboration workspace routes", () => {
     expect(
       routeCollaborationWorkspaceId({ kind: "new-conversation", collaborationWorkspaceId: "cw_1" })
     ).toBe("cw_1");
+  });
+});
+
+describe("canonical conversation redirect", () => {
+  it("resolves a legacy conversation link to the workspace that owns it", () => {
+    expect(
+      canonicalConversationRedirect({
+        route: { kind: "legacy-conversation", conversationId: "conv_2" },
+        loadedConversationCollaborationWorkspaceId: "cw_owner"
+      })
+    ).toEqual({ collaborationWorkspaceId: "cw_owner", conversationId: "conv_2" });
+  });
+
+  it("replaces a stale workspace segment left behind by a moved conversation", () => {
+    expect(
+      canonicalConversationRedirect({
+        route: {
+          kind: "conversation",
+          collaborationWorkspaceId: "cw_stale",
+          conversationId: "conv_2"
+        },
+        loadedConversationCollaborationWorkspaceId: "cw_owner"
+      })
+    ).toEqual({ collaborationWorkspaceId: "cw_owner", conversationId: "conv_2" });
+  });
+
+  it("leaves a conversation already on its canonical url alone", () => {
+    expect(
+      canonicalConversationRedirect({
+        route: {
+          kind: "conversation",
+          collaborationWorkspaceId: "cw_owner",
+          conversationId: "conv_2"
+        },
+        loadedConversationCollaborationWorkspaceId: "cw_owner"
+      })
+    ).toBeUndefined();
+  });
+
+  it("waits for the thread instead of guessing while it loads", () => {
+    expect(
+      canonicalConversationRedirect({
+        route: {
+          kind: "conversation",
+          collaborationWorkspaceId: "cw_stale",
+          conversationId: "conv_2"
+        },
+        loadedConversationCollaborationWorkspaceId: undefined
+      })
+    ).toBeUndefined();
+    expect(
+      canonicalConversationRedirect({
+        route: { kind: "legacy-conversation", conversationId: "conv_2" },
+        loadedConversationCollaborationWorkspaceId: undefined
+      })
+    ).toBeUndefined();
+  });
+
+  it("never redirects a route that names no conversation", () => {
+    expect(
+      canonicalConversationRedirect({
+        route: { kind: "new-conversation", collaborationWorkspaceId: "cw_stale" },
+        loadedConversationCollaborationWorkspaceId: "cw_owner"
+      })
+    ).toBeUndefined();
+    expect(
+      canonicalConversationRedirect({
+        route: { kind: "collaboration-workspace-root" },
+        loadedConversationCollaborationWorkspaceId: "cw_owner"
+      })
+    ).toBeUndefined();
+  });
+});
+
+describe("conversation list cache targeting", () => {
+  const apiBaseUrl = "https://example.test";
+  const authScope = "standalone";
+
+  function conversation(collaborationWorkspaceId: string): Conversation {
+    return {
+      id: "conv_2",
+      clientInstanceId: "client_1",
+      collaborationWorkspaceId,
+      createdByUserId: "user_1",
+      createdByExternalUserId: "external_1",
+      title: "Moved conversation",
+      status: "active",
+      createdAt: "2026-08-31T10:00:00.000Z",
+      updatedAt: "2026-08-31T10:00:00.000Z",
+      retainedUntil: "2026-09-30T10:00:00.000Z"
+    };
+  }
+
+  it("keys a list write by the conversation's own workspace, not the routed one", () => {
+    // The link that is open still names `cw_stale`; the conversation moved to
+    // `cw_owner`, and the cache write has to follow the conversation.
+    expect(conversationListCacheKey(apiBaseUrl, authScope, conversation("cw_owner"))).toEqual(
+      workspaceQueryKeys.conversations(apiBaseUrl, authScope, "cw_owner")
+    );
+    expect(conversationListCacheKey(apiBaseUrl, authScope, conversation("cw_owner"))).not.toEqual(
+      workspaceQueryKeys.conversations(apiBaseUrl, authScope, "cw_stale")
+    );
+  });
+
+  it("separates the lists of two workspaces", () => {
+    expect(conversationListCacheKey(apiBaseUrl, authScope, conversation("cw_a"))).not.toEqual(
+      conversationListCacheKey(apiBaseUrl, authScope, conversation("cw_b"))
+    );
+  });
+});
+
+describe("embedded auth mode", () => {
+  it("keeps collaboration workspaces first-party only", () => {
+    expect(collaborationWorkspacesAvailableFor({})).toBe(true);
+    expect(collaborationWorkspacesAvailableFor({ token: "hmac-session-token" })).toBe(false);
+    expect(collaborationWorkspacesAvailableFor({ getToken: () => "hmac-session-token" })).toBe(
+      false
+    );
   });
 });
 

@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ApiClient,
+  Conversation,
   ConversationListItem,
   ConversationThreadSnapshot,
   DraftAttachment,
@@ -265,6 +266,23 @@ export function useConfigAssetsExportQuery(
   });
 }
 
+/**
+ * Conversation-list writes follow the conversation's own workspace, never the
+ * routed one: a stale `/w/:other/c/:id` link must not splice the conversation
+ * into a list it does not belong to.
+ */
+export function conversationListCacheKey(
+  apiBaseUrl: string,
+  authScope: string,
+  conversation: Pick<Conversation, "collaborationWorkspaceId">
+) {
+  return workspaceQueryKeys.conversations(
+    apiBaseUrl,
+    authScope,
+    conversation.collaborationWorkspaceId
+  );
+}
+
 export interface WorkspaceCacheActions {
   refreshThreadSnapshot(conversationId: string): Promise<ConversationThreadSnapshot>;
   invalidateCurrentUser(): void;
@@ -410,7 +428,7 @@ export function useWorkspaceCacheActions(
         response.thread
       );
       queryClient.setQueryData<ConversationListItem[]>(
-        workspaceQueryKeys.conversations(apiBaseUrl, authScope, collaborationWorkspaceId),
+        conversationListCacheKey(apiBaseUrl, authScope, response.conversation),
         (currentConversations = []) => {
           const existing = currentConversations.filter(
             (conversation) => conversation.id !== response.conversation.id
@@ -426,7 +444,7 @@ export function useWorkspaceCacheActions(
         }
       );
     },
-    [apiBaseUrl, authScope, collaborationWorkspaceId, queryClient]
+    [apiBaseUrl, authScope, queryClient]
   );
 
   const handleRunRequestAccepted = useCallback(
@@ -436,7 +454,7 @@ export function useWorkspaceCacheActions(
         .generateTitle(conversationId)
         .then((updatedConversation) => {
           queryClient.setQueryData<ConversationListItem[]>(
-            workspaceQueryKeys.conversations(apiBaseUrl, authScope, collaborationWorkspaceId),
+            conversationListCacheKey(apiBaseUrl, authScope, updatedConversation),
             (currentConversations = []) => {
               if (
                 currentConversations.some(
@@ -457,7 +475,7 @@ export function useWorkspaceCacheActions(
           invalidateConversations();
         });
     },
-    [apiBaseUrl, authScope, client, collaborationWorkspaceId, invalidateConversations, queryClient]
+    [apiBaseUrl, authScope, client, invalidateConversations, queryClient]
   );
 
   const invalidateStreamError = useCallback(

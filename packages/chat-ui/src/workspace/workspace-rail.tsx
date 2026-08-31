@@ -28,7 +28,8 @@ export function WorkspaceRail({
   onDeleteConversation
 }: {
   config: SafeConfig;
-  collaborationWorkspaceSelector: ReactNode;
+  /** Absent for embedded token sessions, which have no workspace UI at all. */
+  collaborationWorkspaceSelector?: ReactNode;
   conversations: ConversationListItem[];
   selectedConversationId: string | undefined;
   canViewAdministration: boolean;
@@ -77,7 +78,12 @@ export function WorkspaceRail({
 
   return (
     <aside
-      className="relative grid h-full min-h-0 min-w-0 grid-rows-[auto_auto_auto_minmax(0,1fr)_auto] border-r border-sidebar-border bg-sidebar px-5 pb-4 pt-5 text-sidebar-foreground"
+      className={cn(
+        "relative grid h-full min-h-0 min-w-0 border-r border-sidebar-border bg-sidebar px-5 pb-4 pt-5 text-sidebar-foreground",
+        collaborationWorkspaceSelector
+          ? "grid-rows-[auto_auto_auto_minmax(0,1fr)_auto]"
+          : "grid-rows-[auto_auto_minmax(0,1fr)_auto]"
+      )}
       aria-label={t("conversations")}
     >
       <Button
@@ -145,7 +151,9 @@ export function WorkspaceRail({
         </div>
       )}
 
-      <div className="-mx-2 min-w-0 pt-4">{collaborationWorkspaceSelector}</div>
+      {collaborationWorkspaceSelector ? (
+        <div className="-mx-2 min-w-0 pt-4">{collaborationWorkspaceSelector}</div>
+      ) : null}
 
       <div className="grid gap-3 pb-3 pt-4">
         <div className="flex min-w-0 items-center justify-between gap-2">
