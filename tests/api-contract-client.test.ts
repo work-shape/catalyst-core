@@ -81,6 +81,7 @@ describe("api operation catalog and client", () => {
         query: { collaborationWorkspaceId: "workspace/one" }
       })
     ).toBe("/api/conversations?collaborationWorkspaceId=workspace%2Fone");
+    expect(apiOperations.listConversations.buildPath()).toBe("/api/conversations");
     expect(
       buildApiPath("/api/example/:exampleId", {
         params: { exampleId: "value/with spaces" },
@@ -93,9 +94,27 @@ describe("api operation catalog and client", () => {
     expect(() => apiOperations.getConfig.buildPath({ query: { unknown: "value" } })).toThrow(
       /Unknown query parameter "unknown"/u
     );
-    expect(() => apiOperations.listConversations.buildPath()).toThrow(
-      /Missing query parameter "collaborationWorkspaceId"/u
-    );
+  });
+
+  it("omits the workspace query parameter when listing the Personal Workspace", async () => {
+    const calls: Request[] = [];
+    const client = createApiClient({
+      baseUrl: "https://chat.example/",
+      fetchImpl: async (input, init) => {
+        calls.push(input instanceof Request ? input : new Request(input, init));
+        return Response.json([]);
+      }
+    });
+
+    await client.conversations.list();
+    await client.conversations.list("workspace/one");
+    await client.conversations.list(42 as never);
+
+    expect(calls.map((request) => request.url)).toEqual([
+      "https://chat.example/api/conversations",
+      "https://chat.example/api/conversations?collaborationWorkspaceId=workspace%2Fone",
+      "https://chat.example/api/conversations"
+    ]);
   });
 
   it("uses generated SDK operations for client method, path, auth, and response parsing", async () => {

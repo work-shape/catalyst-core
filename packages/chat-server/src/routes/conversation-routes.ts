@@ -18,11 +18,13 @@ export function registerConversationRoutes(app: FastifyInstance, options: ChatSe
     requireAuthScope(user, "conversation:read");
     const collaborationWorkspaceId = (request.query as { collaborationWorkspaceId?: string })
       .collaborationWorkspaceId;
-    if (!collaborationWorkspaceId) {
+    if (collaborationWorkspaceId === "") {
       throw new AppError("BAD_REQUEST", "Missing collaborationWorkspaceId query parameter");
     }
     return conversations.listConversations(
-      asCollaborationWorkspaceId(collaborationWorkspaceId),
+      collaborationWorkspaceId === undefined
+        ? undefined
+        : asCollaborationWorkspaceId(collaborationWorkspaceId),
       user
     );
   });

@@ -102,9 +102,15 @@ export class ConversationWorkflow {
   }
 
   async listConversations(
-    collaborationWorkspaceId: CollaborationWorkspaceId,
+    collaborationWorkspaceId: CollaborationWorkspaceId | undefined,
     user: AuthenticatedUser
   ): Promise<ConversationListItem[]> {
+    collaborationWorkspaceId ??= (
+      await this.options.userStore.ensurePersonalWorkspace({
+        clientInstanceId: this.options.clientInstanceId,
+        userId: asUserId(getSubjectUserId(user))
+      })
+    ).id;
     await this.workspaces.requireActiveMembership(user, collaborationWorkspaceId);
     const conversations = await this.options.conversationStore.listConversationsForWorkspace({
       clientInstanceId: this.options.clientInstanceId,

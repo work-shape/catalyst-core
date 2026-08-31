@@ -4,6 +4,7 @@ import {
   FIRST_PARTY_AUTH_SCOPES,
   StoreBackedAuditRecorder,
   asClientInstanceId,
+  asCollaborationWorkspaceId,
   asUserId,
   type AuthenticatedUser
 } from "@vivd-catalyst/core";
@@ -97,15 +98,11 @@ describe("client instance app vertical slice", () => {
       payload: { title: "Personal conversation" }
     });
     expect(createdConversation.statusCode).toBe(200);
-    const conversation = createdConversation.json() as { collaborationWorkspaceId: string };
-    const conversations = await app.server.inject({
-      method: "GET",
-      url: `/api/conversations?collaborationWorkspaceId=${conversation.collaborationWorkspaceId}`,
-      headers: {
-        authorization: `Bearer ${token}`
-      }
-    });
-    expect(conversations.statusCode).toBe(200);
+    const personalConversation = createdConversation.json() as {
+      id: string;
+      collaborationWorkspaceId: string;
+      createdByUserId: string;
+    };
 
     const firstPartyListing = await app.server.inject({
       method: "GET",
@@ -120,6 +117,41 @@ describe("client instance app vertical slice", () => {
       payload: { name: "First-party workspace" }
     });
     expect(firstPartyCreation.statusCode).toBe(200);
+    const sharedWorkspaceId = (firstPartyCreation.json() as { id: string }).id;
+    await app.store.addMembership({
+      clientInstanceId: asClientInstanceId("demo-local"),
+      collaborationWorkspaceId: asCollaborationWorkspaceId(sharedWorkspaceId),
+      userId: asUserId(personalConversation.createdByUserId),
+      role: "member"
+    });
+    const sharedConversation = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      headers: { "x-dev-user-id": "superadmin-1" },
+      payload: { title: "Shared conversation", collaborationWorkspaceId: sharedWorkspaceId }
+    });
+    expect(sharedConversation.statusCode).toBe(200);
+    const sharedConversationId = (sharedConversation.json() as { id: string }).id;
+
+    const personalConversations = await app.server.inject({
+      method: "GET",
+      url: "/api/conversations",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    expect(personalConversations.statusCode).toBe(200);
+    expect((personalConversations.json() as Array<{ id: string }>).map(({ id }) => id)).toEqual([
+      personalConversation.id
+    ]);
+
+    const sharedConversations = await app.server.inject({
+      method: "GET",
+      url: `/api/conversations?collaborationWorkspaceId=${sharedWorkspaceId}`,
+      headers: { authorization: `Bearer ${token}` }
+    });
+    expect(sharedConversations.statusCode).toBe(200);
+    expect((sharedConversations.json() as Array<{ id: string }>).map(({ id }) => id)).toEqual([
+      sharedConversationId
+    ]);
 
     const usage = await app.server.inject({
       method: "GET",
@@ -242,20 +274,9 @@ describe("client instance app vertical slice", () => {
     expect(issued.statusCode).toBe(200);
     const token = (issued.json() as { chatSessionToken: string }).chatSessionToken;
 
-    const me = await app.server.inject({
-      method: "GET",
-      url: "/api/me",
-      headers: { authorization: `Bearer ${token}` }
-    });
-    expect(me.statusCode).toBe(200);
-    const [personalWorkspace] = await app.store.listWorkspacesForUser({
-      clientInstanceId: asClientInstanceId("demo-local"),
-      userId: asUserId((me.json() as { id: string }).id)
-    });
-
     const conversations = await app.server.inject({
       method: "GET",
-      url: `/api/conversations?collaborationWorkspaceId=${personalWorkspace!.id}`,
+      url: "/api/conversations",
       headers: {
         authorization: `Bearer ${token}`
       }

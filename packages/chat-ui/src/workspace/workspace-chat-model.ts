@@ -248,6 +248,7 @@ export function useWorkspaceChatModel({
     authScope: WORKSPACE_AUTH_SCOPE,
     client,
     collaborationWorkspaceId: activeCollaborationWorkspaceId,
+    collaborationWorkspacesAvailable,
     enabled: isAuthenticated
   });
 
@@ -255,7 +256,8 @@ export function useWorkspaceChatModel({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
     client,
-    collaborationWorkspaceId: activeCollaborationWorkspaceId
+    collaborationWorkspaceId: activeCollaborationWorkspaceId,
+    collaborationWorkspacesAvailable
   });
   const controller = useConversationController({
     client,

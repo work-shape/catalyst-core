@@ -227,7 +227,6 @@ export const apiOperations = {
     method: "GET",
     path: "/api/conversations",
     queryParams: ["collaborationWorkspaceId"],
-    requiredQueryParams: ["collaborationWorkspaceId"],
     responseSchema: z.array(conversationListItemSchema)
   }),
   createConversation: defineJsonApiOperation({

@@ -11,7 +11,11 @@ import {
 import { canonicalConversationRedirect } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-model";
 import { collaborationWorkspaceErrorKey } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-errors";
 import { collaborationWorkspacesAvailableFor } from "../packages/chat-ui/src/chat-workspace";
-import { conversationListCacheKey } from "../packages/chat-ui/src/api/workspace-queries";
+import {
+  PERSONAL_DEFAULT_CONVERSATION_LIST,
+  conversationListCacheKey,
+  workspaceConversationsQueryOptions
+} from "../packages/chat-ui/src/api/workspace-queries";
 import { workspaceQueryKeys } from "../packages/chat-ui/src/api/workspace-query-keys";
 
 describe("collaboration workspace routes", () => {
@@ -183,6 +187,35 @@ describe("conversation list cache targeting", () => {
     expect(conversationListCacheKey(apiBaseUrl, authScope, conversation("cw_a"))).not.toEqual(
       conversationListCacheKey(apiBaseUrl, authScope, conversation("cw_b"))
     );
+  });
+
+  it("enables the embedded Personal Workspace list and targets its stable cache key", async () => {
+    const listArguments: Array<string | undefined> = [];
+    const options = workspaceConversationsQueryOptions({
+      apiBaseUrl,
+      authScope,
+      client: {
+        conversations: {
+          list: async (collaborationWorkspaceId?: string) => {
+            listArguments.push(collaborationWorkspaceId);
+            return [];
+          }
+        }
+      } as never,
+      collaborationWorkspaceId: undefined,
+      collaborationWorkspacesAvailable: false,
+      enabled: true
+    });
+
+    expect(options.enabled).toBe(true);
+    expect(options.queryKey).toEqual(
+      workspaceQueryKeys.conversations(apiBaseUrl, authScope, PERSONAL_DEFAULT_CONVERSATION_LIST)
+    );
+    await options.queryFn();
+    expect(listArguments).toEqual([undefined]);
+    expect(
+      conversationListCacheKey(apiBaseUrl, authScope, conversation("cw_personal"), false)
+    ).toEqual(options.queryKey);
   });
 });
 

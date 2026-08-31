@@ -730,8 +730,8 @@ export type DeclineCollaborationWorkspaceAccessRequestResponse = DeclineCollabor
 export type ListConversationsData = {
     body?: never;
     path?: never;
-    query: {
-        collaborationWorkspaceId: string;
+    query?: {
+        collaborationWorkspaceId?: string;
     };
     url: '/api/conversations';
 };

@@ -111,7 +111,7 @@ export const approveCollaborationWorkspaceAccessRequest = <ThrowOnError extends 
 
 export const declineCollaborationWorkspaceAccessRequest = <ThrowOnError extends boolean = false>(options: Options<DeclineCollaborationWorkspaceAccessRequestData, ThrowOnError>): RequestResult<DeclineCollaborationWorkspaceAccessRequestResponses, unknown, ThrowOnError> => (options.client ?? client).delete<DeclineCollaborationWorkspaceAccessRequestResponses, unknown, ThrowOnError>({ url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/access-requests/{userId}', ...options });
 
-export const listConversations = <ThrowOnError extends boolean = false>(options: Options<ListConversationsData, ThrowOnError>): RequestResult<ListConversationsResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListConversationsResponses, unknown, ThrowOnError>({ url: '/api/conversations', ...options });
+export const listConversations = <ThrowOnError extends boolean = false>(options?: Options<ListConversationsData, ThrowOnError>): RequestResult<ListConversationsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListConversationsResponses, unknown, ThrowOnError>({ url: '/api/conversations', ...options });
 
 export const createConversation = <ThrowOnError extends boolean = false>(options: Options<CreateConversationData, ThrowOnError>): RequestResult<CreateConversationResponses, unknown, ThrowOnError> => (options.client ?? client).post<CreateConversationResponses, unknown, ThrowOnError>({
     url: '/api/conversations',

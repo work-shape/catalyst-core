@@ -18,6 +18,8 @@ interface WorkspaceQueryInput {
   client: ApiClient;
 }
 
+export const PERSONAL_DEFAULT_CONVERSATION_LIST = "personal-default";
+
 export function useWorkspaceMeQuery(input: Pick<WorkspaceQueryInput, "apiBaseUrl" | "client">) {
   return useQuery({
     queryKey: workspaceQueryKeys.me(input.apiBaseUrl),
@@ -39,22 +41,33 @@ export function useWorkspaceConfigQuery(
   });
 }
 
-export function useWorkspaceConversationsQuery(
+export function workspaceConversationsQueryOptions(
   input: WorkspaceQueryInput & {
     collaborationWorkspaceId: string | undefined;
+    collaborationWorkspacesAvailable: boolean;
     enabled: boolean;
   }
 ) {
   const collaborationWorkspaceId = input.collaborationWorkspaceId;
-  return useQuery({
-    queryKey: workspaceQueryKeys.conversations(
-      input.apiBaseUrl,
-      input.authScope,
-      collaborationWorkspaceId
-    ),
-    queryFn: () => input.client.conversations.list(collaborationWorkspaceId ?? ""),
-    enabled: input.enabled && Boolean(collaborationWorkspaceId)
-  });
+  const cacheWorkspaceId = input.collaborationWorkspacesAvailable
+    ? collaborationWorkspaceId
+    : PERSONAL_DEFAULT_CONVERSATION_LIST;
+  return {
+    queryKey: workspaceQueryKeys.conversations(input.apiBaseUrl, input.authScope, cacheWorkspaceId),
+    queryFn: () =>
+      input.client.conversations.list(
+        input.collaborationWorkspacesAvailable ? (collaborationWorkspaceId ?? "") : undefined
+      ),
+    enabled:
+      input.enabled &&
+      (!input.collaborationWorkspacesAvailable || Boolean(collaborationWorkspaceId))
+  };
+}
+
+export function useWorkspaceConversationsQuery(
+  input: Parameters<typeof workspaceConversationsQueryOptions>[0]
+) {
+  return useQuery(workspaceConversationsQueryOptions(input));
 }
 
 export function useCollaborationWorkspacesQuery(
@@ -274,12 +287,15 @@ export function useConfigAssetsExportQuery(
 export function conversationListCacheKey(
   apiBaseUrl: string,
   authScope: string,
-  conversation: Pick<Conversation, "collaborationWorkspaceId">
+  conversation: Pick<Conversation, "collaborationWorkspaceId">,
+  collaborationWorkspacesAvailable = true
 ) {
   return workspaceQueryKeys.conversations(
     apiBaseUrl,
     authScope,
-    conversation.collaborationWorkspaceId
+    collaborationWorkspacesAvailable
+      ? conversation.collaborationWorkspaceId
+      : PERSONAL_DEFAULT_CONVERSATION_LIST
   );
 }
 
@@ -298,10 +314,22 @@ export interface WorkspaceCacheActions {
 }
 
 export function useWorkspaceCacheActions(
-  input: WorkspaceQueryInput & { collaborationWorkspaceId: string | undefined }
+  input: WorkspaceQueryInput & {
+    collaborationWorkspaceId: string | undefined;
+    collaborationWorkspacesAvailable: boolean;
+  }
 ): WorkspaceCacheActions {
   const queryClient = useQueryClient();
-  const { apiBaseUrl, authScope, client, collaborationWorkspaceId } = input;
+  const {
+    apiBaseUrl,
+    authScope,
+    client,
+    collaborationWorkspaceId,
+    collaborationWorkspacesAvailable
+  } = input;
+  const conversationListWorkspaceId = collaborationWorkspacesAvailable
+    ? collaborationWorkspaceId
+    : PERSONAL_DEFAULT_CONVERSATION_LIST;
 
   const invalidateCurrentUser = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.me(apiBaseUrl) });
@@ -309,9 +337,9 @@ export function useWorkspaceCacheActions(
 
   const invalidateConversations = useCallback(() => {
     void queryClient.invalidateQueries({
-      queryKey: workspaceQueryKeys.conversations(apiBaseUrl, authScope, collaborationWorkspaceId)
+      queryKey: workspaceQueryKeys.conversations(apiBaseUrl, authScope, conversationListWorkspaceId)
     });
-  }, [apiBaseUrl, authScope, collaborationWorkspaceId, queryClient]);
+  }, [apiBaseUrl, authScope, conversationListWorkspaceId, queryClient]);
 
   const removeThreadSnapshot = useCallback(
     (conversationId: string) => {
@@ -428,7 +456,12 @@ export function useWorkspaceCacheActions(
         response.thread
       );
       queryClient.setQueryData<ConversationListItem[]>(
-        conversationListCacheKey(apiBaseUrl, authScope, response.conversation),
+        conversationListCacheKey(
+          apiBaseUrl,
+          authScope,
+          response.conversation,
+          collaborationWorkspacesAvailable
+        ),
         (currentConversations = []) => {
           const existing = currentConversations.filter(
             (conversation) => conversation.id !== response.conversation.id
@@ -444,7 +477,7 @@ export function useWorkspaceCacheActions(
         }
       );
     },
-    [apiBaseUrl, authScope, queryClient]
+    [apiBaseUrl, authScope, collaborationWorkspacesAvailable, queryClient]
   );
 
   const handleRunRequestAccepted = useCallback(
@@ -454,7 +487,12 @@ export function useWorkspaceCacheActions(
         .generateTitle(conversationId)
         .then((updatedConversation) => {
           queryClient.setQueryData<ConversationListItem[]>(
-            conversationListCacheKey(apiBaseUrl, authScope, updatedConversation),
+            conversationListCacheKey(
+              apiBaseUrl,
+              authScope,
+              updatedConversation,
+              collaborationWorkspacesAvailable
+            ),
             (currentConversations = []) => {
               if (
                 currentConversations.some(
@@ -475,7 +513,14 @@ export function useWorkspaceCacheActions(
           invalidateConversations();
         });
     },
-    [apiBaseUrl, authScope, client, invalidateConversations, queryClient]
+    [
+      apiBaseUrl,
+      authScope,
+      client,
+      collaborationWorkspacesAvailable,
+      invalidateConversations,
+      queryClient
+    ]
   );
 
   const invalidateStreamError = useCallback(
