@@ -6,11 +6,15 @@ import type {
 } from "@vivd-catalyst/api-client";
 import {
   useCollaborationWorkspaceAccessRequestsQuery,
+  useCollaborationWorkspaceDeletionImpactQuery,
   useCollaborationWorkspaceDirectoryQuery,
   useCollaborationWorkspaceMembersQuery
 } from "../api/workspace-queries";
-import { useCollaborationWorkspaceMutations } from "../api/workspace-mutations";
-import { useTranslation } from "../i18n";
+import {
+  useCollaborationWorkspaceMutations,
+  useMoveConversationMutation
+} from "../api/workspace-mutations";
+import { useTranslation, type TranslationKey } from "../i18n";
 import { BrowseCollaborationWorkspacesDialog } from "./browse-collaboration-workspaces-dialog";
 import {
   CollaborationWorkspaceSettingsDialog,
@@ -25,6 +29,8 @@ import {
   CreateCollaborationWorkspaceDialog,
   type CreateCollaborationWorkspaceValues
 } from "./create-collaboration-workspace-dialog";
+import { DeleteCollaborationWorkspaceDialog } from "./delete-collaboration-workspace-dialog";
+import { MoveConversationDialog } from "./move-conversation-dialog";
 
 interface CollaborationWorkspaceSurfaceInput {
   apiBaseUrl: string;
@@ -37,16 +43,24 @@ export function CollaborationWorkspacePanel({
   authScope,
   client,
   currentUserId,
+  userLabel,
   collaborationWorkspaces,
+  activeCollaborationWorkspaceId,
   dialog,
   onClose,
-  onCollaborationWorkspaceCreated
+  onCollaborationWorkspaceCreated,
+  onConversationMoved,
+  onCollaborationWorkspaceDeleted
 }: CollaborationWorkspaceSurfaceInput & {
   currentUserId: string | undefined;
+  userLabel: string;
   collaborationWorkspaces: CollaborationWorkspaceWithRole[];
+  activeCollaborationWorkspaceId: string | undefined;
   dialog: CollaborationWorkspaceDialogState;
   onClose(): void;
   onCollaborationWorkspaceCreated(collaborationWorkspaceId: string): void;
+  onConversationMoved(conversationId: string, destinationCollaborationWorkspaceId: string): void;
+  onCollaborationWorkspaceDeleted(collaborationWorkspaceId: string): void;
 }) {
   const settingsCollaborationWorkspace =
     dialog.kind === "settings"
@@ -57,6 +71,20 @@ export function CollaborationWorkspacePanel({
 
   return (
     <>
+      {dialog.kind === "move-conversation" ? (
+        <MoveConversationSurface
+          apiBaseUrl={apiBaseUrl}
+          authScope={authScope}
+          client={client}
+          collaborationWorkspaces={collaborationWorkspaces}
+          activeCollaborationWorkspaceId={activeCollaborationWorkspaceId}
+          userLabel={userLabel}
+          conversationId={dialog.conversationId}
+          conversationTitle={dialog.conversationTitle}
+          onClose={onClose}
+          onMoved={onConversationMoved}
+        />
+      ) : null}
       {dialog.kind === "create" ? (
         <CreateCollaborationWorkspaceSurface
           apiBaseUrl={apiBaseUrl}
@@ -82,6 +110,7 @@ export function CollaborationWorkspacePanel({
           collaborationWorkspace={settingsCollaborationWorkspace}
           currentUserId={currentUserId}
           onClose={onClose}
+          onDeleted={onCollaborationWorkspaceDeleted}
         />
       ) : null}
     </>
@@ -99,6 +128,77 @@ function useCollaborationWorkspaceActionError() {
       setErrorMessage(t(collaborationWorkspaceErrorKey(action, error)));
     }
   };
+}
+
+/**
+ * Deletion splits its errors: a rejected confirmation name belongs next to the
+ * input, everything else at the foot of the dialog.
+ */
+function useCollaborationWorkspaceDeletionError() {
+  const { t } = useTranslation();
+  const [errorKey, setErrorKey] = useState<TranslationKey | undefined>();
+  const nameMismatch = errorKey === "collaborationWorkspaceErrorNameMismatch";
+
+  return {
+    errorMessage: errorKey && !nameMismatch ? t(errorKey) : undefined,
+    nameErrorMessage: errorKey && nameMismatch ? t(errorKey) : undefined,
+    clearError: () => setErrorKey(undefined),
+    reportError: (error: unknown) => {
+      setErrorKey(collaborationWorkspaceErrorKey("deleteCollaborationWorkspace", error));
+    }
+  };
+}
+
+function MoveConversationSurface({
+  apiBaseUrl,
+  authScope,
+  client,
+  collaborationWorkspaces,
+  activeCollaborationWorkspaceId,
+  userLabel,
+  conversationId,
+  conversationTitle,
+  onClose,
+  onMoved
+}: CollaborationWorkspaceSurfaceInput & {
+  collaborationWorkspaces: CollaborationWorkspaceWithRole[];
+  activeCollaborationWorkspaceId: string | undefined;
+  userLabel: string;
+  conversationId: string;
+  conversationTitle: string;
+  onClose(): void;
+  onMoved(conversationId: string, destinationCollaborationWorkspaceId: string): void;
+}) {
+  const moveConversation = useMoveConversationMutation({
+    apiBaseUrl,
+    authScope,
+    client,
+    sourceCollaborationWorkspaceId: activeCollaborationWorkspaceId
+  });
+  const { errorMessage, clearError, reportError } = useCollaborationWorkspaceActionError();
+
+  return (
+    <MoveConversationDialog
+      open
+      conversationTitle={conversationTitle}
+      collaborationWorkspaces={collaborationWorkspaces}
+      activeCollaborationWorkspaceId={activeCollaborationWorkspaceId}
+      userLabel={userLabel}
+      pending={moveConversation.isPending}
+      errorMessage={errorMessage}
+      onClose={onClose}
+      onMove={(destinationCollaborationWorkspaceId) => {
+        clearError();
+        moveConversation.mutate(
+          { conversationId, collaborationWorkspaceId: destinationCollaborationWorkspaceId },
+          {
+            onSuccess: () => onMoved(conversationId, destinationCollaborationWorkspaceId),
+            onError: (error) => reportError("moveConversation", error)
+          }
+        );
+      }}
+    />
+  );
 }
 
 function CreateCollaborationWorkspaceSurface({
@@ -197,13 +297,16 @@ function CollaborationWorkspaceSettingsSurface({
   client,
   collaborationWorkspace,
   currentUserId,
-  onClose
+  onClose,
+  onDeleted
 }: CollaborationWorkspaceSurfaceInput & {
   collaborationWorkspace: CollaborationWorkspaceWithRole;
   currentUserId: string | undefined;
   onClose(): void;
+  onDeleted(collaborationWorkspaceId: string): void;
 }) {
   const collaborationWorkspaceId = collaborationWorkspace.id;
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const membersQuery = useCollaborationWorkspaceMembersQuery({
     apiBaseUrl,
     authScope,
@@ -218,8 +321,16 @@ function CollaborationWorkspaceSettingsSurface({
     collaborationWorkspaceId,
     enabled: true
   });
+  const deletionImpactQuery = useCollaborationWorkspaceDeletionImpactQuery({
+    apiBaseUrl,
+    authScope,
+    client,
+    collaborationWorkspaceId,
+    enabled: deleteDialogOpen
+  });
   const {
     updateCollaborationWorkspace,
+    deleteCollaborationWorkspace,
     addCollaborationWorkspaceMember,
     changeCollaborationWorkspaceMemberRole,
     removeCollaborationWorkspaceMember,
@@ -228,6 +339,7 @@ function CollaborationWorkspaceSettingsSurface({
     declineCollaborationWorkspaceAccessRequest
   } = useCollaborationWorkspaceMutations({ apiBaseUrl, authScope, client });
   const { errorMessage, clearError, reportError } = useCollaborationWorkspaceActionError();
+  const deletionError = useCollaborationWorkspaceDeletionError();
   const membershipPending =
     addCollaborationWorkspaceMember.isPending ||
     changeCollaborationWorkspaceMemberRole.isPending ||
@@ -254,63 +366,97 @@ function CollaborationWorkspaceSettingsSurface({
   }
 
   return (
-    <CollaborationWorkspaceSettingsDialog
-      open
-      collaborationWorkspace={collaborationWorkspace}
-      currentUserId={currentUserId}
-      members={membersQuery.data ?? []}
-      membersLoading={membersQuery.isPending}
-      membersLoadFailed={Boolean(membersQuery.error)}
-      accessRequests={accessRequestsQuery.data ?? []}
-      accessRequestsLoading={accessRequestsQuery.isPending}
-      accessRequestsLoadFailed={Boolean(accessRequestsQuery.error)}
-      savePending={updateCollaborationWorkspace.isPending}
-      membershipPending={membershipPending}
-      errorMessage={errorMessage}
-      onClose={onClose}
-      onSave={save}
-      onAddMember={(email) => {
-        clearError();
-        addCollaborationWorkspaceMember.mutate(
-          { collaborationWorkspaceId, email },
-          { onError: (error) => reportError("addMember", error) }
-        );
-      }}
-      onChangeMemberRole={(userId, role: WorkspaceMembershipRole) => {
-        clearError();
-        changeCollaborationWorkspaceMemberRole.mutate(
-          { collaborationWorkspaceId, userId, role },
-          { onError: (error) => reportError("changeRole", error) }
-        );
-      }}
-      onRemoveMember={(userId) => {
-        clearError();
-        removeCollaborationWorkspaceMember.mutate(
-          { collaborationWorkspaceId, userId },
-          { onError: (error) => reportError("removeMember", error) }
-        );
-      }}
-      onLeave={() => {
-        clearError();
-        leaveCollaborationWorkspace.mutate(collaborationWorkspaceId, {
-          onSuccess: onClose,
-          onError: (error) => reportError("leave", error)
-        });
-      }}
-      onApproveAccessRequest={(userId) => {
-        clearError();
-        approveCollaborationWorkspaceAccessRequest.mutate(
-          { collaborationWorkspaceId, userId },
-          { onError: (error) => reportError("approveRequest", error) }
-        );
-      }}
-      onDeclineAccessRequest={(userId) => {
-        clearError();
-        declineCollaborationWorkspaceAccessRequest.mutate(
-          { collaborationWorkspaceId, userId },
-          { onError: (error) => reportError("declineRequest", error) }
-        );
-      }}
-    />
+    <>
+      <CollaborationWorkspaceSettingsDialog
+        open
+        collaborationWorkspace={collaborationWorkspace}
+        currentUserId={currentUserId}
+        members={membersQuery.data ?? []}
+        membersLoading={membersQuery.isPending}
+        membersLoadFailed={Boolean(membersQuery.error)}
+        accessRequests={accessRequestsQuery.data ?? []}
+        accessRequestsLoading={accessRequestsQuery.isPending}
+        accessRequestsLoadFailed={Boolean(accessRequestsQuery.error)}
+        savePending={updateCollaborationWorkspace.isPending}
+        membershipPending={membershipPending}
+        errorMessage={errorMessage}
+        onClose={onClose}
+        onSave={save}
+        onAddMember={(email) => {
+          clearError();
+          addCollaborationWorkspaceMember.mutate(
+            { collaborationWorkspaceId, email },
+            { onError: (error) => reportError("addMember", error) }
+          );
+        }}
+        onChangeMemberRole={(userId, role: WorkspaceMembershipRole) => {
+          clearError();
+          changeCollaborationWorkspaceMemberRole.mutate(
+            { collaborationWorkspaceId, userId, role },
+            { onError: (error) => reportError("changeRole", error) }
+          );
+        }}
+        onRemoveMember={(userId) => {
+          clearError();
+          removeCollaborationWorkspaceMember.mutate(
+            { collaborationWorkspaceId, userId },
+            { onError: (error) => reportError("removeMember", error) }
+          );
+        }}
+        onLeave={() => {
+          clearError();
+          leaveCollaborationWorkspace.mutate(collaborationWorkspaceId, {
+            onSuccess: onClose,
+            onError: (error) => reportError("leave", error)
+          });
+        }}
+        onRequestDelete={() => {
+          clearError();
+          deletionError.clearError();
+          setDeleteDialogOpen(true);
+        }}
+        onApproveAccessRequest={(userId) => {
+          clearError();
+          approveCollaborationWorkspaceAccessRequest.mutate(
+            { collaborationWorkspaceId, userId },
+            { onError: (error) => reportError("approveRequest", error) }
+          );
+        }}
+        onDeclineAccessRequest={(userId) => {
+          clearError();
+          declineCollaborationWorkspaceAccessRequest.mutate(
+            { collaborationWorkspaceId, userId },
+            { onError: (error) => reportError("declineRequest", error) }
+          );
+        }}
+      />
+      <DeleteCollaborationWorkspaceDialog
+        open={deleteDialogOpen}
+        collaborationWorkspaceName={collaborationWorkspace.name}
+        deletionImpact={deletionImpactQuery.data}
+        deletionImpactLoading={deletionImpactQuery.isPending}
+        deletionImpactLoadFailed={Boolean(deletionImpactQuery.error)}
+        pending={deleteCollaborationWorkspace.isPending}
+        errorMessage={deletionError.errorMessage}
+        nameErrorMessage={deletionError.nameErrorMessage}
+        onClose={() => {
+          deletionError.clearError();
+          setDeleteDialogOpen(false);
+        }}
+        onDelete={(confirmName) => {
+          deletionError.clearError();
+          deleteCollaborationWorkspace.mutate(
+            { collaborationWorkspaceId, confirmName },
+            {
+              onSuccess: () => {
+                setDeleteDialogOpen(false);
+                onDeleted(collaborationWorkspaceId);
+              },
+              onError: (error) => deletionError.reportError(error)
+            }
+          );
+        }}
+      />
+    </>
   );
 }

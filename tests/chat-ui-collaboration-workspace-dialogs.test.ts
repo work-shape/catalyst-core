@@ -11,11 +11,20 @@ import { BrowseCollaborationWorkspacesDialog } from "../packages/chat-ui/src/col
 import { CreateCollaborationWorkspaceDialog } from "../packages/chat-ui/src/collaboration-workspace/create-collaboration-workspace-dialog";
 import {
   canChangeCollaborationWorkspaceRole,
+  canDeleteCollaborationWorkspace,
   canRemoveCollaborationWorkspaceMember,
   CollaborationWorkspaceGeneralTab,
   CollaborationWorkspaceMembersTab,
   CollaborationWorkspaceRequestsTab
 } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-settings-dialog";
+import {
+  CollaborationWorkspaceDeletionConfirmStep,
+  CollaborationWorkspaceDeletionImpactStep
+} from "../packages/chat-ui/src/collaboration-workspace/delete-collaboration-workspace-dialog";
+import {
+  moveConversationDestinations,
+  MoveConversationDialog
+} from "../packages/chat-ui/src/collaboration-workspace/move-conversation-dialog";
 
 const noop = () => undefined;
 
@@ -37,6 +46,29 @@ const sharedCollaborationWorkspace: CollaborationWorkspaceWithRole = {
   updatedAt: "2026-08-01T10:00:00.000Z",
   role: "owner",
   pendingAccessRequestCount: 1
+};
+
+const personalCollaborationWorkspace: CollaborationWorkspaceWithRole = {
+  ...sharedCollaborationWorkspace,
+  id: "cw_personal",
+  kind: "personal",
+  name: "Felix Pahlke",
+  description: null,
+  visibility: "private",
+  emoji: null,
+  accentColor: null,
+  personalUserId: "user_1",
+  pendingAccessRequestCount: 0
+};
+
+const secondSharedCollaborationWorkspace: CollaborationWorkspaceWithRole = {
+  ...sharedCollaborationWorkspace,
+  id: "cw_analytics",
+  name: "Analytik",
+  emoji: null,
+  accentColor: "teal",
+  role: "member",
+  pendingAccessRequestCount: 0
 };
 
 const members: WorkspaceMember[] = [
@@ -96,7 +128,8 @@ describe("collaboration workspace settings tabs", () => {
         savePending: false,
         membershipPending: false,
         onSave: noop,
-        onLeave: noop
+        onLeave: noop,
+        onRequestDelete: noop
       })
     );
 
@@ -116,7 +149,8 @@ describe("collaboration workspace settings tabs", () => {
         savePending: false,
         membershipPending: false,
         onSave: noop,
-        onLeave: noop
+        onLeave: noop,
+        onRequestDelete: noop
       })
     );
 
@@ -212,6 +246,43 @@ describe("collaboration workspace settings tabs", () => {
     expect(markup).toContain("Keine offenen Zugriffsanfragen.");
   });
 
+  it("offers deletion to an owner of a shared workspace", () => {
+    const markup = render(
+      "de",
+      createElement(CollaborationWorkspaceGeneralTab, {
+        collaborationWorkspace: sharedCollaborationWorkspace,
+        currentUserId: "user_1",
+        members,
+        savePending: false,
+        membershipPending: false,
+        onSave: noop,
+        onLeave: noop,
+        onRequestDelete: noop
+      })
+    );
+
+    expect(markup).toContain('data-testid="collaboration-workspace-delete-trigger"');
+    expect(markup).toContain("Arbeitsbereich löschen");
+  });
+
+  it("hides deletion from an admin", () => {
+    const markup = render(
+      "de",
+      createElement(CollaborationWorkspaceGeneralTab, {
+        collaborationWorkspace: { ...sharedCollaborationWorkspace, role: "admin" },
+        currentUserId: "user_3",
+        members,
+        savePending: false,
+        membershipPending: false,
+        onSave: noop,
+        onLeave: noop,
+        onRequestDelete: noop
+      })
+    );
+
+    expect(markup).not.toContain('data-testid="collaboration-workspace-delete-trigger"');
+  });
+
   it("follows the role table for role changes and removals", () => {
     expect(canChangeCollaborationWorkspaceRole("owner")).toBe(true);
     expect(canChangeCollaborationWorkspaceRole("admin")).toBe(false);
@@ -220,6 +291,180 @@ describe("collaboration workspace settings tabs", () => {
     expect(canRemoveCollaborationWorkspaceMember("admin", "member")).toBe(true);
     expect(canRemoveCollaborationWorkspaceMember("admin", "admin")).toBe(false);
     expect(canRemoveCollaborationWorkspaceMember("member", "member")).toBe(false);
+  });
+
+  it("restricts deletion to owners of shared workspaces", () => {
+    expect(canDeleteCollaborationWorkspace(sharedCollaborationWorkspace)).toBe(true);
+    expect(canDeleteCollaborationWorkspace({ kind: "shared", role: "admin" })).toBe(false);
+    expect(canDeleteCollaborationWorkspace({ kind: "shared", role: "member" })).toBe(false);
+    expect(canDeleteCollaborationWorkspace({ kind: "personal", role: "owner" })).toBe(false);
+  });
+});
+
+describe("move conversation dialog", () => {
+  const moveDialogProps = {
+    open: true,
+    conversationTitle: "Angebot Q3",
+    collaborationWorkspaces: [
+      secondSharedCollaborationWorkspace,
+      personalCollaborationWorkspace,
+      sharedCollaborationWorkspace
+    ],
+    activeCollaborationWorkspaceId: sharedCollaborationWorkspace.id,
+    userLabel: "Felix Pahlke",
+    pending: false,
+    errorMessage: undefined,
+    onClose: noop,
+    onMove: noop
+  };
+
+  it("offers every workspace except the one the conversation is in", () => {
+    const markup = render("de", createElement(MoveConversationDialog, moveDialogProps));
+
+    expect(markup).toContain("Unterhaltung verschieben");
+    expect(markup).toContain("Angebot Q3");
+    expect(markup).toContain("Persönlicher Arbeitsbereich");
+    expect(markup).toContain("Analytik");
+    expect(markup).not.toContain("Produktteam");
+    expect(markup.match(/data-testid="move-conversation-destination-row"/gu)).toHaveLength(2);
+  });
+
+  it("keeps the move disabled until a destination is picked", () => {
+    const markup = render("de", createElement(MoveConversationDialog, moveDialogProps));
+
+    expect(markup).toContain("Verschieben");
+    expect(markup).toContain('type="submit" disabled=""');
+  });
+
+  it("explains that there is nowhere to move the conversation", () => {
+    const markup = render(
+      "de",
+      createElement(MoveConversationDialog, {
+        ...moveDialogProps,
+        collaborationWorkspaces: [sharedCollaborationWorkspace]
+      })
+    );
+
+    expect(markup).toContain(
+      "Es gibt keinen anderen Arbeitsbereich, in den diese Unterhaltung verschoben werden könnte."
+    );
+    expect(markup).not.toContain('data-testid="move-conversation-destination-row"');
+  });
+
+  it("surfaces the mapped error copy", () => {
+    const markup = render(
+      "de",
+      createElement(MoveConversationDialog, {
+        ...moveDialogProps,
+        errorMessage: "In dieser Unterhaltung läuft noch Arbeit."
+      })
+    );
+
+    expect(markup).toContain("In dieser Unterhaltung läuft noch Arbeit.");
+  });
+
+  it("orders destinations with the Personal Workspace first", () => {
+    const destinations = moveConversationDestinations(
+      [
+        secondSharedCollaborationWorkspace,
+        personalCollaborationWorkspace,
+        sharedCollaborationWorkspace
+      ],
+      sharedCollaborationWorkspace.id
+    );
+
+    expect(destinations.map((destination) => destination.id)).toEqual([
+      personalCollaborationWorkspace.id,
+      secondSharedCollaborationWorkspace.id
+    ]);
+  });
+});
+
+describe("delete collaboration workspace dialog", () => {
+  it("shows what the deletion removes before asking for the name", () => {
+    const markup = render(
+      "de",
+      createElement(CollaborationWorkspaceDeletionImpactStep, {
+        collaborationWorkspaceName: "Produktteam",
+        deletionImpact: { conversationCount: 12, memberCount: 4, pendingAccessRequestCount: 2 },
+        loading: false,
+        loadFailed: false,
+        onCancel: noop,
+        onContinue: noop
+      })
+    );
+
+    expect(markup).toContain("verschwindet der Arbeitsbereich für alle darin");
+    expect(markup).toContain("12 Unterhaltungen werden gelöscht");
+    expect(markup).toContain("4 Mitglieder verlieren den Zugriff.");
+    expect(markup).toContain("2 offene Zugriffsanfragen werden verworfen.");
+    expect(markup).toContain("Weiter");
+  });
+
+  it("blocks the second step while the impact is unknown", () => {
+    const loadingMarkup = render(
+      "de",
+      createElement(CollaborationWorkspaceDeletionImpactStep, {
+        collaborationWorkspaceName: "Produktteam",
+        deletionImpact: undefined,
+        loading: true,
+        loadFailed: false,
+        onCancel: noop,
+        onContinue: noop
+      })
+    );
+    const failedMarkup = render(
+      "de",
+      createElement(CollaborationWorkspaceDeletionImpactStep, {
+        collaborationWorkspaceName: "Produktteam",
+        deletionImpact: undefined,
+        loading: false,
+        loadFailed: true,
+        onCancel: noop,
+        onContinue: noop
+      })
+    );
+
+    expect(loadingMarkup).toContain("Es wird geprüft, was diese Löschung entfernt…");
+    expect(loadingMarkup).toContain('disabled=""');
+    expect(failedMarkup).toContain("Was diese Löschung entfernt, konnte nicht geladen werden.");
+    expect(failedMarkup).toContain('disabled=""');
+  });
+
+  it("asks for the exact workspace name and keeps the destructive button disabled", () => {
+    const markup = render(
+      "de",
+      createElement(CollaborationWorkspaceDeletionConfirmStep, {
+        collaborationWorkspaceName: "Produktteam",
+        pending: false,
+        errorMessage: undefined,
+        nameErrorMessage: undefined,
+        onBack: noop,
+        onDelete: noop
+      })
+    );
+
+    expect(markup).toContain("Gib „Produktteam“ ein, um zu bestätigen");
+    expect(markup).toContain('id="collaboration-workspace-delete-confirm"');
+    expect(markup).toContain('type="submit" disabled=""');
+    expect(markup).toContain("Zurück");
+  });
+
+  it("surfaces a rejected name next to the input", () => {
+    const markup = render(
+      "de",
+      createElement(CollaborationWorkspaceDeletionConfirmStep, {
+        collaborationWorkspaceName: "Produktteam",
+        pending: false,
+        errorMessage: undefined,
+        nameErrorMessage: "Dieser Name stimmt nicht mit dem Namen des Arbeitsbereichs überein.",
+        onBack: noop,
+        onDelete: noop
+      })
+    );
+
+    expect(markup).toContain('aria-invalid="true"');
+    expect(markup).toContain("Dieser Name stimmt nicht mit dem Namen des Arbeitsbereichs überein.");
   });
 });
 

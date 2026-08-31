@@ -116,6 +116,27 @@ export function useCollaborationWorkspaceAccessRequestsQuery(
   });
 }
 
+export function useCollaborationWorkspaceDeletionImpactQuery(
+  input: WorkspaceQueryInput & {
+    collaborationWorkspaceId: string;
+    enabled: boolean;
+  }
+) {
+  return useQuery({
+    queryKey: workspaceQueryKeys.collaborationWorkspaceDeletionImpact(
+      input.apiBaseUrl,
+      input.authScope,
+      input.collaborationWorkspaceId
+    ),
+    queryFn: () =>
+      input.client.collaborationWorkspaces.deletionImpact(input.collaborationWorkspaceId),
+    // The counts are only meaningful at the moment the owner reads them.
+    staleTime: 0,
+    gcTime: 0,
+    enabled: input.enabled
+  });
+}
+
 export function useWorkspaceThreadQuery(
   input: WorkspaceQueryInput & {
     conversationId: string | undefined;

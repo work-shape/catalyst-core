@@ -127,9 +127,11 @@ export interface ConversationRailModel {
   view: WorkspaceView;
   creatingConversation: boolean;
   deletingConversation: boolean;
+  canMoveConversation: boolean;
   startNewConversation(): void;
   selectConversation(conversationId: string): void;
   renameConversation(conversationId: string, title: string): Promise<void>;
+  moveConversation(conversationId: string, title: string): void;
   deleteConversation(conversationId: string): void;
   selectWorkspaceView(view: WorkspaceView): void;
 }
@@ -615,11 +617,13 @@ export function useWorkspaceChatModel({
       view,
       creatingConversation: false,
       deletingConversation: deleteConversationMutation.isPending,
+      canMoveConversation: collaborationWorkspace.canMoveConversation,
       startNewConversation,
       selectConversation,
       renameConversation: async (conversationId, title) => {
         await renameConversationMutation.mutateAsync({ conversationId, title });
       },
+      moveConversation: collaborationWorkspace.openMoveConversationDialog,
       deleteConversation: (conversationId) => deleteConversationMutation.mutate(conversationId),
       selectWorkspaceView: routeState.selectWorkspaceView
     },

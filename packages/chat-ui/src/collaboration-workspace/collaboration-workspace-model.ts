@@ -2,16 +2,22 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ApiClient, CollaborationWorkspaceWithRole } from "@vivd-catalyst/api-client";
 import { useCollaborationWorkspacesQuery } from "../api/workspace-queries";
 import {
+  clearStoredCollaborationWorkspaceId,
   readStoredCollaborationWorkspaceId,
   writeStoredCollaborationWorkspaceId
 } from "../workspace-utils";
-import { routeCollaborationWorkspaceId, type WorkspaceRoute } from "../workspace/workspace-route";
+import {
+  routeCollaborationWorkspaceId,
+  routeConversationId,
+  type WorkspaceRoute
+} from "../workspace/workspace-route";
 
 export type CollaborationWorkspaceDialogState =
   | { kind: "none" }
   | { kind: "create" }
   | { kind: "browse" }
-  | { kind: "settings"; collaborationWorkspaceId: string };
+  | { kind: "settings"; collaborationWorkspaceId: string }
+  | { kind: "move-conversation"; conversationId: string; conversationTitle: string };
 
 export interface CollaborationWorkspaceModel {
   collaborationWorkspaces: CollaborationWorkspaceWithRole[];
@@ -21,11 +27,15 @@ export interface CollaborationWorkspaceModel {
   loading: boolean;
   loadFailed: boolean;
   dialog: CollaborationWorkspaceDialogState;
+  canMoveConversation: boolean;
   selectCollaborationWorkspace(collaborationWorkspaceId: string): void;
   openCreateDialog(): void;
   openBrowseDialog(): void;
   openSettingsDialog(collaborationWorkspaceId: string): void;
+  openMoveConversationDialog(conversationId: string, conversationTitle: string): void;
   closeDialog(): void;
+  conversationMoved(conversationId: string, destinationCollaborationWorkspaceId: string): void;
+  collaborationWorkspaceDeleted(collaborationWorkspaceId: string): void;
 }
 
 export interface CollaborationWorkspaceModelInput {
@@ -186,7 +196,42 @@ export function useCollaborationWorkspaceModel(
     (collaborationWorkspaceId: string) => setDialog({ kind: "settings", collaborationWorkspaceId }),
     []
   );
+  const openMoveConversationDialog = useCallback(
+    (conversationId: string, conversationTitle: string) =>
+      setDialog({ kind: "move-conversation", conversationId, conversationTitle }),
+    []
+  );
   const closeDialog = useCallback(() => setDialog({ kind: "none" }), []);
+
+  // A moved conversation keeps its canonical URL: only the workspace segment
+  // changes, and only while that conversation is the one on screen.
+  const conversationMoved = useCallback(
+    (conversationId: string, destinationCollaborationWorkspaceId: string) => {
+      setDialog({ kind: "none" });
+      if (routeConversationId(route) === conversationId) {
+        showConversation(destinationCollaborationWorkspaceId, conversationId, { replace: true });
+      }
+    },
+    [route, showConversation]
+  );
+
+  const collaborationWorkspaceDeleted = useCallback(
+    (deletedCollaborationWorkspaceId: string) => {
+      setDialog({ kind: "none" });
+      // The browser-local last workspace must not resurrect a deleted id on the
+      // next application root visit.
+      if (
+        userId &&
+        readStoredCollaborationWorkspaceId(apiBaseUrl, userId) === deletedCollaborationWorkspaceId
+      ) {
+        clearStoredCollaborationWorkspaceId(apiBaseUrl, userId);
+      }
+      if (personalCollaborationWorkspaceId) {
+        goToCollaborationWorkspace(personalCollaborationWorkspaceId, { replace: true });
+      }
+    },
+    [apiBaseUrl, goToCollaborationWorkspace, personalCollaborationWorkspaceId, userId]
+  );
 
   return {
     collaborationWorkspaces,
@@ -196,10 +241,14 @@ export function useCollaborationWorkspaceModel(
     loading: collaborationWorkspacesQuery.isPending && isAuthenticated,
     loadFailed: Boolean(collaborationWorkspacesQuery.error),
     dialog,
+    canMoveConversation: collaborationWorkspaces.length > 1,
     selectCollaborationWorkspace,
     openCreateDialog,
     openBrowseDialog,
     openSettingsDialog,
-    closeDialog
+    openMoveConversationDialog,
+    closeDialog,
+    conversationMoved,
+    collaborationWorkspaceDeleted
   };
 }

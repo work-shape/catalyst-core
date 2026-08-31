@@ -69,6 +69,7 @@ export function CollaborationWorkspaceSettingsDialog({
   onChangeMemberRole,
   onRemoveMember,
   onLeave,
+  onRequestDelete,
   onApproveAccessRequest,
   onDeclineAccessRequest
 }: {
@@ -90,6 +91,7 @@ export function CollaborationWorkspaceSettingsDialog({
   onChangeMemberRole(userId: string, role: WorkspaceMembershipRole): void;
   onRemoveMember(userId: string): void;
   onLeave(): void;
+  onRequestDelete(): void;
   onApproveAccessRequest(userId: string): void;
   onDeclineAccessRequest(userId: string): void;
 }) {
@@ -199,6 +201,7 @@ export function CollaborationWorkspaceSettingsDialog({
               membershipPending={membershipPending}
               onSave={onSave}
               onLeave={onLeave}
+              onRequestDelete={onRequestDelete}
             />
           ) : null}
           {tab === "members" ? (
@@ -237,7 +240,8 @@ export function CollaborationWorkspaceGeneralTab({
   savePending,
   membershipPending,
   onSave,
-  onLeave
+  onLeave,
+  onRequestDelete
 }: {
   collaborationWorkspace: CollaborationWorkspaceWithRole;
   currentUserId: string | undefined;
@@ -246,6 +250,7 @@ export function CollaborationWorkspaceGeneralTab({
   membershipPending: boolean;
   onSave(values: CollaborationWorkspaceSettingsValues): void;
   onLeave(): void;
+  onRequestDelete(): void;
 }) {
   const { t } = useTranslation();
   const [name, setName] = useState(collaborationWorkspace.name);
@@ -263,6 +268,7 @@ export function CollaborationWorkspaceGeneralTab({
     (member) => member.role === "owner" && member.userId !== currentUserId
   );
   const canLeave = collaborationWorkspace.role !== "owner" || otherOwnerExists;
+  const canDelete = canDeleteCollaborationWorkspace(collaborationWorkspace);
 
   useEffect(() => {
     setName(collaborationWorkspace.name);
@@ -363,6 +369,19 @@ export function CollaborationWorkspaceGeneralTab({
             {t("collaborationWorkspaceErrorLastOwner")}
           </p>
         )}
+        {canDelete ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-9 w-fit justify-start text-destructive hover:bg-destructive/10"
+            data-testid="collaboration-workspace-delete-trigger"
+            disabled={membershipPending}
+            onClick={onRequestDelete}
+          >
+            <Trash2 size={16} aria-hidden="true" />
+            <span>{t("collaborationWorkspaceDelete")}</span>
+          </Button>
+        ) : null}
       </div>
 
       <Dialog
@@ -653,6 +672,13 @@ export function CollaborationWorkspaceRequestsTab({
  */
 export function canChangeCollaborationWorkspaceRole(actorRole: WorkspaceMembershipRole): boolean {
   return actorRole === "owner";
+}
+
+/** Only an owner deletes, and the Personal Workspace is never deletable. */
+export function canDeleteCollaborationWorkspace(
+  collaborationWorkspace: Pick<CollaborationWorkspaceWithRole, "kind" | "role">
+): boolean {
+  return collaborationWorkspace.kind === "shared" && collaborationWorkspace.role === "owner";
 }
 
 export function canRemoveCollaborationWorkspaceMember(

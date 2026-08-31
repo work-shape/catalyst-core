@@ -240,6 +240,48 @@ export function useRenameConversationMutation(
   });
 }
 
+export function useMoveConversationMutation(
+  input: WorkspaceMutationInput & {
+    sourceCollaborationWorkspaceId: string | undefined;
+  }
+) {
+  const queryClient = useQueryClient();
+  const conversationsKey = (collaborationWorkspaceId: string | undefined) =>
+    workspaceQueryKeys.conversations(input.apiBaseUrl, input.authScope, collaborationWorkspaceId);
+
+  return useMutation({
+    mutationFn: (mutationInput: { conversationId: string; collaborationWorkspaceId: string }) =>
+      input.client.conversations.move(
+        mutationInput.conversationId,
+        mutationInput.collaborationWorkspaceId
+      ),
+    onSuccess: (movedConversation, { collaborationWorkspaceId }) => {
+      // Dropped from the source list before the refetch lands so the rail never
+      // shows a conversation that now lives in another workspace.
+      queryClient.setQueryData<ConversationListItem[]>(
+        conversationsKey(input.sourceCollaborationWorkspaceId),
+        (currentConversations = []) =>
+          currentConversations.filter((conversation) => conversation.id !== movedConversation.id)
+      );
+      for (const listCollaborationWorkspaceId of new Set(
+        [input.sourceCollaborationWorkspaceId, collaborationWorkspaceId].filter(
+          (candidate): candidate is string => Boolean(candidate)
+        )
+      )) {
+        void queryClient.invalidateQueries({
+          queryKey: conversationsKey(listCollaborationWorkspaceId)
+        });
+      }
+      void queryClient.invalidateQueries({
+        queryKey: workspaceQueryKeys.thread(input.apiBaseUrl, input.authScope, movedConversation.id)
+      });
+      void queryClient.invalidateQueries({
+        queryKey: workspaceQueryKeys.auditEvents(input.apiBaseUrl, input.authScope)
+      });
+    }
+  });
+}
+
 export type CreateCollaborationWorkspaceInput = Parameters<
   ApiClient["collaborationWorkspaces"]["create"]
 >[0];
@@ -308,6 +350,32 @@ export function useCollaborationWorkspaceMutations(input: WorkspaceMutationInput
     onSuccess: () => {
       invalidateCollaborationWorkspaces();
       invalidateDirectory();
+    }
+  });
+  const deleteCollaborationWorkspace = useMutation({
+    mutationFn: (mutationInput: { collaborationWorkspaceId: string; confirmName: string }) =>
+      collaborationWorkspaces.delete(
+        mutationInput.collaborationWorkspaceId,
+        mutationInput.confirmName
+      ),
+    onSuccess: (_deletion, { collaborationWorkspaceId }) => {
+      // Dropped before the refetch lands so the route guard cannot bounce back
+      // into the workspace that no longer exists.
+      queryClient.setQueryData<CollaborationWorkspaceWithRole[]>(
+        workspaceQueryKeys.collaborationWorkspaces(apiBaseUrl, authScope),
+        (currentCollaborationWorkspaces = []) =>
+          currentCollaborationWorkspaces.filter(
+            (collaborationWorkspace) => collaborationWorkspace.id !== collaborationWorkspaceId
+          )
+      );
+      invalidateCollaborationWorkspaces();
+      invalidateDirectory();
+      void queryClient.invalidateQueries({
+        queryKey: workspaceQueryKeys.conversationsScope(apiBaseUrl, authScope)
+      });
+      void queryClient.invalidateQueries({
+        queryKey: workspaceQueryKeys.auditEvents(apiBaseUrl, authScope)
+      });
     }
   });
   const addCollaborationWorkspaceMember = useMutation({
@@ -380,6 +448,7 @@ export function useCollaborationWorkspaceMutations(input: WorkspaceMutationInput
   return {
     createCollaborationWorkspace,
     updateCollaborationWorkspace,
+    deleteCollaborationWorkspace,
     addCollaborationWorkspaceMember,
     changeCollaborationWorkspaceMemberRole,
     removeCollaborationWorkspaceMember,

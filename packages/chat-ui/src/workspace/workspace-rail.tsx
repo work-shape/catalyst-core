@@ -17,12 +17,14 @@ export function WorkspaceRail({
   view,
   creatingConversation,
   deletingConversation,
+  canMoveConversation,
   userMenu,
   onToggleSidebar,
   onViewChange,
   onCreateConversation,
   onSelectConversation,
   onRenameConversation,
+  onMoveConversation,
   onDeleteConversation
 }: {
   config: SafeConfig;
@@ -33,12 +35,14 @@ export function WorkspaceRail({
   view: WorkspaceView;
   creatingConversation: boolean;
   deletingConversation: boolean;
+  canMoveConversation: boolean;
   userMenu: ReactNode;
   onToggleSidebar: () => void;
   onViewChange: (view: WorkspaceView) => void;
   onCreateConversation: () => void;
   onSelectConversation: (conversationId: string) => void;
   onRenameConversation: (conversationId: string, title: string) => Promise<void>;
+  onMoveConversation: (conversationId: string, title: string) => void;
   onDeleteConversation: (conversationId: string) => void;
 }) {
   const { t } = useTranslation();
@@ -195,6 +199,11 @@ export function WorkspaceRail({
               selected={conversation.id === selectedConversationId}
               onSelect={() => onSelectConversation(conversation.id)}
               onRename={(title) => onRenameConversation(conversation.id, title)}
+              onMove={
+                canMoveConversation
+                  ? () => onMoveConversation(conversation.id, conversation.title)
+                  : undefined
+              }
               onDelete={() => onDeleteConversation(conversation.id)}
               deleting={deletingConversation}
             />

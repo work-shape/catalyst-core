@@ -23,6 +23,17 @@ export const workspaceQueryKeys = {
     collaborationWorkspaceId: string
   ) =>
     ["collaboration-workspace-members", apiBaseUrl, authScope, collaborationWorkspaceId] as const,
+  collaborationWorkspaceDeletionImpact: (
+    apiBaseUrl: string,
+    authScope: string,
+    collaborationWorkspaceId: string
+  ) =>
+    [
+      "collaboration-workspace-deletion-impact",
+      apiBaseUrl,
+      authScope,
+      collaborationWorkspaceId
+    ] as const,
   collaborationWorkspaceAccessRequests: (
     apiBaseUrl: string,
     authScope: string,

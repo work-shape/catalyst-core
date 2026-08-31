@@ -115,11 +115,12 @@ function ChatWorkspaceContent({
   const chat = model.selectedChat;
   const isStaging = model.config.config.clientInstance.environment === "staging";
   const collaborationWorkspace = model.collaborationWorkspace;
+  const userLabel = model.auth.user.displayLabel || (model.auth.user.email ?? "");
   const collaborationWorkspaceSelector = (
     <CollaborationWorkspaceSelector
       collaborationWorkspaces={collaborationWorkspace.collaborationWorkspaces}
       activeCollaborationWorkspaceId={collaborationWorkspace.activeCollaborationWorkspaceId}
-      userLabel={model.auth.user.displayLabel || (model.auth.user.email ?? "")}
+      userLabel={userLabel}
       loading={collaborationWorkspace.loading}
       loadFailed={collaborationWorkspace.loadFailed}
       onSelectCollaborationWorkspace={collaborationWorkspace.selectCollaborationWorkspace}
@@ -168,12 +169,14 @@ function ChatWorkspaceContent({
               view={model.conversationRail.view}
               creatingConversation={model.conversationRail.creatingConversation}
               deletingConversation={model.conversationRail.deletingConversation}
+              canMoveConversation={model.conversationRail.canMoveConversation}
               userMenu={userMenu}
               onToggleSidebar={model.chrome.closeSidebar}
               onViewChange={model.conversationRail.selectWorkspaceView}
               onCreateConversation={model.conversationRail.startNewConversation}
               onSelectConversation={model.conversationRail.selectConversation}
               onRenameConversation={model.conversationRail.renameConversation}
+              onMoveConversation={model.conversationRail.moveConversation}
               onDeleteConversation={model.conversationRail.deleteConversation}
             />
           </div>
@@ -201,10 +204,14 @@ function ChatWorkspaceContent({
           authScope={WORKSPACE_AUTH_SCOPE}
           client={chat.client}
           currentUserId={model.auth.user.id}
+          userLabel={userLabel}
           collaborationWorkspaces={collaborationWorkspace.collaborationWorkspaces}
+          activeCollaborationWorkspaceId={collaborationWorkspace.activeCollaborationWorkspaceId}
           dialog={collaborationWorkspace.dialog}
           onClose={collaborationWorkspace.closeDialog}
           onCollaborationWorkspaceCreated={collaborationWorkspace.selectCollaborationWorkspace}
+          onConversationMoved={collaborationWorkspace.conversationMoved}
+          onCollaborationWorkspaceDeleted={collaborationWorkspace.collaborationWorkspaceDeleted}
         />
 
         <ControlPlaneRoutes adminPanel={adminPanel} controlPlane={model.controlPlane}>

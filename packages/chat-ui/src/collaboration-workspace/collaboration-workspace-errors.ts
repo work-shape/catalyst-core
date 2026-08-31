@@ -1,10 +1,12 @@
+import type { ApiErrorCode } from "@vivd-catalyst/api-client";
 import type { TranslationKey } from "../i18n";
-import { apiErrorStatus } from "../workspace-utils";
+import { apiErrorCode, apiErrorStatus } from "../workspace-utils";
 
 /**
- * The workspace API answers with English prose today; stable error codes arrive
- * with a later phase. Until then the UI maps HTTP status plus the action that
- * produced it onto localized copy instead of matching server strings.
+ * The workspace API answers with English prose, so the UI maps the stable
+ * `AppError` code plus the action that produced it onto localized copy instead
+ * of matching server strings. Older responses without a code fall back to their
+ * HTTP status.
  */
 export type CollaborationWorkspaceAction =
   | "create"
@@ -15,43 +17,79 @@ export type CollaborationWorkspaceAction =
   | "leave"
   | "requestAccess"
   | "approveRequest"
-  | "declineRequest";
+  | "declineRequest"
+  | "moveConversation"
+  | "deleteCollaborationWorkspace";
 
 export function collaborationWorkspaceErrorKey(
   action: CollaborationWorkspaceAction,
   error: unknown
 ): TranslationKey {
-  const status = apiErrorStatus(error);
+  const code = apiErrorCode(error) ?? statusFallbackCode(apiErrorStatus(error));
 
-  if (status === 401) {
-    return "collaborationWorkspaceErrorSignedOut";
+  switch (code) {
+    case "UNAUTHENTICATED":
+      return "collaborationWorkspaceErrorSignedOut";
+    case "FORBIDDEN":
+      // A move only fails on membership, and naming the missing membership would
+      // leak whether the target workspace exists.
+      return action === "moveConversation"
+        ? "collaborationWorkspaceErrorMoveUnavailable"
+        : "collaborationWorkspaceErrorNotPermitted";
+    case "NOT_FOUND":
+      if (action === "moveConversation") {
+        return "collaborationWorkspaceErrorMoveUnavailable";
+      }
+      return action === "approveRequest" || action === "declineRequest"
+        ? "collaborationWorkspaceErrorRequestGone"
+        : "collaborationWorkspaceErrorNotFound";
+    case "CONFLICT":
+      if (action === "moveConversation") {
+        return "collaborationWorkspaceErrorConversationBusy";
+      }
+      if (action === "deleteCollaborationWorkspace") {
+        return "collaborationWorkspaceErrorCollaborationWorkspaceBusy";
+      }
+      if (action === "removeMember" || action === "leave" || action === "changeRole") {
+        return "collaborationWorkspaceErrorLastOwner";
+      }
+      if (action === "requestAccess") {
+        return "collaborationWorkspaceErrorRequestPending";
+      }
+      if (action === "approveRequest") {
+        return "collaborationWorkspaceErrorInvitationsUnavailable";
+      }
+      return "collaborationWorkspaceErrorAlreadyMember";
+    case "BAD_REQUEST":
+    case "VALIDATION_FAILED":
+      if (action === "deleteCollaborationWorkspace") {
+        return "collaborationWorkspaceErrorNameMismatch";
+      }
+      if (action === "addMember") {
+        return "collaborationWorkspaceErrorInvitationsUnavailable";
+      }
+      return "collaborationWorkspaceErrorInvalid";
+    default:
+      return "collaborationWorkspaceErrorUnexpected";
   }
-  if (status === 403) {
-    return "collaborationWorkspaceErrorNotPermitted";
-  }
-  if (status === 404) {
-    return action === "approveRequest" || action === "declineRequest"
-      ? "collaborationWorkspaceErrorRequestGone"
-      : "collaborationWorkspaceErrorNotFound";
-  }
-  if (status === 409) {
-    if (action === "removeMember" || action === "leave" || action === "changeRole") {
-      return "collaborationWorkspaceErrorLastOwner";
-    }
-    if (action === "requestAccess") {
-      return "collaborationWorkspaceErrorRequestPending";
-    }
-    if (action === "approveRequest") {
-      return "collaborationWorkspaceErrorInvitationsUnavailable";
-    }
-    return "collaborationWorkspaceErrorAlreadyMember";
-  }
-  if (status === 400 || status === 422) {
-    if (action === "addMember") {
-      return "collaborationWorkspaceErrorInvitationsUnavailable";
-    }
-    return "collaborationWorkspaceErrorInvalid";
-  }
+}
 
-  return "collaborationWorkspaceErrorUnexpected";
+/** Only the statuses the workspace surfaces used before codes existed. */
+function statusFallbackCode(status: number | undefined): ApiErrorCode | undefined {
+  switch (status) {
+    case 400:
+      return "BAD_REQUEST";
+    case 401:
+      return "UNAUTHENTICATED";
+    case 403:
+      return "FORBIDDEN";
+    case 404:
+      return "NOT_FOUND";
+    case 409:
+      return "CONFLICT";
+    case 422:
+      return "VALIDATION_FAILED";
+    default:
+      return undefined;
+  }
 }

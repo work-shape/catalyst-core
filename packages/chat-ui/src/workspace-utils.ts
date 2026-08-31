@@ -1,4 +1,4 @@
-import type { LocaleCode } from "@vivd-catalyst/api-client";
+import { appErrorCodeSchema, type ApiErrorCode, type LocaleCode } from "@vivd-catalyst/api-client";
 import type { ResolvedThemeMode } from "./theme";
 
 export const STANDALONE_AUTH_SOURCE = "better-auth";
@@ -22,6 +22,18 @@ export function apiErrorStatus(error: unknown): number | undefined {
   }
   const status = (error as { status?: unknown }).status;
   return typeof status === "number" ? status : undefined;
+}
+
+/**
+ * Stable `AppError` code carried on API failures. Preferred over the HTTP status
+ * so the UI never has to match server prose.
+ */
+export function apiErrorCode(error: unknown): ApiErrorCode | undefined {
+  if (!error || typeof error !== "object" || Array.isArray(error) || !("code" in error)) {
+    return undefined;
+  }
+  const parsed = appErrorCodeSchema.safeParse(error.code);
+  return parsed.success ? parsed.data : undefined;
 }
 
 export function apiErrorMessage(error: unknown, fallback: string | undefined): string | undefined {
@@ -106,6 +118,14 @@ export function writeStoredCollaborationWorkspaceId(
     collaborationWorkspaceStorageKey(apiBaseUrl, userId),
     collaborationWorkspaceId
   );
+}
+
+/**
+ * Called when the stored workspace is gone (deleted), so the next application
+ * root visit falls back to the Personal Workspace instead of a dead id.
+ */
+export function clearStoredCollaborationWorkspaceId(apiBaseUrl: string, userId: string): void {
+  window.localStorage.removeItem(collaborationWorkspaceStorageKey(apiBaseUrl, userId));
 }
 
 export function applyFavicon(href: string): void {

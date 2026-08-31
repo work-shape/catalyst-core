@@ -515,6 +515,137 @@ test("collaboration workspaces scope navigation, settings, and discovery", async
   await expect(page).toHaveURL(new RegExp(`${escapeRegExp(personalPathname)}$`, "u"));
 });
 
+test("conversation rail moves a conversation into another workspace", async ({ page }) => {
+  await signInViaApi(page, normalUser);
+
+  const destinationName = `E2E Move Target ${Date.now()}`;
+  const createdCollaborationWorkspace = await page.request.post(
+    `${apiBaseUrl}/api/collaboration-workspaces`,
+    { data: { name: destinationName, visibility: "private" } }
+  );
+  expect(createdCollaborationWorkspace.ok()).toBe(true);
+  const destinationCollaborationWorkspace = (await createdCollaborationWorkspace.json()) as {
+    id: string;
+  };
+
+  const title = `Move target ${Date.now()}`;
+  const created = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    data: { title }
+  });
+  expect(created.ok()).toBe(true);
+  const conversation = (await created.json()) as { id: string };
+
+  await page.goto(legacyConversationPath(conversation.id));
+  await expect(page).toHaveURL(conversationUrlPattern(conversation.id));
+  const personalPathname = new URL(page.url()).pathname.replace(/\/c\/.*$/u, "");
+
+  const targetConversation = page.getByTestId("conversation-row").filter({ hasText: title });
+  await expect(targetConversation).toHaveCount(1);
+
+  await targetConversation
+    .getByRole("button", { name: `Conversation options for ${title}`, exact: true })
+    .click();
+  await page.getByRole("menuitem", { name: "Move to workspace…", exact: true }).click();
+  const moveDialog = page.getByRole("dialog", { name: "Move conversation", exact: true });
+  await expect(moveDialog).toBeVisible();
+  // The workspace the conversation already lives in is never a destination.
+  await expect(moveDialog.getByRole("radio", { name: "Personal workspace" })).toHaveCount(0);
+  await expect(moveDialog.getByRole("radio", { name: destinationName })).toHaveCount(1);
+
+  await moveDialog.getByRole("radio", { name: destinationName }).check();
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        /^\/api\/conversations\/[^/]+\/move$/u.test(new URL(response.url()).pathname)
+    ),
+    moveDialog.getByRole("button", { name: "Move", exact: true }).click()
+  ]);
+
+  const destinationPathname = `/w/${encodeURIComponent(destinationCollaborationWorkspace.id)}`;
+  await expect(page).toHaveURL(
+    new RegExp(
+      `${escapeRegExp(destinationPathname)}/c/${escapeRegExp(encodeURIComponent(conversation.id))}$`,
+      "u"
+    )
+  );
+  await expect(moveDialog).toHaveCount(0);
+  await expect(targetConversation).toHaveCount(1);
+
+  const selectorTrigger = page.getByTestId("collaboration-workspace-selector-trigger");
+  await expect(selectorTrigger).toContainText(destinationName);
+
+  // Now that the conversation sits in the shared workspace, the Personal
+  // Workspace is offered back under its fixed localized label.
+  await targetConversation
+    .getByRole("button", { name: `Conversation options for ${title}`, exact: true })
+    .click();
+  await page.getByRole("menuitem", { name: "Move to workspace…", exact: true }).click();
+  await expect(moveDialog.getByRole("radio", { name: "Personal workspace" })).toHaveCount(1);
+  await moveDialog.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await expect(moveDialog).toHaveCount(0);
+
+  await selectorTrigger.click();
+  await page.getByRole("button", { name: "Personal workspace" }).click();
+  await expect(page).toHaveURL(new RegExp(`${escapeRegExp(personalPathname)}$`, "u"));
+  await expect(targetConversation).toHaveCount(0);
+});
+
+test("collaboration workspace settings delete a workspace and fall back to personal", async ({
+  page
+}) => {
+  await signInViaApi(page, normalUser);
+
+  const workspaceName = `E2E Delete ${Date.now()}`;
+  const createdCollaborationWorkspace = await page.request.post(
+    `${apiBaseUrl}/api/collaboration-workspaces`,
+    { data: { name: workspaceName, visibility: "discoverable" } }
+  );
+  expect(createdCollaborationWorkspace.ok()).toBe(true);
+  const collaborationWorkspace = (await createdCollaborationWorkspace.json()) as { id: string };
+
+  await page.goto("/");
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
+  const personalPathname = new URL(page.url()).pathname;
+
+  await page.goto(`/w/${collaborationWorkspace.id}`);
+  const selectorTrigger = page.getByTestId("collaboration-workspace-selector-trigger");
+  await expect(selectorTrigger).toContainText(workspaceName);
+
+  await selectorTrigger.click();
+  await page.getByRole("button", { name: `Settings for ${workspaceName}` }).click();
+  await page.getByTestId("collaboration-workspace-delete-trigger").click();
+
+  const deleteDialog = page.getByRole("dialog", { name: "Delete workspace?", exact: true });
+  await expect(deleteDialog).toBeVisible();
+  await expect(deleteDialog.getByTestId("collaboration-workspace-deletion-impact")).toBeVisible();
+  await deleteDialog.getByRole("button", { name: "Continue", exact: true }).click();
+
+  const confirmInput = deleteDialog.getByLabel(`Type "${workspaceName}" to confirm`);
+  const confirmButton = deleteDialog.getByRole("button", { name: "Delete workspace", exact: true });
+  await confirmInput.fill(`${workspaceName} not really`);
+  await expect(confirmButton).toBeDisabled();
+
+  await confirmInput.fill(workspaceName);
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === "DELETE" &&
+        /^\/api\/collaboration-workspaces\/[^/]+$/u.test(new URL(response.url()).pathname)
+    ),
+    confirmButton.click()
+  ]);
+
+  await expect(page).toHaveURL(new RegExp(`${escapeRegExp(personalPathname)}$`, "u"));
+  await expect(selectorTrigger).toContainText("Personal workspace");
+
+  await selectorTrigger.click();
+  await page.getByRole("button", { name: "Browse workspaces" }).click();
+  await expect(
+    page.getByTestId("collaboration-workspace-directory-row").filter({ hasText: workspaceName })
+  ).toHaveCount(0);
+});
+
 test("first message from the root route moves to the persisted conversation route", async ({
   page
 }) => {

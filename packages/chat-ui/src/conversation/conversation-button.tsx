@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ThreadListItemMorePrimitive } from "@assistant-ui/react";
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { FolderInput, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import type { ConversationListItem } from "@vivd-catalyst/api-client";
 import { useTranslation } from "../i18n";
 import { Button } from "../ui/button";
@@ -13,6 +13,7 @@ export function ConversationButton({
   selected,
   onSelect,
   onRename,
+  onMove,
   onDelete,
   deleting
 }: {
@@ -20,6 +21,8 @@ export function ConversationButton({
   selected: boolean;
   onSelect: () => void;
   onRename: (title: string) => Promise<void>;
+  /** Absent while the user belongs to a single Collaboration Workspace. */
+  onMove?: () => void;
   onDelete: () => void;
   deleting: boolean;
 }) {
@@ -253,6 +256,19 @@ export function ConversationButton({
               <Pencil size={15} aria-hidden="true" />
               <span>{t("renameConversationMenuItem")}</span>
             </ThreadListItemMorePrimitive.Item>
+            {onMove ? (
+              <ThreadListItemMorePrimitive.Item
+                className={cn(
+                  "flex min-h-9 cursor-default select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none transition-colors",
+                  "focus:bg-accent data-[highlighted]:bg-accent data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                )}
+                disabled={deleting || saving}
+                onSelect={onMove}
+              >
+                <FolderInput size={15} aria-hidden="true" />
+                <span>{t("moveConversationMenuItem")}</span>
+              </ThreadListItemMorePrimitive.Item>
+            ) : null}
             <ThreadListItemMorePrimitive.Item
               className={cn(
                 "flex min-h-9 cursor-default select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none transition-colors",

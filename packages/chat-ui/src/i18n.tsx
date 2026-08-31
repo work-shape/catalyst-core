@@ -226,6 +226,25 @@ const translations = {
     collaborationWorkspaceCreateTitle: "Create workspace",
     collaborationWorkspaceCreating: "Creating",
     collaborationWorkspaceDecline: "Decline",
+    collaborationWorkspaceDelete: "Delete workspace",
+    collaborationWorkspaceDeleteBack: "Back",
+    collaborationWorkspaceDeleteConfirm: "Delete workspace",
+    collaborationWorkspaceDeleteConfirmLabel: 'Type "{name}" to confirm',
+    collaborationWorkspaceDeleteContinue: "Continue",
+    collaborationWorkspaceDeleteImpactConversationOne:
+      "{count} conversation is deleted, including all of its files.",
+    collaborationWorkspaceDeleteImpactConversations:
+      "{count} conversations are deleted, including all of their files.",
+    collaborationWorkspaceDeleteImpactLoadFailed: "What this deletion removes could not be loaded.",
+    collaborationWorkspaceDeleteImpactLoading: "Checking what this deletion removes…",
+    collaborationWorkspaceDeleteImpactMemberOne: "{count} member loses access.",
+    collaborationWorkspaceDeleteImpactMembers: "{count} members lose access.",
+    collaborationWorkspaceDeleteImpactRequestOne: "{count} open access request is dropped.",
+    collaborationWorkspaceDeleteImpactRequests: "{count} open access requests are dropped.",
+    collaborationWorkspaceDeleteTitle: "Delete workspace?",
+    collaborationWorkspaceDeleteWarning:
+      'Deleting "{name}" removes it for everyone in it. This cannot be undone.',
+    collaborationWorkspaceDeleting: "Deleting",
     collaborationWorkspaceDescriptionHint: "Shown to others in the workspace directory.",
     collaborationWorkspaceDescriptionLabel: "Description (optional)",
     collaborationWorkspaceDirectoryEmpty: "No discoverable workspaces yet.",
@@ -233,10 +252,17 @@ const translations = {
     collaborationWorkspaceEmojiLabel: "Emoji (optional)",
     collaborationWorkspaceEmojiSuggestions: "Suggestions",
     collaborationWorkspaceErrorAlreadyMember: "This person is already a member of the workspace.",
+    collaborationWorkspaceErrorCollaborationWorkspaceBusy:
+      "Work is still running in this workspace. Wait for it to finish and try again.",
+    collaborationWorkspaceErrorConversationBusy:
+      "This conversation still has work running. Wait for it to finish, then move it.",
     collaborationWorkspaceErrorInvalid: "This change is not allowed.",
     collaborationWorkspaceErrorInvitationsUnavailable:
       "No active user with this email address exists in this instance. Email invitations are not available yet, so the person needs an account here first.",
     collaborationWorkspaceErrorLastOwner: "A shared workspace has to keep at least one owner.",
+    collaborationWorkspaceErrorMoveUnavailable:
+      "This conversation or the chosen workspace is no longer available.",
+    collaborationWorkspaceErrorNameMismatch: "This name does not match the workspace name.",
     collaborationWorkspaceErrorNotFound: "This workspace is no longer available.",
     collaborationWorkspaceErrorNotPermitted: "You are not allowed to do this in this workspace.",
     collaborationWorkspaceErrorRequestGone: "This access request is no longer open.",
@@ -350,6 +376,14 @@ const translations = {
     loadingConversation: "Loading conversation",
     loadingUser: "Loading",
     messagePlaceholder: "Message",
+    moveConversationDescription:
+      'Choose the workspace "{title}" moves to. Everyone in that workspace can then read it.',
+    moveConversationDestinationLabel: "Move to",
+    moveConversationMenuItem: "Move to workspace…",
+    moveConversationNoDestinations: "There is no other workspace to move this conversation to.",
+    moveConversationPending: "Moving",
+    moveConversationSubmit: "Move",
+    moveConversationTitle: "Move conversation",
     newConversation: "New",
     newPassword: "New password",
     newPasswordsDoNotMatch: "New passwords do not match",
@@ -688,6 +722,26 @@ const translations = {
     collaborationWorkspaceCreateTitle: "Arbeitsbereich erstellen",
     collaborationWorkspaceCreating: "Wird erstellt",
     collaborationWorkspaceDecline: "Ablehnen",
+    collaborationWorkspaceDelete: "Arbeitsbereich löschen",
+    collaborationWorkspaceDeleteBack: "Zurück",
+    collaborationWorkspaceDeleteConfirm: "Arbeitsbereich löschen",
+    collaborationWorkspaceDeleteConfirmLabel: "Gib „{name}“ ein, um zu bestätigen",
+    collaborationWorkspaceDeleteContinue: "Weiter",
+    collaborationWorkspaceDeleteImpactConversationOne:
+      "{count} Unterhaltung wird gelöscht, samt allen zugehörigen Dateien.",
+    collaborationWorkspaceDeleteImpactConversations:
+      "{count} Unterhaltungen werden gelöscht, samt allen zugehörigen Dateien.",
+    collaborationWorkspaceDeleteImpactLoadFailed:
+      "Was diese Löschung entfernt, konnte nicht geladen werden.",
+    collaborationWorkspaceDeleteImpactLoading: "Es wird geprüft, was diese Löschung entfernt…",
+    collaborationWorkspaceDeleteImpactMemberOne: "{count} Mitglied verliert den Zugriff.",
+    collaborationWorkspaceDeleteImpactMembers: "{count} Mitglieder verlieren den Zugriff.",
+    collaborationWorkspaceDeleteImpactRequestOne: "{count} offene Zugriffsanfrage wird verworfen.",
+    collaborationWorkspaceDeleteImpactRequests: "{count} offene Zugriffsanfragen werden verworfen.",
+    collaborationWorkspaceDeleteTitle: "Arbeitsbereich löschen?",
+    collaborationWorkspaceDeleteWarning:
+      "Mit dem Löschen von „{name}“ verschwindet der Arbeitsbereich für alle darin. Das lässt sich nicht rückgängig machen.",
+    collaborationWorkspaceDeleting: "Wird gelöscht",
     collaborationWorkspaceDescriptionHint:
       "Wird anderen im Verzeichnis der Arbeitsbereiche angezeigt.",
     collaborationWorkspaceDescriptionLabel: "Beschreibung (optional)",
@@ -698,11 +752,19 @@ const translations = {
     collaborationWorkspaceEmojiSuggestions: "Vorschläge",
     collaborationWorkspaceErrorAlreadyMember:
       "Diese Person ist bereits Mitglied des Arbeitsbereichs.",
+    collaborationWorkspaceErrorCollaborationWorkspaceBusy:
+      "In diesem Arbeitsbereich läuft noch Arbeit. Warte, bis sie fertig ist, und versuche es erneut.",
+    collaborationWorkspaceErrorConversationBusy:
+      "In dieser Unterhaltung läuft noch Arbeit. Warte, bis sie fertig ist, und verschiebe sie dann.",
     collaborationWorkspaceErrorInvalid: "Diese Änderung ist nicht zulässig.",
     collaborationWorkspaceErrorInvitationsUnavailable:
       "Es gibt keine aktive Person mit dieser E-Mail-Adresse in dieser Instanz. Einladungen per E-Mail sind noch nicht verfügbar – die Person braucht zuerst ein Konto hier.",
     collaborationWorkspaceErrorLastOwner:
       "Ein geteilter Arbeitsbereich muss mindestens einen Besitzer behalten.",
+    collaborationWorkspaceErrorMoveUnavailable:
+      "Diese Unterhaltung oder der gewählte Arbeitsbereich ist nicht mehr verfügbar.",
+    collaborationWorkspaceErrorNameMismatch:
+      "Dieser Name stimmt nicht mit dem Namen des Arbeitsbereichs überein.",
     collaborationWorkspaceErrorNotFound: "Dieser Arbeitsbereich ist nicht mehr verfügbar.",
     collaborationWorkspaceErrorNotPermitted:
       "Du darfst das in diesem Arbeitsbereich nicht ausführen.",
@@ -820,6 +882,15 @@ const translations = {
     loadingConversation: "Unterhaltung wird geladen",
     loadingUser: "Lädt",
     messagePlaceholder: "Nachricht",
+    moveConversationDescription:
+      "Wähle den Arbeitsbereich, in den „{title}“ verschoben wird. Alle darin können die Unterhaltung danach lesen.",
+    moveConversationDestinationLabel: "Verschieben nach",
+    moveConversationMenuItem: "In Arbeitsbereich verschieben…",
+    moveConversationNoDestinations:
+      "Es gibt keinen anderen Arbeitsbereich, in den diese Unterhaltung verschoben werden könnte.",
+    moveConversationPending: "Wird verschoben",
+    moveConversationSubmit: "Verschieben",
+    moveConversationTitle: "Unterhaltung verschieben",
     newConversation: "Neu",
     newPassword: "Neues Passwort",
     newPasswordsDoNotMatch: "Neue Passwörter stimmen nicht überein",
