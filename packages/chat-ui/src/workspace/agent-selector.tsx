@@ -151,7 +151,11 @@ export function AgentSelector({
                     />
                     <span className="grid min-w-0 gap-0.5">
                       <span className="truncate font-medium">{agent.displayName}</span>
-                      <span className="truncate text-xs text-muted-foreground">{agent.name}</span>
+                      {agent.description ? (
+                        <span className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                          {agent.description}
+                        </span>
+                      ) : null}
                     </span>
                   </button>
                 );

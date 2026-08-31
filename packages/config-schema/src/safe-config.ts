@@ -66,6 +66,11 @@ export function createSafeConfigView(
         locale,
         config.localization.defaultLocale
       ),
+      description: resolveLocalizedString(
+        agent.description,
+        locale,
+        config.localization.defaultLocale
+      ),
       ...compactionThresholdView(getModelSelectionForAgent(config, agent).provider),
       ...(agent.modelBindingId && selectableModelBindingIds.has(agent.modelBindingId)
         ? { defaultModelBindingId: agent.modelBindingId }

@@ -45,6 +45,7 @@ administration:
     enabled: true
     editableAgentFields:
       - displayName
+      - description
       - welcomeMessage
       - welcomeSubtitle
       - instructions

@@ -60,6 +60,7 @@ describe("config CLI serialization", () => {
   it("deterministically round-trips agent YAML and ignores provenance comments", () => {
     const input = {
       ...agentConfig("First line\nSecond line"),
+      description: { en: "Help with documents.", de: "Hilfe bei Unterlagen." },
       reasoningEffort: "xhigh" as const
     };
     const serialized = serializeAgentYaml(input, { instance: "local", version: 12 });
@@ -67,12 +68,14 @@ describe("config CLI serialization", () => {
     expect(serialized).toMatch(/^# Pulled from local \(config version 12\)\./u);
     expect(serialized).toMatch(/instructions: \|[-+]?\n/u);
     expect(parseAgentYaml(serialized)).toEqual(canonicalizeAgentConfig(input));
+    expect(parseAgentYaml(serialized).description).toEqual(input.description);
     expect(serializeAgentYaml(parseAgentYaml(serialized))).toBe(
       serializeAgentYaml(canonicalizeAgentConfig(input))
     );
     expect(Object.keys(canonicalizeAgentConfig(input))).toEqual([
       "name",
       "displayName",
+      "description",
       "instructions",
       "modelProviderId",
       "reasoningEffort",

@@ -775,6 +775,7 @@
                                 "type": "string",
                                 "enum": [
                                   "displayName",
+                                  "description",
                                   "welcomeMessage",
                                   "welcomeSubtitle",
                                   "instructions",
@@ -856,6 +857,9 @@
                             "type": "string"
                           },
                           "displayName": {
+                            "type": "string"
+                          },
+                          "description": {
                             "type": "string"
                           },
                           "defaultModelBindingId": {

@@ -60,10 +60,18 @@ test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
   await page.getByRole("button", { name: "Open sidebar" }).click();
   await expect(conversationRail).toBeVisible();
 
-  await page.getByRole("button", { name: "Select agent" }).click();
+  await page.getByRole("button", { name: "Select agent" }).hover();
+  await expect(page.getByRole("option", { name: /Application Assistant/ })).toContainText(
+    "Help with application and document review."
+  );
+  await expect(page.getByRole("listbox")).not.toContainText("application_assistant");
+  await expect(page.getByRole("option", { name: /Research Assistant/ })).toHaveText(
+    "Research Assistant"
+  );
   await expect(page.getByRole("option", { name: /Research Assistant/ })).toBeVisible();
   await page.getByRole("option", { name: /Research Assistant/ }).click();
-  await expect(page.getByRole("button", { name: "Select agent" })).toContainText(
+  await expect(page.getByRole("button", { name: "Select agent" })).toHaveAttribute(
+    "title",
     "Research Assistant"
   );
 

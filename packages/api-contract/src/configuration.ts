@@ -13,6 +13,7 @@ export const reasoningEffortSchema = z.enum(["none", "low", "medium", "high", "x
 
 export const agentEditableFieldSchema = z.enum([
   "displayName",
+  "description",
   "welcomeMessage",
   "welcomeSubtitle",
   "instructions",
@@ -119,6 +120,7 @@ export const safeConfigSchema = z.object({
     z.object({
       name: z.string(),
       displayName: z.string(),
+      description: z.string().optional(),
       defaultModelBindingId: z.string().optional(),
       compactThresholdTokens: z.number().optional(),
       welcomeMessage: z.string().optional(),

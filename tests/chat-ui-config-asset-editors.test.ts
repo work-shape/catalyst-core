@@ -15,6 +15,7 @@ describe("config asset editors", () => {
         initialForm: agentConfigToForm({
           name: "assistant",
           displayName: "Assistant",
+          description: "Help with the workflow.",
           instructions: "Help the user.",
           modelProviderId: "azure-eu",
           reasoningEffort: "high",
@@ -41,6 +42,7 @@ describe("config asset editors", () => {
     );
 
     expect(markup).toContain("azure-eu");
+    expect(markup).toContain('value="Help with the workflow."');
     expect(markup).toContain('<option value="high" selected="">high</option>');
     expect(markup).toContain('value="128"');
     expect(markup).not.toContain("Save changes");

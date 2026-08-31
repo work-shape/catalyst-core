@@ -2,6 +2,9 @@ name: workflow_assistant
 displayName:
   de: Workflow-Assistent
   en: Workflow Assistant
+description:
+  de: Hilfe beim Prüfen und Zusammenfassen des Beispielworkflows.
+  en: Help reviewing and summarizing the demo workflow.
 welcomeMessage:
   de: Wie kann ich beim Beispielworkflow helfen?
   en: How can I help with the demo workflow?
