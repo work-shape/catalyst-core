@@ -11,6 +11,7 @@ import {
 } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "./types";
 import { authorizeGovernanceAction } from "./governance-actions";
+import { cleanupProductUserData, type UserDeletionTotals } from "./user-deletion";
 
 interface CreateUserCommand {
   displayLabel: string;
@@ -149,12 +150,18 @@ export class UserAdministrationWorkflow {
 
     const existing = await this.getUserOrThrow(command.userId);
     await this.requireAtLeastOneRemainingSuperadmin(existing);
+    const deletionTotals = await cleanupProductUserData({
+      options: this.options,
+      actor,
+      context,
+      userId: command.userId
+    });
     await this.deleteStandalonePasswordSignIns(existing);
     const deleted = await this.options.userStore.deleteUser({
       clientInstanceId: this.options.clientInstanceId,
       userId: command.userId
     });
-    await this.recordUserMutation(actor, context, "user.deleted", deleted);
+    await this.recordUserMutation(actor, context, "user.deleted", deleted, deletionTotals);
     return deleted;
   }
 
@@ -457,7 +464,8 @@ export class UserAdministrationWorkflow {
     actor: AuthenticatedUser,
     context: RuntimeCallContext,
     type: string,
-    user: UserRecord
+    user: UserRecord,
+    deletionTotals?: UserDeletionTotals
   ): Promise<void> {
     await this.options.auditRecorder.record({
       type,
@@ -469,7 +477,8 @@ export class UserAdministrationWorkflow {
         status: user.status,
         roles: user.roles,
         permissionRefs: user.permissionRefs,
-        permissions: user.permissions
+        permissions: user.permissions,
+        ...deletionTotals
       }
     });
   }

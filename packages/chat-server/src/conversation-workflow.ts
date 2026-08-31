@@ -21,6 +21,7 @@ import {
   type RunStartCommand,
   type RunStartCommandKind,
   addDays,
+  asUserId,
   createUserMessageMetadata,
   createPlatformId,
   getRuntimeSubjectUserId,
@@ -123,8 +124,13 @@ export class ConversationWorkflow {
     command: CreateConversationCommand
   ): Promise<Conversation> {
     const subjectUserId = getSubjectUserId(user);
+    const personalWorkspace = await this.options.userStore.ensurePersonalWorkspace({
+      clientInstanceId: this.options.clientInstanceId,
+      userId: asUserId(subjectUserId)
+    });
     const conversation = await this.options.conversationStore.createConversation({
       clientInstanceId: this.options.clientInstanceId,
+      collaborationWorkspaceId: personalWorkspace.id,
       ownerUserId: subjectUserId,
       ownerExternalUserId: user.externalUserId,
       title: command.title ?? "New conversation",

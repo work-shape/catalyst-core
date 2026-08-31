@@ -660,9 +660,15 @@ async function createWorkspaceFixture(store: PostgresPlatformStore): Promise<{
   workspace: ExecutionWorkspace;
 }> {
   const clientInstanceId = asClientInstanceId(`client_${globalThis.crypto.randomUUID()}`);
-  const ownerUserId = `user_${globalThis.crypto.randomUUID()}`;
+  const user = await store.createUser({ clientInstanceId, displayLabel: "Workspace owner" });
+  const ownerUserId = user.id;
+  const personalWorkspace = await store.ensurePersonalWorkspace({
+    clientInstanceId,
+    userId: user.id
+  });
   const conversation = await store.createConversation({
     clientInstanceId,
+    collaborationWorkspaceId: personalWorkspace.id,
     ownerUserId,
     ownerExternalUserId: `external_${ownerUserId}`,
     title: "Workspace test",

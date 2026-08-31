@@ -19,6 +19,7 @@ import {
 import type { PostgresDatabase, PostgresTransaction } from "./postgres-database";
 import { mapUserIdentity, mapUserRecord, type ProductUserRow, type UserIdentityRow } from "./rows";
 import { productUsers, userIdentities } from "./schema";
+import { ensurePersonalWorkspaceInTransaction } from "./postgres-collaboration-workspace-operations";
 
 export async function resolveUserIdentity(
   db: PostgresDatabase,
@@ -171,6 +172,11 @@ export async function resolveUserIdentity(
       throw new AppError("INTERNAL", "Failed to resolve user identity");
     }
 
+    await ensurePersonalWorkspaceInTransaction(tx, {
+      clientInstanceId: input.clientInstanceId,
+      userId: user.id as UserRecord["id"]
+    });
+
     const [identity] = await tx
       .insert(userIdentities)
       .values({
@@ -267,23 +273,30 @@ export async function createUser(
   db: PostgresDatabase,
   input: CreateUserInput
 ): Promise<UserRecord> {
-  const now = new Date();
-  const [row] = await db
-    .insert(productUsers)
-    .values({
-      id: createUserId(),
+  return db.transaction(async (tx) => {
+    const now = new Date();
+    const [row] = await tx
+      .insert(productUsers)
+      .values({
+        id: createUserId(),
+        clientInstanceId: input.clientInstanceId,
+        displayLabel: input.displayLabel,
+        email: input.email ?? null,
+        roles: input.roles ?? ["user"],
+        permissionRefs: input.permissionRefs ?? [],
+        permissions: input.permissions ?? [],
+        status: input.status ?? "active",
+        createdAt: now,
+        updatedAt: now
+      })
+      .returning();
+    if (!row) throw new AppError("INTERNAL", "Failed to create user");
+    await ensurePersonalWorkspaceInTransaction(tx, {
       clientInstanceId: input.clientInstanceId,
-      displayLabel: input.displayLabel,
-      email: input.email ?? null,
-      roles: input.roles ?? ["user"],
-      permissionRefs: input.permissionRefs ?? [],
-      permissions: input.permissions ?? [],
-      status: input.status ?? "active",
-      createdAt: now,
-      updatedAt: now
-    })
-    .returning();
-  return mapUserRecord(row, []);
+      userId: row.id as UserRecord["id"]
+    });
+    return mapUserRecord(row, []);
+  });
 }
 
 export async function updateUser(

@@ -29,6 +29,7 @@ export async function createConversation(
     .values({
       id,
       clientInstanceId: input.clientInstanceId,
+      collaborationWorkspaceId: input.collaborationWorkspaceId,
       ownerUserId: input.ownerUserId,
       ownerExternalUserId: input.ownerExternalUserId,
       title: input.title,

@@ -444,7 +444,7 @@ async function createSourceAttachmentFixture(input: { maxFileBytes?: number } = 
   const root = await mkdtemp(join(tmpdir(), "vivd-workspace-source-"));
   const clientInstanceId = asClientInstanceId(`workspace_source_${globalThis.crypto.randomUUID()}`);
   const store = new InMemoryPlatformStore();
-  const conversation = await store.createConversation({
+  const conversation = await store.createConversationForTesting({
     clientInstanceId,
     ownerUserId: "user-1",
     ownerExternalUserId: "user-1",

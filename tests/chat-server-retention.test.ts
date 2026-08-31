@@ -401,7 +401,7 @@ async function createExpiredConversation(
   clientInstanceId: ClientInstanceId,
   title: string
 ): Promise<Conversation> {
-  const conversation = await store.createConversation({
+  const conversation = await store.createConversationForTesting({
     clientInstanceId,
     ownerUserId: "user-1",
     ownerExternalUserId: "external-user-1",

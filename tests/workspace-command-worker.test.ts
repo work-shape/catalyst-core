@@ -261,7 +261,7 @@ async function createWorkerHarness(
   const auditRecorder = input.withAuditRecorder
     ? new StoreBackedAuditRecorder({ clientInstanceId, store })
     : undefined;
-  const conversation = await store.createConversation({
+  const conversation = await store.createConversationForTesting({
     clientInstanceId,
     ownerUserId,
     ownerExternalUserId: ownerUserId,

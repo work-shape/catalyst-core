@@ -5,6 +5,8 @@ export type Brand<TValue, TBrand extends string> = TValue & {
 export type AgentRunId = Brand<string, "AgentRunId">;
 export type ClientInstanceId = Brand<string, "ClientInstanceId">;
 export type ConversationId = Brand<string, "ConversationId">;
+export type CollaborationWorkspaceId = Brand<string, "CollaborationWorkspaceId">;
+export type WorkspaceAccessRequestId = Brand<string, "WorkspaceAccessRequestId">;
 export type ConversationAttachmentId = Brand<string, "ConversationAttachmentId">;
 export type ExecutionWorkspaceId = Brand<string, "ExecutionWorkspaceId">;
 export type WorkspaceCommandId = Brand<string, "WorkspaceCommandId">;
@@ -34,6 +36,14 @@ export function asClientInstanceId(value: string): ClientInstanceId {
 
 export function asConversationId(value: string): ConversationId {
   return value as ConversationId;
+}
+
+export function asCollaborationWorkspaceId(value: string): CollaborationWorkspaceId {
+  return value as CollaborationWorkspaceId;
+}
+
+export function asWorkspaceAccessRequestId(value: string): WorkspaceAccessRequestId {
+  return value as WorkspaceAccessRequestId;
 }
 
 export function asConversationAttachmentId(value: string): ConversationAttachmentId {

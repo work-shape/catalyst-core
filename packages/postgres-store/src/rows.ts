@@ -5,6 +5,8 @@ import {
   type ArtifactPreviewManifest,
   type AuditEvent,
   type ChatMessage,
+  type CollaborationWorkspace,
+  type CollaborationWorkspaceWithRole,
   type ClientInstanceId,
   type ApiCredentialRecord,
   type ConfigAssetRecord,
@@ -18,6 +20,8 @@ import {
   type ManagedFileRecord,
   type RunObservation,
   type WorkspaceCommand,
+  type WorkspaceMembership,
+  type WorkspaceAccessRequest,
   type WorkspaceFile,
   type UserIdentity,
   type UserRecord,
@@ -26,6 +30,7 @@ import {
   asAgentRunId,
   asConversationAttachmentId,
   asConversationId,
+  asCollaborationWorkspaceId,
   asExecutionWorkspaceId,
   asManagedArtifactId,
   asManagedFileId,
@@ -35,7 +40,8 @@ import {
   asApiCredentialId,
   asServicePrincipalId,
   asStructuredDataResourceId,
-  asWorkspaceCommandId
+  asWorkspaceCommandId,
+  asWorkspaceAccessRequestId
 } from "@vivd-catalyst/core";
 import type {
   agentRunObservations,
@@ -44,6 +50,9 @@ import type {
   artifactPreviewManifests,
   auditEvents,
   conversationAttachments,
+  collaborationWorkspaces,
+  collaborationWorkspaceMemberships,
+  collaborationWorkspaceAccessRequests,
   conversations,
   configAssetRevisions,
   configAssets,
@@ -67,6 +76,9 @@ export type ArtifactPreviewJobRow = typeof artifactPreviewJobs.$inferSelect;
 export type ArtifactPreviewManifestRow = typeof artifactPreviewManifests.$inferSelect;
 export type RunObservationRow = typeof agentRunObservations.$inferSelect;
 export type ConversationRow = typeof conversations.$inferSelect;
+export type CollaborationWorkspaceRow = typeof collaborationWorkspaces.$inferSelect;
+export type WorkspaceMembershipRow = typeof collaborationWorkspaceMemberships.$inferSelect;
+export type WorkspaceAccessRequestRow = typeof collaborationWorkspaceAccessRequests.$inferSelect;
 export type MessageRow = typeof messages.$inferSelect;
 export type ExecutionWorkspaceRow = typeof executionWorkspaces.$inferSelect;
 export type WorkspaceFileRow = typeof executionWorkspaceFiles.$inferSelect;
@@ -92,6 +104,7 @@ export function mapConversation(row: ConversationRow | undefined): Conversation 
   return {
     id: asConversationId(row.id),
     clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    collaborationWorkspaceId: asCollaborationWorkspaceId(row.collaborationWorkspaceId),
     ownerUserId: row.ownerUserId,
     ownerExternalUserId: row.ownerExternalUserId,
     title: row.title,
@@ -100,6 +113,65 @@ export function mapConversation(row: ConversationRow | undefined): Conversation 
     updatedAt: row.updatedAt.toISOString(),
     retainedUntil: row.retainedUntil.toISOString(),
     deletedAt: row.deletedAt?.toISOString()
+  };
+}
+
+export function mapCollaborationWorkspace(
+  row: CollaborationWorkspaceRow | undefined
+): CollaborationWorkspace {
+  if (!row) {
+    throw new AppError("INTERNAL", "Expected collaboration workspace row");
+  }
+  return {
+    id: asCollaborationWorkspaceId(row.id),
+    clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    kind: row.kind,
+    name: row.name,
+    description: row.description,
+    visibility: row.visibility,
+    emoji: row.emoji,
+    accentColor: row.accentColor,
+    personalUserId: row.personalUserId ? asUserId(row.personalUserId) : null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString()
+  };
+}
+
+export function mapCollaborationWorkspaceWithRole(input: {
+  workspace: CollaborationWorkspaceRow;
+  role: WorkspaceMembership["role"];
+}): CollaborationWorkspaceWithRole {
+  return { ...mapCollaborationWorkspace(input.workspace), role: input.role };
+}
+
+export function mapWorkspaceMembership(
+  row: WorkspaceMembershipRow | undefined
+): WorkspaceMembership {
+  if (!row) {
+    throw new AppError("INTERNAL", "Expected workspace membership row");
+  }
+  return {
+    collaborationWorkspaceId: asCollaborationWorkspaceId(row.collaborationWorkspaceId),
+    clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    userId: asUserId(row.userId),
+    role: row.role,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString()
+  };
+}
+
+export function mapWorkspaceAccessRequest(
+  row: WorkspaceAccessRequestRow | undefined
+): WorkspaceAccessRequest {
+  if (!row) {
+    throw new AppError("INTERNAL", "Expected workspace access request row");
+  }
+  return {
+    id: asWorkspaceAccessRequestId(row.id),
+    collaborationWorkspaceId: asCollaborationWorkspaceId(row.collaborationWorkspaceId),
+    clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    userId: asUserId(row.userId),
+    createdAt: row.createdAt.toISOString()
   };
 }
 

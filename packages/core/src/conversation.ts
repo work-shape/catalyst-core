@@ -1,5 +1,11 @@
 import type { ActiveRunSummary, AgentRunProjection } from "./agent-runtime";
-import type { AgentRunId, ClientInstanceId, ConversationId, MessageId } from "./ids";
+import type {
+  AgentRunId,
+  ClientInstanceId,
+  CollaborationWorkspaceId,
+  ConversationId,
+  MessageId
+} from "./ids";
 import type { JsonObject } from "./json";
 import type { ISODateString } from "./time";
 
@@ -8,6 +14,7 @@ export type ConversationStatus = "active" | "deleted" | "retention_expired";
 export interface Conversation {
   id: ConversationId;
   clientInstanceId: ClientInstanceId;
+  collaborationWorkspaceId: CollaborationWorkspaceId;
   ownerUserId: string;
   ownerExternalUserId: string;
   title: string;
@@ -62,6 +69,7 @@ export interface ConversationThreadSnapshot {
 
 export interface CreateConversationInput {
   clientInstanceId: ClientInstanceId;
+  collaborationWorkspaceId: CollaborationWorkspaceId;
   ownerUserId: string;
   ownerExternalUserId: string;
   title: string;

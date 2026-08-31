@@ -790,7 +790,7 @@ async function createConversation(
   clientInstanceId: ClientInstanceId,
   ownerUserId: string
 ) {
-  return store.createConversation({
+  return store.createConversationForTesting({
     clientInstanceId,
     ownerUserId,
     ownerExternalUserId: ownerUserId,

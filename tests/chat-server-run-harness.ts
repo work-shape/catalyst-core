@@ -55,7 +55,7 @@ export async function createStaleRunRecoveryFixture(
       watchdogIntervalMs: 60_000
     }
   };
-  const conversation = await store.createConversation({
+  const conversation = await store.createConversationForTesting({
     clientInstanceId,
     ownerUserId: owner.id,
     ownerExternalUserId: owner.externalUserId,
@@ -99,7 +99,7 @@ export async function createPersistedRecoveryRun(
 ): Promise<AgentRun> {
   const conversation =
     fixture.conversation ??
-    (await fixture.store.createConversation({
+    (await fixture.store.createConversationForTesting({
       clientInstanceId: fixture.clientInstanceId,
       ownerUserId: fixture.owner.id,
       ownerExternalUserId: fixture.owner.externalUserId,

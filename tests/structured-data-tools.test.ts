@@ -440,7 +440,7 @@ describe("structured_data.publish", () => {
 
   it("rejects cross-conversation source files and invalid keys", async () => {
     const harness = await createHarness();
-    const otherConversation = await harness.store.createConversation({
+    const otherConversation = await harness.store.createConversationForTesting({
       clientInstanceId: harness.clientInstanceId,
       ownerUserId: "user-1",
       ownerExternalUserId: "user-1",
@@ -574,7 +574,7 @@ describe("structured_result.read", () => {
 async function createHarness(publicationReviewer?: StructuredDataPublicationReviewer) {
   const clientInstanceId = asClientInstanceId(`structured_data_${globalThis.crypto.randomUUID()}`);
   const store = new InMemoryPlatformStore();
-  const conversation = await store.createConversation({
+  const conversation = await store.createConversationForTesting({
     clientInstanceId,
     ownerUserId: "user-1",
     ownerExternalUserId: "user-1",

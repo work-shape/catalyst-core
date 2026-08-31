@@ -10,6 +10,7 @@ import type {
   ApiAccessStore,
   AuditEventStore,
   ClientInstanceId,
+  CollaborationWorkspaceStore,
   ConfigAssetSource,
   ConfigAssetStore,
   ConversationRetentionStore,
@@ -42,7 +43,7 @@ export interface ChatServerOptions {
     RunObservationStore &
     StructuredDataStore;
   auditEventStore: AuditEventStore;
-  userStore: UserStore;
+  userStore: UserStore & CollaborationWorkspaceStore;
   apiAccessStore: ApiAccessStore;
   usageGovernance: ModelUsageGovernance;
   auditRecorder: AuditRecorder;

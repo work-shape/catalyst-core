@@ -9,6 +9,10 @@ import {
   type ApiCredentialRecord,
   type ChatMessage,
   type ClientInstanceId,
+  type CollaborationWorkspace,
+  type CollaborationWorkspaceId,
+  type CollaborationWorkspaceStore,
+  type CollaborationWorkspaceWithRole,
   type ConfigAssetRecord,
   type ConfigAssetRevisionRecord,
   type ConfigAssetState,
@@ -25,6 +29,7 @@ import {
   type ClaimRunStartCommandResult,
   type CompleteRunStartCommandInput,
   type CreateConversationInput,
+  type CreateWorkspaceInput,
   type CreateApiCredentialInput,
   type CreateServicePrincipalInput,
   type CreateMessageInput,
@@ -46,6 +51,7 @@ import {
   type RunObservation,
   type RunObservationStore,
   type UpdateUserInput,
+  type UpdateWorkspaceInput,
   type UpdateAgentRunStatusInput,
   type UpsertUserIdentityInput,
   type UserRecord,
@@ -57,8 +63,30 @@ import {
   type WorkspaceCommand,
   type WorkspaceCommandId,
   type WorkspaceCommandStore,
+  type WorkspaceMembership,
+  type WorkspaceAccessRequest,
   type WorkspaceFile
 } from "@vivd-catalyst/core";
+import {
+  addMembership as addPostgresMembership,
+  createAccessRequest as createPostgresAccessRequest,
+  createWorkspace as createPostgresWorkspace,
+  deleteAccessRequest as deletePostgresAccessRequest,
+  deleteAccessRequestsForUser as deletePostgresAccessRequestsForUser,
+  deletePersonalWorkspaceForUser as deletePostgresPersonalWorkspaceForUser,
+  deleteWorkspace as deletePostgresWorkspace,
+  ensurePersonalWorkspace as ensurePostgresPersonalWorkspace,
+  getAccessRequest as getPostgresAccessRequest,
+  getMembership as getPostgresMembership,
+  getWorkspace as getPostgresWorkspace,
+  listAccessRequestsForWorkspace as listPostgresAccessRequestsForWorkspace,
+  listMemberships as listPostgresMemberships,
+  listWorkspacesForUser as listPostgresWorkspacesForUser,
+  removeMembership as removePostgresMembership,
+  removeMembershipsForUser as removePostgresMembershipsForUser,
+  updateMembershipRole as updatePostgresMembershipRole,
+  updateWorkspace as updatePostgresWorkspace
+} from "./postgres-collaboration-workspace-operations";
 import {
   createApiCredential as createPostgresApiCredential,
   createServicePrincipal as createPostgresServicePrincipal,
@@ -177,6 +205,7 @@ export class PostgresPlatformStore
   implements
     ConversationStore,
     ConversationRetentionStore,
+    CollaborationWorkspaceStore,
     PlatformFileStore,
     AgentRunStore,
     RunObservationStore,
@@ -331,6 +360,111 @@ export class PostgresPlatformStore
 
   async createConversation(input: CreateConversationInput): Promise<Conversation> {
     return createPostgresConversation(this.db, input);
+  }
+
+  async createWorkspace(input: CreateWorkspaceInput): Promise<CollaborationWorkspace> {
+    return createPostgresWorkspace(this.db, input);
+  }
+
+  async getWorkspace(
+    clientInstanceId: ClientInstanceId,
+    collaborationWorkspaceId: CollaborationWorkspaceId
+  ): Promise<CollaborationWorkspace | undefined> {
+    return getPostgresWorkspace(this.db, clientInstanceId, collaborationWorkspaceId);
+  }
+
+  async listWorkspacesForUser(
+    input: Parameters<CollaborationWorkspaceStore["listWorkspacesForUser"]>[0]
+  ): Promise<CollaborationWorkspaceWithRole[]> {
+    return listPostgresWorkspacesForUser(this.db, input);
+  }
+
+  async updateWorkspace(input: UpdateWorkspaceInput): Promise<CollaborationWorkspace> {
+    return updatePostgresWorkspace(this.db, input);
+  }
+
+  async deleteWorkspace(
+    input: Parameters<CollaborationWorkspaceStore["deleteWorkspace"]>[0]
+  ): Promise<CollaborationWorkspace> {
+    return deletePostgresWorkspace(this.db, input);
+  }
+
+  async ensurePersonalWorkspace(
+    input: Parameters<CollaborationWorkspaceStore["ensurePersonalWorkspace"]>[0]
+  ): Promise<CollaborationWorkspace> {
+    return ensurePostgresPersonalWorkspace(this.db, input);
+  }
+
+  async addMembership(
+    input: Parameters<CollaborationWorkspaceStore["addMembership"]>[0]
+  ): Promise<WorkspaceMembership> {
+    return addPostgresMembership(this.db, input);
+  }
+
+  async updateMembershipRole(
+    input: Parameters<CollaborationWorkspaceStore["updateMembershipRole"]>[0]
+  ): Promise<WorkspaceMembership> {
+    return updatePostgresMembershipRole(this.db, input);
+  }
+
+  async removeMembership(
+    input: Parameters<CollaborationWorkspaceStore["removeMembership"]>[0]
+  ): Promise<WorkspaceMembership> {
+    return removePostgresMembership(this.db, input);
+  }
+
+  async listMemberships(
+    input: Parameters<CollaborationWorkspaceStore["listMemberships"]>[0]
+  ): Promise<WorkspaceMembership[]> {
+    return listPostgresMemberships(this.db, input);
+  }
+
+  async getMembership(
+    input: Parameters<CollaborationWorkspaceStore["getMembership"]>[0]
+  ): Promise<WorkspaceMembership | undefined> {
+    return getPostgresMembership(this.db, input);
+  }
+
+  async createAccessRequest(
+    input: Parameters<CollaborationWorkspaceStore["createAccessRequest"]>[0]
+  ): Promise<WorkspaceAccessRequest> {
+    return createPostgresAccessRequest(this.db, input);
+  }
+
+  async deleteAccessRequest(
+    input: Parameters<CollaborationWorkspaceStore["deleteAccessRequest"]>[0]
+  ): Promise<WorkspaceAccessRequest> {
+    return deletePostgresAccessRequest(this.db, input);
+  }
+
+  async listAccessRequestsForWorkspace(
+    input: Parameters<CollaborationWorkspaceStore["listAccessRequestsForWorkspace"]>[0]
+  ): Promise<WorkspaceAccessRequest[]> {
+    return listPostgresAccessRequestsForWorkspace(this.db, input);
+  }
+
+  async getAccessRequest(
+    input: Parameters<CollaborationWorkspaceStore["getAccessRequest"]>[0]
+  ): Promise<WorkspaceAccessRequest | undefined> {
+    return getPostgresAccessRequest(this.db, input);
+  }
+
+  async deleteAccessRequestsForUser(
+    input: Parameters<CollaborationWorkspaceStore["deleteAccessRequestsForUser"]>[0]
+  ): Promise<number> {
+    return deletePostgresAccessRequestsForUser(this.db, input);
+  }
+
+  async removeMembershipsForUser(
+    input: Parameters<CollaborationWorkspaceStore["removeMembershipsForUser"]>[0]
+  ): Promise<number> {
+    return removePostgresMembershipsForUser(this.db, input);
+  }
+
+  async deletePersonalWorkspaceForUser(
+    input: Parameters<CollaborationWorkspaceStore["deletePersonalWorkspaceForUser"]>[0]
+  ): Promise<CollaborationWorkspace> {
+    return deletePostgresPersonalWorkspaceForUser(this.db, input);
   }
 
   async getConversation(

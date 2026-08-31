@@ -281,14 +281,14 @@ describe("client instance app vertical slice", () => {
       }
     });
     try {
-      const conversation = await store.createConversation({
+      const conversation = await store.createConversationForTesting({
         clientInstanceId,
         ownerUserId: owner.id,
         ownerExternalUserId: owner.externalUserId,
         title: "Artifact download",
         retainedUntil: "2030-01-01T00:00:00.000Z"
       });
-      const otherConversation = await store.createConversation({
+      const otherConversation = await store.createConversationForTesting({
         clientInstanceId,
         ownerUserId: owner.id,
         ownerExternalUserId: owner.externalUserId,

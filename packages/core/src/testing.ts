@@ -13,6 +13,10 @@ import {
   type ClaimRunStartCommandInput,
   type ClaimRunStartCommandResult,
   type ClientInstanceId,
+  type CollaborationWorkspace,
+  type CollaborationWorkspaceId,
+  type CollaborationWorkspaceStore,
+  type CollaborationWorkspaceWithRole,
   type ConfigAssetRecord,
   type ConfigAssetRevisionRecord,
   type ConfigAssetSource,
@@ -26,6 +30,7 @@ import {
   type ConversationStore,
   type CreateAgentRunInput,
   type CreateConversationInput,
+  type CreateWorkspaceInput,
   type CreateMessageInput,
   type ExecutionWorkspaceCleanupStore,
   type ExecutionWorkspaceFileStore,
@@ -53,13 +58,20 @@ import {
   type UserIdentity,
   type UserRecord,
   type UserStore,
+  type UpdateWorkspaceInput,
   type ServicePrincipalRecord,
   type StructuredDataResourceRecord,
   type StructuredDataStore,
   type WorkspaceCommandStore,
+  type WorkspaceMembership,
+  type WorkspaceAccessRequest,
   authenticatedUserFromRecord,
+  asUserId,
+  createCollaborationWorkspaceId,
   createUserId,
-  createPlatformId
+  createPlatformId,
+  createWorkspaceAccessRequestId,
+  validateWorkspaceCreation
 } from "./index";
 import { InMemoryApiAccessStore } from "./testing-in-memory-api-access-store";
 import type { AgentConfig, SkillConfig } from "./config";
@@ -77,6 +89,7 @@ export class InMemoryPlatformStore
   implements
     ConversationStore,
     ConversationRetentionStore,
+    CollaborationWorkspaceStore,
     PlatformFileStore,
     AgentRunStore,
     RunObservationStore,
@@ -92,6 +105,9 @@ export class InMemoryPlatformStore
     StructuredDataStore
 {
   private readonly conversations = new Map<string, Conversation>();
+  private readonly collaborationWorkspaces = new Map<string, CollaborationWorkspace>();
+  private readonly workspaceMemberships = new Map<string, WorkspaceMembership>();
+  private readonly workspaceAccessRequests = new Map<string, WorkspaceAccessRequest>();
   private readonly messages = new Map<string, ChatMessage[]>();
   private readonly structuredDataResources = new Map<string, StructuredDataResourceRecord>();
   private readonly fileStore: InMemoryPlatformFileStore = createInMemoryPlatformFileStore({
@@ -245,11 +261,351 @@ export class InMemoryPlatformStore
     return this.apiAccessStore.updateApiCredentialLastUsed(input);
   }
 
+  async createWorkspace(input: CreateWorkspaceInput): Promise<CollaborationWorkspace> {
+    validateWorkspaceCreation(input);
+    this.requireUser(input.clientInstanceId, input.creatorUserId);
+    if (
+      input.kind === "personal" &&
+      [...this.collaborationWorkspaces.values()].some(
+        (workspace) =>
+          workspace.clientInstanceId === input.clientInstanceId &&
+          workspace.personalUserId === input.personalUserId
+      )
+    ) {
+      throw new AppError("CONFLICT", "User already has a Personal Workspace");
+    }
+
+    const now = new Date().toISOString();
+    const workspace: CollaborationWorkspace = {
+      id: createCollaborationWorkspaceId(),
+      clientInstanceId: input.clientInstanceId,
+      kind: input.kind,
+      name: input.name,
+      description: input.description ?? null,
+      visibility: input.kind === "personal" ? "private" : (input.visibility ?? "discoverable"),
+      emoji: input.emoji ?? null,
+      accentColor: input.accentColor ?? null,
+      personalUserId: input.kind === "personal" ? (input.personalUserId ?? null) : null,
+      createdAt: now,
+      updatedAt: now
+    };
+    this.collaborationWorkspaces.set(workspace.id, workspace);
+    this.workspaceMemberships.set(workspaceMembershipKey(workspace.id, input.creatorUserId), {
+      collaborationWorkspaceId: workspace.id,
+      clientInstanceId: input.clientInstanceId,
+      userId: input.creatorUserId,
+      role: "owner",
+      createdAt: now,
+      updatedAt: now
+    });
+    return workspace;
+  }
+
+  async getWorkspace(
+    clientInstanceId: ClientInstanceId,
+    collaborationWorkspaceId: CollaborationWorkspaceId
+  ): Promise<CollaborationWorkspace | undefined> {
+    const workspace = this.collaborationWorkspaces.get(collaborationWorkspaceId);
+    return workspace?.clientInstanceId === clientInstanceId ? workspace : undefined;
+  }
+
+  async listWorkspacesForUser(input: {
+    clientInstanceId: ClientInstanceId;
+    userId: UserRecord["id"];
+  }): Promise<CollaborationWorkspaceWithRole[]> {
+    return [...this.workspaceMemberships.values()]
+      .filter(
+        (membership) =>
+          membership.clientInstanceId === input.clientInstanceId &&
+          membership.userId === input.userId
+      )
+      .map((membership) => {
+        const workspace = this.collaborationWorkspaces.get(membership.collaborationWorkspaceId);
+        if (!workspace) {
+          throw new AppError("INTERNAL", "Workspace membership points to a missing workspace");
+        }
+        return { ...workspace, role: membership.role };
+      })
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  }
+
+  async updateWorkspace(input: UpdateWorkspaceInput): Promise<CollaborationWorkspace> {
+    const workspace = this.requireWorkspace(input.clientInstanceId, input.collaborationWorkspaceId);
+    if (workspace.kind === "personal") {
+      if (input.name !== undefined) {
+        throw new AppError("VALIDATION_FAILED", "A Personal Workspace cannot be renamed");
+      }
+      if (input.visibility !== undefined && input.visibility !== "private") {
+        throw new AppError("VALIDATION_FAILED", "A Personal Workspace must remain private");
+      }
+    }
+    const updated: CollaborationWorkspace = {
+      ...workspace,
+      name: input.name ?? workspace.name,
+      description: input.description === undefined ? workspace.description : input.description,
+      visibility: input.visibility ?? workspace.visibility,
+      emoji: input.emoji === undefined ? workspace.emoji : input.emoji,
+      accentColor: input.accentColor === undefined ? workspace.accentColor : input.accentColor,
+      updatedAt: new Date().toISOString()
+    };
+    this.collaborationWorkspaces.set(updated.id, updated);
+    return updated;
+  }
+
+  async deleteWorkspace(input: {
+    clientInstanceId: ClientInstanceId;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
+  }): Promise<CollaborationWorkspace> {
+    const workspace = this.requireWorkspace(input.clientInstanceId, input.collaborationWorkspaceId);
+    if (workspace.kind === "personal") {
+      throw new AppError("VALIDATION_FAILED", "A Personal Workspace cannot be deleted");
+    }
+    if (
+      [...this.conversations.values()].some(
+        (conversation) => conversation.collaborationWorkspaceId === workspace.id
+      )
+    ) {
+      throw new AppError("CONFLICT", "Workspace still contains conversations");
+    }
+    this.deleteWorkspaceRecords(workspace.id);
+    return workspace;
+  }
+
+  async ensurePersonalWorkspace(input: {
+    clientInstanceId: ClientInstanceId;
+    userId: UserRecord["id"];
+  }): Promise<CollaborationWorkspace> {
+    const existing = [...this.collaborationWorkspaces.values()].find(
+      (workspace) =>
+        workspace.clientInstanceId === input.clientInstanceId &&
+        workspace.kind === "personal" &&
+        workspace.personalUserId === input.userId
+    );
+    if (existing) {
+      return existing;
+    }
+    return this.createWorkspace({
+      clientInstanceId: input.clientInstanceId,
+      kind: "personal",
+      name: "Personal workspace",
+      visibility: "private",
+      personalUserId: input.userId,
+      creatorUserId: input.userId
+    });
+  }
+
+  async addMembership(input: {
+    clientInstanceId: ClientInstanceId;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
+    userId: UserRecord["id"];
+    role: WorkspaceMembership["role"];
+  }): Promise<WorkspaceMembership> {
+    const workspace = this.requireWorkspace(input.clientInstanceId, input.collaborationWorkspaceId);
+    if (workspace.kind === "personal") {
+      throw new AppError("VALIDATION_FAILED", "A Personal Workspace cannot gain members");
+    }
+    this.requireUser(input.clientInstanceId, input.userId);
+    const key = workspaceMembershipKey(input.collaborationWorkspaceId, input.userId);
+    if (this.workspaceMemberships.has(key)) {
+      throw new AppError("CONFLICT", "Workspace membership already exists");
+    }
+    const now = new Date().toISOString();
+    const membership: WorkspaceMembership = { ...input, createdAt: now, updatedAt: now };
+    this.workspaceMemberships.set(key, membership);
+    return membership;
+  }
+
+  async updateMembershipRole(input: {
+    clientInstanceId: ClientInstanceId;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
+    userId: UserRecord["id"];
+    role: WorkspaceMembership["role"];
+  }): Promise<WorkspaceMembership> {
+    const workspace = this.requireWorkspace(input.clientInstanceId, input.collaborationWorkspaceId);
+    if (workspace.kind === "personal") {
+      throw new AppError("VALIDATION_FAILED", "A Personal Workspace membership cannot change");
+    }
+    const membership = this.requireMembership(input);
+    const updated = { ...membership, role: input.role, updatedAt: new Date().toISOString() };
+    this.workspaceMemberships.set(
+      workspaceMembershipKey(input.collaborationWorkspaceId, input.userId),
+      updated
+    );
+    return updated;
+  }
+
+  async removeMembership(input: {
+    clientInstanceId: ClientInstanceId;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
+    userId: UserRecord["id"];
+  }): Promise<WorkspaceMembership> {
+    const workspace = this.requireWorkspace(input.clientInstanceId, input.collaborationWorkspaceId);
+    if (workspace.kind === "personal") {
+      throw new AppError("VALIDATION_FAILED", "A Personal Workspace membership cannot be removed");
+    }
+    const membership = this.requireMembership(input);
+    this.workspaceMemberships.delete(
+      workspaceMembershipKey(input.collaborationWorkspaceId, input.userId)
+    );
+    return membership;
+  }
+
+  async listMemberships(input: {
+    clientInstanceId: ClientInstanceId;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
+  }): Promise<WorkspaceMembership[]> {
+    this.requireWorkspace(input.clientInstanceId, input.collaborationWorkspaceId);
+    return [...this.workspaceMemberships.values()].filter(
+      (membership) =>
+        membership.clientInstanceId === input.clientInstanceId &&
+        membership.collaborationWorkspaceId === input.collaborationWorkspaceId
+    );
+  }
+
+  async getMembership(input: {
+    clientInstanceId: ClientInstanceId;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
+    userId: UserRecord["id"];
+  }): Promise<WorkspaceMembership | undefined> {
+    const membership = this.workspaceMemberships.get(
+      workspaceMembershipKey(input.collaborationWorkspaceId, input.userId)
+    );
+    return membership?.clientInstanceId === input.clientInstanceId ? membership : undefined;
+  }
+
+  async createAccessRequest(input: {
+    clientInstanceId: ClientInstanceId;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
+    userId: UserRecord["id"];
+  }): Promise<WorkspaceAccessRequest> {
+    const workspace = this.requireWorkspace(input.clientInstanceId, input.collaborationWorkspaceId);
+    if (workspace.kind !== "shared" || workspace.visibility !== "discoverable") {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "Access requests require a Discoverable Shared Workspace"
+      );
+    }
+    this.requireUser(input.clientInstanceId, input.userId);
+    if (await this.getMembership(input)) {
+      throw new AppError("CONFLICT", "User is already a workspace member");
+    }
+    const key = workspaceMembershipKey(input.collaborationWorkspaceId, input.userId);
+    if (this.workspaceAccessRequests.has(key)) {
+      throw new AppError("CONFLICT", "Workspace access request already exists");
+    }
+    const request: WorkspaceAccessRequest = {
+      id: createWorkspaceAccessRequestId(),
+      ...input,
+      createdAt: new Date().toISOString()
+    };
+    this.workspaceAccessRequests.set(key, request);
+    return request;
+  }
+
+  async deleteAccessRequest(input: {
+    clientInstanceId: ClientInstanceId;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
+    userId: UserRecord["id"];
+  }): Promise<WorkspaceAccessRequest> {
+    const request = await this.getAccessRequest(input);
+    if (!request) {
+      throw new AppError("NOT_FOUND", "Workspace access request is not available");
+    }
+    this.workspaceAccessRequests.delete(
+      workspaceMembershipKey(input.collaborationWorkspaceId, input.userId)
+    );
+    return request;
+  }
+
+  async listAccessRequestsForWorkspace(input: {
+    clientInstanceId: ClientInstanceId;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
+  }): Promise<WorkspaceAccessRequest[]> {
+    this.requireWorkspace(input.clientInstanceId, input.collaborationWorkspaceId);
+    return [...this.workspaceAccessRequests.values()].filter(
+      (request) =>
+        request.clientInstanceId === input.clientInstanceId &&
+        request.collaborationWorkspaceId === input.collaborationWorkspaceId
+    );
+  }
+
+  async getAccessRequest(input: {
+    clientInstanceId: ClientInstanceId;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
+    userId: UserRecord["id"];
+  }): Promise<WorkspaceAccessRequest | undefined> {
+    const request = this.workspaceAccessRequests.get(
+      workspaceMembershipKey(input.collaborationWorkspaceId, input.userId)
+    );
+    return request?.clientInstanceId === input.clientInstanceId ? request : undefined;
+  }
+
+  async deleteAccessRequestsForUser(input: {
+    clientInstanceId: ClientInstanceId;
+    userId: UserRecord["id"];
+  }): Promise<number> {
+    const requests = [...this.workspaceAccessRequests.entries()].filter(
+      ([, request]) =>
+        request.clientInstanceId === input.clientInstanceId && request.userId === input.userId
+    );
+    for (const [key] of requests) this.workspaceAccessRequests.delete(key);
+    return requests.length;
+  }
+
+  async removeMembershipsForUser(input: {
+    clientInstanceId: ClientInstanceId;
+    userId: UserRecord["id"];
+  }): Promise<number> {
+    const memberships = [...this.workspaceMemberships.entries()].filter(([, membership]) => {
+      const workspace = this.collaborationWorkspaces.get(membership.collaborationWorkspaceId);
+      return (
+        membership.clientInstanceId === input.clientInstanceId &&
+        membership.userId === input.userId &&
+        workspace?.kind === "shared"
+      );
+    });
+    for (const [key] of memberships) this.workspaceMemberships.delete(key);
+    return memberships.length;
+  }
+
+  async deletePersonalWorkspaceForUser(input: {
+    clientInstanceId: ClientInstanceId;
+    userId: UserRecord["id"];
+  }): Promise<CollaborationWorkspace> {
+    const workspace = [...this.collaborationWorkspaces.values()].find(
+      (candidate) =>
+        candidate.clientInstanceId === input.clientInstanceId &&
+        candidate.kind === "personal" &&
+        candidate.personalUserId === input.userId
+    );
+    if (!workspace) {
+      throw new AppError("NOT_FOUND", "Personal Workspace is not available");
+    }
+    if (
+      [...this.conversations.values()].some(
+        (conversation) =>
+          conversation.collaborationWorkspaceId === workspace.id && conversation.status === "active"
+      )
+    ) {
+      throw new AppError("CONFLICT", "Personal Workspace still has active conversations");
+    }
+    for (const [id, conversation] of this.conversations) {
+      if (conversation.collaborationWorkspaceId === workspace.id) {
+        this.conversations.delete(id);
+        this.messages.delete(id);
+      }
+    }
+    this.deleteWorkspaceRecords(workspace.id);
+    return workspace;
+  }
+
   async createConversation(input: CreateConversationInput): Promise<Conversation> {
+    this.requireWorkspace(input.clientInstanceId, input.collaborationWorkspaceId);
     const now = new Date().toISOString();
     const conversation: Conversation = {
       id: createPlatformId("conv"),
       clientInstanceId: input.clientInstanceId,
+      collaborationWorkspaceId: input.collaborationWorkspaceId,
       ownerUserId: input.ownerUserId,
       ownerExternalUserId: input.ownerExternalUserId,
       title: input.title,
@@ -261,6 +617,36 @@ export class InMemoryPlatformStore
     this.conversations.set(conversation.id, conversation);
     this.messages.set(conversation.id, []);
     return conversation;
+  }
+
+  async createConversationForTesting(
+    input: Omit<CreateConversationInput, "collaborationWorkspaceId">
+  ): Promise<Conversation> {
+    let user = this.users.get(input.ownerUserId);
+    if (!user) {
+      const now = new Date().toISOString();
+      user = {
+        id: asUserId(input.ownerUserId),
+        clientInstanceId: input.clientInstanceId,
+        displayLabel: input.ownerExternalUserId,
+        roles: ["user"],
+        permissionRefs: [],
+        permissions: [],
+        status: "active",
+        createdAt: now,
+        updatedAt: now,
+        identities: []
+      };
+      this.users.set(user.id, user);
+    }
+    if (user.clientInstanceId !== input.clientInstanceId) {
+      throw new AppError("CONFLICT", "Test user belongs to another client instance");
+    }
+    const workspace = await this.ensurePersonalWorkspace({
+      clientInstanceId: input.clientInstanceId,
+      userId: user.id
+    });
+    return this.createConversation({ ...input, collaborationWorkspaceId: workspace.id });
   }
 
   async getConversation(
@@ -1218,6 +1604,10 @@ export class InMemoryPlatformStore
       };
       this.identities.set(identityKey, updatedIdentity);
       this.users.set(user.id, updatedUser);
+      await this.ensurePersonalWorkspace({
+        clientInstanceId: input.clientInstanceId,
+        userId: user.id
+      });
       return authenticatedUserFromRecord({
         user: updatedUser,
         identity: updatedIdentity,
@@ -1260,6 +1650,10 @@ export class InMemoryPlatformStore
     };
     this.identities.set(identityKey, identity);
     this.users.set(updatedUser.id, updatedUser);
+    await this.ensurePersonalWorkspace({
+      clientInstanceId: input.clientInstanceId,
+      userId: updatedUser.id
+    });
     return authenticatedUserFromRecord({
       user: updatedUser,
       identity,
@@ -1290,6 +1684,10 @@ export class InMemoryPlatformStore
       identities: []
     };
     this.users.set(user.id, user);
+    await this.ensurePersonalWorkspace({
+      clientInstanceId: input.clientInstanceId,
+      userId: user.id
+    });
     return user;
   }
 
@@ -1317,6 +1715,20 @@ export class InMemoryPlatformStore
     const user = this.users.get(input.userId);
     if (!user || user.clientInstanceId !== input.clientInstanceId) {
       throw new AppError("NOT_FOUND", "User is not available");
+    }
+    if (
+      [...this.workspaceMemberships.values()].some(
+        (membership) =>
+          membership.clientInstanceId === input.clientInstanceId &&
+          membership.userId === input.userId
+      ) ||
+      [...this.collaborationWorkspaces.values()].some(
+        (workspace) =>
+          workspace.clientInstanceId === input.clientInstanceId &&
+          workspace.personalUserId === input.userId
+      )
+    ) {
+      throw new AppError("CONFLICT", "User workspace lifecycle cleanup is required");
     }
 
     const deleted = this.attachIdentities(user);
@@ -1486,6 +1898,53 @@ export class InMemoryPlatformStore
     };
   }
 
+  private requireUser(clientInstanceId: ClientInstanceId, userId: UserRecord["id"]): UserRecord {
+    const user = this.users.get(userId);
+    if (!user || user.clientInstanceId !== clientInstanceId) {
+      throw new AppError("NOT_FOUND", "User is not available");
+    }
+    return user;
+  }
+
+  private requireWorkspace(
+    clientInstanceId: ClientInstanceId,
+    collaborationWorkspaceId: CollaborationWorkspaceId
+  ): CollaborationWorkspace {
+    const workspace = this.collaborationWorkspaces.get(collaborationWorkspaceId);
+    if (!workspace || workspace.clientInstanceId !== clientInstanceId) {
+      throw new AppError("NOT_FOUND", "Collaboration Workspace is not available");
+    }
+    return workspace;
+  }
+
+  private requireMembership(input: {
+    clientInstanceId: ClientInstanceId;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
+    userId: UserRecord["id"];
+  }): WorkspaceMembership {
+    const membership = this.workspaceMemberships.get(
+      workspaceMembershipKey(input.collaborationWorkspaceId, input.userId)
+    );
+    if (!membership || membership.clientInstanceId !== input.clientInstanceId) {
+      throw new AppError("NOT_FOUND", "Workspace Membership is not available");
+    }
+    return membership;
+  }
+
+  private deleteWorkspaceRecords(collaborationWorkspaceId: CollaborationWorkspaceId): void {
+    this.collaborationWorkspaces.delete(collaborationWorkspaceId);
+    for (const [key, membership] of this.workspaceMemberships) {
+      if (membership.collaborationWorkspaceId === collaborationWorkspaceId) {
+        this.workspaceMemberships.delete(key);
+      }
+    }
+    for (const [key, request] of this.workspaceAccessRequests) {
+      if (request.collaborationWorkspaceId === collaborationWorkspaceId) {
+        this.workspaceAccessRequests.delete(key);
+      }
+    }
+  }
+
   private getIdentitiesForUser(user: UserRecord): UserIdentity[] {
     return [...this.identities.values()]
       .filter(
@@ -1506,6 +1965,13 @@ function createIdentityKey(input: {
   externalUserId: string;
 }): string {
   return `${input.clientInstanceId}:${input.authSource}:${input.externalUserId}`;
+}
+
+function workspaceMembershipKey(
+  collaborationWorkspaceId: CollaborationWorkspaceId,
+  userId: UserRecord["id"]
+): string {
+  return `${collaborationWorkspaceId}:${userId}`;
 }
 
 function runStartCommandKey(input: {

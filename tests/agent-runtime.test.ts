@@ -1664,7 +1664,7 @@ describe("local agent runtime", () => {
       }
     };
     const store = new InMemoryPlatformStore();
-    const conversation = await store.createConversation({
+    const conversation = await store.createConversationForTesting({
       clientInstanceId,
       ownerUserId: "user-1",
       ownerExternalUserId: "user-1",
@@ -2350,7 +2350,7 @@ async function createConversationWithMessages(
     messages: Array<{ role: ChatMessage["role"]; text: string; metadata?: JsonObject }>;
   }
 ): Promise<ChatMessage["conversationId"]> {
-  const conversation = await store.createConversation({
+  const conversation = await store.createConversationForTesting({
     clientInstanceId: input.clientInstanceId,
     ownerUserId: "user-1",
     ownerExternalUserId: "user-1",

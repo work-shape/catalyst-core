@@ -112,7 +112,7 @@ describe("client instance app vertical slice", () => {
       safeguards: config.usage.safeguards,
       costs: config.usage.costs
     });
-    const conversation = await store.createConversation({
+    const conversation = await store.createConversationForTesting({
       clientInstanceId,
       ownerUserId: owner.id,
       ownerExternalUserId: owner.externalUserId,
@@ -233,7 +233,7 @@ describe("client instance app vertical slice", () => {
       safeguards: config.usage.safeguards,
       costs: config.usage.costs
     });
-    const conversation = await store.createConversation({
+    const conversation = await store.createConversationForTesting({
       clientInstanceId,
       ownerUserId: owner.id,
       ownerExternalUserId: owner.externalUserId,
@@ -591,7 +591,7 @@ describe("client instance app vertical slice", () => {
       safeguards: config.usage.safeguards,
       costs: config.usage.costs
     });
-    const conversation = await store.createConversation({
+    const conversation = await store.createConversationForTesting({
       clientInstanceId,
       ownerUserId: owner.id,
       ownerExternalUserId: owner.externalUserId,
