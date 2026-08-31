@@ -71,6 +71,14 @@ function createStandaloneChatRouter(options: StandaloneChatRouterOptions) {
     getParentRoute: () => rootRoute,
     path: "/"
   });
+  const collaborationWorkspaceRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "w/$collaborationWorkspaceId"
+  });
+  const collaborationWorkspaceConversationRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "w/$collaborationWorkspaceId/c/$conversationId"
+  });
   const conversationRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "c/$conversationId"
@@ -108,6 +116,8 @@ function createStandaloneChatRouter(options: StandaloneChatRouterOptions) {
   });
   const routeTree = rootRoute.addChildren([
     indexRoute,
+    collaborationWorkspaceRoute,
+    collaborationWorkspaceConversationRoute,
     conversationRoute,
     settingsRoute,
     adminIndexRoute,
@@ -155,6 +165,21 @@ function StandaloneChatRouteBridge({ options }: { options: StandaloneChatRouterO
 export function workspaceRouteNavigation(route: WorkspaceRoute) {
   if (route.kind === "conversation") {
     return {
+      to: "/w/$collaborationWorkspaceId/c/$conversationId",
+      params: {
+        collaborationWorkspaceId: route.collaborationWorkspaceId,
+        conversationId: route.conversationId
+      }
+    };
+  }
+  if (route.kind === "new-conversation") {
+    return {
+      to: "/w/$collaborationWorkspaceId",
+      params: { collaborationWorkspaceId: route.collaborationWorkspaceId }
+    };
+  }
+  if (route.kind === "legacy-conversation") {
+    return {
       to: "/c/$conversationId",
       params: { conversationId: route.conversationId }
     };
@@ -170,11 +195,31 @@ export function workspaceRouteNavigation(route: WorkspaceRoute) {
 
 export function workspaceRouteFromPath(pathname: string): WorkspaceRoute {
   const normalizedPathname = normalizePathname(pathname);
+  if (normalizedPathname.startsWith("/w/")) {
+    const segments = normalizedPathname.slice("/w/".length).split("/");
+    const encodedCollaborationWorkspaceId = segments[0];
+    if (encodedCollaborationWorkspaceId && segments.length === 1) {
+      return {
+        kind: "new-conversation",
+        collaborationWorkspaceId: decodePathSegment(encodedCollaborationWorkspaceId)
+      };
+    }
+    if (encodedCollaborationWorkspaceId && segments.length === 3 && segments[1] === "c") {
+      const encodedConversationId = segments[2];
+      if (encodedConversationId) {
+        return {
+          kind: "conversation",
+          collaborationWorkspaceId: decodePathSegment(encodedCollaborationWorkspaceId),
+          conversationId: decodePathSegment(encodedConversationId)
+        };
+      }
+    }
+  }
   if (normalizedPathname.startsWith("/c/")) {
     const encodedConversationId = normalizedPathname.slice("/c/".length);
     if (encodedConversationId && !encodedConversationId.includes("/")) {
       return {
-        kind: "conversation",
+        kind: "legacy-conversation",
         conversationId: decodePathSegment(encodedConversationId)
       };
     }
@@ -188,7 +233,7 @@ export function workspaceRouteFromPath(pathname: string): WorkspaceRoute {
       return { kind: "superadmin", tab };
     }
   }
-  return { kind: "new-conversation" };
+  return { kind: "collaboration-workspace-root" };
 }
 
 function normalizePathname(pathname: string): string {

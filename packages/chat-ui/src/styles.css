@@ -294,6 +294,23 @@
   }
 }
 
+/* Workspace Accent: the element carries both theme variants as inline custom
+   properties, so the active theme picks the readable pair with no re-render.
+   `.dark` sits on the workspace <main>, which modal dialogs inherit from. */
+[data-collaboration-workspace-accent] {
+  --collaboration-workspace-accent-surface: var(--collaboration-workspace-accent-surface-light);
+  --collaboration-workspace-accent-on-surface: var(
+    --collaboration-workspace-accent-on-surface-light
+  );
+}
+
+.dark [data-collaboration-workspace-accent] {
+  --collaboration-workspace-accent-surface: var(--collaboration-workspace-accent-surface-dark);
+  --collaboration-workspace-accent-on-surface: var(
+    --collaboration-workspace-accent-on-surface-dark
+  );
+}
+
 .chat-user-message-bubble .chat-markdown [data-streamdown="link"] {
   color: inherit;
   text-decoration-color: color-mix(in srgb, currentColor 72%, transparent);

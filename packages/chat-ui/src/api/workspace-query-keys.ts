@@ -6,8 +6,34 @@ export const workspaceQueryKeys = {
     ["branding", apiBaseUrl, localePreference ?? "auto"] as const,
   config: (apiBaseUrl: string, authScope: string, localePreference: LocaleCode | undefined) =>
     ["config", apiBaseUrl, authScope, localePreference ?? "auto"] as const,
-  conversations: (apiBaseUrl: string, authScope: string) =>
+  conversationsScope: (apiBaseUrl: string, authScope: string) =>
     ["conversations", apiBaseUrl, authScope] as const,
+  conversations: (
+    apiBaseUrl: string,
+    authScope: string,
+    collaborationWorkspaceId: string | undefined
+  ) => ["conversations", apiBaseUrl, authScope, collaborationWorkspaceId] as const,
+  collaborationWorkspaces: (apiBaseUrl: string, authScope: string) =>
+    ["collaboration-workspaces", apiBaseUrl, authScope] as const,
+  collaborationWorkspaceDirectory: (apiBaseUrl: string, authScope: string) =>
+    ["collaboration-workspace-directory", apiBaseUrl, authScope] as const,
+  collaborationWorkspaceMembers: (
+    apiBaseUrl: string,
+    authScope: string,
+    collaborationWorkspaceId: string
+  ) =>
+    ["collaboration-workspace-members", apiBaseUrl, authScope, collaborationWorkspaceId] as const,
+  collaborationWorkspaceAccessRequests: (
+    apiBaseUrl: string,
+    authScope: string,
+    collaborationWorkspaceId: string
+  ) =>
+    [
+      "collaboration-workspace-access-requests",
+      apiBaseUrl,
+      authScope,
+      collaborationWorkspaceId
+    ] as const,
   thread: (apiBaseUrl: string, authScope: string, conversationId: string | undefined) =>
     ["thread", apiBaseUrl, authScope, conversationId] as const,
   conversationResources: (

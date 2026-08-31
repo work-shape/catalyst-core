@@ -3,6 +3,8 @@ import { AssistantRuntimePanel } from "./assistant/assistant-runtime-panel";
 import { AttachmentContentProvider } from "./attachment-content";
 import { ChatDropOverlay } from "./chat-file-dropzone";
 import type { ChatShellProps } from "./chat-shell";
+import { CollaborationWorkspacePanel } from "./collaboration-workspace/collaboration-workspace-panel";
+import { CollaborationWorkspaceSelector } from "./collaboration-workspace/collaboration-workspace-selector";
 import { ControlPlaneRoutes } from "./control-plane/control-plane-routes";
 import { TranslationProvider } from "./i18n";
 import { LoginPanel } from "./login-panel";
@@ -14,7 +16,7 @@ import { UserMenu } from "./workspace/user-menu";
 import { ConfigCheckPanel, SessionCheckPanel, WorkspaceChrome } from "./workspace/workspace-chrome";
 import { WorkspaceRail } from "./workspace/workspace-rail";
 import { type WorkspaceRoute, type WorkspaceRouteChangeOptions } from "./workspace/workspace-route";
-import { useWorkspaceChatModel } from "./workspace/workspace-chat-model";
+import { useWorkspaceChatModel, WORKSPACE_AUTH_SCOPE } from "./workspace/workspace-chat-model";
 import { WorkspaceProviders } from "./workspace/workspace-providers";
 
 interface ChatWorkspaceProps extends ChatShellProps {
@@ -112,6 +114,20 @@ function ChatWorkspaceContent({
   );
   const chat = model.selectedChat;
   const isStaging = model.config.config.clientInstance.environment === "staging";
+  const collaborationWorkspace = model.collaborationWorkspace;
+  const collaborationWorkspaceSelector = (
+    <CollaborationWorkspaceSelector
+      collaborationWorkspaces={collaborationWorkspace.collaborationWorkspaces}
+      activeCollaborationWorkspaceId={collaborationWorkspace.activeCollaborationWorkspaceId}
+      userLabel={model.auth.user.displayLabel || (model.auth.user.email ?? "")}
+      loading={collaborationWorkspace.loading}
+      loadFailed={collaborationWorkspace.loadFailed}
+      onSelectCollaborationWorkspace={collaborationWorkspace.selectCollaborationWorkspace}
+      onOpenCollaborationWorkspaceSettings={collaborationWorkspace.openSettingsDialog}
+      onBrowseCollaborationWorkspaces={collaborationWorkspace.openBrowseDialog}
+      onCreateCollaborationWorkspace={collaborationWorkspace.openCreateDialog}
+    />
+  );
 
   return (
     <TranslationProvider locale={model.config.activeLocale}>
@@ -145,6 +161,7 @@ function ChatWorkspaceContent({
           >
             <WorkspaceRail
               config={model.config.config}
+              collaborationWorkspaceSelector={collaborationWorkspaceSelector}
               conversations={model.conversationRail.conversations}
               selectedConversationId={model.conversationRail.selectedConversationId}
               canViewAdministration={model.conversationRail.canViewAdministration}
@@ -177,6 +194,17 @@ function ChatWorkspaceContent({
           onSelectAgent={model.config.selectAgentName}
           onToggleSidebar={model.chrome.toggleSidebar}
           onToggleTheme={model.config.toggleTheme}
+        />
+
+        <CollaborationWorkspacePanel
+          apiBaseUrl={model.auth.apiBaseUrl}
+          authScope={WORKSPACE_AUTH_SCOPE}
+          client={chat.client}
+          currentUserId={model.auth.user.id}
+          collaborationWorkspaces={collaborationWorkspace.collaborationWorkspaces}
+          dialog={collaborationWorkspace.dialog}
+          onClose={collaborationWorkspace.closeDialog}
+          onCollaborationWorkspaceCreated={collaborationWorkspace.selectCollaborationWorkspace}
         />
 
         <ControlPlaneRoutes adminPanel={adminPanel} controlPlane={model.controlPlane}>

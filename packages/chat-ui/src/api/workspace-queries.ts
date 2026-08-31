@@ -40,12 +40,78 @@ export function useWorkspaceConfigQuery(
 
 export function useWorkspaceConversationsQuery(
   input: WorkspaceQueryInput & {
+    collaborationWorkspaceId: string | undefined;
+    enabled: boolean;
+  }
+) {
+  const collaborationWorkspaceId = input.collaborationWorkspaceId;
+  return useQuery({
+    queryKey: workspaceQueryKeys.conversations(
+      input.apiBaseUrl,
+      input.authScope,
+      collaborationWorkspaceId
+    ),
+    queryFn: () => input.client.conversations.list(collaborationWorkspaceId ?? ""),
+    enabled: input.enabled && Boolean(collaborationWorkspaceId)
+  });
+}
+
+export function useCollaborationWorkspacesQuery(
+  input: WorkspaceQueryInput & {
     enabled: boolean;
   }
 ) {
   return useQuery({
-    queryKey: workspaceQueryKeys.conversations(input.apiBaseUrl, input.authScope),
-    queryFn: input.client.conversations.list,
+    queryKey: workspaceQueryKeys.collaborationWorkspaces(input.apiBaseUrl, input.authScope),
+    queryFn: () => input.client.collaborationWorkspaces.list(),
+    enabled: input.enabled
+  });
+}
+
+export function useCollaborationWorkspaceDirectoryQuery(
+  input: WorkspaceQueryInput & {
+    enabled: boolean;
+  }
+) {
+  return useQuery({
+    queryKey: workspaceQueryKeys.collaborationWorkspaceDirectory(input.apiBaseUrl, input.authScope),
+    queryFn: () => input.client.collaborationWorkspaces.browseDirectory(),
+    enabled: input.enabled
+  });
+}
+
+export function useCollaborationWorkspaceMembersQuery(
+  input: WorkspaceQueryInput & {
+    collaborationWorkspaceId: string;
+    enabled: boolean;
+  }
+) {
+  return useQuery({
+    queryKey: workspaceQueryKeys.collaborationWorkspaceMembers(
+      input.apiBaseUrl,
+      input.authScope,
+      input.collaborationWorkspaceId
+    ),
+    queryFn: () =>
+      input.client.collaborationWorkspaces.members.list(input.collaborationWorkspaceId),
+    enabled: input.enabled
+  });
+}
+
+export function useCollaborationWorkspaceAccessRequestsQuery(
+  input: WorkspaceQueryInput & {
+    collaborationWorkspaceId: string;
+    enabled: boolean;
+  }
+) {
+  return useQuery({
+    queryKey: workspaceQueryKeys.collaborationWorkspaceAccessRequests(
+      input.apiBaseUrl,
+      input.authScope,
+      input.collaborationWorkspaceId
+    ),
+    queryFn: () =>
+      input.client.collaborationWorkspaces.accessRequests.list(input.collaborationWorkspaceId),
     enabled: input.enabled
   });
 }
@@ -192,9 +258,11 @@ export interface WorkspaceCacheActions {
   invalidateStreamError(conversationId: string): void;
 }
 
-export function useWorkspaceCacheActions(input: WorkspaceQueryInput): WorkspaceCacheActions {
+export function useWorkspaceCacheActions(
+  input: WorkspaceQueryInput & { collaborationWorkspaceId: string | undefined }
+): WorkspaceCacheActions {
   const queryClient = useQueryClient();
-  const { apiBaseUrl, authScope, client } = input;
+  const { apiBaseUrl, authScope, client, collaborationWorkspaceId } = input;
 
   const invalidateCurrentUser = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.me(apiBaseUrl) });
@@ -202,9 +270,9 @@ export function useWorkspaceCacheActions(input: WorkspaceQueryInput): WorkspaceC
 
   const invalidateConversations = useCallback(() => {
     void queryClient.invalidateQueries({
-      queryKey: workspaceQueryKeys.conversations(apiBaseUrl, authScope)
+      queryKey: workspaceQueryKeys.conversations(apiBaseUrl, authScope, collaborationWorkspaceId)
     });
-  }, [apiBaseUrl, authScope, queryClient]);
+  }, [apiBaseUrl, authScope, collaborationWorkspaceId, queryClient]);
 
   const removeThreadSnapshot = useCallback(
     (conversationId: string) => {
@@ -321,7 +389,7 @@ export function useWorkspaceCacheActions(input: WorkspaceQueryInput): WorkspaceC
         response.thread
       );
       queryClient.setQueryData<ConversationListItem[]>(
-        workspaceQueryKeys.conversations(apiBaseUrl, authScope),
+        workspaceQueryKeys.conversations(apiBaseUrl, authScope, collaborationWorkspaceId),
         (currentConversations = []) => {
           const existing = currentConversations.filter(
             (conversation) => conversation.id !== response.conversation.id
@@ -337,7 +405,7 @@ export function useWorkspaceCacheActions(input: WorkspaceQueryInput): WorkspaceC
         }
       );
     },
-    [apiBaseUrl, authScope, queryClient]
+    [apiBaseUrl, authScope, collaborationWorkspaceId, queryClient]
   );
 
   const handleRunRequestAccepted = useCallback(
@@ -347,7 +415,7 @@ export function useWorkspaceCacheActions(input: WorkspaceQueryInput): WorkspaceC
         .generateTitle(conversationId)
         .then((updatedConversation) => {
           queryClient.setQueryData<ConversationListItem[]>(
-            workspaceQueryKeys.conversations(apiBaseUrl, authScope),
+            workspaceQueryKeys.conversations(apiBaseUrl, authScope, collaborationWorkspaceId),
             (currentConversations = []) => {
               if (
                 currentConversations.some(
@@ -368,7 +436,7 @@ export function useWorkspaceCacheActions(input: WorkspaceQueryInput): WorkspaceC
           invalidateConversations();
         });
     },
-    [apiBaseUrl, authScope, client, invalidateConversations, queryClient]
+    [apiBaseUrl, authScope, client, collaborationWorkspaceId, invalidateConversations, queryClient]
   );
 
   const invalidateStreamError = useCallback(

@@ -22,6 +22,7 @@ describe("workspace rail branding", () => {
         { locale: "de" },
         createElement(WorkspaceRail, {
           config,
+          collaborationWorkspaceSelector: null,
           conversations: [],
           selectedConversationId: undefined,
           canViewAdministration: false,
@@ -59,6 +60,7 @@ describe("workspace rail branding", () => {
         { locale: "de" },
         createElement(WorkspaceRail, {
           config,
+          collaborationWorkspaceSelector: null,
           conversations: [],
           selectedConversationId: undefined,
           canViewAdministration: false,

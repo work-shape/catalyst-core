@@ -10,6 +10,7 @@ export type WorkspaceView = "chat" | "settings" | "superadmin";
 
 export function WorkspaceRail({
   config,
+  collaborationWorkspaceSelector,
   conversations,
   selectedConversationId,
   canViewAdministration,
@@ -25,6 +26,7 @@ export function WorkspaceRail({
   onDeleteConversation
 }: {
   config: SafeConfig;
+  collaborationWorkspaceSelector: ReactNode;
   conversations: ConversationListItem[];
   selectedConversationId: string | undefined;
   canViewAdministration: boolean;
@@ -71,7 +73,7 @@ export function WorkspaceRail({
 
   return (
     <aside
-      className="relative grid h-full min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)_auto] border-r border-sidebar-border bg-sidebar px-5 pb-4 pt-5 text-sidebar-foreground"
+      className="relative grid h-full min-h-0 min-w-0 grid-rows-[auto_auto_auto_minmax(0,1fr)_auto] border-r border-sidebar-border bg-sidebar px-5 pb-4 pt-5 text-sidebar-foreground"
       aria-label={t("conversations")}
     >
       <Button
@@ -139,7 +141,9 @@ export function WorkspaceRail({
         </div>
       )}
 
-      <div className="grid gap-3 pb-3 pt-6">
+      <div className="-mx-2 min-w-0 pt-4">{collaborationWorkspaceSelector}</div>
+
+      <div className="grid gap-3 pb-3 pt-4">
         <div className="flex min-w-0 items-center justify-between gap-2">
           <span className="truncate text-[0.6875rem] font-semibold uppercase tracking-[0.13em] text-muted-foreground">
             {t("conversations")}

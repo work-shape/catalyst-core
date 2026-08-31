@@ -9,6 +9,7 @@ export interface ProductRunTransportOptions {
   client: {
     runs: Pick<ApiClient["runs"], "create" | "start">;
   };
+  collaborationWorkspaceId?: string;
   selectedConversationId?: string;
   locale: LocaleCode;
   selectedAgentName?: string;
@@ -51,6 +52,7 @@ export class ProductConversationRunTransport implements ChatTransport<UIMessage>
       agentName: this.options.selectedAgentName,
       modelBindingId: this.options.selectedModelBindingId,
       client: this.options.client,
+      collaborationWorkspaceId: this.options.collaborationWorkspaceId,
       conversationId: this.options.selectedConversationId,
       idempotencyKey,
       locale: this.options.locale,
@@ -88,6 +90,7 @@ export async function startProductConversationRun({
   agentName,
   modelBindingId,
   client,
+  collaborationWorkspaceId,
   conversationId,
   idempotencyKey,
   locale,
@@ -98,6 +101,7 @@ export async function startProductConversationRun({
   client: {
     runs: Pick<ApiClient["runs"], "create" | "start">;
   };
+  collaborationWorkspaceId?: string;
   conversationId?: string;
   idempotencyKey: string;
   locale: LocaleCode;
@@ -121,7 +125,8 @@ export async function startProductConversationRun({
     ...request,
     conversation: {
       title: firstLineTitle(text),
-      locale
+      locale,
+      ...(collaborationWorkspaceId ? { collaborationWorkspaceId } : {})
     }
   });
 }

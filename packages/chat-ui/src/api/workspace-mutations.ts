@@ -6,6 +6,7 @@ import type {
   AdministeredUserIdentity,
   ApiClient,
   ChangeCurrentUserPasswordRequest,
+  CollaborationWorkspaceWithRole,
   ConversationListItem,
   ConversationThreadSnapshot,
   CreateApiCredentialRequest,
@@ -14,7 +15,8 @@ import type {
   UpdateAdministeredUserRequest,
   UpdateServicePrincipalRequest,
   UpdateCurrentUserRequest,
-  UpsertAdministeredUserIdentityRequest
+  UpsertAdministeredUserIdentityRequest,
+  WorkspaceMembershipRole
 } from "@vivd-catalyst/api-client";
 import { signOut } from "./auth-client";
 import { apiErrorMessage } from "../workspace-utils";
@@ -28,6 +30,10 @@ interface WorkspaceMutationInput {
   apiBaseUrl: string;
   authScope: string;
   client: ApiClient;
+}
+
+interface CollaborationWorkspaceScopedMutationInput extends WorkspaceMutationInput {
+  collaborationWorkspaceId: string | undefined;
 }
 
 export function useApiAccessMutations(
@@ -117,7 +123,7 @@ export function useApiAccessMutations(
 }
 
 export function useDeleteConversationMutation(
-  input: WorkspaceMutationInput & {
+  input: CollaborationWorkspaceScopedMutationInput & {
     selectedConversationId: string | undefined;
     clearConversationUploads(conversationId: string): void;
     onDeletedActiveConversation(nextSelectedConversationId: string | undefined): void;
@@ -133,7 +139,11 @@ export function useDeleteConversationMutation(
       let nextSelectedConversationId: string | undefined;
       const deletedActiveConversation = input.selectedConversationId === deletedConversation.id;
       queryClient.setQueryData<ConversationListItem[]>(
-        workspaceQueryKeys.conversations(input.apiBaseUrl, input.authScope),
+        workspaceQueryKeys.conversations(
+          input.apiBaseUrl,
+          input.authScope,
+          input.collaborationWorkspaceId
+        ),
         (currentConversations = []) => {
           const remainingConversations = currentConversations.filter(
             (conversation) => conversation.id !== deletedConversation.id
@@ -165,7 +175,11 @@ export function useDeleteConversationMutation(
       }
       input.onDeletedConversation();
       void queryClient.invalidateQueries({
-        queryKey: workspaceQueryKeys.conversations(input.apiBaseUrl, input.authScope)
+        queryKey: workspaceQueryKeys.conversations(
+          input.apiBaseUrl,
+          input.authScope,
+          input.collaborationWorkspaceId
+        )
       });
     },
     onError: (error) => {
@@ -175,7 +189,7 @@ export function useDeleteConversationMutation(
 }
 
 export function useRenameConversationMutation(
-  input: WorkspaceMutationInput & {
+  input: CollaborationWorkspaceScopedMutationInput & {
     onErrorMessage(message: string | undefined): void;
   }
 ) {
@@ -186,7 +200,11 @@ export function useRenameConversationMutation(
       input.client.conversations.rename(conversationId, title),
     onSuccess: (updatedConversation) => {
       queryClient.setQueryData<ConversationListItem[]>(
-        workspaceQueryKeys.conversations(input.apiBaseUrl, input.authScope),
+        workspaceQueryKeys.conversations(
+          input.apiBaseUrl,
+          input.authScope,
+          input.collaborationWorkspaceId
+        ),
         (currentConversations = []) =>
           currentConversations.map((conversation) =>
             conversation.id === updatedConversation.id
@@ -206,7 +224,11 @@ export function useRenameConversationMutation(
       );
       input.onErrorMessage(undefined);
       void queryClient.invalidateQueries({
-        queryKey: workspaceQueryKeys.conversations(input.apiBaseUrl, input.authScope)
+        queryKey: workspaceQueryKeys.conversations(
+          input.apiBaseUrl,
+          input.authScope,
+          input.collaborationWorkspaceId
+        )
       });
       void queryClient.invalidateQueries({
         queryKey: workspaceQueryKeys.auditEvents(input.apiBaseUrl, input.authScope)
@@ -216,6 +238,156 @@ export function useRenameConversationMutation(
       input.onErrorMessage(apiErrorMessage(error, "Rename failed"));
     }
   });
+}
+
+export type CreateCollaborationWorkspaceInput = Parameters<
+  ApiClient["collaborationWorkspaces"]["create"]
+>[0];
+export type UpdateCollaborationWorkspaceInput = Parameters<
+  ApiClient["collaborationWorkspaces"]["update"]
+>[1];
+
+export function useCollaborationWorkspaceMutations(input: WorkspaceMutationInput) {
+  const queryClient = useQueryClient();
+  const { apiBaseUrl, authScope, client } = input;
+  const collaborationWorkspaces = client.collaborationWorkspaces;
+
+  const invalidateCollaborationWorkspaces = () => {
+    void queryClient.invalidateQueries({
+      queryKey: workspaceQueryKeys.collaborationWorkspaces(apiBaseUrl, authScope)
+    });
+  };
+  const invalidateDirectory = () => {
+    void queryClient.invalidateQueries({
+      queryKey: workspaceQueryKeys.collaborationWorkspaceDirectory(apiBaseUrl, authScope)
+    });
+  };
+  const invalidateMembership = (collaborationWorkspaceId: string) => {
+    void queryClient.invalidateQueries({
+      queryKey: workspaceQueryKeys.collaborationWorkspaceMembers(
+        apiBaseUrl,
+        authScope,
+        collaborationWorkspaceId
+      )
+    });
+    void queryClient.invalidateQueries({
+      queryKey: workspaceQueryKeys.collaborationWorkspaceAccessRequests(
+        apiBaseUrl,
+        authScope,
+        collaborationWorkspaceId
+      )
+    });
+    invalidateCollaborationWorkspaces();
+  };
+
+  const createCollaborationWorkspace = useMutation({
+    mutationFn: (mutationInput: CreateCollaborationWorkspaceInput) =>
+      collaborationWorkspaces.create(mutationInput),
+    onSuccess: (created) => {
+      // Seeded before the refetch lands so navigating into the new workspace
+      // cannot race a stale list and bounce back to the Personal Workspace.
+      queryClient.setQueryData<CollaborationWorkspaceWithRole[]>(
+        workspaceQueryKeys.collaborationWorkspaces(apiBaseUrl, authScope),
+        (currentCollaborationWorkspaces = []) =>
+          currentCollaborationWorkspaces.some(
+            (collaborationWorkspace) => collaborationWorkspace.id === created.id
+          )
+            ? currentCollaborationWorkspaces
+            : [...currentCollaborationWorkspaces, created]
+      );
+      invalidateCollaborationWorkspaces();
+      invalidateDirectory();
+    }
+  });
+  const updateCollaborationWorkspace = useMutation({
+    mutationFn: (mutationInput: {
+      collaborationWorkspaceId: string;
+      update: UpdateCollaborationWorkspaceInput;
+    }) =>
+      collaborationWorkspaces.update(mutationInput.collaborationWorkspaceId, mutationInput.update),
+    onSuccess: () => {
+      invalidateCollaborationWorkspaces();
+      invalidateDirectory();
+    }
+  });
+  const addCollaborationWorkspaceMember = useMutation({
+    mutationFn: (mutationInput: { collaborationWorkspaceId: string; email: string }) =>
+      collaborationWorkspaces.members.addByEmail(
+        mutationInput.collaborationWorkspaceId,
+        mutationInput.email
+      ),
+    onSuccess: (_member, { collaborationWorkspaceId }) =>
+      invalidateMembership(collaborationWorkspaceId)
+  });
+  const changeCollaborationWorkspaceMemberRole = useMutation({
+    mutationFn: (mutationInput: {
+      collaborationWorkspaceId: string;
+      userId: string;
+      role: WorkspaceMembershipRole;
+    }) =>
+      collaborationWorkspaces.members.changeRole(
+        mutationInput.collaborationWorkspaceId,
+        mutationInput.userId,
+        mutationInput.role
+      ),
+    onSuccess: (_membership, { collaborationWorkspaceId }) =>
+      invalidateMembership(collaborationWorkspaceId)
+  });
+  const removeCollaborationWorkspaceMember = useMutation({
+    mutationFn: (mutationInput: { collaborationWorkspaceId: string; userId: string }) =>
+      collaborationWorkspaces.members.remove(
+        mutationInput.collaborationWorkspaceId,
+        mutationInput.userId
+      ),
+    onSuccess: (_membership, { collaborationWorkspaceId }) =>
+      invalidateMembership(collaborationWorkspaceId)
+  });
+  const leaveCollaborationWorkspace = useMutation({
+    mutationFn: (collaborationWorkspaceId: string) =>
+      collaborationWorkspaces.members.leave(collaborationWorkspaceId),
+    onSuccess: (_membership, collaborationWorkspaceId) => {
+      invalidateMembership(collaborationWorkspaceId);
+      invalidateDirectory();
+      void queryClient.invalidateQueries({
+        queryKey: workspaceQueryKeys.conversationsScope(apiBaseUrl, authScope)
+      });
+    }
+  });
+  const requestCollaborationWorkspaceAccess = useMutation({
+    mutationFn: (collaborationWorkspaceId: string) =>
+      collaborationWorkspaces.accessRequests.create(collaborationWorkspaceId),
+    onSuccess: invalidateDirectory
+  });
+  const approveCollaborationWorkspaceAccessRequest = useMutation({
+    mutationFn: (mutationInput: { collaborationWorkspaceId: string; userId: string }) =>
+      collaborationWorkspaces.accessRequests.approve(
+        mutationInput.collaborationWorkspaceId,
+        mutationInput.userId
+      ),
+    onSuccess: (_membership, { collaborationWorkspaceId }) =>
+      invalidateMembership(collaborationWorkspaceId)
+  });
+  const declineCollaborationWorkspaceAccessRequest = useMutation({
+    mutationFn: (mutationInput: { collaborationWorkspaceId: string; userId: string }) =>
+      collaborationWorkspaces.accessRequests.decline(
+        mutationInput.collaborationWorkspaceId,
+        mutationInput.userId
+      ),
+    onSuccess: (_request, { collaborationWorkspaceId }) =>
+      invalidateMembership(collaborationWorkspaceId)
+  });
+
+  return {
+    createCollaborationWorkspace,
+    updateCollaborationWorkspace,
+    addCollaborationWorkspaceMember,
+    changeCollaborationWorkspaceMemberRole,
+    removeCollaborationWorkspaceMember,
+    leaveCollaborationWorkspace,
+    requestCollaborationWorkspaceAccess,
+    approveCollaborationWorkspaceAccessRequest,
+    declineCollaborationWorkspaceAccessRequest
+  };
 }
 
 export function useWorkspaceSignOutMutation(input: { apiBaseUrl: string; onSignedOut(): void }) {
@@ -232,7 +404,7 @@ export function useWorkspaceSignOutMutation(input: { apiBaseUrl: string; onSigne
 }
 
 export function useCancelRunMutation(
-  input: WorkspaceMutationInput & {
+  input: CollaborationWorkspaceScopedMutationInput & {
     onErrorMessage(message: string | undefined): void;
   }
 ) {
@@ -254,7 +426,11 @@ export function useCancelRunMutation(
         queryKey: workspaceQueryKeys.thread(input.apiBaseUrl, input.authScope, conversationId)
       });
       void queryClient.invalidateQueries({
-        queryKey: workspaceQueryKeys.conversations(input.apiBaseUrl, input.authScope)
+        queryKey: workspaceQueryKeys.conversations(
+          input.apiBaseUrl,
+          input.authScope,
+          input.collaborationWorkspaceId
+        )
       });
       void queryClient.invalidateQueries({
         queryKey: workspaceQueryKeys.auditEvents(input.apiBaseUrl, input.authScope)

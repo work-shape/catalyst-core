@@ -24,6 +24,10 @@ import {
   useWorkspaceMeQuery,
   useWorkspaceThreadQuery
 } from "../api/workspace-queries";
+import {
+  useCollaborationWorkspaceModel,
+  type CollaborationWorkspaceModel
+} from "../collaboration-workspace/collaboration-workspace-model";
 import type { LocalUploadingAttachment } from "../assistant/assistant-composer";
 import type { ChatFileDropzoneController } from "../chat-file-dropzone";
 import type { ChatShellAdminPanel } from "../chat-shell";
@@ -56,7 +60,7 @@ import {
   useWorkspaceTheme
 } from "./workspace-ui-state";
 
-const WORKSPACE_AUTH_SCOPE = "standalone";
+export const WORKSPACE_AUTH_SCOPE = "standalone";
 
 export interface WorkspaceChatModelInput {
   adminPanel: ChatShellAdminPanel | undefined;
@@ -68,6 +72,7 @@ export interface WorkspaceChatModel {
   config: WorkspaceConfigModel;
   route: WorkspaceRouteModel;
   chrome: WorkspaceChromeModel;
+  collaborationWorkspace: CollaborationWorkspaceModel;
   conversationRail: ConversationRailModel;
   selectedChat: SelectedChatModel;
   controlPlane: ControlPlaneModel;
@@ -132,6 +137,7 @@ export interface ConversationRailModel {
 export interface SelectedChatModel {
   client: ApiClient;
   config: SafeConfig | undefined;
+  collaborationWorkspaceId: string | undefined;
   selectedConversationId: string | undefined;
   messages: Message[] | undefined;
   completedRunProjections: ConversationControllerState["completedRunProjections"];
@@ -202,12 +208,6 @@ export function useWorkspaceChatModel({
     localePreference: preferences.localePreference,
     enabled: isAuthenticated
   });
-  const conversationsQuery = useWorkspaceConversationsQuery({
-    apiBaseUrl,
-    authScope: WORKSPACE_AUTH_SCOPE,
-    client,
-    enabled: isAuthenticated
-  });
   const threadQuery = useWorkspaceThreadQuery({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
@@ -215,11 +215,36 @@ export function useWorkspaceChatModel({
     conversationId: selectedConversationId,
     enabled: isAuthenticated && Boolean(selectedConversationId)
   });
+  const collaborationWorkspace = useCollaborationWorkspaceModel({
+    apiBaseUrl,
+    authScope: WORKSPACE_AUTH_SCOPE,
+    client,
+    isAuthenticated,
+    userId: meQuery.data?.id,
+    route,
+    legacyConversationCollaborationWorkspaceId:
+      route.kind === "legacy-conversation"
+        ? threadQuery.data?.conversation.collaborationWorkspaceId
+        : undefined,
+    legacyConversationUnavailable:
+      route.kind === "legacy-conversation" && Boolean(threadQuery.error),
+    goToCollaborationWorkspace: routeState.goToDefaultChat,
+    showConversation: routeState.showConversation
+  });
+  const activeCollaborationWorkspaceId = collaborationWorkspace.activeCollaborationWorkspaceId;
+  const conversationsQuery = useWorkspaceConversationsQuery({
+    apiBaseUrl,
+    authScope: WORKSPACE_AUTH_SCOPE,
+    client,
+    collaborationWorkspaceId: activeCollaborationWorkspaceId,
+    enabled: isAuthenticated
+  });
 
   const workspaceCache = useWorkspaceCacheActions({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
-    client
+    client,
+    collaborationWorkspaceId: activeCollaborationWorkspaceId
   });
   const controller = useConversationController({
     client,
@@ -289,6 +314,20 @@ export function useWorkspaceChatModel({
   const attachmentAccept = config?.features.attachments.accept ?? "";
   const activeLocale = useWorkspaceLocale(config?.localization.locale);
 
+  function showConversationInActiveCollaborationWorkspace(
+    conversationId: string,
+    options?: { replace?: boolean }
+  ) {
+    if (!activeCollaborationWorkspaceId) {
+      return;
+    }
+    routeState.showConversation(activeCollaborationWorkspaceId, conversationId, options);
+  }
+
+  function goToActiveCollaborationWorkspaceChat(options?: { replace?: boolean }) {
+    routeState.goToDefaultChat(activeCollaborationWorkspaceId, options);
+  }
+
   async function ensureConversationForFiles(files: File[]): Promise<string> {
     if (selectedConversationId) {
       return selectedConversationId;
@@ -297,14 +336,19 @@ export function useWorkspaceChatModel({
       files.length === 1 ? (files[0]?.name ?? "Attached file") : `${files.length} attached files`;
     const conversation = await client.conversations.create({
       title,
-      locale: activeLocale
+      locale: activeLocale,
+      ...(activeCollaborationWorkspaceId
+        ? { collaborationWorkspaceId: activeCollaborationWorkspaceId }
+        : {})
     });
     draftController.moveDraft({
       authScope: WORKSPACE_AUTH_SCOPE,
       fromConversationId: undefined,
       toConversationId: conversation.id
     });
-    routeState.showConversation(conversation.id, { replace: route.kind === "new-conversation" });
+    showConversationInActiveCollaborationWorkspace(conversation.id, {
+      replace: route.kind === "new-conversation"
+    });
     setNotice(undefined);
     workspaceCache.invalidateConversations();
     return conversation.id;
@@ -335,7 +379,7 @@ export function useWorkspaceChatModel({
     conversationActivity.resetConversationActivity();
     clearRunCursors();
     routeState.resetRouteMemory();
-    routeState.goToDefaultChat({ replace: true });
+    routeState.goToDefaultChat(undefined, { replace: true });
   }
 
   const controlPlane = useControlPlaneModel({
@@ -353,7 +397,7 @@ export function useWorkspaceChatModel({
     selectLocale: preferences.selectLocale,
     showContextIndicator: preferences.showContextIndicator,
     setShowContextIndicator: preferences.setShowContextIndicator,
-    goToDefaultChat: routeState.goToDefaultChat,
+    goToDefaultChat: goToActiveCollaborationWorkspaceChat,
     onAccountDeleted: resetAuthenticatedWorkspaceState,
     showSuperadmin: routeState.showSuperadmin
   });
@@ -427,14 +471,17 @@ export function useWorkspaceChatModel({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
     client,
+    collaborationWorkspaceId: activeCollaborationWorkspaceId,
     selectedConversationId,
     clearConversationUploads: draftAttachmentController.clearConversationUploads,
     onDeletedActiveConversation: (nextSelectedConversationId) => {
       if (nextSelectedConversationId) {
-        routeState.showConversation(nextSelectedConversationId, { replace: true });
+        showConversationInActiveCollaborationWorkspace(nextSelectedConversationId, {
+          replace: true
+        });
         return;
       }
-      routeState.goToDefaultChat({ replace: true });
+      goToActiveCollaborationWorkspaceChat({ replace: true });
     },
     onDeletedConversation: () => setNotice(undefined),
     onErrorMessage: setNotice
@@ -443,6 +490,7 @@ export function useWorkspaceChatModel({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
     client,
+    collaborationWorkspaceId: activeCollaborationWorkspaceId,
     onErrorMessage: setNotice
   });
   const signOutMutation = useWorkspaceSignOutMutation({
@@ -455,6 +503,7 @@ export function useWorkspaceChatModel({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
     client,
+    collaborationWorkspaceId: activeCollaborationWorkspaceId,
     onErrorMessage: setNotice
   });
 
@@ -473,13 +522,15 @@ export function useWorkspaceChatModel({
   }
 
   function startNewConversation() {
-    routeState.goToDefaultChat();
+    goToActiveCollaborationWorkspaceChat();
     setNotice(undefined);
     chrome.requestComposerFocus();
   }
 
   function conversationStarted(conversationId: string) {
-    routeState.showConversation(conversationId, { replace: route.kind === "new-conversation" });
+    showConversationInActiveCollaborationWorkspace(conversationId, {
+      replace: route.kind === "new-conversation"
+    });
     setNotice(undefined);
     workspaceCache.invalidateConversationStarted(conversationId);
   }
@@ -494,7 +545,7 @@ export function useWorkspaceChatModel({
 
   function runStarted(response: StartConversationRunResponse) {
     workspaceCache.cacheRunStarted(response);
-    routeState.showConversation(response.conversation.id, {
+    showConversationInActiveCollaborationWorkspace(response.conversation.id, {
       replace: route.kind === "new-conversation"
     });
     setNotice(undefined);
@@ -514,7 +565,7 @@ export function useWorkspaceChatModel({
   }
 
   function selectConversation(conversationId: string) {
-    routeState.showConversation(conversationId);
+    showConversationInActiveCollaborationWorkspace(conversationId);
     setNotice(undefined);
   }
 
@@ -556,6 +607,7 @@ export function useWorkspaceChatModel({
       closeSidebar: chrome.closeSidebar,
       toggleSidebar: chrome.toggleSidebar
     },
+    collaborationWorkspace,
     conversationRail: {
       conversations,
       selectedConversationId,
@@ -574,6 +626,7 @@ export function useWorkspaceChatModel({
     selectedChat: {
       client,
       config,
+      collaborationWorkspaceId: activeCollaborationWorkspaceId,
       selectedConversationId,
       messages,
       completedRunProjections: controller.completedRunProjections,

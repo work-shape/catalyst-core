@@ -108,7 +108,7 @@ export function useDraftAttachmentController(
           )
         });
         void queryClient.invalidateQueries({
-          queryKey: workspaceQueryKeys.conversations(input.apiBaseUrl, input.authScope)
+          queryKey: workspaceQueryKeys.conversationsScope(input.apiBaseUrl, input.authScope)
         });
       })
       .catch((error) => {

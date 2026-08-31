@@ -59,6 +59,7 @@ function AssistantRuntimePane({
   const {
     client,
     config,
+    collaborationWorkspaceId,
     selectedConversationId,
     messagesLoaded,
     notice,
@@ -136,6 +137,7 @@ function AssistantRuntimePane({
         agentName: selectedAgentName,
         modelBindingId: selectedModelBindingId,
         client,
+        collaborationWorkspaceId,
         conversationId: undefined,
         idempotencyKey: createRunIdempotencyKey(),
         locale,
@@ -163,6 +165,7 @@ function AssistantRuntimePane({
     [
       baseSendDisabledReason,
       client,
+      collaborationWorkspaceId,
       locale,
       onMessageSubmitted,
       onRunStarted,
@@ -201,6 +204,7 @@ function AssistantRuntimePane({
     () =>
       new ProductConversationRunTransport({
         client,
+        collaborationWorkspaceId,
         selectedConversationId,
         locale,
         selectedAgentName,
@@ -211,6 +215,7 @@ function AssistantRuntimePane({
       }),
     [
       client,
+      collaborationWorkspaceId,
       locale,
       onMessageSubmitted,
       onRunStarted,

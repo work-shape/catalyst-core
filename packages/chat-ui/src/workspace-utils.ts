@@ -8,6 +8,7 @@ const THEME_STORAGE_KEY = "vivd-catalyst:theme";
 const LOCALE_STORAGE_KEY = "vivd-catalyst:locale";
 const CONTEXT_INDICATOR_STORAGE_KEY = "vivd-catalyst:show-context-indicator";
 const RESOURCES_PANEL_STORAGE_KEY = "vivd-catalyst:resources-panel";
+const COLLABORATION_WORKSPACE_STORAGE_PREFIX = "vivd-catalyst:collaboration-workspace";
 
 export type ResourcesPanelPreference = "open" | "closed";
 
@@ -76,6 +77,35 @@ export function readStoredResourcesPanelPreference(): ResourcesPanelPreference |
 
 export function writeStoredResourcesPanelPreference(preference: ResourcesPanelPreference): void {
   window.localStorage.setItem(RESOURCES_PANEL_STORAGE_KEY, preference);
+}
+
+/**
+ * The last active Collaboration Workspace is browser-local and scoped by client
+ * instance (api base url) and authenticated user, so shared browsers never leak
+ * one person's workspace choice into another's session.
+ */
+function collaborationWorkspaceStorageKey(apiBaseUrl: string, userId: string): string {
+  return `${COLLABORATION_WORKSPACE_STORAGE_PREFIX}:${apiBaseUrl}:${userId}`;
+}
+
+export function readStoredCollaborationWorkspaceId(
+  apiBaseUrl: string,
+  userId: string
+): string | undefined {
+  return (
+    window.localStorage.getItem(collaborationWorkspaceStorageKey(apiBaseUrl, userId)) ?? undefined
+  );
+}
+
+export function writeStoredCollaborationWorkspaceId(
+  apiBaseUrl: string,
+  userId: string,
+  collaborationWorkspaceId: string
+): void {
+  window.localStorage.setItem(
+    collaborationWorkspaceStorageKey(apiBaseUrl, userId),
+    collaborationWorkspaceId
+  );
 }
 
 export function applyFavicon(href: string): void {
