@@ -1242,7 +1242,6 @@
                     ]
                   },
                   "visibility": {
-                    "default": "discoverable",
                     "type": "string",
                     "enum": [
                       "discoverable",
@@ -1282,8 +1281,7 @@
                   }
                 },
                 "required": [
-                  "name",
-                  "visibility"
+                  "name"
                 ],
                 "additionalProperties": false
               }

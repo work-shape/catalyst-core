@@ -330,7 +330,7 @@ export type CreateCollaborationWorkspaceData = {
     body: {
         name: string;
         description?: string | null;
-        visibility: 'discoverable' | 'private';
+        visibility?: 'discoverable' | 'private';
         emoji?: string | null;
         accentColor?: 'ruby' | 'amber' | 'emerald' | 'sapphire' | 'violet' | 'rose' | 'teal' | 'slate' | null;
     };

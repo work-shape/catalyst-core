@@ -56,6 +56,17 @@ describe("api operation catalog and client", () => {
     }
   });
 
+  it("keeps Collaboration Workspace create and update request contracts aligned", () => {
+    const createOperation = openApiDocument.paths["/api/collaboration-workspaces"].post;
+    const createSchema = createOperation.requestBody.content["application/json"].schema;
+
+    expect(createSchema.required).toEqual(["name"]);
+    expect(
+      apiOperations.createCollaborationWorkspace.requestSchema.parse({ name: "Product" })
+    ).toEqual({ name: "Product" });
+    expect(apiOperations.updateCollaborationWorkspace.requestSchema.parse({})).toEqual({});
+  });
+
   it("builds encoded paths from operation params and query values", () => {
     expect(
       apiOperations.listConversationMessages.buildPath({

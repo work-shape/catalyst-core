@@ -1,12 +1,16 @@
+import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import postgres, { type Sql } from "postgres";
 
 const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
 const describePostgres = databaseUrl ? describe : describe.skip;
 const migrationsDirectory = resolve("packages/postgres-store/migrations");
+const preflightScript = resolve("scripts/preflight-collaboration-workspaces.mjs");
 const createdDatabases: string[] = [];
+const runFile = promisify(execFile);
 
 describePostgres("Collaboration Workspace migration 0020", () => {
   afterEach(async () => {
@@ -139,6 +143,44 @@ describePostgres("Collaboration Workspace migration 0020", () => {
     }
   });
 
+  it("passes the read-only preflight when active conversation owners map to users", async () => {
+    const { sql, databaseUrl: testDatabaseUrl } = await createFreshDatabase();
+    try {
+      await applyMigrationsThrough(sql, 19);
+      await seedProductUser(sql, "mapped_user", "active");
+      await seedConversation(sql, "mapped_conversation", "mapped_user");
+
+      const { stdout } = await runFile(process.execPath, [preflightScript], {
+        env: { ...process.env, DATABASE_URL: testDatabaseUrl }
+      });
+
+      expect(stdout).toContain("Product users: 1");
+      expect(stdout).toContain("Active conversations: 1");
+      expect(stdout).toContain("Unmapped active conversations: 0");
+      expect(stdout).toContain("Preflight passed");
+    } finally {
+      await sql.end();
+    }
+  });
+
+  it("fails the read-only preflight when an active conversation owner is unmapped", async () => {
+    const { sql, databaseUrl: testDatabaseUrl } = await createFreshDatabase();
+    try {
+      await applyMigrationsThrough(sql, 19);
+      await seedConversation(sql, "orphaned_conversation", "missing_user");
+
+      const failure = await runFile(process.execPath, [preflightScript], {
+        env: { ...process.env, DATABASE_URL: testDatabaseUrl }
+      }).catch((error: unknown) => error);
+
+      expect(failure).toMatchObject({ code: 1 });
+      expect((failure as { stdout: string }).stdout).toContain("Unmapped active conversations: 1");
+      expect((failure as { stderr: string }).stderr).toContain("Do not deploy migration 0020");
+    } finally {
+      await sql.end();
+    }
+  });
+
   it("renames Conversation creator columns in 0021 without changing stored values", async () => {
     const { sql } = await createFreshDatabase();
     try {
@@ -234,7 +276,7 @@ async function seedConversation(sql: Sql, id: string, ownerUserId: string): Prom
   `;
 }
 
-async function createFreshDatabase(): Promise<{ sql: Sql }> {
+async function createFreshDatabase(): Promise<{ sql: Sql; databaseUrl: string }> {
   const name = `catalyst_migration_${globalThis.crypto.randomUUID().replaceAll("-", "")}`;
   const admin = postgres(databaseUrl!, { max: 1 });
   await admin.unsafe(`create database "${name}"`);
@@ -242,7 +284,7 @@ async function createFreshDatabase(): Promise<{ sql: Sql }> {
   createdDatabases.push(name);
   const url = new URL(databaseUrl!);
   url.pathname = `/${name}`;
-  return { sql: postgres(url.toString(), { max: 1 }) };
+  return { sql: postgres(url.toString(), { max: 1 }), databaseUrl: url.toString() };
 }
 
 async function dropDatabase(name: string): Promise<void> {

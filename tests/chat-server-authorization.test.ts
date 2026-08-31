@@ -4,6 +4,7 @@ import {
   FIRST_PARTY_AUTH_SCOPES,
   StoreBackedAuditRecorder,
   asClientInstanceId,
+  asUserId,
   type AuthenticatedUser
 } from "@vivd-catalyst/core";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
@@ -235,17 +236,26 @@ describe("client instance app vertical slice", () => {
         displayLabel: "Read Only User",
         roles: ["user"],
         permissionRefs: ["demo-tools"],
-        scopes: ["conversation:read", "collaboration_workspace:read"]
+        scopes: ["me:read", "conversation:read"]
       }
     });
     expect(issued.statusCode).toBe(200);
     const token = (issued.json() as { chatSessionToken: string }).chatSessionToken;
 
+    const me = await app.server.inject({
+      method: "GET",
+      url: "/api/me",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    expect(me.statusCode).toBe(200);
+    const [personalWorkspace] = await app.store.listWorkspacesForUser({
+      clientInstanceId: asClientInstanceId("demo-local"),
+      userId: asUserId((me.json() as { id: string }).id)
+    });
+
     const conversations = await app.server.inject({
       method: "GET",
-      url: await personalConversationListUrl(app.server, {
-        authorization: `Bearer ${token}`
-      }),
+      url: `/api/conversations?collaborationWorkspaceId=${personalWorkspace!.id}`,
       headers: {
         authorization: `Bearer ${token}`
       }

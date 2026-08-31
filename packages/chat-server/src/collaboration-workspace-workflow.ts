@@ -211,11 +211,20 @@ export class CollaborationWorkspaceWorkflow {
       collaborationWorkspaceId
     });
 
+    let conversationCount = 0;
     let fileCount = 0;
     for (const conversation of conversations) {
+      const current = await this.options.conversationStore.getConversation(
+        this.options.clientInstanceId,
+        conversation.id
+      );
+      if (!current || current.collaborationWorkspaceId !== collaborationWorkspaceId) {
+        continue;
+      }
       await this.assertConversationIdle(conversation.id);
       const deletedAt = new Date().toISOString();
       const deletion = await deleteConversationAggregate(this.options, conversation.id, deletedAt);
+      conversationCount += 1;
       fileCount += deletion.fileCount + deletion.artifactCount + deletion.workspaceFileCount;
       await this.options.auditRecorder.record({
         type: "conversation.deleted",
@@ -236,7 +245,7 @@ export class CollaborationWorkspaceWorkflow {
     });
     const result = {
       collaborationWorkspaceId,
-      conversationCount: conversations.length,
+      conversationCount,
       fileCount,
       memberCount: memberships.length
     };

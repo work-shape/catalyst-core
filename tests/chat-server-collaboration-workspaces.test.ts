@@ -944,6 +944,63 @@ describe("Collaboration Workspace API", () => {
     ).resolves.toBeUndefined();
     await app.close();
   });
+
+  it("preserves a conversation moved after workspace deletion enumerates it", async () => {
+    const app = await createWorkspaceApp();
+    await currentUser(app.server, "owner");
+    const workspaceId = await createSharedWorkspace(app.server, "owner", "Delete source");
+    const destinationId = await createSharedWorkspace(app.server, "owner", "Keep destination");
+    const moved = await createConversation(app.server, "owner", workspaceId, "Move during delete");
+    const deletedConversation = await createConversation(
+      app.server,
+      "owner",
+      workspaceId,
+      "Delete normally"
+    );
+    await app.store.appendMessage({
+      clientInstanceId,
+      conversationId: asConversationId(moved),
+      role: "user",
+      text: "preserve this data"
+    });
+
+    const getConversation = app.store.getConversation.bind(app.store);
+    let movedDuringDeletion = false;
+    app.store.getConversation = async (requestedClientInstanceId, conversationId) => {
+      if (!movedDuringDeletion && conversationId === moved) {
+        movedDuringDeletion = true;
+        await app.store.moveConversation({
+          clientInstanceId,
+          conversationId: asConversationId(moved),
+          fromCollaborationWorkspaceId: asCollaborationWorkspaceId(workspaceId),
+          toCollaborationWorkspaceId: asCollaborationWorkspaceId(destinationId)
+        });
+      }
+      return getConversation(requestedClientInstanceId, conversationId);
+    };
+
+    const deleted = await inject(app.server, "owner", {
+      method: "DELETE",
+      url: `/api/collaboration-workspaces/${workspaceId}`,
+      payload: { confirmName: "Delete source" }
+    });
+    expect(deleted.statusCode).toBe(200);
+    expect(deleted.json()).toMatchObject({ conversationCount: 1 });
+    await expect(
+      app.store.getConversation(clientInstanceId, asConversationId(moved))
+    ).resolves.toMatchObject({ collaborationWorkspaceId: destinationId, status: "active" });
+    await expect(
+      app.store.listMessages({
+        clientInstanceId,
+        conversationId: asConversationId(moved)
+      })
+    ).resolves.toEqual([expect.objectContaining({ text: "preserve this data" })]);
+    await expect(
+      app.store.getConversation(clientInstanceId, asConversationId(deletedConversation))
+    ).resolves.toBeUndefined();
+    await expect(app.store.getWorkspace(clientInstanceId, workspaceId)).resolves.toBeUndefined();
+    await app.close();
+  });
 });
 
 const WORKSPACE_OBJECT_ROOT = "/tmp/vivd-catalyst-phase-d-workspace-objects";

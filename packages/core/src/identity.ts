@@ -18,15 +18,13 @@ export const CHAT_SESSION_AUTH_SCOPES = [
   "run:command"
 ] as const;
 
-const CHAT_SESSION_ALLOWED_AUTH_SCOPES = [
-  ...CHAT_SESSION_AUTH_SCOPES,
-  "collaboration_workspace:read",
-  "collaboration_workspace:manage"
-] as const;
+const CHAT_SESSION_ALLOWED_AUTH_SCOPES = CHAT_SESSION_AUTH_SCOPES;
 
 export const FIRST_PARTY_AUTH_SCOPES = [
   AUTH_SCOPE_WILDCARD,
   ...CHAT_SESSION_ALLOWED_AUTH_SCOPES,
+  "collaboration_workspace:read",
+  "collaboration_workspace:manage",
   "me:write",
   "governance:read",
   "governance:write",

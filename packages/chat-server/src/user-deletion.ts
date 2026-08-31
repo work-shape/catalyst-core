@@ -44,10 +44,6 @@ export async function cleanupProductUserData(input: {
   const personalWorkspace = workspaces.find(
     (workspace) => workspace.kind === "personal" && workspace.personalUserId === input.userId
   );
-  if (!personalWorkspace) {
-    throw new AppError("INTERNAL", "User has no Personal Workspace");
-  }
-
   const users = await options.userStore.listUsers({
     clientInstanceId: options.clientInstanceId
   });
@@ -77,10 +73,12 @@ export async function cleanupProductUserData(input: {
     );
   }
 
-  const conversations = await options.conversationStore.listConversationsForWorkspace({
-    clientInstanceId: options.clientInstanceId,
-    collaborationWorkspaceId: personalWorkspace.id
-  });
+  const conversations = personalWorkspace
+    ? await options.conversationStore.listConversationsForWorkspace({
+        clientInstanceId: options.clientInstanceId,
+        collaborationWorkspaceId: personalWorkspace.id
+      })
+    : [];
   const totals: UserDeletionTotals = {
     conversationCount: 0,
     attachmentCount: 0,
@@ -127,10 +125,12 @@ export async function cleanupProductUserData(input: {
     clientInstanceId: options.clientInstanceId,
     userId: input.userId
   });
-  await options.userStore.deletePersonalWorkspaceForUser({
-    clientInstanceId: options.clientInstanceId,
-    userId: input.userId
-  });
+  if (personalWorkspace) {
+    await options.userStore.deletePersonalWorkspaceForUser({
+      clientInstanceId: options.clientInstanceId,
+      userId: input.userId
+    });
+  }
   return totals;
 }
 

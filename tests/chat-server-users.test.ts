@@ -214,7 +214,7 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
-  it("lets a signed-in user delete their own account and owned conversations", async () => {
+  it("retries account deletion after final user deletion fails", async () => {
     const clientInstanceId = asClientInstanceId("demo-local");
     const store = new InMemoryPlatformStore();
     const config = createTestConfig();
@@ -276,6 +276,15 @@ describe("client instance app vertical slice", () => {
       title: "Keep this conversation",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
+    const deleteUser = store.deleteUser.bind(store);
+    let deleteUserAttempts = 0;
+    store.deleteUser = async (input) => {
+      deleteUserAttempts += 1;
+      if (deleteUserAttempts === 1) {
+        throw new AppError("INTERNAL", "Injected final user deletion failure");
+      }
+      return deleteUser(input);
+    };
     const deletedPasswordSignIns: Array<{ externalUserId: string }> = [];
     const server = await createChatServer({
       config,
@@ -336,13 +345,29 @@ describe("client instance app vertical slice", () => {
     });
     expect(delegatedDelete.statusCode).toBe(403);
 
+    const failed = await server.inject({
+      method: "DELETE",
+      url: "/api/me"
+    });
+    expect(failed.statusCode).toBe(500);
+    await expect(
+      store.listWorkspacesForUser({ clientInstanceId, userId: asUserId(user.id) })
+    ).resolves.toEqual([]);
+    await expect(store.listUsers({ clientInstanceId })).resolves.toContainEqual(
+      expect.objectContaining({ id: user.id })
+    );
+
     const deleted = await server.inject({
       method: "DELETE",
       url: "/api/me"
     });
     expect(deleted.statusCode).toBe(200);
     expect(deleted.json()).toEqual({ ok: true });
-    expect(deletedPasswordSignIns).toEqual([{ externalUserId: "auth-delete-me" }]);
+    expect(deleteUserAttempts).toBe(2);
+    expect(deletedPasswordSignIns).toEqual([
+      { externalUserId: "auth-delete-me" },
+      { externalUserId: "auth-delete-me" }
+    ]);
 
     await expect(store.listUsers({ clientInstanceId })).resolves.not.toContainEqual(
       expect.objectContaining({ id: user.id })
@@ -375,7 +400,7 @@ describe("client instance app vertical slice", () => {
           type: "user.deleted",
           metadata: expect.objectContaining({
             requestedBy: "self",
-            conversationCount: 1
+            conversationCount: 0
           })
         })
       ])

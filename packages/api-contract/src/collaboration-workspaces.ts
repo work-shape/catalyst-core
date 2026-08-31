@@ -80,20 +80,18 @@ const workspaceEmojiSchema = z.string().trim().max(32).nullable();
 export const createCollaborationWorkspaceRequestSchema = z.object({
   name: workspaceNameSchema,
   description: workspaceDescriptionSchema.optional(),
-  visibility: workspaceVisibilitySchema.optional().default("discoverable"),
+  visibility: workspaceVisibilitySchema.optional(),
   emoji: workspaceEmojiSchema.optional(),
   accentColor: workspaceAccentColorSchema.nullable().optional()
 });
 
-export const updateCollaborationWorkspaceRequestSchema = z
-  .object({
-    name: workspaceNameSchema.optional(),
-    description: workspaceDescriptionSchema.optional(),
-    visibility: workspaceVisibilitySchema.optional(),
-    emoji: workspaceEmojiSchema.optional(),
-    accentColor: workspaceAccentColorSchema.nullable().optional()
-  })
-  .refine((value) => Object.keys(value).length > 0, "At least one workspace setting is required");
+export const updateCollaborationWorkspaceRequestSchema = z.object({
+  name: workspaceNameSchema.optional(),
+  description: workspaceDescriptionSchema.optional(),
+  visibility: workspaceVisibilitySchema.optional(),
+  emoji: workspaceEmojiSchema.optional(),
+  accentColor: workspaceAccentColorSchema.nullable().optional()
+});
 
 export const addWorkspaceMemberRequestSchema = z.object({
   email: z.string().trim().email()
