@@ -59,7 +59,7 @@ describePostgres("Postgres execution workspace store", () => {
         conversationId: fixture.conversation.id,
         ownerUserId: "wrong-owner"
       })
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    ).resolves.toEqual(fixture.workspace);
 
     await expect(
       store.getExecutionWorkspace({
@@ -669,8 +669,8 @@ async function createWorkspaceFixture(store: PostgresPlatformStore): Promise<{
   const conversation = await store.createConversation({
     clientInstanceId,
     collaborationWorkspaceId: personalWorkspace.id,
-    ownerUserId,
-    ownerExternalUserId: `external_${ownerUserId}`,
+    createdByUserId: ownerUserId,
+    createdByExternalUserId: `external_${ownerUserId}`,
     title: "Workspace test",
     retainedUntil: "2026-07-29T00:00:00.000Z"
   });

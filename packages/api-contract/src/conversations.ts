@@ -4,8 +4,9 @@ import { localeCodeSchema } from "./configuration";
 export const conversationSchema = z.object({
   id: z.string(),
   clientInstanceId: z.string(),
-  ownerUserId: z.string(),
-  ownerExternalUserId: z.string(),
+  collaborationWorkspaceId: z.string(),
+  createdByUserId: z.string(),
+  createdByExternalUserId: z.string(),
   title: z.string(),
   status: z.string(),
   createdAt: z.string(),
@@ -323,6 +324,7 @@ export const retryArtifactPreviewResponseSchema = artifactPreviewResponseSchema;
 
 export const createConversationRequestSchema = z.object({
   title: z.string().min(1).optional(),
+  collaborationWorkspaceId: z.string().min(1).optional(),
   locale: localeCodeSchema.optional()
 });
 

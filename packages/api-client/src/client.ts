@@ -1,4 +1,5 @@
 import { createConversationsClient } from "./conversations-client";
+import { createCollaborationWorkspacesClient } from "./collaboration-workspaces-client";
 import { createInstanceClients } from "./instance-client";
 import { createRunsClient, type ObserveRunEventsOptions } from "./runs-client";
 import { createApiClientTransport, type ApiClientOptions } from "./transport";
@@ -12,6 +13,7 @@ export function createApiClient(options: ApiClientOptions) {
   return {
     browserManagedDownloads: transport.browserManagedDownloads,
     ...instanceClients,
+    collaborationWorkspaces: createCollaborationWorkspacesClient(transport),
     conversations: createConversationsClient(transport),
     runs: createRunsClient(transport)
   };

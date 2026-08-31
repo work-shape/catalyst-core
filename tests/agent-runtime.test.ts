@@ -1666,8 +1666,8 @@ describe("local agent runtime", () => {
     const store = new InMemoryPlatformStore();
     const conversation = await store.createConversationForTesting({
       clientInstanceId,
-      ownerUserId: "user-1",
-      ownerExternalUserId: "user-1",
+      createdByUserId: "user-1",
+      createdByExternalUserId: "user-1",
       title: "Tool artifact observation",
       retainedUntil: "2026-07-29T00:00:00.000Z"
     });
@@ -2352,8 +2352,8 @@ async function createConversationWithMessages(
 ): Promise<ChatMessage["conversationId"]> {
   const conversation = await store.createConversationForTesting({
     clientInstanceId: input.clientInstanceId,
-    ownerUserId: "user-1",
-    ownerExternalUserId: "user-1",
+    createdByUserId: "user-1",
+    createdByExternalUserId: "user-1",
     title: "Test conversation",
     retainedUntil: new Date(Date.now() + 86_400_000).toISOString()
   });

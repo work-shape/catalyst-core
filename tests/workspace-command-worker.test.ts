@@ -263,8 +263,8 @@ async function createWorkerHarness(
     : undefined;
   const conversation = await store.createConversationForTesting({
     clientInstanceId,
-    ownerUserId,
-    ownerExternalUserId: ownerUserId,
+    createdByUserId: ownerUserId,
+    createdByExternalUserId: ownerUserId,
     title: "Worker test",
     retainedUntil: "2026-07-29T00:00:00.000Z"
   });

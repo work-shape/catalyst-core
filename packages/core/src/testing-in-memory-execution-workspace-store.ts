@@ -36,10 +36,9 @@ export type InMemoryExecutionWorkspaceStore = ExecutionWorkspaceMetadataStore &
   ExecutionWorkspaceCleanupStore;
 
 export interface InMemoryExecutionWorkspaceStoreCallbacks {
-  requireOwnedActiveConversation(
+  requireActiveConversation(
     clientInstanceId: ClientInstanceId,
-    conversationId: ConversationId,
-    ownerUserId: string
+    conversationId: ConversationId
   ): Promise<void>;
   isConversationActive(
     clientInstanceId: ClientInstanceId,
@@ -66,11 +65,7 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
     ownerUserId: string;
     now?: string;
   }): Promise<ExecutionWorkspace> {
-    await this.callbacks.requireOwnedActiveConversation(
-      input.clientInstanceId,
-      input.conversationId,
-      input.ownerUserId
-    );
+    await this.callbacks.requireActiveConversation(input.clientInstanceId, input.conversationId);
 
     const existing = await this.getExecutionWorkspaceForConversation(input);
     if (existing) {
@@ -206,11 +201,7 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
   }
 
   async enqueueWorkspaceCommand(input: EnqueueWorkspaceCommandInput): Promise<WorkspaceCommand> {
-    const workspace = await this.requireActiveWorkspace(
-      input.clientInstanceId,
-      input.workspaceId,
-      input.ownerUserId
-    );
+    const workspace = await this.requireActiveWorkspace(input.clientInstanceId, input.workspaceId);
     const queuedAt = input.queuedAt ?? new Date().toISOString();
     const command: WorkspaceCommand = {
       id: createPlatformId("wcmd"),
@@ -573,11 +564,10 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
 
   private async requireActiveWorkspace(
     clientInstanceId: ClientInstanceId,
-    workspaceId: ExecutionWorkspaceId,
-    ownerUserId?: string
+    workspaceId: ExecutionWorkspaceId
   ): Promise<ExecutionWorkspace> {
     const workspace = await this.getExecutionWorkspace({ clientInstanceId, workspaceId });
-    if (!workspace || (ownerUserId !== undefined && workspace.ownerUserId !== ownerUserId)) {
+    if (!workspace) {
       throw new AppError("NOT_FOUND", "Execution workspace is not available");
     }
     return workspace;

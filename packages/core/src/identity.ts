@@ -18,9 +18,15 @@ export const CHAT_SESSION_AUTH_SCOPES = [
   "run:command"
 ] as const;
 
+const CHAT_SESSION_ALLOWED_AUTH_SCOPES = [
+  ...CHAT_SESSION_AUTH_SCOPES,
+  "collaboration_workspace:read",
+  "collaboration_workspace:manage"
+] as const;
+
 export const FIRST_PARTY_AUTH_SCOPES = [
   AUTH_SCOPE_WILDCARD,
-  ...CHAT_SESSION_AUTH_SCOPES,
+  ...CHAT_SESSION_ALLOWED_AUTH_SCOPES,
   "me:write",
   "governance:read",
   "governance:write",
@@ -33,7 +39,7 @@ export const FIRST_PARTY_AUTH_SCOPES = [
   "config_assets:release"
 ] as const;
 
-export type ChatSessionAuthScope = (typeof CHAT_SESSION_AUTH_SCOPES)[number];
+export type ChatSessionAuthScope = (typeof CHAT_SESSION_ALLOWED_AUTH_SCOPES)[number];
 export type FirstPartyAuthScope = (typeof FIRST_PARTY_AUTH_SCOPES)[number];
 export type AuthScope = FirstPartyAuthScope | (string & {});
 
@@ -176,5 +182,5 @@ export function requireAuthScope(user: { scopes?: AuthScope[] }, scope: AuthScop
 }
 
 export function isChatSessionAuthScope(scope: string): scope is ChatSessionAuthScope {
-  return CHAT_SESSION_AUTH_SCOPES.includes(scope as ChatSessionAuthScope);
+  return CHAT_SESSION_ALLOWED_AUTH_SCOPES.includes(scope as ChatSessionAuthScope);
 }

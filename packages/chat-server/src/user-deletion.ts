@@ -48,12 +48,39 @@ export async function cleanupProductUserData(input: {
     throw new AppError("INTERNAL", "User has no Personal Workspace");
   }
 
-  const conversations = (
-    await options.conversationStore.listConversationsForUser({
+  const users = await options.userStore.listUsers({
+    clientInstanceId: options.clientInstanceId
+  });
+  const activeUserIds = new Set(
+    users.filter((user) => user.status === "active").map((user) => user.id)
+  );
+  let blockingWorkspaceCount = 0;
+  for (const workspace of workspaces) {
+    if (workspace.kind !== "shared" || workspace.role !== "owner") continue;
+    const memberships = await options.userStore.listMemberships({
       clientInstanceId: options.clientInstanceId,
-      ownerUserId: input.userId
-    })
-  ).filter((conversation) => conversation.collaborationWorkspaceId === personalWorkspace.id);
+      collaborationWorkspaceId: workspace.id
+    });
+    const hasAnotherActiveOwner = memberships.some(
+      (membership) =>
+        membership.role === "owner" &&
+        membership.userId !== input.userId &&
+        activeUserIds.has(membership.userId)
+    );
+    if (!hasAnotherActiveOwner) blockingWorkspaceCount += 1;
+  }
+  if (blockingWorkspaceCount > 0) {
+    throw new AppError(
+      "CONFLICT",
+      `User is the last active owner of ${blockingWorkspaceCount} Shared Workspace${blockingWorkspaceCount === 1 ? "" : "s"}`,
+      { blockingWorkspaceCount }
+    );
+  }
+
+  const conversations = await options.conversationStore.listConversationsForWorkspace({
+    clientInstanceId: options.clientInstanceId,
+    collaborationWorkspaceId: personalWorkspace.id
+  });
   const totals: UserDeletionTotals = {
     conversationCount: 0,
     attachmentCount: 0,
@@ -96,7 +123,6 @@ export async function cleanupProductUserData(input: {
     clientInstanceId: options.clientInstanceId,
     userId: input.userId
   });
-  // Phase B: block deletion when this user is the last owner of a Shared Workspace.
   totals.sharedMembershipCount = await options.userStore.removeMembershipsForUser({
     clientInstanceId: options.clientInstanceId,
     userId: input.userId

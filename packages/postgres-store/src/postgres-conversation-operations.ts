@@ -30,8 +30,8 @@ export async function createConversation(
       id,
       clientInstanceId: input.clientInstanceId,
       collaborationWorkspaceId: input.collaborationWorkspaceId,
-      ownerUserId: input.ownerUserId,
-      ownerExternalUserId: input.ownerExternalUserId,
+      createdByUserId: input.createdByUserId,
+      createdByExternalUserId: input.createdByExternalUserId,
       title: input.title,
       status: "active",
       createdAt: now,
@@ -60,11 +60,11 @@ export async function getConversation(
   return row ? mapConversation(row) : undefined;
 }
 
-export async function listConversationsForUser(
+export async function listConversationsForWorkspace(
   db: PostgresDatabase,
   input: {
     clientInstanceId: ClientInstanceId;
-    ownerUserId: string;
+    collaborationWorkspaceId: Conversation["collaborationWorkspaceId"];
   }
 ): Promise<Conversation[]> {
   const rows = await db
@@ -73,7 +73,7 @@ export async function listConversationsForUser(
     .where(
       and(
         eq(conversations.clientInstanceId, input.clientInstanceId),
-        eq(conversations.ownerUserId, input.ownerUserId),
+        eq(conversations.collaborationWorkspaceId, input.collaborationWorkspaceId),
         eq(conversations.status, "active")
       )
     )

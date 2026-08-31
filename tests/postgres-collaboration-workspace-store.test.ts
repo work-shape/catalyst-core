@@ -131,6 +131,32 @@ describePostgres("Postgres Collaboration Workspace store", () => {
       await cleanupClient(sql, clientInstanceId);
     }
   });
+
+  it("lists only discoverable Shared Workspaces", async () => {
+    const clientInstanceId = testClientInstanceId("directory");
+    try {
+      const owner = await store.createUser({ clientInstanceId, displayLabel: "Owner" });
+      const discoverable = await store.createWorkspace({
+        clientInstanceId,
+        kind: "shared",
+        name: "Discoverable",
+        creatorUserId: owner.id
+      });
+      await store.createWorkspace({
+        clientInstanceId,
+        kind: "shared",
+        name: "Private",
+        visibility: "private",
+        creatorUserId: owner.id
+      });
+
+      await expect(store.listDiscoverableWorkspaces({ clientInstanceId })).resolves.toEqual([
+        discoverable
+      ]);
+    } finally {
+      await cleanupClient(sql, clientInstanceId);
+    }
+  });
 });
 
 function testClientInstanceId(label: string): ClientInstanceId {

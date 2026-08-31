@@ -89,8 +89,8 @@ describe("structured result projection", () => {
       const store = new InMemoryPlatformStore();
       const conversation = await store.createConversationForTesting({
         clientInstanceId,
-        ownerUserId: "user_test",
-        ownerExternalUserId: "user_test",
+        createdByUserId: "user_test",
+        createdByExternalUserId: "user_test",
         title: "Test",
         retainedUntil: "2030-01-01T00:00:00.000Z"
       });

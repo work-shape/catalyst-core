@@ -12,6 +12,7 @@ import {
   type AuthenticatedUser,
   type ChatMessage,
   type Conversation,
+  type CollaborationWorkspaceId,
   type ConversationListItem,
   type ConversationThreadSnapshot,
   type ConversationId,
@@ -24,7 +25,6 @@ import {
   asUserId,
   createUserMessageMetadata,
   createPlatformId,
-  getRuntimeSubjectUserId,
   getSubjectUserId,
   withoutAssistantProviderContinuation,
   isAppError,
@@ -34,6 +34,7 @@ import {
 import { getModelSelectionForConversationTitles } from "@vivd-catalyst/config-schema";
 import type { ModelMessage } from "@vivd-catalyst/model-provider";
 import { createEmptyAttachmentManifest } from "./attachments";
+import { CollaborationWorkspaceWorkflow } from "./collaboration-workspace-workflow";
 import {
   createConversationTitle,
   isTemporaryConversationTitle,
@@ -54,6 +55,7 @@ import {
 
 export interface CreateConversationCommand {
   title?: string;
+  collaborationWorkspaceId?: CollaborationWorkspaceId;
 }
 
 export interface SendConversationMessageCommand {
@@ -77,9 +79,11 @@ const IDEMPOTENCY_PENDING_RECLAIM_MS = 5 * 60 * 1000;
 
 export class ConversationWorkflow {
   private readonly options: ChatServerOptions;
+  private readonly workspaces: CollaborationWorkspaceWorkflow;
 
   constructor(options: ChatServerOptions) {
     this.options = options;
+    this.workspaces = new CollaborationWorkspaceWorkflow(options);
   }
 
   private async requireDefaultAgentName(): Promise<string> {
@@ -93,18 +97,20 @@ export class ConversationWorkflow {
     return assets.defaultAgentName;
   }
 
-  async listConversations(user: AuthenticatedUser): Promise<ConversationListItem[]> {
-    const subjectUserId = getSubjectUserId(user);
-    const conversations = await this.options.conversationStore.listConversationsForUser({
+  async listConversations(
+    collaborationWorkspaceId: CollaborationWorkspaceId,
+    user: AuthenticatedUser
+  ): Promise<ConversationListItem[]> {
+    await this.workspaces.requireActiveMembership(user, collaborationWorkspaceId);
+    const conversations = await this.options.conversationStore.listConversationsForWorkspace({
       clientInstanceId: this.options.clientInstanceId,
-      ownerUserId: subjectUserId
+      collaborationWorkspaceId
     });
     return Promise.all(
       conversations.map(async (conversation): Promise<ConversationListItem> => {
         const activeRun = await this.options.conversationStore.getActiveConversationAgentRun({
           clientInstanceId: this.options.clientInstanceId,
-          conversationId: conversation.id,
-          ownerUserId: subjectUserId
+          conversationId: conversation.id
         });
         const recovered = activeRun ? await recoverStaleRun(this.options, activeRun) : undefined;
         const runForList = recovered?.run ?? activeRun;
@@ -124,15 +130,20 @@ export class ConversationWorkflow {
     command: CreateConversationCommand
   ): Promise<Conversation> {
     const subjectUserId = getSubjectUserId(user);
-    const personalWorkspace = await this.options.userStore.ensurePersonalWorkspace({
-      clientInstanceId: this.options.clientInstanceId,
-      userId: asUserId(subjectUserId)
-    });
+    const collaborationWorkspaceId = command.collaborationWorkspaceId
+      ? (await this.workspaces.requireActiveMembership(user, command.collaborationWorkspaceId))
+          .collaborationWorkspaceId
+      : (
+          await this.options.userStore.ensurePersonalWorkspace({
+            clientInstanceId: this.options.clientInstanceId,
+            userId: asUserId(subjectUserId)
+          })
+        ).id;
     const conversation = await this.options.conversationStore.createConversation({
       clientInstanceId: this.options.clientInstanceId,
-      collaborationWorkspaceId: personalWorkspace.id,
-      ownerUserId: subjectUserId,
-      ownerExternalUserId: user.externalUserId,
+      collaborationWorkspaceId,
+      createdByUserId: subjectUserId,
+      createdByExternalUserId: user.externalUserId,
       title: command.title ?? "New conversation",
       retainedUntil: addDays(
         new Date(),
@@ -157,7 +168,7 @@ export class ConversationWorkflow {
     conversationId: ConversationId,
     user: AuthenticatedUser
   ): Promise<ChatMessage[]> {
-    await this.requireOwnedActiveConversation(conversationId, user);
+    await this.requireActiveConversationMembership(conversationId, user);
     const messages = await this.options.conversationStore.listMessages({
       clientInstanceId: this.options.clientInstanceId,
       conversationId
@@ -169,23 +180,21 @@ export class ConversationWorkflow {
     conversationId: ConversationId,
     user: AuthenticatedUser
   ): Promise<ConversationThreadSnapshot> {
-    const conversation = await this.requireOwnedActiveConversation(conversationId, user);
+    const conversation = await this.requireActiveConversationMembership(conversationId, user);
     const messages = await this.options.conversationStore.listMessages({
       clientInstanceId: this.options.clientInstanceId,
       conversationId
     });
     const activeRun = await this.options.conversationStore.getActiveConversationAgentRun({
       clientInstanceId: this.options.clientInstanceId,
-      conversationId,
-      ownerUserId: getSubjectUserId(user)
+      conversationId
     });
     const recovered = activeRun ? await recoverStaleRun(this.options, activeRun) : undefined;
     const latestRun = activeRun
       ? undefined
       : await this.options.conversationStore.getLatestConversationAgentRun({
           clientInstanceId: this.options.clientInstanceId,
-          conversationId,
-          ownerUserId: getSubjectUserId(user)
+          conversationId
         });
     const latestVisibleTerminalRun =
       latestRun?.status === "failed" || latestRun?.status === "cancelled" ? latestRun : undefined;
@@ -194,7 +203,6 @@ export class ConversationWorkflow {
     const completedRunProjections = await this.createCompletedRunProjections(
       conversationId,
       messages,
-      user,
       runForSnapshot?.id
     );
 
@@ -206,7 +214,7 @@ export class ConversationWorkflow {
         ? {
             activeRun: {
               run: toActiveRunSummary(runForSnapshot),
-              projection: await this.createRunProjection(runForSnapshot, user)
+              projection: await this.createRunProjection(runForSnapshot)
             }
           }
         : {}),
@@ -227,7 +235,7 @@ export class ConversationWorkflow {
     user: AuthenticatedUser,
     context: RuntimeCallContext
   ): Promise<Conversation> {
-    const conversation = await this.requireOwnedActiveConversation(conversationId, user);
+    const conversation = await this.requireActiveConversationMembership(conversationId, user);
     if (conversation.title === title) {
       return conversation;
     }
@@ -255,7 +263,6 @@ export class ConversationWorkflow {
   private async createCompletedRunProjections(
     conversationId: ConversationId,
     messages: ChatMessage[],
-    user: AuthenticatedUser,
     activeRunId: AgentRunId | undefined
   ): Promise<Record<string, AgentRunProjection>> {
     const runIds = Array.from(
@@ -276,13 +283,12 @@ export class ConversationWorkflow {
         conversationId,
         runId
       });
-      if (!run || run.ownerUserId !== getSubjectUserId(user) || isActiveRun(run)) {
+      if (!run || isActiveRun(run)) {
         continue;
       }
       const observations = await this.options.conversationStore.listRunObservations({
         clientInstanceId: this.options.clientInstanceId,
-        runId,
-        ownerUserId: getSubjectUserId(user)
+        runId
       });
       if (observations.length === 0) {
         continue;
@@ -301,7 +307,7 @@ export class ConversationWorkflow {
     context: RuntimeCallContext,
     command: SendConversationMessageCommand
   ): Promise<StartedConversationMessageRun> {
-    await this.requireOwnedActiveConversation(conversationId, user);
+    await this.requireActiveConversationMembership(conversationId, user);
     this.assertUserSelectableModelBinding(command.modelBindingId);
     let runStartCommand: RunStartCommand | undefined;
     if (command.idempotencyKey) {
@@ -450,7 +456,7 @@ export class ConversationWorkflow {
         user
       });
       if (claim.status === "resolved") {
-        const conversation = await this.requireOwnedActiveConversation(
+        const conversation = await this.requireActiveConversationMembership(
           claim.started.run.conversationId,
           user
         );
@@ -464,7 +470,8 @@ export class ConversationWorkflow {
 
     try {
       const conversation = await this.createConversation(user, context, {
-        title: command.title ?? createConversationTitle(command.text)
+        title: command.title ?? createConversationTitle(command.text),
+        collaborationWorkspaceId: command.collaborationWorkspaceId
       });
       const started = await this.startMessageRun(conversation.id, user, context, {
         ...command,
@@ -513,15 +520,12 @@ export class ConversationWorkflow {
       yield* this.options.agentRuntime.observe(runId, context, options);
       return;
     }
-    if (persistedRun.ownerUserId !== getRuntimeSubjectUserId(context)) {
-      throw new AppError("NOT_FOUND", "Agent run is not available");
-    }
+    await this.requireActiveConversationMembership(persistedRun.conversationId, context.user);
 
     let lastSequence = options.afterSequence ?? 0;
     const observations = await this.options.conversationStore.listRunObservations({
       clientInstanceId: this.options.clientInstanceId,
       runId,
-      ownerUserId: getRuntimeSubjectUserId(context),
       afterSequence: lastSequence
     });
     for (const observation of observations) {
@@ -549,15 +553,13 @@ export class ConversationWorkflow {
             clientInstanceId: this.options.clientInstanceId,
             runId
           })) ?? latestRun;
-        if (staleRun.ownerUserId === getRuntimeSubjectUserId(context)) {
-          const recovered = await recoverInterruptedRun(this.options, staleRun);
-          const recoveryEvent = recoveryEventFromObservation(recovered?.observation);
-          if (recoveryEvent && recoveryEvent.sequence > lastSequence) {
-            yield recoveryEvent;
-          }
-          if (recovered || observations.length > 0) {
-            return;
-          }
+        const recovered = await recoverInterruptedRun(this.options, staleRun);
+        const recoveryEvent = recoveryEventFromObservation(recovered?.observation);
+        if (recoveryEvent && recoveryEvent.sequence > lastSequence) {
+          yield recoveryEvent;
+        }
+        if (recovered || observations.length > 0) {
+          return;
         }
       }
       throw error;
@@ -569,11 +571,9 @@ export class ConversationWorkflow {
       clientInstanceId: this.options.clientInstanceId,
       runId
     });
-    if (run?.ownerUserId === getRuntimeSubjectUserId(context)) {
-      return run.status;
-    }
     if (run) {
-      throw new AppError("NOT_FOUND", "Agent run is not available");
+      await this.requireActiveConversationMembership(run.conversationId, context.user);
+      return run.status;
     }
     return this.options.agentRuntime.getStatus(runId, context);
   }
@@ -583,7 +583,9 @@ export class ConversationWorkflow {
       clientInstanceId: this.options.clientInstanceId,
       runId
     });
-    return run?.ownerUserId === getSubjectUserId(user) ? run : undefined;
+    if (!run) return undefined;
+    await this.requireActiveConversationMembership(run.conversationId, user);
+    return run;
   }
 
   async getConversationRunForUser(
@@ -591,38 +593,22 @@ export class ConversationWorkflow {
     runId: AgentRunId,
     user: AuthenticatedUser
   ): Promise<AgentRun | undefined> {
+    await this.requireActiveConversationMembership(conversationId, user);
     const run = await this.options.conversationStore.getConversationAgentRun({
       clientInstanceId: this.options.clientInstanceId,
       conversationId,
       runId
     });
-    const subjectUserId = getSubjectUserId(user);
-    if (!run || run.ownerUserId !== subjectUserId) {
-      return undefined;
-    }
-
-    const conversation = await this.options.conversationStore.getConversation(
-      this.options.clientInstanceId,
-      conversationId
-    );
-    if (
-      !conversation ||
-      conversation.status !== "active" ||
-      conversation.ownerUserId !== subjectUserId
-    ) {
+    if (!run) {
       return undefined;
     }
     return run;
   }
 
-  private async createRunProjection(
-    run: AgentRun,
-    user: AuthenticatedUser
-  ): Promise<AgentRunProjection> {
+  private async createRunProjection(run: AgentRun): Promise<AgentRunProjection> {
     const observations = await this.options.conversationStore.listRunObservations({
       clientInstanceId: this.options.clientInstanceId,
       runId: run.id,
-      ownerUserId: getSubjectUserId(user),
       afterSequence: 0
     });
     return projectAgentRun(run, observations);
@@ -728,7 +714,7 @@ export class ConversationWorkflow {
       return undefined;
     }
 
-    const conversation = await this.requireOwnedActiveConversation(conversationId, user);
+    const conversation = await this.requireActiveConversationMembership(conversationId, user);
     const messages = await this.options.conversationStore.listMessages({
       clientInstanceId: this.options.clientInstanceId,
       conversationId
@@ -875,7 +861,7 @@ export class ConversationWorkflow {
         "User conversation deletion is disabled for this client instance"
       );
     }
-    await this.requireOwnedActiveConversation(conversationId, user);
+    await this.requireActiveConversationMembership(conversationId, user);
     const deletedAt = new Date().toISOString();
     const attachmentDeletion = this.options.attachments
       ? await this.options.attachments.deleteConversationAttachments({
@@ -908,7 +894,7 @@ export class ConversationWorkflow {
     return deleted;
   }
 
-  async requireOwnedActiveConversation(
+  async requireActiveConversationMembership(
     conversationId: ConversationId,
     user: AuthenticatedUser
   ): Promise<Conversation> {
@@ -919,8 +905,13 @@ export class ConversationWorkflow {
     if (!conversation || conversation.status !== "active") {
       throw new AppError("NOT_FOUND", "Conversation is not available");
     }
-    if (conversation.ownerUserId !== getSubjectUserId(user)) {
-      throw new AppError("NOT_FOUND", "Conversation is not available");
+    try {
+      await this.workspaces.requireActiveMembership(user, conversation.collaborationWorkspaceId);
+    } catch (error) {
+      if (isAppError(error) && error.code === "NOT_FOUND") {
+        throw new AppError("NOT_FOUND", "Conversation is not available");
+      }
+      throw error;
     }
     return conversation;
   }
@@ -980,13 +971,13 @@ export class ConversationWorkflow {
     if (expectedConversationId && command.conversationId !== expectedConversationId) {
       throw new AppError("NOT_FOUND", "Agent run is not available");
     }
-    await this.requireOwnedActiveConversation(command.conversationId, user);
+    await this.requireActiveConversationMembership(command.conversationId, user);
     const run = await this.options.conversationStore.getConversationAgentRun({
       clientInstanceId: this.options.clientInstanceId,
       conversationId: command.conversationId,
       runId: command.runId
     });
-    if (!run || run.ownerUserId !== getSubjectUserId(user)) {
+    if (!run) {
       throw new AppError("NOT_FOUND", "Agent run is not available");
     }
     return {

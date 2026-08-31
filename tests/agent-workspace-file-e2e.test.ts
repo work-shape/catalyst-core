@@ -25,8 +25,8 @@ describe("agent workspace file e2e", () => {
       const store = new InMemoryPlatformStore();
       const conversation = await store.createConversationForTesting({
         clientInstanceId,
-        ownerUserId: "user-1",
-        ownerExternalUserId: "user-1",
+        createdByUserId: "user-1",
+        createdByExternalUserId: "user-1",
         title: "Read uploaded deck",
         retainedUntil: "2026-07-29T00:00:00.000Z"
       });

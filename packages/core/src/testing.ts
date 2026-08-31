@@ -122,8 +122,8 @@ export class InMemoryPlatformStore
   private readonly runObservations = new Map<string, RunObservation[]>();
   private readonly executionWorkspaceStore: InMemoryExecutionWorkspaceStore =
     createInMemoryExecutionWorkspaceStore({
-      requireOwnedActiveConversation: (clientInstanceId, conversationId, ownerUserId) =>
-        this.requireOwnedActiveConversation(clientInstanceId, conversationId, ownerUserId),
+      requireActiveConversation: (clientInstanceId, conversationId) =>
+        this.requireActiveConversation(clientInstanceId, conversationId),
       isConversationActive: async (clientInstanceId, conversationId) => {
         const conversation = await this.getConversation(clientInstanceId, conversationId);
         return conversation?.status === "active";
@@ -326,6 +326,19 @@ export class InMemoryPlatformStore
         }
         return { ...workspace, role: membership.role };
       })
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  }
+
+  async listDiscoverableWorkspaces(input: {
+    clientInstanceId: ClientInstanceId;
+  }): Promise<CollaborationWorkspace[]> {
+    return [...this.collaborationWorkspaces.values()]
+      .filter(
+        (workspace) =>
+          workspace.clientInstanceId === input.clientInstanceId &&
+          workspace.kind === "shared" &&
+          workspace.visibility === "discoverable"
+      )
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
   }
 
@@ -606,8 +619,8 @@ export class InMemoryPlatformStore
       id: createPlatformId("conv"),
       clientInstanceId: input.clientInstanceId,
       collaborationWorkspaceId: input.collaborationWorkspaceId,
-      ownerUserId: input.ownerUserId,
-      ownerExternalUserId: input.ownerExternalUserId,
+      createdByUserId: input.createdByUserId,
+      createdByExternalUserId: input.createdByExternalUserId,
       title: input.title,
       status: "active",
       createdAt: now,
@@ -622,13 +635,13 @@ export class InMemoryPlatformStore
   async createConversationForTesting(
     input: Omit<CreateConversationInput, "collaborationWorkspaceId">
   ): Promise<Conversation> {
-    let user = this.users.get(input.ownerUserId);
+    let user = this.users.get(input.createdByUserId);
     if (!user) {
       const now = new Date().toISOString();
       user = {
-        id: asUserId(input.ownerUserId),
+        id: asUserId(input.createdByUserId),
         clientInstanceId: input.clientInstanceId,
-        displayLabel: input.ownerExternalUserId,
+        displayLabel: input.createdByExternalUserId,
         roles: ["user"],
         permissionRefs: [],
         permissions: [],
@@ -660,15 +673,15 @@ export class InMemoryPlatformStore
     return conversation;
   }
 
-  async listConversationsForUser(input: {
+  async listConversationsForWorkspace(input: {
     clientInstanceId: ClientInstanceId;
-    ownerUserId: string;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
   }): Promise<Conversation[]> {
     return [...this.conversations.values()]
       .filter(
         (conversation) =>
           conversation.clientInstanceId === input.clientInstanceId &&
-          conversation.ownerUserId === input.ownerUserId &&
+          conversation.collaborationWorkspaceId === input.collaborationWorkspaceId &&
           conversation.status === "active"
       )
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
@@ -845,17 +858,12 @@ export class InMemoryPlatformStore
     input: PrepareConversationRunStartInput
   ): Promise<PreparedConversationRunStart> {
     const conversation = await this.getConversation(input.clientInstanceId, input.conversationId);
-    if (
-      !conversation ||
-      conversation.status !== "active" ||
-      conversation.ownerUserId !== input.ownerUserId
-    ) {
+    if (!conversation || conversation.status !== "active") {
       throw new AppError("NOT_FOUND", "Conversation is not available");
     }
     const activeRun = await this.getActiveConversationAgentRun({
       clientInstanceId: input.clientInstanceId,
-      conversationId: input.conversationId,
-      ownerUserId: input.ownerUserId
+      conversationId: input.conversationId
     });
     if (activeRun) {
       throw new AppError("CONFLICT", "Conversation already has an active agent run");
@@ -979,13 +987,11 @@ export class InMemoryPlatformStore
   async getActiveConversationAgentRun(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
-    ownerUserId: string;
   }): Promise<AgentRun | undefined> {
     return [...this.agentRuns.values()].find(
       (run) =>
         run.clientInstanceId === input.clientInstanceId &&
         run.conversationId === input.conversationId &&
-        run.ownerUserId === input.ownerUserId &&
         isActiveAgentRunStatus(run.status)
     );
   }
@@ -993,14 +999,12 @@ export class InMemoryPlatformStore
   async getLatestConversationAgentRun(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
-    ownerUserId: string;
   }): Promise<AgentRun | undefined> {
     return [...this.agentRuns.values()]
       .filter(
         (run) =>
           run.clientInstanceId === input.clientInstanceId &&
-          run.conversationId === input.conversationId &&
-          run.ownerUserId === input.ownerUserId
+          run.conversationId === input.conversationId
       )
       .sort((left, right) => right.startedAt.localeCompare(left.startedAt))[0];
   }
@@ -1052,7 +1056,7 @@ export class InMemoryPlatformStore
       clientInstanceId: input.clientInstanceId,
       runId: input.runId
     });
-    if (!run || run.ownerUserId !== input.ownerUserId) {
+    if (!run) {
       return { status: "not_recovered" };
     }
     if (!isActiveAgentRunStatus(run.status) || run.updatedAt >= input.staleUpdatedBefore) {
@@ -1108,7 +1112,7 @@ export class InMemoryPlatformStore
 
   async appendRunObservation(input: AppendRunObservationInput): Promise<RunObservation> {
     const run = await this.getConversationAgentRun(input);
-    if (!run || run.ownerUserId !== input.ownerUserId) {
+    if (!run) {
       throw new AppError("NOT_FOUND", "Agent run is not available");
     }
     const observations = this.runObservations.get(input.runId) ?? [];
@@ -1119,7 +1123,7 @@ export class InMemoryPlatformStore
       clientInstanceId: input.clientInstanceId,
       runId: input.runId,
       conversationId: input.conversationId,
-      ownerUserId: input.ownerUserId,
+      ownerUserId: run.ownerUserId,
       sequence: input.event.sequence,
       type: input.event.type,
       payload: input.event,
@@ -1139,12 +1143,11 @@ export class InMemoryPlatformStore
   async listRunObservations(input: {
     clientInstanceId: ClientInstanceId;
     runId: AgentRunId;
-    ownerUserId: string;
     afterSequence?: number;
     limit?: number;
   }): Promise<RunObservation[]> {
     const run = await this.getAgentRun(input);
-    if (!run || run.ownerUserId !== input.ownerUserId) {
+    if (!run) {
       return [];
     }
     const afterSequence = input.afterSequence ?? 0;
@@ -1806,21 +1809,6 @@ export class InMemoryPlatformStore
   ): Promise<void> {
     const conversation = await this.getConversation(clientInstanceId, conversationId);
     if (!conversation || conversation.status !== "active") {
-      throw new AppError("NOT_FOUND", "Conversation is not available");
-    }
-  }
-
-  private async requireOwnedActiveConversation(
-    clientInstanceId: ClientInstanceId,
-    conversationId: ConversationId,
-    ownerUserId: string
-  ): Promise<void> {
-    const conversation = await this.getConversation(clientInstanceId, conversationId);
-    if (
-      !conversation ||
-      conversation.status !== "active" ||
-      conversation.ownerUserId !== ownerUserId
-    ) {
       throw new AppError("NOT_FOUND", "Conversation is not available");
     }
   }

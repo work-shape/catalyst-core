@@ -57,8 +57,8 @@ export async function createStaleRunRecoveryFixture(
   };
   const conversation = await store.createConversationForTesting({
     clientInstanceId,
-    ownerUserId: owner.id,
-    ownerExternalUserId: owner.externalUserId,
+    createdByUserId: owner.id,
+    createdByExternalUserId: owner.externalUserId,
     title: "Recovered run",
     retainedUntil: "2030-01-01T00:00:00.000Z"
   });
@@ -101,8 +101,8 @@ export async function createPersistedRecoveryRun(
     fixture.conversation ??
     (await fixture.store.createConversationForTesting({
       clientInstanceId: fixture.clientInstanceId,
-      ownerUserId: fixture.owner.id,
-      ownerExternalUserId: fixture.owner.externalUserId,
+      createdByUserId: fixture.owner.id,
+      createdByExternalUserId: fixture.owner.externalUserId,
       title: `Recovered ${input.status}`,
       retainedUntil: "2030-01-01T00:00:00.000Z"
     }));

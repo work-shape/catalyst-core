@@ -8,12 +8,30 @@ export function createConversationsClient(transport: ApiClientTransport) {
       params: { conversationId, artifactId }
     });
 
+  const listForWorkspace = (collaborationWorkspaceId: string) =>
+    transport.unwrapJson(
+      generatedSdk.listConversations({
+        client: transport.generatedClient,
+        query: { collaborationWorkspaceId }
+      }),
+      apiOperations.listConversations.responseSchema
+    );
+
   return {
-    list: () =>
-      transport.unwrapJson(
-        generatedSdk.listConversations({ client: transport.generatedClient }),
-        apiOperations.listConversations.responseSchema
-      ),
+    list: async (collaborationWorkspaceId?: unknown) => {
+      if (typeof collaborationWorkspaceId === "string") {
+        return listForWorkspace(collaborationWorkspaceId);
+      }
+      const workspaces = await transport.unwrapJson(
+        generatedSdk.listCollaborationWorkspaces({ client: transport.generatedClient }),
+        apiOperations.listCollaborationWorkspaces.responseSchema
+      );
+      const personalWorkspace = workspaces.find((workspace) => workspace.kind === "personal");
+      if (!personalWorkspace) {
+        throw new Error("Personal Workspace is not available");
+      }
+      return listForWorkspace(personalWorkspace.id);
+    },
     create: (input: OperationRequestInput<typeof apiOperations.createConversation> = {}) =>
       transport.unwrapJson(
         generatedSdk.createConversation({

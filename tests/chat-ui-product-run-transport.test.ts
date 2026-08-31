@@ -249,8 +249,8 @@ function createStartResponse({
     conversation: {
       id: conversationId,
       clientInstanceId: "client_1",
-      ownerUserId: "user_1",
-      ownerExternalUserId: "external_1",
+      createdByUserId: "user_1",
+      createdByExternalUserId: "external_1",
       title: "Test",
       status: "active",
       createdAt: "2026-06-26T10:00:00.000Z",
@@ -282,8 +282,8 @@ function createStartResponse({
       conversation: {
         id: conversationId,
         clientInstanceId: "client_1",
-        ownerUserId: "user_1",
-        ownerExternalUserId: "external_1",
+        createdByUserId: "user_1",
+        createdByExternalUserId: "external_1",
         title: "Test",
         status: "active",
         createdAt: "2026-06-26T10:00:00.000Z",

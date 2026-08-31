@@ -16,7 +16,7 @@ export function registerConversationResourceRoutes(
     const { user } = await authenticateRequest(options, request);
     requireAuthScope(user, "conversation:read");
     const conversationId = getConversationId(request);
-    await conversations.requireOwnedActiveConversation(conversationId, user);
+    await conversations.requireActiveConversationMembership(conversationId, user);
     return listConversationResources({
       store: options.conversationStore,
       clientInstanceId: options.clientInstanceId,
@@ -28,7 +28,7 @@ export function registerConversationResourceRoutes(
     const { user } = await authenticateRequest(options, request);
     requireAuthScope(user, "conversation:read");
     const conversationId = getConversationId(request);
-    await conversations.requireOwnedActiveConversation(conversationId, user);
+    await conversations.requireActiveConversationMembership(conversationId, user);
     const resource = await options.conversationStore.getStructuredDataResource({
       clientInstanceId: options.clientInstanceId,
       conversationId,

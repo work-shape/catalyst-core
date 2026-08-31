@@ -138,6 +138,54 @@ describePostgres("Collaboration Workspace migration 0020", () => {
       await sql.end();
     }
   });
+
+  it("renames Conversation creator columns in 0021 without changing stored values", async () => {
+    const { sql } = await createFreshDatabase();
+    try {
+      await applyMigrationsThrough(sql, 19);
+      await seedProductUser(sql, "creator_user", "active");
+      await sql`
+        insert into conversations (
+          id, client_instance_id, owner_user_id, owner_external_user_id, title, status,
+          created_at, updated_at, retained_until
+        ) values (
+          'conv_creator', 'migration-test-client', 'creator_user', 'external_creator',
+          'Creator rename', 'active', now(), now(), now() + interval '1 year'
+        )
+      `;
+      await applyMigration(sql, "0020_collaboration_workspaces");
+      await applyMigration(sql, "0021_conversation_creator_attribution");
+
+      const [conversation] = await sql<
+        Array<{ created_by_user_id: string; created_by_external_user_id: string }>
+      >`
+        select created_by_user_id, created_by_external_user_id
+        from conversations
+        where id = 'conv_creator'
+      `;
+      expect(conversation).toEqual({
+        created_by_user_id: "creator_user",
+        created_by_external_user_id: "external_creator"
+      });
+      const oldColumns = await sql<Array<{ column_name: string }>>`
+        select column_name
+        from information_schema.columns
+        where table_schema = 'public'
+          and table_name = 'conversations'
+          and column_name in ('owner_user_id', 'owner_external_user_id')
+      `;
+      expect(oldColumns).toEqual([]);
+      const ownerIndexes = await sql<Array<{ indexname: string }>>`
+        select indexname
+        from pg_indexes
+        where schemaname = 'public'
+          and indexname in ('conversations_owner_idx', 'conversations_owner_user_idx')
+      `;
+      expect(ownerIndexes).toEqual([]);
+    } finally {
+      await sql.end();
+    }
+  });
 });
 
 async function applyMigrationsThrough(sql: Sql, finalIndex: number): Promise<void> {

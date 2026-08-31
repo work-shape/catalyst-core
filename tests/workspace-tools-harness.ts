@@ -65,8 +65,8 @@ export async function createWorkspaceHarness(
   const conversation = await store.createConversation({
     clientInstanceId,
     collaborationWorkspaceId: personalWorkspace.id,
-    ownerUserId,
-    ownerExternalUserId: ownerUserId,
+    createdByUserId: ownerUserId,
+    createdByExternalUserId: ownerUserId,
     title: "Workspace tools test",
     retainedUntil: "2026-07-29T00:00:00.000Z"
   });

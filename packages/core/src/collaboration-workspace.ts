@@ -12,6 +12,19 @@ export type CollaborationWorkspaceKind = "personal" | "shared";
 export type WorkspaceVisibility = "discoverable" | "private";
 export type WorkspaceMembershipRole = "owner" | "admin" | "member";
 
+export const WORKSPACE_ACCENT_COLORS = [
+  "ruby",
+  "amber",
+  "emerald",
+  "sapphire",
+  "violet",
+  "rose",
+  "teal",
+  "slate"
+] as const;
+
+export type WorkspaceAccentColor = (typeof WORKSPACE_ACCENT_COLORS)[number];
+
 export interface CollaborationWorkspace {
   id: CollaborationWorkspaceId;
   clientInstanceId: ClientInstanceId;
@@ -20,7 +33,7 @@ export interface CollaborationWorkspace {
   description: string | null;
   visibility: WorkspaceVisibility;
   emoji: string | null;
-  accentColor: string | null;
+  accentColor: WorkspaceAccentColor | null;
   personalUserId: UserId | null;
   createdAt: ISODateString;
   updatedAt: ISODateString;
@@ -54,7 +67,7 @@ export interface CreateWorkspaceInput {
   description?: string | null;
   visibility?: WorkspaceVisibility;
   emoji?: string | null;
-  accentColor?: string | null;
+  accentColor?: WorkspaceAccentColor | null;
   personalUserId?: UserId | null;
   creatorUserId: UserId;
 }
@@ -66,7 +79,7 @@ export interface UpdateWorkspaceInput {
   description?: string | null;
   visibility?: WorkspaceVisibility;
   emoji?: string | null;
-  accentColor?: string | null;
+  accentColor?: WorkspaceAccentColor | null;
 }
 
 export interface CollaborationWorkspaceStore {
@@ -79,6 +92,9 @@ export interface CollaborationWorkspaceStore {
     clientInstanceId: ClientInstanceId;
     userId: UserId;
   }): Promise<CollaborationWorkspaceWithRole[]>;
+  listDiscoverableWorkspaces(input: {
+    clientInstanceId: ClientInstanceId;
+  }): Promise<CollaborationWorkspace[]>;
   updateWorkspace(input: UpdateWorkspaceInput): Promise<CollaborationWorkspace>;
   deleteWorkspace(input: {
     clientInstanceId: ClientInstanceId;

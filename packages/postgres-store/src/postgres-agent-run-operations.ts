@@ -134,7 +134,6 @@ export async function prepareConversationRunStart(
       from conversations
       where client_instance_id = ${input.clientInstanceId}
         and id = ${input.conversationId}
-        and owner_user_id = ${input.ownerUserId}
         and status = 'active'
       for update
     `)) as unknown as Array<{ id: string }>;
@@ -149,7 +148,6 @@ export async function prepareConversationRunStart(
         and(
           eq(agentRuns.clientInstanceId, input.clientInstanceId),
           eq(agentRuns.conversationId, input.conversationId),
-          eq(agentRuns.ownerUserId, input.ownerUserId),
           drizzleSql`${agentRuns.status} in ('queued', 'running', 'waiting_for_permission', 'cancelling')`
         )
       )
@@ -323,7 +321,6 @@ export async function getActiveConversationAgentRun(
   input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
-    ownerUserId: string;
   }
 ): Promise<AgentRun | undefined> {
   const [row] = await db
@@ -333,7 +330,6 @@ export async function getActiveConversationAgentRun(
       and(
         eq(agentRuns.clientInstanceId, input.clientInstanceId),
         eq(agentRuns.conversationId, input.conversationId),
-        eq(agentRuns.ownerUserId, input.ownerUserId),
         drizzleSql`${agentRuns.status} in ('queued', 'running', 'waiting_for_permission', 'cancelling')`
       )
     )
@@ -346,7 +342,6 @@ export async function getLatestConversationAgentRun(
   input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
-    ownerUserId: string;
   }
 ): Promise<AgentRun | undefined> {
   const [row] = await db
@@ -355,8 +350,7 @@ export async function getLatestConversationAgentRun(
     .where(
       and(
         eq(agentRuns.clientInstanceId, input.clientInstanceId),
-        eq(agentRuns.conversationId, input.conversationId),
-        eq(agentRuns.ownerUserId, input.ownerUserId)
+        eq(agentRuns.conversationId, input.conversationId)
       )
     )
     .orderBy(desc(agentRuns.startedAt))
@@ -424,7 +418,6 @@ export async function recoverStaleAgentRun(
         and(
           eq(agentRunObservations.clientInstanceId, input.clientInstanceId),
           eq(agentRunObservations.runId, input.runId),
-          eq(agentRunObservations.ownerUserId, input.ownerUserId),
           drizzleSql`${agentRunObservations.type} in ('run_completed', 'run_cancelled', 'run_failed')`
         )
       )
@@ -505,8 +498,7 @@ export async function appendRunObservation(
         and(
           eq(agentRuns.clientInstanceId, input.clientInstanceId),
           eq(agentRuns.conversationId, input.conversationId),
-          eq(agentRuns.id, input.runId),
-          eq(agentRuns.ownerUserId, input.ownerUserId)
+          eq(agentRuns.id, input.runId)
         )
       )
       .limit(1);
@@ -520,7 +512,7 @@ export async function appendRunObservation(
         clientInstanceId: input.clientInstanceId,
         runId: input.runId,
         conversationId: input.conversationId,
-        ownerUserId: input.ownerUserId,
+        ownerUserId: run.ownerUserId,
         sequence: input.event.sequence,
         type: input.event.type,
         payload: input.event,
@@ -547,7 +539,6 @@ export async function listRunObservations(
   input: {
     clientInstanceId: ClientInstanceId;
     runId: AgentRunId;
-    ownerUserId: string;
     afterSequence?: number;
     limit?: number;
   }
@@ -559,7 +550,6 @@ export async function listRunObservations(
       and(
         eq(agentRunObservations.clientInstanceId, input.clientInstanceId),
         eq(agentRunObservations.runId, input.runId),
-        eq(agentRunObservations.ownerUserId, input.ownerUserId),
         gt(agentRunObservations.sequence, input.afterSequence ?? 0)
       )
     )
@@ -612,7 +602,6 @@ function staleActiveRunWhere(input: RecoverStaleAgentRunInput) {
   return and(
     eq(agentRuns.clientInstanceId, input.clientInstanceId),
     eq(agentRuns.id, input.runId),
-    eq(agentRuns.ownerUserId, input.ownerUserId),
     drizzleSql`${agentRuns.status} in ('queued', 'running', 'waiting_for_permission', 'cancelling')`,
     lt(agentRuns.updatedAt, new Date(input.staleUpdatedBefore))
   );

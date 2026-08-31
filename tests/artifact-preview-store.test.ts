@@ -137,8 +137,8 @@ async function expectManagedArtifactEnsureContract(
   const conversation = await store.createConversation({
     clientInstanceId,
     collaborationWorkspaceId: personalWorkspace.id,
-    ownerUserId: user.id,
-    ownerExternalUserId: "user-1",
+    createdByUserId: user.id,
+    createdByExternalUserId: "user-1",
     title: "Attachment preview source",
     retainedUntil: "2030-01-01T00:00:00.000Z"
   });
@@ -727,8 +727,8 @@ async function createPreviewFixture(store: PreviewJobIdentityStore): Promise<{
   const conversation = await store.createConversation({
     clientInstanceId,
     collaborationWorkspaceId: personalWorkspace.id,
-    ownerUserId: user.id,
-    ownerExternalUserId: "user-1",
+    createdByUserId: user.id,
+    createdByExternalUserId: "user-1",
     title: "Artifact preview store parity",
     retainedUntil: "2030-01-01T00:00:00.000Z"
   });

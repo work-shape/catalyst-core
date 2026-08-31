@@ -403,8 +403,8 @@ async function createExpiredConversation(
 ): Promise<Conversation> {
   const conversation = await store.createConversationForTesting({
     clientInstanceId,
-    ownerUserId: "user-1",
-    ownerExternalUserId: "external-user-1",
+    createdByUserId: "user-1",
+    createdByExternalUserId: "external-user-1",
     title,
     retainedUntil: "2024-01-01T00:00:00.000Z"
   });
@@ -428,7 +428,7 @@ async function createAttachedObjects(input: {
   artifact: ManagedArtifactRecord;
 }> {
   const file = await input.managedObjects.createFile({
-    ownerUserId: input.conversation.ownerUserId,
+    ownerUserId: input.conversation.createdByUserId,
     conversationId: input.conversation.id,
     filename: "retention.txt",
     mimeType: "text/plain",
@@ -476,7 +476,7 @@ async function createWorkspaceObjects(input: {
   const workspace = await input.store.ensureExecutionWorkspace({
     clientInstanceId: input.clientInstanceId,
     conversationId: input.conversation.id,
-    ownerUserId: input.conversation.ownerUserId,
+    ownerUserId: input.conversation.createdByUserId,
     now: "2023-12-31T23:00:00.000Z"
   });
   const files = [
@@ -559,7 +559,7 @@ async function createWorkspaceObjects(input: {
   await input.store.enqueueWorkspaceCommand({
     clientInstanceId: input.clientInstanceId,
     workspaceId: workspace.id,
-    ownerUserId: input.conversation.ownerUserId,
+    ownerUserId: input.conversation.createdByUserId,
     command: "python3 calculate.py",
     limits: {
       timeoutSeconds: 60,

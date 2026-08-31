@@ -15,8 +15,8 @@ export interface Conversation {
   id: ConversationId;
   clientInstanceId: ClientInstanceId;
   collaborationWorkspaceId: CollaborationWorkspaceId;
-  ownerUserId: string;
-  ownerExternalUserId: string;
+  createdByUserId: string;
+  createdByExternalUserId: string;
   title: string;
   status: ConversationStatus;
   createdAt: ISODateString;
@@ -70,8 +70,8 @@ export interface ConversationThreadSnapshot {
 export interface CreateConversationInput {
   clientInstanceId: ClientInstanceId;
   collaborationWorkspaceId: CollaborationWorkspaceId;
-  ownerUserId: string;
-  ownerExternalUserId: string;
+  createdByUserId: string;
+  createdByExternalUserId: string;
   title: string;
   retainedUntil: ISODateString;
 }
@@ -98,9 +98,9 @@ export interface ConversationStore {
     clientInstanceId: ClientInstanceId,
     conversationId: ConversationId
   ): Promise<Conversation | undefined>;
-  listConversationsForUser(input: {
+  listConversationsForWorkspace(input: {
     clientInstanceId: ClientInstanceId;
-    ownerUserId: string;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
   }): Promise<Conversation[]>;
   updateConversationTitle(input: UpdateConversationTitleInput): Promise<Conversation>;
   appendMessage(input: CreateMessageInput): Promise<ChatMessage>;

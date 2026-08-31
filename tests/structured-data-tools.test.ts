@@ -442,8 +442,8 @@ describe("structured_data.publish", () => {
     const harness = await createHarness();
     const otherConversation = await harness.store.createConversationForTesting({
       clientInstanceId: harness.clientInstanceId,
-      ownerUserId: "user-1",
-      ownerExternalUserId: "user-1",
+      createdByUserId: "user-1",
+      createdByExternalUserId: "user-1",
       title: "Other",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
@@ -576,8 +576,8 @@ async function createHarness(publicationReviewer?: StructuredDataPublicationRevi
   const store = new InMemoryPlatformStore();
   const conversation = await store.createConversationForTesting({
     clientInstanceId,
-    ownerUserId: "user-1",
-    ownerExternalUserId: "user-1",
+    createdByUserId: "user-1",
+    createdByExternalUserId: "user-1",
     title: "Structured data",
     retainedUntil: "2030-01-01T00:00:00.000Z"
   });

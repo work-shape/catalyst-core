@@ -80,6 +80,7 @@ import {
   getMembership as getPostgresMembership,
   getWorkspace as getPostgresWorkspace,
   listAccessRequestsForWorkspace as listPostgresAccessRequestsForWorkspace,
+  listDiscoverableWorkspaces as listPostgresDiscoverableWorkspaces,
   listMemberships as listPostgresMemberships,
   listWorkspacesForUser as listPostgresWorkspacesForUser,
   removeMembership as removePostgresMembership,
@@ -133,7 +134,7 @@ import {
   deleteConversation as deletePostgresConversation,
   expireConversation as expirePostgresConversation,
   getConversation as getPostgresConversation,
-  listConversationsForUser as listPostgresConversationsForUser,
+  listConversationsForWorkspace as listPostgresConversationsForWorkspace,
   listExpiredConversations as listPostgresExpiredConversations,
   listMessages as listPostgresMessages,
   listRecentMessages as listPostgresRecentMessages,
@@ -379,6 +380,12 @@ export class PostgresPlatformStore
     return listPostgresWorkspacesForUser(this.db, input);
   }
 
+  async listDiscoverableWorkspaces(
+    input: Parameters<CollaborationWorkspaceStore["listDiscoverableWorkspaces"]>[0]
+  ): Promise<CollaborationWorkspace[]> {
+    return listPostgresDiscoverableWorkspaces(this.db, input);
+  }
+
   async updateWorkspace(input: UpdateWorkspaceInput): Promise<CollaborationWorkspace> {
     return updatePostgresWorkspace(this.db, input);
   }
@@ -474,11 +481,10 @@ export class PostgresPlatformStore
     return getPostgresConversation(this.db, clientInstanceId, conversationId);
   }
 
-  async listConversationsForUser(input: {
-    clientInstanceId: ClientInstanceId;
-    ownerUserId: string;
-  }): Promise<Conversation[]> {
-    return listPostgresConversationsForUser(this.db, input);
+  async listConversationsForWorkspace(
+    input: Parameters<ConversationStore["listConversationsForWorkspace"]>[0]
+  ): Promise<Conversation[]> {
+    return listPostgresConversationsForWorkspace(this.db, input);
   }
 
   async listExpiredConversations(input: {

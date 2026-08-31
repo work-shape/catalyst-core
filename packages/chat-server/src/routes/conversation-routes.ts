@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { apiOperations } from "@vivd-catalyst/api-contract";
-import { requireAuthScope } from "@vivd-catalyst/core";
+import { AppError, asCollaborationWorkspaceId, requireAuthScope } from "@vivd-catalyst/core";
 import { ConversationWorkflow } from "../conversation-workflow";
 import type { ChatServerOptions } from "../types";
 import {
@@ -16,7 +16,15 @@ export function registerConversationRoutes(app: FastifyInstance, options: ChatSe
   app.get(apiOperations.listConversations.path, async (request) => {
     const { user } = await authenticateRequest(options, request);
     requireAuthScope(user, "conversation:read");
-    return conversations.listConversations(user);
+    const collaborationWorkspaceId = (request.query as { collaborationWorkspaceId?: string })
+      .collaborationWorkspaceId;
+    if (!collaborationWorkspaceId) {
+      throw new AppError("BAD_REQUEST", "Missing collaborationWorkspaceId query parameter");
+    }
+    return conversations.listConversations(
+      asCollaborationWorkspaceId(collaborationWorkspaceId),
+      user
+    );
   });
 
   app.post(apiOperations.createConversation.path, async (request) => {
@@ -26,7 +34,12 @@ export function registerConversationRoutes(app: FastifyInstance, options: ChatSe
     return conversations.createConversation(
       user,
       withRequestLocale(context, options, request, body.locale),
-      body
+      {
+        title: body.title,
+        collaborationWorkspaceId: body.collaborationWorkspaceId
+          ? asCollaborationWorkspaceId(body.collaborationWorkspaceId)
+          : undefined
+      }
     );
   });
 

@@ -6,6 +6,7 @@ import {
   expectRunStatus,
   parseSseChunks
 } from "./chat-server-run-harness";
+import { personalConversationListUrl } from "./chat-server-harness";
 
 describe("client instance app vertical slice", () => {
   it("recovers a stale durable active run in thread snapshots without duplicate terminal observations", async () => {
@@ -61,7 +62,7 @@ describe("client instance app vertical slice", () => {
 
     const listed = await server.inject({
       method: "GET",
-      url: "/api/conversations"
+      url: await personalConversationListUrl(server)
     });
     expect(listed.statusCode).toBe(200);
     const listedConversation = (listed.json() as Array<{ id: string; activeRun?: unknown }>).find(
@@ -221,7 +222,7 @@ describe("client instance app vertical slice", () => {
         "x-test-user": "other-user"
       }
     });
-    expect(wrongOwnerEvents.statusCode).toBe(204);
+    expect(wrongOwnerEvents.statusCode).toBe(404);
 
     const wrongOwnerSnapshot = await server.inject({
       method: "GET",

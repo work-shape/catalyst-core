@@ -10,7 +10,11 @@ import {
 } from "@vivd-catalyst/core";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
-import { createTestConfig, createClientInstanceApp } from "./chat-server-harness";
+import {
+  createTestConfig,
+  createClientInstanceApp,
+  personalConversationListUrl
+} from "./chat-server-harness";
 import { createMissingRuntime, createUnusedModelProvider } from "./chat-server-run-harness";
 
 describe("client instance app vertical slice", () => {
@@ -253,8 +257,8 @@ describe("client instance app vertical slice", () => {
     const conversation = await store.createConversation({
       clientInstanceId,
       collaborationWorkspaceId: personalWorkspace!.id,
-      ownerUserId: user.id,
-      ownerExternalUserId: user.externalUserId,
+      createdByUserId: user.id,
+      createdByExternalUserId: user.externalUserId,
       title: "Delete this conversation",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
@@ -267,8 +271,8 @@ describe("client instance app vertical slice", () => {
     const otherConversation = await store.createConversation({
       clientInstanceId,
       collaborationWorkspaceId: otherPersonalWorkspace!.id,
-      ownerUserId: otherUser.id,
-      ownerExternalUserId: otherUser.externalUserId,
+      createdByUserId: otherUser.id,
+      createdByExternalUserId: otherUser.externalUserId,
       title: "Keep this conversation",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
@@ -419,8 +423,8 @@ describe("client instance app vertical slice", () => {
     const personalConversation = await app.store.createConversation({
       clientInstanceId,
       collaborationWorkspaceId: personal!.id,
-      ownerUserId: deletedUserId,
-      ownerExternalUserId: deletedUserId,
+      createdByUserId: deletedUserId,
+      createdByExternalUserId: deletedUserId,
       title: "Delete private data",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
@@ -439,8 +443,8 @@ describe("client instance app vertical slice", () => {
     const sharedConversation = await app.store.createConversation({
       clientInstanceId,
       collaborationWorkspaceId: shared.id,
-      ownerUserId: deletedUserId,
-      ownerExternalUserId: deletedUserId,
+      createdByUserId: deletedUserId,
+      createdByExternalUserId: deletedUserId,
       title: "Preserve shared data",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
@@ -809,12 +813,14 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(createdConversation.statusCode).toBe(200);
-    const conversation = createdConversation.json() as { id: string; ownerUserId: string };
-    expect(conversation.ownerUserId).toBe(administeredUser.id);
+    const conversation = createdConversation.json() as { id: string; createdByUserId: string };
+    expect(conversation.createdByUserId).toBe(administeredUser.id);
 
     const standaloneConversations = await app.server.inject({
       method: "GET",
-      url: "/api/conversations",
+      url: await personalConversationListUrl(app.server, {
+        "x-dev-user-id": "jane-dev-source"
+      }),
       headers: {
         "x-dev-user-id": "jane-dev-source"
       }
@@ -823,7 +829,7 @@ describe("client instance app vertical slice", () => {
     expect(standaloneConversations.json()).toEqual([
       expect.objectContaining({
         id: conversation.id,
-        ownerUserId: administeredUser.id
+        createdByUserId: administeredUser.id
       })
     ]);
 
@@ -925,12 +931,14 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(createdConversation.statusCode).toBe(200);
-    const conversation = createdConversation.json() as { id: string; ownerUserId: string };
-    expect(conversation.ownerUserId).toBe(administeredUser.id);
+    const conversation = createdConversation.json() as { id: string; createdByUserId: string };
+    expect(conversation.createdByUserId).toBe(administeredUser.id);
 
     const standaloneConversations = await app.server.inject({
       method: "GET",
-      url: "/api/conversations",
+      url: await personalConversationListUrl(app.server, {
+        "x-dev-user-id": "jane-dev-source"
+      }),
       headers: {
         "x-dev-user-id": "jane-dev-source"
       }
@@ -939,7 +947,7 @@ describe("client instance app vertical slice", () => {
     expect(standaloneConversations.json()).toEqual([
       expect.objectContaining({
         id: conversation.id,
-        ownerUserId: administeredUser.id
+        createdByUserId: administeredUser.id
       })
     ]);
 
@@ -1000,7 +1008,7 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(ambiguousConversation.statusCode).toBe(200);
-    expect((ambiguousConversation.json() as { ownerUserId: string }).ownerUserId).not.toBe(
+    expect((ambiguousConversation.json() as { createdByUserId: string }).createdByUserId).not.toBe(
       administeredUser.id
     );
 

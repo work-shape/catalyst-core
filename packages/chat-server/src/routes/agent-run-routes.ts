@@ -21,9 +21,9 @@ import {
   type ConversationId,
   type RuntimeCallContext,
   asAgentRunId,
+  asCollaborationWorkspaceId,
   asConversationId,
   asToolCallId,
-  getSubjectUserId,
   requireAuthScope
 } from "@vivd-catalyst/core";
 import { ConversationWorkflow } from "../conversation-workflow";
@@ -64,13 +64,7 @@ export function registerAgentRunRoutes(app: FastifyInstance, options: ChatServer
     conversationId: ConversationId,
     user: AuthenticatedUser
   ): Promise<Conversation> {
-    const conversation = (await conversations.listConversations(user)).find(
-      (candidate) => candidate.id === conversationId
-    );
-    if (!conversation) {
-      throw new AppError("NOT_FOUND", "Conversation not found");
-    }
-    return conversation;
+    return conversations.requireActiveConversationMembership(conversationId, user);
   }
 
   app.post(apiOperations.generateConversationTitle.path, async (request) => {
@@ -154,7 +148,10 @@ export function registerAgentRunRoutes(app: FastifyInstance, options: ChatServer
         modelBindingId: body.modelBindingId,
         idempotencyKey: body.idempotencyKey,
         text: body.message.text,
-        title: body.conversation?.title
+        title: body.conversation?.title,
+        collaborationWorkspaceId: body.conversation?.collaborationWorkspaceId
+          ? asCollaborationWorkspaceId(body.conversation.collaborationWorkspaceId)
+          : undefined
       }
     );
     void generateTitleForConversationOnce(started.conversation.id, user, localizedContext).catch(
@@ -210,7 +207,7 @@ export function registerAgentRunRoutes(app: FastifyInstance, options: ChatServer
 
     const run = await conversations.getConversationRunForUser(conversationId, runId, user);
     if (!run) {
-      return reply.status(204).send();
+      throw new AppError("NOT_FOUND", "Agent run is not available");
     }
     if (!isObservableRunStatus(run.status) && afterSequence >= run.lastSequence) {
       return reply.status(204).send();
@@ -237,7 +234,7 @@ export function registerAgentRunRoutes(app: FastifyInstance, options: ChatServer
               clientInstanceId: options.clientInstanceId,
               runId,
               conversationId,
-              ownerUserId: getSubjectUserId(user),
+              ownerUserId: run.ownerUserId,
               sequence: event.sequence,
               type: event.type,
               payload: event,

@@ -31,7 +31,7 @@ export function registerConversationFileRoutes(
     const { user } = await authenticateRequest(options, request);
     requireAuthScope(user, "conversation:read");
     const conversationId = getConversationId(request);
-    await conversations.requireOwnedActiveConversation(conversationId, user);
+    await conversations.requireActiveConversationMembership(conversationId, user);
     const service = attachments(options);
     const download = (request.query as { download?: string }).download === "true";
     const sentAttachment = download
@@ -78,7 +78,7 @@ export function registerConversationFileRoutes(
     const { user } = await authenticateRequest(options, request);
     requireAuthScope(user, "conversation:read");
     const conversationId = getConversationId(request);
-    await conversations.requireOwnedActiveConversation(conversationId, user);
+    await conversations.requireActiveConversationMembership(conversationId, user);
     const artifactId = asManagedArtifactId(getArtifactId(request));
     const artifactRecord = await options.conversationStore.getManagedArtifact({
       clientInstanceId: options.clientInstanceId,
@@ -112,7 +112,7 @@ export function registerConversationFileRoutes(
     const { user } = await authenticateRequest(options, request);
     requireAuthScope(user, "conversation:read");
     const conversationId = getConversationId(request);
-    await conversations.requireOwnedActiveConversation(conversationId, user);
+    await conversations.requireActiveConversationMembership(conversationId, user);
     const artifactId = asManagedArtifactId(getArtifactId(request));
     const artifactRecord = await options.conversationStore.getManagedArtifact({
       clientInstanceId: options.clientInstanceId,
@@ -129,7 +129,7 @@ export function registerConversationFileRoutes(
     const { user } = await authenticateRequest(options, request);
     requireAuthScope(user, "conversation:read");
     const conversationId = getConversationId(request);
-    await conversations.requireOwnedActiveConversation(conversationId, user);
+    await conversations.requireActiveConversationMembership(conversationId, user);
     const attachment = await options.conversationStore.getConversationAttachment({
       clientInstanceId: options.clientInstanceId,
       attachmentId: asConversationAttachmentId(getAttachmentId(request))
@@ -154,7 +154,7 @@ export function registerConversationFileRoutes(
     const { user } = await authenticateRequest(options, request);
     requireAuthScope(user, "conversation:read");
     const conversationId = getConversationId(request);
-    await conversations.requireOwnedActiveConversation(conversationId, user);
+    await conversations.requireActiveConversationMembership(conversationId, user);
     const artifactId = asManagedArtifactId(getArtifactId(request));
     const artifactRecord = await options.conversationStore.getManagedArtifact({
       clientInstanceId: options.clientInstanceId,

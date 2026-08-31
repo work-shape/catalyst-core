@@ -792,8 +792,8 @@ async function createConversation(
 ) {
   return store.createConversationForTesting({
     clientInstanceId,
-    ownerUserId,
-    ownerExternalUserId: ownerUserId,
+    createdByUserId: ownerUserId,
+    createdByExternalUserId: ownerUserId,
     title: "Resources",
     retainedUntil: "2030-01-01T00:00:00.000Z"
   });

@@ -114,8 +114,8 @@ describe("client instance app vertical slice", () => {
     });
     const conversation = await store.createConversationForTesting({
       clientInstanceId,
-      ownerUserId: owner.id,
-      ownerExternalUserId: owner.externalUserId,
+      createdByUserId: owner.id,
+      createdByExternalUserId: owner.externalUserId,
       title: "Failed projection test",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
@@ -235,8 +235,8 @@ describe("client instance app vertical slice", () => {
     });
     const conversation = await store.createConversationForTesting({
       clientInstanceId,
-      ownerUserId: owner.id,
-      ownerExternalUserId: owner.externalUserId,
+      createdByUserId: owner.id,
+      createdByExternalUserId: owner.externalUserId,
       title: "Completed projection test",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
@@ -593,8 +593,8 @@ describe("client instance app vertical slice", () => {
     });
     const conversation = await store.createConversationForTesting({
       clientInstanceId,
-      ownerUserId: owner.id,
-      ownerExternalUserId: owner.externalUserId,
+      createdByUserId: owner.id,
+      createdByExternalUserId: owner.externalUserId,
       title: "Incomplete completed projection test",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });

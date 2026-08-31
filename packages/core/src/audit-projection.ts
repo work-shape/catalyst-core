@@ -73,6 +73,15 @@ const ACTIVITY_LABELS: Record<string, string> = {
   "conversation.retention_expiration_failed": "Conversation retention failed",
   "conversation.title_generated": "Generated a conversation title",
   "conversation.title_generation_failed": "Conversation title generation failed",
+  "collaboration_workspace.created": "Created a workspace",
+  "collaboration_workspace.updated": "Updated a workspace",
+  "collaboration_workspace.member_added": "Added a workspace member",
+  "collaboration_workspace.member_removed": "Removed a workspace member",
+  "collaboration_workspace.member_left": "Left a workspace",
+  "collaboration_workspace.member_role_changed": "Changed a workspace member role",
+  "collaboration_workspace.access_requested": "Requested workspace access",
+  "collaboration_workspace.access_request_approved": "Approved workspace access",
+  "collaboration_workspace.access_request_declined": "Declined workspace access",
   "message.created": "Sent a message",
   "message.completed": "Assistant responded",
   "message.failed": "Assistant response failed",
@@ -134,6 +143,7 @@ function tierForType(type: string): AuditActivityTier {
     type.startsWith("governance.") ||
     type.startsWith("user.") ||
     type.startsWith("auth.") ||
+    type.startsWith("collaboration_workspace.") ||
     type === "conversation.deleted" ||
     type.startsWith("conversation.retention")
   ) {
@@ -158,6 +168,7 @@ function rankForType(type: string): number {
   if (type.startsWith("governance.")) return 100;
   if (type.startsWith("user.")) return 95;
   if (type.startsWith("auth.")) return 90;
+  if (type.startsWith("collaboration_workspace.")) return 88;
   if (type.startsWith("conversation.")) return 85;
   if (type === "message.completed" || type === "message.failed" || type === "message.cancelled") {
     return 80;
@@ -228,6 +239,9 @@ function resolveTarget(event: AuditEvent): AuditActivityTarget | undefined {
   }
   if (type.startsWith("conversation.")) {
     return subject ? { kind: "conversation", id: subject } : undefined;
+  }
+  if (type.startsWith("collaboration_workspace.")) {
+    return subject ? { kind: "collaboration_workspace", id: subject } : undefined;
   }
   if (type.startsWith("user.") || type.startsWith("governance.user_")) {
     return subject ? { kind: "user", id: subject } : undefined;

@@ -161,7 +161,7 @@ export const collaborationWorkspaces = pgTable(
     description: text("description"),
     visibility: text("visibility").$type<CollaborationWorkspace["visibility"]>().notNull(),
     emoji: text("emoji"),
-    accentColor: text("accent_color"),
+    accentColor: text("accent_color").$type<CollaborationWorkspace["accentColor"]>(),
     personalUserId: text("personal_user_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
@@ -253,8 +253,8 @@ export const conversations = pgTable(
     id: text("id").primaryKey(),
     clientInstanceId: text("client_instance_id").notNull(),
     collaborationWorkspaceId: text("collaboration_workspace_id").notNull(),
-    ownerUserId: text("owner_user_id").notNull(),
-    ownerExternalUserId: text("owner_external_user_id").notNull(),
+    createdByUserId: text("created_by_user_id").notNull(),
+    createdByExternalUserId: text("created_by_external_user_id").notNull(),
     title: text("title").notNull(),
     status: text("status").$type<Conversation["status"]>().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
@@ -263,16 +263,6 @@ export const conversations = pgTable(
     deletedAt: timestamp("deleted_at", { withTimezone: true })
   },
   (table) => [
-    index("conversations_owner_idx").on(
-      table.clientInstanceId,
-      table.ownerExternalUserId,
-      table.updatedAt.desc()
-    ),
-    index("conversations_owner_user_idx").on(
-      table.clientInstanceId,
-      table.ownerUserId,
-      table.updatedAt.desc()
-    ),
     index("conversations_retention_expiry_idx").on(
       table.clientInstanceId,
       table.status,

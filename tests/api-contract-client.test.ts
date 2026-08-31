@@ -66,6 +66,11 @@ describe("api operation catalog and client", () => {
       "/api/config?locale=de"
     );
     expect(
+      apiOperations.listConversations.buildPath({
+        query: { collaborationWorkspaceId: "workspace/one" }
+      })
+    ).toBe("/api/conversations?collaborationWorkspaceId=workspace%2Fone");
+    expect(
       buildApiPath("/api/example/:exampleId", {
         params: { exampleId: "value/with spaces" },
         query: { view: "full" }
@@ -76,6 +81,9 @@ describe("api operation catalog and client", () => {
     );
     expect(() => apiOperations.getConfig.buildPath({ query: { unknown: "value" } })).toThrow(
       /Unknown query parameter "unknown"/u
+    );
+    expect(() => apiOperations.listConversations.buildPath()).toThrow(
+      /Missing query parameter "collaborationWorkspaceId"/u
     );
   });
 
@@ -355,8 +363,9 @@ describe("api operation catalog and client", () => {
         conversation: {
           id: "conv_1",
           clientInstanceId: "client_1",
-          ownerUserId: "user_1",
-          ownerExternalUserId: "user_1",
+          collaborationWorkspaceId: "cws_1",
+          createdByUserId: "user_1",
+          createdByExternalUserId: "user_1",
           title: "Started",
           status: "active",
           createdAt: "2026-06-27T00:00:00.000Z",
@@ -389,8 +398,9 @@ describe("api operation catalog and client", () => {
           conversation: {
             id: "conv_1",
             clientInstanceId: "client_1",
-            ownerUserId: "user_1",
-            ownerExternalUserId: "user_1",
+            collaborationWorkspaceId: "cws_1",
+            createdByUserId: "user_1",
+            createdByExternalUserId: "user_1",
             title: "Started",
             status: "active",
             createdAt: "2026-06-27T00:00:00.000Z",

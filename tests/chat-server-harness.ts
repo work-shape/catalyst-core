@@ -183,3 +183,22 @@ function toJsonObject(input: object): JsonObject {
 }
 
 export type TestServer = Awaited<ReturnType<typeof createClientInstanceApp>>["server"];
+
+export async function personalConversationListUrl(
+  server: TestServer,
+  headers: Record<string, string> = {}
+): Promise<string> {
+  const response = await server.inject({
+    method: "GET",
+    url: "/api/collaboration-workspaces",
+    headers
+  });
+  if (response.statusCode !== 200) {
+    throw new Error(`Could not resolve Personal Workspace: ${response.statusCode}`);
+  }
+  const personal = (response.json() as Array<{ id: string; kind: string }>).find(
+    (workspace) => workspace.kind === "personal"
+  );
+  if (!personal) throw new Error("Personal Workspace is not available");
+  return `/api/conversations?collaborationWorkspaceId=${encodeURIComponent(personal.id)}`;
+}
