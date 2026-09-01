@@ -106,6 +106,8 @@ ui:
   clientName: E2E Customer
   title: Vivd Catalyst E2E
   welcomeMessage: E2E ready.
+  collaborationWorkspaces:
+    enabled: true
   accentColor: "#0f766e"
   theme:
     accentColor: "#0f766e"

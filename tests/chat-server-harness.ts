@@ -82,6 +82,7 @@ export function createTestConfig(
     webAccess?: unknown;
     developmentAuth?: unknown;
     sessionToken?: unknown;
+    collaborationWorkspacesEnabled?: boolean;
   } = {}
 ) {
   const config = parseClientInstanceConfig({
@@ -131,6 +132,9 @@ export function createTestConfig(
     },
     ...(input.webAccess ? { webAccess: input.webAccess } : {}),
     ...(input.executionWorkspaces ? { executionWorkspaces: input.executionWorkspaces } : {}),
+    ui: {
+      collaborationWorkspaces: { enabled: input.collaborationWorkspacesEnabled ?? true }
+    },
     tools: input.tools ?? []
   });
   testAssetsByConfig.set(config, {

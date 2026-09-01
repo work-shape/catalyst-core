@@ -13,6 +13,119 @@ import { createMultipartFilePayload } from "./chat-server-attachment-harness";
 const clientInstanceId = asClientInstanceId("demo-local");
 
 describe("Collaboration Workspace API", () => {
+  it("blocks growth operations while personal workspace conversations keep working", async () => {
+    const app = await createWorkspaceApp(false);
+    await currentUser(app.server, "owner");
+
+    const workspaces = await inject(app.server, "owner", {
+      method: "GET",
+      url: "/api/collaboration-workspaces"
+    });
+    expect(workspaces.statusCode).toBe(200);
+    const personalWorkspace = (workspaces.json() as Array<{ id: string; kind: string }>).find(
+      (workspace) => workspace.kind === "personal"
+    );
+    expect(personalWorkspace).toBeDefined();
+
+    const conversation = await inject(app.server, "owner", {
+      method: "POST",
+      url: "/api/conversations",
+      payload: { title: "Personal while shared workspaces are disabled" }
+    });
+    expect(conversation.statusCode).toBe(200);
+    expect(conversation.json()).toMatchObject({
+      collaborationWorkspaceId: personalWorkspace!.id
+    });
+    const conversationId = (conversation.json() as { id: string }).id;
+    const listedConversations = await inject(app.server, "owner", {
+      method: "GET",
+      url: "/api/conversations"
+    });
+    expect(listedConversations.statusCode).toBe(200);
+    expect(listedConversations.json()).toContainEqual(
+      expect.objectContaining({ id: conversationId })
+    );
+    expect(
+      (
+        await inject(app.server, "owner", {
+          method: "GET",
+          url: `/api/conversations/${conversationId}/thread`
+        })
+      ).statusCode
+    ).toBe(200);
+
+    for (const request of [
+      {
+        method: "POST" as const,
+        url: "/api/collaboration-workspaces",
+        payload: { name: "Blocked" }
+      },
+      { method: "GET" as const, url: "/api/collaboration-workspaces/directory" },
+      {
+        method: "POST" as const,
+        url: "/api/collaboration-workspaces/missing/access-requests"
+      },
+      {
+        method: "POST" as const,
+        url: "/api/collaboration-workspaces/missing/members",
+        payload: { email: "member@example.test" }
+      }
+    ]) {
+      const response = await inject(app.server, "owner", request);
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toMatchObject({
+        error: {
+          code: "FORBIDDEN",
+          message: "Collaboration workspaces are not enabled for this instance"
+        }
+      });
+    }
+
+    await app.close();
+  });
+
+  it("keeps existing shared workspaces usable after the feature is disabled", async () => {
+    const app = await createWorkspaceApp();
+    await currentUser(app.server, "owner");
+    await currentUser(app.server, "member");
+    const workspaceId = await createSharedWorkspace(app.server, "owner", "Existing workspace");
+    await addWorkspaceMember(app.server, "owner", workspaceId, "member@example.test");
+
+    app.config.ui.collaborationWorkspaces.enabled = false;
+
+    for (const actor of ["owner", "member"]) {
+      const listed = await inject(app.server, actor, {
+        method: "GET",
+        url: "/api/collaboration-workspaces"
+      });
+      expect(listed.statusCode).toBe(200);
+      expect(listed.json()).toContainEqual(expect.objectContaining({ id: workspaceId }));
+
+      const read = await inject(app.server, actor, {
+        method: "GET",
+        url: `/api/collaboration-workspaces/${workspaceId}`
+      });
+      expect(read.statusCode).toBe(200);
+      expect(read.json()).toMatchObject({ id: workspaceId, name: "Existing workspace" });
+    }
+
+    const left = await inject(app.server, "member", {
+      method: "DELETE",
+      url: `/api/collaboration-workspaces/${workspaceId}/members/me`
+    });
+    expect(left.statusCode).toBe(200);
+
+    const deleted = await inject(app.server, "owner", {
+      method: "DELETE",
+      url: `/api/collaboration-workspaces/${workspaceId}`,
+      payload: { confirmName: "Existing workspace" }
+    });
+    expect(deleted.statusCode).toBe(200);
+    await expect(app.store.getWorkspace(clientInstanceId, workspaceId)).resolves.toBeUndefined();
+
+    await app.close();
+  });
+
   it("enforces roles, exact-email addition, access requests, and the last-owner invariant", async () => {
     const app = await createWorkspaceApp();
     const owner = await currentUser(app.server, "owner");
@@ -1005,9 +1118,10 @@ describe("Collaboration Workspace API", () => {
 
 const WORKSPACE_OBJECT_ROOT = "/tmp/vivd-catalyst-phase-d-workspace-objects";
 
-async function createWorkspaceApp() {
+async function createWorkspaceApp(collaborationWorkspacesEnabled = true) {
   return createClientInstanceApp({
     config: createTestConfig({
+      collaborationWorkspacesEnabled,
       developmentAuth: {
         enabled: true,
         defaultUserId: "owner",

@@ -228,6 +228,9 @@ export type GetConfigResponses = {
             resources: {
                 enabled: boolean;
             };
+            collaborationWorkspaces: {
+                enabled: boolean;
+            };
             configAssets: {
                 enabled: boolean;
                 editableAgentFields: Array<'displayName' | 'description' | 'welcomeMessage' | 'welcomeSubtitle' | 'instructions' | 'modelBindingId' | 'reasoningEffort' | 'maxSteps' | 'toolNames' | 'skillNames' | 'initialPrompts'>;

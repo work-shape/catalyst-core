@@ -767,6 +767,18 @@
                           ],
                           "additionalProperties": false
                         },
+                        "collaborationWorkspaces": {
+                          "type": "object",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "enabled"
+                          ],
+                          "additionalProperties": false
+                        },
                         "configAssets": {
                           "type": "object",
                           "properties": {
@@ -823,6 +835,7 @@
                       "required": [
                         "attachments",
                         "resources",
+                        "collaborationWorkspaces",
                         "configAssets"
                       ],
                       "additionalProperties": false

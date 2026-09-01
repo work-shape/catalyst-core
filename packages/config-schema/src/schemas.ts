@@ -658,6 +658,9 @@ export const uiConfigSchema = z
     // client names are only shown inside its dropdown.
     showAgentName: z.boolean().default(false),
     resources: z.object({ enabled: z.boolean().default(true) }).default({ enabled: true }),
+    collaborationWorkspaces: z
+      .object({ enabled: z.boolean().default(false) })
+      .default({ enabled: false }),
     accentColor: z.string().min(1).default("#0f766e"),
     theme: lightUiThemeSchema,
     darkTheme: darkUiThemeSchema,
@@ -668,6 +671,7 @@ export const uiConfigSchema = z
     welcomeMessage: "How can I help?",
     showAgentName: false,
     resources: { enabled: true },
+    collaborationWorkspaces: { enabled: false },
     accentColor: "#0f766e",
     logoInvertOnDark: false,
     theme: defaultLightUiTheme,
