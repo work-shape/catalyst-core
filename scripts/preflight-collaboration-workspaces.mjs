@@ -16,8 +16,8 @@ try {
       where status = 'active'
     ),
     conversation_mappings as (
-      select conversation.id, product_user.id as mapped_user_id
-      from active_conversations conversation
+      select conversation.id, conversation.status, product_user.id as mapped_user_id
+      from conversations conversation
       left join product_users product_user
         on product_user.client_instance_id = conversation.client_instance_id
         and product_user.id = conversation.owner_user_id
@@ -36,6 +36,12 @@ try {
       (select count(*)::bigint from active_conversations) as conversation_count,
       (select count(*)::bigint from conversation_mappings where mapped_user_id is null)
         as unmapped_conversation_count,
+      (select count(*)::bigint from conversation_mappings
+        where mapped_user_id is null and status = 'active')
+        as unmapped_active_conversation_count,
+      (select count(*)::bigint from conversation_mappings
+        where mapped_user_id is null and status <> 'active')
+        as unmapped_non_active_conversation_count,
       count(*) filter (where conversation_count > 0)::bigint as users_with_conversations,
       coalesce(min(conversation_count), 0)::bigint as minimum_conversations_per_user,
       coalesce(max(conversation_count), 0)::bigint as maximum_conversations_per_user,
@@ -46,11 +52,15 @@ try {
   const userCount = Number(summary.user_count);
   const conversationCount = Number(summary.conversation_count);
   const unmappedConversationCount = Number(summary.unmapped_conversation_count);
+  const unmappedActiveConversationCount = Number(summary.unmapped_active_conversation_count);
+  const unmappedNonActiveConversationCount = Number(summary.unmapped_non_active_conversation_count);
 
   console.log("Collaboration Workspaces migration preflight");
   console.log(`Product users: ${userCount}`);
   console.log(`Active conversations: ${conversationCount}`);
-  console.log(`Unmapped active conversations: ${unmappedConversationCount}`);
+  console.log(`Unmapped conversations: ${unmappedConversationCount}`);
+  console.log(`Unmapped active conversations: ${unmappedActiveConversationCount}`);
+  console.log(`Unmapped non-active conversations: ${unmappedNonActiveConversationCount}`);
   console.log(
     `Per-user active conversations: ${summary.users_with_conversations} users with conversations, ` +
       `min ${summary.minimum_conversations_per_user}, max ${summary.maximum_conversations_per_user}, ` +
@@ -59,11 +69,11 @@ try {
 
   if (unmappedConversationCount > 0) {
     console.error(
-      `Preflight failed: ${unmappedConversationCount} active conversation(s) have no matching product user. Do not deploy migration 0020.`
+      `Preflight failed: ${unmappedConversationCount} conversation(s) have no matching product user. Do not deploy migration 0020.`
     );
     process.exitCode = 1;
   } else {
-    console.log("Preflight passed: every active conversation owner maps to a product user.");
+    console.log("Preflight passed: every conversation owner maps to a product user.");
   }
 } catch (error) {
   console.error(

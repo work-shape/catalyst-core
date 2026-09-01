@@ -143,7 +143,7 @@ describePostgres("Collaboration Workspace migration 0020", () => {
     }
   });
 
-  it("passes the read-only preflight when active conversation owners map to users", async () => {
+  it("passes the read-only preflight when conversation owners map to users", async () => {
     const { sql, databaseUrl: testDatabaseUrl } = await createFreshDatabase();
     try {
       await applyMigrationsThrough(sql, 19);
@@ -156,25 +156,37 @@ describePostgres("Collaboration Workspace migration 0020", () => {
 
       expect(stdout).toContain("Product users: 1");
       expect(stdout).toContain("Active conversations: 1");
+      expect(stdout).toContain("Unmapped conversations: 0");
       expect(stdout).toContain("Unmapped active conversations: 0");
+      expect(stdout).toContain("Unmapped non-active conversations: 0");
       expect(stdout).toContain("Preflight passed");
     } finally {
       await sql.end();
     }
   });
 
-  it("fails the read-only preflight when an active conversation owner is unmapped", async () => {
+  it("fails the read-only preflight when conversation owners are unmapped in any status", async () => {
     const { sql, databaseUrl: testDatabaseUrl } = await createFreshDatabase();
     try {
       await applyMigrationsThrough(sql, 19);
-      await seedConversation(sql, "orphaned_conversation", "missing_user");
+      await seedConversation(sql, "active_orphaned_conversation", "missing_active_user");
+      await seedConversation(sql, "deleted_orphaned_conversation", "missing_deleted_user");
+      await sql`
+        update conversations
+        set status = 'deleted'
+        where id = 'deleted_orphaned_conversation'
+      `;
 
       const failure = await runFile(process.execPath, [preflightScript], {
         env: { ...process.env, DATABASE_URL: testDatabaseUrl }
       }).catch((error: unknown) => error);
 
       expect(failure).toMatchObject({ code: 1 });
+      expect((failure as { stdout: string }).stdout).toContain("Unmapped conversations: 2");
       expect((failure as { stdout: string }).stdout).toContain("Unmapped active conversations: 1");
+      expect((failure as { stdout: string }).stdout).toContain(
+        "Unmapped non-active conversations: 1"
+      );
       expect((failure as { stderr: string }).stderr).toContain("Do not deploy migration 0020");
     } finally {
       await sql.end();
