@@ -818,12 +818,24 @@ describe("collaboration workspace emoji picker", () => {
   });
 
   it("curates a duplicate-free list that keeps the quick picks", () => {
-    expect(collaborationWorkspaceEmojiChoices.length).toBeGreaterThan(100);
-    expect(collaborationWorkspaceEmojiChoices.length).toBeLessThanOrEqual(140);
+    // Broad enough to be worth browsing, bounded so it stays a curated list.
+    expect(collaborationWorkspaceEmojiChoices.length).toBeGreaterThan(180);
+    expect(collaborationWorkspaceEmojiChoices.length).toBeLessThanOrEqual(260);
     expect(new Set(collaborationWorkspaceEmojiChoices).size).toBe(
       collaborationWorkspaceEmojiChoices.length
     );
     for (const emoji of collaborationWorkspaceEmojiSuggestions) {
+      expect(collaborationWorkspaceEmojiChoices).toContain(emoji);
+    }
+  });
+
+  it("covers the property and financing vocabulary these deployments run on", () => {
+    /*
+      The first cut of this list had no house in it at all, which is a poor
+      showing for products about buying and financing property. These are the
+      words people reach for when naming such a workspace.
+    */
+    for (const emoji of ["🏠", "🏡", "🏘️", "🏚️", "🏢", "🏦", "🧱", "🚪", "🔑", "📐", "💶", "💰"]) {
       expect(collaborationWorkspaceEmojiChoices).toContain(emoji);
     }
   });
