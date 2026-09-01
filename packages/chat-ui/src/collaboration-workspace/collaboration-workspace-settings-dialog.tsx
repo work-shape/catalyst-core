@@ -187,10 +187,18 @@ export function CollaborationWorkspaceSettingsDialog({
 
         {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
 
+        {/*
+          One height for every tab so the dialog frame never jumps while
+          switching. The clamp keeps it inside short viewports; anything taller
+          (the General form) scrolls inside the panel. The negative margin plus
+          matching padding keeps alignment while leaving room for focus rings,
+          which the scroll container would otherwise clip.
+        */}
         <div
           role="tabpanel"
           id={`collaboration-workspace-panel-${tab}`}
           aria-labelledby={`collaboration-workspace-tab-${tab}`}
+          className="-mx-1 h-[clamp(18rem,55vh,30rem)] overflow-y-auto px-1"
         >
           {tab === "general" ? (
             <CollaborationWorkspaceGeneralTab
@@ -464,6 +472,13 @@ export function CollaborationWorkspaceMembersTab({
           <Input
             id="collaboration-workspace-member-email"
             type="email"
+            /*
+             * A workspace admin adds other people here, so the browser's own
+             * address autofill would only offer the operator's private
+             * addresses. The neutral name keeps heuristic autofill off too.
+             */
+            name="collaboration-workspace-member-email"
+            autoComplete="off"
             value={email}
             disabled={pending}
             placeholder={t("collaborationWorkspaceAddMemberPlaceholder")}

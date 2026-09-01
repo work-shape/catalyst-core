@@ -92,6 +92,19 @@ export function defaultCollaborationWorkspaceAccentColor(
   return collaborationWorkspaceAccentColors[index] ?? "teal";
 }
 
+/**
+ * Starting point for a workspace that is being created: varied between dialog
+ * openings, but picked once and then stable, so typing a name never cycles the
+ * preview through the palette. `random` is injectable to keep tests
+ * deterministic.
+ */
+export function randomCollaborationWorkspaceAccentColor(
+  random: () => number = Math.random
+): CollaborationWorkspaceAccentColor {
+  const index = Math.floor(random() * collaborationWorkspaceAccentColors.length);
+  return collaborationWorkspaceAccentColors[index] ?? "teal";
+}
+
 export function resolveCollaborationWorkspaceAccentColor(input: {
   accentColor: string | null | undefined;
   name: string;

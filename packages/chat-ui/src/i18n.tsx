@@ -250,6 +250,7 @@ const translations = {
     collaborationWorkspaceDirectoryEmpty: "No discoverable workspaces yet.",
     collaborationWorkspaceDirectoryLoadFailed: "The workspace directory could not be loaded.",
     collaborationWorkspaceEmojiLabel: "Emoji (optional)",
+    collaborationWorkspaceEmojiNone: "No emoji",
     collaborationWorkspaceEmojiSuggestions: "Suggestions",
     collaborationWorkspaceErrorAlreadyMember: "This person is already a member of the workspace.",
     collaborationWorkspaceErrorCollaborationWorkspaceBusy:
@@ -749,6 +750,7 @@ const translations = {
     collaborationWorkspaceDirectoryLoadFailed:
       "Das Verzeichnis der Arbeitsbereiche konnte nicht geladen werden.",
     collaborationWorkspaceEmojiLabel: "Emoji (optional)",
+    collaborationWorkspaceEmojiNone: "Kein Emoji",
     collaborationWorkspaceEmojiSuggestions: "Vorschläge",
     collaborationWorkspaceErrorAlreadyMember:
       "Diese Person ist bereits Mitglied des Arbeitsbereichs.",

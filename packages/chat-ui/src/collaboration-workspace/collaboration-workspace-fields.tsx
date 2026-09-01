@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { Ban, Check } from "lucide-react";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { Input } from "../ui/input";
 import { cn } from "../ui/cn";
@@ -121,6 +121,22 @@ export function CollaborationWorkspaceEmojiField({
           role="group"
           aria-label={t("collaborationWorkspaceEmojiSuggestions")}
         >
+          <button
+            type="button"
+            disabled={disabled}
+            aria-pressed={value === ""}
+            aria-label={t("collaborationWorkspaceEmojiNone")}
+            title={t("collaborationWorkspaceEmojiNone")}
+            data-testid="collaboration-workspace-emoji-none"
+            className={cn(
+              "grid size-8 place-items-center rounded-md border border-dashed text-muted-foreground outline-none transition-colors",
+              "hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:opacity-50",
+              value === "" && "border-ring border-solid bg-accent"
+            )}
+            onClick={() => onChange("")}
+          >
+            <Ban size={14} aria-hidden="true" />
+          </button>
           {collaborationWorkspaceEmojiSuggestions.map((emoji) => (
             <button
               key={emoji}

@@ -4,7 +4,7 @@ import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { Input, Textarea } from "../ui/input";
 import {
-  defaultCollaborationWorkspaceAccentColor,
+  randomCollaborationWorkspaceAccentColor,
   type CollaborationWorkspaceAccentColor
 } from "./collaboration-workspace-accent";
 import { CollaborationWorkspaceAvatar } from "./collaboration-workspace-avatar";
@@ -27,12 +27,15 @@ export function CreateCollaborationWorkspaceDialog({
   open,
   pending,
   errorMessage,
+  initialAccentColor,
   onClose,
   onCreate
 }: {
   open: boolean;
   pending: boolean;
   errorMessage: string | undefined;
+  /** Pins the starting accent instead of picking one; keeps tests deterministic. */
+  initialAccentColor?: CollaborationWorkspaceAccentColor;
   onClose(): void;
   onCreate(values: CreateCollaborationWorkspaceValues): void;
 }) {
@@ -41,11 +44,15 @@ export function CreateCollaborationWorkspaceDialog({
   const [description, setDescription] = useState("");
   const [emoji, setEmoji] = useState("");
   const [visibility, setVisibility] = useState<CollaborationWorkspaceVisibility>("discoverable");
-  const [accentColorOverride, setAccentColorOverride] = useState<
-    CollaborationWorkspaceAccentColor | undefined
-  >();
+  /*
+   * Picked once per dialog opening rather than derived from the name: deriving
+   * it re-rolled the accent on every keystroke, so the preview cycled through
+   * the palette while typing. An explicit swatch pick simply overwrites it.
+   */
+  const [accentColor, setAccentColor] = useState<CollaborationWorkspaceAccentColor>(
+    () => initialAccentColor ?? randomCollaborationWorkspaceAccentColor()
+  );
   const [nameTouched, setNameTouched] = useState(false);
-  const accentColor = accentColorOverride ?? defaultCollaborationWorkspaceAccentColor(name);
   const trimmedName = name.trim();
   const nameMissing = nameTouched && !trimmedName;
 
@@ -57,9 +64,9 @@ export function CreateCollaborationWorkspaceDialog({
     setDescription("");
     setEmoji("");
     setVisibility("discoverable");
-    setAccentColorOverride(undefined);
+    setAccentColor(initialAccentColor ?? randomCollaborationWorkspaceAccentColor());
     setNameTouched(false);
-  }, [open]);
+  }, [open, initialAccentColor]);
 
   function submit() {
     setNameTouched(true);
@@ -92,17 +99,21 @@ export function CreateCollaborationWorkspaceDialog({
           submit();
         }}
       >
-        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
-          <CollaborationWorkspaceAvatar
-            name={trimmedName}
-            emoji={emoji}
-            accentColor={accentColor}
-            size="lg"
-          />
-          <div className="grid gap-2">
-            <label className="text-sm font-medium" htmlFor="collaboration-workspace-name">
-              {t("collaborationWorkspaceNameLabel")}
-            </label>
+        {/*
+          The label sits above the whole row so the avatar centers against the
+          input line itself, not against the label-plus-input block.
+        */}
+        <div className="grid gap-2">
+          <label className="text-sm font-medium" htmlFor="collaboration-workspace-name">
+            {t("collaborationWorkspaceNameLabel")}
+          </label>
+          <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+            <CollaborationWorkspaceAvatar
+              name={trimmedName}
+              emoji={emoji}
+              accentColor={accentColor}
+              size="lg"
+            />
             <Input
               id="collaboration-workspace-name"
               value={name}
@@ -145,7 +156,7 @@ export function CreateCollaborationWorkspaceDialog({
         <CollaborationWorkspaceAccentField
           value={accentColor}
           disabled={pending}
-          onChange={setAccentColorOverride}
+          onChange={setAccentColor}
         />
 
         {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}

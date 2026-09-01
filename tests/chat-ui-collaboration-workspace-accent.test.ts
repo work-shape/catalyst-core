@@ -5,6 +5,7 @@ import {
   collaborationWorkspaceAccentTokens,
   contrastRatio,
   defaultCollaborationWorkspaceAccentColor,
+  randomCollaborationWorkspaceAccentColor,
   resolveCollaborationWorkspaceAccentColor
 } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-accent";
 
@@ -31,13 +32,23 @@ describe("collaboration workspace accent palette", () => {
     });
   });
 
-  it("derives a stable default from the workspace name", () => {
+  it("derives a stable fallback from the name for a stored workspace without an accent", () => {
     const first = defaultCollaborationWorkspaceAccentColor("Product team");
     const second = defaultCollaborationWorkspaceAccentColor("Product team");
 
     expect(first).toBe(second);
     expect(collaborationWorkspaceAccentColors).toContain(first);
     expect(defaultCollaborationWorkspaceAccentColor("")).toBeDefined();
+  });
+
+  it("picks a create-dialog starting accent from the injected random", () => {
+    expect(randomCollaborationWorkspaceAccentColor(() => 0)).toBe(
+      collaborationWorkspaceAccentColors[0]
+    );
+    expect(randomCollaborationWorkspaceAccentColor(() => 0.999)).toBe(
+      collaborationWorkspaceAccentColors.at(-1)
+    );
+    expect(collaborationWorkspaceAccentColors).toContain(randomCollaborationWorkspaceAccentColor());
   });
 
   it("prefers the persisted palette key and falls back for unknown values", () => {

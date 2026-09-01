@@ -101,6 +101,46 @@ describe("create collaboration workspace dialog", () => {
     expect(markup).toContain('aria-label="Vorschläge"');
   });
 
+  it("starts from the injected accent instead of deriving one from the name", () => {
+    const markup = render(
+      "de",
+      createElement(CreateCollaborationWorkspaceDialog, {
+        open: true,
+        pending: false,
+        errorMessage: undefined,
+        initialAccentColor: "violet",
+        onClose: noop,
+        onCreate: noop
+      })
+    );
+
+    expect(markup).toMatch(
+      /aria-pressed="true"[^>]*data-testid="collaboration-workspace-accent-violet"/u
+    );
+    expect(markup).not.toMatch(
+      /aria-pressed="true"[^>]*data-testid="collaboration-workspace-accent-ruby"/u
+    );
+  });
+
+  it("offers a way to clear the emoji back to initials", () => {
+    const markup = render(
+      "de",
+      createElement(CreateCollaborationWorkspaceDialog, {
+        open: true,
+        pending: false,
+        errorMessage: undefined,
+        initialAccentColor: "violet",
+        onClose: noop,
+        onCreate: noop
+      })
+    );
+
+    expect(markup).toContain('aria-label="Kein Emoji"');
+    expect(markup).toMatch(
+      /aria-pressed="true"[^>]*data-testid="collaboration-workspace-emoji-none"/u
+    );
+  });
+
   it("surfaces the mapped error copy", () => {
     const markup = render(
       "en",
@@ -180,6 +220,28 @@ describe("collaboration workspace settings tabs", () => {
     expect(markup).toContain('aria-label="Rolle von Mara Ruiz"');
     expect(markup).toContain('aria-label="Mara Ruiz entfernen"');
     expect(markup).not.toContain('aria-label="Felix Pahlke entfernen"');
+  });
+
+  it("keeps the browser address autofill out of the add-member input", () => {
+    const markup = render(
+      "de",
+      createElement(CollaborationWorkspaceMembersTab, {
+        collaborationWorkspace: sharedCollaborationWorkspace,
+        currentUserId: "user_1",
+        members,
+        loading: false,
+        loadFailed: false,
+        pending: false,
+        onAddMember: noop,
+        onChangeMemberRole: noop,
+        onRemoveMember: noop
+      })
+    );
+
+    // React serializes the attribute name as written; HTML parses it case-insensitively.
+    expect(markup).toMatch(/id="collaboration-workspace-member-email"[^>]*autocomplete="off"/iu);
+    expect(markup).toContain('name="collaboration-workspace-member-email"');
+    expect(markup).not.toContain('name="email"');
   });
 
   it("keeps roles read-only for an admin", () => {
