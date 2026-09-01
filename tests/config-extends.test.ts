@@ -82,29 +82,101 @@ describe("config file extends", () => {
     expect(config.clientInstance.displayName).toBe("Base Client");
   });
 
-  it("lets an overlay switch the UI source without colliding with the base's choice", async () => {
+  it("deep-merges inline UI over a UI file before applying defaults", async () => {
     const root = await writeFixtures({
-      "ui.yaml": [
-        "clientName: Base Co",
-        "defaultLocale: de",
-        "supportedLocales:",
-        "  - de",
-        ""
-      ].join("\n"),
-      "app.base.yaml": `${baseConfig}uiFile: ./ui.yaml\n`,
+      "ui.yaml": ["title: File title", "showAgentName: true", 'accentColor: "#111111"', ""].join(
+        "\n"
+      ),
       "app.yaml": [
-        "extends: ./app.base.yaml",
+        baseConfig,
+        "uiFile: ./ui.yaml",
         "ui:",
-        "  clientName: Overlay Co",
-        "  defaultLocale: de",
-        "  supportedLocales:",
-        "    - de",
+        "  title: Overlay title",
+        "  collaborationWorkspaces:",
+        "    enabled: true",
         ""
       ].join("\n")
     });
 
     const config = await loadClientInstanceConfigFromFile(join(root, "app.yaml"));
-    expect(config.ui?.clientName).toBe("Overlay Co");
+    expect(config.ui.title).toBe("Overlay title");
+    expect(config.ui.showAgentName).toBe(true);
+    expect(config.ui.accentColor).toBe("#111111");
+    expect(config.ui.collaborationWorkspaces.enabled).toBe(true);
+    expect(config.ui.defaultThemeMode).toBe("system");
+  });
+
+  it("loads UI from a file without an inline overlay", async () => {
+    const root = await writeFixtures({
+      "ui.yaml": ["welcomeMessage: File welcome", "showAgentName: true", ""].join("\n"),
+      "app.yaml": `${baseConfig}uiFile: ./ui.yaml\n`
+    });
+
+    const config = await loadClientInstanceConfigFromFile(join(root, "app.yaml"));
+    expect(config.ui.welcomeMessage).toBe("File welcome");
+    expect(config.ui.showAgentName).toBe(true);
+    expect(config.ui.defaultThemeMode).toBe("system");
+  });
+
+  it("loads inline UI without a UI file", async () => {
+    const root = await writeFixtures({
+      "app.yaml": [baseConfig, "ui:", "  title: Inline title", "  showAgentName: true", ""].join(
+        "\n"
+      )
+    });
+
+    const config = await loadClientInstanceConfigFromFile(join(root, "app.yaml"));
+    expect(config.ui.title).toBe("Inline title");
+    expect(config.ui.showAgentName).toBe(true);
+    expect(config.ui.defaultThemeMode).toBe("system");
+  });
+
+  it("rejects unknown inline UI overlay keys", async () => {
+    const root = await writeFixtures({
+      "ui.yaml": "title: File title\n",
+      "app.yaml": [
+        baseConfig,
+        "uiFile: ./ui.yaml",
+        "ui:",
+        "  collaborationWorkspacs:",
+        "    enabled: true",
+        "  collaborationWorkspaces:",
+        "    enabld: true",
+        ""
+      ].join("\n")
+    });
+
+    try {
+      await loadClientInstanceConfigFromFile(join(root, "app.yaml"));
+      throw new Error("Expected the unknown UI overlay key to be rejected");
+    } catch (error) {
+      expect(error).toBeInstanceOf(AppError);
+      if (!(error instanceof AppError)) {
+        throw error;
+      }
+      expect(error.code).toBe("VALIDATION_FAILED");
+      expect(JSON.stringify(error.details)).toContain("collaborationWorkspacs");
+      expect(JSON.stringify(error.details)).toContain("enabld");
+    }
+  });
+
+  it("applies inline UI from an extending file over the base UI file", async () => {
+    const root = await writeFixtures({
+      "ui.yaml": ["clientName: Base Co", "title: Shared title", ""].join("\n"),
+      "app.base.yaml": `${baseConfig}uiFile: ./ui.yaml\n`,
+      "app.yaml": [
+        "extends: ./app.base.yaml",
+        "ui:",
+        "  collaborationWorkspaces:",
+        "    enabled: true",
+        ""
+      ].join("\n")
+    });
+
+    const config = await loadClientInstanceConfigFromFile(join(root, "app.yaml"));
+    expect(config.ui.clientName).toBe("Base Co");
+    expect(config.ui.title).toBe("Shared title");
+    expect(config.ui.collaborationWorkspaces.enabled).toBe(true);
   });
 
   it("replaces a base object with a non-record override instead of silently keeping it", async () => {

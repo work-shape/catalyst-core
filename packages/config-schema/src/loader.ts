@@ -5,6 +5,7 @@ import { AppError } from "@vivd-catalyst/core";
 import {
   clientInstanceConfigFileSchema,
   skillFileFrontmatterSchema,
+  uiConfigOverlaySchema,
   uiConfigSchema,
   type ClientInstanceConfig
 } from "./schemas";
@@ -24,14 +25,16 @@ export async function loadClientInstanceConfigFromFile(
 
   const baseDir = dirname(path);
   if (parsed.data.uiFile && hasInlineUi) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      "Use either ui or uiFile in client instance config, not both"
-    );
+    const overlay = uiConfigOverlaySchema.safeParse(parsed.data.ui);
+    if (!overlay.success) {
+      throw new AppError("VALIDATION_FAILED", "Inline UI config overlay is invalid", {
+        issues: overlay.error.issues
+      });
+    }
   }
 
   const fileUi = parsed.data.uiFile
-    ? await loadUiConfigFile(baseDir, parsed.data.uiFile)
+    ? await loadUiConfigFile(baseDir, parsed.data.uiFile, hasInlineUi ? parsed.data.ui : undefined)
     : hasInlineUi
       ? parsed.data.ui
       : undefined;
@@ -42,10 +45,14 @@ export async function loadClientInstanceConfigFromFile(
   });
 }
 
-async function loadUiConfigFile(baseDir: string, uiFile: string) {
+async function loadUiConfigFile(baseDir: string, uiFile: string, overlay?: unknown) {
   const uiPath = resolve(baseDir, uiFile);
   const uiRaw = await readStructuredFile(uiPath);
-  const ui = uiConfigSchema.safeParse(uiRaw);
+  const mergedUi =
+    isPlainObject(uiRaw) && isPlainObject(overlay)
+      ? mergeConfigObjects(uiRaw, overlay)
+      : (overlay ?? uiRaw);
+  const ui = uiConfigSchema.safeParse(mergedUi);
   if (!ui.success) {
     throw new AppError("VALIDATION_FAILED", `UI config '${uiFile}' is invalid`, {
       issues: ui.error.issues
@@ -94,16 +101,7 @@ async function readConfigFileWithExtends(path: string, visited: Set<string>): Pr
       `Config file '${extendsValue}' extended from '${path}' must contain an object`
     );
   }
-  // ui and uiFile are mutually exclusive: overriding either one replaces the
-  // base's choice of UI source instead of colliding with it.
-  const effectiveBase = { ...base };
-  if ("ui" in overrides) {
-    delete effectiveBase.uiFile;
-  }
-  if ("uiFile" in overrides) {
-    delete effectiveBase.ui;
-  }
-  return mergeConfigObjects(effectiveBase, overrides);
+  return mergeConfigObjects(base, overrides);
 }
 
 function mergeConfigObjects(

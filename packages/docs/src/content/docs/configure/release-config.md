@@ -115,6 +115,7 @@ Merge rules:
 - Arrays and scalars replace the base value wholesale — overriding one list entry means restating the whole list.
 - `extends` chains are allowed; cycles fail validation with a clear error.
 - Relative paths in the merged result (such as `uiFile`) resolve against the entry file's directory, not the extended file's.
+- When a merged config has both `uiFile` and inline `ui`, the file supplies the base UI config and inline `ui` overlays it with the same object and array merge rules.
 
 Keep everything shared in one base file and put only genuine per-environment differences in the environment files. Reading an environment file should answer "what makes this environment different?" at a glance.
 

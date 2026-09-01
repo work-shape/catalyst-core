@@ -679,6 +679,20 @@ export const uiConfigSchema = z
     defaultThemeMode: "system"
   });
 
+export const uiConfigOverlaySchema = uiConfigSchema
+  .unwrap()
+  .extend({
+    resources: uiConfigSchema.unwrap().shape.resources.unwrap().strict().optional(),
+    collaborationWorkspaces: uiConfigSchema
+      .unwrap()
+      .shape.collaborationWorkspaces.unwrap()
+      .strict()
+      .optional(),
+    theme: lightUiThemeSchema.unwrap().strict().optional(),
+    darkTheme: darkUiThemeSchema.unwrap().strict().optional()
+  })
+  .strict();
+
 export const administrationConfigSchema = z
   .object({
     agentConfiguration: z
@@ -804,7 +818,7 @@ export const clientInstanceConfigFileSchema = z.preprocess(
       ui: true
     })
     .extend({
-      ui: uiConfigSchema.optional(),
+      ui: z.unknown().optional(),
       uiFile: z.string().min(1).optional()
     })
 );
