@@ -5,6 +5,7 @@ import { ConversationButton } from "../conversation/conversation-button";
 import { useTranslation } from "../i18n";
 import { Button } from "../ui/button";
 import { cn } from "../ui/cn";
+import { ClientBrandingLogo, clientBrandingFrom } from "./client-branding";
 
 export type WorkspaceView = "chat" | "settings" | "superadmin";
 
@@ -48,11 +49,7 @@ export function WorkspaceRail({
 }) {
   const { t } = useTranslation();
   const [conversationQuery, setConversationQuery] = useState("");
-  const clientLabel = config.ui.clientName ?? config.ui.title;
-  const clientInitial = clientLabel.trim().charAt(0).toLocaleUpperCase();
-  const logoUrl = config.ui.logoUrl;
-  const logoUrlDark = config.ui.logoUrlDark;
-  const invertLogoOnDark = Boolean(config.ui.logoInvertOnDark && !logoUrlDark);
+  const branding = clientBrandingFrom(config);
   const filteredConversations = useMemo(() => {
     const query = conversationQuery.trim().toLocaleLowerCase();
     if (!query) {
@@ -75,29 +72,27 @@ export function WorkspaceRail({
       <Shield size={16} aria-hidden="true" />
     </Button>
   ) : null;
+  const closeSidebarButton = (className: string) => (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className={cn("size-9 text-muted-foreground hover:text-sidebar-foreground", className)}
+      aria-label={t("closeSidebar")}
+      title={t("closeSidebar")}
+      aria-pressed="true"
+      onClick={onToggleSidebar}
+    >
+      <PanelLeft size={17} aria-hidden="true" />
+    </Button>
+  );
 
   return (
     <aside
-      className={cn(
-        "relative grid h-full min-h-0 min-w-0 border-r border-sidebar-border bg-sidebar px-5 pb-4 pt-5 text-sidebar-foreground",
-        collaborationWorkspaceSelector
-          ? "grid-rows-[auto_auto_auto_minmax(0,1fr)_auto]"
-          : "grid-rows-[auto_auto_minmax(0,1fr)_auto]"
-      )}
+      className="relative grid h-full min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)_auto] border-r border-sidebar-border bg-sidebar px-5 pb-4 pt-5 text-sidebar-foreground"
       aria-label={t("conversations")}
     >
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="absolute right-4 top-4 z-20 size-9 text-muted-foreground hover:text-sidebar-foreground"
-        aria-label={t("closeSidebar")}
-        title={t("closeSidebar")}
-        aria-pressed="true"
-        onClick={onToggleSidebar}
-      >
-        <PanelLeft size={17} aria-hidden="true" />
-      </Button>
+      {collaborationWorkspaceSelector ? null : closeSidebarButton("absolute right-4 top-4 z-20")}
 
       <Button
         type="button"
@@ -111,49 +106,46 @@ export function WorkspaceRail({
         <ChevronLeft size={12} strokeWidth={1.75} aria-hidden="true" />
       </Button>
 
-      {logoUrl ? (
+      {/*
+        With workspace chrome visible the selector is the rail's top element and
+        carries the collapse toggle; the client branding moves into its popover.
+        Without the chrome — feature off or embedded — the branding row stays
+        exactly as it was.
+      */}
+      {collaborationWorkspaceSelector ? (
+        <div className="min-w-0 border-b border-sidebar-border pb-3">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
+            <div className="-ml-2 min-w-0">{collaborationWorkspaceSelector}</div>
+            {closeSidebarButton("shrink-0")}
+          </div>
+        </div>
+      ) : branding.logoUrl ? (
         <div className="flex h-16 min-w-0 items-start border-b border-sidebar-border pb-3 pr-11">
           <button
             type="button"
             className="flex h-12 min-w-0 max-w-[11rem] cursor-pointer items-center justify-start overflow-hidden rounded-sm border-0 bg-transparent p-0 text-primary outline-none focus-visible:ring-[3px] focus-visible:ring-sidebar-ring/30"
-            aria-label={clientLabel}
+            aria-label={branding.clientLabel}
             onClick={onCreateConversation}
           >
-            <img
-              className={cn(
-                "max-h-11 w-full object-contain object-left",
-                logoUrlDark && "dark:hidden",
-                invertLogoOnDark && "dark:invert"
-              )}
-              src={logoUrl}
-              alt={clientLabel}
+            <ClientBrandingLogo
+              branding={branding}
+              className="max-h-11 w-full object-contain object-left"
             />
-            {logoUrlDark ? (
-              <img
-                className="hidden max-h-11 w-full object-contain object-left dark:block"
-                src={logoUrlDark}
-                alt={clientLabel}
-              />
-            ) : null}
           </button>
         </div>
       ) : (
         <div className="grid h-16 min-w-0 grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-2.5 border-b border-sidebar-border pb-3 pr-11">
           <div className="grid size-9 place-items-center overflow-hidden rounded-md border border-sidebar-border bg-sidebar-accent/50 text-primary">
             <span className="text-sm font-semibold" aria-hidden="true">
-              {clientInitial}
+              {branding.clientInitial}
             </span>
           </div>
           <div className="grid min-w-0 gap-1 pt-0.5">
-            <strong className="truncate text-sm font-semibold">{clientLabel}</strong>
+            <strong className="truncate text-sm font-semibold">{branding.clientLabel}</strong>
             <span className="truncate text-xs text-muted-foreground">{t("workspace")}</span>
           </div>
         </div>
       )}
-
-      {collaborationWorkspaceSelector ? (
-        <div className="-mx-2 min-w-0 pt-4">{collaborationWorkspaceSelector}</div>
-      ) : null}
 
       <div className="grid gap-3 pb-3 pt-4">
         <div className="flex min-w-0 items-center justify-between gap-2">

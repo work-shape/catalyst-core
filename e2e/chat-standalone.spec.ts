@@ -1518,7 +1518,7 @@ test("normal users are redirected away from superadmin routes", async ({ page })
 
   await page.goto("/admin/usage");
 
-  await expect(page.getByText("E2E Customer")).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Conversations" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Administration panel" })).toHaveCount(0);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
 });
@@ -1533,7 +1533,7 @@ test("workspace and superadmin keep page scroll locked", async ({ page }) => {
   }
 
   await page.goto("/");
-  await expect(page.getByText("E2E Customer")).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Conversations" })).toBeVisible();
   await expectDocumentScrollLocked(page);
 
   await page.getByRole("button", { name: "Open administration panel" }).click();
@@ -1624,7 +1624,7 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
   });
 
   await page.goto("/");
-  await expect(page.getByText("E2E Customer")).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Conversations" })).toBeVisible();
   await page
     .getByPlaceholder("Message")
     .fill(
@@ -1865,10 +1865,16 @@ async function signInViaUi(
     ),
     page.getByRole("button", { name: "Sign in", exact: true }).click()
   ]);
+  /*
+   * The rail itself is the readiness signal. With collaboration workspace
+   * chrome visible the client branding lives in the workspace selector popover
+   * rather than in a branding row, so the rail no longer spells out the client
+   * name.
+   */
   await expect(
     page
       .getByRole("complementary", { name: "Conversations" })
-      .getByText("E2E Customer", { exact: true })
+      .getByRole("searchbox", { name: "Search conversations" })
   ).toBeVisible();
 }
 

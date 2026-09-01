@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom
 import type {
   CollaborationWorkspaceDirectoryItem,
   CollaborationWorkspaceWithRole,
-  WorkspaceMember
+  WorkspaceMember,
+  WorkspaceMemberCandidate
 } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
@@ -14,8 +15,10 @@ import {
   canDeleteCollaborationWorkspace,
   canRemoveCollaborationWorkspaceMember,
   CollaborationWorkspaceGeneralTab,
+  CollaborationWorkspaceMemberCandidateList,
   CollaborationWorkspaceMembersTab,
-  CollaborationWorkspaceRequestsTab
+  CollaborationWorkspaceRequestsTab,
+  nextCollaborationWorkspaceMemberCandidate
 } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-settings-dialog";
 import {
   CollaborationWorkspaceDeletionConfirmStep,
@@ -208,7 +211,10 @@ describe("collaboration workspace settings tabs", () => {
         members,
         loading: false,
         loadFailed: false,
+        memberCandidates: [],
+        memberCandidatesLoading: false,
         pending: false,
+        onMemberCandidateSearchChange: noop,
         onAddMember: noop,
         onChangeMemberRole: noop,
         onRemoveMember: noop
@@ -231,7 +237,10 @@ describe("collaboration workspace settings tabs", () => {
         members,
         loading: false,
         loadFailed: false,
+        memberCandidates: [],
+        memberCandidatesLoading: false,
         pending: false,
+        onMemberCandidateSearchChange: noop,
         onAddMember: noop,
         onChangeMemberRole: noop,
         onRemoveMember: noop
@@ -244,6 +253,98 @@ describe("collaboration workspace settings tabs", () => {
     expect(markup).not.toContain('name="email"');
   });
 
+  it("exposes the add-member field as a closed combobox until suggestions arrive", () => {
+    const markup = render(
+      "de",
+      createElement(CollaborationWorkspaceMembersTab, {
+        collaborationWorkspace: sharedCollaborationWorkspace,
+        currentUserId: "user_1",
+        members,
+        loading: false,
+        loadFailed: false,
+        memberCandidates: [],
+        memberCandidatesLoading: false,
+        pending: false,
+        onMemberCandidateSearchChange: noop,
+        onAddMember: noop,
+        onChangeMemberRole: noop,
+        onRemoveMember: noop
+      })
+    );
+
+    expect(markup).toContain('role="combobox"');
+    expect(markup).toContain('aria-controls="collaboration-workspace-member-candidates"');
+    expect(markup).toContain('aria-expanded="false"');
+    // Empty results stay quiet: no listbox, no "nothing found" copy.
+    expect(markup).not.toContain('role="listbox"');
+  });
+
+  describe("member candidate suggestions", () => {
+    const candidates: WorkspaceMemberCandidate[] = [
+      { displayLabel: "Mara Ruiz", email: "mara@example.com", hasPendingAccessRequest: false },
+      { displayLabel: "Jonas Weber", email: "jonas@example.com", hasPendingAccessRequest: true }
+    ];
+
+    it("renders each candidate as an option with the email as secondary text", () => {
+      const markup = render(
+        "de",
+        createElement(CollaborationWorkspaceMemberCandidateList, {
+          candidates,
+          highlightedIndex: 1,
+          onSelect: noop
+        })
+      );
+
+      expect(markup).toContain('role="listbox"');
+      expect(markup).toContain('aria-label="Mitgliedervorschläge"');
+      expect(markup).toContain('id="collaboration-workspace-member-candidates-0"');
+      expect(markup).toContain("Mara Ruiz");
+      expect(markup).toContain("mara@example.com");
+      // The highlight is carried by aria-selected, not by focus.
+      expect(markup).toMatch(
+        /id="collaboration-workspace-member-candidates-1"[^>]*aria-selected="true"/u
+      );
+      expect(markup).toMatch(
+        /id="collaboration-workspace-member-candidates-0"[^>]*aria-selected="false"/u
+      );
+    });
+
+    it("flags a pending access request without blocking the row", () => {
+      expect(
+        render(
+          "de",
+          createElement(CollaborationWorkspaceMemberCandidateList, {
+            candidates,
+            highlightedIndex: -1,
+            onSelect: noop
+          })
+        )
+      ).toContain("Hat Zugriff angefragt");
+
+      const englishMarkup = render(
+        "en",
+        createElement(CollaborationWorkspaceMemberCandidateList, {
+          candidates,
+          highlightedIndex: -1,
+          onSelect: noop
+        })
+      );
+
+      expect(englishMarkup).toContain("Has requested access");
+      // Only the flagged candidate carries the hint; both stay selectable.
+      expect(englishMarkup.match(/Has requested access/gu)).toHaveLength(1);
+      expect(englishMarkup.match(/role="option"/gu)).toHaveLength(2);
+    });
+
+    it("wraps the arrow-key highlight around both ends", () => {
+      expect(nextCollaborationWorkspaceMemberCandidate(-1, 1, 3)).toBe(0);
+      expect(nextCollaborationWorkspaceMemberCandidate(-1, -1, 3)).toBe(2);
+      expect(nextCollaborationWorkspaceMemberCandidate(2, 1, 3)).toBe(0);
+      expect(nextCollaborationWorkspaceMemberCandidate(0, -1, 3)).toBe(2);
+      expect(nextCollaborationWorkspaceMemberCandidate(0, 1, 0)).toBe(-1);
+    });
+  });
+
   it("keeps roles read-only for an admin", () => {
     const markup = render(
       "de",
@@ -253,7 +354,10 @@ describe("collaboration workspace settings tabs", () => {
         members,
         loading: false,
         loadFailed: false,
+        memberCandidates: [],
+        memberCandidatesLoading: false,
         pending: false,
+        onMemberCandidateSearchChange: noop,
         onAddMember: noop,
         onChangeMemberRole: noop,
         onRemoveMember: noop

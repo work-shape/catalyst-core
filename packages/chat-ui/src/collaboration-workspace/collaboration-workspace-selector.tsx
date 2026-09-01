@@ -20,6 +20,7 @@ export function CollaborationWorkspaceSelector({
   userLabel,
   loading,
   loadFailed,
+  clientBrandingHeader,
   onSelectCollaborationWorkspace,
   onOpenCollaborationWorkspaceSettings,
   onBrowseCollaborationWorkspaces,
@@ -30,6 +31,8 @@ export function CollaborationWorkspaceSelector({
   userLabel: string;
   loading: boolean;
   loadFailed: boolean;
+  /** Client identity, shown at the top of the popover once the rail's own branding row is gone. */
+  clientBrandingHeader?: ReactNode;
   onSelectCollaborationWorkspace(collaborationWorkspaceId: string): void;
   onOpenCollaborationWorkspaceSettings(collaborationWorkspaceId: string): void;
   onBrowseCollaborationWorkspaces(): void;
@@ -121,6 +124,7 @@ export function CollaborationWorkspaceSelector({
           userLabel={userLabel}
           loading={loading}
           loadFailed={loadFailed}
+          clientBrandingHeader={clientBrandingHeader}
           onSelectCollaborationWorkspace={selectCollaborationWorkspace}
           onOpenCollaborationWorkspaceSettings={openCollaborationWorkspaceSettings}
           onBrowseCollaborationWorkspaces={() => {
@@ -143,6 +147,7 @@ export function CollaborationWorkspaceSelectorMenu({
   userLabel,
   loading,
   loadFailed,
+  clientBrandingHeader,
   onSelectCollaborationWorkspace,
   onOpenCollaborationWorkspaceSettings,
   onBrowseCollaborationWorkspaces,
@@ -153,6 +158,7 @@ export function CollaborationWorkspaceSelectorMenu({
   userLabel: string;
   loading: boolean;
   loadFailed: boolean;
+  clientBrandingHeader?: ReactNode;
   onSelectCollaborationWorkspace(collaborationWorkspaceId: string): void;
   onOpenCollaborationWorkspaceSettings(collaborationWorkspaceId: string): void;
   onBrowseCollaborationWorkspaces(): void;
@@ -172,6 +178,7 @@ export function CollaborationWorkspaceSelectorMenu({
       aria-label={t("collaborationWorkspaceSelectorLabel")}
       className="absolute left-0 top-[calc(100%+0.5rem)] z-50 grid w-[min(19rem,calc(100vw-3rem))] gap-1 rounded-md border bg-popover p-2 text-popover-foreground shadow-lg"
     >
+      {clientBrandingHeader}
       {loadFailed ? (
         <p className="px-2 py-3 text-sm text-destructive">
           {t("collaborationWorkspaceLoadFailed")}

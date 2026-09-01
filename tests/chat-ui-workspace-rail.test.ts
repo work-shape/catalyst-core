@@ -135,15 +135,27 @@ describe("workspace rail collaboration workspace slot", () => {
     const markup = renderRail();
 
     expect(markup).toContain("grid-rows-[auto_auto_minmax(0,1fr)_auto]");
-    expect(markup).not.toContain("grid-rows-[auto_auto_auto_minmax(0,1fr)_auto]");
     expect(markup).not.toContain('aria-label="Switch workspace"');
+    // The branding row and its own collapse toggle stay exactly as they were.
+    expect(markup).toContain("Musterfinanz");
+    expect(markup).toContain(">F</span>");
+    expect(markup).toContain("absolute right-4 top-4");
+    expect(markup).toContain('aria-label="Close sidebar"');
   });
 
-  it("keeps the selector row for a first-party session", () => {
+  it("lets the selector replace the branding row for a first-party session", () => {
     const markup = renderRail(selector);
 
-    expect(markup).toContain("grid-rows-[auto_auto_auto_minmax(0,1fr)_auto]");
+    expect(markup).toContain("grid-rows-[auto_auto_minmax(0,1fr)_auto]");
     expect(markup).toContain('aria-label="Switch workspace"');
+    // Direction A: no standalone branding row — the client identity moved into
+    // the selector popover, which is closed here.
+    expect(markup).not.toContain("Musterfinanz");
+    expect(markup).not.toContain(">F</span>");
+    // The collapse toggle rides along in the selector row instead.
+    expect(markup).toContain('aria-label="Close sidebar"');
+    expect(markup).not.toContain("absolute right-4 top-4");
+    expect(markup).toContain('aria-label="Collapse sidebar"');
   });
 });
 
@@ -170,8 +182,9 @@ describe("collaboration workspace chrome feature flag", () => {
     const markup = renderRail(firstPartyChromeVisible(false) ? selector : undefined);
 
     expect(markup).toContain("grid-rows-[auto_auto_minmax(0,1fr)_auto]");
-    expect(markup).not.toContain("grid-rows-[auto_auto_auto_minmax(0,1fr)_auto]");
     expect(markup).not.toContain('aria-label="Switch workspace"');
+    // Zero visual change for a non-workspace instance: branding row intact.
+    expect(markup).toContain("Musterfinanz");
     // The rail itself keeps working: conversations, search and the new-chat
     // action stay exactly as they are without the feature.
     expect(markup).toContain('aria-label="Conversations"');
@@ -183,8 +196,9 @@ describe("collaboration workspace chrome feature flag", () => {
 
     const markup = renderRail(firstPartyChromeVisible(true) ? selector : undefined);
 
-    expect(markup).toContain("grid-rows-[auto_auto_auto_minmax(0,1fr)_auto]");
+    expect(markup).toContain("grid-rows-[auto_auto_minmax(0,1fr)_auto]");
     expect(markup).toContain('aria-label="Switch workspace"');
+    expect(markup).not.toContain("Musterfinanz");
   });
 
   it("keeps embedded sessions chrome-free whatever the feature flag says", () => {

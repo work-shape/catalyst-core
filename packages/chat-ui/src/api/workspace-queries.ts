@@ -112,6 +112,35 @@ export function useCollaborationWorkspaceMembersQuery(
   });
 }
 
+/**
+ * Typeahead over the people an owner/admin can add. `placeholderData` keeps the
+ * previous matches on screen while the next query is in flight, so the dropdown
+ * does not blink shut between keystrokes.
+ */
+export function useCollaborationWorkspaceMemberCandidatesQuery(
+  input: WorkspaceQueryInput & {
+    collaborationWorkspaceId: string;
+    query: string;
+    enabled: boolean;
+  }
+) {
+  return useQuery({
+    queryKey: workspaceQueryKeys.collaborationWorkspaceMemberCandidates(
+      input.apiBaseUrl,
+      input.authScope,
+      input.collaborationWorkspaceId,
+      input.query
+    ),
+    queryFn: () =>
+      input.client.collaborationWorkspaces.members.searchCandidates(
+        input.collaborationWorkspaceId,
+        input.query
+      ),
+    placeholderData: (previousData) => previousData,
+    enabled: input.enabled
+  });
+}
+
 export function useCollaborationWorkspaceAccessRequestsQuery(
   input: WorkspaceQueryInput & {
     collaborationWorkspaceId: string;

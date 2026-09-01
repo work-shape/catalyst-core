@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   ApiClient,
   CollaborationWorkspaceWithRole,
+  WorkspaceMemberCandidate,
   WorkspaceMembershipRole
 } from "@vivd-catalyst/api-client";
 import {
   useCollaborationWorkspaceAccessRequestsQuery,
   useCollaborationWorkspaceDeletionImpactQuery,
   useCollaborationWorkspaceDirectoryQuery,
+  useCollaborationWorkspaceMemberCandidatesQuery,
   useCollaborationWorkspaceMembersQuery
 } from "../api/workspace-queries";
 import {
@@ -16,6 +18,7 @@ import {
 } from "../api/workspace-mutations";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { BrowseCollaborationWorkspacesDialog } from "./browse-collaboration-workspaces-dialog";
+import { canManageCollaborationWorkspace } from "./collaboration-workspace-selector";
 import {
   CollaborationWorkspaceSettingsDialog,
   type CollaborationWorkspaceSettingsValues
@@ -291,6 +294,26 @@ function BrowseCollaborationWorkspacesSurface({
   );
 }
 
+/** Server-side floor for the candidate search; below it nothing is requested. */
+const collaborationWorkspaceMemberCandidateMinQueryLength = 2;
+const collaborationWorkspaceMemberCandidateDebounceMs = 250;
+const emptyCollaborationWorkspaceMemberCandidates: WorkspaceMemberCandidate[] = [];
+
+/** Keeps the candidate request off every keystroke. */
+function useDebouncedCollaborationWorkspaceMemberQuery(query: string): string {
+  const [debouncedQuery, setDebouncedQuery] = useState(query);
+
+  useEffect(() => {
+    const timer = setTimeout(
+      () => setDebouncedQuery(query),
+      collaborationWorkspaceMemberCandidateDebounceMs
+    );
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  return debouncedQuery;
+}
+
 function CollaborationWorkspaceSettingsSurface({
   apiBaseUrl,
   authScope,
@@ -307,6 +330,9 @@ function CollaborationWorkspaceSettingsSurface({
 }) {
   const collaborationWorkspaceId = collaborationWorkspace.id;
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [memberCandidateSearch, setMemberCandidateSearch] = useState("");
+  const debouncedMemberCandidateSearch =
+    useDebouncedCollaborationWorkspaceMemberQuery(memberCandidateSearch);
   const membersQuery = useCollaborationWorkspaceMembersQuery({
     apiBaseUrl,
     authScope,
@@ -320,6 +346,17 @@ function CollaborationWorkspaceSettingsSurface({
     client,
     collaborationWorkspaceId,
     enabled: true
+  });
+  // Candidate search is owner/admin-only server-side; a member never asks.
+  const memberCandidatesQuery = useCollaborationWorkspaceMemberCandidatesQuery({
+    apiBaseUrl,
+    authScope,
+    client,
+    collaborationWorkspaceId,
+    query: debouncedMemberCandidateSearch,
+    enabled:
+      canManageCollaborationWorkspace(collaborationWorkspace) &&
+      debouncedMemberCandidateSearch.length >= collaborationWorkspaceMemberCandidateMinQueryLength
   });
   const deletionImpactQuery = useCollaborationWorkspaceDeletionImpactQuery({
     apiBaseUrl,
@@ -374,6 +411,13 @@ function CollaborationWorkspaceSettingsSurface({
         members={membersQuery.data ?? []}
         membersLoading={membersQuery.isPending}
         membersLoadFailed={Boolean(membersQuery.error)}
+        /* A failed candidate search stays silent: the add flow reports errors. */
+        memberCandidates={
+          memberCandidatesQuery.error
+            ? emptyCollaborationWorkspaceMemberCandidates
+            : (memberCandidatesQuery.data ?? emptyCollaborationWorkspaceMemberCandidates)
+        }
+        memberCandidatesLoading={memberCandidatesQuery.isFetching}
         accessRequests={accessRequestsQuery.data ?? []}
         accessRequestsLoading={accessRequestsQuery.isPending}
         accessRequestsLoadFailed={Boolean(accessRequestsQuery.error)}
@@ -382,6 +426,7 @@ function CollaborationWorkspaceSettingsSurface({
         errorMessage={errorMessage}
         onClose={onClose}
         onSave={save}
+        onMemberCandidateSearchChange={setMemberCandidateSearch}
         onAddMember={(email) => {
           clearError();
           addCollaborationWorkspaceMember.mutate(

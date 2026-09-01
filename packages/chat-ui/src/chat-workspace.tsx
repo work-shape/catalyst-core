@@ -12,6 +12,7 @@ import { ResourcesPanel, ResourcesPanelToggle, useResourcesPanelState } from "./
 import { isResourcesPanelAvailable } from "./resources-panel-model";
 import { ToolDisplayPanel, useToolDisplayPanel } from "./tool-display-panel";
 import { cn } from "./ui/cn";
+import { ClientBrandingHeader } from "./workspace/client-branding";
 import { UserMenu } from "./workspace/user-menu";
 import { ConfigCheckPanel, SessionCheckPanel, WorkspaceChrome } from "./workspace/workspace-chrome";
 import { WorkspaceRail } from "./workspace/workspace-rail";
@@ -149,6 +150,7 @@ function ChatWorkspaceContent({
       userLabel={userLabel}
       loading={collaborationWorkspace.loading}
       loadFailed={collaborationWorkspace.loadFailed}
+      clientBrandingHeader={<ClientBrandingHeader config={model.config.config} />}
       onSelectCollaborationWorkspace={collaborationWorkspace.selectCollaborationWorkspace}
       onOpenCollaborationWorkspaceSettings={collaborationWorkspace.openSettingsDialog}
       onBrowseCollaborationWorkspaces={collaborationWorkspace.openBrowseDialog}

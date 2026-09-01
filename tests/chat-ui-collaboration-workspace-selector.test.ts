@@ -1,12 +1,13 @@
 import { createElement } from "../packages/chat-ui/node_modules/react";
 import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
-import type { CollaborationWorkspaceWithRole } from "@vivd-catalyst/api-client";
+import type { CollaborationWorkspaceWithRole, SafeConfig } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 import {
   CollaborationWorkspaceSelector,
   CollaborationWorkspaceSelectorMenu
 } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-selector";
+import { ClientBrandingHeader } from "../packages/chat-ui/src/workspace/client-branding";
 
 const noop = () => undefined;
 
@@ -163,5 +164,56 @@ describe("collaboration workspace selector", () => {
     expect(markup).toContain('aria-expanded="false"');
     expect(markup).toContain("Personal workspace");
     expect(markup).not.toContain("Browse workspaces");
+  });
+});
+
+describe("collaboration workspace selector client branding", () => {
+  function renderMenuWithBranding(config: SafeConfig): string {
+    return renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { locale: "de" },
+        createElement(CollaborationWorkspaceSelectorMenu, {
+          collaborationWorkspaces: [personal],
+          activeCollaborationWorkspaceId: "cw_personal",
+          userLabel: "Felix Pahlke",
+          loading: false,
+          loadFailed: false,
+          clientBrandingHeader: createElement(ClientBrandingHeader, { config }),
+          onSelectCollaborationWorkspace: noop,
+          onOpenCollaborationWorkspaceSettings: noop,
+          onBrowseCollaborationWorkspaces: noop,
+          onCreateCollaborationWorkspace: noop
+        })
+      )
+    );
+  }
+
+  it("heads the popover with the client logo, above the personal workspace row", () => {
+    const markup = renderMenuWithBranding({
+      ui: {
+        clientName: "Musterfinanz",
+        logoUrl: "/assets/musterfinanz.svg"
+      }
+    } as SafeConfig);
+
+    expect(markup).toContain('src="/assets/musterfinanz.svg"');
+    expect(markup).toContain('data-testid="client-branding-header"');
+    expect(markup.indexOf("client-branding-header")).toBeLessThan(
+      markup.indexOf("Persönlicher Arbeitsbereich")
+    );
+  });
+
+  it("falls back to the client name when no logo is configured", () => {
+    const markup = renderMenuWithBranding({
+      ui: { clientName: "Musterfinanz", title: "Musterfinanz Chat" }
+    } as SafeConfig);
+
+    expect(markup).toContain("Musterfinanz");
+    expect(markup).not.toContain("<img");
+  });
+
+  it("leaves the popover unchanged when no branding is supplied", () => {
+    expect(renderMenu([personal])).not.toContain("client-branding-header");
   });
 });
