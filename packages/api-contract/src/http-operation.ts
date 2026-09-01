@@ -16,6 +16,7 @@ export interface ApiOperationBase {
   readonly path: string;
   readonly requestKind: ApiRequestKind;
   readonly queryParams?: readonly string[];
+  readonly requiredQueryParams?: readonly string[];
   readonly buildPath: (options?: BuildApiPathOptions) => string;
 }
 
@@ -48,6 +49,7 @@ type JsonApiOperationConfigBase = {
   method: ApiHttpMethod;
   path: string;
   queryParams?: readonly string[];
+  requiredQueryParams?: readonly string[];
 };
 
 export function defineJsonApiOperation<ResponseSchema extends z.ZodType>(
@@ -77,7 +79,8 @@ export function defineJsonApiOperation(
     ...config,
     requestKind: config.requestSchema ? "json" : (config.requestKind ?? "none"),
     responseKind: "json",
-    buildPath: (options) => buildOperationPath(config.path, config.queryParams, options)
+    buildPath: (options) =>
+      buildOperationPath(config.path, config.queryParams, config.requiredQueryParams, options)
   } as JsonApiOperation;
 }
 
@@ -86,17 +89,19 @@ export function defineBlobApiOperation(config: JsonApiOperationConfigBase): Blob
     ...config,
     requestKind: "none",
     responseKind: "blob",
-    buildPath: (options) => buildOperationPath(config.path, config.queryParams, options)
+    buildPath: (options) =>
+      buildOperationPath(config.path, config.queryParams, config.requiredQueryParams, options)
   };
 }
 
 export function buildApiPath(pathTemplate: string, options: BuildApiPathOptions = {}): string {
-  return buildOperationPath(pathTemplate, undefined, options);
+  return buildOperationPath(pathTemplate, undefined, undefined, options);
 }
 
 function buildOperationPath(
   pathTemplate: string,
   allowedQueryParams: readonly string[] | undefined,
+  requiredQueryParams: readonly string[] | undefined,
   options: BuildApiPathOptions = {}
 ): string {
   const params = options.params ?? {};
@@ -125,6 +130,12 @@ function buildOperationPath(
       throw new Error(`Unknown query parameter "${name}" for "${pathTemplate}"`);
     }
     query.append(name, String(value));
+  }
+
+  for (const name of requiredQueryParams ?? []) {
+    if (!query.has(name)) {
+      throw new Error(`Missing query parameter "${name}" for "${pathTemplate}"`);
+    }
   }
 
   const queryString = query.toString();

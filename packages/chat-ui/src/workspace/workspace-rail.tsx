@@ -10,33 +10,40 @@ export type WorkspaceView = "chat" | "settings" | "superadmin";
 
 export function WorkspaceRail({
   config,
+  collaborationWorkspaceSelector,
   conversations,
   selectedConversationId,
   canViewAdministration,
   view,
   creatingConversation,
   deletingConversation,
+  canMoveConversation,
   userMenu,
   onToggleSidebar,
   onViewChange,
   onCreateConversation,
   onSelectConversation,
   onRenameConversation,
+  onMoveConversation,
   onDeleteConversation
 }: {
   config: SafeConfig;
+  /** Absent for embedded token sessions, which have no workspace UI at all. */
+  collaborationWorkspaceSelector?: ReactNode;
   conversations: ConversationListItem[];
   selectedConversationId: string | undefined;
   canViewAdministration: boolean;
   view: WorkspaceView;
   creatingConversation: boolean;
   deletingConversation: boolean;
+  canMoveConversation: boolean;
   userMenu: ReactNode;
   onToggleSidebar: () => void;
   onViewChange: (view: WorkspaceView) => void;
   onCreateConversation: () => void;
   onSelectConversation: (conversationId: string) => void;
   onRenameConversation: (conversationId: string, title: string) => Promise<void>;
+  onMoveConversation: (conversationId: string, title: string) => void;
   onDeleteConversation: (conversationId: string) => void;
 }) {
   const { t } = useTranslation();
@@ -71,7 +78,12 @@ export function WorkspaceRail({
 
   return (
     <aside
-      className="relative grid h-full min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)_auto] border-r border-sidebar-border bg-sidebar px-5 pb-4 pt-5 text-sidebar-foreground"
+      className={cn(
+        "relative grid h-full min-h-0 min-w-0 border-r border-sidebar-border bg-sidebar px-5 pb-4 pt-5 text-sidebar-foreground",
+        collaborationWorkspaceSelector
+          ? "grid-rows-[auto_auto_auto_minmax(0,1fr)_auto]"
+          : "grid-rows-[auto_auto_minmax(0,1fr)_auto]"
+      )}
       aria-label={t("conversations")}
     >
       <Button
@@ -139,7 +151,11 @@ export function WorkspaceRail({
         </div>
       )}
 
-      <div className="grid gap-3 pb-3 pt-6">
+      {collaborationWorkspaceSelector ? (
+        <div className="-mx-2 min-w-0 pt-4">{collaborationWorkspaceSelector}</div>
+      ) : null}
+
+      <div className="grid gap-3 pb-3 pt-4">
         <div className="flex min-w-0 items-center justify-between gap-2">
           <span className="truncate text-[0.6875rem] font-semibold uppercase tracking-[0.13em] text-muted-foreground">
             {t("conversations")}
@@ -191,6 +207,11 @@ export function WorkspaceRail({
               selected={conversation.id === selectedConversationId}
               onSelect={() => onSelectConversation(conversation.id)}
               onRename={(title) => onRenameConversation(conversation.id, title)}
+              onMove={
+                canMoveConversation
+                  ? () => onMoveConversation(conversation.id, conversation.title)
+                  : undefined
+              }
               onDelete={() => onDeleteConversation(conversation.id)}
               deleting={deletingConversation}
             />

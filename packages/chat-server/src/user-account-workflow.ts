@@ -4,17 +4,12 @@ import {
   asUserId,
   auditActorFromUser,
   authenticatedUserFromRecord,
-  getSubjectUserId,
   type AuthenticatedUser,
-  type ConversationId,
   type RuntimeCallContext,
   type UserRecord
 } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "./types";
-import {
-  cleanupExecutionWorkspaceForConversation,
-  executionWorkspaceCleanupAuditMetadata
-} from "./workspace-cleanup";
+import { cleanupProductUserData } from "./user-deletion";
 
 interface UpdateCurrentUserCommand {
   displayLabel: string;
@@ -24,19 +19,6 @@ interface ChangeCurrentUserPasswordCommand {
   currentPassword: string;
   newPassword: string;
 }
-
-interface ConversationDeletionTotals {
-  conversationCount: number;
-  attachmentCount: number;
-  fileCount: number;
-  artifactCount: number;
-  workspaceCount: number;
-  workspaceFileCount: number;
-  workspaceCommandCount: number;
-  workspaceObjectCount: number;
-}
-
-type ConversationDataDeletionTotals = Omit<ConversationDeletionTotals, "conversationCount">;
 
 export class UserAccountWorkflow {
   constructor(private readonly options: ChatServerOptions) {}
@@ -121,7 +103,12 @@ export class UserAccountWorkflow {
     }
 
     const existing = await this.getCurrentUserOrThrow(actor);
-    const deletionTotals = await this.deleteActiveConversations(actor, context);
+    const deletionTotals = await cleanupProductUserData({
+      options: this.options,
+      actor,
+      context,
+      userId: asUserId(actor.id)
+    });
     await this.deleteStandalonePasswordSignIns(existing);
     const deleted = await this.options.userStore.deleteUser({
       clientInstanceId: this.options.clientInstanceId,
@@ -155,87 +142,6 @@ export class UserAccountWorkflow {
       throw new AppError("NOT_FOUND", "User account is not available");
     }
     return user;
-  }
-
-  private async deleteActiveConversations(
-    actor: AuthenticatedUser,
-    context: RuntimeCallContext
-  ): Promise<ConversationDeletionTotals> {
-    const conversations = await this.options.conversationStore.listConversationsForUser({
-      clientInstanceId: this.options.clientInstanceId,
-      ownerUserId: getSubjectUserId(actor)
-    });
-    const totals: ConversationDeletionTotals = {
-      conversationCount: 0,
-      attachmentCount: 0,
-      fileCount: 0,
-      artifactCount: 0,
-      workspaceCount: 0,
-      workspaceFileCount: 0,
-      workspaceCommandCount: 0,
-      workspaceObjectCount: 0
-    };
-
-    for (const conversation of conversations) {
-      const deletedAt = new Date().toISOString();
-      const deletion = await this.deleteConversationDataForAccountDeletion(
-        conversation.id,
-        deletedAt
-      );
-      totals.conversationCount += 1;
-      totals.attachmentCount += deletion.attachmentCount;
-      totals.fileCount += deletion.fileCount;
-      totals.artifactCount += deletion.artifactCount;
-      totals.workspaceCount += deletion.workspaceCount;
-      totals.workspaceFileCount += deletion.workspaceFileCount;
-      totals.workspaceCommandCount += deletion.workspaceCommandCount;
-      totals.workspaceObjectCount += deletion.workspaceObjectCount;
-
-      await this.options.auditRecorder.record({
-        type: "conversation.deleted",
-        status: "success",
-        actor: auditActorFromUser(actor),
-        subject: conversation.id,
-        correlationId: context.correlationId,
-        metadata: {
-          requestedBy: "account_deletion",
-          ...deletion
-        }
-      });
-    }
-
-    return totals;
-  }
-
-  private async deleteConversationDataForAccountDeletion(
-    conversationId: ConversationId,
-    deletedAt: string
-  ): Promise<ConversationDataDeletionTotals> {
-    const attachmentDeletion = this.options.attachments
-      ? await this.options.attachments.deleteConversationAttachments({
-          conversationId,
-          deletedAt
-        })
-      : undefined;
-    const workspaceDeletion = await cleanupExecutionWorkspaceForConversation(this.options, {
-      conversationId,
-      deletedAt
-    });
-    await this.options.conversationStore.deleteConversation({
-      clientInstanceId: this.options.clientInstanceId,
-      conversationId,
-      deletedAt
-    });
-    const workspaceMetadata = executionWorkspaceCleanupAuditMetadata(workspaceDeletion);
-    return {
-      attachmentCount: attachmentDeletion?.attachmentCount ?? 0,
-      fileCount: attachmentDeletion?.fileObjectKeys.length ?? 0,
-      artifactCount: attachmentDeletion?.artifactObjectKeys.length ?? 0,
-      workspaceCount: Number(workspaceMetadata.workspaceCount ?? 0),
-      workspaceFileCount: Number(workspaceMetadata.workspaceFileCount ?? 0),
-      workspaceCommandCount: Number(workspaceMetadata.workspaceCommandCount ?? 0),
-      workspaceObjectCount: Number(workspaceMetadata.workspaceObjectCount ?? 0)
-    };
   }
 
   private async deleteStandalonePasswordSignIns(user: UserRecord): Promise<void> {

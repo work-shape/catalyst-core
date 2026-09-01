@@ -9,7 +9,12 @@ import {
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
-import { createTestConfig, createClientInstanceApp, createTestUser } from "./chat-server-harness";
+import {
+  createTestConfig,
+  createClientInstanceApp,
+  createTestUser,
+  personalConversationListUrl
+} from "./chat-server-harness";
 import {
   createMissingRuntime,
   createUnusedModelProvider,
@@ -58,7 +63,7 @@ describe("client instance app vertical slice", () => {
 
     const listed = await app.server.inject({
       method: "GET",
-      url: "/api/conversations"
+      url: await personalConversationListUrl(app.server)
     });
     expect(listed.statusCode).toBe(200);
     expect(listed.json()).toContainEqual(
@@ -180,7 +185,7 @@ describe("client instance app vertical slice", () => {
 
     const listed = await app.server.inject({
       method: "GET",
-      url: "/api/conversations"
+      url: await personalConversationListUrl(app.server)
     });
     expect(listed.statusCode).toBe(200);
     expect(listed.json()).toContainEqual(
@@ -281,17 +286,17 @@ describe("client instance app vertical slice", () => {
       }
     });
     try {
-      const conversation = await store.createConversation({
+      const conversation = await store.createConversationForTesting({
         clientInstanceId,
-        ownerUserId: owner.id,
-        ownerExternalUserId: owner.externalUserId,
+        createdByUserId: owner.id,
+        createdByExternalUserId: owner.externalUserId,
         title: "Artifact download",
         retainedUntil: "2030-01-01T00:00:00.000Z"
       });
-      const otherConversation = await store.createConversation({
+      const otherConversation = await store.createConversationForTesting({
         clientInstanceId,
-        ownerUserId: owner.id,
-        ownerExternalUserId: owner.externalUserId,
+        createdByUserId: owner.id,
+        createdByExternalUserId: owner.externalUserId,
         title: "Other conversation",
         retainedUntil: "2030-01-01T00:00:00.000Z"
       });
@@ -525,7 +530,7 @@ describe("client instance app vertical slice", () => {
 
     const listed = await app.server.inject({
       method: "GET",
-      url: "/api/conversations"
+      url: await personalConversationListUrl(app.server)
     });
     expect(listed.statusCode).toBe(200);
     expect(listed.json()).toContainEqual(

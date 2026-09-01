@@ -7,6 +7,7 @@ import {
   type ConversationId,
   type CreateConversationInput,
   type CreateMessageInput,
+  type MoveConversationInput,
   createPlatformId
 } from "@vivd-catalyst/core";
 import type { PostgresDatabase } from "./postgres-database";
@@ -29,8 +30,9 @@ export async function createConversation(
     .values({
       id,
       clientInstanceId: input.clientInstanceId,
-      ownerUserId: input.ownerUserId,
-      ownerExternalUserId: input.ownerExternalUserId,
+      collaborationWorkspaceId: input.collaborationWorkspaceId,
+      createdByUserId: input.createdByUserId,
+      createdByExternalUserId: input.createdByExternalUserId,
       title: input.title,
       status: "active",
       createdAt: now,
@@ -59,11 +61,11 @@ export async function getConversation(
   return row ? mapConversation(row) : undefined;
 }
 
-export async function listConversationsForUser(
+export async function listConversationsForWorkspace(
   db: PostgresDatabase,
   input: {
     clientInstanceId: ClientInstanceId;
-    ownerUserId: string;
+    collaborationWorkspaceId: Conversation["collaborationWorkspaceId"];
   }
 ): Promise<Conversation[]> {
   const rows = await db
@@ -72,12 +74,34 @@ export async function listConversationsForUser(
     .where(
       and(
         eq(conversations.clientInstanceId, input.clientInstanceId),
-        eq(conversations.ownerUserId, input.ownerUserId),
+        eq(conversations.collaborationWorkspaceId, input.collaborationWorkspaceId),
         eq(conversations.status, "active")
       )
     )
     .orderBy(desc(conversations.updatedAt));
   return rows.map(mapConversation);
+}
+
+export async function moveConversation(
+  db: PostgresDatabase,
+  input: MoveConversationInput
+): Promise<Conversation> {
+  const [row] = await db
+    .update(conversations)
+    .set({ collaborationWorkspaceId: input.toCollaborationWorkspaceId })
+    .where(
+      and(
+        eq(conversations.clientInstanceId, input.clientInstanceId),
+        eq(conversations.id, input.conversationId),
+        eq(conversations.status, "active"),
+        eq(conversations.collaborationWorkspaceId, input.fromCollaborationWorkspaceId)
+      )
+    )
+    .returning();
+  if (!row) {
+    throw new AppError("CONFLICT", "Conversation workspace changed during the move");
+  }
+  return mapConversation(row);
 }
 
 export async function listExpiredConversations(

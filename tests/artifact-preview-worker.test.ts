@@ -748,10 +748,10 @@ async function createWorkerFixture(
   const clientInstanceId = asClientInstanceId(`preview_worker_${globalThis.crypto.randomUUID()}`);
   const store = new InMemoryPlatformStore();
   const objectStore = new MemoryObjectStorage();
-  const conversation = await store.createConversation({
+  const conversation = await store.createConversationForTesting({
     clientInstanceId,
-    ownerUserId: "user-1",
-    ownerExternalUserId: "user-1",
+    createdByUserId: "user-1",
+    createdByExternalUserId: "user-1",
     title: "Preview worker",
     retainedUntil: "2030-01-01T00:00:00.000Z"
   });

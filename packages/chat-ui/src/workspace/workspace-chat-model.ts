@@ -24,6 +24,10 @@ import {
   useWorkspaceMeQuery,
   useWorkspaceThreadQuery
 } from "../api/workspace-queries";
+import {
+  useCollaborationWorkspaceModel,
+  type CollaborationWorkspaceModel
+} from "../collaboration-workspace/collaboration-workspace-model";
 import type { LocalUploadingAttachment } from "../assistant/assistant-composer";
 import type { ChatFileDropzoneController } from "../chat-file-dropzone";
 import type { ChatShellAdminPanel } from "../chat-shell";
@@ -56,11 +60,30 @@ import {
   useWorkspaceTheme
 } from "./workspace-ui-state";
 
-const WORKSPACE_AUTH_SCOPE = "standalone";
+export const WORKSPACE_AUTH_SCOPE = "standalone";
+
+/**
+ * Collaboration Workspace chrome — the rail selector, the dialogs panel and
+ * the conversation move action — is opt-in per client instance. With it off
+ * a first-party session keeps its `collaboration_workspace:read` scope, so
+ * routing, the workspace list query and the Personal Workspace stay exactly as
+ * they are and only the visible surfaces are withheld.
+ */
+export function collaborationWorkspaceChromeVisibleFor(input: {
+  collaborationWorkspacesAvailable: boolean;
+  config: SafeConfig | undefined;
+}): boolean {
+  return (
+    input.collaborationWorkspacesAvailable &&
+    (input.config?.features.collaborationWorkspaces.enabled ?? false)
+  );
+}
 
 export interface WorkspaceChatModelInput {
   adminPanel: ChatShellAdminPanel | undefined;
   manageDocumentTitle: boolean | undefined;
+  /** False for embedded token sessions, which stay fixed-context. */
+  collaborationWorkspacesAvailable: boolean;
 }
 
 export interface WorkspaceChatModel {
@@ -68,6 +91,9 @@ export interface WorkspaceChatModel {
   config: WorkspaceConfigModel;
   route: WorkspaceRouteModel;
   chrome: WorkspaceChromeModel;
+  collaborationWorkspace: CollaborationWorkspaceModel;
+  /** False when the auth mode or the client instance config withholds the chrome. */
+  collaborationWorkspaceChromeVisible: boolean;
   conversationRail: ConversationRailModel;
   selectedChat: SelectedChatModel;
   controlPlane: ControlPlaneModel;
@@ -122,9 +148,11 @@ export interface ConversationRailModel {
   view: WorkspaceView;
   creatingConversation: boolean;
   deletingConversation: boolean;
+  canMoveConversation: boolean;
   startNewConversation(): void;
   selectConversation(conversationId: string): void;
   renameConversation(conversationId: string, title: string): Promise<void>;
+  moveConversation(conversationId: string, title: string): void;
   deleteConversation(conversationId: string): void;
   selectWorkspaceView(view: WorkspaceView): void;
 }
@@ -132,6 +160,7 @@ export interface ConversationRailModel {
 export interface SelectedChatModel {
   client: ApiClient;
   config: SafeConfig | undefined;
+  collaborationWorkspaceId: string | undefined;
   selectedConversationId: string | undefined;
   messages: Message[] | undefined;
   completedRunProjections: ConversationControllerState["completedRunProjections"];
@@ -175,7 +204,8 @@ export interface ToolDisplayModel {
 
 export function useWorkspaceChatModel({
   adminPanel,
-  manageDocumentTitle
+  manageDocumentTitle,
+  collaborationWorkspacesAvailable
 }: WorkspaceChatModelInput): WorkspaceChatModel {
   const [notice, setNotice] = useState<string | undefined>();
   const [selectedAgentName, setSelectedAgentName] = useState<string | undefined>();
@@ -202,12 +232,6 @@ export function useWorkspaceChatModel({
     localePreference: preferences.localePreference,
     enabled: isAuthenticated
   });
-  const conversationsQuery = useWorkspaceConversationsQuery({
-    apiBaseUrl,
-    authScope: WORKSPACE_AUTH_SCOPE,
-    client,
-    enabled: isAuthenticated
-  });
   const threadQuery = useWorkspaceThreadQuery({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
@@ -215,11 +239,44 @@ export function useWorkspaceChatModel({
     conversationId: selectedConversationId,
     enabled: isAuthenticated && Boolean(selectedConversationId)
   });
+  // Only a settled thread for the conversation actually on screen may decide
+  // the canonical URL. A snapshot left over from another conversation, or one
+  // still being refetched after a move, would redirect back to a workspace the
+  // conversation has already left.
+  const loadedConversation =
+    threadQuery.data?.conversation.id === selectedConversationId && !threadQuery.isFetching
+      ? threadQuery.data?.conversation
+      : undefined;
+  const collaborationWorkspace = useCollaborationWorkspaceModel({
+    apiBaseUrl,
+    authScope: WORKSPACE_AUTH_SCOPE,
+    client,
+    isAuthenticated,
+    enabled: collaborationWorkspacesAvailable,
+    userId: meQuery.data?.id,
+    route,
+    loadedConversationCollaborationWorkspaceId: loadedConversation?.collaborationWorkspaceId,
+    legacyConversationUnavailable:
+      route.kind === "legacy-conversation" && Boolean(threadQuery.error),
+    goToCollaborationWorkspace: routeState.goToDefaultChat,
+    showConversation: routeState.showConversation
+  });
+  const activeCollaborationWorkspaceId = collaborationWorkspace.activeCollaborationWorkspaceId;
+  const conversationsQuery = useWorkspaceConversationsQuery({
+    apiBaseUrl,
+    authScope: WORKSPACE_AUTH_SCOPE,
+    client,
+    collaborationWorkspaceId: activeCollaborationWorkspaceId,
+    collaborationWorkspacesAvailable,
+    enabled: isAuthenticated
+  });
 
   const workspaceCache = useWorkspaceCacheActions({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
-    client
+    client,
+    collaborationWorkspaceId: activeCollaborationWorkspaceId,
+    collaborationWorkspacesAvailable
   });
   const controller = useConversationController({
     client,
@@ -287,7 +344,25 @@ export function useWorkspaceChatModel({
   const config = configQuery.data;
   const attachmentsEnabled = config?.features.attachments.enabled ?? false;
   const attachmentAccept = config?.features.attachments.accept ?? "";
+  const collaborationWorkspaceChromeVisible = collaborationWorkspaceChromeVisibleFor({
+    collaborationWorkspacesAvailable,
+    config
+  });
   const activeLocale = useWorkspaceLocale(config?.localization.locale);
+
+  function showConversationInActiveCollaborationWorkspace(
+    conversationId: string,
+    options?: { replace?: boolean }
+  ) {
+    if (!activeCollaborationWorkspaceId) {
+      return;
+    }
+    routeState.showConversation(activeCollaborationWorkspaceId, conversationId, options);
+  }
+
+  function goToActiveCollaborationWorkspaceChat(options?: { replace?: boolean }) {
+    routeState.goToDefaultChat(activeCollaborationWorkspaceId, options);
+  }
 
   async function ensureConversationForFiles(files: File[]): Promise<string> {
     if (selectedConversationId) {
@@ -297,14 +372,19 @@ export function useWorkspaceChatModel({
       files.length === 1 ? (files[0]?.name ?? "Attached file") : `${files.length} attached files`;
     const conversation = await client.conversations.create({
       title,
-      locale: activeLocale
+      locale: activeLocale,
+      ...(activeCollaborationWorkspaceId
+        ? { collaborationWorkspaceId: activeCollaborationWorkspaceId }
+        : {})
     });
     draftController.moveDraft({
       authScope: WORKSPACE_AUTH_SCOPE,
       fromConversationId: undefined,
       toConversationId: conversation.id
     });
-    routeState.showConversation(conversation.id, { replace: route.kind === "new-conversation" });
+    showConversationInActiveCollaborationWorkspace(conversation.id, {
+      replace: route.kind === "new-conversation"
+    });
     setNotice(undefined);
     workspaceCache.invalidateConversations();
     return conversation.id;
@@ -335,7 +415,7 @@ export function useWorkspaceChatModel({
     conversationActivity.resetConversationActivity();
     clearRunCursors();
     routeState.resetRouteMemory();
-    routeState.goToDefaultChat({ replace: true });
+    routeState.goToDefaultChat(undefined, { replace: true });
   }
 
   const controlPlane = useControlPlaneModel({
@@ -353,7 +433,7 @@ export function useWorkspaceChatModel({
     selectLocale: preferences.selectLocale,
     showContextIndicator: preferences.showContextIndicator,
     setShowContextIndicator: preferences.setShowContextIndicator,
-    goToDefaultChat: routeState.goToDefaultChat,
+    goToDefaultChat: goToActiveCollaborationWorkspaceChat,
     onAccountDeleted: resetAuthenticatedWorkspaceState,
     showSuperadmin: routeState.showSuperadmin
   });
@@ -427,14 +507,17 @@ export function useWorkspaceChatModel({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
     client,
+    collaborationWorkspaceId: activeCollaborationWorkspaceId,
     selectedConversationId,
     clearConversationUploads: draftAttachmentController.clearConversationUploads,
     onDeletedActiveConversation: (nextSelectedConversationId) => {
       if (nextSelectedConversationId) {
-        routeState.showConversation(nextSelectedConversationId, { replace: true });
+        showConversationInActiveCollaborationWorkspace(nextSelectedConversationId, {
+          replace: true
+        });
         return;
       }
-      routeState.goToDefaultChat({ replace: true });
+      goToActiveCollaborationWorkspaceChat({ replace: true });
     },
     onDeletedConversation: () => setNotice(undefined),
     onErrorMessage: setNotice
@@ -443,6 +526,7 @@ export function useWorkspaceChatModel({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
     client,
+    collaborationWorkspaceId: activeCollaborationWorkspaceId,
     onErrorMessage: setNotice
   });
   const signOutMutation = useWorkspaceSignOutMutation({
@@ -455,6 +539,7 @@ export function useWorkspaceChatModel({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
     client,
+    collaborationWorkspaceId: activeCollaborationWorkspaceId,
     onErrorMessage: setNotice
   });
 
@@ -473,13 +558,15 @@ export function useWorkspaceChatModel({
   }
 
   function startNewConversation() {
-    routeState.goToDefaultChat();
+    goToActiveCollaborationWorkspaceChat();
     setNotice(undefined);
     chrome.requestComposerFocus();
   }
 
   function conversationStarted(conversationId: string) {
-    routeState.showConversation(conversationId, { replace: route.kind === "new-conversation" });
+    showConversationInActiveCollaborationWorkspace(conversationId, {
+      replace: route.kind === "new-conversation"
+    });
     setNotice(undefined);
     workspaceCache.invalidateConversationStarted(conversationId);
   }
@@ -494,7 +581,7 @@ export function useWorkspaceChatModel({
 
   function runStarted(response: StartConversationRunResponse) {
     workspaceCache.cacheRunStarted(response);
-    routeState.showConversation(response.conversation.id, {
+    showConversationInActiveCollaborationWorkspace(response.conversation.id, {
       replace: route.kind === "new-conversation"
     });
     setNotice(undefined);
@@ -514,7 +601,7 @@ export function useWorkspaceChatModel({
   }
 
   function selectConversation(conversationId: string) {
-    routeState.showConversation(conversationId);
+    showConversationInActiveCollaborationWorkspace(conversationId);
     setNotice(undefined);
   }
 
@@ -556,6 +643,8 @@ export function useWorkspaceChatModel({
       closeSidebar: chrome.closeSidebar,
       toggleSidebar: chrome.toggleSidebar
     },
+    collaborationWorkspace,
+    collaborationWorkspaceChromeVisible,
     conversationRail: {
       conversations,
       selectedConversationId,
@@ -563,17 +652,21 @@ export function useWorkspaceChatModel({
       view,
       creatingConversation: false,
       deletingConversation: deleteConversationMutation.isPending,
+      canMoveConversation:
+        collaborationWorkspaceChromeVisible && collaborationWorkspace.canMoveConversation,
       startNewConversation,
       selectConversation,
       renameConversation: async (conversationId, title) => {
         await renameConversationMutation.mutateAsync({ conversationId, title });
       },
+      moveConversation: collaborationWorkspace.openMoveConversationDialog,
       deleteConversation: (conversationId) => deleteConversationMutation.mutate(conversationId),
       selectWorkspaceView: routeState.selectWorkspaceView
     },
     selectedChat: {
       client,
       config,
+      collaborationWorkspaceId: activeCollaborationWorkspaceId,
       selectedConversationId,
       messages,
       completedRunProjections: controller.completedRunProjections,

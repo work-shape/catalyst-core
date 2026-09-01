@@ -8,7 +8,7 @@ import { fromNodeHeaders } from "better-auth/node";
 import postgres from "postgres";
 import {
   AppError,
-  AUTH_SCOPE_WILDCARD,
+  FIRST_PARTY_AUTH_SCOPES,
   type AuthenticatedUser,
   type ClientInstanceId
 } from "@vivd-catalyst/core";
@@ -120,6 +120,7 @@ export async function createStandaloneAuthRuntime(
     trustedOrigins: options.trustedOrigins ?? [],
     emailAndPassword: {
       enabled: true,
+      disableSignUp: true,
       minPasswordLength: 8
     }
   });
@@ -189,7 +190,7 @@ class BetterAuthAdapter implements AuthAdapter {
         clientInstanceId: request.clientInstanceId,
         authSource: this.id
       },
-      scopes: [AUTH_SCOPE_WILDCARD]
+      scopes: [...FIRST_PARTY_AUTH_SCOPES]
     };
   }
 }

@@ -420,12 +420,10 @@ export interface AgentRunStore {
   getActiveConversationAgentRun(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
-    ownerUserId: string;
   }): Promise<AgentRun | undefined>;
   getLatestConversationAgentRun(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
-    ownerUserId: string;
   }): Promise<AgentRun | undefined>;
   updateAgentRunStatus(input: UpdateAgentRunStatusInput): Promise<AgentRun>;
   listStaleActiveAgentRuns(input: {
@@ -449,7 +447,6 @@ export interface RunObservationStore {
   listRunObservations(input: {
     clientInstanceId: ClientInstanceId;
     runId: AgentRunId;
-    ownerUserId: string;
     afterSequence?: number;
     limit?: number;
   }): Promise<RunObservation[]>;

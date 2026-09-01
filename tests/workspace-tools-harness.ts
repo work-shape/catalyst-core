@@ -3,6 +3,7 @@ import {
   asClientInstanceId,
   asManagedFileId,
   asToolCallId,
+  asUserId,
   StoreBackedAuditRecorder,
   type ClientInstanceId,
   type Conversation,
@@ -46,12 +47,26 @@ export async function createWorkspaceHarness(
   } = {}
 ) {
   const clientInstanceId = asClientInstanceId(`workspace_tools_${globalThis.crypto.randomUUID()}`);
-  const ownerUserId = "user-1";
   const store = new InMemoryPlatformStore();
+  const owner = await store.resolveUserIdentity({
+    clientInstanceId,
+    authSource: "test",
+    externalUserId: "user-1",
+    displayLabel: "Workspace Tools User",
+    roles: ["user"],
+    permissionRefs: [],
+    permissions: []
+  });
+  const ownerUserId = owner.id;
+  const personalWorkspace = await store.ensurePersonalWorkspace({
+    clientInstanceId,
+    userId: asUserId(owner.id)
+  });
   const conversation = await store.createConversation({
     clientInstanceId,
-    ownerUserId,
-    ownerExternalUserId: ownerUserId,
+    collaborationWorkspaceId: personalWorkspace.id,
+    createdByUserId: ownerUserId,
+    createdByExternalUserId: ownerUserId,
     title: "Workspace tools test",
     retainedUntil: "2026-07-29T00:00:00.000Z"
   });
@@ -97,7 +112,7 @@ export async function createWorkspaceHarness(
     getAgentToolNames: () => agentToolNames,
     ...(auditRecorder ? { auditRecorder } : {})
   });
-  const context = createToolContext(clientInstanceId);
+  const context = createToolContext(clientInstanceId, ownerUserId);
   return {
     clientInstanceId,
     ownerUserId,
@@ -159,12 +174,15 @@ export async function createWorkspaceHarness(
   };
 }
 
-function createToolContext(clientInstanceId: ClientInstanceId): ToolExecutionContext {
+function createToolContext(
+  clientInstanceId: ClientInstanceId,
+  ownerUserId: string
+): ToolExecutionContext {
   return {
     clientInstanceId,
     correlationId: "corr_workspace_tools",
     user: {
-      id: "user-1",
+      id: ownerUserId,
       externalUserId: "user-1",
       displayLabel: "Workspace Tools User",
       roles: ["user"],

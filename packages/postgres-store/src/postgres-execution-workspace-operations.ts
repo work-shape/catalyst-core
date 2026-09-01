@@ -42,10 +42,9 @@ export async function ensureExecutionWorkspace(
   input: EnsureExecutionWorkspaceInput
 ): Promise<ExecutionWorkspace> {
   const now = input.now ? new Date(input.now) : new Date();
-  await requireOwnedActiveConversation(db, {
+  await requireActiveConversation(db, {
     clientInstanceId: input.clientInstanceId,
-    conversationId: input.conversationId,
-    ownerUserId: input.ownerUserId
+    conversationId: input.conversationId
   });
 
   const [inserted] = await db
@@ -275,8 +274,7 @@ export async function enqueueWorkspaceCommand(
   return db.transaction(async (tx) => {
     const workspace = await requireActiveWorkspace(tx, {
       clientInstanceId: input.clientInstanceId,
-      workspaceId: input.workspaceId,
-      ownerUserId: input.ownerUserId
+      workspaceId: input.workspaceId
     });
     const queuedAt = input.queuedAt ? new Date(input.queuedAt) : new Date();
     const [row] = await tx
@@ -720,12 +718,11 @@ export async function markExecutionWorkspaceDeleted(
   });
 }
 
-async function requireOwnedActiveConversation(
+async function requireActiveConversation(
   db: PostgresDatabase,
   input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
-    ownerUserId: string;
   }
 ): Promise<void> {
   const [row] = await db
@@ -735,7 +732,6 @@ async function requireOwnedActiveConversation(
       and(
         eq(conversations.clientInstanceId, input.clientInstanceId),
         eq(conversations.id, input.conversationId),
-        eq(conversations.ownerUserId, input.ownerUserId),
         eq(conversations.status, "active")
       )
     )
@@ -750,7 +746,6 @@ async function requireActiveWorkspace(
   input: {
     clientInstanceId: ClientInstanceId;
     workspaceId: ExecutionWorkspaceId;
-    ownerUserId?: string;
   }
 ): Promise<ExecutionWorkspace> {
   const where = [
@@ -758,9 +753,6 @@ async function requireActiveWorkspace(
     eq(executionWorkspaces.id, input.workspaceId),
     eq(executionWorkspaces.status, "active")
   ];
-  if (input.ownerUserId !== undefined) {
-    where.push(eq(executionWorkspaces.ownerUserId, input.ownerUserId));
-  }
   const [row] = await db
     .select()
     .from(executionWorkspaces)

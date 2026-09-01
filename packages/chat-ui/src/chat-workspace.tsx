@@ -3,6 +3,8 @@ import { AssistantRuntimePanel } from "./assistant/assistant-runtime-panel";
 import { AttachmentContentProvider } from "./attachment-content";
 import { ChatDropOverlay } from "./chat-file-dropzone";
 import type { ChatShellProps } from "./chat-shell";
+import { CollaborationWorkspacePanel } from "./collaboration-workspace/collaboration-workspace-panel";
+import { CollaborationWorkspaceSelector } from "./collaboration-workspace/collaboration-workspace-selector";
 import { ControlPlaneRoutes } from "./control-plane/control-plane-routes";
 import { TranslationProvider } from "./i18n";
 import { LoginPanel } from "./login-panel";
@@ -14,12 +16,28 @@ import { UserMenu } from "./workspace/user-menu";
 import { ConfigCheckPanel, SessionCheckPanel, WorkspaceChrome } from "./workspace/workspace-chrome";
 import { WorkspaceRail } from "./workspace/workspace-rail";
 import { type WorkspaceRoute, type WorkspaceRouteChangeOptions } from "./workspace/workspace-route";
-import { useWorkspaceChatModel } from "./workspace/workspace-chat-model";
+import { useWorkspaceChatModel, WORKSPACE_AUTH_SCOPE } from "./workspace/workspace-chat-model";
 import { WorkspaceProviders } from "./workspace/workspace-providers";
 
 interface ChatWorkspaceProps extends ChatShellProps {
   route: WorkspaceRoute;
   onRouteChange(route: WorkspaceRoute, options?: WorkspaceRouteChangeOptions): void;
+}
+
+/**
+ * An embedded session authenticates with a host-issued token whose scope is
+ * capped below `collaboration_workspace:read`, so every Collaboration Workspace
+ * surface is first-party only and the widget stays fixed-context.
+ *
+ * This is the auth-mode half of the decision: it drives the workspace list
+ * query and its cache dimension. Whether a first-party session also *shows* the
+ * chrome is `collaborationWorkspaceChromeVisibleFor`, which adds the config
+ * feature flag on top.
+ */
+export function collaborationWorkspacesAvailableFor(
+  auth: Pick<ChatShellProps, "token" | "getToken">
+): boolean {
+  return !auth.token && !auth.getToken;
 }
 
 export function ChatWorkspace({
@@ -32,6 +50,8 @@ export function ChatWorkspace({
   route,
   onRouteChange
 }: ChatWorkspaceProps) {
+  const workspacesAvailable = collaborationWorkspacesAvailableFor({ token, getToken });
+
   return (
     <WorkspaceProviders
       apiBaseUrl={apiBaseUrl}
@@ -44,6 +64,7 @@ export function ChatWorkspace({
         adminPanel={adminPanel}
         manageDocumentTitle={manageDocumentTitle}
         className={className}
+        collaborationWorkspacesAvailable={workspacesAvailable}
       />
     </WorkspaceProviders>
   );
@@ -52,9 +73,16 @@ export function ChatWorkspace({
 function ChatWorkspaceContent({
   adminPanel,
   manageDocumentTitle,
-  className
-}: Pick<ChatWorkspaceProps, "adminPanel" | "manageDocumentTitle" | "className">) {
-  const model = useWorkspaceChatModel({ adminPanel, manageDocumentTitle });
+  className,
+  collaborationWorkspacesAvailable
+}: Pick<ChatWorkspaceProps, "adminPanel" | "manageDocumentTitle" | "className"> & {
+  collaborationWorkspacesAvailable: boolean;
+}) {
+  const model = useWorkspaceChatModel({
+    adminPanel,
+    manageDocumentTitle,
+    collaborationWorkspacesAvailable
+  });
   const [displayPanelWidth, setDisplayPanelWidth] = useState(0);
   const resourcesEnabled = model.config.config?.features.resources.enabled ?? false;
   const resourcesConversationId = model.route.selectedConversationId;
@@ -112,6 +140,21 @@ function ChatWorkspaceContent({
   );
   const chat = model.selectedChat;
   const isStaging = model.config.config.clientInstance.environment === "staging";
+  const collaborationWorkspace = model.collaborationWorkspace;
+  const userLabel = model.auth.user.displayLabel || (model.auth.user.email ?? "");
+  const collaborationWorkspaceSelector = model.collaborationWorkspaceChromeVisible ? (
+    <CollaborationWorkspaceSelector
+      collaborationWorkspaces={collaborationWorkspace.collaborationWorkspaces}
+      activeCollaborationWorkspaceId={collaborationWorkspace.activeCollaborationWorkspaceId}
+      userLabel={userLabel}
+      loading={collaborationWorkspace.loading}
+      loadFailed={collaborationWorkspace.loadFailed}
+      onSelectCollaborationWorkspace={collaborationWorkspace.selectCollaborationWorkspace}
+      onOpenCollaborationWorkspaceSettings={collaborationWorkspace.openSettingsDialog}
+      onBrowseCollaborationWorkspaces={collaborationWorkspace.openBrowseDialog}
+      onCreateCollaborationWorkspace={collaborationWorkspace.openCreateDialog}
+    />
+  ) : undefined;
 
   return (
     <TranslationProvider locale={model.config.activeLocale}>
@@ -145,18 +188,21 @@ function ChatWorkspaceContent({
           >
             <WorkspaceRail
               config={model.config.config}
+              collaborationWorkspaceSelector={collaborationWorkspaceSelector}
               conversations={model.conversationRail.conversations}
               selectedConversationId={model.conversationRail.selectedConversationId}
               canViewAdministration={model.conversationRail.canViewAdministration}
               view={model.conversationRail.view}
               creatingConversation={model.conversationRail.creatingConversation}
               deletingConversation={model.conversationRail.deletingConversation}
+              canMoveConversation={model.conversationRail.canMoveConversation}
               userMenu={userMenu}
               onToggleSidebar={model.chrome.closeSidebar}
               onViewChange={model.conversationRail.selectWorkspaceView}
               onCreateConversation={model.conversationRail.startNewConversation}
               onSelectConversation={model.conversationRail.selectConversation}
               onRenameConversation={model.conversationRail.renameConversation}
+              onMoveConversation={model.conversationRail.moveConversation}
               onDeleteConversation={model.conversationRail.deleteConversation}
             />
           </div>
@@ -178,6 +224,23 @@ function ChatWorkspaceContent({
           onToggleSidebar={model.chrome.toggleSidebar}
           onToggleTheme={model.config.toggleTheme}
         />
+
+        {model.collaborationWorkspaceChromeVisible ? (
+          <CollaborationWorkspacePanel
+            apiBaseUrl={model.auth.apiBaseUrl}
+            authScope={WORKSPACE_AUTH_SCOPE}
+            client={chat.client}
+            currentUserId={model.auth.user.id}
+            userLabel={userLabel}
+            collaborationWorkspaces={collaborationWorkspace.collaborationWorkspaces}
+            activeCollaborationWorkspaceId={collaborationWorkspace.activeCollaborationWorkspaceId}
+            dialog={collaborationWorkspace.dialog}
+            onClose={collaborationWorkspace.closeDialog}
+            onCollaborationWorkspaceCreated={collaborationWorkspace.selectCollaborationWorkspace}
+            onConversationMoved={collaborationWorkspace.conversationMoved}
+            onCollaborationWorkspaceDeleted={collaborationWorkspace.collaborationWorkspaceDeleted}
+          />
+        ) : null}
 
         <ControlPlaneRoutes adminPanel={adminPanel} controlPlane={model.controlPlane}>
           <section className="relative h-full min-h-0 min-w-0">

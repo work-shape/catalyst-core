@@ -18,6 +18,21 @@ import {
   validateConfigAssetsResponseSchema
 } from "./configuration";
 import {
+  addWorkspaceMemberRequestSchema,
+  collaborationWorkspaceDirectoryItemSchema,
+  collaborationWorkspaceWithRoleSchema,
+  createCollaborationWorkspaceRequestSchema,
+  deleteCollaborationWorkspaceRequestSchema,
+  collaborationWorkspaceDeletionImpactSchema,
+  collaborationWorkspaceDeletionResultSchema,
+  updateCollaborationWorkspaceRequestSchema,
+  updateWorkspaceMemberRoleRequestSchema,
+  workspaceAccessRequestItemSchema,
+  workspaceAccessRequestSchema,
+  workspaceMemberSchema,
+  workspaceMembershipSchema
+} from "./collaboration-workspaces";
+import {
   artifactPreviewResponseSchema,
   cancelRunRequestSchema,
   cancelRunResponseSchema,
@@ -30,6 +45,7 @@ import {
   draftAttachmentSchema,
   draftAttachmentUploadResponseSchema,
   messageSchema,
+  moveConversationRequestSchema,
   renameConversationRequestSchema,
   retryArtifactPreviewResponseSchema,
   retryDraftAttachmentResponseSchema,
@@ -105,10 +121,112 @@ export const apiOperations = {
     queryParams: ["locale"],
     responseSchema: safeConfigSchema
   }),
+  listCollaborationWorkspaces: defineJsonApiOperation({
+    operationId: "listCollaborationWorkspaces",
+    method: "GET",
+    path: "/api/collaboration-workspaces",
+    responseSchema: z.array(collaborationWorkspaceWithRoleSchema)
+  }),
+  createCollaborationWorkspace: defineJsonApiOperation({
+    operationId: "createCollaborationWorkspace",
+    method: "POST",
+    path: "/api/collaboration-workspaces",
+    requestSchema: createCollaborationWorkspaceRequestSchema,
+    responseSchema: collaborationWorkspaceWithRoleSchema
+  }),
+  listCollaborationWorkspaceDirectory: defineJsonApiOperation({
+    operationId: "listCollaborationWorkspaceDirectory",
+    method: "GET",
+    path: "/api/collaboration-workspaces/directory",
+    responseSchema: z.array(collaborationWorkspaceDirectoryItemSchema)
+  }),
+  getCollaborationWorkspace: defineJsonApiOperation({
+    operationId: "getCollaborationWorkspace",
+    method: "GET",
+    path: "/api/collaboration-workspaces/:collaborationWorkspaceId",
+    responseSchema: collaborationWorkspaceWithRoleSchema
+  }),
+  updateCollaborationWorkspace: defineJsonApiOperation({
+    operationId: "updateCollaborationWorkspace",
+    method: "PATCH",
+    path: "/api/collaboration-workspaces/:collaborationWorkspaceId",
+    requestSchema: updateCollaborationWorkspaceRequestSchema,
+    responseSchema: collaborationWorkspaceWithRoleSchema
+  }),
+  getCollaborationWorkspaceDeletionImpact: defineJsonApiOperation({
+    operationId: "getCollaborationWorkspaceDeletionImpact",
+    method: "GET",
+    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/deletion-impact",
+    responseSchema: collaborationWorkspaceDeletionImpactSchema
+  }),
+  deleteCollaborationWorkspace: defineJsonApiOperation({
+    operationId: "deleteCollaborationWorkspace",
+    method: "DELETE",
+    path: "/api/collaboration-workspaces/:collaborationWorkspaceId",
+    requestSchema: deleteCollaborationWorkspaceRequestSchema,
+    responseSchema: collaborationWorkspaceDeletionResultSchema
+  }),
+  listCollaborationWorkspaceMembers: defineJsonApiOperation({
+    operationId: "listCollaborationWorkspaceMembers",
+    method: "GET",
+    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/members",
+    responseSchema: z.array(workspaceMemberSchema)
+  }),
+  addCollaborationWorkspaceMember: defineJsonApiOperation({
+    operationId: "addCollaborationWorkspaceMember",
+    method: "POST",
+    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/members",
+    requestSchema: addWorkspaceMemberRequestSchema,
+    responseSchema: workspaceMemberSchema
+  }),
+  updateCollaborationWorkspaceMemberRole: defineJsonApiOperation({
+    operationId: "updateCollaborationWorkspaceMemberRole",
+    method: "PATCH",
+    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/members/:userId",
+    requestSchema: updateWorkspaceMemberRoleRequestSchema,
+    responseSchema: workspaceMembershipSchema
+  }),
+  removeCollaborationWorkspaceMember: defineJsonApiOperation({
+    operationId: "removeCollaborationWorkspaceMember",
+    method: "DELETE",
+    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/members/:userId",
+    responseSchema: workspaceMembershipSchema
+  }),
+  leaveCollaborationWorkspace: defineJsonApiOperation({
+    operationId: "leaveCollaborationWorkspace",
+    method: "DELETE",
+    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/members/me",
+    responseSchema: workspaceMembershipSchema
+  }),
+  requestCollaborationWorkspaceAccess: defineJsonApiOperation({
+    operationId: "requestCollaborationWorkspaceAccess",
+    method: "POST",
+    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/access-requests",
+    responseSchema: workspaceAccessRequestSchema
+  }),
+  listCollaborationWorkspaceAccessRequests: defineJsonApiOperation({
+    operationId: "listCollaborationWorkspaceAccessRequests",
+    method: "GET",
+    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/access-requests",
+    responseSchema: z.array(workspaceAccessRequestItemSchema)
+  }),
+  approveCollaborationWorkspaceAccessRequest: defineJsonApiOperation({
+    operationId: "approveCollaborationWorkspaceAccessRequest",
+    method: "POST",
+    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/access-requests/:userId/approve",
+    responseSchema: workspaceMembershipSchema
+  }),
+  declineCollaborationWorkspaceAccessRequest: defineJsonApiOperation({
+    operationId: "declineCollaborationWorkspaceAccessRequest",
+    method: "DELETE",
+    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/access-requests/:userId",
+    responseSchema: workspaceAccessRequestSchema
+  }),
   listConversations: defineJsonApiOperation({
     operationId: "listConversations",
     method: "GET",
     path: "/api/conversations",
+    queryParams: ["collaborationWorkspaceId"],
     responseSchema: z.array(conversationListItemSchema)
   }),
   createConversation: defineJsonApiOperation({
@@ -129,6 +247,13 @@ export const apiOperations = {
     method: "PATCH",
     path: "/api/conversations/:conversationId/title",
     requestSchema: renameConversationRequestSchema,
+    responseSchema: conversationSchema
+  }),
+  moveConversation: defineJsonApiOperation({
+    operationId: "moveConversation",
+    method: "POST",
+    path: "/api/conversations/:conversationId/move",
+    requestSchema: moveConversationRequestSchema,
     responseSchema: conversationSchema
   }),
   getConversationThread: defineJsonApiOperation({

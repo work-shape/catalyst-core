@@ -5,6 +5,7 @@ export * from "./api-access";
 export * from "./files";
 export * from "./execution-workspace";
 export * from "./conversation";
+export * from "./collaboration-workspace";
 export * from "./message-metadata";
 export * from "./tool-execution";
 export * from "./agent-runtime";

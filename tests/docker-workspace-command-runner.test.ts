@@ -235,10 +235,10 @@ async function createDockerHarness(input: {
   const clientInstanceId = asClientInstanceId(`docker_runner_${globalThis.crypto.randomUUID()}`);
   const ownerUserId = "user-1";
   const store = new InMemoryPlatformStore();
-  const conversation = await store.createConversation({
+  const conversation = await store.createConversationForTesting({
     clientInstanceId,
-    ownerUserId,
-    ownerExternalUserId: ownerUserId,
+    createdByUserId: ownerUserId,
+    createdByExternalUserId: ownerUserId,
     title: "Docker workspace runner test",
     retainedUntil: "2026-07-29T00:00:00.000Z"
   });

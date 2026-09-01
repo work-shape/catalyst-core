@@ -130,6 +130,8 @@
                           "config:read",
                           "conversation:read",
                           "conversation:write",
+                          "collaboration_workspace:read",
+                          "collaboration_workspace:manage",
                           "run:start",
                           "run:observe",
                           "run:cancel",
@@ -309,6 +311,8 @@
                           "config:read",
                           "conversation:read",
                           "conversation:write",
+                          "collaboration_workspace:read",
+                          "collaboration_workspace:manage",
                           "run:start",
                           "run:observe",
                           "run:cancel",
@@ -763,6 +767,18 @@
                           ],
                           "additionalProperties": false
                         },
+                        "collaborationWorkspaces": {
+                          "type": "object",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "enabled"
+                          ],
+                          "additionalProperties": false
+                        },
                         "configAssets": {
                           "type": "object",
                           "properties": {
@@ -819,6 +835,7 @@
                       "required": [
                         "attachments",
                         "resources",
+                        "collaborationWorkspaces",
                         "configAssets"
                       ],
                       "additionalProperties": false
@@ -1081,9 +1098,9 @@
         }
       }
     },
-    "/api/conversations": {
+    "/api/collaboration-workspaces": {
       "get": {
-        "operationId": "listConversations",
+        "operationId": "listCollaborationWorkspaces",
         "parameters": [],
         "responses": {
           "200": {
@@ -1101,10 +1118,1496 @@
                       "clientInstanceId": {
                         "type": "string"
                       },
-                      "ownerUserId": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "personal",
+                          "shared"
+                        ]
+                      },
+                      "name": {
                         "type": "string"
                       },
-                      "ownerExternalUserId": {
+                      "description": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "visibility": {
+                        "type": "string",
+                        "enum": [
+                          "discoverable",
+                          "private"
+                        ]
+                      },
+                      "emoji": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "accentColor": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "ruby",
+                              "amber",
+                              "emerald",
+                              "sapphire",
+                              "violet",
+                              "rose",
+                              "teal",
+                              "slate"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "personalUserId": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      },
+                      "updatedAt": {
+                        "type": "string"
+                      },
+                      "role": {
+                        "type": "string",
+                        "enum": [
+                          "owner",
+                          "admin",
+                          "member"
+                        ]
+                      },
+                      "pendingAccessRequestCount": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "clientInstanceId",
+                      "kind",
+                      "name",
+                      "description",
+                      "visibility",
+                      "emoji",
+                      "accentColor",
+                      "personalUserId",
+                      "createdAt",
+                      "updatedAt",
+                      "role",
+                      "pendingAccessRequestCount"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createCollaborationWorkspace",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "description": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 500
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "visibility": {
+                    "type": "string",
+                    "enum": [
+                      "discoverable",
+                      "private"
+                    ]
+                  },
+                  "emoji": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 32
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "accentColor": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ruby",
+                          "amber",
+                          "emerald",
+                          "sapphire",
+                          "violet",
+                          "rose",
+                          "teal",
+                          "slate"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "personal",
+                        "shared"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "visibility": {
+                      "type": "string",
+                      "enum": [
+                        "discoverable",
+                        "private"
+                      ]
+                    },
+                    "emoji": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "accentColor": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "ruby",
+                            "amber",
+                            "emerald",
+                            "sapphire",
+                            "violet",
+                            "rose",
+                            "teal",
+                            "slate"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "personalUserId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "owner",
+                        "admin",
+                        "member"
+                      ]
+                    },
+                    "pendingAccessRequestCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "clientInstanceId",
+                    "kind",
+                    "name",
+                    "description",
+                    "visibility",
+                    "emoji",
+                    "accentColor",
+                    "personalUserId",
+                    "createdAt",
+                    "updatedAt",
+                    "role",
+                    "pendingAccessRequestCount"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collaboration-workspaces/directory": {
+      "get": {
+        "operationId": "listCollaborationWorkspaceDirectory",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "emoji": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "accentColor": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "ruby",
+                              "amber",
+                              "emerald",
+                              "sapphire",
+                              "violet",
+                              "rose",
+                              "teal",
+                              "slate"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "accessState": {
+                        "type": "string",
+                        "enum": [
+                          "member",
+                          "request_pending",
+                          "can_request"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "description",
+                      "emoji",
+                      "accentColor",
+                      "accessState"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collaboration-workspaces/{collaborationWorkspaceId}": {
+      "get": {
+        "operationId": "getCollaborationWorkspace",
+        "parameters": [
+          {
+            "name": "collaborationWorkspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "personal",
+                        "shared"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "visibility": {
+                      "type": "string",
+                      "enum": [
+                        "discoverable",
+                        "private"
+                      ]
+                    },
+                    "emoji": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "accentColor": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "ruby",
+                            "amber",
+                            "emerald",
+                            "sapphire",
+                            "violet",
+                            "rose",
+                            "teal",
+                            "slate"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "personalUserId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "owner",
+                        "admin",
+                        "member"
+                      ]
+                    },
+                    "pendingAccessRequestCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "clientInstanceId",
+                    "kind",
+                    "name",
+                    "description",
+                    "visibility",
+                    "emoji",
+                    "accentColor",
+                    "personalUserId",
+                    "createdAt",
+                    "updatedAt",
+                    "role",
+                    "pendingAccessRequestCount"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateCollaborationWorkspace",
+        "parameters": [
+          {
+            "name": "collaborationWorkspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "description": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 500
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "visibility": {
+                    "type": "string",
+                    "enum": [
+                      "discoverable",
+                      "private"
+                    ]
+                  },
+                  "emoji": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 32
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "accentColor": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ruby",
+                          "amber",
+                          "emerald",
+                          "sapphire",
+                          "violet",
+                          "rose",
+                          "teal",
+                          "slate"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "personal",
+                        "shared"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "visibility": {
+                      "type": "string",
+                      "enum": [
+                        "discoverable",
+                        "private"
+                      ]
+                    },
+                    "emoji": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "accentColor": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "ruby",
+                            "amber",
+                            "emerald",
+                            "sapphire",
+                            "violet",
+                            "rose",
+                            "teal",
+                            "slate"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "personalUserId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "owner",
+                        "admin",
+                        "member"
+                      ]
+                    },
+                    "pendingAccessRequestCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "clientInstanceId",
+                    "kind",
+                    "name",
+                    "description",
+                    "visibility",
+                    "emoji",
+                    "accentColor",
+                    "personalUserId",
+                    "createdAt",
+                    "updatedAt",
+                    "role",
+                    "pendingAccessRequestCount"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteCollaborationWorkspace",
+        "parameters": [
+          {
+            "name": "collaborationWorkspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "confirmName": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "confirmName"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "collaborationWorkspaceId": {
+                      "type": "string"
+                    },
+                    "conversationCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "fileCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "memberCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "collaborationWorkspaceId",
+                    "conversationCount",
+                    "fileCount",
+                    "memberCount"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collaboration-workspaces/{collaborationWorkspaceId}/deletion-impact": {
+      "get": {
+        "operationId": "getCollaborationWorkspaceDeletionImpact",
+        "parameters": [
+          {
+            "name": "collaborationWorkspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "conversationCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "memberCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "pendingAccessRequestCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "conversationCount",
+                    "memberCount",
+                    "pendingAccessRequestCount"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collaboration-workspaces/{collaborationWorkspaceId}/members": {
+      "get": {
+        "operationId": "listCollaborationWorkspaceMembers",
+        "parameters": [
+          {
+            "name": "collaborationWorkspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "userId": {
+                        "type": "string"
+                      },
+                      "displayLabel": {
+                        "type": "string"
+                      },
+                      "email": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "role": {
+                        "type": "string",
+                        "enum": [
+                          "owner",
+                          "admin",
+                          "member"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "userId",
+                      "displayLabel",
+                      "email",
+                      "role"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "addCollaborationWorkspaceMember",
+        "parameters": [
+          {
+            "name": "collaborationWorkspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  }
+                },
+                "required": [
+                  "email"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "userId": {
+                      "type": "string"
+                    },
+                    "displayLabel": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "owner",
+                        "admin",
+                        "member"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "userId",
+                    "displayLabel",
+                    "email",
+                    "role"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collaboration-workspaces/{collaborationWorkspaceId}/members/{userId}": {
+      "patch": {
+        "operationId": "updateCollaborationWorkspaceMemberRole",
+        "parameters": [
+          {
+            "name": "collaborationWorkspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "owner",
+                      "admin",
+                      "member"
+                    ]
+                  }
+                },
+                "required": [
+                  "role"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "collaborationWorkspaceId": {
+                      "type": "string"
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "userId": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "owner",
+                        "admin",
+                        "member"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "collaborationWorkspaceId",
+                    "clientInstanceId",
+                    "userId",
+                    "role",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "removeCollaborationWorkspaceMember",
+        "parameters": [
+          {
+            "name": "collaborationWorkspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "collaborationWorkspaceId": {
+                      "type": "string"
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "userId": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "owner",
+                        "admin",
+                        "member"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "collaborationWorkspaceId",
+                    "clientInstanceId",
+                    "userId",
+                    "role",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collaboration-workspaces/{collaborationWorkspaceId}/members/me": {
+      "delete": {
+        "operationId": "leaveCollaborationWorkspace",
+        "parameters": [
+          {
+            "name": "collaborationWorkspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "collaborationWorkspaceId": {
+                      "type": "string"
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "userId": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "owner",
+                        "admin",
+                        "member"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "collaborationWorkspaceId",
+                    "clientInstanceId",
+                    "userId",
+                    "role",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collaboration-workspaces/{collaborationWorkspaceId}/access-requests": {
+      "post": {
+        "operationId": "requestCollaborationWorkspaceAccess",
+        "parameters": [
+          {
+            "name": "collaborationWorkspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "collaborationWorkspaceId": {
+                      "type": "string"
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "userId": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "collaborationWorkspaceId",
+                    "clientInstanceId",
+                    "userId",
+                    "createdAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listCollaborationWorkspaceAccessRequests",
+        "parameters": [
+          {
+            "name": "collaborationWorkspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "userId": {
+                        "type": "string"
+                      },
+                      "displayLabel": {
+                        "type": "string"
+                      },
+                      "email": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "userId",
+                      "displayLabel",
+                      "email",
+                      "createdAt"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collaboration-workspaces/{collaborationWorkspaceId}/access-requests/{userId}/approve": {
+      "post": {
+        "operationId": "approveCollaborationWorkspaceAccessRequest",
+        "parameters": [
+          {
+            "name": "collaborationWorkspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "collaborationWorkspaceId": {
+                      "type": "string"
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "userId": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "owner",
+                        "admin",
+                        "member"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "collaborationWorkspaceId",
+                    "clientInstanceId",
+                    "userId",
+                    "role",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collaboration-workspaces/{collaborationWorkspaceId}/access-requests/{userId}": {
+      "delete": {
+        "operationId": "declineCollaborationWorkspaceAccessRequest",
+        "parameters": [
+          {
+            "name": "collaborationWorkspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "collaborationWorkspaceId": {
+                      "type": "string"
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "userId": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "collaborationWorkspaceId",
+                    "clientInstanceId",
+                    "userId",
+                    "createdAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/conversations": {
+      "get": {
+        "operationId": "listConversations",
+        "parameters": [
+          {
+            "name": "collaborationWorkspaceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "clientInstanceId": {
+                        "type": "string"
+                      },
+                      "collaborationWorkspaceId": {
+                        "type": "string"
+                      },
+                      "createdByUserId": {
+                        "type": "string"
+                      },
+                      "createdByExternalUserId": {
                         "type": "string"
                       },
                       "title": {
@@ -1185,8 +2688,9 @@
                     "required": [
                       "id",
                       "clientInstanceId",
-                      "ownerUserId",
-                      "ownerExternalUserId",
+                      "collaborationWorkspaceId",
+                      "createdByUserId",
+                      "createdByExternalUserId",
                       "title",
                       "status",
                       "createdAt",
@@ -1212,6 +2716,10 @@
                 "type": "object",
                 "properties": {
                   "title": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "collaborationWorkspaceId": {
                     "type": "string",
                     "minLength": 1
                   },
@@ -1242,10 +2750,13 @@
                     "clientInstanceId": {
                       "type": "string"
                     },
-                    "ownerUserId": {
+                    "collaborationWorkspaceId": {
                       "type": "string"
                     },
-                    "ownerExternalUserId": {
+                    "createdByUserId": {
+                      "type": "string"
+                    },
+                    "createdByExternalUserId": {
                       "type": "string"
                     },
                     "title": {
@@ -1270,8 +2781,9 @@
                   "required": [
                     "id",
                     "clientInstanceId",
-                    "ownerUserId",
-                    "ownerExternalUserId",
+                    "collaborationWorkspaceId",
+                    "createdByUserId",
+                    "createdByExternalUserId",
                     "title",
                     "status",
                     "createdAt",
@@ -1313,10 +2825,13 @@
                     "clientInstanceId": {
                       "type": "string"
                     },
-                    "ownerUserId": {
+                    "collaborationWorkspaceId": {
                       "type": "string"
                     },
-                    "ownerExternalUserId": {
+                    "createdByUserId": {
+                      "type": "string"
+                    },
+                    "createdByExternalUserId": {
                       "type": "string"
                     },
                     "title": {
@@ -1341,8 +2856,9 @@
                   "required": [
                     "id",
                     "clientInstanceId",
-                    "ownerUserId",
-                    "ownerExternalUserId",
+                    "collaborationWorkspaceId",
+                    "createdByUserId",
+                    "createdByExternalUserId",
                     "title",
                     "status",
                     "createdAt",
@@ -1403,10 +2919,13 @@
                     "clientInstanceId": {
                       "type": "string"
                     },
-                    "ownerUserId": {
+                    "collaborationWorkspaceId": {
                       "type": "string"
                     },
-                    "ownerExternalUserId": {
+                    "createdByUserId": {
+                      "type": "string"
+                    },
+                    "createdByExternalUserId": {
                       "type": "string"
                     },
                     "title": {
@@ -1431,8 +2950,104 @@
                   "required": [
                     "id",
                     "clientInstanceId",
-                    "ownerUserId",
-                    "ownerExternalUserId",
+                    "collaborationWorkspaceId",
+                    "createdByUserId",
+                    "createdByExternalUserId",
+                    "title",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "retainedUntil"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/conversations/{conversationId}/move": {
+      "post": {
+        "operationId": "moveConversation",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "collaborationWorkspaceId": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "collaborationWorkspaceId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "collaborationWorkspaceId": {
+                      "type": "string"
+                    },
+                    "createdByUserId": {
+                      "type": "string"
+                    },
+                    "createdByExternalUserId": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "retainedUntil": {
+                      "type": "string"
+                    },
+                    "deletedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "clientInstanceId",
+                    "collaborationWorkspaceId",
+                    "createdByUserId",
+                    "createdByExternalUserId",
                     "title",
                     "status",
                     "createdAt",
@@ -1477,10 +3092,13 @@
                         "clientInstanceId": {
                           "type": "string"
                         },
-                        "ownerUserId": {
+                        "collaborationWorkspaceId": {
                           "type": "string"
                         },
-                        "ownerExternalUserId": {
+                        "createdByUserId": {
+                          "type": "string"
+                        },
+                        "createdByExternalUserId": {
                           "type": "string"
                         },
                         "title": {
@@ -1505,8 +3123,9 @@
                       "required": [
                         "id",
                         "clientInstanceId",
-                        "ownerUserId",
-                        "ownerExternalUserId",
+                        "collaborationWorkspaceId",
+                        "createdByUserId",
+                        "createdByExternalUserId",
                         "title",
                         "status",
                         "createdAt",
@@ -3662,10 +5281,13 @@
                         "clientInstanceId": {
                           "type": "string"
                         },
-                        "ownerUserId": {
+                        "collaborationWorkspaceId": {
                           "type": "string"
                         },
-                        "ownerExternalUserId": {
+                        "createdByUserId": {
+                          "type": "string"
+                        },
+                        "createdByExternalUserId": {
                           "type": "string"
                         },
                         "title": {
@@ -3690,8 +5312,9 @@
                       "required": [
                         "id",
                         "clientInstanceId",
-                        "ownerUserId",
-                        "ownerExternalUserId",
+                        "collaborationWorkspaceId",
+                        "createdByUserId",
+                        "createdByExternalUserId",
                         "title",
                         "status",
                         "createdAt",
@@ -4189,10 +5812,13 @@
                             "clientInstanceId": {
                               "type": "string"
                             },
-                            "ownerUserId": {
+                            "collaborationWorkspaceId": {
                               "type": "string"
                             },
-                            "ownerExternalUserId": {
+                            "createdByUserId": {
+                              "type": "string"
+                            },
+                            "createdByExternalUserId": {
                               "type": "string"
                             },
                             "title": {
@@ -4217,8 +5843,9 @@
                           "required": [
                             "id",
                             "clientInstanceId",
-                            "ownerUserId",
-                            "ownerExternalUserId",
+                            "collaborationWorkspaceId",
+                            "createdByUserId",
+                            "createdByExternalUserId",
                             "title",
                             "status",
                             "createdAt",
@@ -5236,6 +6863,10 @@
                         "type": "string",
                         "minLength": 1
                       },
+                      "collaborationWorkspaceId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
                       "locale": {
                         "type": "string",
                         "enum": [
@@ -5273,10 +6904,13 @@
                         "clientInstanceId": {
                           "type": "string"
                         },
-                        "ownerUserId": {
+                        "collaborationWorkspaceId": {
                           "type": "string"
                         },
-                        "ownerExternalUserId": {
+                        "createdByUserId": {
+                          "type": "string"
+                        },
+                        "createdByExternalUserId": {
                           "type": "string"
                         },
                         "title": {
@@ -5301,8 +6935,9 @@
                       "required": [
                         "id",
                         "clientInstanceId",
-                        "ownerUserId",
-                        "ownerExternalUserId",
+                        "collaborationWorkspaceId",
+                        "createdByUserId",
+                        "createdByExternalUserId",
                         "title",
                         "status",
                         "createdAt",
@@ -5800,10 +7435,13 @@
                             "clientInstanceId": {
                               "type": "string"
                             },
-                            "ownerUserId": {
+                            "collaborationWorkspaceId": {
                               "type": "string"
                             },
-                            "ownerExternalUserId": {
+                            "createdByUserId": {
+                              "type": "string"
+                            },
+                            "createdByExternalUserId": {
                               "type": "string"
                             },
                             "title": {
@@ -5828,8 +7466,9 @@
                           "required": [
                             "id",
                             "clientInstanceId",
-                            "ownerUserId",
-                            "ownerExternalUserId",
+                            "collaborationWorkspaceId",
+                            "createdByUserId",
+                            "createdByExternalUserId",
                             "title",
                             "status",
                             "createdAt",
@@ -7573,10 +9212,13 @@
                     "clientInstanceId": {
                       "type": "string"
                     },
-                    "ownerUserId": {
+                    "collaborationWorkspaceId": {
                       "type": "string"
                     },
-                    "ownerExternalUserId": {
+                    "createdByUserId": {
+                      "type": "string"
+                    },
+                    "createdByExternalUserId": {
                       "type": "string"
                     },
                     "title": {
@@ -7601,8 +9243,9 @@
                   "required": [
                     "id",
                     "clientInstanceId",
-                    "ownerUserId",
-                    "ownerExternalUserId",
+                    "collaborationWorkspaceId",
+                    "createdByUserId",
+                    "createdByExternalUserId",
                     "title",
                     "status",
                     "createdAt",
@@ -12855,6 +14498,8 @@
                         "config:read",
                         "conversation:read",
                         "conversation:write",
+                        "collaboration_workspace:read",
+                        "collaboration_workspace:manage",
                         "run:start",
                         "run:observe",
                         "run:cancel",

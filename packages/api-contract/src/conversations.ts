@@ -4,14 +4,19 @@ import { localeCodeSchema } from "./configuration";
 export const conversationSchema = z.object({
   id: z.string(),
   clientInstanceId: z.string(),
-  ownerUserId: z.string(),
-  ownerExternalUserId: z.string(),
+  collaborationWorkspaceId: z.string(),
+  createdByUserId: z.string(),
+  createdByExternalUserId: z.string(),
   title: z.string(),
   status: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
   retainedUntil: z.string(),
   deletedAt: z.string().optional()
+});
+
+export const moveConversationRequestSchema = z.object({
+  collaborationWorkspaceId: z.string().min(1)
 });
 
 export const messageMetadataVersionSchema = z.literal(1);
@@ -323,6 +328,7 @@ export const retryArtifactPreviewResponseSchema = artifactPreviewResponseSchema;
 
 export const createConversationRequestSchema = z.object({
   title: z.string().min(1).optional(),
+  collaborationWorkspaceId: z.string().min(1).optional(),
   locale: localeCodeSchema.optional()
 });
 

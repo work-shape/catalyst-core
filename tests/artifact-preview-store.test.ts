@@ -121,22 +121,30 @@ async function expectManagedArtifactEnsureContract(
   store: Pick<
     PlatformStore,
     | "createConversation"
+    | "createUser"
+    | "ensurePersonalWorkspace"
     | "createManagedFile"
     | "ensureManagedArtifact"
     | "listManagedArtifactsForFile"
   >
 ): Promise<void> {
   const clientInstanceId = asClientInstanceId(`preview_source_${globalThis.crypto.randomUUID()}`);
+  const user = await store.createUser({ clientInstanceId, displayLabel: "Preview user" });
+  const personalWorkspace = await store.ensurePersonalWorkspace({
+    clientInstanceId,
+    userId: user.id
+  });
   const conversation = await store.createConversation({
     clientInstanceId,
-    ownerUserId: "user-1",
-    ownerExternalUserId: "user-1",
+    collaborationWorkspaceId: personalWorkspace.id,
+    createdByUserId: user.id,
+    createdByExternalUserId: "user-1",
     title: "Attachment preview source",
     retainedUntil: "2030-01-01T00:00:00.000Z"
   });
   const file = await store.createManagedFile({
     clientInstanceId,
-    ownerUserId: "user-1",
+    ownerUserId: user.id,
     filename: "deck.pptx",
     mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     byteSize: 128,
@@ -711,16 +719,22 @@ async function createPreviewFixture(store: PreviewJobIdentityStore): Promise<{
   artifact: ManagedArtifactRecord;
 }> {
   const clientInstanceId = asClientInstanceId(`preview_store_${globalThis.crypto.randomUUID()}`);
+  const user = await store.createUser({ clientInstanceId, displayLabel: "Preview user" });
+  const personalWorkspace = await store.ensurePersonalWorkspace({
+    clientInstanceId,
+    userId: user.id
+  });
   const conversation = await store.createConversation({
     clientInstanceId,
-    ownerUserId: "user-1",
-    ownerExternalUserId: "user-1",
+    collaborationWorkspaceId: personalWorkspace.id,
+    createdByUserId: user.id,
+    createdByExternalUserId: "user-1",
     title: "Artifact preview store parity",
     retainedUntil: "2030-01-01T00:00:00.000Z"
   });
   const file = await store.createManagedFile({
     clientInstanceId,
-    ownerUserId: "user-1",
+    ownerUserId: user.id,
     filename: "report.docx",
     mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     byteSize: 128,
@@ -744,6 +758,8 @@ async function createPreviewFixture(store: PreviewJobIdentityStore): Promise<{
 type PreviewJobIdentityStore = Pick<
   PlatformStore,
   | "createManagedFile"
+  | "createUser"
+  | "ensurePersonalWorkspace"
   | "createConversation"
   | "createManagedArtifact"
   | "getManagedArtifact"

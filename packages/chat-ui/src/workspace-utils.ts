@@ -1,4 +1,4 @@
-import type { LocaleCode } from "@vivd-catalyst/api-client";
+import { appErrorCodeSchema, type ApiErrorCode, type LocaleCode } from "@vivd-catalyst/api-client";
 import type { ResolvedThemeMode } from "./theme";
 
 export const STANDALONE_AUTH_SOURCE = "better-auth";
@@ -8,6 +8,7 @@ const THEME_STORAGE_KEY = "vivd-catalyst:theme";
 const LOCALE_STORAGE_KEY = "vivd-catalyst:locale";
 const CONTEXT_INDICATOR_STORAGE_KEY = "vivd-catalyst:show-context-indicator";
 const RESOURCES_PANEL_STORAGE_KEY = "vivd-catalyst:resources-panel";
+const COLLABORATION_WORKSPACE_STORAGE_PREFIX = "vivd-catalyst:collaboration-workspace";
 
 export type ResourcesPanelPreference = "open" | "closed";
 
@@ -21,6 +22,18 @@ export function apiErrorStatus(error: unknown): number | undefined {
   }
   const status = (error as { status?: unknown }).status;
   return typeof status === "number" ? status : undefined;
+}
+
+/**
+ * Stable `AppError` code carried on API failures. Preferred over the HTTP status
+ * so the UI never has to match server prose.
+ */
+export function apiErrorCode(error: unknown): ApiErrorCode | undefined {
+  if (!error || typeof error !== "object" || Array.isArray(error) || !("code" in error)) {
+    return undefined;
+  }
+  const parsed = appErrorCodeSchema.safeParse(error.code);
+  return parsed.success ? parsed.data : undefined;
 }
 
 export function apiErrorMessage(error: unknown, fallback: string | undefined): string | undefined {
@@ -76,6 +89,43 @@ export function readStoredResourcesPanelPreference(): ResourcesPanelPreference |
 
 export function writeStoredResourcesPanelPreference(preference: ResourcesPanelPreference): void {
   window.localStorage.setItem(RESOURCES_PANEL_STORAGE_KEY, preference);
+}
+
+/**
+ * The last active Collaboration Workspace is browser-local and scoped by client
+ * instance (api base url) and authenticated user, so shared browsers never leak
+ * one person's workspace choice into another's session.
+ */
+function collaborationWorkspaceStorageKey(apiBaseUrl: string, userId: string): string {
+  return `${COLLABORATION_WORKSPACE_STORAGE_PREFIX}:${apiBaseUrl}:${userId}`;
+}
+
+export function readStoredCollaborationWorkspaceId(
+  apiBaseUrl: string,
+  userId: string
+): string | undefined {
+  return (
+    window.localStorage.getItem(collaborationWorkspaceStorageKey(apiBaseUrl, userId)) ?? undefined
+  );
+}
+
+export function writeStoredCollaborationWorkspaceId(
+  apiBaseUrl: string,
+  userId: string,
+  collaborationWorkspaceId: string
+): void {
+  window.localStorage.setItem(
+    collaborationWorkspaceStorageKey(apiBaseUrl, userId),
+    collaborationWorkspaceId
+  );
+}
+
+/**
+ * Called when the stored workspace is gone (deleted), so the next application
+ * root visit falls back to the Personal Workspace instead of a dead id.
+ */
+export function clearStoredCollaborationWorkspaceId(apiBaseUrl: string, userId: string): void {
+  window.localStorage.removeItem(collaborationWorkspaceStorageKey(apiBaseUrl, userId));
 }
 
 export function applyFavicon(href: string): void {

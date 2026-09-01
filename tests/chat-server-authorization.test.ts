@@ -1,9 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { createChatServer } from "@vivd-catalyst/chat-server";
-import { StoreBackedAuditRecorder, asClientInstanceId } from "@vivd-catalyst/core";
+import {
+  FIRST_PARTY_AUTH_SCOPES,
+  StoreBackedAuditRecorder,
+  asClientInstanceId,
+  asCollaborationWorkspaceId,
+  asUserId,
+  type AuthenticatedUser
+} from "@vivd-catalyst/core";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
-import { createTestConfig, createClientInstanceApp, createTestUser } from "./chat-server-harness";
+import {
+  createTestConfig,
+  createClientInstanceApp,
+  createTestUser,
+  personalConversationListUrl
+} from "./chat-server-harness";
 import { createMissingRuntime, createUnusedModelProvider } from "./chat-server-run-harness";
 
 describe("client instance app vertical slice", () => {
@@ -52,14 +64,94 @@ describe("client instance app vertical slice", () => {
     expect(issued.statusCode).toBe(200);
     const token = (issued.json() as { chatSessionToken: string }).chatSessionToken;
 
-    const conversations = await app.server.inject({
+    const workspaceListing = await app.server.inject({
       method: "GET",
-      url: "/api/conversations",
+      url: "/api/collaboration-workspaces",
       headers: {
         authorization: `Bearer ${token}`
       }
     });
-    expect(conversations.statusCode).toBe(200);
+    expect(workspaceListing.statusCode).toBe(403);
+    expect((workspaceListing.json() as { error: { message: string } }).error.message).toContain(
+      "Missing auth scope 'collaboration_workspace:read'"
+    );
+
+    const workspaceCreation = await app.server.inject({
+      method: "POST",
+      url: "/api/collaboration-workspaces",
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      payload: { name: "Should not be created" }
+    });
+    expect(workspaceCreation.statusCode).toBe(403);
+    expect((workspaceCreation.json() as { error: { message: string } }).error.message).toContain(
+      "Missing auth scope 'collaboration_workspace:manage'"
+    );
+
+    const createdConversation = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      payload: { title: "Personal conversation" }
+    });
+    expect(createdConversation.statusCode).toBe(200);
+    const personalConversation = createdConversation.json() as {
+      id: string;
+      collaborationWorkspaceId: string;
+      createdByUserId: string;
+    };
+
+    const firstPartyListing = await app.server.inject({
+      method: "GET",
+      url: "/api/collaboration-workspaces",
+      headers: { "x-dev-user-id": "superadmin-1" }
+    });
+    expect(firstPartyListing.statusCode).toBe(200);
+    const firstPartyCreation = await app.server.inject({
+      method: "POST",
+      url: "/api/collaboration-workspaces",
+      headers: { "x-dev-user-id": "superadmin-1" },
+      payload: { name: "First-party workspace" }
+    });
+    expect(firstPartyCreation.statusCode).toBe(200);
+    const sharedWorkspaceId = (firstPartyCreation.json() as { id: string }).id;
+    await app.store.addMembership({
+      clientInstanceId: asClientInstanceId("demo-local"),
+      collaborationWorkspaceId: asCollaborationWorkspaceId(sharedWorkspaceId),
+      userId: asUserId(personalConversation.createdByUserId),
+      role: "member"
+    });
+    const sharedConversation = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      headers: { "x-dev-user-id": "superadmin-1" },
+      payload: { title: "Shared conversation", collaborationWorkspaceId: sharedWorkspaceId }
+    });
+    expect(sharedConversation.statusCode).toBe(200);
+    const sharedConversationId = (sharedConversation.json() as { id: string }).id;
+
+    const personalConversations = await app.server.inject({
+      method: "GET",
+      url: "/api/conversations",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    expect(personalConversations.statusCode).toBe(200);
+    expect((personalConversations.json() as Array<{ id: string }>).map(({ id }) => id)).toEqual([
+      personalConversation.id
+    ]);
+
+    const sharedConversations = await app.server.inject({
+      method: "GET",
+      url: `/api/conversations?collaborationWorkspaceId=${sharedWorkspaceId}`,
+      headers: { authorization: `Bearer ${token}` }
+    });
+    expect(sharedConversations.statusCode).toBe(200);
+    expect((sharedConversations.json() as Array<{ id: string }>).map(({ id }) => id)).toEqual([
+      sharedConversationId
+    ]);
 
     const usage = await app.server.inject({
       method: "GET",
@@ -83,6 +175,70 @@ describe("client instance app vertical slice", () => {
     expect(audit.statusCode).toBe(403);
 
     await app.close();
+  });
+
+  it("grants standalone users workspace read and manage scopes", async () => {
+    const clientInstanceId = asClientInstanceId("demo-local");
+    const store = new InMemoryPlatformStore();
+    const config = createTestConfig();
+    const profile = await store.createUser({
+      clientInstanceId,
+      displayLabel: "Standalone user",
+      email: "standalone@example.test"
+    });
+    const standaloneUser: AuthenticatedUser = {
+      id: profile.id,
+      externalUserId: "standalone-user",
+      displayLabel: profile.displayLabel,
+      email: profile.email,
+      emailVerified: true,
+      roles: ["user"],
+      permissionRefs: [],
+      permissions: [],
+      clientInstanceId,
+      authSource: "better-auth",
+      scopes: [...FIRST_PARTY_AUTH_SCOPES]
+    };
+    expect(standaloneUser.scopes).toEqual(
+      expect.arrayContaining(["collaboration_workspace:read", "collaboration_workspace:manage"])
+    );
+    const usageGovernance = new ModelUsageGovernance({
+      store,
+      budget: config.usage.budget,
+      safeguards: config.usage.safeguards,
+      costs: config.usage.costs
+    });
+    const server = await createChatServer({
+      config,
+      clientInstanceId,
+      authAdapter: {
+        id: "better-auth-test",
+        async authenticate() {
+          return standaloneUser;
+        }
+      },
+      conversationStore: store,
+      auditEventStore: store,
+      userStore: store,
+      usageGovernance,
+      auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store }),
+      agentRuntime: createMissingRuntime(),
+      modelProvider: createUnusedModelProvider()
+    });
+
+    const listed = await server.inject({
+      method: "GET",
+      url: "/api/collaboration-workspaces"
+    });
+    expect(listed.statusCode).toBe(200);
+    const created = await server.inject({
+      method: "POST",
+      url: "/api/collaboration-workspaces",
+      payload: { name: "Standalone workspace" }
+    });
+    expect(created.statusCode).toBe(200);
+
+    await server.close();
   });
 
   it("honors explicit chat session token scopes for conversation writes", async () => {
@@ -112,7 +268,7 @@ describe("client instance app vertical slice", () => {
         displayLabel: "Read Only User",
         roles: ["user"],
         permissionRefs: ["demo-tools"],
-        scopes: ["conversation:read"]
+        scopes: ["me:read", "conversation:read"]
       }
     });
     expect(issued.statusCode).toBe(200);
@@ -209,11 +365,11 @@ describe("client instance app vertical slice", () => {
     expect(createdConversation.statusCode).toBe(200);
     const conversation = createdConversation.json() as {
       id: string;
-      ownerUserId: string;
-      ownerExternalUserId: string;
+      createdByUserId: string;
+      createdByExternalUserId: string;
     };
-    expect(conversation.ownerExternalUserId).toBe("customer-jane");
-    expect(conversation.ownerUserId).not.toBe("svc-customer-api");
+    expect(conversation.createdByExternalUserId).toBe("customer-jane");
+    expect(conversation.createdByUserId).not.toBe("svc-customer-api");
 
     const audit = await app.server.inject({
       method: "GET",
@@ -228,11 +384,11 @@ describe("client instance app vertical slice", () => {
         type: "conversation.created",
         subject: conversation.id,
         actor: expect.objectContaining({
-          userId: conversation.ownerUserId,
+          userId: conversation.createdByUserId,
           principalKind: "service",
           principalId: "svc-customer-api",
           principalDisplayLabel: "Customer API",
-          subjectUserId: conversation.ownerUserId,
+          subjectUserId: conversation.createdByUserId,
           delegatedActor: expect.objectContaining({
             kind: "service_principal",
             id: "svc-customer-api",

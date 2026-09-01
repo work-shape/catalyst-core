@@ -1,5 +1,11 @@
 import type { ActiveRunSummary, AgentRunProjection } from "./agent-runtime";
-import type { AgentRunId, ClientInstanceId, ConversationId, MessageId } from "./ids";
+import type {
+  AgentRunId,
+  ClientInstanceId,
+  CollaborationWorkspaceId,
+  ConversationId,
+  MessageId
+} from "./ids";
 import type { JsonObject } from "./json";
 import type { ISODateString } from "./time";
 
@@ -8,8 +14,9 @@ export type ConversationStatus = "active" | "deleted" | "retention_expired";
 export interface Conversation {
   id: ConversationId;
   clientInstanceId: ClientInstanceId;
-  ownerUserId: string;
-  ownerExternalUserId: string;
+  collaborationWorkspaceId: CollaborationWorkspaceId;
+  createdByUserId: string;
+  createdByExternalUserId: string;
   title: string;
   status: ConversationStatus;
   createdAt: ISODateString;
@@ -62,8 +69,9 @@ export interface ConversationThreadSnapshot {
 
 export interface CreateConversationInput {
   clientInstanceId: ClientInstanceId;
-  ownerUserId: string;
-  ownerExternalUserId: string;
+  collaborationWorkspaceId: CollaborationWorkspaceId;
+  createdByUserId: string;
+  createdByExternalUserId: string;
   title: string;
   retainedUntil: ISODateString;
 }
@@ -84,16 +92,24 @@ export interface UpdateConversationTitleInput {
   updatedAt: ISODateString;
 }
 
+export interface MoveConversationInput {
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  fromCollaborationWorkspaceId: CollaborationWorkspaceId;
+  toCollaborationWorkspaceId: CollaborationWorkspaceId;
+}
+
 export interface ConversationStore {
   createConversation(input: CreateConversationInput): Promise<Conversation>;
   getConversation(
     clientInstanceId: ClientInstanceId,
     conversationId: ConversationId
   ): Promise<Conversation | undefined>;
-  listConversationsForUser(input: {
+  listConversationsForWorkspace(input: {
     clientInstanceId: ClientInstanceId;
-    ownerUserId: string;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
   }): Promise<Conversation[]>;
+  moveConversation(input: MoveConversationInput): Promise<Conversation>;
   updateConversationTitle(input: UpdateConversationTitleInput): Promise<Conversation>;
   appendMessage(input: CreateMessageInput): Promise<ChatMessage>;
   listMessages(input: {

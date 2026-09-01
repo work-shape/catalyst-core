@@ -443,8 +443,7 @@ describe("client instance app vertical slice", () => {
         }
       }
     );
-    expect(wrongOwnerEvents.status).toBe(204);
-    expect(await wrongOwnerEvents.text()).toBe("");
+    expect(wrongOwnerEvents.status).toBe(404);
 
     const wrongOwnerCancel = await fetch(
       `${baseUrl}/api/conversations/${conversation.id}/runs/${runId}/cancel`,

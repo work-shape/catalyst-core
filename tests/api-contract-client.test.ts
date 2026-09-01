@@ -6,7 +6,7 @@ import {
   buildApiPath,
   openApiDocument
 } from "@vivd-catalyst/api-contract";
-import { createApiClient } from "@vivd-catalyst/api-client";
+import { ApiError, createApiClient } from "@vivd-catalyst/api-client";
 
 describe("api operation catalog and client", () => {
   it("accepts assistant final metadata with normalized web sources and citations", () => {
@@ -56,6 +56,17 @@ describe("api operation catalog and client", () => {
     }
   });
 
+  it("keeps Collaboration Workspace create and update request contracts aligned", () => {
+    const createOperation = openApiDocument.paths["/api/collaboration-workspaces"].post;
+    const createSchema = createOperation.requestBody.content["application/json"].schema;
+
+    expect(createSchema.required).toEqual(["name"]);
+    expect(
+      apiOperations.createCollaborationWorkspace.requestSchema.parse({ name: "Product" })
+    ).toEqual({ name: "Product" });
+    expect(apiOperations.updateCollaborationWorkspace.requestSchema.parse({})).toEqual({});
+  });
+
   it("builds encoded paths from operation params and query values", () => {
     expect(
       apiOperations.listConversationMessages.buildPath({
@@ -65,6 +76,12 @@ describe("api operation catalog and client", () => {
     expect(apiOperations.getConfig.buildPath({ query: { locale: "de" } })).toBe(
       "/api/config?locale=de"
     );
+    expect(
+      apiOperations.listConversations.buildPath({
+        query: { collaborationWorkspaceId: "workspace/one" }
+      })
+    ).toBe("/api/conversations?collaborationWorkspaceId=workspace%2Fone");
+    expect(apiOperations.listConversations.buildPath()).toBe("/api/conversations");
     expect(
       buildApiPath("/api/example/:exampleId", {
         params: { exampleId: "value/with spaces" },
@@ -77,6 +94,27 @@ describe("api operation catalog and client", () => {
     expect(() => apiOperations.getConfig.buildPath({ query: { unknown: "value" } })).toThrow(
       /Unknown query parameter "unknown"/u
     );
+  });
+
+  it("omits the workspace query parameter when listing the Personal Workspace", async () => {
+    const calls: Request[] = [];
+    const client = createApiClient({
+      baseUrl: "https://chat.example/",
+      fetchImpl: async (input, init) => {
+        calls.push(input instanceof Request ? input : new Request(input, init));
+        return Response.json([]);
+      }
+    });
+
+    await client.conversations.list();
+    await client.conversations.list("workspace/one");
+    await client.conversations.list(42 as never);
+
+    expect(calls.map((request) => request.url)).toEqual([
+      "https://chat.example/api/conversations",
+      "https://chat.example/api/conversations?collaborationWorkspaceId=workspace%2Fone",
+      "https://chat.example/api/conversations"
+    ]);
   });
 
   it("uses generated SDK operations for client method, path, auth, and response parsing", async () => {
@@ -104,6 +142,28 @@ describe("api operation catalog and client", () => {
     expect(request?.method).toBe(operation.method);
     expect(request?.credentials).toBe("include");
     expect(request?.headers.get("authorization")).toBe("Bearer test-token");
+  });
+
+  it("exposes the stable server error code on ApiError", async () => {
+    const client = createApiClient({
+      baseUrl: "https://chat.example/",
+      fetchImpl: async () =>
+        Response.json(
+          { error: { code: "VALIDATION_FAILED", message: "Workspace name does not match" } },
+          { status: 422 }
+        )
+    });
+
+    const error = await client.collaborationWorkspaces
+      .delete("workspace_1", "wrong")
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({
+      code: "VALIDATION_FAILED",
+      message: "Workspace name does not match",
+      status: 422
+    });
   });
 
   it("forces promoted managed artifact content to a blob regardless of content type", async () => {
@@ -355,8 +415,9 @@ describe("api operation catalog and client", () => {
         conversation: {
           id: "conv_1",
           clientInstanceId: "client_1",
-          ownerUserId: "user_1",
-          ownerExternalUserId: "user_1",
+          collaborationWorkspaceId: "cws_1",
+          createdByUserId: "user_1",
+          createdByExternalUserId: "user_1",
           title: "Started",
           status: "active",
           createdAt: "2026-06-27T00:00:00.000Z",
@@ -389,8 +450,9 @@ describe("api operation catalog and client", () => {
           conversation: {
             id: "conv_1",
             clientInstanceId: "client_1",
-            ownerUserId: "user_1",
-            ownerExternalUserId: "user_1",
+            collaborationWorkspaceId: "cws_1",
+            createdByUserId: "user_1",
+            createdByExternalUserId: "user_1",
             title: "Started",
             status: "active",
             createdAt: "2026-06-27T00:00:00.000Z",

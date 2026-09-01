@@ -5,11 +5,16 @@ import {
   AppError,
   PERMISSIONS,
   StoreBackedAuditRecorder,
-  asClientInstanceId
+  asClientInstanceId,
+  asUserId
 } from "@vivd-catalyst/core";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
-import { createTestConfig, createClientInstanceApp } from "./chat-server-harness";
+import {
+  createTestConfig,
+  createClientInstanceApp,
+  personalConversationListUrl
+} from "./chat-server-harness";
 import { createMissingRuntime, createUnusedModelProvider } from "./chat-server-run-harness";
 
 describe("client instance app vertical slice", () => {
@@ -209,7 +214,7 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
-  it("lets a signed-in user delete their own account and owned conversations", async () => {
+  it("retries account deletion after final user deletion fails", async () => {
     const clientInstanceId = asClientInstanceId("demo-local");
     const store = new InMemoryPlatformStore();
     const config = createTestConfig();
@@ -239,10 +244,21 @@ describe("client instance app vertical slice", () => {
       permissionRefs: ["demo-tools"],
       correlationId: "corr_other"
     });
+    const [personalWorkspace] = await store.listWorkspacesForUser({
+      clientInstanceId,
+      userId: asUserId(user.id)
+    });
+    const [otherPersonalWorkspace] = await store.listWorkspacesForUser({
+      clientInstanceId,
+      userId: asUserId(otherUser.id)
+    });
+    expect(personalWorkspace).toMatchObject({ kind: "personal", role: "owner" });
+    expect(otherPersonalWorkspace).toMatchObject({ kind: "personal", role: "owner" });
     const conversation = await store.createConversation({
       clientInstanceId,
-      ownerUserId: user.id,
-      ownerExternalUserId: user.externalUserId,
+      collaborationWorkspaceId: personalWorkspace!.id,
+      createdByUserId: user.id,
+      createdByExternalUserId: user.externalUserId,
       title: "Delete this conversation",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
@@ -254,11 +270,21 @@ describe("client instance app vertical slice", () => {
     });
     const otherConversation = await store.createConversation({
       clientInstanceId,
-      ownerUserId: otherUser.id,
-      ownerExternalUserId: otherUser.externalUserId,
+      collaborationWorkspaceId: otherPersonalWorkspace!.id,
+      createdByUserId: otherUser.id,
+      createdByExternalUserId: otherUser.externalUserId,
       title: "Keep this conversation",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
+    const deleteUser = store.deleteUser.bind(store);
+    let deleteUserAttempts = 0;
+    store.deleteUser = async (input) => {
+      deleteUserAttempts += 1;
+      if (deleteUserAttempts === 1) {
+        throw new AppError("INTERNAL", "Injected final user deletion failure");
+      }
+      return deleteUser(input);
+    };
     const deletedPasswordSignIns: Array<{ externalUserId: string }> = [];
     const server = await createChatServer({
       config,
@@ -319,20 +345,34 @@ describe("client instance app vertical slice", () => {
     });
     expect(delegatedDelete.statusCode).toBe(403);
 
+    const failed = await server.inject({
+      method: "DELETE",
+      url: "/api/me"
+    });
+    expect(failed.statusCode).toBe(500);
+    await expect(
+      store.listWorkspacesForUser({ clientInstanceId, userId: asUserId(user.id) })
+    ).resolves.toEqual([]);
+    await expect(store.listUsers({ clientInstanceId })).resolves.toContainEqual(
+      expect.objectContaining({ id: user.id })
+    );
+
     const deleted = await server.inject({
       method: "DELETE",
       url: "/api/me"
     });
     expect(deleted.statusCode).toBe(200);
     expect(deleted.json()).toEqual({ ok: true });
-    expect(deletedPasswordSignIns).toEqual([{ externalUserId: "auth-delete-me" }]);
+    expect(deleteUserAttempts).toBe(2);
+    expect(deletedPasswordSignIns).toEqual([
+      { externalUserId: "auth-delete-me" },
+      { externalUserId: "auth-delete-me" }
+    ]);
 
     await expect(store.listUsers({ clientInstanceId })).resolves.not.toContainEqual(
       expect.objectContaining({ id: user.id })
     );
-    await expect(store.getConversation(clientInstanceId, conversation.id)).resolves.toMatchObject({
-      status: "deleted"
-    });
+    await expect(store.getConversation(clientInstanceId, conversation.id)).resolves.toBeUndefined();
     await expect(
       store.getConversation(clientInstanceId, otherConversation.id)
     ).resolves.toMatchObject({
@@ -360,13 +400,120 @@ describe("client instance app vertical slice", () => {
           type: "user.deleted",
           metadata: expect.objectContaining({
             requestedBy: "self",
-            conversationCount: 1
+            conversationCount: 0
           })
         })
       ])
     );
 
     await server.close();
+  });
+
+  it("uses the workspace-aware cleanup lifecycle for superadmin user deletion", async () => {
+    const clientInstanceId = asClientInstanceId("demo-local");
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        developmentAuth: {
+          enabled: true,
+          defaultUserId: "superadmin-1",
+          users: [
+            {
+              id: "superadmin-1",
+              externalUserId: "superadmin-1",
+              displayLabel: "Superadmin",
+              roles: ["user", "admin", "superadmin"],
+              permissionRefs: ["demo-tools"]
+            }
+          ]
+        }
+      }),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+    await app.server.inject({ method: "GET", url: "/api/me" });
+    const [superadmin] = await app.store.listUsers({ clientInstanceId });
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/superadmin/users",
+      payload: { displayLabel: "Delete by admin", roles: ["user"] }
+    });
+    expect(created.statusCode).toBe(200);
+    const deletedUserId = asUserId((created.json() as { id: string }).id);
+    const [personal] = await app.store.listWorkspacesForUser({
+      clientInstanceId,
+      userId: deletedUserId
+    });
+    expect(personal).toMatchObject({ kind: "personal", role: "owner" });
+    const personalConversation = await app.store.createConversation({
+      clientInstanceId,
+      collaborationWorkspaceId: personal!.id,
+      createdByUserId: deletedUserId,
+      createdByExternalUserId: deletedUserId,
+      title: "Delete private data",
+      retainedUntil: "2030-01-01T00:00:00.000Z"
+    });
+    const shared = await app.store.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Preserved shared data",
+      creatorUserId: superadmin!.id
+    });
+    await app.store.addMembership({
+      clientInstanceId,
+      collaborationWorkspaceId: shared.id,
+      userId: deletedUserId,
+      role: "member"
+    });
+    const sharedConversation = await app.store.createConversation({
+      clientInstanceId,
+      collaborationWorkspaceId: shared.id,
+      createdByUserId: deletedUserId,
+      createdByExternalUserId: deletedUserId,
+      title: "Preserve shared data",
+      retainedUntil: "2030-01-01T00:00:00.000Z"
+    });
+    const requestTarget = await app.store.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Requested workspace",
+      creatorUserId: superadmin!.id
+    });
+    await app.store.createAccessRequest({
+      clientInstanceId,
+      collaborationWorkspaceId: requestTarget.id,
+      userId: deletedUserId
+    });
+
+    const response = await app.server.inject({
+      method: "DELETE",
+      url: `/api/superadmin/users/${deletedUserId}`
+    });
+    expect(response.statusCode).toBe(200);
+    await expect(
+      app.store.getConversation(clientInstanceId, personalConversation.id)
+    ).resolves.toBe(undefined);
+    await expect(
+      app.store.getConversation(clientInstanceId, sharedConversation.id)
+    ).resolves.toMatchObject({ status: "active" });
+    await expect(
+      app.store.getMembership({
+        clientInstanceId,
+        collaborationWorkspaceId: shared.id,
+        userId: deletedUserId
+      })
+    ).resolves.toBeUndefined();
+    await expect(
+      app.store.getAccessRequest({
+        clientInstanceId,
+        collaborationWorkspaceId: requestTarget.id,
+        userId: deletedUserId
+      })
+    ).resolves.toBeUndefined();
+    await expect(app.store.getWorkspace(clientInstanceId, shared.id)).resolves.toBeDefined();
+    await expect(app.store.getWorkspace(clientInstanceId, personal!.id)).resolves.toBeUndefined();
+
+    await app.close();
   });
 
   it("lets admins administer non-superadmin users without escalating superadmin access", async () => {
@@ -691,12 +838,14 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(createdConversation.statusCode).toBe(200);
-    const conversation = createdConversation.json() as { id: string; ownerUserId: string };
-    expect(conversation.ownerUserId).toBe(administeredUser.id);
+    const conversation = createdConversation.json() as { id: string; createdByUserId: string };
+    expect(conversation.createdByUserId).toBe(administeredUser.id);
 
     const standaloneConversations = await app.server.inject({
       method: "GET",
-      url: "/api/conversations",
+      url: await personalConversationListUrl(app.server, {
+        "x-dev-user-id": "jane-dev-source"
+      }),
       headers: {
         "x-dev-user-id": "jane-dev-source"
       }
@@ -705,7 +854,7 @@ describe("client instance app vertical slice", () => {
     expect(standaloneConversations.json()).toEqual([
       expect.objectContaining({
         id: conversation.id,
-        ownerUserId: administeredUser.id
+        createdByUserId: administeredUser.id
       })
     ]);
 
@@ -807,12 +956,14 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(createdConversation.statusCode).toBe(200);
-    const conversation = createdConversation.json() as { id: string; ownerUserId: string };
-    expect(conversation.ownerUserId).toBe(administeredUser.id);
+    const conversation = createdConversation.json() as { id: string; createdByUserId: string };
+    expect(conversation.createdByUserId).toBe(administeredUser.id);
 
     const standaloneConversations = await app.server.inject({
       method: "GET",
-      url: "/api/conversations",
+      url: await personalConversationListUrl(app.server, {
+        "x-dev-user-id": "jane-dev-source"
+      }),
       headers: {
         "x-dev-user-id": "jane-dev-source"
       }
@@ -821,7 +972,7 @@ describe("client instance app vertical slice", () => {
     expect(standaloneConversations.json()).toEqual([
       expect.objectContaining({
         id: conversation.id,
-        ownerUserId: administeredUser.id
+        createdByUserId: administeredUser.id
       })
     ]);
 
@@ -882,7 +1033,7 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(ambiguousConversation.statusCode).toBe(200);
-    expect((ambiguousConversation.json() as { ownerUserId: string }).ownerUserId).not.toBe(
+    expect((ambiguousConversation.json() as { createdByUserId: string }).createdByUserId).not.toBe(
       administeredUser.id
     );
 

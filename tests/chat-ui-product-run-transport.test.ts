@@ -57,6 +57,42 @@ describe("chat UI product run transport", () => {
     ]);
   });
 
+  it("creates the conversation inside the active collaboration workspace", async () => {
+    const calls: unknown[] = [];
+    const client = {
+      runs: {
+        async create(input: unknown) {
+          calls.push(input);
+          return createStartResponse({ conversationId: "conv_new" });
+        },
+        async start() {
+          throw new Error("startRun should not be called");
+        }
+      }
+    };
+
+    await startProductConversationRun({
+      client,
+      collaborationWorkspaceId: "cw_shared",
+      idempotencyKey: "idem-new",
+      locale: "en",
+      text: "Create this conversation"
+    });
+
+    expect(calls).toEqual([
+      {
+        idempotencyKey: "idem-new",
+        locale: "en",
+        message: { text: "Create this conversation" },
+        conversation: {
+          title: "Create this conversation",
+          locale: "en",
+          collaborationWorkspaceId: "cw_shared"
+        }
+      }
+    ]);
+  });
+
   it("starts an existing conversation through the product startConversationRun API", async () => {
     const calls: unknown[] = [];
     const client = {
@@ -249,8 +285,8 @@ function createStartResponse({
     conversation: {
       id: conversationId,
       clientInstanceId: "client_1",
-      ownerUserId: "user_1",
-      ownerExternalUserId: "external_1",
+      createdByUserId: "user_1",
+      createdByExternalUserId: "external_1",
       title: "Test",
       status: "active",
       createdAt: "2026-06-26T10:00:00.000Z",
@@ -282,8 +318,8 @@ function createStartResponse({
       conversation: {
         id: conversationId,
         clientInstanceId: "client_1",
-        ownerUserId: "user_1",
-        ownerExternalUserId: "external_1",
+        createdByUserId: "user_1",
+        createdByExternalUserId: "external_1",
         title: "Test",
         status: "active",
         createdAt: "2026-06-26T10:00:00.000Z",

@@ -10,6 +10,7 @@ import type {
   ApiAccessStore,
   AuditEventStore,
   ClientInstanceId,
+  CollaborationWorkspaceStore,
   ConfigAssetSource,
   ConfigAssetStore,
   ConversationRetentionStore,
@@ -19,7 +20,8 @@ import type {
   PlatformFileStore,
   RunObservationStore,
   StructuredDataStore,
-  UserStore
+  UserStore,
+  WorkspaceCommandStore
 } from "@vivd-catalyst/core";
 import type { AuditRecorder } from "@vivd-catalyst/core";
 import type { AuthAdapter } from "@vivd-catalyst/auth";
@@ -40,9 +42,10 @@ export interface ChatServerOptions {
     PlatformFileStore &
     AgentRunStore &
     RunObservationStore &
-    StructuredDataStore;
+    StructuredDataStore &
+    Pick<WorkspaceCommandStore, "countActiveWorkspaceCommands">;
   auditEventStore: AuditEventStore;
-  userStore: UserStore;
+  userStore: UserStore & CollaborationWorkspaceStore;
   apiAccessStore: ApiAccessStore;
   usageGovernance: ModelUsageGovernance;
   auditRecorder: AuditRecorder;

@@ -10,6 +10,7 @@ import {
   asExecutionWorkspaceId,
   asManagedArtifactId,
   asToolCallId,
+  asUserId,
   asWorkspaceCommandId,
   StoreBackedAuditRecorder,
   type ClientInstanceId,
@@ -1045,12 +1046,26 @@ async function createRunnerHarness(
   } = {}
 ) {
   const clientInstanceId = asClientInstanceId(`workspace_runner_${globalThis.crypto.randomUUID()}`);
-  const ownerUserId = "user-1";
   const store = new InMemoryPlatformStore();
+  const owner = await store.resolveUserIdentity({
+    clientInstanceId,
+    authSource: "test",
+    externalUserId: "user-1",
+    displayLabel: "Workspace Runner User",
+    roles: ["user"],
+    permissionRefs: [],
+    permissions: []
+  });
+  const ownerUserId = owner.id;
+  const [personalWorkspace] = await store.listWorkspacesForUser({
+    clientInstanceId,
+    userId: asUserId(owner.id)
+  });
   const conversation = await store.createConversation({
     clientInstanceId,
-    ownerUserId,
-    ownerExternalUserId: ownerUserId,
+    collaborationWorkspaceId: personalWorkspace!.id,
+    createdByUserId: ownerUserId,
+    createdByExternalUserId: ownerUserId,
     title: "Workspace runner test",
     retainedUntil: "2026-07-29T00:00:00.000Z"
   });
@@ -1083,7 +1098,7 @@ async function createRunnerHarness(
     ...(input.telemetry ? { telemetry: input.telemetry } : {}),
     limits: input.limits
   });
-  const context = createToolContext(clientInstanceId, conversation);
+  const context = createToolContext(clientInstanceId, conversation, ownerUserId);
   const ensureWorkspace = () =>
     store.ensureExecutionWorkspace({
       clientInstanceId,
@@ -1139,13 +1154,14 @@ async function createRunnerHarness(
 
 function createToolContext(
   clientInstanceId: ClientInstanceId,
-  conversation: Conversation
+  conversation: Conversation,
+  ownerUserId: string
 ): ToolExecutionContext {
   return {
     clientInstanceId,
     correlationId: "corr_workspace_runner",
     user: {
-      id: "user-1",
+      id: ownerUserId,
       externalUserId: "user-1",
       displayLabel: "Workspace Runner User",
       roles: ["user"],

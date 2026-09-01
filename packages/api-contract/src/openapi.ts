@@ -59,7 +59,7 @@ function createParameters(operation: ApiOperation): { parameters: OpenApiParamet
     ...(operation.queryParams ?? []).map((name) => ({
       name,
       in: "query" as const,
-      required: false,
+      required: operation.requiredQueryParams?.includes(name) ?? false,
       schema: { type: "string" }
     }))
   ];

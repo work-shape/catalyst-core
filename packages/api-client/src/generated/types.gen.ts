@@ -59,7 +59,7 @@ export type GetCurrentUserResponses = {
             displayLabel?: string;
             authSource: string;
         };
-        scopes?: Array<'*' | 'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'api_access:read' | 'api_access:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
+        scopes?: Array<'*' | 'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'collaboration_workspace:read' | 'collaboration_workspace:manage' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'api_access:read' | 'api_access:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
     };
 };
 
@@ -104,7 +104,7 @@ export type UpdateCurrentUserResponses = {
             displayLabel?: string;
             authSource: string;
         };
-        scopes?: Array<'*' | 'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'api_access:read' | 'api_access:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
+        scopes?: Array<'*' | 'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'collaboration_workspace:read' | 'collaboration_workspace:manage' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'api_access:read' | 'api_access:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
     };
 };
 
@@ -228,6 +228,9 @@ export type GetConfigResponses = {
             resources: {
                 enabled: boolean;
             };
+            collaborationWorkspaces: {
+                enabled: boolean;
+            };
             configAssets: {
                 enabled: boolean;
                 editableAgentFields: Array<'displayName' | 'description' | 'welcomeMessage' | 'welcomeSubtitle' | 'instructions' | 'modelBindingId' | 'reasoningEffort' | 'maxSteps' | 'toolNames' | 'skillNames' | 'initialPrompts'>;
@@ -296,10 +299,443 @@ export type GetConfigResponses = {
 
 export type GetConfigResponse = GetConfigResponses[keyof GetConfigResponses];
 
-export type ListConversationsData = {
+export type ListCollaborationWorkspacesData = {
     body?: never;
     path?: never;
     query?: never;
+    url: '/api/collaboration-workspaces';
+};
+
+export type ListCollaborationWorkspacesResponses = {
+    /**
+     * Successful response
+     */
+    200: Array<{
+        id: string;
+        clientInstanceId: string;
+        kind: 'personal' | 'shared';
+        name: string;
+        description: string | null;
+        visibility: 'discoverable' | 'private';
+        emoji: string | null;
+        accentColor: 'ruby' | 'amber' | 'emerald' | 'sapphire' | 'violet' | 'rose' | 'teal' | 'slate' | null;
+        personalUserId: string | null;
+        createdAt: string;
+        updatedAt: string;
+        role: 'owner' | 'admin' | 'member';
+        pendingAccessRequestCount: number;
+    }>;
+};
+
+export type ListCollaborationWorkspacesResponse = ListCollaborationWorkspacesResponses[keyof ListCollaborationWorkspacesResponses];
+
+export type CreateCollaborationWorkspaceData = {
+    body: {
+        name: string;
+        description?: string | null;
+        visibility?: 'discoverable' | 'private';
+        emoji?: string | null;
+        accentColor?: 'ruby' | 'amber' | 'emerald' | 'sapphire' | 'violet' | 'rose' | 'teal' | 'slate' | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/collaboration-workspaces';
+};
+
+export type CreateCollaborationWorkspaceResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        id: string;
+        clientInstanceId: string;
+        kind: 'personal' | 'shared';
+        name: string;
+        description: string | null;
+        visibility: 'discoverable' | 'private';
+        emoji: string | null;
+        accentColor: 'ruby' | 'amber' | 'emerald' | 'sapphire' | 'violet' | 'rose' | 'teal' | 'slate' | null;
+        personalUserId: string | null;
+        createdAt: string;
+        updatedAt: string;
+        role: 'owner' | 'admin' | 'member';
+        pendingAccessRequestCount: number;
+    };
+};
+
+export type CreateCollaborationWorkspaceResponse = CreateCollaborationWorkspaceResponses[keyof CreateCollaborationWorkspaceResponses];
+
+export type ListCollaborationWorkspaceDirectoryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/collaboration-workspaces/directory';
+};
+
+export type ListCollaborationWorkspaceDirectoryResponses = {
+    /**
+     * Successful response
+     */
+    200: Array<{
+        id: string;
+        name: string;
+        description: string | null;
+        emoji: string | null;
+        accentColor: 'ruby' | 'amber' | 'emerald' | 'sapphire' | 'violet' | 'rose' | 'teal' | 'slate' | null;
+        accessState: 'member' | 'request_pending' | 'can_request';
+    }>;
+};
+
+export type ListCollaborationWorkspaceDirectoryResponse = ListCollaborationWorkspaceDirectoryResponses[keyof ListCollaborationWorkspaceDirectoryResponses];
+
+export type DeleteCollaborationWorkspaceData = {
+    body: {
+        confirmName: string;
+    };
+    path: {
+        collaborationWorkspaceId: string;
+    };
+    query?: never;
+    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}';
+};
+
+export type DeleteCollaborationWorkspaceResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        collaborationWorkspaceId: string;
+        conversationCount: number;
+        fileCount: number;
+        memberCount: number;
+    };
+};
+
+export type DeleteCollaborationWorkspaceResponse = DeleteCollaborationWorkspaceResponses[keyof DeleteCollaborationWorkspaceResponses];
+
+export type GetCollaborationWorkspaceData = {
+    body?: never;
+    path: {
+        collaborationWorkspaceId: string;
+    };
+    query?: never;
+    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}';
+};
+
+export type GetCollaborationWorkspaceResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        id: string;
+        clientInstanceId: string;
+        kind: 'personal' | 'shared';
+        name: string;
+        description: string | null;
+        visibility: 'discoverable' | 'private';
+        emoji: string | null;
+        accentColor: 'ruby' | 'amber' | 'emerald' | 'sapphire' | 'violet' | 'rose' | 'teal' | 'slate' | null;
+        personalUserId: string | null;
+        createdAt: string;
+        updatedAt: string;
+        role: 'owner' | 'admin' | 'member';
+        pendingAccessRequestCount: number;
+    };
+};
+
+export type GetCollaborationWorkspaceResponse = GetCollaborationWorkspaceResponses[keyof GetCollaborationWorkspaceResponses];
+
+export type UpdateCollaborationWorkspaceData = {
+    body: {
+        name?: string;
+        description?: string | null;
+        visibility?: 'discoverable' | 'private';
+        emoji?: string | null;
+        accentColor?: 'ruby' | 'amber' | 'emerald' | 'sapphire' | 'violet' | 'rose' | 'teal' | 'slate' | null;
+    };
+    path: {
+        collaborationWorkspaceId: string;
+    };
+    query?: never;
+    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}';
+};
+
+export type UpdateCollaborationWorkspaceResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        id: string;
+        clientInstanceId: string;
+        kind: 'personal' | 'shared';
+        name: string;
+        description: string | null;
+        visibility: 'discoverable' | 'private';
+        emoji: string | null;
+        accentColor: 'ruby' | 'amber' | 'emerald' | 'sapphire' | 'violet' | 'rose' | 'teal' | 'slate' | null;
+        personalUserId: string | null;
+        createdAt: string;
+        updatedAt: string;
+        role: 'owner' | 'admin' | 'member';
+        pendingAccessRequestCount: number;
+    };
+};
+
+export type UpdateCollaborationWorkspaceResponse = UpdateCollaborationWorkspaceResponses[keyof UpdateCollaborationWorkspaceResponses];
+
+export type GetCollaborationWorkspaceDeletionImpactData = {
+    body?: never;
+    path: {
+        collaborationWorkspaceId: string;
+    };
+    query?: never;
+    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/deletion-impact';
+};
+
+export type GetCollaborationWorkspaceDeletionImpactResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        conversationCount: number;
+        memberCount: number;
+        pendingAccessRequestCount: number;
+    };
+};
+
+export type GetCollaborationWorkspaceDeletionImpactResponse = GetCollaborationWorkspaceDeletionImpactResponses[keyof GetCollaborationWorkspaceDeletionImpactResponses];
+
+export type ListCollaborationWorkspaceMembersData = {
+    body?: never;
+    path: {
+        collaborationWorkspaceId: string;
+    };
+    query?: never;
+    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/members';
+};
+
+export type ListCollaborationWorkspaceMembersResponses = {
+    /**
+     * Successful response
+     */
+    200: Array<{
+        userId: string;
+        displayLabel: string;
+        email: string | null;
+        role: 'owner' | 'admin' | 'member';
+    }>;
+};
+
+export type ListCollaborationWorkspaceMembersResponse = ListCollaborationWorkspaceMembersResponses[keyof ListCollaborationWorkspaceMembersResponses];
+
+export type AddCollaborationWorkspaceMemberData = {
+    body: {
+        email: string;
+    };
+    path: {
+        collaborationWorkspaceId: string;
+    };
+    query?: never;
+    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/members';
+};
+
+export type AddCollaborationWorkspaceMemberResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        userId: string;
+        displayLabel: string;
+        email: string | null;
+        role: 'owner' | 'admin' | 'member';
+    };
+};
+
+export type AddCollaborationWorkspaceMemberResponse = AddCollaborationWorkspaceMemberResponses[keyof AddCollaborationWorkspaceMemberResponses];
+
+export type RemoveCollaborationWorkspaceMemberData = {
+    body?: never;
+    path: {
+        collaborationWorkspaceId: string;
+        userId: string;
+    };
+    query?: never;
+    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/members/{userId}';
+};
+
+export type RemoveCollaborationWorkspaceMemberResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        collaborationWorkspaceId: string;
+        clientInstanceId: string;
+        userId: string;
+        role: 'owner' | 'admin' | 'member';
+        createdAt: string;
+        updatedAt: string;
+    };
+};
+
+export type RemoveCollaborationWorkspaceMemberResponse = RemoveCollaborationWorkspaceMemberResponses[keyof RemoveCollaborationWorkspaceMemberResponses];
+
+export type UpdateCollaborationWorkspaceMemberRoleData = {
+    body: {
+        role: 'owner' | 'admin' | 'member';
+    };
+    path: {
+        collaborationWorkspaceId: string;
+        userId: string;
+    };
+    query?: never;
+    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/members/{userId}';
+};
+
+export type UpdateCollaborationWorkspaceMemberRoleResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        collaborationWorkspaceId: string;
+        clientInstanceId: string;
+        userId: string;
+        role: 'owner' | 'admin' | 'member';
+        createdAt: string;
+        updatedAt: string;
+    };
+};
+
+export type UpdateCollaborationWorkspaceMemberRoleResponse = UpdateCollaborationWorkspaceMemberRoleResponses[keyof UpdateCollaborationWorkspaceMemberRoleResponses];
+
+export type LeaveCollaborationWorkspaceData = {
+    body?: never;
+    path: {
+        collaborationWorkspaceId: string;
+    };
+    query?: never;
+    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/members/me';
+};
+
+export type LeaveCollaborationWorkspaceResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        collaborationWorkspaceId: string;
+        clientInstanceId: string;
+        userId: string;
+        role: 'owner' | 'admin' | 'member';
+        createdAt: string;
+        updatedAt: string;
+    };
+};
+
+export type LeaveCollaborationWorkspaceResponse = LeaveCollaborationWorkspaceResponses[keyof LeaveCollaborationWorkspaceResponses];
+
+export type ListCollaborationWorkspaceAccessRequestsData = {
+    body?: never;
+    path: {
+        collaborationWorkspaceId: string;
+    };
+    query?: never;
+    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/access-requests';
+};
+
+export type ListCollaborationWorkspaceAccessRequestsResponses = {
+    /**
+     * Successful response
+     */
+    200: Array<{
+        userId: string;
+        displayLabel: string;
+        email: string | null;
+        createdAt: string;
+    }>;
+};
+
+export type ListCollaborationWorkspaceAccessRequestsResponse = ListCollaborationWorkspaceAccessRequestsResponses[keyof ListCollaborationWorkspaceAccessRequestsResponses];
+
+export type RequestCollaborationWorkspaceAccessData = {
+    body?: never;
+    path: {
+        collaborationWorkspaceId: string;
+    };
+    query?: never;
+    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/access-requests';
+};
+
+export type RequestCollaborationWorkspaceAccessResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        id: string;
+        collaborationWorkspaceId: string;
+        clientInstanceId: string;
+        userId: string;
+        createdAt: string;
+    };
+};
+
+export type RequestCollaborationWorkspaceAccessResponse = RequestCollaborationWorkspaceAccessResponses[keyof RequestCollaborationWorkspaceAccessResponses];
+
+export type ApproveCollaborationWorkspaceAccessRequestData = {
+    body?: never;
+    path: {
+        collaborationWorkspaceId: string;
+        userId: string;
+    };
+    query?: never;
+    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/access-requests/{userId}/approve';
+};
+
+export type ApproveCollaborationWorkspaceAccessRequestResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        collaborationWorkspaceId: string;
+        clientInstanceId: string;
+        userId: string;
+        role: 'owner' | 'admin' | 'member';
+        createdAt: string;
+        updatedAt: string;
+    };
+};
+
+export type ApproveCollaborationWorkspaceAccessRequestResponse = ApproveCollaborationWorkspaceAccessRequestResponses[keyof ApproveCollaborationWorkspaceAccessRequestResponses];
+
+export type DeclineCollaborationWorkspaceAccessRequestData = {
+    body?: never;
+    path: {
+        collaborationWorkspaceId: string;
+        userId: string;
+    };
+    query?: never;
+    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/access-requests/{userId}';
+};
+
+export type DeclineCollaborationWorkspaceAccessRequestResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        id: string;
+        collaborationWorkspaceId: string;
+        clientInstanceId: string;
+        userId: string;
+        createdAt: string;
+    };
+};
+
+export type DeclineCollaborationWorkspaceAccessRequestResponse = DeclineCollaborationWorkspaceAccessRequestResponses[keyof DeclineCollaborationWorkspaceAccessRequestResponses];
+
+export type ListConversationsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        collaborationWorkspaceId?: string;
+    };
     url: '/api/conversations';
 };
 
@@ -310,8 +746,9 @@ export type ListConversationsResponses = {
     200: Array<{
         id: string;
         clientInstanceId: string;
-        ownerUserId: string;
-        ownerExternalUserId: string;
+        collaborationWorkspaceId: string;
+        createdByUserId: string;
+        createdByExternalUserId: string;
         title: string;
         status: string;
         createdAt: string;
@@ -338,6 +775,7 @@ export type ListConversationsResponse = ListConversationsResponses[keyof ListCon
 export type CreateConversationData = {
     body: {
         title?: string;
+        collaborationWorkspaceId?: string;
         locale?: 'en' | 'de';
     };
     path?: never;
@@ -352,8 +790,9 @@ export type CreateConversationResponses = {
     200: {
         id: string;
         clientInstanceId: string;
-        ownerUserId: string;
-        ownerExternalUserId: string;
+        collaborationWorkspaceId: string;
+        createdByUserId: string;
+        createdByExternalUserId: string;
         title: string;
         status: string;
         createdAt: string;
@@ -383,8 +822,9 @@ export type RenameConversationResponses = {
     200: {
         id: string;
         clientInstanceId: string;
-        ownerUserId: string;
-        ownerExternalUserId: string;
+        collaborationWorkspaceId: string;
+        createdByUserId: string;
+        createdByExternalUserId: string;
         title: string;
         status: string;
         createdAt: string;
@@ -412,8 +852,9 @@ export type GenerateConversationTitleResponses = {
     200: {
         id: string;
         clientInstanceId: string;
-        ownerUserId: string;
-        ownerExternalUserId: string;
+        collaborationWorkspaceId: string;
+        createdByUserId: string;
+        createdByExternalUserId: string;
         title: string;
         status: string;
         createdAt: string;
@@ -424,6 +865,38 @@ export type GenerateConversationTitleResponses = {
 };
 
 export type GenerateConversationTitleResponse = GenerateConversationTitleResponses[keyof GenerateConversationTitleResponses];
+
+export type MoveConversationData = {
+    body: {
+        collaborationWorkspaceId: string;
+    };
+    path: {
+        conversationId: string;
+    };
+    query?: never;
+    url: '/api/conversations/{conversationId}/move';
+};
+
+export type MoveConversationResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        id: string;
+        clientInstanceId: string;
+        collaborationWorkspaceId: string;
+        createdByUserId: string;
+        createdByExternalUserId: string;
+        title: string;
+        status: string;
+        createdAt: string;
+        updatedAt: string;
+        retainedUntil: string;
+        deletedAt?: string;
+    };
+};
+
+export type MoveConversationResponse = MoveConversationResponses[keyof MoveConversationResponses];
 
 export type GetConversationThreadData = {
     body?: never;
@@ -442,8 +915,9 @@ export type GetConversationThreadResponses = {
         conversation: {
             id: string;
             clientInstanceId: string;
-            ownerUserId: string;
-            ownerExternalUserId: string;
+            collaborationWorkspaceId: string;
+            createdByUserId: string;
+            createdByExternalUserId: string;
             title: string;
             status: string;
             createdAt: string;
@@ -972,8 +1446,9 @@ export type StartConversationRunResponses = {
         conversation: {
             id: string;
             clientInstanceId: string;
-            ownerUserId: string;
-            ownerExternalUserId: string;
+            collaborationWorkspaceId: string;
+            createdByUserId: string;
+            createdByExternalUserId: string;
             title: string;
             status: string;
             createdAt: string;
@@ -1094,8 +1569,9 @@ export type StartConversationRunResponses = {
             conversation: {
                 id: string;
                 clientInstanceId: string;
-                ownerUserId: string;
-                ownerExternalUserId: string;
+                collaborationWorkspaceId: string;
+                createdByUserId: string;
+                createdByExternalUserId: string;
                 title: string;
                 status: string;
                 createdAt: string;
@@ -1321,6 +1797,7 @@ export type CreateConversationRunData = {
         };
         conversation?: {
             title?: string;
+            collaborationWorkspaceId?: string;
             locale?: 'en' | 'de';
         };
     };
@@ -1337,8 +1814,9 @@ export type CreateConversationRunResponses = {
         conversation: {
             id: string;
             clientInstanceId: string;
-            ownerUserId: string;
-            ownerExternalUserId: string;
+            collaborationWorkspaceId: string;
+            createdByUserId: string;
+            createdByExternalUserId: string;
             title: string;
             status: string;
             createdAt: string;
@@ -1459,8 +1937,9 @@ export type CreateConversationRunResponses = {
             conversation: {
                 id: string;
                 clientInstanceId: string;
-                ownerUserId: string;
-                ownerExternalUserId: string;
+                collaborationWorkspaceId: string;
+                createdByUserId: string;
+                createdByExternalUserId: string;
                 title: string;
                 status: string;
                 createdAt: string;
@@ -1878,8 +2357,9 @@ export type DeleteConversationResponses = {
     200: {
         id: string;
         clientInstanceId: string;
-        ownerUserId: string;
-        ownerExternalUserId: string;
+        collaborationWorkspaceId: string;
+        createdByUserId: string;
+        createdByExternalUserId: string;
         title: string;
         status: string;
         createdAt: string;
@@ -3388,7 +3868,7 @@ export type IssueSessionTokenData = {
         permissionRefs?: Array<string>;
         permissions?: Array<string>;
         correlationId?: string;
-        scopes?: Array<'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'api_access:read' | 'api_access:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
+        scopes?: Array<'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'collaboration_workspace:read' | 'collaboration_workspace:manage' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'api_access:read' | 'api_access:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
         delegatedActor?: {
             kind: 'service_principal';
             id: string;

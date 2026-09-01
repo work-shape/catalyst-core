@@ -16,10 +16,16 @@ describePostgres("Postgres conversation store", () => {
     const clientInstanceId = asClientInstanceId(
       `recent_messages_${globalThis.crypto.randomUUID()}`
     );
+    const user = await store.createUser({ clientInstanceId, displayLabel: "Test user" });
+    const personalWorkspace = await store.ensurePersonalWorkspace({
+      clientInstanceId,
+      userId: user.id
+    });
     const conversation = await store.createConversation({
       clientInstanceId,
-      ownerUserId: "user_test",
-      ownerExternalUserId: "user_test",
+      collaborationWorkspaceId: personalWorkspace.id,
+      createdByUserId: user.id,
+      createdByExternalUserId: "user_test",
       title: "Recent messages",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
@@ -51,8 +57,17 @@ describePostgres("Postgres conversation store", () => {
           limit: 2
         })
       ).resolves.toMatchObject([{ id: messageIds[1] }, { id: messageIds[2] }]);
+      await expect(
+        store.listConversationsForWorkspace({
+          clientInstanceId,
+          collaborationWorkspaceId: personalWorkspace.id
+        })
+      ).resolves.toEqual([expect.objectContaining({ id: conversation.id })]);
     } finally {
       await sql`delete from conversations where id = ${conversation.id}`;
+      await sql`delete from collaboration_workspace_memberships where client_instance_id = ${clientInstanceId}`;
+      await sql`delete from collaboration_workspaces where client_instance_id = ${clientInstanceId}`;
+      await sql`delete from product_users where client_instance_id = ${clientInstanceId}`;
       await sql.end();
       await store.close();
     }

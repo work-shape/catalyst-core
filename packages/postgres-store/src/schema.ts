@@ -23,6 +23,7 @@ import type {
   AuditActor,
   AuditEvent,
   ChatMessage,
+  CollaborationWorkspace,
   ConfigAssetRecord,
   ConfigAssetRevisionRecord,
   ConversationAttachment,
@@ -38,6 +39,8 @@ import type {
   ServicePrincipalRecord,
   StructuredDataResourceRecord,
   UserRecord,
+  WorkspaceAccessRequest,
+  WorkspaceMembership,
   WorkspaceCommand,
   WorkspaceFile
 } from "@vivd-catalyst/core";
@@ -148,13 +151,110 @@ export const apiCredentials = pgTable(
   ]
 );
 
+export const collaborationWorkspaces = pgTable(
+  "collaboration_workspaces",
+  {
+    id: text("id").primaryKey(),
+    clientInstanceId: text("client_instance_id").notNull(),
+    kind: text("kind").$type<CollaborationWorkspace["kind"]>().notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    visibility: text("visibility").$type<CollaborationWorkspace["visibility"]>().notNull(),
+    emoji: text("emoji"),
+    accentColor: text("accent_color").$type<CollaborationWorkspace["accentColor"]>(),
+    personalUserId: text("personal_user_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    uniqueIndex("collaboration_workspaces_client_id_idx").on(table.clientInstanceId, table.id),
+    uniqueIndex("collaboration_workspaces_personal_user_idx")
+      .on(table.clientInstanceId, table.personalUserId)
+      .where(sql`${table.kind} = 'personal'`),
+    foreignKey({
+      name: "collaboration_workspaces_personal_user_fk",
+      columns: [table.clientInstanceId, table.personalUserId],
+      foreignColumns: [productUsers.clientInstanceId, productUsers.id]
+    }).onDelete("restrict"),
+    check(
+      "collaboration_workspaces_personal_kind_check",
+      sql`(${table.kind} = 'personal') = (${table.personalUserId} is not null)`
+    ),
+    check(
+      "collaboration_workspaces_personal_visibility_check",
+      sql`${table.kind} <> 'personal' or ${table.visibility} = 'private'`
+    )
+  ]
+);
+
+export const collaborationWorkspaceMemberships = pgTable(
+  "collaboration_workspace_memberships",
+  {
+    collaborationWorkspaceId: text("collaboration_workspace_id").notNull(),
+    clientInstanceId: text("client_instance_id").notNull(),
+    userId: text("user_id").notNull(),
+    role: text("role").$type<WorkspaceMembership["role"]>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    primaryKey({
+      name: "collaboration_workspace_memberships_pk",
+      columns: [table.collaborationWorkspaceId, table.userId]
+    }),
+    foreignKey({
+      name: "collaboration_workspace_memberships_workspace_fk",
+      columns: [table.clientInstanceId, table.collaborationWorkspaceId],
+      foreignColumns: [collaborationWorkspaces.clientInstanceId, collaborationWorkspaces.id]
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "collaboration_workspace_memberships_user_fk",
+      columns: [table.clientInstanceId, table.userId],
+      foreignColumns: [productUsers.clientInstanceId, productUsers.id]
+    }).onDelete("restrict"),
+    index("collaboration_workspace_memberships_user_idx").on(table.clientInstanceId, table.userId)
+  ]
+);
+
+export const collaborationWorkspaceAccessRequests = pgTable(
+  "collaboration_workspace_access_requests",
+  {
+    id: text("id").primaryKey(),
+    collaborationWorkspaceId: text("collaboration_workspace_id").notNull(),
+    clientInstanceId: text("client_instance_id").notNull(),
+    userId: text("user_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    uniqueIndex("collaboration_workspace_access_requests_workspace_user_idx").on(
+      table.collaborationWorkspaceId,
+      table.userId
+    ),
+    foreignKey({
+      name: "collaboration_workspace_access_requests_workspace_fk",
+      columns: [table.clientInstanceId, table.collaborationWorkspaceId],
+      foreignColumns: [collaborationWorkspaces.clientInstanceId, collaborationWorkspaces.id]
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "collaboration_workspace_access_requests_user_fk",
+      columns: [table.clientInstanceId, table.userId],
+      foreignColumns: [productUsers.clientInstanceId, productUsers.id]
+    }).onDelete("cascade"),
+    index("collaboration_workspace_access_requests_workspace_idx").on(
+      table.clientInstanceId,
+      table.collaborationWorkspaceId
+    )
+  ]
+);
+
 export const conversations = pgTable(
   "conversations",
   {
     id: text("id").primaryKey(),
     clientInstanceId: text("client_instance_id").notNull(),
-    ownerUserId: text("owner_user_id").notNull(),
-    ownerExternalUserId: text("owner_external_user_id").notNull(),
+    collaborationWorkspaceId: text("collaboration_workspace_id").notNull(),
+    createdByUserId: text("created_by_user_id").notNull(),
+    createdByExternalUserId: text("created_by_external_user_id").notNull(),
     title: text("title").notNull(),
     status: text("status").$type<Conversation["status"]>().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
@@ -163,20 +263,19 @@ export const conversations = pgTable(
     deletedAt: timestamp("deleted_at", { withTimezone: true })
   },
   (table) => [
-    index("conversations_owner_idx").on(
-      table.clientInstanceId,
-      table.ownerExternalUserId,
-      table.updatedAt.desc()
-    ),
-    index("conversations_owner_user_idx").on(
-      table.clientInstanceId,
-      table.ownerUserId,
-      table.updatedAt.desc()
-    ),
     index("conversations_retention_expiry_idx").on(
       table.clientInstanceId,
       table.status,
       table.retainedUntil
+    ),
+    foreignKey({
+      name: "conversations_collaboration_workspace_fk",
+      columns: [table.clientInstanceId, table.collaborationWorkspaceId],
+      foreignColumns: [collaborationWorkspaces.clientInstanceId, collaborationWorkspaces.id]
+    }).onDelete("restrict"),
+    index("conversations_collaboration_workspace_idx").on(
+      table.clientInstanceId,
+      table.collaborationWorkspaceId
     )
   ]
 );

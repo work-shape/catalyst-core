@@ -8,11 +8,19 @@ export function createConversationsClient(transport: ApiClientTransport) {
       params: { conversationId, artifactId }
     });
 
+  const listForWorkspace = (collaborationWorkspaceId?: string) =>
+    transport.unwrapJson(
+      generatedSdk.listConversations({
+        client: transport.generatedClient,
+        ...(collaborationWorkspaceId === undefined ? {} : { query: { collaborationWorkspaceId } })
+      }),
+      apiOperations.listConversations.responseSchema
+    );
+
   return {
-    list: () =>
-      transport.unwrapJson(
-        generatedSdk.listConversations({ client: transport.generatedClient }),
-        apiOperations.listConversations.responseSchema
+    list: (collaborationWorkspaceId?: string) =>
+      listForWorkspace(
+        typeof collaborationWorkspaceId === "string" ? collaborationWorkspaceId : undefined
       ),
     create: (input: OperationRequestInput<typeof apiOperations.createConversation> = {}) =>
       transport.unwrapJson(
@@ -54,6 +62,15 @@ export function createConversationsClient(transport: ApiClientTransport) {
           body: apiOperations.renameConversation.requestSchema.parse({ title })
         }),
         apiOperations.renameConversation.responseSchema
+      ),
+    move: (conversationId: string, collaborationWorkspaceId: string) =>
+      transport.unwrapJson(
+        generatedSdk.moveConversation({
+          client: transport.generatedClient,
+          path: { conversationId },
+          body: apiOperations.moveConversation.requestSchema.parse({ collaborationWorkspaceId })
+        }),
+        apiOperations.moveConversation.responseSchema
       ),
     delete: (conversationId: string) =>
       transport.unwrapJson(

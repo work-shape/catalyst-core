@@ -32,7 +32,9 @@ import {
 } from "../workspace-utils";
 import type { ResourcesPanelPreference } from "../workspace-utils";
 import {
+  collaborationWorkspaceHomeRoute,
   defaultWorkspaceRoute,
+  routeConversationId,
   workspaceRouteView,
   type SuperadminRouteTab,
   type WorkspaceRoute,
@@ -44,8 +46,15 @@ interface WorkspaceRouteContextValue {
   route: WorkspaceRoute;
   view: WorkspaceRouteView;
   selectedConversationId: string | undefined;
-  goToDefaultChat(options?: WorkspaceRouteChangeOptions): void;
-  showConversation(conversationId: string, options?: WorkspaceRouteChangeOptions): void;
+  goToDefaultChat(
+    collaborationWorkspaceId: string | undefined,
+    options?: WorkspaceRouteChangeOptions
+  ): void;
+  showConversation(
+    collaborationWorkspaceId: string,
+    conversationId: string,
+    options?: WorkspaceRouteChangeOptions
+  ): void;
   showSettings(): void;
   showSuperadmin(tab?: SuperadminRouteTab, options?: WorkspaceRouteChangeOptions): void;
   selectWorkspaceView(view: WorkspaceRouteView): void;
@@ -105,7 +114,7 @@ export function WorkspaceUiStateProvider({
   onRouteChange(route: WorkspaceRoute, options?: WorkspaceRouteChangeOptions): void;
   children: ReactNode;
 }) {
-  const selectedConversationId = route.kind === "conversation" ? route.conversationId : undefined;
+  const selectedConversationId = routeConversationId(route);
   const selectedConversationIdRef = useRef<string | undefined>(undefined);
   const lastChatRouteRef = useRef<WorkspaceRoute>(defaultWorkspaceRoute());
   const backgroundActiveRunsRef = useRef<Set<string>>(new Set());
@@ -156,15 +165,24 @@ export function WorkspaceUiStateProvider({
   }, []);
 
   const goToDefaultChat = useCallback(
-    (options?: WorkspaceRouteChangeOptions) => {
-      onRouteChange(defaultWorkspaceRoute(), options);
+    (collaborationWorkspaceId: string | undefined, options?: WorkspaceRouteChangeOptions) => {
+      onRouteChange(
+        collaborationWorkspaceId
+          ? collaborationWorkspaceHomeRoute(collaborationWorkspaceId)
+          : defaultWorkspaceRoute(),
+        options
+      );
     },
     [onRouteChange]
   );
 
   const showConversation = useCallback(
-    (conversationId: string, options?: WorkspaceRouteChangeOptions) => {
-      onRouteChange({ kind: "conversation", conversationId }, options);
+    (
+      collaborationWorkspaceId: string,
+      conversationId: string,
+      options?: WorkspaceRouteChangeOptions
+    ) => {
+      onRouteChange({ kind: "conversation", collaborationWorkspaceId, conversationId }, options);
     },
     [onRouteChange]
   );

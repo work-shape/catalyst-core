@@ -87,10 +87,10 @@ describe("structured result projection", () => {
       vi.setSystemTime(new Date("2026-08-06T10:00:00.000Z"));
       const clientInstanceId = asClientInstanceId("client_test");
       const store = new InMemoryPlatformStore();
-      const conversation = await store.createConversation({
+      const conversation = await store.createConversationForTesting({
         clientInstanceId,
-        ownerUserId: "user_test",
-        ownerExternalUserId: "user_test",
+        createdByUserId: "user_test",
+        createdByExternalUserId: "user_test",
         title: "Test",
         retainedUntil: "2030-01-01T00:00:00.000Z"
       });

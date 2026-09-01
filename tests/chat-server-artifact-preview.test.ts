@@ -21,10 +21,10 @@ describe("artifact preview routes", () => {
   it("creates one hidden preview source for a sent Office attachment and reuses it", async () => {
     const { clientInstanceId, owner, server, store } = await createPreviewServer();
     try {
-      const conversation = await store.createConversation({
+      const conversation = await store.createConversationForTesting({
         clientInstanceId,
-        ownerUserId: owner.id,
-        ownerExternalUserId: owner.externalUserId,
+        createdByUserId: owner.id,
+        createdByExternalUserId: owner.externalUserId,
         title: "Attachment preview",
         retainedUntil: "2030-01-01T00:00:00.000Z"
       });
@@ -116,10 +116,10 @@ describe("artifact preview routes", () => {
   it("rejects attachment preview jobs for files with native preview paths", async () => {
     const { clientInstanceId, owner, server, store } = await createPreviewServer();
     try {
-      const conversation = await store.createConversation({
+      const conversation = await store.createConversationForTesting({
         clientInstanceId,
-        ownerUserId: owner.id,
-        ownerExternalUserId: owner.externalUserId,
+        createdByUserId: owner.id,
+        createdByExternalUserId: owner.externalUserId,
         title: "Native PDF preview",
         retainedUntil: "2030-01-01T00:00:00.000Z"
       });
@@ -172,17 +172,17 @@ describe("artifact preview routes", () => {
   it("serves artifact preview state without exposing renderer or storage internals", async () => {
     const { clientInstanceId, owner, server, store } = await createPreviewServer();
     try {
-      const conversation = await store.createConversation({
+      const conversation = await store.createConversationForTesting({
         clientInstanceId,
-        ownerUserId: owner.id,
-        ownerExternalUserId: owner.externalUserId,
+        createdByUserId: owner.id,
+        createdByExternalUserId: owner.externalUserId,
         title: "Artifact preview",
         retainedUntil: "2030-01-01T00:00:00.000Z"
       });
-      const otherConversation = await store.createConversation({
+      const otherConversation = await store.createConversationForTesting({
         clientInstanceId,
-        ownerUserId: owner.id,
-        ownerExternalUserId: owner.externalUserId,
+        createdByUserId: owner.id,
+        createdByExternalUserId: owner.externalUserId,
         title: "Other preview conversation",
         retainedUntil: "2030-01-01T00:00:00.000Z"
       });
@@ -655,10 +655,10 @@ describe("artifact preview routes", () => {
     };
     const { server, store } = await createPreviewServer({ clientInstanceId, owner });
     try {
-      const conversation = await store.createConversation({
+      const conversation = await store.createConversationForTesting({
         clientInstanceId,
-        ownerUserId: owner.id,
-        ownerExternalUserId: owner.externalUserId,
+        createdByUserId: owner.id,
+        createdByExternalUserId: owner.externalUserId,
         title: "Artifact preview forbidden",
         retainedUntil: "2030-01-01T00:00:00.000Z"
       });

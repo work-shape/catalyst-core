@@ -210,7 +210,7 @@ export class LocalAgentRuntime implements AgentRuntime {
       clientInstanceId: context.clientInstanceId,
       runId
     });
-    if (run?.ownerUserId === getRuntimeSubjectUserId(context)) {
+    if (run) {
       return run.status;
     }
     throw new AppError("NOT_FOUND", `Agent run '${runId}' was not found`);

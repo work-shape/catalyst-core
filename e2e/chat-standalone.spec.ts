@@ -171,7 +171,7 @@ test("composer sends on Enter and inserts a newline on Shift+Enter", async ({ pa
 
   expect(createRunRequests).toBe(1);
   expect(legacyChatRequests).toBe(0);
-  await expect(page).toHaveURL(/\/c\/[^/]+$/u);
+  await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
   await expect(input).toHaveValue("");
 });
 
@@ -190,7 +190,7 @@ test(
     ).join(" ");
     await input.fill(longMessage);
     await input.press("Enter");
-    await expect(page).toHaveURL(/\/c\/[^/]+$/u);
+    await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
     await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
 
     const conversationId = currentConversationId(page);
@@ -246,7 +246,7 @@ test("new turns anchor below the top chrome and retain response runway", async (
   const input = page.getByPlaceholder("Message");
   await input.fill(`Anchor warmup ${Date.now()}`);
   await input.press("Enter");
-  await expect(page).toHaveURL(/\/c\/[^/]+$/u);
+  await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
   await expect(page.getByText(/Local agent response:/u)).toBeVisible();
   await expect(page.getByRole("button", { name: "Send message" })).toBeEnabled();
 
@@ -387,7 +387,7 @@ test("new conversation action returns from a persisted conversation to a clean d
   );
   await page.getByRole("button", { name: "Send message" }).click();
   await createRunResponse;
-  await expect(page).toHaveURL(/\/c\/[^/]+$/u);
+  await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
 
   const conversationId = currentConversationId(page);
   const createdConversation = page.getByTestId("conversation-row").filter({ hasText: messageText });
@@ -396,15 +396,13 @@ test("new conversation action returns from a persisted conversation to a clean d
 
   await page.getByRole("button", { name: "New", exact: true }).click();
 
-  await expect(page).toHaveURL(/\/$/u);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
   await expect(input).toHaveValue("");
   await expect(input).toBeFocused();
   await expect(createdConversation).toHaveCount(1);
 
   await createdConversation.getByRole("button").first().click();
-  await expect(page).toHaveURL(
-    new RegExp(`${escapeRegExp(conversationPath(conversationId))}$`, "u")
-  );
+  await expect(page).toHaveURL(conversationUrlPattern(conversationId));
 });
 
 test("standalone conversation routes are addressable and follow rail navigation", async ({
@@ -418,31 +416,241 @@ test("standalone conversation routes are addressable and follow rail navigation"
   expect(created.ok()).toBe(true);
   const conversation = (await created.json()) as { id: string };
 
-  await page.goto(conversationPath(conversation.id));
+  await page.goto(legacyConversationPath(conversation.id));
   const input = page.getByPlaceholder("Message");
   const targetConversation = page.getByTestId("conversation-row").filter({ hasText: title });
   await expect(input).toBeVisible();
   await expect(targetConversation).toHaveAttribute("data-selected", "true");
-  await expect(page).toHaveURL(new RegExp(`${escapeRegExp(conversationPath(conversation.id))}$`));
+  await expect(page).toHaveURL(conversationUrlPattern(conversation.id));
 
   await page.getByRole("button", { name: "New", exact: true }).click();
-  await expect(page).toHaveURL(/\/$/u);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
   await input.fill("Route-scoped new draft");
 
   await targetConversation.getByRole("button").first().click();
-  await expect(page).toHaveURL(new RegExp(`${escapeRegExp(conversationPath(conversation.id))}$`));
+  await expect(page).toHaveURL(conversationUrlPattern(conversation.id));
   await expect(input).toHaveValue("");
 
   await page.goBack();
-  await expect(page).toHaveURL(/\/$/u);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
   await expect(input).toHaveValue("Route-scoped new draft");
+});
+
+test("collaboration workspaces scope navigation, settings, and discovery", async ({ page }) => {
+  await signInViaUi(page, normalUser);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
+  const personalPathname = new URL(page.url()).pathname;
+
+  const selectorTrigger = page.getByTestId("collaboration-workspace-selector-trigger");
+  await expect(selectorTrigger).toContainText("Personal workspace");
+
+  const workspaceName = `E2E Workspace ${Date.now()}`;
+  await selectorTrigger.click();
+  await page.getByRole("button", { name: "Create workspace" }).click();
+  await page.getByLabel("Name").fill(workspaceName);
+  await page.getByRole("button", { name: "Create workspace" }).click();
+
+  await expect(selectorTrigger).toContainText(workspaceName);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
+  const sharedPathname = new URL(page.url()).pathname;
+  expect(sharedPathname).not.toBe(personalPathname);
+
+  const input = page.getByPlaceholder("Message");
+  const messageText = `Workspace scoped ${Date.now()}`;
+  const createRunResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname === "/api/conversations/runs"
+  );
+  await input.fill(messageText);
+  await page.getByRole("button", { name: "Send message" }).click();
+  const response = await createRunResponse;
+  expect(response.ok()).toBe(true);
+  const started = (await response.json()) as { conversation: { id: string } };
+  await expect(page).toHaveURL(conversationUrlPattern(started.conversation.id));
+  expect(new URL(page.url()).pathname.startsWith(`${sharedPathname}/c/`)).toBe(true);
+  // This test is about workspace scoping, not about the agent run, so the run is
+  // cancelled best-effort: whether it streams, fails, or already finished must not
+  // decide the outcome of the assertions below.
+  await page
+    .getByRole("button", { name: "Stop generating" })
+    .click({ timeout: 5_000 })
+    .catch(() => undefined);
+
+  const workspaceConversation = page
+    .getByTestId("conversation-row")
+    .filter({ hasText: messageText });
+  await expect(workspaceConversation).toHaveCount(1);
+
+  const renamedWorkspaceName = `${workspaceName} renamed`;
+  await selectorTrigger.click();
+  await page.getByRole("button", { name: `Settings for ${workspaceName}` }).click();
+  await page.getByLabel("Name").fill(renamedWorkspaceName);
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(selectorTrigger).toContainText(renamedWorkspaceName);
+  await page.getByRole("button", { name: "Close dialog" }).click();
+
+  await selectorTrigger.click();
+  await page.getByRole("button", { name: "Browse workspaces" }).click();
+  await expect(
+    page.getByTestId("collaboration-workspace-directory-row").filter({
+      hasText: renamedWorkspaceName
+    })
+  ).toHaveCount(1);
+  await page.getByRole("button", { name: "Close dialog" }).click();
+
+  await selectorTrigger.click();
+  await page.getByRole("button", { name: "Personal workspace" }).click();
+  await expect(page).toHaveURL(new RegExp(`${escapeRegExp(personalPathname)}$`, "u"));
+  await expect(workspaceConversation).toHaveCount(0);
+
+  await selectorTrigger.click();
+  await page.getByRole("button", { name: renamedWorkspaceName, exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${escapeRegExp(sharedPathname)}$`, "u"));
+
+  await page.goto("/");
+  await expect(page).toHaveURL(new RegExp(`${escapeRegExp(sharedPathname)}$`, "u"));
+
+  await page.goto("/w/cw_not_a_workspace");
+  await expect(page).toHaveURL(new RegExp(`${escapeRegExp(personalPathname)}$`, "u"));
+});
+
+test("conversation rail moves a conversation into another workspace", async ({ page }) => {
+  await signInViaApi(page, normalUser);
+
+  const destinationName = `E2E Move Target ${Date.now()}`;
+  const createdCollaborationWorkspace = await page.request.post(
+    `${apiBaseUrl}/api/collaboration-workspaces`,
+    { data: { name: destinationName, visibility: "private" } }
+  );
+  expect(createdCollaborationWorkspace.ok()).toBe(true);
+  const destinationCollaborationWorkspace = (await createdCollaborationWorkspace.json()) as {
+    id: string;
+  };
+
+  const title = `Move target ${Date.now()}`;
+  const created = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    data: { title }
+  });
+  expect(created.ok()).toBe(true);
+  const conversation = (await created.json()) as { id: string };
+
+  await page.goto(legacyConversationPath(conversation.id));
+  await expect(page).toHaveURL(conversationUrlPattern(conversation.id));
+  const personalPathname = new URL(page.url()).pathname.replace(/\/c\/.*$/u, "");
+
+  const targetConversation = page.getByTestId("conversation-row").filter({ hasText: title });
+  await expect(targetConversation).toHaveCount(1);
+
+  await targetConversation
+    .getByRole("button", { name: `Conversation options for ${title}`, exact: true })
+    .click();
+  await page.getByRole("menuitem", { name: "Move to workspace…", exact: true }).click();
+  const moveDialog = page.getByRole("dialog", { name: "Move conversation", exact: true });
+  await expect(moveDialog).toBeVisible();
+  // The workspace the conversation already lives in is never a destination.
+  await expect(moveDialog.getByRole("radio", { name: "Personal workspace" })).toHaveCount(0);
+  await expect(moveDialog.getByRole("radio", { name: destinationName })).toHaveCount(1);
+
+  await moveDialog.getByRole("radio", { name: destinationName }).check();
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        /^\/api\/conversations\/[^/]+\/move$/u.test(new URL(response.url()).pathname)
+    ),
+    moveDialog.getByRole("button", { name: "Move", exact: true }).click()
+  ]);
+
+  const destinationPathname = `/w/${encodeURIComponent(destinationCollaborationWorkspace.id)}`;
+  await expect(page).toHaveURL(
+    new RegExp(
+      `${escapeRegExp(destinationPathname)}/c/${escapeRegExp(encodeURIComponent(conversation.id))}$`,
+      "u"
+    )
+  );
+  await expect(moveDialog).toHaveCount(0);
+  await expect(targetConversation).toHaveCount(1);
+
+  const selectorTrigger = page.getByTestId("collaboration-workspace-selector-trigger");
+  await expect(selectorTrigger).toContainText(destinationName);
+
+  // Now that the conversation sits in the shared workspace, the Personal
+  // Workspace is offered back under its fixed localized label.
+  await targetConversation
+    .getByRole("button", { name: `Conversation options for ${title}`, exact: true })
+    .click();
+  await page.getByRole("menuitem", { name: "Move to workspace…", exact: true }).click();
+  await expect(moveDialog.getByRole("radio", { name: "Personal workspace" })).toHaveCount(1);
+  await moveDialog.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await expect(moveDialog).toHaveCount(0);
+
+  await selectorTrigger.click();
+  await page.getByRole("button", { name: "Personal workspace" }).click();
+  await expect(page).toHaveURL(new RegExp(`${escapeRegExp(personalPathname)}$`, "u"));
+  await expect(targetConversation).toHaveCount(0);
+});
+
+test("collaboration workspace settings delete a workspace and fall back to personal", async ({
+  page
+}) => {
+  await signInViaApi(page, normalUser);
+
+  const workspaceName = `E2E Delete ${Date.now()}`;
+  const createdCollaborationWorkspace = await page.request.post(
+    `${apiBaseUrl}/api/collaboration-workspaces`,
+    { data: { name: workspaceName, visibility: "discoverable" } }
+  );
+  expect(createdCollaborationWorkspace.ok()).toBe(true);
+  const collaborationWorkspace = (await createdCollaborationWorkspace.json()) as { id: string };
+
+  await page.goto("/");
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
+  const personalPathname = new URL(page.url()).pathname;
+
+  await page.goto(`/w/${collaborationWorkspace.id}`);
+  const selectorTrigger = page.getByTestId("collaboration-workspace-selector-trigger");
+  await expect(selectorTrigger).toContainText(workspaceName);
+
+  await selectorTrigger.click();
+  await page.getByRole("button", { name: `Settings for ${workspaceName}` }).click();
+  await page.getByTestId("collaboration-workspace-delete-trigger").click();
+
+  const deleteDialog = page.getByRole("dialog", { name: "Delete workspace?", exact: true });
+  await expect(deleteDialog).toBeVisible();
+  await expect(deleteDialog.getByTestId("collaboration-workspace-deletion-impact")).toBeVisible();
+  await deleteDialog.getByRole("button", { name: "Continue", exact: true }).click();
+
+  const confirmInput = deleteDialog.getByLabel(`Type "${workspaceName}" to confirm`);
+  const confirmButton = deleteDialog.getByRole("button", { name: "Delete workspace", exact: true });
+  await confirmInput.fill(`${workspaceName} not really`);
+  await expect(confirmButton).toBeDisabled();
+
+  await confirmInput.fill(workspaceName);
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === "DELETE" &&
+        /^\/api\/collaboration-workspaces\/[^/]+$/u.test(new URL(response.url()).pathname)
+    ),
+    confirmButton.click()
+  ]);
+
+  await expect(page).toHaveURL(new RegExp(`${escapeRegExp(personalPathname)}$`, "u"));
+  await expect(selectorTrigger).toContainText("Personal workspace");
+
+  await selectorTrigger.click();
+  await page.getByRole("button", { name: "Browse workspaces" }).click();
+  await expect(
+    page.getByTestId("collaboration-workspace-directory-row").filter({ hasText: workspaceName })
+  ).toHaveCount(0);
 });
 
 test("first message from the root route moves to the persisted conversation route", async ({
   page
 }) => {
   await signInViaUi(page, normalUser);
-  await expect(page).toHaveURL(/\/$/u);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
   let legacyChatRequests = 0;
   page.on("request", (request) => {
     if (request.method() === "POST" && new URL(request.url()).pathname === "/api/chat") {
@@ -462,22 +670,20 @@ test("first message from the root route moves to the persisted conversation rout
   expect(response.ok()).toBe(true);
   const started = (await response.json()) as { conversation: { id: string } };
 
-  await expect(page).toHaveURL(
-    new RegExp(`${escapeRegExp(conversationPath(started.conversation.id))}$`, "u")
-  );
+  await expect(page).toHaveURL(conversationUrlPattern(started.conversation.id));
   expect(legacyChatRequests).toBe(0);
   const createdConversation = page.getByTestId("conversation-row").filter({ hasText: messageText });
   await expect(createdConversation).toHaveAttribute("data-selected", "true");
 
   await page.getByRole("button", { name: "New", exact: true }).click();
-  await expect(page).toHaveURL(/\/$/u);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
   await expect(page.getByPlaceholder("Message")).toHaveValue("");
   await expect(createdConversation).toHaveCount(1);
 });
 
 test("root submit stays draft-only while create-run is pending", async ({ page }) => {
   await signInViaUi(page, normalUser);
-  await expect(page).toHaveURL(/\/$/u);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
 
   let releaseCreateRun = () => {};
   const createRunGate = new Promise<void>((resolve) => {
@@ -513,7 +719,7 @@ test("root submit stays draft-only while create-run is pending", async ({ page }
   await page.getByRole("button", { name: "Send message" }).click();
 
   await expect.poll(() => createRunRequests).toBe(1);
-  await expect(page).toHaveURL(/\/$/u);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
   await expect(input).toHaveValue(messageText);
   await expect(page.getByRole("button", { name: "Send message" })).toBeDisabled();
   await expect(
@@ -529,9 +735,7 @@ test("root submit stays draft-only while create-run is pending", async ({ page }
   expect(response.ok()).toBe(true);
   const started = (await response.json()) as { conversation: { id: string } };
 
-  await expect(page).toHaveURL(
-    new RegExp(`${escapeRegExp(conversationPath(started.conversation.id))}$`, "u")
-  );
+  await expect(page).toHaveURL(conversationUrlPattern(started.conversation.id));
   await expect(input).toHaveValue("");
   await expect(
     chatRegion.locator('[data-role="user"]').filter({ hasText: messageText })
@@ -554,7 +758,7 @@ test("stop generating cancels the active stream instead of only hiding the butto
   expect(lateToken).not.toBe("");
   await input.fill(messageText);
   await input.press("Enter");
-  await expect(page).toHaveURL(/\/c\/[^/]+$/u);
+  await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
 
   const stopButton = page.getByRole("button", { name: "Stop generating" });
   await expect(stopButton).toBeVisible();
@@ -760,7 +964,7 @@ test(
       }
     });
 
-    await page.goto(conversationPath(conversation.id));
+    await page.goto(legacyConversationPath(conversation.id));
     const input = page.getByPlaceholder("Message");
     const chatRegion = page.getByRole("region", { name: "Chat" });
     const sourceConversation = page
@@ -775,7 +979,7 @@ test(
     await page.getByRole("button", { name: "Send message" }).click();
     await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
 
-    await page.goto(conversationPath(conversation.id));
+    await page.goto(legacyConversationPath(conversation.id));
     const runningConversation = page.getByTestId("conversation-row").filter({
       has: page.getByTestId("conversation-running-indicator")
     });
@@ -822,7 +1026,7 @@ test(
       ),
       sendButton.click()
     ]);
-    await expect(page).toHaveURL(/\/c\/[^/]+$/u);
+    await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
     await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
     expect(await sampleMaxCursorCount(page, 300)).toBeLessThanOrEqual(1);
     const newConversation = page.getByTestId("conversation-row").filter({ hasText: messageToken });
@@ -1316,7 +1520,7 @@ test("normal users are redirected away from superadmin routes", async ({ page })
 
   await expect(page.getByText("E2E Customer")).toBeVisible();
   await expect(page.getByRole("region", { name: "Administration panel" })).toHaveCount(0);
-  await expect(page).toHaveURL(/\/$/u);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
 });
 
 test("workspace and superadmin keep page scroll locked", async ({ page }) => {
@@ -1615,8 +1819,15 @@ test("superadmin deletes a user from the users panel", async ({ page }) => {
   expect(users.some((user) => user.email === createdUser.email)).toBe(false);
 });
 
-function conversationPath(conversationId: string): string {
+function legacyConversationPath(conversationId: string): string {
   return `/c/${encodeURIComponent(conversationId)}`;
+}
+
+const collaborationWorkspaceUrlPattern = /\/w\/[^/]+$/u;
+const collaborationWorkspaceConversationUrlPattern = /\/w\/[^/]+\/c\/[^/]+$/u;
+
+function conversationUrlPattern(conversationId: string): RegExp {
+  return new RegExp(`/w/[^/]+/c/${escapeRegExp(encodeURIComponent(conversationId))}$`, "u");
 }
 
 function isRunEventsPath(pathname: string): boolean {
@@ -1624,7 +1835,7 @@ function isRunEventsPath(pathname: string): boolean {
 }
 
 function currentConversationId(page: Page): string {
-  const match = /^\/c\/([^/]+)$/u.exec(new URL(page.url()).pathname);
+  const match = /^\/w\/[^/]+\/c\/([^/]+)$/u.exec(new URL(page.url()).pathname);
   if (!match?.[1]) {
     throw new Error(`Current route is not a conversation route: ${page.url()}`);
   }
