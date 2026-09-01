@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, isNull, or, sql as drizzleSql } from "drizzle-orm";
 import {
   AppError,
   type ClientInstanceId,
@@ -10,6 +10,7 @@ import {
   type UpdateWorkspaceInput,
   type UserId,
   type WorkspaceAccessRequest,
+  type WorkspaceMemberCandidate,
   type WorkspaceMembership,
   createCollaborationWorkspaceId,
   createWorkspaceAccessRequestId,
@@ -27,7 +28,8 @@ import {
   collaborationWorkspaceMemberships,
   collaborationWorkspaces,
   conversations,
-  productUsers
+  productUsers,
+  userIdentities
 } from "./schema";
 
 type WorkspaceDatabase = PostgresDatabase | PostgresTransaction;
@@ -348,6 +350,82 @@ export async function listMemberships(
   return rows.map(mapWorkspaceMembership);
 }
 
+export async function searchMemberCandidates(
+  db: PostgresDatabase,
+  input: Parameters<CollaborationWorkspaceStore["searchMemberCandidates"]>[0]
+): Promise<WorkspaceMemberCandidate[]> {
+  await requireWorkspace(db, input.clientInstanceId, input.collaborationWorkspaceId);
+  const pattern = `%${escapeLikePattern(input.query)}%`;
+  const effectiveEmail = drizzleSql<string | null>`coalesce(
+    ${productUsers.email},
+    (
+      select min(${userIdentities.email})
+      from ${userIdentities}
+      where ${userIdentities.clientInstanceId} = ${productUsers.clientInstanceId}
+        and ${userIdentities.userId} = ${productUsers.id}
+        and ${userIdentities.emailVerified} = true
+        and ${userIdentities.email} is not null
+    )
+  )`;
+  const hasPendingAccessRequest = drizzleSql<boolean>`exists (
+    select 1
+    from ${collaborationWorkspaceAccessRequests}
+    where ${collaborationWorkspaceAccessRequests.clientInstanceId} = ${input.clientInstanceId}
+      and ${collaborationWorkspaceAccessRequests.collaborationWorkspaceId} = ${input.collaborationWorkspaceId}
+      and ${collaborationWorkspaceAccessRequests.userId} = ${productUsers.id}
+  )`;
+  const verifiedIdentityEmailMatches = drizzleSql<boolean>`exists (
+    select 1
+    from ${userIdentities}
+    where ${userIdentities.clientInstanceId} = ${productUsers.clientInstanceId}
+      and ${userIdentities.userId} = ${productUsers.id}
+      and ${userIdentities.emailVerified} = true
+      and ${userIdentities.email} ilike ${pattern}
+  )`;
+  const rows = await db
+    .select({
+      displayLabel: productUsers.displayLabel,
+      email: effectiveEmail,
+      hasPendingAccessRequest
+    })
+    .from(productUsers)
+    .leftJoin(
+      collaborationWorkspaceMemberships,
+      and(
+        eq(collaborationWorkspaceMemberships.clientInstanceId, productUsers.clientInstanceId),
+        eq(
+          collaborationWorkspaceMemberships.collaborationWorkspaceId,
+          input.collaborationWorkspaceId
+        ),
+        eq(collaborationWorkspaceMemberships.userId, productUsers.id)
+      )
+    )
+    .where(
+      and(
+        eq(productUsers.clientInstanceId, input.clientInstanceId),
+        eq(productUsers.status, "active"),
+        isNull(collaborationWorkspaceMemberships.userId),
+        drizzleSql`${effectiveEmail} is not null`,
+        or(
+          ilike(productUsers.displayLabel, pattern),
+          ilike(productUsers.email, pattern),
+          verifiedIdentityEmailMatches
+        )
+      )
+    )
+    .orderBy(
+      asc(drizzleSql`lower(${productUsers.displayLabel})`),
+      asc(drizzleSql`lower(${effectiveEmail})`),
+      asc(productUsers.id)
+    )
+    .limit(input.limit);
+  return rows.map((row) => ({
+    displayLabel: row.displayLabel,
+    email: row.email!,
+    hasPendingAccessRequest: row.hasPendingAccessRequest
+  }));
+}
+
 export async function getMembership(
   db: WorkspaceDatabase,
   input: Parameters<CollaborationWorkspaceStore["getMembership"]>[0]
@@ -630,4 +708,8 @@ function accessRequestWhere(input: {
     ),
     eq(collaborationWorkspaceAccessRequests.userId, input.userId)
   );
+}
+
+function escapeLikePattern(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
 }

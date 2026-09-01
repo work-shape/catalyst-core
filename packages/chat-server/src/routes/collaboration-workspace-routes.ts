@@ -77,6 +77,17 @@ export function registerCollaborationWorkspaceRoutes(
     return workspaces.listMembers(user, getCollaborationWorkspaceId(request.params));
   });
 
+  app.get(apiOperations.listCollaborationWorkspaceMemberCandidates.path, async (request) => {
+    const { user } = await authenticateRequest(options, request);
+    requireAuthScope(user, "collaboration_workspace:manage");
+    const query = (request.query as { q?: unknown }).q;
+    return workspaces.searchMemberCandidates(
+      user,
+      getCollaborationWorkspaceId(request.params),
+      typeof query === "string" ? query : ""
+    );
+  });
+
   app.post(apiOperations.addCollaborationWorkspaceMember.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
     requireAuthScope(user, "collaboration_workspace:manage");

@@ -58,6 +58,12 @@ export const workspaceMemberSchema = z.object({
   role: workspaceMembershipRoleSchema
 });
 
+export const workspaceMemberCandidateSchema = z.object({
+  displayLabel: z.string(),
+  email: z.string(),
+  hasPendingAccessRequest: z.boolean()
+});
+
 export const workspaceAccessRequestSchema = z.object({
   id: z.string(),
   collaborationWorkspaceId: z.string(),
@@ -124,4 +130,5 @@ export type CollaborationWorkspaceDirectoryItem = z.infer<
   typeof collaborationWorkspaceDirectoryItemSchema
 >;
 export type WorkspaceMember = z.infer<typeof workspaceMemberSchema>;
+export type WorkspaceMemberCandidate = z.infer<typeof workspaceMemberCandidateSchema>;
 export type WorkspaceAccessRequestItem = z.infer<typeof workspaceAccessRequestItemSchema>;

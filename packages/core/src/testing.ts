@@ -64,6 +64,7 @@ import {
   type StructuredDataStore,
   type WorkspaceCommandStore,
   type WorkspaceMembership,
+  type WorkspaceMemberCandidate,
   type WorkspaceAccessRequest,
   authenticatedUserFromRecord,
   asUserId,
@@ -480,6 +481,63 @@ export class InMemoryPlatformStore
         membership.clientInstanceId === input.clientInstanceId &&
         membership.collaborationWorkspaceId === input.collaborationWorkspaceId
     );
+  }
+
+  async searchMemberCandidates(input: {
+    clientInstanceId: ClientInstanceId;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
+    query: string;
+    limit: number;
+  }): Promise<WorkspaceMemberCandidate[]> {
+    this.requireWorkspace(input.clientInstanceId, input.collaborationWorkspaceId);
+    const normalizedQuery = input.query.toLocaleLowerCase("en-US");
+    return [...this.users.values()]
+      .filter(
+        (user) =>
+          user.clientInstanceId === input.clientInstanceId &&
+          user.status === "active" &&
+          !this.workspaceMemberships.has(
+            workspaceMembershipKey(input.collaborationWorkspaceId, user.id)
+          )
+      )
+      .map((user) => {
+        const verifiedIdentityEmails = this.getIdentitiesForUser(user)
+          .filter((identity) => identity.emailVerified && identity.email)
+          .map((identity) => identity.email!)
+          .sort((left, right) => left.localeCompare(right));
+        return {
+          user,
+          verifiedIdentityEmails,
+          email: user.email ?? verifiedIdentityEmails[0]
+        };
+      })
+      .filter(
+        (candidate): candidate is typeof candidate & { email: string } =>
+          Boolean(candidate.email) &&
+          (candidate.user.displayLabel.toLocaleLowerCase("en-US").includes(normalizedQuery) ||
+            candidate.user.email?.toLocaleLowerCase("en-US").includes(normalizedQuery) === true ||
+            candidate.verifiedIdentityEmails.some((email) =>
+              email.toLocaleLowerCase("en-US").includes(normalizedQuery)
+            ))
+      )
+      .sort(
+        (left, right) =>
+          left.user.displayLabel
+            .toLocaleLowerCase("en-US")
+            .localeCompare(right.user.displayLabel.toLocaleLowerCase("en-US")) ||
+          left.email
+            .toLocaleLowerCase("en-US")
+            .localeCompare(right.email.toLocaleLowerCase("en-US")) ||
+          left.user.id.localeCompare(right.user.id)
+      )
+      .slice(0, input.limit)
+      .map((candidate) => ({
+        displayLabel: candidate.user.displayLabel,
+        email: candidate.email,
+        hasPendingAccessRequest: this.workspaceAccessRequests.has(
+          workspaceMembershipKey(input.collaborationWorkspaceId, candidate.user.id)
+        )
+      }));
   }
 
   async getMembership(input: {

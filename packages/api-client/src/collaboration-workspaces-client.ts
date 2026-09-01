@@ -70,6 +70,15 @@ export function createCollaborationWorkspacesClient(transport: ApiClientTranspor
           }),
           apiOperations.listCollaborationWorkspaceMembers.responseSchema
         ),
+      searchCandidates: (collaborationWorkspaceId: string, query: string) =>
+        transport.unwrapJson(
+          generatedSdk.listCollaborationWorkspaceMemberCandidates({
+            client: transport.generatedClient,
+            path: { collaborationWorkspaceId },
+            query: { q: query }
+          }),
+          apiOperations.listCollaborationWorkspaceMemberCandidates.responseSchema
+        ),
       addByEmail: (collaborationWorkspaceId: string, email: string) =>
         transport.unwrapJson(
           generatedSdk.addCollaborationWorkspaceMember({

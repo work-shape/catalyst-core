@@ -12,6 +12,7 @@ import {
   type RuntimeCallContext,
   type UserRecord,
   type WorkspaceAccentColor,
+  type WorkspaceMemberCandidate,
   type WorkspaceMembership,
   type WorkspaceMembershipRole,
   type WorkspaceVisibility
@@ -376,6 +377,25 @@ export class CollaborationWorkspaceWorkflow {
         email: member.email ?? null,
         role: membership.role
       };
+    });
+  }
+
+  async searchMemberCandidates(
+    user: AuthenticatedUser,
+    collaborationWorkspaceId: CollaborationWorkspaceId,
+    query: string
+  ): Promise<WorkspaceMemberCandidate[]> {
+    this.requireCollaborationWorkspacesEnabled();
+    const actorMembership = await this.requireActiveMembership(user, collaborationWorkspaceId);
+    requireOwnerOrAdmin(actorMembership);
+    await this.requireSharedWorkspace(collaborationWorkspaceId);
+    const normalizedQuery = query.trim();
+    if (normalizedQuery.length < 2) return [];
+    return this.options.userStore.searchMemberCandidates({
+      clientInstanceId: this.options.clientInstanceId,
+      collaborationWorkspaceId,
+      query: normalizedQuery,
+      limit: 8
     });
   }
 

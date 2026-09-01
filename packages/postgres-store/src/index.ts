@@ -63,6 +63,7 @@ import {
   type WorkspaceCommand,
   type WorkspaceCommandId,
   type WorkspaceCommandStore,
+  type WorkspaceMemberCandidate,
   type WorkspaceMembership,
   type WorkspaceAccessRequest,
   type WorkspaceFile
@@ -82,6 +83,7 @@ import {
   listAccessRequestsForWorkspace as listPostgresAccessRequestsForWorkspace,
   listDiscoverableWorkspaces as listPostgresDiscoverableWorkspaces,
   listMemberships as listPostgresMemberships,
+  searchMemberCandidates as searchPostgresMemberCandidates,
   listWorkspacesForUser as listPostgresWorkspacesForUser,
   removeMembership as removePostgresMembership,
   removeMembershipsForUser as removePostgresMembershipsForUser,
@@ -425,6 +427,12 @@ export class PostgresPlatformStore
     input: Parameters<CollaborationWorkspaceStore["listMemberships"]>[0]
   ): Promise<WorkspaceMembership[]> {
     return listPostgresMemberships(this.db, input);
+  }
+
+  async searchMemberCandidates(
+    input: Parameters<CollaborationWorkspaceStore["searchMemberCandidates"]>[0]
+  ): Promise<WorkspaceMemberCandidate[]> {
+    return searchPostgresMemberCandidates(this.db, input);
   }
 
   async getMembership(

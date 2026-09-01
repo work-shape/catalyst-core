@@ -553,6 +553,30 @@ export type AddCollaborationWorkspaceMemberResponses = {
 
 export type AddCollaborationWorkspaceMemberResponse = AddCollaborationWorkspaceMemberResponses[keyof AddCollaborationWorkspaceMemberResponses];
 
+export type ListCollaborationWorkspaceMemberCandidatesData = {
+    body?: never;
+    path: {
+        collaborationWorkspaceId: string;
+    };
+    query?: {
+        q?: string;
+    };
+    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/member-candidates';
+};
+
+export type ListCollaborationWorkspaceMemberCandidatesResponses = {
+    /**
+     * Successful response
+     */
+    200: Array<{
+        displayLabel: string;
+        email: string;
+        hasPendingAccessRequest: boolean;
+    }>;
+};
+
+export type ListCollaborationWorkspaceMemberCandidatesResponse = ListCollaborationWorkspaceMemberCandidatesResponses[keyof ListCollaborationWorkspaceMemberCandidatesResponses];
+
 export type RemoveCollaborationWorkspaceMemberData = {
     body?: never;
     path: {

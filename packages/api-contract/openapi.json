@@ -2114,6 +2114,61 @@
         }
       }
     },
+    "/api/collaboration-workspaces/{collaborationWorkspaceId}/member-candidates": {
+      "get": {
+        "operationId": "listCollaborationWorkspaceMemberCandidates",
+        "parameters": [
+          {
+            "name": "collaborationWorkspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "displayLabel": {
+                        "type": "string"
+                      },
+                      "email": {
+                        "type": "string"
+                      },
+                      "hasPendingAccessRequest": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "displayLabel",
+                      "email",
+                      "hasPendingAccessRequest"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/collaboration-workspaces/{collaborationWorkspaceId}/members/{userId}": {
       "patch": {
         "operationId": "updateCollaborationWorkspaceMemberRole",

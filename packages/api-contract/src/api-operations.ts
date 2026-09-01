@@ -29,6 +29,7 @@ import {
   updateWorkspaceMemberRoleRequestSchema,
   workspaceAccessRequestItemSchema,
   workspaceAccessRequestSchema,
+  workspaceMemberCandidateSchema,
   workspaceMemberSchema,
   workspaceMembershipSchema
 } from "./collaboration-workspaces";
@@ -171,6 +172,13 @@ export const apiOperations = {
     method: "GET",
     path: "/api/collaboration-workspaces/:collaborationWorkspaceId/members",
     responseSchema: z.array(workspaceMemberSchema)
+  }),
+  listCollaborationWorkspaceMemberCandidates: defineJsonApiOperation({
+    operationId: "listCollaborationWorkspaceMemberCandidates",
+    method: "GET",
+    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/member-candidates",
+    queryParams: ["q"],
+    responseSchema: z.array(workspaceMemberCandidateSchema)
   }),
   addCollaborationWorkspaceMember: defineJsonApiOperation({
     operationId: "addCollaborationWorkspaceMember",

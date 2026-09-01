@@ -69,6 +69,10 @@ describe("Collaboration Workspace API", () => {
         method: "POST" as const,
         url: "/api/collaboration-workspaces/missing/members",
         payload: { email: "member@example.test" }
+      },
+      {
+        method: "GET" as const,
+        url: "/api/collaboration-workspaces/missing/member-candidates?q=owner"
       }
     ]) {
       const response = await inject(app.server, "owner", request);
@@ -80,6 +84,163 @@ describe("Collaboration Workspace API", () => {
         }
       });
     }
+
+    await app.close();
+  });
+
+  it("searches add-member candidates for workspace owners and admins", async () => {
+    const app = await createWorkspaceApp();
+    await currentUser(app.server, "owner");
+    const admin = await currentUser(app.server, "admin");
+    await currentUser(app.server, "member");
+    const outsider = await currentUser(app.server, "outsider");
+    const workspaceId = await createSharedWorkspace(app.server, "owner", "Candidate search");
+    await addWorkspaceMember(app.server, "owner", workspaceId, "admin@example.test");
+    await inject(app.server, "owner", {
+      method: "PATCH",
+      url: `/api/collaboration-workspaces/${workspaceId}/members/${admin.id}`,
+      payload: { role: "admin" }
+    });
+    await addWorkspaceMember(app.server, "owner", workspaceId, "member@example.test");
+
+    await app.store.createUser({
+      clientInstanceId,
+      displayLabel: "Label Search Person",
+      email: "label-result@example.test"
+    });
+    await app.store.createUser({
+      clientInstanceId,
+      displayLabel: "Email Result",
+      email: "Mixed.Email@example.test"
+    });
+    const identityMatch = await app.store.createUser({
+      clientInstanceId,
+      displayLabel: "Identity Email Result"
+    });
+    await app.store.upsertUserIdentity({
+      clientInstanceId,
+      userId: identityMatch.id,
+      authSource: "oidc",
+      externalUserId: "candidate-identity",
+      email: "Verified.Alias@example.test",
+      emailVerified: true
+    });
+    await inject(app.server, "outsider", {
+      method: "POST",
+      url: `/api/collaboration-workspaces/${workspaceId}/access-requests`
+    });
+
+    const ownerLabelMatch = await inject(app.server, "owner", {
+      method: "GET",
+      url: `/api/collaboration-workspaces/${workspaceId}/member-candidates?q=SEARCH%20PERSON`
+    });
+    expect(ownerLabelMatch.statusCode).toBe(200);
+    expect(ownerLabelMatch.json()).toEqual([
+      {
+        displayLabel: "Label Search Person",
+        email: "label-result@example.test",
+        hasPendingAccessRequest: false
+      }
+    ]);
+
+    const adminEmailMatch = await inject(app.server, "admin", {
+      method: "GET",
+      url: `/api/collaboration-workspaces/${workspaceId}/member-candidates?q=MIXED.EMAIL`
+    });
+    expect(adminEmailMatch.statusCode).toBe(200);
+    expect(adminEmailMatch.json()).toEqual([
+      {
+        displayLabel: "Email Result",
+        email: "Mixed.Email@example.test",
+        hasPendingAccessRequest: false
+      }
+    ]);
+
+    const verifiedIdentityMatch = await inject(app.server, "owner", {
+      method: "GET",
+      url: `/api/collaboration-workspaces/${workspaceId}/member-candidates?q=VERIFIED.ALIAS`
+    });
+    expect(verifiedIdentityMatch.json()).toEqual([
+      {
+        displayLabel: "Identity Email Result",
+        email: "Verified.Alias@example.test",
+        hasPendingAccessRequest: false
+      }
+    ]);
+
+    const pendingRequester = await inject(app.server, "owner", {
+      method: "GET",
+      url: `/api/collaboration-workspaces/${workspaceId}/member-candidates?q=OUTSIDER%40`
+    });
+    expect(pendingRequester.json()).toEqual([
+      {
+        displayLabel: "outsider",
+        email: "outsider@example.test",
+        hasPendingAccessRequest: true
+      }
+    ]);
+
+    expect(
+      (
+        await inject(app.server, "owner", {
+          method: "GET",
+          url: `/api/collaboration-workspaces/${workspaceId}/member-candidates?q=MEMBER%40EXAMPLE`
+        })
+      ).json()
+    ).toEqual([]);
+    expect(
+      (
+        await inject(app.server, "owner", {
+          method: "GET",
+          url: `/api/collaboration-workspaces/${workspaceId}/member-candidates?q=%20a%20`
+        })
+      ).json()
+    ).toEqual([]);
+    expect(
+      (
+        await inject(app.server, "member", {
+          method: "GET",
+          url: `/api/collaboration-workspaces/${workspaceId}/member-candidates?q=search`
+        })
+      ).statusCode
+    ).toBe(403);
+    expect(
+      (
+        await inject(app.server, "outsider", {
+          method: "GET",
+          url: `/api/collaboration-workspaces/${workspaceId}/member-candidates?q=search`
+        })
+      ).statusCode
+    ).toBe(404);
+
+    for (let index = 0; index < 10; index += 1) {
+      await app.store.createUser({
+        clientInstanceId,
+        displayLabel: `Limit Candidate ${index.toString().padStart(2, "0")}`,
+        email: `limit-${index}@example.test`
+      });
+    }
+    const limited = await inject(app.server, "admin", {
+      method: "GET",
+      url: `/api/collaboration-workspaces/${workspaceId}/member-candidates?q=limit%20candidate`
+    });
+    expect(limited.statusCode).toBe(200);
+    expect(limited.json()).toHaveLength(8);
+    expect(limited.json()).toEqual(
+      Array.from({ length: 8 }, (_, index) => ({
+        displayLabel: `Limit Candidate ${index.toString().padStart(2, "0")}`,
+        email: `limit-${index}@example.test`,
+        hasPendingAccessRequest: false
+      }))
+    );
+
+    const auditBefore = await app.store.listAuditEvents({ clientInstanceId });
+    await inject(app.server, "owner", {
+      method: "GET",
+      url: `/api/collaboration-workspaces/${workspaceId}/member-candidates?q=email`
+    });
+    const auditAfter = await app.store.listAuditEvents({ clientInstanceId });
+    expect(auditAfter).toHaveLength(auditBefore.length);
 
     await app.close();
   });

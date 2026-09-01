@@ -56,6 +56,12 @@ export interface WorkspaceAccessRequest {
   createdAt: ISODateString;
 }
 
+export interface WorkspaceMemberCandidate {
+  displayLabel: string;
+  email: string;
+  hasPendingAccessRequest: boolean;
+}
+
 export interface CollaborationWorkspaceWithRole extends CollaborationWorkspace {
   role: WorkspaceMembershipRole;
 }
@@ -125,6 +131,12 @@ export interface CollaborationWorkspaceStore {
     clientInstanceId: ClientInstanceId;
     collaborationWorkspaceId: CollaborationWorkspaceId;
   }): Promise<WorkspaceMembership[]>;
+  searchMemberCandidates(input: {
+    clientInstanceId: ClientInstanceId;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
+    query: string;
+    limit: number;
+  }): Promise<WorkspaceMemberCandidate[]>;
   getMembership(input: {
     clientInstanceId: ClientInstanceId;
     collaborationWorkspaceId: CollaborationWorkspaceId;

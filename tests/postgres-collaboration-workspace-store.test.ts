@@ -132,6 +132,123 @@ describePostgres("Postgres Collaboration Workspace store", () => {
     }
   });
 
+  it("searches active non-members as add-member candidates", async () => {
+    const clientInstanceId = testClientInstanceId("member-candidates");
+    try {
+      const owner = await store.createUser({ clientInstanceId, displayLabel: "Owner" });
+      const existing = await store.createUser({
+        clientInstanceId,
+        displayLabel: "Existing Candidate",
+        email: "existing-candidate@example.test"
+      });
+      const pending = await store.createUser({
+        clientInstanceId,
+        displayLabel: "Pending Candidate",
+        email: "pending-candidate@example.test"
+      });
+      await store.createUser({
+        clientInstanceId,
+        displayLabel: "Disabled Candidate",
+        email: "disabled-candidate@example.test",
+        status: "disabled"
+      });
+      const identityMatch = await store.createUser({
+        clientInstanceId,
+        displayLabel: "Identity Result"
+      });
+      await store.upsertUserIdentity({
+        clientInstanceId,
+        userId: identityMatch.id,
+        authSource: "oidc",
+        externalUserId: "postgres-candidate",
+        email: "Verified.Alias@example.test",
+        emailVerified: true
+      });
+      const shared = await store.createWorkspace({
+        clientInstanceId,
+        kind: "shared",
+        name: "Candidate search",
+        creatorUserId: owner.id
+      });
+      await store.addMembership({
+        clientInstanceId,
+        collaborationWorkspaceId: shared.id,
+        userId: existing.id,
+        role: "member"
+      });
+      await store.createAccessRequest({
+        clientInstanceId,
+        collaborationWorkspaceId: shared.id,
+        userId: pending.id
+      });
+
+      await expect(
+        store.searchMemberCandidates({
+          clientInstanceId,
+          collaborationWorkspaceId: shared.id,
+          query: "PENDING CANDIDATE",
+          limit: 8
+        })
+      ).resolves.toEqual([
+        {
+          displayLabel: "Pending Candidate",
+          email: "pending-candidate@example.test",
+          hasPendingAccessRequest: true
+        }
+      ]);
+      await expect(
+        store.searchMemberCandidates({
+          clientInstanceId,
+          collaborationWorkspaceId: shared.id,
+          query: "verified.alias",
+          limit: 8
+        })
+      ).resolves.toEqual([
+        {
+          displayLabel: "Identity Result",
+          email: "Verified.Alias@example.test",
+          hasPendingAccessRequest: false
+        }
+      ]);
+      await expect(
+        store.searchMemberCandidates({
+          clientInstanceId,
+          collaborationWorkspaceId: shared.id,
+          query: "existing-candidate",
+          limit: 8
+        })
+      ).resolves.toEqual([]);
+      await expect(
+        store.searchMemberCandidates({
+          clientInstanceId,
+          collaborationWorkspaceId: shared.id,
+          query: "disabled-candidate",
+          limit: 8
+        })
+      ).resolves.toEqual([]);
+
+      for (let index = 0; index < 10; index += 1) {
+        await store.createUser({
+          clientInstanceId,
+          displayLabel: `PG Limit ${index.toString().padStart(2, "0")}`,
+          email: `pg-limit-${index}@example.test`
+        });
+      }
+      const limited = await store.searchMemberCandidates({
+        clientInstanceId,
+        collaborationWorkspaceId: shared.id,
+        query: "PG LIMIT",
+        limit: 8
+      });
+      expect(limited).toHaveLength(8);
+      expect(limited.map((candidate) => candidate.displayLabel)).toEqual(
+        Array.from({ length: 8 }, (_, index) => `PG Limit ${index.toString().padStart(2, "0")}`)
+      );
+    } finally {
+      await cleanupClient(sql, clientInstanceId);
+    }
+  });
+
   it("lists only discoverable Shared Workspaces", async () => {
     const clientInstanceId = testClientInstanceId("directory");
     try {
