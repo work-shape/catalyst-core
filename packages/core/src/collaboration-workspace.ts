@@ -13,13 +13,23 @@ export type WorkspaceVisibility = "discoverable" | "private";
 export type WorkspaceMembershipRole = "owner" | "admin" | "member";
 
 export const WORKSPACE_ACCENT_COLORS = [
+  "garnet",
   "ruby",
+  "mahogany",
+  "copper",
   "amber",
+  "olive",
+  "jade",
   "emerald",
-  "sapphire",
-  "violet",
-  "rose",
   "teal",
+  "turquoise",
+  "azure",
+  "sapphire",
+  "indigo",
+  "violet",
+  "magenta",
+  "rose",
+  "stone",
   "slate"
 ] as const;
 

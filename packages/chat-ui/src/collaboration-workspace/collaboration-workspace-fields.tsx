@@ -17,13 +17,23 @@ import {
 export type CollaborationWorkspaceVisibility = "discoverable" | "private";
 
 const accentLabelKeys: Record<CollaborationWorkspaceAccentColor, TranslationKey> = {
+  garnet: "collaborationWorkspaceAccentGarnet",
   ruby: "collaborationWorkspaceAccentRuby",
+  mahogany: "collaborationWorkspaceAccentMahogany",
+  copper: "collaborationWorkspaceAccentCopper",
   amber: "collaborationWorkspaceAccentAmber",
+  olive: "collaborationWorkspaceAccentOlive",
+  jade: "collaborationWorkspaceAccentJade",
   emerald: "collaborationWorkspaceAccentEmerald",
-  sapphire: "collaborationWorkspaceAccentSapphire",
-  violet: "collaborationWorkspaceAccentViolet",
-  rose: "collaborationWorkspaceAccentRose",
   teal: "collaborationWorkspaceAccentTeal",
+  turquoise: "collaborationWorkspaceAccentTurquoise",
+  azure: "collaborationWorkspaceAccentAzure",
+  sapphire: "collaborationWorkspaceAccentSapphire",
+  indigo: "collaborationWorkspaceAccentIndigo",
+  violet: "collaborationWorkspaceAccentViolet",
+  magenta: "collaborationWorkspaceAccentMagenta",
+  rose: "collaborationWorkspaceAccentRose",
+  stone: "collaborationWorkspaceAccentStone",
   slate: "collaborationWorkspaceAccentSlate"
 };
 
@@ -273,7 +283,13 @@ export function CollaborationWorkspaceAccentField({
     <div className="grid gap-2">
       <span className="text-sm font-medium">{t("collaborationWorkspaceAccentLabel")}</span>
       <div
-        className="flex flex-wrap gap-2"
+        /*
+          Fixed 2rem columns so the swatches line up in a grid rather than a
+          ragged wrap. The cap is nine columns exactly (9 x 2rem + 8 x 0.5rem),
+          which splits the palette into even rows on a roomy dialog and lets
+          auto-fill drop to fewer columns on a narrow one.
+        */
+        className="grid max-w-[22rem] grid-cols-[repeat(auto-fill,2rem)] gap-2"
         role="group"
         aria-label={t("collaborationWorkspaceAccentLabel")}
       >

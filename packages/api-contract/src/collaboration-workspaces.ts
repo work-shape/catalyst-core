@@ -4,13 +4,23 @@ export const workspaceVisibilitySchema = z.enum(["discoverable", "private"]);
 export const workspaceMembershipRoleSchema = z.enum(["owner", "admin", "member"]);
 export type WorkspaceMembershipRole = z.infer<typeof workspaceMembershipRoleSchema>;
 export const workspaceAccentColorSchema = z.enum([
+  "garnet",
   "ruby",
+  "mahogany",
+  "copper",
   "amber",
+  "olive",
+  "jade",
   "emerald",
-  "sapphire",
-  "violet",
-  "rose",
   "teal",
+  "turquoise",
+  "azure",
+  "sapphire",
+  "indigo",
+  "violet",
+  "magenta",
+  "rose",
+  "stone",
   "slate"
 ]);
 

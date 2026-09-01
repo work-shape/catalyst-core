@@ -318,7 +318,7 @@ export type ListCollaborationWorkspacesResponses = {
         description: string | null;
         visibility: 'discoverable' | 'private';
         emoji: string | null;
-        accentColor: 'ruby' | 'amber' | 'emerald' | 'sapphire' | 'violet' | 'rose' | 'teal' | 'slate' | null;
+        accentColor: 'garnet' | 'ruby' | 'mahogany' | 'copper' | 'amber' | 'olive' | 'jade' | 'emerald' | 'teal' | 'turquoise' | 'azure' | 'sapphire' | 'indigo' | 'violet' | 'magenta' | 'rose' | 'stone' | 'slate' | null;
         personalUserId: string | null;
         createdAt: string;
         updatedAt: string;
@@ -335,7 +335,7 @@ export type CreateCollaborationWorkspaceData = {
         description?: string | null;
         visibility?: 'discoverable' | 'private';
         emoji?: string | null;
-        accentColor?: 'ruby' | 'amber' | 'emerald' | 'sapphire' | 'violet' | 'rose' | 'teal' | 'slate' | null;
+        accentColor?: 'garnet' | 'ruby' | 'mahogany' | 'copper' | 'amber' | 'olive' | 'jade' | 'emerald' | 'teal' | 'turquoise' | 'azure' | 'sapphire' | 'indigo' | 'violet' | 'magenta' | 'rose' | 'stone' | 'slate' | null;
     };
     path?: never;
     query?: never;
@@ -354,7 +354,7 @@ export type CreateCollaborationWorkspaceResponses = {
         description: string | null;
         visibility: 'discoverable' | 'private';
         emoji: string | null;
-        accentColor: 'ruby' | 'amber' | 'emerald' | 'sapphire' | 'violet' | 'rose' | 'teal' | 'slate' | null;
+        accentColor: 'garnet' | 'ruby' | 'mahogany' | 'copper' | 'amber' | 'olive' | 'jade' | 'emerald' | 'teal' | 'turquoise' | 'azure' | 'sapphire' | 'indigo' | 'violet' | 'magenta' | 'rose' | 'stone' | 'slate' | null;
         personalUserId: string | null;
         createdAt: string;
         updatedAt: string;
@@ -381,7 +381,7 @@ export type ListCollaborationWorkspaceDirectoryResponses = {
         name: string;
         description: string | null;
         emoji: string | null;
-        accentColor: 'ruby' | 'amber' | 'emerald' | 'sapphire' | 'violet' | 'rose' | 'teal' | 'slate' | null;
+        accentColor: 'garnet' | 'ruby' | 'mahogany' | 'copper' | 'amber' | 'olive' | 'jade' | 'emerald' | 'teal' | 'turquoise' | 'azure' | 'sapphire' | 'indigo' | 'violet' | 'magenta' | 'rose' | 'stone' | 'slate' | null;
         accessState: 'member' | 'request_pending' | 'can_request';
     }>;
 };
@@ -434,7 +434,7 @@ export type GetCollaborationWorkspaceResponses = {
         description: string | null;
         visibility: 'discoverable' | 'private';
         emoji: string | null;
-        accentColor: 'ruby' | 'amber' | 'emerald' | 'sapphire' | 'violet' | 'rose' | 'teal' | 'slate' | null;
+        accentColor: 'garnet' | 'ruby' | 'mahogany' | 'copper' | 'amber' | 'olive' | 'jade' | 'emerald' | 'teal' | 'turquoise' | 'azure' | 'sapphire' | 'indigo' | 'violet' | 'magenta' | 'rose' | 'stone' | 'slate' | null;
         personalUserId: string | null;
         createdAt: string;
         updatedAt: string;
@@ -451,7 +451,7 @@ export type UpdateCollaborationWorkspaceData = {
         description?: string | null;
         visibility?: 'discoverable' | 'private';
         emoji?: string | null;
-        accentColor?: 'ruby' | 'amber' | 'emerald' | 'sapphire' | 'violet' | 'rose' | 'teal' | 'slate' | null;
+        accentColor?: 'garnet' | 'ruby' | 'mahogany' | 'copper' | 'amber' | 'olive' | 'jade' | 'emerald' | 'teal' | 'turquoise' | 'azure' | 'sapphire' | 'indigo' | 'violet' | 'magenta' | 'rose' | 'stone' | 'slate' | null;
     };
     path: {
         collaborationWorkspaceId: string;
@@ -472,7 +472,7 @@ export type UpdateCollaborationWorkspaceResponses = {
         description: string | null;
         visibility: 'discoverable' | 'private';
         emoji: string | null;
-        accentColor: 'ruby' | 'amber' | 'emerald' | 'sapphire' | 'violet' | 'rose' | 'teal' | 'slate' | null;
+        accentColor: 'garnet' | 'ruby' | 'mahogany' | 'copper' | 'amber' | 'olive' | 'jade' | 'emerald' | 'teal' | 'turquoise' | 'azure' | 'sapphire' | 'indigo' | 'violet' | 'magenta' | 'rose' | 'stone' | 'slate' | null;
         personalUserId: string | null;
         createdAt: string;
         updatedAt: string;

@@ -19,8 +19,13 @@ import {
   CollaborationWorkspaceMembersTab,
   CollaborationWorkspaceRequestsTab,
   CollaborationWorkspaceSettingsDialog,
+  CollaborationWorkspaceSettingsHeader,
   nextCollaborationWorkspaceMemberCandidate
 } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-settings-dialog";
+import {
+  collaborationWorkspaceAccentColors,
+  collaborationWorkspaceAccentTokens
+} from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-accent";
 import { CollaborationWorkspaceEmojiGrid } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-fields";
 import {
   collaborationWorkspaceEmojiChoices,
@@ -841,41 +846,41 @@ describe("collaboration workspace emoji picker", () => {
   });
 });
 
+function renderSettingsDialog(): string {
+  return render(
+    "de",
+    createElement(CollaborationWorkspaceSettingsDialog, {
+      open: true,
+      collaborationWorkspace: sharedCollaborationWorkspace,
+      currentUserId: "user_1",
+      members,
+      membersLoading: false,
+      membersLoadFailed: false,
+      memberCandidates: [],
+      memberCandidatesLoading: false,
+      accessRequests: [],
+      accessRequestsLoading: false,
+      accessRequestsLoadFailed: false,
+      savePending: false,
+      membershipPending: false,
+      errorMessage: undefined,
+      onClose: noop,
+      onSave: noop,
+      onMemberCandidateSearchChange: noop,
+      onAddMember: noop,
+      onChangeMemberRole: noop,
+      onRemoveMember: noop,
+      onLeave: noop,
+      onRequestDelete: noop,
+      onApproveAccessRequest: noop,
+      onDeclineAccessRequest: noop
+    })
+  );
+}
+
 describe("collaboration workspace dialog chrome", () => {
   const scrollBody = 'data-testid="collaboration-workspace-dialog-scroll-body"';
   const pinnedFooter = '<div class="flex items-center justify-end gap-2 border-t px-5 py-4">';
-
-  function renderSettingsDialog(): string {
-    return render(
-      "de",
-      createElement(CollaborationWorkspaceSettingsDialog, {
-        open: true,
-        collaborationWorkspace: sharedCollaborationWorkspace,
-        currentUserId: "user_1",
-        members,
-        membersLoading: false,
-        membersLoadFailed: false,
-        memberCandidates: [],
-        memberCandidatesLoading: false,
-        accessRequests: [],
-        accessRequestsLoading: false,
-        accessRequestsLoadFailed: false,
-        savePending: false,
-        membershipPending: false,
-        errorMessage: undefined,
-        onClose: noop,
-        onSave: noop,
-        onMemberCandidateSearchChange: noop,
-        onAddMember: noop,
-        onChangeMemberRole: noop,
-        onRemoveMember: noop,
-        onLeave: noop,
-        onRequestDelete: noop,
-        onApproveAccessRequest: noop,
-        onDeclineAccessRequest: noop
-      })
-    );
-  }
 
   it("keeps the settings tab panel itself unscrolled at a fixed height", () => {
     const markup = renderSettingsDialog();
@@ -980,5 +985,71 @@ describe("collaboration workspace dialog chrome", () => {
     expect(markup).toMatch(/role="listbox"[^>]*class="chat-scrollbar[^"]*overflow-y-auto/u);
     // The rounded frame is a wrapper, so the thumb never runs under its radius.
     expect(markup).toMatch(/<div class="absolute[^"]*rounded-md border[^"]*"><ul/u);
+  });
+});
+
+describe("collaboration workspace appearance preview", () => {
+  const violetSurface = collaborationWorkspaceAccentTokens("violet", "light").surface;
+  const magentaSurface = collaborationWorkspaceAccentTokens("magenta", "light").surface;
+
+  it("previews the unsaved emoji and color in the settings header", () => {
+    // The header tile is the only preview of the appearance fields, so it has
+    // to follow the draft rather than the stored workspace: picking a swatch
+    // shows up here before "Anderungen speichern" is pressed.
+    const markup = render(
+      "de",
+      createElement(CollaborationWorkspaceSettingsHeader, {
+        name: sharedCollaborationWorkspace.name,
+        role: "owner",
+        appearance: { emoji: "🏦", accentColor: "magenta" }
+      })
+    );
+
+    expect(markup).toContain('data-collaboration-workspace-accent="magenta"');
+    expect(markup).toContain(magentaSurface);
+    expect(markup).toContain("🏦");
+    expect(markup).not.toContain(violetSurface);
+    expect(markup).not.toContain(sharedCollaborationWorkspace.emoji);
+  });
+
+  it("falls back to the stored appearance before anything is edited", () => {
+    const markup = renderSettingsDialog();
+
+    expect(markup).toContain('data-collaboration-workspace-accent="violet"');
+    expect(markup).toContain(violetSurface);
+  });
+
+  it("previews the draft appearance in the create dialog too", () => {
+    const markup = render(
+      "de",
+      createElement(CreateCollaborationWorkspaceDialog, {
+        open: true,
+        pending: false,
+        errorMessage: undefined,
+        initialAccentColor: "magenta",
+        onClose: noop,
+        onCreate: noop
+      })
+    );
+
+    // The avatar and the checked swatch read the same state, so the preview
+    // cannot drift from the field driving it.
+    expect(markup).toContain('data-collaboration-workspace-accent="magenta"');
+    expect(markup).toMatch(
+      /data-collaboration-workspace-accent="magenta"[^>]*data-testid="collaboration-workspace-accent-magenta"/u
+    );
+  });
+
+  it("offers the whole palette as a wrapping grid of swatches", () => {
+    const markup = renderSettingsDialog();
+
+    for (const accentColor of collaborationWorkspaceAccentColors) {
+      expect(markup, accentColor).toContain(
+        `data-testid="collaboration-workspace-accent-${accentColor}"`
+      );
+    }
+
+    // Fixed-width columns rather than flex-wrap, so the rows line up.
+    expect(markup).toContain("grid-cols-[repeat(auto-fill,2rem)]");
   });
 });

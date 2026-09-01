@@ -45,6 +45,12 @@ export interface CollaborationWorkspaceSettingsValues {
 
 export type CollaborationWorkspaceSettingsTab = "general" | "members" | "requests";
 
+/** The appearance fields the header avatar previews while they are unsaved. */
+export interface CollaborationWorkspaceAppearance {
+  emoji: string | null;
+  accentColor: CollaborationWorkspaceAccentColor;
+}
+
 const settingsTabs: Array<{ id: CollaborationWorkspaceSettingsTab; label: TranslationKey }> = [
   { id: "general", label: "collaborationWorkspaceTabGeneral" },
   { id: "members", label: "collaborationWorkspaceTabMembers" },
@@ -118,11 +124,20 @@ export function CollaborationWorkspaceSettingsDialog({
 }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<CollaborationWorkspaceSettingsTab>("general");
+  /*
+   * The header avatar is the preview for the General tab's appearance fields,
+   * so it follows the unsaved draft rather than the stored workspace. The draft
+   * lives here because the avatar sits above the tabs, outside the tab that
+   * owns the form. Undefined means "nothing edited yet", which is also the
+   * state it returns to when the dialog closes without saving.
+   */
+  const [draft, setDraft] = useState<CollaborationWorkspaceAppearance | undefined>();
   const tabRefs = useRef<Partial<Record<CollaborationWorkspaceSettingsTab, HTMLButtonElement>>>({});
 
   useEffect(() => {
     if (!open) {
       setTab("general");
+      setDraft(undefined);
     }
   }, [open]);
 
@@ -151,22 +166,16 @@ export function CollaborationWorkspaceSettingsDialog({
       */}
       <div className="-m-5 grid">
         <div className="grid gap-5 px-5 pt-5">
-          <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
-            <CollaborationWorkspaceAvatar
-              name={collaborationWorkspace.name}
-              emoji={collaborationWorkspace.emoji}
-              accentColor={collaborationWorkspace.accentColor}
-              size="lg"
-            />
-            <div className="grid min-w-0 gap-1">
-              <strong className="truncate text-sm font-semibold">
-                {collaborationWorkspace.name}
-              </strong>
-              <span className="text-xs text-muted-foreground">
-                {t(roleLabelKeys[collaborationWorkspace.role])}
-              </span>
-            </div>
-          </div>
+          <CollaborationWorkspaceSettingsHeader
+            name={collaborationWorkspace.name}
+            role={collaborationWorkspace.role}
+            appearance={
+              draft ?? {
+                emoji: collaborationWorkspace.emoji,
+                accentColor: resolveCollaborationWorkspaceAccentColor(collaborationWorkspace)
+              }
+            }
+          />
 
           {/*
             The rule under the tabs is the top edge of the scrolling panel, so
@@ -250,6 +259,7 @@ export function CollaborationWorkspaceSettingsDialog({
               onSave={onSave}
               onLeave={onLeave}
               onRequestDelete={onRequestDelete}
+              onAppearanceDraftChange={setDraft}
             />
           ) : null}
           {tab === "members" ? (
@@ -284,6 +294,39 @@ export function CollaborationWorkspaceSettingsDialog({
   );
 }
 
+/**
+ * The identity block pinned above the tabs. `appearance` is a parameter rather
+ * than something read off `collaborationWorkspace` because this tile doubles as
+ * the live preview for the General tab's emoji and color fields: picking either
+ * one has to show up here before anything is saved.
+ */
+export function CollaborationWorkspaceSettingsHeader({
+  name,
+  role,
+  appearance
+}: {
+  name: string;
+  role: WorkspaceMembershipRole;
+  appearance: CollaborationWorkspaceAppearance;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+      <CollaborationWorkspaceAvatar
+        name={name}
+        emoji={appearance.emoji}
+        accentColor={appearance.accentColor}
+        size="lg"
+      />
+      <div className="grid min-w-0 gap-1">
+        <strong className="truncate text-sm font-semibold">{name}</strong>
+        <span className="text-xs text-muted-foreground">{t(roleLabelKeys[role])}</span>
+      </div>
+    </div>
+  );
+}
+
 export function CollaborationWorkspaceGeneralTab({
   collaborationWorkspace,
   currentUserId,
@@ -292,7 +335,8 @@ export function CollaborationWorkspaceGeneralTab({
   membershipPending,
   onSave,
   onLeave,
-  onRequestDelete
+  onRequestDelete,
+  onAppearanceDraftChange
 }: {
   collaborationWorkspace: CollaborationWorkspaceWithRole;
   currentUserId: string | undefined;
@@ -302,6 +346,11 @@ export function CollaborationWorkspaceGeneralTab({
   onSave(values: CollaborationWorkspaceSettingsValues): void;
   onLeave(): void;
   onRequestDelete(): void;
+  /**
+   * Reports the unsaved emoji and accent so the dialog header can preview them.
+   * Must be referentially stable, since it is an effect dependency.
+   */
+  onAppearanceDraftChange?(draft: CollaborationWorkspaceAppearance): void;
 }) {
   const { t } = useTranslation();
   const [name, setName] = useState(collaborationWorkspace.name);
@@ -328,6 +377,16 @@ export function CollaborationWorkspaceGeneralTab({
     setVisibility(collaborationWorkspace.visibility);
     setAccentColor(resolveCollaborationWorkspaceAccentColor(collaborationWorkspace));
   }, [collaborationWorkspace]);
+
+  /*
+   * Push the appearance draft up on every change so the header avatar previews
+   * it. Reporting the resolved accent rather than the stored one also means the
+   * header stops showing a stale colour for a workspace whose accent was only
+   * ever derived from its name.
+   */
+  useEffect(() => {
+    onAppearanceDraftChange?.({ emoji, accentColor });
+  }, [emoji, accentColor, onAppearanceDraftChange]);
 
   return (
     <>
