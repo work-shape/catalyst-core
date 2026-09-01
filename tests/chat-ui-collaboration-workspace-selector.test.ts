@@ -64,13 +64,39 @@ function renderMenu(
 }
 
 describe("collaboration workspace selector", () => {
-  it("shows the fixed personal label with its marker instead of the stored name", () => {
+  it("shows the fixed personal label without a secondary marker line", () => {
     const markup = renderMenu([personal]);
 
     expect(markup).toContain("Persönlicher Arbeitsbereich");
-    expect(markup).toContain("Persönlich");
+    // The marker used to render as its own text node right under the name.
+    expect(markup).not.toContain(">Persönlich<");
     expect(markup).not.toContain("Server side personal name");
-    expect(markup).toContain("Noch keine geteilten Arbeitsbereiche.");
+  });
+
+  it("omits the shared section entirely while no shared workspace exists", () => {
+    const markup = renderMenu([personal]);
+
+    expect(markup).not.toContain("Geteilte Arbeitsbereiche");
+    expect(markup).not.toContain("Noch keine geteilten Arbeitsbereiche.");
+  });
+
+  it("labels the shared section quietly once shared workspaces exist", () => {
+    const markup = renderMenu([personal, collaborationWorkspace({ id: "cw_a", name: "Alpaka" })]);
+    const heading = /<p class="([^"]*)">Geteilte Arbeitsbereiche<\/p>/u.exec(markup);
+
+    expect(heading?.[1]).toContain("text-xs");
+    expect(heading?.[1]).not.toContain("uppercase");
+    expect(heading?.[1]).not.toContain("tracking");
+  });
+
+  it("offers create and browse as short buttons with full-length accessible names", () => {
+    const markup = renderMenu([personal]);
+
+    expect(markup).toContain('aria-label="Arbeitsbereich erstellen"');
+    expect(markup).toContain('aria-label="Arbeitsbereiche durchsuchen"');
+    expect(markup).toContain(">Erstellen<");
+    expect(markup).toContain(">Durchsuchen<");
+    expect(markup.indexOf(">Erstellen<")).toBeLessThan(markup.indexOf(">Durchsuchen<"));
   });
 
   it("lists shared workspaces alphabetically after the personal workspace", () => {

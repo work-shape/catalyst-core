@@ -193,62 +193,61 @@ export function CollaborationWorkspaceSelectorMenu({
             <CollaborationWorkspaceRow
               active={personalCollaborationWorkspace.id === activeCollaborationWorkspaceId}
               avatar={<PersonalCollaborationWorkspaceAvatar label={userLabel} />}
-              marker={t("collaborationWorkspacePersonalMarker")}
               name={t("collaborationWorkspacePersonalName")}
               onSelect={() => onSelectCollaborationWorkspace(personalCollaborationWorkspace.id)}
             />
           ) : null}
 
-          <p className="px-2 pb-1 pt-3 text-[0.6875rem] font-semibold uppercase tracking-[0.13em] text-muted-foreground">
-            {t("collaborationWorkspaceSharedHeading")}
-          </p>
-          {sharedCollaborationWorkspaces.length === 0 ? (
-            <p className="px-2 pb-2 text-sm text-muted-foreground">
-              {t("collaborationWorkspaceSharedEmpty")}
-            </p>
-          ) : (
-            sharedCollaborationWorkspaces.map((collaborationWorkspace) => (
-              <CollaborationWorkspaceRow
-                key={collaborationWorkspace.id}
-                accentColor={resolveCollaborationWorkspaceAccentColor(collaborationWorkspace)}
-                active={collaborationWorkspace.id === activeCollaborationWorkspaceId}
-                avatar={
-                  <CollaborationWorkspaceAvatar
-                    name={collaborationWorkspace.name}
-                    emoji={collaborationWorkspace.emoji}
-                    accentColor={collaborationWorkspace.accentColor}
-                  />
-                }
-                name={collaborationWorkspace.name}
-                pendingAccessRequestCount={collaborationWorkspace.pendingAccessRequestCount}
-                onSelect={() => onSelectCollaborationWorkspace(collaborationWorkspace.id)}
-                onOpenSettings={
-                  canManageCollaborationWorkspace(collaborationWorkspace)
-                    ? () => onOpenCollaborationWorkspaceSettings(collaborationWorkspace.id)
-                    : undefined
-                }
-              />
-            ))
-          )}
+          {sharedCollaborationWorkspaces.length > 0 ? (
+            <>
+              <p className="px-2 pb-1 pt-3 text-xs text-muted-foreground">
+                {t("collaborationWorkspaceSharedHeading")}
+              </p>
+              {sharedCollaborationWorkspaces.map((collaborationWorkspace) => (
+                <CollaborationWorkspaceRow
+                  key={collaborationWorkspace.id}
+                  accentColor={resolveCollaborationWorkspaceAccentColor(collaborationWorkspace)}
+                  active={collaborationWorkspace.id === activeCollaborationWorkspaceId}
+                  avatar={
+                    <CollaborationWorkspaceAvatar
+                      name={collaborationWorkspace.name}
+                      emoji={collaborationWorkspace.emoji}
+                      accentColor={collaborationWorkspace.accentColor}
+                    />
+                  }
+                  name={collaborationWorkspace.name}
+                  pendingAccessRequestCount={collaborationWorkspace.pendingAccessRequestCount}
+                  onSelect={() => onSelectCollaborationWorkspace(collaborationWorkspace.id)}
+                  onOpenSettings={
+                    canManageCollaborationWorkspace(collaborationWorkspace)
+                      ? () => onOpenCollaborationWorkspaceSettings(collaborationWorkspace.id)
+                      : undefined
+                  }
+                />
+              ))}
+            </>
+          ) : null}
 
-          <div className="mt-2 grid gap-1 border-t pt-2">
+          <div className="mt-2 grid grid-cols-2 gap-1 border-t pt-2">
             <Button
               type="button"
               variant="ghost"
-              className="h-9 w-full justify-start text-muted-foreground"
-              onClick={onBrowseCollaborationWorkspaces}
+              className="h-9 w-full text-muted-foreground"
+              aria-label={t("collaborationWorkspaceCreate")}
+              onClick={onCreateCollaborationWorkspace}
             >
-              <Compass size={16} aria-hidden="true" />
-              <span>{t("collaborationWorkspaceBrowse")}</span>
+              <Plus size={16} aria-hidden="true" />
+              <span>{t("collaborationWorkspaceCreateShort")}</span>
             </Button>
             <Button
               type="button"
               variant="ghost"
-              className="h-9 w-full justify-start text-muted-foreground"
-              onClick={onCreateCollaborationWorkspace}
+              className="h-9 w-full text-muted-foreground"
+              aria-label={t("collaborationWorkspaceBrowse")}
+              onClick={onBrowseCollaborationWorkspaces}
             >
-              <Plus size={16} aria-hidden="true" />
-              <span>{t("collaborationWorkspaceCreate")}</span>
+              <Compass size={16} aria-hidden="true" />
+              <span>{t("collaborationWorkspaceBrowseShort")}</span>
             </Button>
           </div>
         </>
@@ -261,7 +260,6 @@ function CollaborationWorkspaceRow({
   accentColor,
   active,
   avatar,
-  marker,
   name,
   pendingAccessRequestCount = 0,
   onSelect,
@@ -270,7 +268,6 @@ function CollaborationWorkspaceRow({
   accentColor?: CollaborationWorkspaceAccentColor;
   active: boolean;
   avatar: ReactNode;
-  marker?: string;
   name: string;
   pendingAccessRequestCount?: number;
   onSelect(): void;
@@ -303,10 +300,7 @@ function CollaborationWorkspaceRow({
         onClick={onSelect}
       >
         {avatar}
-        <span className="grid min-w-0">
-          <span className="truncate text-sm font-medium">{name}</span>
-          {marker ? <span className="truncate text-xs text-muted-foreground">{marker}</span> : null}
-        </span>
+        <span className="truncate text-sm font-medium">{name}</span>
       </button>
       {onOpenSettings ? (
         <button
