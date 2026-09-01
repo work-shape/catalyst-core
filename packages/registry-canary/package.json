@@ -1,0 +1,14 @@
+{
+  "name": "@vivd-solutions/registry-canary",
+  "version": "0.0.1",
+  "description": "Throwaway GitHub Packages publishing canary.",
+  "private": false,
+  "main": "index.js",
+  "license": "UNLICENSED",
+  "files": [
+    "index.js"
+  ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  }
+}

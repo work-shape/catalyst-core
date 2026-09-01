@@ -1,0 +1,80 @@
+name: Registry canary
+
+on:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://npm.pkg.github.com
+
+      - name: Publish canary
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          trap 'echo "✗ publish: registry check or publish failed"' ERR
+
+          package="@vivd-solutions/registry-canary"
+          version="0.0.1"
+
+          if view_output="$(npm view "${package}@${version}" version --registry=https://npm.pkg.github.com 2>&1)"; then
+            echo "::notice::${package}@${version} already exists; skipping publish"
+            echo "✓ publish: ${package}@${version} already exists; skipped"
+          elif grep -q "E404" <<<"${view_output}"; then
+            npm publish packages/registry-canary
+            echo "✓ publish: published ${package}@${version}"
+          else
+            echo "${view_output}" >&2
+            echo "✗ publish: could not check ${package}@${version}" >&2
+            exit 1
+          fi
+
+  consume:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+    steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install and require canary
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          trap 'echo "✗ consume: install or runtime check failed"' ERR
+
+          scratch_dir="${RUNNER_TEMP}/registry-canary-consume"
+          mkdir -p "${scratch_dir}"
+          cd "${scratch_dir}"
+
+          cat > package.json <<'JSON'
+          {
+            "name": "registry-canary-consumer",
+            "private": true
+          }
+          JSON
+
+          printf '%s\n' \
+            '@vivd-solutions:registry=https://npm.pkg.github.com' \
+            "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" \
+            > .npmrc
+
+          npm install --ignore-scripts --no-audit --no-fund @vivd-solutions/registry-canary@0.0.1
+          node -e 'const { REGISTRY_CANARY } = require("@vivd-solutions/registry-canary"); if (REGISTRY_CANARY !== "github-packages-canary") throw new Error(`Unexpected export: ${REGISTRY_CANARY}`); console.log(REGISTRY_CANARY)'
+          echo "✓ consume: installed and required @vivd-solutions/registry-canary@0.0.1"
