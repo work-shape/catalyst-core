@@ -120,6 +120,7 @@ export async function createStandaloneAuthRuntime(
     trustedOrigins: options.trustedOrigins ?? [],
     emailAndPassword: {
       enabled: true,
+      disableSignUp: true,
       minPasswordLength: 8
     }
   });
