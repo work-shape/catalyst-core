@@ -173,25 +173,29 @@ export class InProcessToolExecution implements ToolExecution {
       throw new Error("Tool-reported model usage requires a configured usage recorder");
     }
     const { modelUsage, ...publicResult } = result;
-    await Promise.all(modelUsage.map((usage) => usageRecorder.recordModelUsage({
-      clientInstanceId: context.clientInstanceId,
-      conversationId: request.conversationId,
-      agentRunId: request.agentRunId,
-      agentName: request.agentName,
-      providerId: usage.providerId,
-      model: usage.model,
-      inputTokens: usage.inputTokens,
-      ...(usage.cachedInputTokens !== undefined
-        ? { cachedInputTokens: usage.cachedInputTokens }
-        : {}),
-      outputTokens: usage.outputTokens,
-      totalTokens: usage.totalTokens,
-      source: usage.source,
-      ...(usage.webSearchCallCount !== undefined
-        ? { webSearchCallCount: usage.webSearchCallCount }
-        : {}),
-      correlationId: context.correlationId
-    })));
+    await Promise.all(
+      modelUsage.map((usage) =>
+        usageRecorder.recordModelUsage({
+          clientInstanceId: context.clientInstanceId,
+          conversationId: request.conversationId,
+          agentRunId: request.agentRunId,
+          agentName: request.agentName,
+          providerId: usage.providerId,
+          model: usage.model,
+          inputTokens: usage.inputTokens,
+          ...(usage.cachedInputTokens !== undefined
+            ? { cachedInputTokens: usage.cachedInputTokens }
+            : {}),
+          outputTokens: usage.outputTokens,
+          totalTokens: usage.totalTokens,
+          source: usage.source,
+          ...(usage.webSearchCallCount !== undefined
+            ? { webSearchCallCount: usage.webSearchCallCount }
+            : {}),
+          correlationId: context.correlationId
+        })
+      )
+    );
     return publicResult;
   }
 

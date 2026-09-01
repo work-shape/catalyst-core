@@ -216,6 +216,13 @@ export type AgentRuntimeEvent =
       toolName: string;
     }
   | {
+      type: "tool_call_preparation_cancelled";
+      runId: AgentRunId;
+      sequence: number;
+      createdAt: ISODateString;
+      toolCallId: ToolCallId;
+    }
+  | {
       type: "tool_call_started";
       runId: AgentRunId;
       sequence: number;

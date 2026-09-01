@@ -151,6 +151,54 @@ SH
     --root "$root" --services api
 }
 
+test_ensure_compose_dev_images() {
+  local root="$scratch/dev-images-fixture"
+  local fake_bin="$root/fake-bin"
+  mkdir -p "$fake_bin" "$root/packages/example"
+  printf '{"name":"fixture"}\n' > "$root/package.json"
+  printf '{"name":"example"}\n' > "$root/packages/example/package.json"
+  printf 'FROM scratch\n' > "$root/Dockerfile"
+  cat > "$fake_bin/docker" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$*" == "compose config --images api" ]]; then
+  printf 'fixture-api\n'
+elif [[ "$*" == "image inspect fixture-api" ]]; then
+  [[ -f "$FAKE_DOCKER_IMAGE" ]] && printf 'sha256:fixture\n'
+elif [[ "$*" == "compose build api" ]]; then
+  touch "$FAKE_DOCKER_IMAGE"
+  printf 'build\n' >> "$FAKE_DOCKER_BUILDS"
+else
+  exit 2
+fi
+SH
+  chmod +x "$fake_bin/docker"
+
+  local command=(
+    node "$kit_dir/ensure-compose-dev-images.mjs"
+    --root "$root"
+    --services api
+    --inputs package.json Dockerfile
+    --package-roots packages
+  )
+  FAKE_DOCKER_IMAGE="$root/image" FAKE_DOCKER_BUILDS="$root/builds" \
+    PATH="$fake_bin:$PATH" "${command[@]}"
+  [[ "$(wc -l < "$root/builds" | tr -d ' ')" == "1" ]] \
+    || fail "initial development image build did not run exactly once"
+
+  FAKE_DOCKER_IMAGE="$root/image" FAKE_DOCKER_BUILDS="$root/builds" \
+    PATH="$fake_bin:$PATH" "${command[@]}"
+  [[ "$(wc -l < "$root/builds" | tr -d ' ')" == "1" ]] \
+    || fail "unchanged development images rebuilt"
+
+  printf '{"name":"example","version":"2.0.0"}\n' \
+    > "$root/packages/example/package.json"
+  FAKE_DOCKER_IMAGE="$root/image" FAKE_DOCKER_BUILDS="$root/builds" \
+    PATH="$fake_bin:$PATH" "${command[@]}"
+  [[ "$(wc -l < "$root/builds" | tr -d ' ')" == "2" ]] \
+    || fail "changed package manifest did not rebuild development images"
+}
+
 test_compose_helpers() {
   KIT_DIR="$kit_dir" node --input-type=module <<'NODE'
 import { pathToFileURL } from "node:url";
@@ -170,5 +218,6 @@ NODE
 test_prepare_build_workspace
 test_update_release
 test_compose_watch_preflight
+test_ensure_compose_dev_images
 test_compose_helpers
 echo "deployment-kit tests passed"

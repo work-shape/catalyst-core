@@ -28,6 +28,7 @@ export function canonicalizeAgentConfig(input: unknown): AgentConfig {
   return {
     name: agent.name,
     displayName: agent.displayName,
+    ...(agent.description === undefined ? {} : { description: agent.description }),
     ...(agent.welcomeMessage === undefined ? {} : { welcomeMessage: agent.welcomeMessage }),
     ...(agent.welcomeSubtitle === undefined ? {} : { welcomeSubtitle: agent.welcomeSubtitle }),
     instructions: agent.instructions,

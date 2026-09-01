@@ -23,13 +23,14 @@ import type {
 } from "./capabilities";
 import {
   createLocalWorkspaceObjectStorage,
+  EXECUTION_WORKSPACE_ARTIFACT_METADATA_SOURCE,
   type DeletableWorkspaceObjectStorage,
   type WorkspaceFileByteStore
 } from "@vivd-catalyst/tool-execution";
 
 const WORKSPACE_SOURCE_ATTACHMENT_KIND = "workspace_source";
 const WORKSPACE_SOURCE_METADATA_SOURCE = "execution_workspace_source";
-const WORKSPACE_ARTIFACT_METADATA_SOURCE = "execution_workspace";
+const LEGACY_WORKSPACE_PREVIEW_ARTIFACT_METADATA_SOURCE = "execution_workspace_preview";
 const DEFAULT_WORKSPACE_SOURCE_MAX_FILE_BYTES = 25 * 1024 * 1024;
 const ARTIFACT_PREVIEW_OBJECT_KEY_PREFIX = "artifact-previews/";
 const ARTIFACT_PREVIEW_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
@@ -183,7 +184,8 @@ export function createExecutionWorkspaceManagedObjectReader(input: {
         throw new AppError("NOT_FOUND", "Managed workspace artifact is not available");
       }
       if (
-        artifact.metadata.source !== WORKSPACE_ARTIFACT_METADATA_SOURCE &&
+        artifact.metadata.source !== EXECUTION_WORKSPACE_ARTIFACT_METADATA_SOURCE &&
+        artifact.metadata.source !== LEGACY_WORKSPACE_PREVIEW_ARTIFACT_METADATA_SOURCE &&
         !(await isReadableArtifactPreviewImage({
           artifact,
           clientInstanceId: input.clientInstanceId,

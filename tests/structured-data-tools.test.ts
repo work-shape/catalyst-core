@@ -5,6 +5,7 @@ import {
   asMessageId,
   asToolCallId,
   createToolResultMetadata,
+  type StructuredDataPublicationReviewer,
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
@@ -15,6 +16,135 @@ import {
 } from "@vivd-catalyst/tool-execution";
 
 describe("structured_data.publish", () => {
+  it("reviews a fully materialized replacement and publishes with model-visible warnings", async () => {
+    let proposal: Parameters<StructuredDataPublicationReviewer>[0] | undefined;
+    const harness = await createHarness((input) => {
+      proposal = input;
+      return ["Reconcile the proposed value"];
+    });
+    const attachment = await createSentAttachment(
+      harness.store,
+      harness.clientInstanceId,
+      harness.conversation.id
+    );
+    await harness.store.appendMessage({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      role: "assistant",
+      text: "Durable evidence"
+    });
+
+    await expect(
+      harness.run({
+        resourceKey: "claim_data",
+        title: "Claim data",
+        operation: "replace",
+        sections: [
+          {
+            key: "person",
+            label: "Person",
+            fields: [
+              {
+                key: "name",
+                label: "Name",
+                value: "Ada",
+                sources: [{ fileId: attachment.fileId, page: 2 }]
+              }
+            ]
+          }
+        ]
+      })
+    ).resolves.toMatchObject({
+      status: "success",
+      output: {
+        revision: 1,
+        warnings: ["Reconcile the proposed value"],
+        message: expect.stringContaining("Reconcile the proposed value")
+      }
+    });
+    expect(proposal).toMatchObject({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      resourceKey: "claim_data",
+      title: "Claim data",
+      state: {
+        title: "Claim data",
+        sections: [
+          {
+            fields: [
+              {
+                value: "Ada",
+                sources: [{ attachmentId: attachment.id, page: 2 }]
+              }
+            ]
+          }
+        ]
+      },
+      attachments: [{ id: attachment.id, fileId: attachment.fileId, filename: "source.pdf" }]
+    });
+    expect(proposal?.messages.some((message) => message.text === "Durable evidence")).toBe(true);
+    await expect(harness.resources()).resolves.toEqual([
+      expect.objectContaining({
+        revision: 1,
+        state: expect.objectContaining({
+          sections: [
+            expect.objectContaining({
+              fields: [expect.objectContaining({ value: "Ada" })]
+            })
+          ]
+        })
+      })
+    ]);
+  });
+
+  it("reviews a materialized patch and persists it despite warnings", async () => {
+    const proposals: Parameters<StructuredDataPublicationReviewer>[0][] = [];
+    const harness = await createHarness((input) => {
+      proposals.push(input);
+      return input.state.sections[0]?.fields[0]?.value === "Grace" ? ["Conflicting value"] : [];
+    });
+    await harness.run({
+      resourceKey: "claim_data",
+      title: "Claim data",
+      operation: "replace",
+      sections: [
+        {
+          key: "person",
+          label: "Person",
+          fields: [{ key: "name", label: "Full name", value: "Ada" }]
+        }
+      ]
+    });
+
+    await expect(
+      harness.run({
+        resourceKey: "claim_data",
+        operation: "patch",
+        set: [{ sectionKey: "person", fieldKey: "name", value: "Grace" }]
+      })
+    ).resolves.toMatchObject({
+      status: "success",
+      output: {
+        revision: 2,
+        warnings: ["Conflicting value"],
+        message: expect.stringContaining("Conflicting value")
+      }
+    });
+    expect(proposals.at(-1)?.state.sections[0]?.fields[0]?.value).toBe("Grace");
+    await expect(harness.resources()).resolves.toEqual([
+      expect.objectContaining({
+        revision: 2,
+        state: expect.objectContaining({
+          sections: [
+            expect.objectContaining({
+              fields: [expect.objectContaining({ value: "Grace" })]
+            })
+          ]
+        })
+      })
+    ]);
+  });
+
   it("creates and fully replaces a resource with server-owned revisions", async () => {
     const harness = await createHarness();
     const first = await harness.run({
@@ -55,6 +185,9 @@ describe("structured_data.publish", () => {
         }
       }
     });
+    if (first.status === "success") {
+      expect(first.output).not.toHaveProperty("warnings");
+    }
 
     const second = await harness.run({
       resourceKey: "claim_data",
@@ -438,7 +571,7 @@ describe("structured_result.read", () => {
   });
 });
 
-async function createHarness() {
+async function createHarness(publicationReviewer?: StructuredDataPublicationReviewer) {
   const clientInstanceId = asClientInstanceId(`structured_data_${globalThis.crypto.randomUUID()}`);
   const store = new InMemoryPlatformStore();
   const conversation = await store.createConversation({
@@ -448,7 +581,7 @@ async function createHarness() {
     title: "Structured data",
     retainedUntil: "2030-01-01T00:00:00.000Z"
   });
-  const tools = createStructuredDataToolDefinitions({ store });
+  const tools = createStructuredDataToolDefinitions({ store, publicationReviewer });
   const execution = new InProcessToolExecution({
     registry: new ToolRegistry({ tools }),
     getAgentToolNames: () => tools.map((tool) => tool.name)

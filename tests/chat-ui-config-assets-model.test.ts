@@ -14,6 +14,7 @@ describe("config assets form model", () => {
     const config = {
       name: "workflow_assistant",
       displayName: { de: "Workflow-Assistent", en: "Workflow Assistant" },
+      description: { de: "Hilfe beim Workflow.", en: "Help with the workflow." },
       welcomeMessage: { de: "Wie kann ich helfen?", en: "How can I help?" },
       instructions: "Help the user.\nBe concise.",
       modelProviderId: "openai",

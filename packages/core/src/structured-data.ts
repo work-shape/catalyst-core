@@ -4,6 +4,8 @@ import type {
   ConversationId,
   StructuredDataResourceId
 } from "./ids";
+import type { ChatMessage } from "./conversation";
+import type { ConversationAttachment } from "./files";
 import type { ISODateString } from "./time";
 
 export const STRUCTURED_DATA_RESOURCE_DISPLAY_KIND = "structured_data.resource";
@@ -56,6 +58,21 @@ export type PublishStructuredDataResourceInput = {
   title: string;
   state: StructuredDataState;
 };
+
+export type StructuredDataPublicationAttachment = Pick<
+  ConversationAttachment,
+  "id" | "fileId" | "filename"
+>;
+
+export type StructuredDataPublicationReviewer = (input: {
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  resourceKey: string;
+  title: string;
+  state: StructuredDataState;
+  messages: readonly ChatMessage[];
+  attachments: readonly StructuredDataPublicationAttachment[];
+}) => readonly string[] | Promise<readonly string[]>;
 
 export interface StructuredDataStore {
   getStructuredDataResource(input: {

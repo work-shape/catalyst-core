@@ -48,6 +48,7 @@ export type ReasoningEffortConfig = (typeof REASONING_EFFORTS)[number];
 
 export const AGENT_EDITABLE_FIELDS = [
   "displayName",
+  "description",
   "welcomeMessage",
   "welcomeSubtitle",
   "instructions",
@@ -72,6 +73,7 @@ export interface ModelBindingConfig {
 export interface AgentConfig {
   name: string;
   displayName: LocalizedStringConfig;
+  description?: LocalizedStringConfig;
   welcomeMessage?: LocalizedStringConfig;
   welcomeSubtitle?: LocalizedStringConfig;
   instructions: string;

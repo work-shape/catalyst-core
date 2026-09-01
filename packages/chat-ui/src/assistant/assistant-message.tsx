@@ -21,8 +21,8 @@ import {
   User
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { AttachmentPreview } from "../attachment-preview";
 import { managedFileIdFromUrl, useAttachmentContentContext } from "../attachment-content";
+import { MessageAttachments } from "../message-attachments";
 import {
   ASSISTANT_WORK_GROUP,
   countAssistantWorkTimelineSteps,
@@ -498,9 +498,7 @@ function UserMessage() {
         data-message-id={messageId}
         aria-hidden="true"
       />
-      <MessagePrimitive.Attachments>
-        {() => <AttachmentPreview removable={false} />}
-      </MessagePrimitive.Attachments>
+      <MessageAttachments />
       <div className="chat-user-message-bubble max-w-[min(42rem,88%)] rounded-2xl rounded-tr-md bg-primary px-4 py-2.5 text-sm leading-6 text-primary-foreground shadow-xs [overflow-wrap:anywhere]">
         <MessagePrimitive.Parts
           components={{ Text: UserTextPart, File: FilePart, Image: ImagePart }}

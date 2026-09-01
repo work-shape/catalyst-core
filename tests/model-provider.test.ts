@@ -1053,6 +1053,114 @@ describe("OpenAI-compatible model provider", () => {
     });
   });
 
+  it("rejects a chat-completions stream that closes before its completion marker", async () => {
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const requestBody = JSON.parse(String(init?.body)) as {
+        tools?: Array<{ function?: { name?: string } }>;
+      };
+      return new Response(
+        createSseStream(
+          [
+            {
+              choices: [
+                {
+                  delta: {
+                    tool_calls: [
+                      {
+                        index: 0,
+                        id: "call_truncated",
+                        type: "function",
+                        function: {
+                          name: requestBody.tools?.[0]?.function?.name,
+                          arguments: "{"
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ],
+          false
+        ),
+        { status: 200, headers: { "content-type": "text/event-stream" } }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new OpenAiCompatibleChatProvider({
+      id: "openai",
+      model: "gpt-test",
+      baseUrl: "https://example.test/v1",
+      apiKey: "test"
+    });
+
+    const stream = provider.stream!(
+      {
+        providerId: "openai",
+        model: "gpt-test",
+        messages: [{ role: "user", content: "run a tool" }],
+        tools: [{ name: "save_data", description: "Save data" }]
+      },
+      createModelProviderTestContext()
+    )[Symbol.asyncIterator]();
+
+    await expect(stream.next()).resolves.toMatchObject({
+      value: { type: "tool_call_preparing", toolCallId: "call_truncated" }
+    });
+    await expect(stream.next()).rejects.toMatchObject({
+      code: "TIMEOUT",
+      message: "Model provider stream ended before the completion marker"
+    });
+  });
+
+  it("rejects a Responses stream that closes before response.completed", async () => {
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const requestBody = JSON.parse(String(init?.body)) as { tools?: Array<{ name?: string }> };
+      return new Response(
+        createSseStream(
+          [
+            {
+              type: "response.output_item.added",
+              item: {
+                type: "function_call",
+                call_id: "call_truncated",
+                name: requestBody.tools?.[0]?.name
+              }
+            }
+          ],
+          false
+        ),
+        { status: 200, headers: { "content-type": "text/event-stream" } }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new OpenAiCompatibleChatProvider({
+      id: "openai",
+      api: "responses",
+      model: "gpt-5.5",
+      baseUrl: "https://example.test/v1",
+      apiKey: "test"
+    });
+
+    const stream = provider.stream!(
+      {
+        providerId: "openai",
+        model: "gpt-5.5",
+        messages: [{ role: "user", content: "run a tool" }],
+        tools: [{ name: "show_view", description: "Show view" }]
+      },
+      createModelProviderTestContext()
+    )[Symbol.asyncIterator]();
+
+    await expect(stream.next()).resolves.toMatchObject({
+      value: { type: "tool_call_preparing", toolCallId: "call_truncated" }
+    });
+    await expect(stream.next()).rejects.toMatchObject({
+      code: "TIMEOUT",
+      message: "Model provider stream ended before response.completed"
+    });
+  });
+
   it("surfaces provider error bodies from stream requests", async () => {
     const fetchMock = vi.fn(async () => {
       return new Response(
@@ -1152,14 +1260,16 @@ describe("OpenAI-compatible model provider", () => {
   });
 });
 
-function createSseStream(chunks: unknown[]): ReadableStream<Uint8Array> {
+function createSseStream(chunks: unknown[], includeDone = true): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   return new ReadableStream({
     start(controller) {
       for (const chunk of chunks) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
       }
-      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      if (includeDone) {
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      }
       controller.close();
     }
   });

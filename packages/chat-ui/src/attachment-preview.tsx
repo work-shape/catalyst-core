@@ -7,7 +7,16 @@ import { useTranslation } from "./i18n";
 import { cn } from "./ui/cn";
 import { Spinner } from "./ui/spinner";
 
-export function AttachmentPreview({ removable }: { removable: boolean }) {
+/** `row` renders the file as a full-width list entry inside a grouped attachment card. */
+export type AttachmentPreviewVariant = "chip" | "row";
+
+export function AttachmentPreview({
+  removable,
+  variant = "chip"
+}: {
+  removable: boolean;
+  variant?: AttachmentPreviewVariant;
+}) {
   const attachment = useAuiState((state) => state.attachment as AttachmentSnapshot);
   const imageUrl = useAttachmentImageUrl(attachment);
   const managedFileId = managedFileIdFromAttachmentContent(attachment.content);
@@ -72,13 +81,22 @@ export function AttachmentPreview({ removable }: { removable: boolean }) {
     );
   }
 
+  const row = variant === "row";
+  const fileClassName = cn(
+    "items-center gap-1.5 rounded-md text-xs text-muted-foreground",
+    row ? "flex w-full px-2 py-1.5 text-left" : "inline-flex max-w-full bg-muted/45 px-2 py-1"
+  );
+
   return (
-    <AttachmentPrimitive.Root className="group/attachment relative max-w-72">
+    <AttachmentPrimitive.Root
+      className={cn("group/attachment relative", row ? "min-w-0" : "max-w-72")}
+    >
       {previewAvailable ? (
         <button
           type="button"
           className={cn(
-            "inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-md bg-muted/45 px-2 py-1 text-xs text-muted-foreground transition-colors",
+            fileClassName,
+            "cursor-pointer transition-colors",
             "hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
           )}
           title={t("openArtifactPreview", { filename })}
@@ -97,7 +115,7 @@ export function AttachmentPreview({ removable }: { removable: boolean }) {
           </span>
         </button>
       ) : (
-        <div className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-muted/45 px-2 py-1 text-xs text-muted-foreground">
+        <div className={fileClassName}>
           <AttachmentPrimitive.unstable_Thumb className="shrink-0 font-mono text-[0.65rem] uppercase leading-none text-muted-foreground" />
           <span className="min-w-0 truncate">
             <AttachmentPrimitive.Name />
@@ -295,7 +313,11 @@ function imageSourceFromContent(
   };
 }
 
-function isImageAttachment(attachment: AttachmentSnapshot): boolean {
+export function isImageAttachment(attachment: {
+  type?: string;
+  contentType?: string;
+  name?: string;
+}): boolean {
   return (
     attachment.type === "image" ||
     isImageMimeType(attachment.contentType) ||

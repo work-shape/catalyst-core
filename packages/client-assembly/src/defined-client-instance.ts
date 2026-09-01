@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
+import type { StructuredDataPublicationReviewer } from "@vivd-catalyst/core";
 import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
 import {
   createClientInstanceApp,
@@ -22,6 +23,7 @@ export interface DefineClientInstanceInput {
   configFile?: string;
   tools?: ToolAssemblyDefinition[];
   capabilities?: ClientInstanceCapability[];
+  structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
   corsOrigin?: string | string[];
   loadEnv?: boolean;
 }
@@ -103,6 +105,8 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
       }),
       tools,
       capabilities,
+      structuredDataPublicationReviewer:
+        appInput.structuredDataPublicationReviewer ?? input.structuredDataPublicationReviewer,
       corsOrigin: appInput.corsOrigin ?? input.corsOrigin
     });
   }

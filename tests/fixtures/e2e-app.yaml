@@ -54,10 +54,10 @@ administration:
     enabled: true
     editableAgentFields:
       - displayName
+      - description
       - welcomeMessage
       - welcomeSubtitle
       - instructions
-      - modelProviderId
       - modelBindingId
       - reasoningEffort
       - maxSteps

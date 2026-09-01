@@ -389,6 +389,13 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     toolName: z.string()
   }),
   z.object({
+    type: z.literal("tool_call_preparation_cancelled"),
+    runId: z.string(),
+    sequence: z.number(),
+    createdAt: z.string(),
+    toolCallId: z.string()
+  }),
+  z.object({
     type: z.literal("tool_call_started"),
     runId: z.string(),
     sequence: z.number(),

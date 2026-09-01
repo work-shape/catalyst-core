@@ -230,7 +230,7 @@ export type GetConfigResponses = {
             };
             configAssets: {
                 enabled: boolean;
-                editableAgentFields: Array<'displayName' | 'welcomeMessage' | 'welcomeSubtitle' | 'instructions' | 'modelBindingId' | 'reasoningEffort' | 'maxSteps' | 'toolNames' | 'skillNames' | 'initialPrompts'>;
+                editableAgentFields: Array<'displayName' | 'description' | 'welcomeMessage' | 'welcomeSubtitle' | 'instructions' | 'modelBindingId' | 'reasoningEffort' | 'maxSteps' | 'toolNames' | 'skillNames' | 'initialPrompts'>;
                 allowAgentCreation: boolean;
                 allowAgentDeletion: boolean;
                 allowDefaultAgentChange: boolean;
@@ -246,6 +246,7 @@ export type GetConfigResponses = {
         agents: Array<{
             name: string;
             displayName: string;
+            description?: string;
             defaultModelBindingId?: string;
             compactThresholdTokens?: number;
             welcomeMessage?: string;
@@ -1730,6 +1731,12 @@ export type ObserveConversationRunResponses = {
             createdAt: string;
             toolCallId: string;
             toolName: string;
+        } | {
+            type: 'tool_call_preparation_cancelled';
+            runId: string;
+            sequence: number;
+            createdAt: string;
+            toolCallId: string;
         } | {
             type: 'tool_call_started';
             runId: string;

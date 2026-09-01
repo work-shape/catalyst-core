@@ -80,6 +80,8 @@ export {
 } from "./workspace-tool-results";
 export type { WorkspaceCommandServiceLimits } from "./workspace-tool-schemas";
 
+export const EXECUTION_WORKSPACE_ARTIFACT_METADATA_SOURCE = "execution_workspace";
+
 export type WorkspaceToolStore = Pick<
   PlatformStore,
   | "ensureExecutionWorkspace"
@@ -573,6 +575,9 @@ export class WorkspaceCommandService {
     input: z.infer<typeof workspacePreviewImagesInputSchema>,
     context: ToolExecutionContext
   ): Promise<ToolHandlerResult<z.infer<typeof workspacePreviewImagesOutputSchema>>> {
+    if (!this.objectStore) {
+      return failed("handler_failed", "Workspace preview image bytes are not available");
+    }
     const rawPaths = input.paths ?? (input.path ? [input.path] : []);
     const maxImages = Math.min(
       input.maxImages ?? this.limits.maxPreviewImages,
@@ -627,6 +632,30 @@ export class WorkspaceCommandService {
           supportedMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/gif"]
         });
       }
+      let bytes: Uint8Array;
+      try {
+        bytes = await this.objectStore.getObject(file.objectKey);
+      } catch (error) {
+        if (isAppError(error) && error.code !== "NOT_FOUND") {
+          throw error;
+        }
+        return failed(
+          "handler_failed",
+          `Workspace preview image '${file.path}' is not available in durable storage. Recreate the preview before inspecting it.`,
+          { path: file.path }
+        );
+      }
+      if (bytes.byteLength !== file.byteSize) {
+        return failed(
+          "handler_failed",
+          `Workspace preview image '${file.path}' does not match its stored metadata. Recreate the preview before inspecting it.`,
+          {
+            path: file.path,
+            expectedByteSize: file.byteSize,
+            actualByteSize: bytes.byteLength
+          }
+        );
+      }
       const artifact = await this.store.createManagedArtifact({
         clientInstanceId: context.clientInstanceId,
         conversationId: workspace.value.conversationId,
@@ -637,7 +666,7 @@ export class WorkspaceCommandService {
         byteSize: file.byteSize,
         checksum: file.checksum,
         metadata: {
-          source: "execution_workspace_preview",
+          source: EXECUTION_WORKSPACE_ARTIFACT_METADATA_SOURCE,
           workspaceId: workspace.value.id,
           workspacePath: file.path
         }

@@ -1,6 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
-import { REASONING_EFFORTS, StoreBackedAuditRecorder } from "@vivd-catalyst/core";
+import {
+  REASONING_EFFORTS,
+  StoreBackedAuditRecorder,
+  type StructuredDataPublicationReviewer
+} from "@vivd-catalyst/core";
 import { createChatServer } from "@vivd-catalyst/chat-server";
 import type { ChatAttachmentService } from "@vivd-catalyst/chat-server";
 import { createManagedObjectAccess } from "@vivd-catalyst/capability-sdk";
@@ -59,6 +63,7 @@ export interface CreateClientInstanceAppInput {
   storeMode?: PlatformStoreMode;
   tools: ToolAssemblyDefinition[];
   capabilities?: ClientInstanceCapability[];
+  structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
   corsOrigin?: string | string[];
 }
 
@@ -171,7 +176,10 @@ export async function createClientInstanceApp(
     tools: [
       ...createBuiltInToolDefinitions(),
       ...workspaceTools,
-      ...createStructuredDataToolDefinitions({ store }),
+      ...createStructuredDataToolDefinitions({
+        store,
+        publicationReviewer: input.structuredDataPublicationReviewer
+      }),
       ...webAccessTools,
       ...createDataSourceTools({ dataSources }),
       createReadSkillTool({ assetSource }),

@@ -11,6 +11,7 @@ export interface AgentInitialPromptForm {
 export interface AgentFormState {
   name: string;
   displayName: LocalizedPair;
+  description: LocalizedPair;
   welcomeMessage: LocalizedPair;
   welcomeSubtitle: LocalizedPair;
   instructions: string;
@@ -77,6 +78,7 @@ export function agentConfigToForm(config: Record<string, unknown>): AgentFormSta
   return {
     name: typeof config.name === "string" ? config.name : "",
     displayName: localizedToPair(config.displayName),
+    description: localizedToPair(config.description),
     welcomeMessage: localizedToPair(config.welcomeMessage),
     welcomeSubtitle: localizedToPair(config.welcomeSubtitle),
     instructions: typeof config.instructions === "string" ? config.instructions : "",
@@ -98,6 +100,7 @@ export function agentConfigToForm(config: Record<string, unknown>): AgentFormSta
 
 export function agentFormToConfig(form: AgentFormState): Record<string, unknown> {
   const displayName = pairToLocalized(form.displayName);
+  const description = pairToLocalized(form.description);
   const welcomeMessage = pairToLocalized(form.welcomeMessage);
   const welcomeSubtitle = hasLocalizedContent(form.welcomeSubtitle)
     ? pairToLocalized(form.welcomeSubtitle)
@@ -106,6 +109,7 @@ export function agentFormToConfig(form: AgentFormState): Record<string, unknown>
   return {
     name: form.name.trim(),
     displayName: displayName ?? "",
+    ...(description === undefined ? {} : { description }),
     ...(welcomeMessage === undefined ? {} : { welcomeMessage }),
     ...(welcomeSubtitle === undefined ? {} : { welcomeSubtitle }),
     instructions: form.instructions,
@@ -131,6 +135,7 @@ export function emptyAgentForm(): AgentFormState {
   return {
     name: "",
     displayName: { ...EMPTY_LOCALIZED_PAIR },
+    description: { ...EMPTY_LOCALIZED_PAIR },
     welcomeMessage: { ...EMPTY_LOCALIZED_PAIR },
     welcomeSubtitle: { ...EMPTY_LOCALIZED_PAIR },
     instructions: "",

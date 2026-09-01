@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { asManagedArtifactId } from "@vivd-catalyst/core";
+import { createExecutionWorkspaceManagedObjectReader } from "@vivd-catalyst/client-assembly";
 import { createArtifactPreviewSettingsHash } from "@vivd-catalyst/tool-execution";
 import { createModelVisibleToolOutput } from "../packages/agent-runtime/src/model-context-projection";
 import { createWorkspaceHarness, encode } from "./workspace-tools-harness";
@@ -544,24 +545,24 @@ describe("workspace.preview_images", () => {
     expect(JSON.stringify(result)).not.toContain("objectKey");
     expect(JSON.stringify(result)).not.toContain("execution-workspaces/private");
 
+    const storedArtifact = await harness.store.getManagedArtifact({
+      clientInstanceId: harness.clientInstanceId,
+      artifactId: asManagedArtifactId(result.output.artifactId)
+    });
+    expect(storedArtifact?.metadata.source).toBe("execution_workspace");
+    if (!storedArtifact) {
+      throw new Error("Expected stored workspace preview artifact");
+    }
+    const workspaceReader = createExecutionWorkspaceManagedObjectReader({
+      clientInstanceId: harness.clientInstanceId,
+      files: harness.store,
+      byteStore: harness.objectStore
+    });
+
     const modelOutput = await createModelVisibleToolOutput(result, {
       clientInstanceId: harness.clientInstanceId,
       toolOutput: { maxTokens: 60_000 },
-      artifactReader: {
-        async readArtifact(input) {
-          const artifact = await harness.store.getManagedArtifact({
-            clientInstanceId: input.clientInstanceId,
-            artifactId: input.artifactId
-          });
-          if (!artifact) {
-            throw new Error("Missing artifact");
-          }
-          return {
-            bytes: await harness.objectStore.getObject(artifact.objectKey),
-            mimeType: artifact.mimeType
-          };
-        }
-      }
+      artifactReader: workspaceReader
     });
     const imageParts = Array.isArray(modelOutput.content)
       ? modelOutput.content.filter((part) => part.type === "image")
@@ -573,6 +574,24 @@ describe("workspace.preview_images", () => {
         data: previewBytes
       }
     ]);
+
+    const legacyArtifact = await harness.store.createManagedArtifact({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      kind: "image.png",
+      objectKey: storedArtifact.objectKey,
+      filename: "legacy-page-1.png",
+      mimeType: "image/png",
+      byteSize: previewBytes.byteLength,
+      checksum: storedArtifact.checksum,
+      metadata: { source: "execution_workspace_preview" }
+    });
+    await expect(
+      workspaceReader.readArtifact({
+        clientInstanceId: harness.clientInstanceId,
+        artifactId: legacyArtifact.id
+      })
+    ).resolves.toMatchObject({ mimeType: "image/png", bytes: previewBytes });
     expect(modelOutput.text).toContain("[Visual context loaded]");
   });
 

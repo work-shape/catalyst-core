@@ -19,7 +19,11 @@ import {
   type ToolExecutionResult
 } from "@vivd-catalyst/core";
 import { createStaticConfigAssetSource, InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
-import { LocalAgentRuntime, type LocalAgentRunFailureReport } from "@vivd-catalyst/agent-runtime";
+import {
+  LocalAgentRuntime,
+  type LocalAgentRunFailureReport,
+  type ModelCallGovernance
+} from "@vivd-catalyst/agent-runtime";
 import {
   modelContentText,
   type ModelCompletionStreamEvent,
@@ -1424,6 +1428,224 @@ describe("local agent runtime", () => {
       },
       modelOutput: ""
     });
+  });
+
+  it("retries a transient provider disconnect before streamed output or tool execution", async () => {
+    const clientInstanceId = asClientInstanceId("provider-stream-retry-client");
+    const context: RuntimeCallContext = {
+      clientInstanceId,
+      correlationId: "corr-provider-stream-retry",
+      user: {
+        id: "user-1",
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const store = new InMemoryPlatformStore();
+    const conversationId = await createConversationWithMessages(store, {
+      clientInstanceId,
+      messages: []
+    });
+    const providerConfig: ModelProviderConfig = {
+      id: "test-provider",
+      type: "deterministic",
+      model: "test-model"
+    };
+    let attempts = 0;
+    const modelProvider: ModelProvider = {
+      id: "test-provider",
+      async complete() {
+        throw new Error("Expected the streaming provider path to be used");
+      },
+      async *stream(): AsyncIterable<ModelCompletionStreamEvent> {
+        attempts += 1;
+        if (attempts === 1) {
+          yield {
+            type: "tool_call_preparing",
+            toolCallId: "call_interrupted",
+            toolName: "workspace.exec"
+          };
+          throw Object.assign(new TypeError("terminated"), {
+            cause: { code: "UND_ERR_SOCKET" }
+          });
+        }
+        if (attempts === 2) {
+          yield {
+            type: "completed",
+            completion: {
+              text: "Recovered after a transient disconnect.",
+              toolCalls: [],
+              usage: noReportedUsage()
+            }
+          };
+          return;
+        }
+        yield { type: "text_delta", delta: "Visible partial output." };
+        throw new TypeError("terminated");
+      }
+    };
+    const runtime = new LocalAgentRuntime({
+      assetSource: createStaticConfigAssetSource({
+        agents: [
+          {
+            name: "provider_stream_retry_agent",
+            displayName: "Provider Stream Retry Agent",
+            instructions: "Help the user.",
+            modelProviderId: "test-provider",
+            toolNames: [],
+            initialPrompts: []
+          }
+        ]
+      }),
+      modelProviders: [providerConfig],
+      defaultModelProvider: providerConfig,
+      conversationHistory: store,
+      modelProvider,
+      toolRegistry: new ToolRegistry({ tools: [] }),
+      toolExecution: createUnusedToolExecution(),
+      usageGovernance: new ModelUsageGovernance({
+        store,
+        budget: {},
+        safeguards: {}
+      })
+    });
+
+    const run = await runtime.start(
+      {
+        agentName: "provider_stream_retry_agent",
+        conversationId,
+        message: { text: "hello" }
+      },
+      context
+    );
+    const events = [];
+    for await (const event of runtime.observe(run.runId, context)) {
+      events.push(event);
+    }
+
+    expect(attempts).toBe(2);
+    expect(events.map((event) => event.type)).toEqual([
+      "tool_call_preparing",
+      "tool_call_preparation_cancelled",
+      "message_delta",
+      "message_completed",
+      "run_completed"
+    ]);
+    expect(events).not.toContainEqual(expect.objectContaining({ type: "run_failed" }));
+
+    const secondConversationId = await createConversationWithMessages(store, {
+      clientInstanceId,
+      messages: []
+    });
+    const interruptedRun = await runtime.start(
+      {
+        agentName: "provider_stream_retry_agent",
+        conversationId: secondConversationId,
+        message: { text: "hello again" }
+      },
+      context
+    );
+    const interruptedEvents = [];
+    for await (const event of runtime.observe(interruptedRun.runId, context)) {
+      interruptedEvents.push(event);
+    }
+
+    expect(attempts).toBe(3);
+    expect(interruptedEvents.map((event) => event.type)).toEqual(["message_delta", "run_failed"]);
+  });
+
+  it("does not repeat a completed model call when usage persistence fails", async () => {
+    const clientInstanceId = asClientInstanceId("usage-persistence-failure-client");
+    const context: RuntimeCallContext = {
+      clientInstanceId,
+      correlationId: "corr-usage-persistence-failure",
+      user: {
+        id: "user-1",
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const store = new InMemoryPlatformStore();
+    const conversationId = await createConversationWithMessages(store, {
+      clientInstanceId,
+      messages: []
+    });
+    const providerConfig: ModelProviderConfig = {
+      id: "test-provider",
+      type: "deterministic",
+      model: "test-model"
+    };
+    let providerCalls = 0;
+    const modelProvider: ModelProvider = {
+      id: "test-provider",
+      async complete() {
+        throw new Error("Expected the streaming provider path to be used");
+      },
+      async *stream(): AsyncIterable<ModelCompletionStreamEvent> {
+        providerCalls += 1;
+        yield {
+          type: "completed",
+          completion: {
+            text: "The provider completed once.",
+            toolCalls: [],
+            usage: noReportedUsage()
+          }
+        };
+      }
+    };
+    const usageGovernance: ModelCallGovernance = {
+      runModelCall(_clientInstanceId, execute) {
+        return execute();
+      },
+      async recordModelUsage() {
+        throw Object.assign(new Error("usage persistence timed out"), { code: "ETIMEDOUT" });
+      }
+    };
+    const runtime = new LocalAgentRuntime({
+      assetSource: createStaticConfigAssetSource({
+        agents: [
+          {
+            name: "usage_persistence_failure_agent",
+            displayName: "Usage Persistence Failure Agent",
+            instructions: "Help the user.",
+            modelProviderId: "test-provider",
+            toolNames: [],
+            initialPrompts: []
+          }
+        ]
+      }),
+      modelProviders: [providerConfig],
+      defaultModelProvider: providerConfig,
+      conversationHistory: store,
+      modelProvider,
+      toolRegistry: new ToolRegistry({ tools: [] }),
+      toolExecution: createUnusedToolExecution(),
+      usageGovernance
+    });
+
+    const run = await runtime.start(
+      {
+        agentName: "usage_persistence_failure_agent",
+        conversationId,
+        message: { text: "hello" }
+      },
+      context
+    );
+    const events = [];
+    for await (const event of runtime.observe(run.runId, context)) {
+      events.push(event);
+    }
+
+    expect(providerCalls).toBe(1);
+    expect(events.map((event) => event.type)).toEqual(["message_delta", "run_failed"]);
   });
 
   it("persists tool result artifacts in durable observations and tool message metadata", async () => {

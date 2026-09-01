@@ -775,6 +775,7 @@
                                 "type": "string",
                                 "enum": [
                                   "displayName",
+                                  "description",
                                   "welcomeMessage",
                                   "welcomeSubtitle",
                                   "instructions",
@@ -856,6 +857,9 @@
                             "type": "string"
                           },
                           "displayName": {
+                            "type": "string"
+                          },
+                          "description": {
                             "type": "string"
                           },
                           "defaultModelBindingId": {
@@ -6998,6 +7002,35 @@
                             "createdAt",
                             "toolCallId",
                             "toolName"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "tool_call_preparation_cancelled"
+                            },
+                            "runId": {
+                              "type": "string"
+                            },
+                            "sequence": {
+                              "type": "number"
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            },
+                            "toolCallId": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "runId",
+                            "sequence",
+                            "createdAt",
+                            "toolCallId"
                           ],
                           "additionalProperties": false
                         },

@@ -80,11 +80,13 @@ export async function* streamOpenAiCompatibleCompletion(
 ): AsyncIterable<ModelCompletionStreamEvent> {
   let text = "";
   let usage = noReportedUsage();
+  let completed = false;
   const toolCalls = new Map<number, Partial<OpenAiCompatibleStreamingToolCall>>();
   const announcedToolCalls = new Set<number>();
 
   for await (const data of readServerSentEventData(body)) {
     if (data === "[DONE]") {
+      completed = true;
       break;
     }
     const payload = parseStreamChunk(data);
@@ -126,6 +128,10 @@ export async function* streamOpenAiCompatibleCompletion(
         }
       }
     }
+  }
+
+  if (!completed) {
+    throw new AppError("TIMEOUT", "Model provider stream ended before the completion marker");
   }
 
   yield {
@@ -276,13 +282,13 @@ export async function* streamOpenAiResponsesCompletion(
     }
   }
 
-  const finalText = finalResponse ? readOpenAiResponsesText(finalResponse) : "";
-  const webMetadata = finalResponse
-    ? readOpenAiResponsesWebMetadata(finalResponse)
-    : { sources: [], citations: [] };
-  const webSearchCallCount = finalResponse
-    ? readOpenAiResponsesWebSearchCallCount(finalResponse)
-    : usage.webSearchCallCount;
+  if (!finalResponse) {
+    throw new AppError("TIMEOUT", "Model provider stream ended before response.completed");
+  }
+
+  const finalText = readOpenAiResponsesText(finalResponse);
+  const webMetadata = readOpenAiResponsesWebMetadata(finalResponse);
+  const webSearchCallCount = readOpenAiResponsesWebSearchCallCount(finalResponse);
   yield {
     type: "completed",
     completion: {
@@ -294,11 +300,13 @@ export async function* streamOpenAiResponsesCompletion(
       })),
       sources: webMetadata.sources,
       citations: webMetadata.citations,
-      continuation: finalResponse
-        ? createOpenAiResponsesContinuation(providerId, finalResponse, previousContinuation)
-        : previousContinuation,
+      continuation: createOpenAiResponsesContinuation(
+        providerId,
+        finalResponse,
+        previousContinuation
+      ),
       contextManagement: {
-        compacted: finalResponse ? didOpenAiResponsesCompact(finalResponse) : false
+        compacted: didOpenAiResponsesCompact(finalResponse)
       },
       usage: {
         ...usage,

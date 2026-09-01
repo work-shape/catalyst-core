@@ -1,20 +1,11 @@
 import { ComposerPrimitive, useAuiState, useComposer } from "@assistant-ui/react";
-import {
-  CheckCircle2,
-  FileText,
-  ImageIcon,
-  Paperclip,
-  RotateCcw,
-  Send,
-  Square,
-  X
-} from "lucide-react";
+import { AlertCircle, CheckCircle2, Paperclip, RotateCcw, Send, Square, X } from "lucide-react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
 import { AttachmentPreview } from "../attachment-preview";
 import { ContextIndicator } from "./context-indicator";
-import { useTranslation } from "../i18n";
+import { useTranslation, type TranslationContextValue } from "../i18n";
 import { isComposerBlockedByActiveRun, shouldShowCancelAction } from "./thread-activity";
 import { Button } from "../ui/button";
 import { cn } from "../ui/cn";
@@ -347,6 +338,19 @@ export function AssistantComposer({
   );
 }
 
+type AttachmentChipStatus = DraftAttachment["status"] | LocalUploadingAttachment["status"];
+
+interface AttachmentChipItem {
+  id: string;
+  filename: string;
+  byteSize: number;
+  status: AttachmentChipStatus;
+  removable: boolean;
+  retryable: boolean;
+}
+
+const ATTACHMENT_FADE_HEIGHT = "1rem";
+
 function DraftAttachmentList({
   attachments,
   localUploadingAttachments,
@@ -358,97 +362,185 @@ function DraftAttachmentList({
   onRemoveAttachment: (attachmentId: string) => void;
   onRetryAttachment: (attachmentId: string) => void;
 }) {
+  const { t } = useTranslation();
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const [overflow, setOverflow] = useState({ above: false, below: false });
+
+  const items: AttachmentChipItem[] = [
+    ...localUploadingAttachments.map((attachment) => ({
+      id: attachment.id,
+      filename: attachment.filename,
+      byteSize: attachment.byteSize,
+      status: attachment.status,
+      removable: false,
+      retryable: false
+    })),
+    ...attachments.map((attachment) => ({
+      id: attachment.id,
+      filename: attachment.filename,
+      byteSize: attachment.byteSize,
+      status: attachment.status,
+      removable: true,
+      retryable: attachment.status === "failed"
+    }))
+  ].sort(
+    (left, right) => attachmentAttentionRank(left.status) - attachmentAttentionRank(right.status)
+  );
+
+  const totalBytes = items.reduce((sum, item) => sum + item.byteSize, 0);
+  const failedCount = items.filter(
+    (item) => item.status === "failed" || item.status === "unsupported"
+  ).length;
+
+  const syncOverflow = useCallback(() => {
+    const node = listRef.current;
+    if (!node) {
+      return;
+    }
+    const above = node.scrollTop > 1;
+    const below = node.scrollTop + node.clientHeight < node.scrollHeight - 1;
+    setOverflow((previous) =>
+      previous.above === above && previous.below === below ? previous : { above, below }
+    );
+  }, []);
+
+  useLayoutEffect(() => {
+    syncOverflow();
+    const node = listRef.current;
+    if (!node || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(syncOverflow);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [syncOverflow, items.length]);
+
   return (
-    <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto">
-      {localUploadingAttachments.map((attachment) => (
-        <AttachmentChip
-          key={attachment.id}
-          filename={attachment.filename}
-          byteSize={attachment.byteSize}
-          mimeType={attachment.mimeType}
-          status={attachment.status}
-        />
-      ))}
-      {attachments.map((attachment) => (
-        <AttachmentChip
-          key={attachment.id}
-          filename={attachment.filename}
-          byteSize={attachment.byteSize}
-          mimeType={attachment.mimeType}
-          status={attachment.status}
-          failed={attachment.status === "failed"}
-          unsupported={attachment.status === "unsupported"}
-          onRemove={() => onRemoveAttachment(attachment.id)}
-          onRetry={
-            attachment.status === "failed" ? () => onRetryAttachment(attachment.id) : undefined
-          }
-        />
-      ))}
+    <div className="grid gap-1.5">
+      {items.length > 1 ? (
+        <div className="flex items-center justify-between gap-2 px-1 text-xs text-muted-foreground">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <Paperclip size={13} className="shrink-0" aria-hidden="true" />
+            <span className="truncate">
+              {items.length === 1
+                ? t("attachmentsSummaryOne", { size: formatFileSize(totalBytes) })
+                : t("attachmentsSummary", {
+                    count: items.length,
+                    size: formatFileSize(totalBytes)
+                  })}
+              {failedCount > 0 ? ` · ${t("attachmentsFailedCount", { count: failedCount })}` : null}
+            </span>
+          </span>
+          {attachments.length > 1 ? (
+            <button
+              type="button"
+              className="shrink-0 rounded px-1 py-0.5 underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/40 focus-visible:outline-none"
+              onClick={() => {
+                for (const attachment of attachments) {
+                  onRemoveAttachment(attachment.id);
+                }
+              }}
+            >
+              {t("attachmentsRemoveAll")}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {/* Paint containment keeps offscreen grid rows out of the thread's
+          scrollable overflow while this nested list remains scrollable. */}
+      <div className="max-h-36 overflow-hidden [contain:paint]">
+        <div
+          ref={listRef}
+          className="grid max-h-36 gap-1.5 overflow-y-auto sm:grid-cols-2"
+          style={{
+            scrollbarWidth: "thin",
+            scrollbarColor: "var(--border) transparent",
+            maskImage: attachmentFadeMask(overflow),
+            WebkitMaskImage: attachmentFadeMask(overflow)
+          }}
+          onScroll={syncOverflow}
+        >
+          {items.map((item) => (
+            <AttachmentChip
+              key={item.id}
+              filename={item.filename}
+              byteSize={item.byteSize}
+              status={item.status}
+              onRemove={item.removable ? () => onRemoveAttachment(item.id) : undefined}
+              onRetry={item.retryable ? () => onRetryAttachment(item.id) : undefined}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
+}
+
+function attachmentAttentionRank(status: AttachmentChipStatus): number {
+  if (status === "failed" || status === "unsupported") {
+    return 0;
+  }
+  return status === "ready" || status === "deleted" ? 2 : 1;
+}
+
+function attachmentFadeMask(overflow: { above: boolean; below: boolean }): string | undefined {
+  if (!overflow.above && !overflow.below) {
+    return undefined;
+  }
+  const stops = [
+    overflow.above ? `transparent 0, #000 ${ATTACHMENT_FADE_HEIGHT}` : "#000 0",
+    overflow.below ? `#000 calc(100% - ${ATTACHMENT_FADE_HEIGHT}), transparent 100%` : "#000 100%"
+  ];
+  return `linear-gradient(to bottom, ${stops.join(", ")})`;
 }
 
 function AttachmentChip({
   filename,
   byteSize,
-  mimeType,
   status,
-  failed,
-  unsupported,
   onRemove,
   onRetry
 }: {
   filename: string;
   byteSize: number;
-  mimeType?: string;
-  status: DraftAttachment["status"] | LocalUploadingAttachment["status"];
-  failed?: boolean;
-  unsupported?: boolean;
+  status: AttachmentChipStatus;
   onRemove?: () => void;
   onRetry?: () => void;
 }) {
-  const ready = status === "ready";
+  const { t } = useTranslation();
+  const failed = status === "failed" || status === "unsupported";
+  const pending = status === "uploading" || status === "queued" || status === "preprocessing";
 
   return (
     <span
       className={cn(
-        "inline-flex max-w-full items-center gap-2 rounded-md border bg-background px-2 py-1 text-xs shadow-xs",
-        failed || unsupported
-          ? "border-destructive/40 text-destructive"
-          : "border-border text-foreground",
-        ready
-          ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300"
-          : undefined
+        "flex min-w-0 items-center gap-2 rounded-md border bg-background px-2 py-1 text-xs",
+        failed ? "border-destructive/40 text-destructive" : "border-border text-foreground"
       )}
+      title={filename}
     >
-      {isImageMimeType(mimeType) ? (
-        <ImageIcon
-          size={14}
-          className={cn(
-            "shrink-0 text-muted-foreground",
-            ready ? "text-emerald-600 dark:text-emerald-400" : undefined
-          )}
-          aria-hidden="true"
-        />
+      {failed ? (
+        <AlertCircle size={14} className="shrink-0" aria-hidden="true" />
+      ) : pending ? (
+        <Spinner size="xs" className="shrink-0" />
       ) : (
-        <FileText
+        <CheckCircle2
           size={14}
-          className={cn(
-            "shrink-0 text-muted-foreground",
-            ready ? "text-emerald-600 dark:text-emerald-400" : undefined
-          )}
+          className="shrink-0 text-emerald-600 dark:text-emerald-400"
           aria-hidden="true"
         />
       )}
-      <span className="min-w-0 truncate font-medium">{filename}</span>
-      <AttachmentStatusIndicator status={status} />
-      <span className="shrink-0 text-muted-foreground">{formatFileSize(byteSize)}</span>
+      <span className="min-w-0 flex-1 truncate">{filename}</span>
+      <span className="sr-only">{attachmentStatusLabel(status, t)}</span>
+      <span className="shrink-0 text-muted-foreground">
+        {pending ? attachmentStatusLabel(status, t) : formatFileSize(byteSize)}
+      </span>
       {onRetry ? (
         <button
           type="button"
-          className="grid size-5 shrink-0 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-          aria-label="Retry attachment"
-          title="Retry"
+          className="grid size-5 shrink-0 place-items-center rounded transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 focus-visible:outline-none"
+          aria-label={t("attachmentRetry")}
+          title={t("attachmentRetry")}
           onClick={onRetry}
         >
           <RotateCcw size={13} aria-hidden="true" />
@@ -457,9 +549,9 @@ function AttachmentChip({
       {onRemove ? (
         <button
           type="button"
-          className="grid size-5 shrink-0 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-          aria-label="Remove attachment"
-          title="Remove"
+          className="grid size-5 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 focus-visible:outline-none"
+          aria-label={t("attachmentRemove")}
+          title={t("attachmentRemove")}
           onClick={onRemove}
         >
           <X size={13} aria-hidden="true" />
@@ -469,30 +561,24 @@ function AttachmentChip({
   );
 }
 
-function AttachmentStatusIndicator({
-  status
-}: {
-  status: DraftAttachment["status"] | LocalUploadingAttachment["status"];
-}) {
-  if (status === "ready") {
-    return (
-      <span className="inline-flex shrink-0 items-center gap-1 font-medium text-emerald-700 dark:text-emerald-300">
-        <CheckCircle2 size={13} aria-hidden="true" />
-        <span>{status}</span>
-      </span>
-    );
+function attachmentStatusLabel(
+  status: AttachmentChipStatus,
+  t: TranslationContextValue["t"]
+): string {
+  switch (status) {
+    case "failed":
+      return t("attachmentStatusFailed");
+    case "unsupported":
+      return t("attachmentStatusUnsupported");
+    case "uploading":
+      return t("attachmentStatusUploading");
+    case "queued":
+      return t("attachmentStatusQueued");
+    case "preprocessing":
+      return t("attachmentStatusPreparing");
+    default:
+      return t("attachmentStatusReady");
   }
-
-  if (status === "uploading" || status === "queued" || status === "preprocessing") {
-    return (
-      <span className="inline-flex shrink-0 items-center gap-1 text-muted-foreground">
-        <Spinner size="xs" />
-        <span>{status}</span>
-      </span>
-    );
-  }
-
-  return <span className="shrink-0 text-muted-foreground">{status}</span>;
 }
 
 function ComposerAction({
@@ -585,15 +671,6 @@ function formatFileSize(byteSize: number): string {
     return `${Math.round(byteSize / 102.4) / 10} KB`;
   }
   return `${Math.round(byteSize / 1024 / 102.4) / 10} MB`;
-}
-
-function isImageMimeType(mimeType: string | undefined): boolean {
-  return (
-    mimeType === "image/png" ||
-    mimeType === "image/jpeg" ||
-    mimeType === "image/webp" ||
-    mimeType === "image/gif"
-  );
 }
 
 export function formatModelLabel(model: string): string {

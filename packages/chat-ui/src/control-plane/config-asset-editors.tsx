@@ -147,6 +147,12 @@ export function AgentEditor({
           onChange={(displayName) => update({ displayName })}
         />
         <LocalizedField
+          label={t("configDescription")}
+          disabled={!canEdit("description")}
+          value={form.description}
+          onChange={(description) => update({ description })}
+        />
+        <LocalizedField
           label={t("configWelcomeMessage")}
           disabled={!canEdit("welcomeMessage")}
           value={form.welcomeMessage}

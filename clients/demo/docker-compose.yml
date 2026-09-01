@@ -215,6 +215,16 @@ services:
           path: ../../packages/chat-ui/src
           target: /app/packages/chat-ui/src
           ignore: *watch-ignore
+        - action: sync
+          path: ../../packages/api-client/src
+          target: /app/packages/api-client/src
+          initial_sync: true
+          ignore: *watch-ignore
+        - action: sync
+          path: ../../packages/api-contract/src
+          target: /app/packages/api-contract/src
+          initial_sync: true
+          ignore: *watch-ignore
         - action: rebuild
           path: ../../clients/demo/package.json
         - action: rebuild

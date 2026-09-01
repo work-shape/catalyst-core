@@ -60,6 +60,13 @@ For one compatibility release, a CLI without `CATALYST_API_KEY` falls back to `C
 
 ## Interactive editing and field ownership
 
+Agent `name` is the stable technical identifier used by config references and
+agent selection. Use `displayName` for the user-facing name and an optional
+localized `description` for the short explanation beneath it in the agent
+selector. Without a description, the selector shows only the display name.
+These fields accept a plain string or an `en`/`de` map. Keep `welcomeMessage`
+and `welcomeSubtitle` for the conversation's empty state.
+
 Admins with the `config_assets.write` permission edit assets in the admin panel's Config tab. Release config decides how much of an agent is interactively editable:
 
 ```yaml
@@ -68,6 +75,7 @@ administration:
     enabled: true
     editableAgentFields:
       - displayName
+      - description
       - welcomeMessage
       - welcomeSubtitle
       - instructions

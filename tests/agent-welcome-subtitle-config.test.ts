@@ -5,7 +5,23 @@ import {
   parseClientInstanceConfig
 } from "@vivd-catalyst/config-schema";
 
-describe("agent welcome subtitle config", () => {
+describe("agent presentation config", () => {
+  it("resolves the optional agent description independently of the welcome subtitle", () => {
+    const config = parseClientInstanceConfig(
+      baseConfig({ localization: { defaultLocale: "en", supportedLocales: ["en", "de"] } })
+    );
+    const assets = createAssets({
+      description: { en: "Help with documents.", de: "Hilfe bei Unterlagen." },
+      welcomeSubtitle: "Welcome!"
+    });
+
+    const safeConfig = createSafeConfigView(config, assets, { requestedLocale: "de" });
+
+    expect(safeConfig.agents[0]?.description).toBe("Hilfe bei Unterlagen.");
+    expect(safeConfig.agents[0]?.welcomeSubtitle).toBe("Welcome!");
+    expect(createSafeConfigView(config, createAssets({})).agents[0]?.description).toBeUndefined();
+  });
+
   it("allows an empty subtitle so deployments can hide the empty-state subline", () => {
     const config = parseClientInstanceConfig(baseConfig());
     const assets = createAssets({

@@ -1,5 +1,6 @@
 name: application_assistant
 displayName: Application Assistant
+description: Help with application and document review.
 modelProviderId: local
 instructions: |
   You help users work through sensitive application and document review workflows.

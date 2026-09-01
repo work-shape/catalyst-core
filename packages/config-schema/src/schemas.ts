@@ -282,6 +282,7 @@ const welcomeSubtitleSchema = z.union([
 export const agentConfigSchema = z.object({
   name: z.string().min(1),
   displayName: localizedStringSchema,
+  description: localizedStringSchema.optional(),
   welcomeMessage: localizedStringSchema.optional(),
   welcomeSubtitle: welcomeSubtitleSchema.optional(),
   instructions: z.string().min(1),

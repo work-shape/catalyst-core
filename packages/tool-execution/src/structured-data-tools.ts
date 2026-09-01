@@ -3,6 +3,7 @@ import {
   currentStructuredResults,
   type PlatformStore,
   type StructuredDataFieldSource,
+  type StructuredDataPublicationReviewer,
   type StructuredDataState
 } from "@vivd-catalyst/core";
 import {
@@ -31,6 +32,7 @@ type StructuredDataToolStore = Pick<
 
 export function createStructuredDataToolDefinitions(input: {
   store: StructuredDataToolStore;
+  publicationReviewer?: StructuredDataPublicationReviewer;
 }): AnyToolDefinition[] {
   return [
     defineTool({
@@ -61,13 +63,19 @@ export function createStructuredDataToolDefinitions(input: {
                 )
           )
         ];
-        const sourceAttachmentIds = new Map<string, StructuredDataFieldSource["attachmentId"]>();
-        if (sourceFileIds.length > 0) {
-          const sentAttachments = await input.store.listSentConversationAttachments({
+        let sentAttachments:
+          | Awaited<ReturnType<StructuredDataToolStore["listSentConversationAttachments"]>>
+          | undefined;
+        const getSentAttachments = async () => {
+          sentAttachments ??= await input.store.listSentConversationAttachments({
             clientInstanceId: context.clientInstanceId,
             conversationId
           });
-          for (const attachment of sentAttachments) {
+          return sentAttachments;
+        };
+        const sourceAttachmentIds = new Map<string, StructuredDataFieldSource["attachmentId"]>();
+        if (sourceFileIds.length > 0) {
+          for (const attachment of await getSentAttachments()) {
             sourceAttachmentIds.set(attachment.fileId, attachment.id);
           }
           const invalidSourceFileId = sourceFileIds.find(
@@ -168,6 +176,33 @@ export function createStructuredDataToolDefinitions(input: {
           }
         }
 
+        const warnings = input.publicationReviewer
+          ? [
+              ...new Set(
+                (
+                  await input.publicationReviewer({
+                    clientInstanceId: context.clientInstanceId,
+                    conversationId,
+                    resourceKey: toolInput.resourceKey,
+                    title,
+                    state,
+                    messages: await input.store.listMessages({
+                      clientInstanceId: context.clientInstanceId,
+                      conversationId
+                    }),
+                    attachments: (await getSentAttachments()).map(({ id, fileId, filename }) => ({
+                      id,
+                      fileId,
+                      filename
+                    }))
+                  })
+                )
+                  .map((warning) => warning.trim())
+                  .filter(Boolean)
+              )
+            ]
+          : [];
+
         const resource = await input.store.publishStructuredDataResource({
           clientInstanceId: context.clientInstanceId,
           conversationId,
@@ -193,7 +228,10 @@ export function createStructuredDataToolDefinitions(input: {
             resourceKey: resource.resourceKey,
             revision: resource.revision,
             operation: toolInput.operation,
-            message: `Published structured data resource '${resource.resourceKey}' revision ${resource.revision}.`
+            message:
+              `Published structured data resource '${resource.resourceKey}' revision ${resource.revision}.` +
+              (warnings.length > 0 ? ` Review warnings: ${warnings.join(" | ")}` : ""),
+            ...(warnings.length > 0 ? { warnings } : {})
           },
           {
             display: {

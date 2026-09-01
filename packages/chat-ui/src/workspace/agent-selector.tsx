@@ -120,11 +120,6 @@ export function AgentSelector({
         // the hover area and the list does not close while moving into it.
         <div className="absolute left-0 top-full z-50 pt-2">
           <div className="grid w-[min(19rem,calc(100vw-2rem))] gap-1 rounded-md border bg-popover p-1.5 text-popover-foreground shadow-lg">
-            {!showName && contextLabel ? (
-              <span className="truncate px-2.5 pt-1 text-xs text-muted-foreground">
-                {contextLabel}
-              </span>
-            ) : null}
             <div role="listbox" className="grid gap-1">
               {agents.map((agent) => {
                 const selected = agent.name === selectedAgent?.name;
@@ -151,7 +146,11 @@ export function AgentSelector({
                     />
                     <span className="grid min-w-0 gap-0.5">
                       <span className="truncate font-medium">{agent.displayName}</span>
-                      <span className="truncate text-xs text-muted-foreground">{agent.name}</span>
+                      {agent.description ? (
+                        <span className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                          {agent.description}
+                        </span>
+                      ) : null}
                     </span>
                   </button>
                 );
