@@ -18,8 +18,14 @@ import {
   CollaborationWorkspaceMemberCandidateList,
   CollaborationWorkspaceMembersTab,
   CollaborationWorkspaceRequestsTab,
+  CollaborationWorkspaceSettingsDialog,
   nextCollaborationWorkspaceMemberCandidate
 } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-settings-dialog";
+import { CollaborationWorkspaceEmojiGrid } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-fields";
+import {
+  collaborationWorkspaceEmojiChoices,
+  collaborationWorkspaceEmojiSuggestions
+} from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-emoji";
 import {
   CollaborationWorkspaceDeletionConfirmStep,
   CollaborationWorkspaceDeletionImpactStep
@@ -719,5 +725,248 @@ describe("browse collaboration workspaces dialog", () => {
     );
 
     expect(markup).toContain("Das Verzeichnis der Arbeitsbereiche konnte nicht geladen werden.");
+  });
+});
+
+describe("collaboration workspace emoji picker", () => {
+  function countOccurrences(markup: string, needle: string): number {
+    return markup.split(needle).length - 1;
+  }
+
+  function renderCreateDialog(locale: "de" | "en"): string {
+    return render(
+      locale,
+      createElement(CreateCollaborationWorkspaceDialog, {
+        open: true,
+        pending: false,
+        errorMessage: undefined,
+        initialAccentColor: "violet",
+        onClose: noop,
+        onCreate: noop
+      })
+    );
+  }
+
+  it("keeps the quick picks and hides the curated grid until More is used", () => {
+    const markup = renderCreateDialog("en");
+
+    expect(countOccurrences(markup, 'data-testid="collaboration-workspace-emoji-none"')).toBe(1);
+    for (const emoji of collaborationWorkspaceEmojiSuggestions) {
+      expect(markup).toContain(`>${emoji}</button>`);
+    }
+    expect(markup).toMatch(
+      /aria-expanded="false"[^>]*data-testid="collaboration-workspace-emoji-more"/u
+    );
+    expect(markup).toContain(">More<");
+    // The toggle's aria-controls names the grid, so only the grid itself counts.
+    expect(markup).not.toContain('data-testid="collaboration-workspace-emoji-grid"');
+    expect(markup).not.toContain("collaboration-workspace-emoji-choice");
+  });
+
+  it("labels the toggle in German", () => {
+    const markup = renderCreateDialog("de");
+
+    expect(markup).toContain(">Mehr<");
+    expect(markup).not.toContain(">Weniger<");
+  });
+
+  it("offers the toggle in the settings dialog as well", () => {
+    const markup = render(
+      "de",
+      createElement(CollaborationWorkspaceGeneralTab, {
+        collaborationWorkspace: sharedCollaborationWorkspace,
+        currentUserId: "user_1",
+        members,
+        savePending: false,
+        membershipPending: false,
+        onSave: noop,
+        onLeave: noop,
+        onRequestDelete: noop
+      })
+    );
+
+    expect(markup).toContain('data-testid="collaboration-workspace-emoji-more"');
+    expect(markup).toContain(">Mehr<");
+  });
+
+  it("renders more than a hundred selectable tiles once the grid is open", () => {
+    const markup = render(
+      "de",
+      createElement(CollaborationWorkspaceEmojiGrid, {
+        value: "🧩",
+        onChange: noop
+      })
+    );
+
+    expect(
+      countOccurrences(markup, 'data-testid="collaboration-workspace-emoji-choice"')
+    ).toBeGreaterThan(100);
+    expect(markup).toMatch(
+      /data-testid="collaboration-workspace-emoji-grid"[^>]*class="chat-scrollbar/u
+    );
+    /*
+      A whole number of rows: h-7 tiles on a gap-1 row gap make a 2rem pitch, so
+      six rows plus the p-1 offset end at 12.25rem. Anything else cuts the last
+      row through the middle of its emoji.
+    */
+    expect(markup).toContain("max-h-[12.25rem]");
+    expect(markup).toContain("gap-1");
+    expect(markup).toContain('aria-label="Weitere Emojis"');
+    expect(markup).toMatch(
+      /aria-pressed="true"[^>]*data-testid="collaboration-workspace-emoji-choice"[^>]*>🧩</u
+    );
+  });
+
+  it("curates a duplicate-free list that keeps the quick picks", () => {
+    expect(collaborationWorkspaceEmojiChoices.length).toBeGreaterThan(100);
+    expect(collaborationWorkspaceEmojiChoices.length).toBeLessThanOrEqual(140);
+    expect(new Set(collaborationWorkspaceEmojiChoices).size).toBe(
+      collaborationWorkspaceEmojiChoices.length
+    );
+    for (const emoji of collaborationWorkspaceEmojiSuggestions) {
+      expect(collaborationWorkspaceEmojiChoices).toContain(emoji);
+    }
+  });
+});
+
+describe("collaboration workspace dialog chrome", () => {
+  const scrollBody = 'data-testid="collaboration-workspace-dialog-scroll-body"';
+  const pinnedFooter = '<div class="flex items-center justify-end gap-2 border-t px-5 py-4">';
+
+  function renderSettingsDialog(): string {
+    return render(
+      "de",
+      createElement(CollaborationWorkspaceSettingsDialog, {
+        open: true,
+        collaborationWorkspace: sharedCollaborationWorkspace,
+        currentUserId: "user_1",
+        members,
+        membersLoading: false,
+        membersLoadFailed: false,
+        memberCandidates: [],
+        memberCandidatesLoading: false,
+        accessRequests: [],
+        accessRequestsLoading: false,
+        accessRequestsLoadFailed: false,
+        savePending: false,
+        membershipPending: false,
+        errorMessage: undefined,
+        onClose: noop,
+        onSave: noop,
+        onMemberCandidateSearchChange: noop,
+        onAddMember: noop,
+        onChangeMemberRole: noop,
+        onRemoveMember: noop,
+        onLeave: noop,
+        onRequestDelete: noop,
+        onApproveAccessRequest: noop,
+        onDeclineAccessRequest: noop
+      })
+    );
+  }
+
+  it("keeps the settings tab panel itself unscrolled at a fixed height", () => {
+    const markup = renderSettingsDialog();
+
+    /*
+      The panel is the frame, not the scroller: each tab splits it into a
+      scrolling region and a pinned footer, so the height stays put while the
+      tab changes and no action can scroll out of reach.
+    */
+    expect(markup).toMatch(
+      /role="tabpanel"[^>]*class="h-\[clamp\(20rem,68vh,44rem\)\] overflow-hidden"/u
+    );
+    expect(markup).not.toMatch(/role="tabpanel"[^>]*class="[^"]*overflow-y-auto/u);
+  });
+
+  it("pins the settings save button below the scrolling fields", () => {
+    const markup = renderSettingsDialog();
+
+    const bodyIndex = markup.indexOf(scrollBody);
+    const footerIndex = markup.indexOf(pinnedFooter);
+    const saveIndex = markup.indexOf("Änderungen speichern");
+
+    expect(bodyIndex).toBeGreaterThan(-1);
+    expect(footerIndex).toBeGreaterThan(bodyIndex);
+    // The label only appears after the footer opens, so it cannot be scrolled away.
+    expect(saveIndex).toBeGreaterThan(footerIndex);
+  });
+
+  it("gives every workspace dialog the same scroll body padding and gutter", () => {
+    for (const markup of [
+      renderSettingsDialog(),
+      render(
+        "de",
+        createElement(CreateCollaborationWorkspaceDialog, {
+          open: true,
+          pending: false,
+          errorMessage: undefined,
+          initialAccentColor: "violet",
+          onClose: noop,
+          onCreate: noop
+        })
+      ),
+      render(
+        "de",
+        createElement(BrowseCollaborationWorkspacesDialog, {
+          open: true,
+          collaborationWorkspaces: [
+            {
+              id: "cw_open",
+              name: "Offene Runde",
+              description: null,
+              emoji: null,
+              accentColor: null,
+              accessState: "can_request"
+            }
+          ],
+          loading: false,
+          loadFailed: false,
+          errorMessage: undefined,
+          pendingCollaborationWorkspaceId: undefined,
+          onRequestAccess: noop,
+          onClose: noop
+        })
+      )
+    ]) {
+      // Equal breathing room at both cut edges, and a gutter to the thumb.
+      expect(markup).toMatch(
+        new RegExp(`${scrollBody}[^>]*class="chat-scrollbar overflow-y-auto py-5 pl-5 pr-3`, "u")
+      );
+      expect(markup).toContain(pinnedFooter);
+    }
+  });
+
+  it("reports which edge is hiding content so the fade can be applied", () => {
+    const markup = renderSettingsDialog();
+
+    /*
+      Server-rendered, nothing has scrolled yet, so both edges start false and
+      the mask is omitted entirely; the client sets them on scroll and resize.
+    */
+    expect(markup).toMatch(/data-overflow-above="false"[^>]*data-overflow-below="false"/u);
+    expect(markup).not.toContain("mask-image");
+  });
+
+  it("themes the member candidate dropdown inside its own frame", () => {
+    const markup = render(
+      "de",
+      createElement(CollaborationWorkspaceMemberCandidateList, {
+        candidates: [
+          {
+            userId: "user_9",
+            email: "neu@example.com",
+            displayLabel: "Neue Person",
+            hasPendingAccessRequest: false
+          }
+        ],
+        highlightedIndex: -1,
+        onSelect: noop
+      })
+    );
+
+    expect(markup).toMatch(/role="listbox"[^>]*class="chat-scrollbar[^"]*overflow-y-auto/u);
+    // The rounded frame is a wrapper, so the thumb never runs under its radius.
+    expect(markup).toMatch(/<div class="absolute[^"]*rounded-md border[^"]*"><ul/u);
   });
 });

@@ -4,6 +4,10 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { CollaborationWorkspaceAvatar } from "./collaboration-workspace-avatar";
+import {
+  CollaborationWorkspaceDialogFooter,
+  CollaborationWorkspaceDialogScrollBody
+} from "./collaboration-workspace-dialog-chrome";
 
 export function BrowseCollaborationWorkspacesDialog({
   open,
@@ -27,62 +31,73 @@ export function BrowseCollaborationWorkspacesDialog({
   const { t } = useTranslation();
 
   return (
-    <Dialog open={open} title={t("collaborationWorkspaceBrowseTitle")} onClose={onClose}>
-      <div className="grid gap-4">
-        <p className="text-sm leading-6 text-muted-foreground">
+    <Dialog
+      open={open}
+      title={t("collaborationWorkspaceBrowseTitle")}
+      className="chat-scrollbar"
+      onClose={onClose}
+    >
+      {/*
+        Same chrome as the other workspace dialogs: a pinned intro, the
+        directory scrolling between two rules, and a pinned Close.
+      */}
+      <div className="-m-5 grid">
+        <p className="border-b px-5 py-4 text-sm leading-6 text-muted-foreground">
           {t("collaborationWorkspaceBrowseDescription")}
         </p>
 
-        {loadFailed ? (
-          <p className="text-sm text-destructive">
-            {t("collaborationWorkspaceDirectoryLoadFailed")}
-          </p>
-        ) : loading ? (
-          <p className="text-sm text-muted-foreground">{t("collaborationWorkspaceLoading")}</p>
-        ) : collaborationWorkspaces.length === 0 ? (
-          <p className="rounded-md border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">
-            {t("collaborationWorkspaceDirectoryEmpty")}
-          </p>
-        ) : (
-          <ul className="grid gap-2">
-            {collaborationWorkspaces.map((collaborationWorkspace) => (
-              <li
-                key={collaborationWorkspace.id}
-                data-testid="collaboration-workspace-directory-row"
-                className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-md border p-3"
-              >
-                <CollaborationWorkspaceAvatar
-                  name={collaborationWorkspace.name}
-                  emoji={collaborationWorkspace.emoji}
-                  accentColor={collaborationWorkspace.accentColor}
-                  size="lg"
-                />
-                <div className="grid min-w-0 gap-1">
-                  <span className="truncate text-sm font-medium">
-                    {collaborationWorkspace.name}
-                  </span>
-                  <span className="line-clamp-2 text-xs leading-5 text-muted-foreground">
-                    {collaborationWorkspace.description?.trim() ||
-                      t("collaborationWorkspaceNoDescription")}
-                  </span>
-                </div>
-                <DirectoryAction
-                  accessState={collaborationWorkspace.accessState}
-                  pending={pendingCollaborationWorkspaceId === collaborationWorkspace.id}
-                  onRequestAccess={() => onRequestAccess(collaborationWorkspace.id)}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
+        <CollaborationWorkspaceDialogScrollBody className="max-h-[clamp(20rem,68vh,44rem)]">
+          {loadFailed ? (
+            <p className="text-sm text-destructive">
+              {t("collaborationWorkspaceDirectoryLoadFailed")}
+            </p>
+          ) : loading ? (
+            <p className="text-sm text-muted-foreground">{t("collaborationWorkspaceLoading")}</p>
+          ) : collaborationWorkspaces.length === 0 ? (
+            <p className="rounded-md border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">
+              {t("collaborationWorkspaceDirectoryEmpty")}
+            </p>
+          ) : (
+            <ul className="grid gap-2">
+              {collaborationWorkspaces.map((collaborationWorkspace) => (
+                <li
+                  key={collaborationWorkspace.id}
+                  data-testid="collaboration-workspace-directory-row"
+                  className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-md border p-3"
+                >
+                  <CollaborationWorkspaceAvatar
+                    name={collaborationWorkspace.name}
+                    emoji={collaborationWorkspace.emoji}
+                    accentColor={collaborationWorkspace.accentColor}
+                    size="lg"
+                  />
+                  <div className="grid min-w-0 gap-1">
+                    <span className="truncate text-sm font-medium">
+                      {collaborationWorkspace.name}
+                    </span>
+                    <span className="line-clamp-2 text-xs leading-5 text-muted-foreground">
+                      {collaborationWorkspace.description?.trim() ||
+                        t("collaborationWorkspaceNoDescription")}
+                    </span>
+                  </div>
+                  <DirectoryAction
+                    accessState={collaborationWorkspace.accessState}
+                    pending={pendingCollaborationWorkspaceId === collaborationWorkspace.id}
+                    onRequestAccess={() => onRequestAccess(collaborationWorkspace.id)}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
 
-        {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
+          {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
+        </CollaborationWorkspaceDialogScrollBody>
 
-        <div className="flex justify-end">
+        <CollaborationWorkspaceDialogFooter>
           <Button type="button" variant="outline" onClick={onClose}>
             {t("close")}
           </Button>
-        </div>
+        </CollaborationWorkspaceDialogFooter>
       </div>
     </Dialog>
   );

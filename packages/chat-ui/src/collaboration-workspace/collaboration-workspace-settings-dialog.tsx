@@ -15,6 +15,7 @@ import { Dialog } from "../ui/dialog";
 import { Input, Textarea } from "../ui/input";
 import { Select } from "../ui/select";
 import { Spinner } from "../ui/spinner";
+import { useScrollEdgeFade } from "../ui/scroll-edge-fade";
 import {
   resolveCollaborationWorkspaceAccentColor,
   type CollaborationWorkspaceAccentColor
@@ -23,6 +24,10 @@ import {
   CollaborationWorkspaceAvatar,
   collaborationWorkspaceInitials
 } from "./collaboration-workspace-avatar";
+import {
+  CollaborationWorkspaceDialogFooter,
+  CollaborationWorkspaceDialogScrollBody
+} from "./collaboration-workspace-dialog-chrome";
 import {
   CollaborationWorkspaceAccentField,
   CollaborationWorkspaceEmojiField,
@@ -135,86 +140,105 @@ export function CollaborationWorkspaceSettingsDialog({
     <Dialog
       open={open}
       title={t("collaborationWorkspaceSettingsTitle")}
-      className="w-[min(44rem,calc(100vw-2rem))]"
+      className="chat-scrollbar w-[min(44rem,calc(100vw-2rem))]"
       onClose={onClose}
     >
-      <div className="grid gap-5">
-        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
-          <CollaborationWorkspaceAvatar
-            name={collaborationWorkspace.name}
-            emoji={collaborationWorkspace.emoji}
-            accentColor={collaborationWorkspace.accentColor}
-            size="lg"
-          />
-          <div className="grid min-w-0 gap-1">
-            <strong className="truncate text-sm font-semibold">
-              {collaborationWorkspace.name}
-            </strong>
-            <span className="text-xs text-muted-foreground">
-              {t(roleLabelKeys[collaborationWorkspace.role])}
-            </span>
+      {/*
+        Full-bleed: the dialog body's own p-5 is cancelled so the tab bar rule,
+        the scrolling panel and the pinned footer can each reach the dialog edge
+        and own their padding. Everything above the tabpanel stays put; only the
+        active tab's content scrolls.
+      */}
+      <div className="-m-5 grid">
+        <div className="grid gap-5 px-5 pt-5">
+          <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+            <CollaborationWorkspaceAvatar
+              name={collaborationWorkspace.name}
+              emoji={collaborationWorkspace.emoji}
+              accentColor={collaborationWorkspace.accentColor}
+              size="lg"
+            />
+            <div className="grid min-w-0 gap-1">
+              <strong className="truncate text-sm font-semibold">
+                {collaborationWorkspace.name}
+              </strong>
+              <span className="text-xs text-muted-foreground">
+                {t(roleLabelKeys[collaborationWorkspace.role])}
+              </span>
+            </div>
+          </div>
+
+          {/*
+            The rule under the tabs is the top edge of the scrolling panel, so
+            content scrolling away passes under a real boundary instead of being
+            cut off in open space.
+          */}
+          <div
+            role="tablist"
+            aria-label={t("collaborationWorkspaceSettingsTitle")}
+            className="flex gap-1 border-b"
+            onKeyDown={(event) => {
+              if (event.key === "ArrowRight") {
+                event.preventDefault();
+                selectTabByOffset(1);
+              }
+              if (event.key === "ArrowLeft") {
+                event.preventDefault();
+                selectTabByOffset(-1);
+              }
+            }}
+          >
+            {settingsTabs.map((candidate) => (
+              <button
+                key={candidate.id}
+                ref={(element) => {
+                  if (element) {
+                    tabRefs.current[candidate.id] = element;
+                  }
+                }}
+                type="button"
+                role="tab"
+                id={`collaboration-workspace-tab-${candidate.id}`}
+                aria-controls={`collaboration-workspace-panel-${candidate.id}`}
+                aria-selected={tab === candidate.id}
+                tabIndex={tab === candidate.id ? 0 : -1}
+                className={cn(
+                  "-mb-px border-b-2 px-3 py-2 text-sm font-medium outline-none transition-colors",
+                  "focus-visible:ring-[3px] focus-visible:ring-ring/40",
+                  tab === candidate.id
+                    ? "border-primary text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                )}
+                onClick={() => setTab(candidate.id)}
+              >
+                {candidate.id === "requests"
+                  ? t(candidate.label, { count: accessRequests.length })
+                  : t(candidate.label)}
+              </button>
+            ))}
           </div>
         </div>
 
-        <div
-          role="tablist"
-          aria-label={t("collaborationWorkspaceSettingsTitle")}
-          className="flex gap-1 border-b"
-          onKeyDown={(event) => {
-            if (event.key === "ArrowRight") {
-              event.preventDefault();
-              selectTabByOffset(1);
-            }
-            if (event.key === "ArrowLeft") {
-              event.preventDefault();
-              selectTabByOffset(-1);
-            }
-          }}
-        >
-          {settingsTabs.map((candidate) => (
-            <button
-              key={candidate.id}
-              ref={(element) => {
-                if (element) {
-                  tabRefs.current[candidate.id] = element;
-                }
-              }}
-              type="button"
-              role="tab"
-              id={`collaboration-workspace-tab-${candidate.id}`}
-              aria-controls={`collaboration-workspace-panel-${candidate.id}`}
-              aria-selected={tab === candidate.id}
-              tabIndex={tab === candidate.id ? 0 : -1}
-              className={cn(
-                "-mb-px border-b-2 px-3 py-2 text-sm font-medium outline-none transition-colors",
-                "focus-visible:ring-[3px] focus-visible:ring-ring/40",
-                tab === candidate.id
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              )}
-              onClick={() => setTab(candidate.id)}
-            >
-              {candidate.id === "requests"
-                ? t(candidate.label, { count: accessRequests.length })
-                : t(candidate.label)}
-            </button>
-          ))}
-        </div>
-
-        {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
+        {errorMessage ? (
+          <p className="border-b px-5 py-3 text-sm text-destructive">{errorMessage}</p>
+        ) : null}
 
         {/*
           One height for every tab so the dialog frame never jumps while
-          switching. The clamp keeps it inside short viewports; anything taller
-          (the General form) scrolls inside the panel. The negative margin plus
-          matching padding keeps alignment while leaving room for focus rings,
-          which the scroll container would otherwise clip.
+          switching. The clamp keeps it inside short viewports: with the body
+          padding now owned by the panel, the surrounding chrome (dialog header,
+          identity row, tabs) runs to roughly 11rem, so 68vh still leaves
+          headroom under the native dialog max-height on a 13" laptop.
+
+          The panel itself does not scroll. Each tab splits this fixed height
+          into its own scrolling region and, where it has one, a pinned action
+          footer, so a save button is never scrolled out of reach.
         */}
         <div
           role="tabpanel"
           id={`collaboration-workspace-panel-${tab}`}
           aria-labelledby={`collaboration-workspace-tab-${tab}`}
-          className="-mx-1 h-[clamp(18rem,55vh,30rem)] overflow-y-auto px-1"
+          className="h-[clamp(20rem,68vh,44rem)] overflow-hidden"
         >
           {tab === "general" ? (
             <CollaborationWorkspaceGeneralTab
@@ -307,8 +331,13 @@ export function CollaborationWorkspaceGeneralTab({
 
   return (
     <>
+      {/*
+        The tab owns the split of the panel's fixed height: the fields scroll,
+        the save action does not. Leaving and deleting stay inside the scrolling
+        region, below the form, because they are secondary to saving.
+      */}
       <form
-        className="grid gap-5"
+        className="grid h-full grid-rows-[minmax(0,1fr)_auto]"
         onSubmit={(event) => {
           event.preventDefault();
           if (!trimmedName || savePending) {
@@ -323,93 +352,95 @@ export function CollaborationWorkspaceGeneralTab({
           });
         }}
       >
-        <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="collaboration-workspace-settings-name">
-            {t("collaborationWorkspaceNameLabel")}
-          </label>
-          <Input
-            id="collaboration-workspace-settings-name"
-            value={name}
-            maxLength={120}
+        <CollaborationWorkspaceDialogScrollBody>
+          <div className="grid gap-2">
+            <label className="text-sm font-medium" htmlFor="collaboration-workspace-settings-name">
+              {t("collaborationWorkspaceNameLabel")}
+            </label>
+            <Input
+              id="collaboration-workspace-settings-name"
+              value={name}
+              maxLength={120}
+              disabled={savePending}
+              aria-invalid={trimmedName ? undefined : true}
+              onChange={(event) => setName(event.currentTarget.value)}
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <label
+              className="text-sm font-medium"
+              htmlFor="collaboration-workspace-settings-description"
+            >
+              {t("collaborationWorkspaceDescriptionLabel")}
+            </label>
+            <Textarea
+              id="collaboration-workspace-settings-description"
+              value={description}
+              maxLength={500}
+              disabled={savePending}
+              onChange={(event) => setDescription(event.currentTarget.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t("collaborationWorkspaceDescriptionHint")}
+            </p>
+          </div>
+
+          <CollaborationWorkspaceVisibilityField
+            value={visibility}
             disabled={savePending}
-            aria-invalid={trimmedName ? undefined : true}
-            onChange={(event) => setName(event.currentTarget.value)}
+            onChange={setVisibility}
           />
-        </div>
-
-        <div className="grid gap-2">
-          <label
-            className="text-sm font-medium"
-            htmlFor="collaboration-workspace-settings-description"
-          >
-            {t("collaborationWorkspaceDescriptionLabel")}
-          </label>
-          <Textarea
-            id="collaboration-workspace-settings-description"
-            value={description}
-            maxLength={500}
+          <CollaborationWorkspaceEmojiField
+            value={emoji}
             disabled={savePending}
-            onChange={(event) => setDescription(event.currentTarget.value)}
+            onChange={setEmoji}
           />
-          <p className="text-xs text-muted-foreground">
-            {t("collaborationWorkspaceDescriptionHint")}
-          </p>
-        </div>
+          <CollaborationWorkspaceAccentField
+            value={accentColor}
+            disabled={savePending}
+            onChange={setAccentColor}
+          />
 
-        <CollaborationWorkspaceVisibilityField
-          value={visibility}
-          disabled={savePending}
-          onChange={setVisibility}
-        />
-        <CollaborationWorkspaceEmojiField
-          value={emoji}
-          disabled={savePending}
-          onChange={setEmoji}
-        />
-        <CollaborationWorkspaceAccentField
-          value={accentColor}
-          disabled={savePending}
-          onChange={setAccentColor}
-        />
+          <div className="grid gap-2 border-t pt-5">
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-9 w-fit justify-start text-destructive hover:bg-destructive/10"
+              disabled={!canLeave || membershipPending}
+              title={canLeave ? undefined : t("collaborationWorkspaceErrorLastOwner")}
+              onClick={() => setConfirmLeaveOpen(true)}
+            >
+              <LogOut size={16} aria-hidden="true" />
+              <span>{t("collaborationWorkspaceLeave")}</span>
+            </Button>
+            {canLeave ? null : (
+              <p className="text-xs text-muted-foreground">
+                {t("collaborationWorkspaceErrorLastOwner")}
+              </p>
+            )}
+            {canDelete ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-9 w-fit justify-start text-destructive hover:bg-destructive/10"
+                data-testid="collaboration-workspace-delete-trigger"
+                disabled={membershipPending}
+                onClick={onRequestDelete}
+              >
+                <Trash2 size={16} aria-hidden="true" />
+                <span>{t("collaborationWorkspaceDelete")}</span>
+              </Button>
+            ) : null}
+          </div>
+        </CollaborationWorkspaceDialogScrollBody>
 
-        <div className="flex justify-end">
+        <CollaborationWorkspaceDialogFooter>
           <Button type="submit" disabled={savePending || !trimmedName}>
             {savePending ? t("saving") : t("configSaveChanges")}
           </Button>
-        </div>
+        </CollaborationWorkspaceDialogFooter>
       </form>
-
-      <div className="mt-6 grid gap-2 border-t pt-5">
-        <Button
-          type="button"
-          variant="ghost"
-          className="h-9 w-fit justify-start text-destructive hover:bg-destructive/10"
-          disabled={!canLeave || membershipPending}
-          title={canLeave ? undefined : t("collaborationWorkspaceErrorLastOwner")}
-          onClick={() => setConfirmLeaveOpen(true)}
-        >
-          <LogOut size={16} aria-hidden="true" />
-          <span>{t("collaborationWorkspaceLeave")}</span>
-        </Button>
-        {canLeave ? null : (
-          <p className="text-xs text-muted-foreground">
-            {t("collaborationWorkspaceErrorLastOwner")}
-          </p>
-        )}
-        {canDelete ? (
-          <Button
-            type="button"
-            variant="ghost"
-            className="h-9 w-fit justify-start text-destructive hover:bg-destructive/10"
-            data-testid="collaboration-workspace-delete-trigger"
-            disabled={membershipPending}
-            onClick={onRequestDelete}
-          >
-            <Trash2 size={16} aria-hidden="true" />
-            <span>{t("collaborationWorkspaceDelete")}</span>
-          </Button>
-        ) : null}
-      </div>
 
       <Dialog
         open={confirmLeaveOpen}
@@ -555,162 +586,166 @@ export function CollaborationWorkspaceMembersTab({
   }
 
   return (
-    <div className="grid gap-5">
-      <form
-        className="grid gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const trimmedEmail = email.trim();
-          if (!trimmedEmail || pending) {
-            return;
-          }
-          onAddMember(trimmedEmail);
-          setEmail("");
-          closeMemberCandidates();
-          onMemberCandidateSearchChange("");
-        }}
-      >
-        <label className="text-sm font-medium" htmlFor="collaboration-workspace-member-email">
-          {t("collaborationWorkspaceAddMemberLabel")}
-        </label>
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-          <div ref={comboboxRef} className="relative min-w-0">
-            <Input
-              ref={emailInputRef}
-              id="collaboration-workspace-member-email"
-              type="email"
-              /*
-               * A workspace admin adds other people here, so the browser's own
-               * address autofill would only offer the operator's private
-               * addresses. The neutral name keeps heuristic autofill off too.
-               */
-              name="collaboration-workspace-member-email"
-              autoComplete="off"
-              className="pr-9"
-              role="combobox"
-              aria-expanded={memberCandidateListOpen}
-              aria-controls={collaborationWorkspaceMemberCandidateListId}
-              aria-autocomplete="list"
-              aria-activedescendant={
-                highlightedCandidate
-                  ? collaborationWorkspaceMemberCandidateOptionId(highlightedMemberCandidate)
-                  : undefined
-              }
-              value={email}
-              disabled={pending}
-              placeholder={t("collaborationWorkspaceAddMemberPlaceholder")}
-              onChange={(event) => {
-                const nextEmail = event.currentTarget.value;
-                setEmail(nextEmail);
-                setMemberCandidatesOpen(true);
-                setHighlightedMemberCandidate(-1);
-                onMemberCandidateSearchChange(nextEmail.trim());
-              }}
-              onFocus={() => {
-                setMemberCandidatesOpen(true);
-                onMemberCandidateSearchChange(email.trim());
-              }}
-              onBlur={() => {
-                // The suggestions only load while the field has focus.
-                closeMemberCandidates();
-                onMemberCandidateSearchChange("");
-              }}
-              onKeyDown={onEmailKeyDown}
-            />
-            {memberCandidatesLoading ? (
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                <Spinner size="sm" />
-                <span className="sr-only">
-                  {t("collaborationWorkspaceMemberCandidatesLoading")}
-                </span>
-              </span>
-            ) : null}
-            {memberCandidateListOpen ? (
-              <CollaborationWorkspaceMemberCandidateList
-                candidates={memberCandidates}
-                highlightedIndex={highlightedMemberCandidate}
-                onSelect={selectMemberCandidate}
+    <>
+      <CollaborationWorkspaceDialogScrollBody className="h-full">
+        <form
+          className="grid gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const trimmedEmail = email.trim();
+            if (!trimmedEmail || pending) {
+              return;
+            }
+            onAddMember(trimmedEmail);
+            setEmail("");
+            closeMemberCandidates();
+            onMemberCandidateSearchChange("");
+          }}
+        >
+          <label className="text-sm font-medium" htmlFor="collaboration-workspace-member-email">
+            {t("collaborationWorkspaceAddMemberLabel")}
+          </label>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+            <div ref={comboboxRef} className="relative min-w-0">
+              <Input
+                ref={emailInputRef}
+                id="collaboration-workspace-member-email"
+                type="email"
+                /*
+                 * A workspace admin adds other people here, so the browser's own
+                 * address autofill would only offer the operator's private
+                 * addresses. The neutral name keeps heuristic autofill off too.
+                 */
+                name="collaboration-workspace-member-email"
+                autoComplete="off"
+                className="pr-9"
+                role="combobox"
+                aria-expanded={memberCandidateListOpen}
+                aria-controls={collaborationWorkspaceMemberCandidateListId}
+                aria-autocomplete="list"
+                aria-activedescendant={
+                  highlightedCandidate
+                    ? collaborationWorkspaceMemberCandidateOptionId(highlightedMemberCandidate)
+                    : undefined
+                }
+                value={email}
+                disabled={pending}
+                placeholder={t("collaborationWorkspaceAddMemberPlaceholder")}
+                onChange={(event) => {
+                  const nextEmail = event.currentTarget.value;
+                  setEmail(nextEmail);
+                  setMemberCandidatesOpen(true);
+                  setHighlightedMemberCandidate(-1);
+                  onMemberCandidateSearchChange(nextEmail.trim());
+                }}
+                onFocus={() => {
+                  setMemberCandidatesOpen(true);
+                  onMemberCandidateSearchChange(email.trim());
+                }}
+                onBlur={() => {
+                  // The suggestions only load while the field has focus.
+                  closeMemberCandidates();
+                  onMemberCandidateSearchChange("");
+                }}
+                onKeyDown={onEmailKeyDown}
               />
-            ) : null}
-          </div>
-          <Button type="submit" variant="outline" disabled={pending}>
-            <UserPlus size={16} aria-hidden="true" />
-            {t("collaborationWorkspaceAddMemberSubmit")}
-          </Button>
-        </div>
-      </form>
-
-      {loadFailed ? (
-        <p className="text-sm text-destructive">{t("collaborationWorkspaceMembersLoadFailed")}</p>
-      ) : loading ? (
-        <p className="text-sm text-muted-foreground">{t("collaborationWorkspaceMembersLoading")}</p>
-      ) : (
-        <ul className="grid gap-2">
-          {members.map((member) => {
-            const isSelf = member.userId === currentUserId;
-            return (
-              <li
-                key={member.userId}
-                data-testid="collaboration-workspace-member-row"
-                className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-3 rounded-md border p-3"
-              >
-                <span
-                  className="grid size-8 shrink-0 place-items-center rounded-md bg-secondary text-xs font-semibold text-secondary-foreground"
-                  aria-hidden="true"
-                >
-                  {collaborationWorkspaceInitials(member.displayLabel)}
-                </span>
-                <span className="grid min-w-0 gap-0.5">
-                  <span className="truncate text-sm font-medium">{member.displayLabel}</span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    {member.email ?? ""}
+              {memberCandidatesLoading ? (
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                  <Spinner size="sm" />
+                  <span className="sr-only">
+                    {t("collaborationWorkspaceMemberCandidatesLoading")}
                   </span>
                 </span>
-                {canChangeCollaborationWorkspaceRole(actorRole) ? (
-                  <Select
-                    className="h-9 w-36"
-                    value={member.role}
-                    disabled={pending}
-                    aria-label={t("collaborationWorkspaceRoleLabel", {
-                      name: member.displayLabel
-                    })}
-                    onChange={(event) =>
-                      onChangeMemberRole(
-                        member.userId,
-                        event.currentTarget.value as WorkspaceMembershipRole
-                      )
-                    }
+              ) : null}
+              {memberCandidateListOpen ? (
+                <CollaborationWorkspaceMemberCandidateList
+                  candidates={memberCandidates}
+                  highlightedIndex={highlightedMemberCandidate}
+                  onSelect={selectMemberCandidate}
+                />
+              ) : null}
+            </div>
+            <Button type="submit" variant="outline" disabled={pending}>
+              <UserPlus size={16} aria-hidden="true" />
+              {t("collaborationWorkspaceAddMemberSubmit")}
+            </Button>
+          </div>
+        </form>
+
+        {loadFailed ? (
+          <p className="text-sm text-destructive">{t("collaborationWorkspaceMembersLoadFailed")}</p>
+        ) : loading ? (
+          <p className="text-sm text-muted-foreground">
+            {t("collaborationWorkspaceMembersLoading")}
+          </p>
+        ) : (
+          <ul className="grid gap-2">
+            {members.map((member) => {
+              const isSelf = member.userId === currentUserId;
+              return (
+                <li
+                  key={member.userId}
+                  data-testid="collaboration-workspace-member-row"
+                  className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-3 rounded-md border p-3"
+                >
+                  <span
+                    className="grid size-8 shrink-0 place-items-center rounded-md bg-secondary text-xs font-semibold text-secondary-foreground"
+                    aria-hidden="true"
                   >
-                    <option value="owner">{t("collaborationWorkspaceRoleOwner")}</option>
-                    <option value="admin">{t("collaborationWorkspaceRoleAdmin")}</option>
-                    <option value="member">{t("collaborationWorkspaceRoleMember")}</option>
-                  </Select>
-                ) : (
-                  <Badge variant="secondary">{t(roleLabelKeys[member.role])}</Badge>
-                )}
-                {!isSelf && canRemoveCollaborationWorkspaceMember(actorRole, member.role) ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-8 text-muted-foreground hover:text-destructive"
-                    disabled={pending}
-                    aria-label={t("collaborationWorkspaceRemoveMember", {
-                      name: member.displayLabel
-                    })}
-                    title={t("collaborationWorkspaceRemoveMember", { name: member.displayLabel })}
-                    onClick={() => setMemberPendingRemoval(member)}
-                  >
-                    <Trash2 size={15} aria-hidden="true" />
-                  </Button>
-                ) : (
-                  <span aria-hidden="true" className="size-8" />
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                    {collaborationWorkspaceInitials(member.displayLabel)}
+                  </span>
+                  <span className="grid min-w-0 gap-0.5">
+                    <span className="truncate text-sm font-medium">{member.displayLabel}</span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {member.email ?? ""}
+                    </span>
+                  </span>
+                  {canChangeCollaborationWorkspaceRole(actorRole) ? (
+                    <Select
+                      className="h-9 w-36"
+                      value={member.role}
+                      disabled={pending}
+                      aria-label={t("collaborationWorkspaceRoleLabel", {
+                        name: member.displayLabel
+                      })}
+                      onChange={(event) =>
+                        onChangeMemberRole(
+                          member.userId,
+                          event.currentTarget.value as WorkspaceMembershipRole
+                        )
+                      }
+                    >
+                      <option value="owner">{t("collaborationWorkspaceRoleOwner")}</option>
+                      <option value="admin">{t("collaborationWorkspaceRoleAdmin")}</option>
+                      <option value="member">{t("collaborationWorkspaceRoleMember")}</option>
+                    </Select>
+                  ) : (
+                    <Badge variant="secondary">{t(roleLabelKeys[member.role])}</Badge>
+                  )}
+                  {!isSelf && canRemoveCollaborationWorkspaceMember(actorRole, member.role) ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 text-muted-foreground hover:text-destructive"
+                      disabled={pending}
+                      aria-label={t("collaborationWorkspaceRemoveMember", {
+                        name: member.displayLabel
+                      })}
+                      title={t("collaborationWorkspaceRemoveMember", { name: member.displayLabel })}
+                      onClick={() => setMemberPendingRemoval(member)}
+                    >
+                      <Trash2 size={15} aria-hidden="true" />
+                    </Button>
+                  ) : (
+                    <span aria-hidden="true" className="size-8" />
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </CollaborationWorkspaceDialogScrollBody>
 
       <Dialog
         open={Boolean(memberPendingRemoval)}
@@ -749,7 +784,7 @@ export function CollaborationWorkspaceMembersTab({
           </div>
         </div>
       </Dialog>
-    </div>
+    </>
   );
 }
 
@@ -768,41 +803,52 @@ export function CollaborationWorkspaceMemberCandidateList({
   onSelect(candidate: WorkspaceMemberCandidate): void;
 }) {
   const { t } = useTranslation();
+  const fade = useScrollEdgeFade<HTMLUListElement>([candidates.length]);
 
   return (
-    <ul
-      role="listbox"
-      id={collaborationWorkspaceMemberCandidateListId}
-      aria-label={t("collaborationWorkspaceMemberCandidatesLabel")}
-      className="absolute left-0 right-0 top-[calc(100%+0.25rem)] z-50 grid max-h-56 gap-0.5 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-lg"
-    >
-      {candidates.map((candidate, index) => (
-        <li
-          key={candidate.email}
-          role="option"
-          id={collaborationWorkspaceMemberCandidateOptionId(index)}
-          aria-selected={index === highlightedIndex}
-          data-testid="collaboration-workspace-member-candidate"
-          className={cn(
-            "grid min-w-0 cursor-pointer gap-0.5 rounded-md px-2 py-1.5",
-            index === highlightedIndex ? "bg-accent text-accent-foreground" : "hover:bg-accent/60"
-          )}
-          // Keeps the click from pulling focus out of the input.
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => onSelect(candidate)}
-        >
-          <span className="truncate text-sm font-medium">{candidate.displayLabel}</span>
-          <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-            <span className="truncate">{candidate.email}</span>
-            {candidate.hasPendingAccessRequest ? (
-              <span className="shrink-0 rounded-sm bg-secondary px-1.5 py-0.5 text-[0.6875rem] text-secondary-foreground">
-                {t("collaborationWorkspaceMemberCandidatePendingRequest")}
-              </span>
-            ) : null}
-          </span>
-        </li>
-      ))}
-    </ul>
+    /*
+      As in the emoji grid: the frame owns the rounded border and the list
+      scrolls inside its padding, so the thumb stays clear of the corner radius,
+      and the edge fade says whether more suggestions are hidden.
+    */
+    <div className="absolute left-0 right-0 top-[calc(100%+0.25rem)] z-50 rounded-md border bg-popover p-1 text-popover-foreground shadow-lg">
+      <ul
+        ref={fade.ref}
+        style={fade.style}
+        role="listbox"
+        id={collaborationWorkspaceMemberCandidateListId}
+        aria-label={t("collaborationWorkspaceMemberCandidatesLabel")}
+        className="chat-scrollbar grid max-h-56 auto-rows-max gap-0.5 overflow-y-auto"
+        onScroll={fade.onScroll}
+      >
+        {candidates.map((candidate, index) => (
+          <li
+            key={candidate.email}
+            role="option"
+            id={collaborationWorkspaceMemberCandidateOptionId(index)}
+            aria-selected={index === highlightedIndex}
+            data-testid="collaboration-workspace-member-candidate"
+            className={cn(
+              "grid min-w-0 cursor-pointer gap-0.5 rounded-md px-2 py-1.5",
+              index === highlightedIndex ? "bg-accent text-accent-foreground" : "hover:bg-accent/60"
+            )}
+            // Keeps the click from pulling focus out of the input.
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => onSelect(candidate)}
+          >
+            <span className="truncate text-sm font-medium">{candidate.displayLabel}</span>
+            <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="truncate">{candidate.email}</span>
+              {candidate.hasPendingAccessRequest ? (
+                <span className="shrink-0 rounded-sm bg-secondary px-1.5 py-0.5 text-[0.6875rem] text-secondary-foreground">
+                  {t("collaborationWorkspaceMemberCandidatePendingRequest")}
+                </span>
+              ) : null}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -836,63 +882,77 @@ export function CollaborationWorkspaceRequestsTab({
 }) {
   const { locale, t } = useTranslation();
 
+  /*
+    Every state goes through the same scrolling region so the tab keeps one
+    padding rhythm, whether it shows a list, a message or an empty state.
+  */
   if (loadFailed) {
     return (
-      <p className="text-sm text-destructive">{t("collaborationWorkspaceRequestsLoadFailed")}</p>
+      <CollaborationWorkspaceDialogScrollBody className="h-full">
+        <p className="text-sm text-destructive">{t("collaborationWorkspaceRequestsLoadFailed")}</p>
+      </CollaborationWorkspaceDialogScrollBody>
     );
   }
   if (loading) {
     return (
-      <p className="text-sm text-muted-foreground">{t("collaborationWorkspaceRequestsLoading")}</p>
+      <CollaborationWorkspaceDialogScrollBody className="h-full">
+        <p className="text-sm text-muted-foreground">
+          {t("collaborationWorkspaceRequestsLoading")}
+        </p>
+      </CollaborationWorkspaceDialogScrollBody>
     );
   }
   if (accessRequests.length === 0) {
     return (
-      <p className="rounded-md border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">
-        {t("collaborationWorkspaceRequestsEmpty")}
-      </p>
+      <CollaborationWorkspaceDialogScrollBody className="h-full">
+        <p className="rounded-md border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">
+          {t("collaborationWorkspaceRequestsEmpty")}
+        </p>
+      </CollaborationWorkspaceDialogScrollBody>
     );
   }
 
   return (
-    <ul className="grid gap-2">
-      {accessRequests.map((accessRequest) => (
-        <li
-          key={accessRequest.userId}
-          data-testid="collaboration-workspace-request-row"
-          className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border p-3"
-        >
-          <span className="grid min-w-0 gap-0.5">
-            <span className="truncate text-sm font-medium">{accessRequest.displayLabel}</span>
-            <span className="truncate text-xs text-muted-foreground">
-              {accessRequest.email ?? ""}
-            </span>
-            <span className="truncate text-xs text-muted-foreground">
-              {t("collaborationWorkspaceRequestedOn", {
-                date: formatRequestDate(accessRequest.createdAt, locale)
-              })}
-            </span>
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={pending}
-            onClick={() => onDecline(accessRequest.userId)}
+    <CollaborationWorkspaceDialogScrollBody className="h-full">
+      <ul className="grid gap-2">
+        {accessRequests.map((accessRequest) => (
+          <li
+            key={accessRequest.userId}
+            data-testid="collaboration-workspace-request-row"
+            className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border p-3"
           >
-            {t("collaborationWorkspaceDecline")}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            disabled={pending}
-            onClick={() => onApprove(accessRequest.userId)}
-          >
-            {t("collaborationWorkspaceApprove")}
-          </Button>
-        </li>
-      ))}
-    </ul>
+            <span className="grid min-w-0 gap-0.5">
+              <span className="truncate text-sm font-medium">{accessRequest.displayLabel}</span>
+              <span className="truncate text-xs text-muted-foreground">
+                {accessRequest.email ?? ""}
+              </span>
+              <span className="truncate text-xs text-muted-foreground">
+                {t("collaborationWorkspaceRequestedOn", {
+                  date: formatRequestDate(accessRequest.createdAt, locale)
+                })}
+              </span>
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={pending}
+              onClick={() => onDecline(accessRequest.userId)}
+            >
+              {t("collaborationWorkspaceDecline")}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={pending}
+              onClick={() => onApprove(accessRequest.userId)}
+            >
+              {t("collaborationWorkspaceApprove")}
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </CollaborationWorkspaceDialogScrollBody>
   );
 }
 

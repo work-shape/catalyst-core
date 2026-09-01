@@ -167,6 +167,18 @@ describe("collaboration workspace selector", () => {
     expect(markup).toContain("Arbeitsbereiche konnten nicht geladen werden.");
   });
 
+  it("scrolls a long workspace list with the themed scrollbar, footer pinned below", () => {
+    const markup = renderMenu([
+      personal,
+      collaborationWorkspace({ id: "cw_a", name: "Alpha" }),
+      collaborationWorkspace({ id: "cw_b", name: "Beta" })
+    ]);
+
+    expect(markup).toMatch(/<div class="chat-scrollbar[^"]*overflow-y-auto[^"]*"/u);
+    // The create/browse row stays outside the scroll container.
+    expect(markup).toMatch(/<\/div><div class="mt-2 grid grid-cols-2 gap-1 border-t pt-2"/u);
+  });
+
   it("keeps the trigger closed until it is used", () => {
     const markup = renderToStaticMarkup(
       createElement(

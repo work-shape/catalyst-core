@@ -1,25 +1,20 @@
-import { Ban, Check } from "lucide-react";
+import { Ban, Check, ChevronDown, ChevronUp } from "lucide-react";
+import { useState } from "react";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { Input } from "../ui/input";
 import { cn } from "../ui/cn";
+import { useScrollEdgeFade } from "../ui/scroll-edge-fade";
 import {
   collaborationWorkspaceAccentAttributes,
   collaborationWorkspaceAccentColors,
   type CollaborationWorkspaceAccentColor
 } from "./collaboration-workspace-accent";
+import {
+  collaborationWorkspaceEmojiChoices,
+  collaborationWorkspaceEmojiSuggestions
+} from "./collaboration-workspace-emoji";
 
 export type CollaborationWorkspaceVisibility = "discoverable" | "private";
-
-export const collaborationWorkspaceEmojiSuggestions = [
-  "🚀",
-  "📈",
-  "🧭",
-  "🧪",
-  "🏗️",
-  "💡",
-  "📚",
-  "🤝"
-] as const;
 
 const accentLabelKeys: Record<CollaborationWorkspaceAccentColor, TranslationKey> = {
   ruby: "collaborationWorkspaceAccentRuby",
@@ -100,7 +95,13 @@ export function CollaborationWorkspaceEmojiField({
   onChange(value: string): void;
 }) {
   const { t } = useTranslation();
+  /*
+   * Collapsed on every dialog opening: both dialogs mount their surface fresh,
+   * so the initial state is all the reset this needs.
+   */
+  const [moreOpen, setMoreOpen] = useState(false);
   const emojiInputId = "collaboration-workspace-emoji";
+  const emojiGridId = "collaboration-workspace-emoji-grid";
 
   return (
     <div className="grid gap-2">
@@ -117,7 +118,7 @@ export function CollaborationWorkspaceEmojiField({
           onChange={(event) => onChange(event.currentTarget.value)}
         />
         <div
-          className="flex flex-wrap gap-1"
+          className="flex flex-wrap items-center gap-1"
           role="group"
           aria-label={t("collaborationWorkspaceEmojiSuggestions")}
         >
@@ -145,6 +146,104 @@ export function CollaborationWorkspaceEmojiField({
               aria-pressed={value === emoji}
               className={cn(
                 "grid size-8 place-items-center rounded-md border text-base outline-none transition-colors",
+                "hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:opacity-50",
+                value === emoji && "border-ring bg-accent"
+              )}
+              onClick={() => onChange(value === emoji ? "" : emoji)}
+            >
+              {emoji}
+            </button>
+          ))}
+          <button
+            type="button"
+            disabled={disabled}
+            aria-expanded={moreOpen}
+            aria-controls={emojiGridId}
+            data-testid="collaboration-workspace-emoji-more"
+            className={cn(
+              "flex h-8 items-center gap-1 rounded-md border px-2 text-xs font-medium outline-none transition-colors",
+              "text-muted-foreground hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/40",
+              "disabled:opacity-50",
+              moreOpen && "border-ring bg-accent text-foreground"
+            )}
+            onClick={() => setMoreOpen((open) => !open)}
+          >
+            <span>
+              {moreOpen
+                ? t("collaborationWorkspaceEmojiLess")
+                : t("collaborationWorkspaceEmojiMore")}
+            </span>
+            {moreOpen ? (
+              <ChevronUp size={12} aria-hidden="true" />
+            ) : (
+              <ChevronDown size={12} aria-hidden="true" />
+            )}
+          </button>
+        </div>
+      </div>
+      {moreOpen ? (
+        <CollaborationWorkspaceEmojiGrid
+          id={emojiGridId}
+          value={value}
+          disabled={disabled}
+          onChange={onChange}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The full emoji list behind the "More" toggle. Tiles behave exactly like the
+ * quick picks, so the live avatar preview and the free-text field stay in sync.
+ */
+export function CollaborationWorkspaceEmojiGrid({
+  id,
+  value,
+  disabled,
+  onChange
+}: {
+  id?: string;
+  value: string;
+  disabled?: boolean;
+  onChange(value: string): void;
+}) {
+  const { t } = useTranslation();
+  const fade = useScrollEdgeFade<HTMLDivElement>();
+
+  return (
+    /*
+      The frame carries the rounded border; the scrolling grid sits inside its
+      padding so the scrollbar thumb never runs under the corner radius.
+
+      The height is an exact row count so the cut never lands mid-emoji: a h-7
+      tile plus a gap-1 row gap is a 2rem pitch, and the p-1 top padding shifts
+      every row boundary by the same 0.25rem the bottom padding gives back. Six
+      rows therefore end at 6 * 2rem + 0.25rem, exactly where row seven starts.
+      The edge fade then says whether row seven exists at all.
+    */
+    <div className="rounded-md border p-1">
+      <div
+        ref={fade.ref}
+        style={fade.style}
+        id={id}
+        role="group"
+        aria-label={t("collaborationWorkspaceEmojiMoreLabel")}
+        data-testid="collaboration-workspace-emoji-grid"
+        data-overflow-below={fade.overflow.below ? "true" : "false"}
+        className="chat-scrollbar max-h-[12.25rem] overflow-y-auto p-1"
+        onScroll={fade.onScroll}
+      >
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(1.75rem,1fr))] content-start gap-1">
+          {collaborationWorkspaceEmojiChoices.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              disabled={disabled}
+              aria-pressed={value === emoji}
+              data-testid="collaboration-workspace-emoji-choice"
+              className={cn(
+                "grid h-7 w-full place-items-center rounded-md border text-base outline-none transition-colors",
                 "hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:opacity-50",
                 value === emoji && "border-ring bg-accent"
               )}

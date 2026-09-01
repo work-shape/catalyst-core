@@ -9,6 +9,10 @@ import {
 } from "./collaboration-workspace-accent";
 import { CollaborationWorkspaceAvatar } from "./collaboration-workspace-avatar";
 import {
+  CollaborationWorkspaceDialogFooter,
+  CollaborationWorkspaceDialogScrollBody
+} from "./collaboration-workspace-dialog-chrome";
+import {
   CollaborationWorkspaceAccentField,
   CollaborationWorkspaceEmojiField,
   CollaborationWorkspaceVisibilityField,
@@ -86,82 +90,95 @@ export function CreateCollaborationWorkspaceDialog({
     <Dialog
       open={open}
       title={t("collaborationWorkspaceCreateTitle")}
+      /*
+        The body below caps its own height, so the frame should not need to
+        scroll; theming it keeps the fallback from showing an OS scrollbar under
+        the rounded border on an unusually short viewport.
+      */
+      className="chat-scrollbar"
       onClose={() => {
         if (!pending) {
           onClose();
         }
       }}
     >
+      {/*
+        Same chrome as the settings dialog: the fields scroll, the actions stay
+        pinned, and the dialog body's own p-5 is cancelled so both the scroll
+        region and the footer rule reach the dialog edge.
+      */}
       <form
-        className="grid gap-5"
+        className="-m-5 grid"
         onSubmit={(event) => {
           event.preventDefault();
           submit();
         }}
       >
-        {/*
-          The label sits above the whole row so the avatar centers against the
-          input line itself, not against the label-plus-input block.
-        */}
-        <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="collaboration-workspace-name">
-            {t("collaborationWorkspaceNameLabel")}
-          </label>
-          <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
-            <CollaborationWorkspaceAvatar
-              name={trimmedName}
-              emoji={emoji}
-              accentColor={accentColor}
-              size="lg"
-            />
-            <Input
-              id="collaboration-workspace-name"
-              value={name}
-              maxLength={120}
-              autoFocus
-              disabled={pending}
-              placeholder={t("collaborationWorkspaceNamePlaceholder")}
-              aria-invalid={nameMissing || undefined}
-              onChange={(event) => setName(event.currentTarget.value)}
-              onBlur={() => setNameTouched(true)}
-            />
+        <CollaborationWorkspaceDialogScrollBody className="max-h-[clamp(20rem,68vh,44rem)]">
+          {/*
+            The label sits above the whole row so the avatar centers against the
+            input line itself, not against the label-plus-input block.
+          */}
+          <div className="grid gap-2">
+            <label className="text-sm font-medium" htmlFor="collaboration-workspace-name">
+              {t("collaborationWorkspaceNameLabel")}
+            </label>
+            <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+              <CollaborationWorkspaceAvatar
+                name={trimmedName}
+                emoji={emoji}
+                accentColor={accentColor}
+                size="lg"
+              />
+              <Input
+                id="collaboration-workspace-name"
+                value={name}
+                maxLength={120}
+                autoFocus
+                disabled={pending}
+                placeholder={t("collaborationWorkspaceNamePlaceholder")}
+                aria-invalid={nameMissing || undefined}
+                onChange={(event) => setName(event.currentTarget.value)}
+                onBlur={() => setNameTouched(true)}
+              />
+            </div>
           </div>
-        </div>
-        {nameMissing ? (
-          <p className="text-sm text-destructive">{t("collaborationWorkspaceNameRequired")}</p>
-        ) : null}
+          {nameMissing ? (
+            <p className="text-sm text-destructive">{t("collaborationWorkspaceNameRequired")}</p>
+          ) : null}
 
-        <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="collaboration-workspace-description">
-            {t("collaborationWorkspaceDescriptionLabel")}
-          </label>
-          <Textarea
-            id="collaboration-workspace-description"
-            value={description}
-            maxLength={500}
+          <div className="grid gap-2">
+            <label className="text-sm font-medium" htmlFor="collaboration-workspace-description">
+              {t("collaborationWorkspaceDescriptionLabel")}
+            </label>
+            <Textarea
+              id="collaboration-workspace-description"
+              value={description}
+              maxLength={500}
+              disabled={pending}
+              onChange={(event) => setDescription(event.currentTarget.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t("collaborationWorkspaceDescriptionHint")}
+            </p>
+          </div>
+
+          <CollaborationWorkspaceVisibilityField
+            value={visibility}
             disabled={pending}
-            onChange={(event) => setDescription(event.currentTarget.value)}
+            onChange={setVisibility}
           />
-          <p className="text-xs text-muted-foreground">
-            {t("collaborationWorkspaceDescriptionHint")}
-          </p>
-        </div>
+          <CollaborationWorkspaceEmojiField value={emoji} disabled={pending} onChange={setEmoji} />
+          <CollaborationWorkspaceAccentField
+            value={accentColor}
+            disabled={pending}
+            onChange={setAccentColor}
+          />
 
-        <CollaborationWorkspaceVisibilityField
-          value={visibility}
-          disabled={pending}
-          onChange={setVisibility}
-        />
-        <CollaborationWorkspaceEmojiField value={emoji} disabled={pending} onChange={setEmoji} />
-        <CollaborationWorkspaceAccentField
-          value={accentColor}
-          disabled={pending}
-          onChange={setAccentColor}
-        />
+          {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
+        </CollaborationWorkspaceDialogScrollBody>
 
-        {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
-
-        <div className="flex justify-end gap-2">
+        <CollaborationWorkspaceDialogFooter>
           <Button type="button" variant="outline" disabled={pending} onClick={onClose}>
             {t("cancel")}
           </Button>
@@ -170,7 +187,7 @@ export function CreateCollaborationWorkspaceDialog({
               ? t("collaborationWorkspaceCreating")
               : t("collaborationWorkspaceCreateSubmit")}
           </Button>
-        </div>
+        </CollaborationWorkspaceDialogFooter>
       </form>
     </Dialog>
   );

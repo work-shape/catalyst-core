@@ -4,6 +4,7 @@ import type { CollaborationWorkspaceWithRole } from "@vivd-catalyst/api-client";
 import { useTranslation } from "../i18n";
 import { Button } from "../ui/button";
 import { cn } from "../ui/cn";
+import { useScrollEdgeFade } from "../ui/scroll-edge-fade";
 import {
   collaborationWorkspaceAccentAttributes,
   resolveCollaborationWorkspaceAccentColor,
@@ -171,6 +172,7 @@ export function CollaborationWorkspaceSelectorMenu({
   const sharedCollaborationWorkspaces = collaborationWorkspaces
     .filter((collaborationWorkspace) => collaborationWorkspace.kind === "shared")
     .sort((left, right) => left.name.localeCompare(right.name));
+  const fade = useScrollEdgeFade<HTMLDivElement>([collaborationWorkspaces.length]);
 
   return (
     <div
@@ -189,44 +191,58 @@ export function CollaborationWorkspaceSelectorMenu({
         </p>
       ) : (
         <>
-          {personalCollaborationWorkspace ? (
-            <CollaborationWorkspaceRow
-              active={personalCollaborationWorkspace.id === activeCollaborationWorkspaceId}
-              avatar={<PersonalCollaborationWorkspaceAvatar label={userLabel} />}
-              name={t("collaborationWorkspacePersonalName")}
-              onSelect={() => onSelectCollaborationWorkspace(personalCollaborationWorkspace.id)}
-            />
-          ) : null}
+          {/*
+            A long workspace list scrolls here instead of running off the
+            viewport, and the create/browse footer below stays reachable. The
+            negative margin plus padding leaves room for the row focus rings,
+            which the scroll container would otherwise clip, and the edge fade
+            shows when more workspaces are hidden past the cut.
+          */}
+          <div
+            ref={fade.ref}
+            style={fade.style}
+            className="chat-scrollbar -mx-1 grid max-h-[min(22rem,50vh)] auto-rows-max gap-1 overflow-y-auto px-1"
+            onScroll={fade.onScroll}
+          >
+            {personalCollaborationWorkspace ? (
+              <CollaborationWorkspaceRow
+                active={personalCollaborationWorkspace.id === activeCollaborationWorkspaceId}
+                avatar={<PersonalCollaborationWorkspaceAvatar label={userLabel} />}
+                name={t("collaborationWorkspacePersonalName")}
+                onSelect={() => onSelectCollaborationWorkspace(personalCollaborationWorkspace.id)}
+              />
+            ) : null}
 
-          {sharedCollaborationWorkspaces.length > 0 ? (
-            <>
-              <p className="px-2 pb-1 pt-3 text-xs text-muted-foreground">
-                {t("collaborationWorkspaceSharedHeading")}
-              </p>
-              {sharedCollaborationWorkspaces.map((collaborationWorkspace) => (
-                <CollaborationWorkspaceRow
-                  key={collaborationWorkspace.id}
-                  accentColor={resolveCollaborationWorkspaceAccentColor(collaborationWorkspace)}
-                  active={collaborationWorkspace.id === activeCollaborationWorkspaceId}
-                  avatar={
-                    <CollaborationWorkspaceAvatar
-                      name={collaborationWorkspace.name}
-                      emoji={collaborationWorkspace.emoji}
-                      accentColor={collaborationWorkspace.accentColor}
-                    />
-                  }
-                  name={collaborationWorkspace.name}
-                  pendingAccessRequestCount={collaborationWorkspace.pendingAccessRequestCount}
-                  onSelect={() => onSelectCollaborationWorkspace(collaborationWorkspace.id)}
-                  onOpenSettings={
-                    canManageCollaborationWorkspace(collaborationWorkspace)
-                      ? () => onOpenCollaborationWorkspaceSettings(collaborationWorkspace.id)
-                      : undefined
-                  }
-                />
-              ))}
-            </>
-          ) : null}
+            {sharedCollaborationWorkspaces.length > 0 ? (
+              <>
+                <p className="px-2 pb-1 pt-3 text-xs text-muted-foreground">
+                  {t("collaborationWorkspaceSharedHeading")}
+                </p>
+                {sharedCollaborationWorkspaces.map((collaborationWorkspace) => (
+                  <CollaborationWorkspaceRow
+                    key={collaborationWorkspace.id}
+                    accentColor={resolveCollaborationWorkspaceAccentColor(collaborationWorkspace)}
+                    active={collaborationWorkspace.id === activeCollaborationWorkspaceId}
+                    avatar={
+                      <CollaborationWorkspaceAvatar
+                        name={collaborationWorkspace.name}
+                        emoji={collaborationWorkspace.emoji}
+                        accentColor={collaborationWorkspace.accentColor}
+                      />
+                    }
+                    name={collaborationWorkspace.name}
+                    pendingAccessRequestCount={collaborationWorkspace.pendingAccessRequestCount}
+                    onSelect={() => onSelectCollaborationWorkspace(collaborationWorkspace.id)}
+                    onOpenSettings={
+                      canManageCollaborationWorkspace(collaborationWorkspace)
+                        ? () => onOpenCollaborationWorkspaceSettings(collaborationWorkspace.id)
+                        : undefined
+                    }
+                  />
+                ))}
+              </>
+            ) : null}
+          </div>
 
           <div className="mt-2 grid grid-cols-2 gap-1 border-t pt-2">
             <Button
