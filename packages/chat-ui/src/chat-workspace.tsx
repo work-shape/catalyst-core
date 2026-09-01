@@ -28,6 +28,11 @@ interface ChatWorkspaceProps extends ChatShellProps {
  * An embedded session authenticates with a host-issued token whose scope is
  * capped below `collaboration_workspace:read`, so every Collaboration Workspace
  * surface is first-party only and the widget stays fixed-context.
+ *
+ * This is the auth-mode half of the decision: it drives the workspace list
+ * query and its cache dimension. Whether a first-party session also *shows* the
+ * chrome is `collaborationWorkspaceChromeVisibleFor`, which adds the config
+ * feature flag on top.
  */
 export function collaborationWorkspacesAvailableFor(
   auth: Pick<ChatShellProps, "token" | "getToken">
@@ -137,7 +142,7 @@ function ChatWorkspaceContent({
   const isStaging = model.config.config.clientInstance.environment === "staging";
   const collaborationWorkspace = model.collaborationWorkspace;
   const userLabel = model.auth.user.displayLabel || (model.auth.user.email ?? "");
-  const collaborationWorkspaceSelector = collaborationWorkspacesAvailable ? (
+  const collaborationWorkspaceSelector = model.collaborationWorkspaceChromeVisible ? (
     <CollaborationWorkspaceSelector
       collaborationWorkspaces={collaborationWorkspace.collaborationWorkspaces}
       activeCollaborationWorkspaceId={collaborationWorkspace.activeCollaborationWorkspaceId}
@@ -220,7 +225,7 @@ function ChatWorkspaceContent({
           onToggleTheme={model.config.toggleTheme}
         />
 
-        {collaborationWorkspacesAvailable ? (
+        {model.collaborationWorkspaceChromeVisible ? (
           <CollaborationWorkspacePanel
             apiBaseUrl={model.auth.apiBaseUrl}
             authScope={WORKSPACE_AUTH_SCOPE}
