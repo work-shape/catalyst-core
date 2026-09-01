@@ -33,7 +33,7 @@ jobs:
             echo "::notice::${package}@${version} already exists; skipping publish"
             echo "✓ publish: ${package}@${version} already exists; skipped"
           elif grep -q "E404" <<<"${view_output}"; then
-            npm publish packages/registry-canary
+            npm publish ./packages/registry-canary
             echo "✓ publish: published ${package}@${version}"
           else
             echo "${view_output}" >&2
