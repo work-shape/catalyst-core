@@ -45,6 +45,7 @@ export async function createClientInstanceAgentRunWorker(
     store: execution.store,
     conversationHistory: execution.store,
     workerId: execution.env.AGENT_RUN_WORKER_ID,
+    concurrency: readAgentRunWorkerConcurrency(execution.env),
     loadCurrentUser: (run) => loadCurrentUser(execution.store, run),
     execute: createWorkerLocalAgentRunExecutor(execution.localAgentRuntimeOptions)
   });
@@ -82,6 +83,19 @@ export async function runClientInstanceAgentRunWorker(
     process.off("SIGINT", stop);
     await service.close();
   }
+}
+
+export function readAgentRunWorkerConcurrency(env: ClientInstanceEnv): number | undefined {
+  const raw = env.AGENT_RUN_WORKER_CONCURRENCY;
+  if (!raw) return undefined;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "AGENT_RUN_WORKER_CONCURRENCY must be a positive integer"
+    );
+  }
+  return value;
 }
 
 async function loadCurrentUser(store: PlatformStore, run: AgentRun): Promise<AuthenticatedUser> {
