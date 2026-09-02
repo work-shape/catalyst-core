@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AddressInfo } from "net";
+import { asAgentRunId, asClientInstanceId } from "@vivd-catalyst/core";
 import { createTestConfig, createClientInstanceApp, type TestServer } from "./chat-server-harness";
 import {
   injectStartConversationRun,
@@ -15,6 +16,46 @@ import {
 } from "./chat-server-attachment-harness";
 
 describe("client instance app vertical slice", () => {
+  it("queues prepared runs when the API uses the worker runtime", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig(),
+      env: {},
+      storeMode: "memory",
+      agentRuntimeMode: "worker",
+      tools: []
+    });
+    try {
+      const created = await app.server.inject({
+        method: "POST",
+        url: "/api/conversations",
+        payload: { title: "Worker dispatch" }
+      });
+      const conversation = created.json() as { id: string };
+      const started = await app.server.inject({
+        method: "POST",
+        url: `/api/conversations/${conversation.id}/runs`,
+        payload: {
+          idempotencyKey: "worker-dispatch-key",
+          message: { text: "Queue this run" }
+        }
+      });
+
+      expect(started.statusCode).toBe(200);
+      const result = started.json() as { run: { id: string; status: string } };
+      expect(result.run.status).toBe("queued");
+      expect(
+        await app.store.listRunObservations({
+          clientInstanceId: asClientInstanceId(app.config.clientInstance.id),
+          runId: asAgentRunId(result.run.id),
+          afterSequence: 0,
+          limit: 10
+        })
+      ).toEqual([]);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("exposes idempotent public Agent Runs start APIs and product SSE ids", async () => {
     const app = await createClientInstanceApp({
       config: createTestConfig(),

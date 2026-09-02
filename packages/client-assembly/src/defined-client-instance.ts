@@ -12,6 +12,12 @@ import {
 import type { ClientInstanceCapability } from "./capabilities";
 import type { ClientInstanceEnv } from "./env";
 import {
+  createClientInstanceAgentRunWorker,
+  runClientInstanceAgentRunWorker,
+  type ClientInstanceAgentRunWorker,
+  type CreateClientInstanceAgentRunWorkerInput
+} from "./agent-run-worker";
+import {
   seedStandaloneAuth as seedStandaloneAuthCommand,
   type SeedStandaloneAuthInput,
   type SeedStandaloneAuthResult
@@ -26,6 +32,7 @@ export interface DefineClientInstanceInput {
   structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
   corsOrigin?: string | string[];
   loadEnv?: boolean;
+  agentRuntimeMode?: CreateClientInstanceAppInput["agentRuntimeMode"];
 }
 
 export interface DefinedClientInstance {
@@ -46,6 +53,22 @@ export interface DefinedClientInstance {
     storeMode?: CreateClientInstanceAppInput["storeMode"];
     corsOrigin?: string | string[];
   }): Promise<ClientInstanceApp>;
+  createAgentRunWorker(
+    input?: Omit<
+      CreateClientInstanceAgentRunWorkerInput,
+      "configPath" | "tools" | "capabilities"
+    > & {
+      configPath?: string;
+    }
+  ): Promise<ClientInstanceAgentRunWorker>;
+  runAgentRunWorker(
+    input?: Omit<
+      CreateClientInstanceAgentRunWorkerInput,
+      "configPath" | "tools" | "capabilities"
+    > & {
+      configPath?: string;
+    }
+  ): Promise<void>;
   seedStandaloneAuth(
     input?: Omit<SeedStandaloneAuthInput, "configPath"> & {
       configPath?: string;
@@ -107,8 +130,27 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
       capabilities,
       structuredDataPublicationReviewer:
         appInput.structuredDataPublicationReviewer ?? input.structuredDataPublicationReviewer,
-      corsOrigin: appInput.corsOrigin ?? input.corsOrigin
+      corsOrigin: appInput.corsOrigin ?? input.corsOrigin,
+      agentRuntimeMode: appInput.agentRuntimeMode ?? input.agentRuntimeMode
     });
+  }
+
+  function resolveAgentWorkerInput(
+    workerInput: Omit<
+      CreateClientInstanceAgentRunWorkerInput,
+      "configPath" | "tools" | "capabilities"
+    > & { configPath?: string } = {}
+  ): CreateClientInstanceAgentRunWorkerInput {
+    const env = loadEnvironment({ env: workerInput.env });
+    return {
+      ...workerInput,
+      env,
+      configPath: resolveConfigPath({ env, configPath: workerInput.configPath }),
+      tools,
+      capabilities,
+      structuredDataPublicationReviewer:
+        workerInput.structuredDataPublicationReviewer ?? input.structuredDataPublicationReviewer
+    };
   }
 
   return {
@@ -117,6 +159,12 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
     loadEnvironment,
     resolveConfigPath,
     createApp,
+    createAgentRunWorker(workerInput = {}) {
+      return createClientInstanceAgentRunWorker(resolveAgentWorkerInput(workerInput));
+    },
+    runAgentRunWorker(workerInput = {}) {
+      return runClientInstanceAgentRunWorker(resolveAgentWorkerInput(workerInput));
+    },
     async listen(listenInput = {}) {
       const app = await createApp({
         env: listenInput.env,

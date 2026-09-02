@@ -21,6 +21,12 @@ export {
   type DefineClientInstanceInput
 } from "./defined-client-instance";
 export {
+  createClientInstanceAgentRunWorker,
+  runClientInstanceAgentRunWorker,
+  type ClientInstanceAgentRunWorker,
+  type CreateClientInstanceAgentRunWorkerInput
+} from "./agent-run-worker";
+export {
   seedStandaloneAuth,
   type SeedStandaloneAuthInput,
   type SeedStandaloneAuthResult

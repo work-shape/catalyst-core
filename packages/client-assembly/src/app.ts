@@ -1,5 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
+import {
+  LocalAgentRuntime,
+  StoreBackedAgentRuntime,
+  type WorkerLocalAgentRuntimeOptions
+} from "@vivd-catalyst/agent-runtime";
 import {
   REASONING_EFFORTS,
   StoreBackedAuditRecorder,
@@ -65,6 +69,7 @@ export interface CreateClientInstanceAppInput {
   capabilities?: ClientInstanceCapability[];
   structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
   corsOrigin?: string | string[];
+  agentRuntimeMode?: "local" | "worker";
 }
 
 export interface ClientInstanceApp {
@@ -78,180 +83,30 @@ export interface ClientInstanceApp {
 export async function createClientInstanceApp(
   input: CreateClientInstanceAppInput
 ): Promise<ClientInstanceApp> {
-  const env = input.env ?? process.env;
-  const config = input.config ?? (await loadConfig(input.configPath));
-  const clientInstanceId = getClientInstanceId(config);
-  const resolvedStoreMode = resolveStoreMode(input.storeMode, env);
-  const store = await createPlatformStore({ env, storeMode: input.storeMode });
-  const dataSources = createDataSourceRegistry({
-    configs: config.dataSources,
-    secretResolver: createEnvSecretResolver(env)
-  });
-  const executionWorkspaceObjectRoot = config.executionWorkspaces.enabled
-    ? requiredEnv(env, "EXECUTION_WORKSPACE_OBJECT_ROOT")
-    : undefined;
-  const workspaceFileByteStore = executionWorkspaceObjectRoot
-    ? createLocalWorkspaceFileByteStore({
-        rootDirectory: executionWorkspaceObjectRoot
-      })
-    : undefined;
-  const capabilityContributions = await createCapabilityContributions(input.capabilities ?? [], {
-    capabilitiesConfig: config.capabilities,
-    clientInstanceId,
-    dataSources,
+  const execution = await createClientInstanceExecutionAssembly(input);
+  const {
     env,
-    files: store,
-    managedObjectAccess: {
-      createAccess(accessInput) {
-        return createManagedObjectAccess({
-          clientInstanceId,
-          files: store,
-          ...accessInput
-        });
-      }
-    },
-    storeMode: resolvedStoreMode
-  });
-  const capabilityAttachmentHandlers = capabilityContributions.flatMap(
-    (contribution) => contribution.attachments ?? []
-  );
-  const workspaceSourceAttachment = executionWorkspaceObjectRoot
-    ? createExecutionWorkspaceSourceAttachmentHandler({
-        clientInstanceId,
-        files: store,
-        objectRootDirectory: executionWorkspaceObjectRoot,
-        maxFileBytes: config.executionWorkspaces.sourceFiles.maxFileBytes,
-        markDeletedOnDelete: capabilityAttachmentHandlers.length === 0
-      })
-    : undefined;
-  const attachments = resolveAttachmentHandlers([
-    ...(workspaceSourceAttachment ? [workspaceSourceAttachment] : []),
-    ...capabilityAttachmentHandlers
-  ]);
-  const workspaceManagedObjectReader = workspaceFileByteStore
-    ? createExecutionWorkspaceManagedObjectReader({
-        clientInstanceId,
-        files: store,
-        byteStore: workspaceFileByteStore
-      })
-    : undefined;
-  const auditRecorder = new StoreBackedAuditRecorder({
+    config,
     clientInstanceId,
-    store
-  });
-  const managedObjects = resolveManagedObjectReaders([
-    ...(workspaceManagedObjectReader ? [workspaceManagedObjectReader] : []),
-    ...capabilityContributions.flatMap((contribution) => contribution.managedObjects ?? [])
-  ]);
-  const assetSource = createConfigAssetSource({
     store,
-    clientInstanceId
-  });
-  const workspaceTools = config.executionWorkspaces.enabled
-    ? createWorkspaceToolDefinitions({
-        store,
-        objectStore: workspaceFileByteStore,
-        fileStore: workspaceFileByteStore,
-        auditRecorder,
-        telemetry: createConsoleWorkspaceCommandTelemetry(console),
-        limits: config.executionWorkspaces.command,
-        sourceFileReader: attachments
-          ? {
-              readSourceFile(readInput) {
-                return attachments.readConversationFile({
-                  conversationId: readInput.conversationId,
-                  fileId: readInput.fileId
-                });
-              }
-            }
-          : undefined
-      })
-    : [];
-  const webAccessTools =
-    config.webAccess.enabled && config.webAccess.fetch.enabled
-      ? createWebFetchToolDefinitions({ config: config.webAccess.fetch })
-      : [];
-  const tools = createToolDefinitions({
-    config,
-    tools: [
-      ...createBuiltInToolDefinitions(),
-      ...workspaceTools,
-      ...createStructuredDataToolDefinitions({
-        store,
-        publicationReviewer: input.structuredDataPublicationReviewer
-      }),
-      ...webAccessTools,
-      ...createDataSourceTools({ dataSources }),
-      createReadSkillTool({ assetSource }),
-      ...capabilityContributions.flatMap((contribution) => contribution.tools ?? []),
-      ...input.tools
-    ]
-  });
-  assertClientAssemblyValid({
-    config,
-    tools
-  });
-  const usageGovernance = new ModelUsageGovernance({
-    store,
-    budget: config.usage.budget,
-    safeguards: config.usage.safeguards,
-    costs: config.usage.costs
-  });
-  const toolRegistry = new ToolRegistry({
-    tools,
-    enabledToolNames: getEnabledToolNames(config)
-  });
-  const toolExecution = new InProcessToolExecution({
-    registry: toolRegistry,
-    async getAgentToolNames(agentName) {
-      const assets = await assetSource.getSnapshot();
-      const agent = assets.agents.find((candidate) => candidate.name === agentName);
-      return agent?.toolNames ?? [];
-    },
+    attachments,
+    managedObjects,
+    workspaceFileByteStore,
     auditRecorder,
-    usageRecorder: usageGovernance
-  });
-  const modelProvider = createModelProviderRegistry({
-    configs: config.modelProviders,
-    env
-  });
-  const defaultModelProvider = config.modelProviders[0];
-  if (!defaultModelProvider) {
-    throw new AppError("VALIDATION_FAILED", "At least one model provider is required");
-  }
-  const agentRuntime = new LocalAgentRuntime({
     assetSource,
-    modelProviders: config.modelProviders,
-    modelBindings: config.modelBindings,
-    defaultModelProvider,
-    conversationHistory: store,
-    modelProviderContinuationStore: store,
-    agentRunStore: store,
-    runObservationStore: store,
-    modelProvider,
-    toolRegistry,
-    toolExecution,
     usageGovernance,
-    webAccess: config.webAccess,
-    maxSteps: config.runtime.maxSteps,
-    repeatedToolCallLimit: config.runtime.repeatedToolCallLimit,
-    modelContext: config.modelContext,
-    runFailureReporter: createRuntimeFailureReporter(),
-    artifactReader: managedObjects
-      ? {
-          readArtifact(readInput) {
-            return managedObjects.readArtifact(readInput);
-          }
-        }
-      : undefined,
-    fileReader: managedObjects
-      ? {
-          readFile(readInput) {
-            return managedObjects.readFile(readInput);
-          }
-        }
-      : undefined
-  });
+    modelProvider,
+    localAgentRuntimeOptions
+  } = execution;
+  const agentRuntime =
+    input.agentRuntimeMode === "worker"
+      ? new StoreBackedAgentRuntime({ store })
+      : new LocalAgentRuntime({
+          ...localAgentRuntimeOptions,
+          conversationHistory: store,
+          agentRunStore: store,
+          runObservationStore: store
+        });
   const { authAdapter, standaloneAuth, sessionToken, serviceAccessToken } =
     await createClientInstanceAuth({
       config,
@@ -315,6 +170,167 @@ export async function createClientInstanceApp(
     serviceAccessToken
   });
 
+  return {
+    config,
+    server,
+    store,
+    async listen(listenInput = {}) {
+      await server.listen({
+        host: listenInput.host ?? env.HOST ?? "127.0.0.1",
+        port: Number(listenInput.port ?? env.PORT ?? 4100)
+      });
+    },
+    async close() {
+      await server.close();
+      await standaloneAuth?.close();
+      await execution.close();
+    }
+  };
+}
+
+export async function createClientInstanceExecutionAssembly(
+  input: Omit<CreateClientInstanceAppInput, "agentRuntimeMode" | "corsOrigin">
+) {
+  const env = input.env ?? process.env;
+  const config = input.config ?? (await loadConfig(input.configPath));
+  const clientInstanceId = getClientInstanceId(config);
+  const resolvedStoreMode = resolveStoreMode(input.storeMode, env);
+  const store = await createPlatformStore({ env, storeMode: input.storeMode });
+  const dataSources = createDataSourceRegistry({
+    configs: config.dataSources,
+    secretResolver: createEnvSecretResolver(env)
+  });
+  const executionWorkspaceObjectRoot = config.executionWorkspaces.enabled
+    ? requiredEnv(env, "EXECUTION_WORKSPACE_OBJECT_ROOT")
+    : undefined;
+  const workspaceFileByteStore = executionWorkspaceObjectRoot
+    ? createLocalWorkspaceFileByteStore({ rootDirectory: executionWorkspaceObjectRoot })
+    : undefined;
+  const capabilityContributions = await createCapabilityContributions(input.capabilities ?? [], {
+    capabilitiesConfig: config.capabilities,
+    clientInstanceId,
+    dataSources,
+    env,
+    files: store,
+    managedObjectAccess: {
+      createAccess(accessInput) {
+        return createManagedObjectAccess({ clientInstanceId, files: store, ...accessInput });
+      }
+    },
+    storeMode: resolvedStoreMode
+  });
+  const capabilityAttachmentHandlers = capabilityContributions.flatMap(
+    (contribution) => contribution.attachments ?? []
+  );
+  const workspaceSourceAttachment = executionWorkspaceObjectRoot
+    ? createExecutionWorkspaceSourceAttachmentHandler({
+        clientInstanceId,
+        files: store,
+        objectRootDirectory: executionWorkspaceObjectRoot,
+        maxFileBytes: config.executionWorkspaces.sourceFiles.maxFileBytes,
+        markDeletedOnDelete: capabilityAttachmentHandlers.length === 0
+      })
+    : undefined;
+  const attachments = resolveAttachmentHandlers([
+    ...(workspaceSourceAttachment ? [workspaceSourceAttachment] : []),
+    ...capabilityAttachmentHandlers
+  ]);
+  const workspaceManagedObjectReader = workspaceFileByteStore
+    ? createExecutionWorkspaceManagedObjectReader({
+        clientInstanceId,
+        files: store,
+        byteStore: workspaceFileByteStore
+      })
+    : undefined;
+  const auditRecorder = new StoreBackedAuditRecorder({ clientInstanceId, store });
+  const managedObjects = resolveManagedObjectReaders([
+    ...(workspaceManagedObjectReader ? [workspaceManagedObjectReader] : []),
+    ...capabilityContributions.flatMap((contribution) => contribution.managedObjects ?? [])
+  ]);
+  const assetSource = createConfigAssetSource({ store, clientInstanceId });
+  const workspaceTools = config.executionWorkspaces.enabled
+    ? createWorkspaceToolDefinitions({
+        store,
+        objectStore: workspaceFileByteStore,
+        fileStore: workspaceFileByteStore,
+        auditRecorder,
+        telemetry: createConsoleWorkspaceCommandTelemetry(console),
+        limits: config.executionWorkspaces.command,
+        sourceFileReader: attachments
+          ? {
+              readSourceFile(readInput) {
+                return attachments.readConversationFile({
+                  conversationId: readInput.conversationId,
+                  fileId: readInput.fileId
+                });
+              }
+            }
+          : undefined
+      })
+    : [];
+  const tools = createToolDefinitions({
+    config,
+    tools: [
+      ...createBuiltInToolDefinitions(),
+      ...workspaceTools,
+      ...createStructuredDataToolDefinitions({
+        store,
+        publicationReviewer: input.structuredDataPublicationReviewer
+      }),
+      ...(config.webAccess.enabled && config.webAccess.fetch.enabled
+        ? createWebFetchToolDefinitions({ config: config.webAccess.fetch })
+        : []),
+      ...createDataSourceTools({ dataSources }),
+      createReadSkillTool({ assetSource }),
+      ...capabilityContributions.flatMap((contribution) => contribution.tools ?? []),
+      ...input.tools
+    ]
+  });
+  assertClientAssemblyValid({ config, tools });
+  const usageGovernance = new ModelUsageGovernance({
+    store,
+    budget: config.usage.budget,
+    safeguards: config.usage.safeguards,
+    costs: config.usage.costs
+  });
+  const toolRegistry = new ToolRegistry({ tools, enabledToolNames: getEnabledToolNames(config) });
+  const toolExecution = new InProcessToolExecution({
+    registry: toolRegistry,
+    async getAgentToolNames(agentName) {
+      const assets = await assetSource.getSnapshot();
+      return assets.agents.find((candidate) => candidate.name === agentName)?.toolNames ?? [];
+    },
+    auditRecorder,
+    usageRecorder: usageGovernance
+  });
+  const modelProvider = createModelProviderRegistry({ configs: config.modelProviders, env });
+  const defaultModelProvider = config.modelProviders[0];
+  if (!defaultModelProvider) {
+    throw new AppError("VALIDATION_FAILED", "At least one model provider is required");
+  }
+  const localAgentRuntimeOptions = {
+    assetSource,
+    modelProviders: config.modelProviders,
+    modelBindings: config.modelBindings,
+    defaultModelProvider,
+    modelProviderContinuationStore: store,
+    modelProvider,
+    toolRegistry,
+    toolExecution,
+    usageGovernance,
+    webAccess: config.webAccess,
+    maxSteps: config.runtime.maxSteps,
+    repeatedToolCallLimit: config.runtime.repeatedToolCallLimit,
+    modelContext: config.modelContext,
+    runFailureReporter: createRuntimeFailureReporter(),
+    artifactReader: managedObjects
+      ? { readArtifact: managedObjects.readArtifact.bind(managedObjects) }
+      : undefined,
+    fileReader: managedObjects
+      ? { readFile: managedObjects.readFile.bind(managedObjects) }
+      : undefined
+  } satisfies WorkerLocalAgentRuntimeOptions;
+
   const assets = await assetSource.getSnapshot();
   validateConfigAssetBundle({
     agents: assets.agents,
@@ -330,19 +346,21 @@ export async function createClientInstanceApp(
   });
 
   return {
+    env,
     config,
-    server,
+    clientInstanceId,
+    storeMode: resolvedStoreMode,
     store,
-    async listen(listenInput = {}) {
-      await server.listen({
-        host: listenInput.host ?? env.HOST ?? "127.0.0.1",
-        port: Number(listenInput.port ?? env.PORT ?? 4100)
-      });
-    },
+    attachments,
+    managedObjects,
+    workspaceFileByteStore,
+    auditRecorder,
+    assetSource,
+    usageGovernance,
+    modelProvider,
+    localAgentRuntimeOptions,
     async close() {
-      await server.close();
       await closeCapabilityContributions(capabilityContributions);
-      await standaloneAuth?.close();
       await store.close?.();
     }
   };
