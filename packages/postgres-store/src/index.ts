@@ -24,6 +24,7 @@ import {
   type AgentRun,
   type AgentRunId,
   type AgentRunStore,
+  type AppendAssistantMessageInput,
   type AppendRunObservationInput,
   type ClaimRunStartCommandInput,
   type ClaimRunStartCommandResult,
@@ -42,6 +43,8 @@ import {
   type ExecutionWorkspaceMetadataStore,
   type ExecutionWorkspaceId,
   type ModelUsageEvent,
+  type ModelProviderContinuationCheckpoint,
+  type ModelProviderContinuationStore,
   type ModelUsageEventRecordInput,
   type ModelUsageEventStore,
   type ModelUsageWindowSummary,
@@ -131,6 +134,7 @@ import {
   listConfigAssetRevisions as listPostgresConfigAssetRevisions
 } from "./postgres-config-asset-operations";
 import {
+  appendAssistantMessage as appendPostgresAssistantMessage,
   appendMessage as appendPostgresMessage,
   createConversation as createPostgresConversation,
   deleteConversation as deletePostgresConversation,
@@ -145,6 +149,7 @@ import {
   touchConversation,
   updateConversationTitle as updatePostgresConversationTitle
 } from "./postgres-conversation-operations";
+import { getModelProviderContinuation as getPostgresModelProviderContinuation } from "./postgres-model-provider-continuation-operations";
 import type { PostgresDatabase } from "./postgres-database";
 import { createPostgresPlatformFileStore } from "./postgres-file-store";
 import {
@@ -209,6 +214,7 @@ export class PostgresPlatformStore
   implements
     ConversationStore,
     ConversationRetentionStore,
+    ModelProviderContinuationStore,
     CollaborationWorkspaceStore,
     PlatformFileStore,
     AgentRunStore,
@@ -523,6 +529,10 @@ export class PostgresPlatformStore
     return appendPostgresMessage(this.db, input);
   }
 
+  async appendAssistantMessage(input: AppendAssistantMessageInput): Promise<ChatMessage> {
+    return appendPostgresAssistantMessage(this.db, input);
+  }
+
   async listMessages(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
@@ -536,6 +546,12 @@ export class PostgresPlatformStore
     limit: number;
   }): Promise<ChatMessage[]> {
     return listPostgresRecentMessages(this.db, input);
+  }
+
+  async getModelProviderContinuation(
+    input: Parameters<ModelProviderContinuationStore["getModelProviderContinuation"]>[0]
+  ): Promise<ModelProviderContinuationCheckpoint | undefined> {
+    return getPostgresModelProviderContinuation(this.db, input);
   }
 
   async getStructuredDataResource(

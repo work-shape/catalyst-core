@@ -6,7 +6,7 @@ import type {
   ConversationId,
   MessageId
 } from "./ids";
-import type { JsonObject } from "./json";
+import type { JsonObject, JsonValue } from "./json";
 import type { ISODateString } from "./time";
 
 export type ConversationStatus = "active" | "deleted" | "retention_expired";
@@ -85,6 +85,18 @@ export interface CreateMessageInput {
   metadata?: JsonObject;
 }
 
+export interface AppendAssistantMessageInput {
+  id?: MessageId;
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  text: string;
+  metadata?: JsonObject;
+  providerContinuation?: {
+    providerId: string;
+    state: JsonValue;
+  };
+}
+
 export interface UpdateConversationTitleInput {
   clientInstanceId: ClientInstanceId;
   conversationId: ConversationId;
@@ -99,7 +111,7 @@ export interface MoveConversationInput {
   toCollaborationWorkspaceId: CollaborationWorkspaceId;
 }
 
-export interface ConversationStore {
+export interface ConversationStore extends ConversationHistoryStore {
   createConversation(input: CreateConversationInput): Promise<Conversation>;
   getConversation(
     clientInstanceId: ClientInstanceId,
@@ -111,16 +123,6 @@ export interface ConversationStore {
   }): Promise<Conversation[]>;
   moveConversation(input: MoveConversationInput): Promise<Conversation>;
   updateConversationTitle(input: UpdateConversationTitleInput): Promise<Conversation>;
-  appendMessage(input: CreateMessageInput): Promise<ChatMessage>;
-  listMessages(input: {
-    clientInstanceId: ClientInstanceId;
-    conversationId: ConversationId;
-  }): Promise<ChatMessage[]>;
-  listRecentMessages(input: {
-    clientInstanceId: ClientInstanceId;
-    conversationId: ConversationId;
-    limit: number;
-  }): Promise<ChatMessage[]>;
   deleteConversation(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
@@ -155,4 +157,22 @@ export interface ConversationHistoryReader {
 
 export interface ConversationHistoryStore extends ConversationHistoryReader {
   appendMessage(input: CreateMessageInput): Promise<ChatMessage>;
+  appendAssistantMessage(input: AppendAssistantMessageInput): Promise<ChatMessage>;
+}
+
+export interface ModelProviderContinuationCheckpoint {
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  providerId: string;
+  state: JsonValue;
+  sourceMessageId: MessageId;
+  updatedAt: ISODateString;
+}
+
+export interface ModelProviderContinuationStore {
+  getModelProviderContinuation(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    providerId: string;
+  }): Promise<ModelProviderContinuationCheckpoint | undefined>;
 }

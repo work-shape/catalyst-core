@@ -16,6 +16,7 @@ import {
   type ConversationHistoryStore,
   type LocaleCode,
   type ModelBindingConfig,
+  type ModelProviderContinuationStore,
   type ModelProviderConfig,
   type ModelUsageRecorder,
   type ReasoningEffortConfig,
@@ -32,7 +33,6 @@ import {
   createPlatformId,
   getRuntimeSubjectUserId,
   unknownToJsonValue,
-  withoutAssistantProviderContinuation,
   systemClock
 } from "@vivd-catalyst/core";
 import {
@@ -74,6 +74,7 @@ export interface LocalAgentRuntimeOptions {
   modelBindings?: readonly ModelBindingConfig[];
   defaultModelProvider: ModelProviderConfig;
   conversationHistory: ConversationHistoryStore;
+  modelProviderContinuationStore?: ModelProviderContinuationStore;
   agentRunStore?: AgentRunStore;
   runObservationStore?: RunObservationStore;
   modelProvider: ModelProvider;
@@ -117,6 +118,17 @@ export class LocalAgentRuntime implements AgentRuntime {
   private readonly runAbortControllers = new Map<AgentRunId, AbortController>();
 
   constructor(options: LocalAgentRuntimeOptions) {
+    if (
+      !options.modelProviderContinuationStore &&
+      options.modelProviders.some(
+        (provider) => getProviderCompactionThreshold(provider) !== undefined
+      )
+    ) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "Model provider compaction requires a model provider continuation store"
+      );
+    }
     this.options = options;
   }
 
@@ -258,10 +270,9 @@ export class LocalAgentRuntime implements AgentRuntime {
           "Cannot persist cancelled assistant response without a conversation id"
         );
       }
-      partialMessage = await this.options.conversationHistory.appendMessage({
+      partialMessage = await this.options.conversationHistory.appendAssistantMessage({
         clientInstanceId: context.clientInstanceId,
         conversationId,
-        role: "assistant",
         text: partialText,
         metadata: createAssistantFinalMetadata({
           runId,
@@ -369,28 +380,23 @@ export class LocalAgentRuntime implements AgentRuntime {
           return;
         }
         const assistantText = completion.text || completedWithoutTextFallback(context.locale);
-        const persisted = await this.options.conversationHistory.appendMessage({
+        const persisted = await this.options.conversationHistory.appendAssistantMessage({
           clientInstanceId: context.clientInstanceId,
           conversationId: input.conversationId,
-          role: "assistant",
           text: assistantText,
           metadata: createAssistantFinalMetadata({
             runId,
             reasoning,
             sources: completion.sources,
             citations: completion.citations,
-            modelContext,
-            providerContinuation: persistedContinuation
-          })
+            modelContext
+          }),
+          providerContinuation: persistedContinuation
         });
-        const publicMessage = {
-          ...persisted,
-          metadata: withoutAssistantProviderContinuation(persisted.metadata)
-        };
         if (emittedDeltas) {
-          state.completeMessage(publicMessage);
+          state.completeMessage(persisted);
         } else {
-          state.message(publicMessage);
+          state.message(persisted);
         }
         state.complete();
         return;
@@ -404,18 +410,17 @@ export class LocalAgentRuntime implements AgentRuntime {
         content: completion.text,
         toolCalls: completion.toolCalls
       });
-      await this.options.conversationHistory.appendMessage({
+      await this.options.conversationHistory.appendAssistantMessage({
         clientInstanceId: context.clientInstanceId,
         conversationId: input.conversationId,
-        role: "assistant",
         text: completion.text,
         metadata: createAssistantToolCallsMetadata({
           runId,
           toolCalls: completion.toolCalls,
           reasoning,
-          modelContext,
-          providerContinuation: persistedContinuation
-        })
+          modelContext
+        }),
+        providerContinuation: persistedContinuation
       });
 
       for (const toolCall of completion.toolCalls) {
@@ -606,13 +611,31 @@ export class LocalAgentRuntime implements AgentRuntime {
     });
     const history = dropCurrentSubmittedMessage(persistedMessages, input.message.text);
     const compactionEnabled = getProviderCompactionThreshold(provider) !== undefined;
-    const checkpointIndex = compactionEnabled
+    const storedCheckpoint = compactionEnabled
+      ? await this.options.modelProviderContinuationStore?.getModelProviderContinuation({
+          clientInstanceId: context.clientInstanceId,
+          conversationId: input.conversationId,
+          providerId: provider.id
+        })
+      : undefined;
+    const storedCheckpointIndex = storedCheckpoint
+      ? history.findIndex((message) => message.id === storedCheckpoint.sourceMessageId)
+      : -1;
+    const legacyCheckpointIndex = compactionEnabled
       ? findLatestCompactionCheckpointIndex(history, provider.id)
       : -1;
-    const checkpoint =
-      checkpointIndex >= 0
-        ? readAssistantProviderContinuation(history[checkpointIndex]?.metadata)
+    const checkpointIndex = Math.max(storedCheckpointIndex, legacyCheckpointIndex);
+    const legacyCheckpoint =
+      legacyCheckpointIndex >= 0
+        ? readAssistantProviderContinuation(history[legacyCheckpointIndex]?.metadata)
         : undefined;
+    const checkpoint =
+      storedCheckpointIndex >= legacyCheckpointIndex && storedCheckpointIndex >= 0
+        ? {
+            providerId: storedCheckpoint!.providerId,
+            state: storedCheckpoint!.state
+          }
+        : legacyCheckpoint;
     const activeHistory = compactionEnabled
       ? history.slice(Math.max(checkpointIndex, 0))
       : selectRecentCompleteHistory(

@@ -1,6 +1,7 @@
-import { and, asc, desc, eq, lte, ne } from "drizzle-orm";
+import { and, asc, desc, eq, lt, lte, ne } from "drizzle-orm";
 import {
   AppError,
+  type AppendAssistantMessageInput,
   type ChatMessage,
   type ClientInstanceId,
   type Conversation,
@@ -10,11 +11,12 @@ import {
   type MoveConversationInput,
   createPlatformId
 } from "@vivd-catalyst/core";
-import type { PostgresDatabase } from "./postgres-database";
-import { mapConversation, mapMessage } from "./rows";
+import type { PostgresDatabase, PostgresTransaction } from "./postgres-database";
+import { mapConversation, mapMessage, type MessageRow } from "./rows";
 import {
   conversationAttachments,
   conversations,
+  modelProviderContinuations,
   messages,
   structuredDataResources
 } from "./schema";
@@ -160,7 +162,60 @@ export async function appendMessage(
   db: PostgresDatabase,
   input: CreateMessageInput
 ): Promise<ChatMessage> {
-  const conversation = await getConversation(db, input.clientInstanceId, input.conversationId);
+  return mapMessage(await appendMessageRecord(db, input));
+}
+
+export async function appendAssistantMessage(
+  db: PostgresDatabase,
+  input: AppendAssistantMessageInput
+): Promise<ChatMessage> {
+  return db.transaction(async (tx) => {
+    const row = await appendMessageRecord(tx, { ...input, role: "assistant" });
+    if (input.providerContinuation) {
+      await tx
+        .insert(modelProviderContinuations)
+        .values({
+          clientInstanceId: row.clientInstanceId,
+          conversationId: row.conversationId,
+          providerId: input.providerContinuation.providerId,
+          state: input.providerContinuation.state,
+          sourceMessageId: row.id,
+          sourceStorageOrdinal: row.storageOrdinal,
+          updatedAt: row.createdAt
+        })
+        .onConflictDoUpdate({
+          target: [
+            modelProviderContinuations.clientInstanceId,
+            modelProviderContinuations.conversationId,
+            modelProviderContinuations.providerId
+          ],
+          set: {
+            state: input.providerContinuation.state,
+            sourceMessageId: row.id,
+            sourceStorageOrdinal: row.storageOrdinal,
+            updatedAt: row.createdAt
+          },
+          setWhere: lt(modelProviderContinuations.sourceStorageOrdinal, row.storageOrdinal)
+        });
+    }
+    return mapMessage(row);
+  });
+}
+
+async function appendMessageRecord(
+  db: PostgresDatabase | PostgresTransaction,
+  input: CreateMessageInput
+): Promise<MessageRow> {
+  const [conversation] = await db
+    .select()
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.clientInstanceId, input.clientInstanceId),
+        eq(conversations.id, input.conversationId)
+      )
+    )
+    .limit(1);
   if (!conversation || conversation.status !== "active") {
     throw new AppError("NOT_FOUND", "Conversation is not available");
   }
@@ -188,7 +243,10 @@ export async function appendMessage(
         eq(conversations.id, input.conversationId)
       )
     );
-  return mapMessage(row);
+  if (!row) {
+    throw new AppError("INTERNAL", "Expected inserted message row");
+  }
+  return row;
 }
 
 export async function listMessages(

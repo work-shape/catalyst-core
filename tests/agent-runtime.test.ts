@@ -2095,6 +2095,7 @@ describe("local agent runtime", () => {
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
       conversationHistory: store,
+      modelProviderContinuationStore: store,
       agentRunStore: store,
       runObservationStore: store,
       modelProvider,
@@ -2141,9 +2142,20 @@ describe("local agent runtime", () => {
       conversationId
     });
     const checkpoint = persistedAfterCompaction.at(-1);
-    expect(readAssistantProviderContinuation(checkpoint?.metadata)).toEqual({
+    expect(readAssistantProviderContinuation(checkpoint?.metadata)).toBeUndefined();
+    expect(
+      await store.getModelProviderContinuation({
+        clientInstanceId,
+        conversationId,
+        providerId: "test-provider"
+      })
+    ).toEqual({
+      clientInstanceId,
+      conversationId,
       providerId: "test-provider",
-      state: continuation.state
+      state: continuation.state,
+      sourceMessageId: checkpoint?.id,
+      updatedAt: checkpoint?.createdAt
     });
 
     const secondUserMessage = await store.appendMessage({
@@ -2175,6 +2187,56 @@ describe("local agent runtime", () => {
       { role: "system", text: expect.stringContaining("Help the user.") },
       { role: "assistant", text: "After compaction." },
       { role: "user", text: "Continue" }
+    ]);
+
+    const legacyContinuation = {
+      providerId: "test-provider",
+      state: { compaction: { encrypted_content: "newer-legacy-checkpoint" } }
+    };
+    await store.appendMessage({
+      clientInstanceId,
+      conversationId,
+      role: "assistant",
+      text: "Written by an older API process.",
+      metadata: {
+        agentRuntime: {
+          version: 1,
+          kind: "assistant_final",
+          runId: "run_legacy",
+          finishStatus: "completed",
+          providerContinuation: legacyContinuation
+        }
+      }
+    });
+    const thirdUserMessage = await store.appendMessage({
+      clientInstanceId,
+      conversationId,
+      role: "user",
+      text: "Continue after the mixed-version write"
+    });
+    const thirdRun = await runtime.start(
+      {
+        agentName: "compaction_agent",
+        conversationId,
+        inputMessageId: thirdUserMessage.id,
+        message: { text: thirdUserMessage.text }
+      },
+      context
+    );
+    for await (const _event of runtime.observe(thirdRun.runId, context)) {
+      // Drain the third run.
+    }
+
+    expect(requests[2]?.continuation).toEqual(legacyContinuation);
+    expect(
+      requests[2]?.messages.map((message) => ({
+        role: message.role,
+        text: modelContentText(message.content)
+      }))
+    ).toEqual([
+      { role: "system", text: expect.stringContaining("Help the user.") },
+      { role: "assistant", text: "Written by an older API process." },
+      { role: "user", text: "Continue after the mixed-version write" }
     ]);
   });
 

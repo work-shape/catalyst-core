@@ -1,6 +1,10 @@
 import type { AgentRunStore, RunObservationStore } from "./agent-runtime";
 import type { AuditEventStore } from "./audit";
-import type { ConversationRetentionStore, ConversationStore } from "./conversation";
+import type {
+  ConversationRetentionStore,
+  ConversationStore,
+  ModelProviderContinuationStore
+} from "./conversation";
 import type { CollaborationWorkspaceStore } from "./collaboration-workspace";
 import type { ConfigAssetStore } from "./config-assets";
 import type {
@@ -19,6 +23,7 @@ export interface PlatformStore
   extends
     ConversationStore,
     ConversationRetentionStore,
+    ModelProviderContinuationStore,
     CollaborationWorkspaceStore,
     PlatformFileStore,
     AgentRunStore,

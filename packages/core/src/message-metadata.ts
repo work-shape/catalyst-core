@@ -98,7 +98,6 @@ export function createAssistantToolCallsMetadata(input: {
   toolCalls: readonly { toolCallId: ToolCallId | string; toolName: string; input: unknown }[];
   reasoning?: readonly StoredReasoningSummary[];
   modelContext?: StoredModelContextSnapshot;
-  providerContinuation?: StoredModelProviderContinuation;
 }): JsonObject {
   return wrapAgentRuntimeMetadata({
     version: MESSAGE_METADATA_VERSION,
@@ -110,8 +109,7 @@ export function createAssistantToolCallsMetadata(input: {
       input: unknownToJsonValue(toolCall.input)
     })),
     ...createReasoningMetadata(input.reasoning),
-    ...(input.modelContext ? { modelContext: input.modelContext } : {}),
-    ...(input.providerContinuation ? { providerContinuation: input.providerContinuation } : {})
+    ...(input.modelContext ? { modelContext: input.modelContext } : {})
   });
 }
 
@@ -123,7 +121,6 @@ export function createAssistantFinalMetadata(input: {
   finishStatus?: "completed" | "cancelled";
   cancellationReason?: string;
   modelContext?: StoredModelContextSnapshot;
-  providerContinuation?: StoredModelProviderContinuation;
 }): JsonObject {
   return wrapAgentRuntimeMetadata({
     version: MESSAGE_METADATA_VERSION,
@@ -133,8 +130,7 @@ export function createAssistantFinalMetadata(input: {
     ...(input.cancellationReason ? { cancellationReason: input.cancellationReason } : {}),
     ...createReasoningMetadata(input.reasoning),
     ...createWebSourceMetadata(input.sources, input.citations),
-    ...(input.modelContext ? { modelContext: input.modelContext } : {}),
-    ...(input.providerContinuation ? { providerContinuation: input.providerContinuation } : {})
+    ...(input.modelContext ? { modelContext: input.modelContext } : {})
   });
 }
 

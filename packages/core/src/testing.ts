@@ -3,6 +3,7 @@ import {
   type AgentRun,
   type AgentRunId,
   type AgentRunStore,
+  type AppendAssistantMessageInput,
   type AppendRunObservationInput,
   type AuditEvent,
   type AuditEventInput,
@@ -28,6 +29,8 @@ import {
   type ConversationId,
   type ConversationRetentionStore,
   type ConversationStore,
+  type ModelProviderContinuationCheckpoint,
+  type ModelProviderContinuationStore,
   type CreateAgentRunInput,
   type CreateConversationInput,
   type CreateWorkspaceInput,
@@ -90,6 +93,7 @@ export class InMemoryPlatformStore
   implements
     ConversationStore,
     ConversationRetentionStore,
+    ModelProviderContinuationStore,
     CollaborationWorkspaceStore,
     PlatformFileStore,
     AgentRunStore,
@@ -110,6 +114,10 @@ export class InMemoryPlatformStore
   private readonly workspaceMemberships = new Map<string, WorkspaceMembership>();
   private readonly workspaceAccessRequests = new Map<string, WorkspaceAccessRequest>();
   private readonly messages = new Map<string, ChatMessage[]>();
+  private readonly modelProviderContinuations = new Map<
+    string,
+    ModelProviderContinuationCheckpoint
+  >();
   private readonly structuredDataResources = new Map<string, StructuredDataResourceRecord>();
   private readonly fileStore: InMemoryPlatformFileStore = createInMemoryPlatformFileStore({
     requireActiveConversation: (clientInstanceId, conversationId) =>
@@ -838,6 +846,47 @@ export class InMemoryPlatformStore
     return message;
   }
 
+  async appendAssistantMessage(input: AppendAssistantMessageInput): Promise<ChatMessage> {
+    const conversation = await this.getConversation(input.clientInstanceId, input.conversationId);
+    if (!conversation || conversation.status !== "active") {
+      throw new AppError("NOT_FOUND", "Conversation is not available");
+    }
+
+    const message: ChatMessage = {
+      id: input.id ?? createPlatformId("msg"),
+      clientInstanceId: input.clientInstanceId,
+      conversationId: input.conversationId,
+      role: "assistant",
+      text: input.text,
+      createdAt: new Date().toISOString(),
+      metadata: input.metadata
+    };
+    const checkpoint = input.providerContinuation
+      ? {
+          clientInstanceId: input.clientInstanceId,
+          conversationId: input.conversationId,
+          providerId: input.providerContinuation.providerId,
+          state: input.providerContinuation.state,
+          sourceMessageId: message.id,
+          updatedAt: message.createdAt
+        }
+      : undefined;
+    const messages = this.messages.get(input.conversationId) ?? [];
+    messages.push(message);
+    this.messages.set(input.conversationId, messages);
+    if (checkpoint) {
+      this.modelProviderContinuations.set(
+        modelProviderContinuationKey(input.conversationId, checkpoint.providerId),
+        checkpoint
+      );
+    }
+    this.conversations.set(input.conversationId, {
+      ...conversation,
+      updatedAt: message.createdAt
+    });
+    return message;
+  }
+
   async listMessages(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
@@ -858,6 +907,17 @@ export class InMemoryPlatformStore
   }): Promise<ChatMessage[]> {
     const messages = await this.listMessages(input);
     return messages.slice(-input.limit);
+  }
+
+  async getModelProviderContinuation(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    providerId: string;
+  }): Promise<ModelProviderContinuationCheckpoint | undefined> {
+    const checkpoint = this.modelProviderContinuations.get(
+      modelProviderContinuationKey(input.conversationId, input.providerId)
+    );
+    return checkpoint?.clientInstanceId === input.clientInstanceId ? checkpoint : undefined;
   }
 
   async claimRunStartCommand(
@@ -1582,6 +1642,11 @@ export class InMemoryPlatformStore
     };
     this.conversations.set(input.conversationId, deleted);
     this.messages.set(input.conversationId, []);
+    for (const [key, checkpoint] of this.modelProviderContinuations) {
+      if (checkpoint.conversationId === input.conversationId) {
+        this.modelProviderContinuations.delete(key);
+      }
+    }
     for (const resource of this.structuredDataResources.values()) {
       if (
         resource.clientInstanceId === input.clientInstanceId &&
@@ -2048,6 +2113,10 @@ function workspaceMembershipKey(
   userId: UserRecord["id"]
 ): string {
   return `${collaborationWorkspaceId}:${userId}`;
+}
+
+function modelProviderContinuationKey(conversationId: ConversationId, providerId: string): string {
+  return `${conversationId}:${providerId}`;
 }
 
 function runStartCommandKey(input: {

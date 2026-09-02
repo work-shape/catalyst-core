@@ -240,6 +240,71 @@ describePostgres("Collaboration Workspace migration 0020", () => {
       await sql.end();
     }
   });
+
+  it("backfills the latest provider continuations without removing legacy metadata in 0022", async () => {
+    const { sql } = await createFreshDatabase();
+    try {
+      await applyMigrationsThrough(sql, 19);
+      await seedProductUser(sql, "continuation_user", "active");
+      await seedConversation(sql, "conv_continuation", "continuation_user");
+      await applyMigration(sql, "0020_collaboration_workspaces");
+      await applyMigration(sql, "0021_conversation_creator_attribution");
+
+      for (const [id, providerId, state, createdAt] of [
+        ["msg_provider_a_old", "provider-a", { value: "old" }, "2026-01-01T10:00:00Z"],
+        ["msg_provider_b", "provider-b", { value: "other" }, "2026-01-01T10:01:00Z"],
+        ["msg_provider_a_new", "provider-a", { value: "new" }, "2026-01-01T10:02:00Z"]
+      ] as const) {
+        await sql`
+          insert into messages (
+            id, client_instance_id, conversation_id, role, text, created_at, metadata
+          ) values (
+            ${id}, 'migration-test-client', 'conv_continuation', 'assistant', ${id},
+            ${createdAt},
+            ${sql.json({
+              agentRuntime: {
+                version: 1,
+                kind: "assistant_final",
+                runId: `run_${id}`,
+                finishStatus: "completed",
+                providerContinuation: { providerId, state }
+              }
+            })}
+          )
+        `;
+      }
+
+      await applyMigration(sql, "0022_lethal_titania");
+
+      const continuations = await sql<
+        Array<{ provider_id: string; state: unknown; source_message_id: string }>
+      >`
+        select provider_id, state, source_message_id
+        from model_provider_continuations
+        order by provider_id
+      `;
+      expect(continuations).toEqual([
+        {
+          provider_id: "provider-a",
+          state: { value: "new" },
+          source_message_id: "msg_provider_a_new"
+        },
+        {
+          provider_id: "provider-b",
+          state: { value: "other" },
+          source_message_id: "msg_provider_b"
+        }
+      ]);
+      const [legacyMetadata] = await sql<Array<{ count: string }>>`
+        select count(*)::text as count
+        from messages
+        where (metadata -> 'agentRuntime') ? 'providerContinuation'
+      `;
+      expect(legacyMetadata?.count).toBe("3");
+    } finally {
+      await sql.end();
+    }
+  });
 });
 
 async function applyMigrationsThrough(sql: Sql, finalIndex: number): Promise<void> {

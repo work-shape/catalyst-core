@@ -43,6 +43,53 @@ describePostgres("Postgres conversation store", () => {
           text: `Message ${index + 1}`
         });
       }
+      const firstCheckpointMessage = await store.appendAssistantMessage({
+        clientInstanceId,
+        conversationId: conversation.id,
+        text: "First checkpoint",
+        providerContinuation: {
+          providerId: "test-provider",
+          state: { checkpoint: "first" }
+        }
+      });
+      const latestCheckpointMessage = await store.appendAssistantMessage({
+        clientInstanceId,
+        conversationId: conversation.id,
+        text: "Latest checkpoint",
+        providerContinuation: {
+          providerId: "test-provider",
+          state: { checkpoint: "latest" }
+        }
+      });
+      await sql`
+        insert into model_provider_continuations (
+          client_instance_id, conversation_id, provider_id, state, source_message_id,
+          source_storage_ordinal, updated_at
+        )
+        select
+          client_instance_id, conversation_id, 'test-provider', ${sql.json({ checkpoint: "stale" })},
+          id, storage_ordinal, created_at
+        from messages
+        where id = ${firstCheckpointMessage.id}
+        on conflict (client_instance_id, conversation_id, provider_id) do update
+        set
+          state = excluded.state,
+          source_message_id = excluded.source_message_id,
+          source_storage_ordinal = excluded.source_storage_ordinal,
+          updated_at = excluded.updated_at
+        where model_provider_continuations.source_storage_ordinal
+          < excluded.source_storage_ordinal
+      `;
+      await expect(
+        store.getModelProviderContinuation({
+          clientInstanceId,
+          conversationId: conversation.id,
+          providerId: "test-provider"
+        })
+      ).resolves.toMatchObject({
+        state: { checkpoint: "latest" },
+        sourceMessageId: latestCheckpointMessage.id
+      });
       await sql`
         update messages
         set created_at = ${"2026-08-06T10:00:00.000Z"}
@@ -56,7 +103,10 @@ describePostgres("Postgres conversation store", () => {
           conversationId: conversation.id,
           limit: 2
         })
-      ).resolves.toMatchObject([{ id: messageIds[1] }, { id: messageIds[2] }]);
+      ).resolves.toMatchObject([
+        { id: firstCheckpointMessage.id },
+        { id: latestCheckpointMessage.id }
+      ]);
       await expect(
         store.listConversationsForWorkspace({
           clientInstanceId,

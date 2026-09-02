@@ -32,6 +32,7 @@ import type {
   JsonObject,
   ManagedArtifactRecord,
   ManagedFileRecord,
+  ModelProviderContinuationCheckpoint,
   ModelUsageEvent,
   RunObservation,
   RunStartCommand,
@@ -300,6 +301,29 @@ export const messages = pgTable(
       table.conversationId,
       table.createdAt.asc()
     )
+  ]
+);
+
+export const modelProviderContinuations = pgTable(
+  "model_provider_continuations",
+  {
+    clientInstanceId: text("client_instance_id").notNull(),
+    conversationId: text("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    providerId: text("provider_id").notNull(),
+    state: jsonb("state").$type<ModelProviderContinuationCheckpoint["state"]>().notNull(),
+    sourceMessageId: text("source_message_id")
+      .notNull()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    sourceStorageOrdinal: bigint("source_storage_ordinal", { mode: "number" }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    primaryKey({
+      name: "model_provider_continuations_pk",
+      columns: [table.clientInstanceId, table.conversationId, table.providerId]
+    })
   ]
 );
 
@@ -864,6 +888,7 @@ export const schema = {
   apiCredentials,
   conversations,
   messages,
+  modelProviderContinuations,
   agentRuns,
   agentRunObservations,
   runStartCommands,
