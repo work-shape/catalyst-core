@@ -116,7 +116,12 @@ function ChatWorkspaceContent({
   if (!model.auth.user) {
     return (
       <TranslationProvider locale={model.config.activeLocale}>
-        <SessionCheckPanel className={className} error={model.auth.sessionError} />
+        <SessionCheckPanel
+          className={className}
+          unavailable={model.auth.sessionUnavailable}
+          retrying={model.auth.sessionRetrying}
+          onRetry={model.auth.retryCurrentUser}
+        />
       </TranslationProvider>
     );
   }

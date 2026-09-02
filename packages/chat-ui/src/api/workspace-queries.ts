@@ -19,13 +19,37 @@ interface WorkspaceQueryInput {
 }
 
 export const PERSONAL_DEFAULT_CONVERSATION_LIST = "personal-default";
+const CURRENT_USER_DEADLINE_MS = 15_000;
 
 export function useWorkspaceMeQuery(input: Pick<WorkspaceQueryInput, "apiBaseUrl" | "client">) {
   return useQuery({
     queryKey: workspaceQueryKeys.me(input.apiBaseUrl),
-    queryFn: input.client.account.get,
+    queryFn: ({ signal }) => getCurrentUserWithinDeadline(input.client, signal),
     retry: false
   });
+}
+
+export async function getCurrentUserWithinDeadline(
+  client: { account: Pick<ApiClient["account"], "get"> },
+  querySignal: AbortSignal,
+  deadlineMs = CURRENT_USER_DEADLINE_MS
+) {
+  const controller = new AbortController();
+  const abortRequest = () => controller.abort(querySignal.reason);
+  const timeout = globalThis.setTimeout(() => controller.abort(), deadlineMs);
+
+  if (querySignal.aborted) {
+    abortRequest();
+  } else {
+    querySignal.addEventListener("abort", abortRequest, { once: true });
+  }
+
+  try {
+    return await client.account.get(controller.signal);
+  } finally {
+    globalThis.clearTimeout(timeout);
+    querySignal.removeEventListener("abort", abortRequest);
+  }
 }
 
 export function useWorkspaceConfigQuery(

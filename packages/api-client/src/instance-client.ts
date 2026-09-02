@@ -12,9 +12,9 @@ export function createInstanceClients(transport: ApiClientTransport) {
         )
     },
     account: {
-      get: () =>
+      get: (signal?: AbortSignal) =>
         transport.unwrapJson(
-          generatedSdk.getCurrentUser({ client: transport.generatedClient }),
+          generatedSdk.getCurrentUser({ client: transport.generatedClient, signal }),
           apiOperations.getCurrentUser.responseSchema
         ),
       update: (input: OperationRequestInput<typeof apiOperations.updateCurrentUser>) =>

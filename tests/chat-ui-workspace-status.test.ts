@@ -2,7 +2,10 @@ import { createElement } from "../packages/chat-ui/node_modules/react";
 import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
 import { describe, expect, it } from "vitest";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
-import { ConfigCheckPanel } from "../packages/chat-ui/src/workspace/workspace-chrome";
+import {
+  ConfigCheckPanel,
+  SessionCheckPanel
+} from "../packages/chat-ui/src/workspace/workspace-chrome";
 
 describe("workspace config status", () => {
   it("keeps the loading state neutral until customer config is available", () => {
@@ -30,5 +33,45 @@ describe("workspace config status", () => {
 
     expect(markup).toContain("Arbeitsbereich konnte nicht geladen werden");
     expect(markup).toContain("Bitte lade die Seite neu und versuche es noch einmal.");
+  });
+});
+
+describe("workspace session status", () => {
+  it("shows a neutral localized failure with one manual retry", () => {
+    const markup = renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { locale: "de" },
+        createElement(SessionCheckPanel, {
+          className: undefined,
+          unavailable: true,
+          retrying: false,
+          onRetry: () => undefined
+        })
+      )
+    );
+
+    expect(markup).toContain("Dienst nicht erreichbar");
+    expect(markup).toContain("Erneut versuchen");
+    expect(markup).not.toContain("beschäftigt");
+    expect(markup.match(/<button/gu)).toHaveLength(1);
+  });
+
+  it("does not offer retry while the initial check is still running", () => {
+    const markup = renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { locale: "en" },
+        createElement(SessionCheckPanel, {
+          className: undefined,
+          unavailable: false,
+          retrying: true,
+          onRetry: () => undefined
+        })
+      )
+    );
+
+    expect(markup).toContain("Checking session");
+    expect(markup).not.toContain("<button");
   });
 });

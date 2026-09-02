@@ -104,11 +104,13 @@ export interface WorkspaceAuthModel {
   apiBaseUrl: string;
   user: ApiUser | undefined;
   loginRequired: boolean;
-  sessionError: string | undefined;
+  sessionUnavailable: boolean;
+  sessionRetrying: boolean;
   signingOut: boolean;
   signOut(): void;
   openSettings(): void;
   invalidateCurrentUser(): void;
+  retryCurrentUser(): void;
 }
 
 export interface WorkspaceConfigModel {
@@ -610,11 +612,13 @@ export function useWorkspaceChatModel({
       apiBaseUrl,
       user: meQuery.data,
       loginRequired: apiErrorStatus(meQuery.error) === 401,
-      sessionError: meQuery.error ? apiErrorMessage(meQuery.error, undefined) : undefined,
+      sessionUnavailable: Boolean(meQuery.error),
+      sessionRetrying: meQuery.isFetching,
       signingOut: signOutMutation.isPending,
       signOut: () => signOutMutation.mutate(),
       openSettings: routeState.showSettings,
-      invalidateCurrentUser: workspaceCache.invalidateCurrentUser
+      invalidateCurrentUser: workspaceCache.invalidateCurrentUser,
+      retryCurrentUser: () => void meQuery.refetch()
     },
     config: {
       config,
