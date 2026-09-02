@@ -201,6 +201,8 @@ export function mapAgentRun(row: AgentRunRow | undefined): AgentRun {
     ownerUserId: row.ownerUserId,
     inputMessageId: asMessageId(row.inputMessageId),
     agentName: row.agentName,
+    modelBindingId: row.modelBindingId ?? undefined,
+    locale: row.locale ?? undefined,
     status: row.status,
     idempotencyKey: row.idempotencyKey ?? undefined,
     startedAt: row.startedAt.toISOString(),
@@ -212,8 +214,11 @@ export function mapAgentRun(row: AgentRunRow | undefined): AgentRun {
     error: row.error ?? undefined,
     correlationId: row.correlationId,
     leaseOwner: row.leaseOwner ?? undefined,
+    leaseToken: row.leaseToken ?? undefined,
     leaseExpiresAt: row.leaseExpiresAt?.toISOString(),
-    heartbeatAt: row.heartbeatAt?.toISOString()
+    heartbeatAt: row.heartbeatAt?.toISOString(),
+    cancellationRequestedAt: row.cancellationRequestedAt?.toISOString(),
+    cancellationReason: row.cancellationReason ?? undefined
   };
 }
 

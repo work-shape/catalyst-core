@@ -24,11 +24,14 @@ import {
   type AgentRun,
   type AgentRunId,
   type AgentRunStore,
+  type AppendClaimedRunObservationInput,
   type AppendAssistantMessageInput,
   type AppendRunObservationInput,
+  type ClaimAgentRunInput,
   type ClaimRunStartCommandInput,
   type ClaimRunStartCommandResult,
   type CompleteRunStartCommandInput,
+  type HeartbeatAgentRunInput,
   type CreateConversationInput,
   type CreateWorkspaceInput,
   type CreateApiCredentialInput,
@@ -50,6 +53,8 @@ import {
   type ModelUsageWindowSummary,
   type PlatformFileStore,
   type ReleaseRunStartCommandInput,
+  type RecoverExpiredAgentRunsInput,
+  type RequestAgentRunCancellationInput,
   type ResolveUserIdentityInput,
   type RunObservation,
   type RunObservationStore,
@@ -104,7 +109,9 @@ import {
   updateServicePrincipal as updatePostgresServicePrincipal
 } from "./postgres-api-access-operations";
 import {
+  appendClaimedRunObservation as appendPostgresClaimedRunObservation,
   appendRunObservation as appendPostgresRunObservation,
+  claimNextAgentRun as claimNextPostgresAgentRun,
   claimRunStartCommand as claimPostgresRunStartCommand,
   completeRunStartCommand as completePostgresRunStartCommand,
   createAgentRun as createPostgresAgentRun,
@@ -112,11 +119,14 @@ import {
   getActiveConversationAgentRun as getPostgresActiveConversationAgentRun,
   getConversationAgentRun as getPostgresConversationAgentRun,
   getLatestConversationAgentRun as getPostgresLatestConversationAgentRun,
+  heartbeatAgentRun as heartbeatPostgresAgentRun,
   listRunObservations as listPostgresRunObservations,
   prepareConversationRunStart as preparePostgresConversationRunStart,
   listStaleActiveAgentRuns as listPostgresStaleActiveAgentRuns,
   releaseRunStartCommand as releasePostgresRunStartCommand,
   recoverStaleAgentRun as recoverPostgresStaleAgentRun,
+  recoverExpiredAgentRuns as recoverPostgresExpiredAgentRuns,
+  requestAgentRunCancellation as requestPostgresAgentRunCancellation,
   updateAgentRunStatus as updatePostgresAgentRunStatus
 } from "./postgres-agent-run-operations";
 import {
@@ -635,6 +645,28 @@ export class PostgresPlatformStore
 
   async recoverStaleAgentRun(input: Parameters<AgentRunStore["recoverStaleAgentRun"]>[0]) {
     return recoverPostgresStaleAgentRun(this.db, input);
+  }
+
+  async claimNextAgentRun(input: ClaimAgentRunInput): Promise<AgentRun | undefined> {
+    return claimNextPostgresAgentRun(this.db, input);
+  }
+
+  async heartbeatAgentRun(input: HeartbeatAgentRunInput): Promise<AgentRun> {
+    return heartbeatPostgresAgentRun(this.db, input);
+  }
+
+  async requestAgentRunCancellation(input: RequestAgentRunCancellationInput): Promise<AgentRun> {
+    return requestPostgresAgentRunCancellation(this.db, input);
+  }
+
+  async appendClaimedRunObservation(
+    input: AppendClaimedRunObservationInput
+  ): Promise<RunObservation> {
+    return appendPostgresClaimedRunObservation(this.db, input);
+  }
+
+  async recoverExpiredAgentRuns(input: RecoverExpiredAgentRunsInput): Promise<AgentRun[]> {
+    return recoverPostgresExpiredAgentRuns(this.db, input);
   }
 
   async appendRunObservation(input: AppendRunObservationInput): Promise<RunObservation> {

@@ -1,0 +1,172 @@
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import {
+  asAgentRunId,
+  asClientInstanceId,
+  asMessageId,
+  type AgentRun,
+  type ClientInstanceId
+} from "@vivd-catalyst/core";
+import { PostgresPlatformStore } from "@vivd-catalyst/postgres-store";
+
+const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
+const describePostgres = databaseUrl ? describe : describe.skip;
+
+describePostgres("Postgres agent run worker store", () => {
+  let store: PostgresPlatformStore;
+  let secondStore: PostgresPlatformStore;
+
+  beforeAll(async () => {
+    store = await PostgresPlatformStore.connect({ databaseUrl: databaseUrl!, runMigrations: true });
+    secondStore = await PostgresPlatformStore.connect({
+      databaseUrl: databaseUrl!,
+      runMigrations: false
+    });
+  });
+
+  afterAll(async () => {
+    await secondStore?.close();
+    await store?.close();
+  });
+
+  it("claims a queued run once across separate connections", async () => {
+    const fixture = await createQueuedRun(store);
+    const [first, second] = await Promise.all([
+      store.claimNextAgentRun(claimInput(fixture, "worker-a", "lease-a")),
+      secondStore.claimNextAgentRun(claimInput(fixture, "worker-b", "lease-b"))
+    ]);
+
+    expect([first, second].filter(Boolean)).toHaveLength(1);
+    expect([first, second].find(Boolean)).toMatchObject({
+      id: fixture.run.id,
+      status: "running"
+    });
+  });
+
+  it("fences observation and terminal writes by lease token", async () => {
+    const fixture = await createQueuedRun(store);
+    const claimed = await store.claimNextAgentRun(claimInput(fixture, "worker-a", "current-token"));
+    expect(claimed).toBeDefined();
+    await expect(
+      secondStore.appendClaimedRunObservation({
+        clientInstanceId: fixture.clientInstanceId,
+        runId: fixture.run.id,
+        leaseToken: "stale-token",
+        event: {
+          type: "run_completed",
+          runId: fixture.run.id,
+          sequence: 1,
+          createdAt: "2026-09-02T12:01:00.000Z"
+        }
+      })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    await store.appendClaimedRunObservation({
+      clientInstanceId: fixture.clientInstanceId,
+      runId: fixture.run.id,
+      leaseToken: "current-token",
+      event: {
+        type: "run_completed",
+        runId: fixture.run.id,
+        sequence: 1,
+        createdAt: "2026-09-02T12:01:00.000Z"
+      }
+    });
+    await expect(
+      secondStore.appendClaimedRunObservation({
+        clientInstanceId: fixture.clientInstanceId,
+        runId: fixture.run.id,
+        leaseToken: "current-token",
+        event: {
+          type: "run_failed",
+          runId: fixture.run.id,
+          sequence: 2,
+          createdAt: "2026-09-02T12:02:00.000Z",
+          error: { code: "LATE", message: "Late worker", category: "internal_error" }
+        }
+      })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("terminalizes an expired lease once", async () => {
+    const fixture = await createQueuedRun(store);
+    await store.claimNextAgentRun(
+      claimInput(fixture, "worker-a", "expired-token", "2026-09-02T12:00:01.000Z")
+    );
+    const input = {
+      clientInstanceId: fixture.clientInstanceId,
+      leaseExpiredBefore: "2026-09-02T12:01:00.000Z",
+      recoveredAt: "2026-09-02T12:01:00.000Z",
+      error: {
+        code: "AGENT_RUN_RUNTIME_INTERRUPTED",
+        message: "Lease expired",
+        category: "runtime_interrupted" as const
+      },
+      limit: 10
+    };
+    expect(await store.recoverExpiredAgentRuns(input)).toHaveLength(1);
+    expect(await secondStore.recoverExpiredAgentRuns(input)).toEqual([]);
+    await expect(
+      store.listRunObservations({
+        clientInstanceId: fixture.clientInstanceId,
+        runId: fixture.run.id
+      })
+    ).resolves.toMatchObject([
+      { type: "run_failed", sequence: 1, payload: { error: { category: "runtime_interrupted" } } }
+    ]);
+  });
+});
+
+async function createQueuedRun(store: PostgresPlatformStore): Promise<{
+  clientInstanceId: ClientInstanceId;
+  run: AgentRun;
+}> {
+  const id = globalThis.crypto.randomUUID();
+  const clientInstanceId = asClientInstanceId(`agent-worker-${id}`);
+  const user = await store.createUser({ clientInstanceId, displayLabel: "Agent worker owner" });
+  const workspace = await store.ensurePersonalWorkspace({ clientInstanceId, userId: user.id });
+  const conversation = await store.createConversation({
+    clientInstanceId,
+    collaborationWorkspaceId: workspace.id,
+    createdByUserId: user.id,
+    createdByExternalUserId: `external-${id}`,
+    title: "Agent worker test",
+    retainedUntil: "2030-01-01T00:00:00.000Z"
+  });
+  const inputMessageId = asMessageId(`msg-${id}`);
+  await store.appendMessage({
+    id: inputMessageId,
+    clientInstanceId,
+    conversationId: conversation.id,
+    role: "user",
+    text: "Run it"
+  });
+  const run = await store.createAgentRun({
+    id: asAgentRunId(`run-${id}`),
+    clientInstanceId,
+    conversationId: conversation.id,
+    ownerUserId: user.id,
+    inputMessageId,
+    agentName: "worker-test",
+    modelBindingId: "binding-test",
+    locale: "de-DE",
+    status: "queued",
+    correlationId: `corr-${id}`,
+    startedAt: "2026-09-02T12:00:00.000Z"
+  });
+  return { clientInstanceId, run };
+}
+
+function claimInput(
+  fixture: { clientInstanceId: ClientInstanceId },
+  workerId: string,
+  leaseToken: string,
+  leaseExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+) {
+  return {
+    clientInstanceId: fixture.clientInstanceId,
+    workerId,
+    leaseToken,
+    now: new Date().toISOString(),
+    leaseExpiresAt
+  };
+}

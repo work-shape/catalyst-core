@@ -395,6 +395,9 @@ export class ConversationWorkflow {
           ownerUserId: getSubjectUserId(user),
           inputMessageId: userMessageId,
           agentName: command.agentName ?? (await this.requireDefaultAgentName()),
+          modelBindingId: command.modelBindingId,
+          locale: context.locale,
+          status: "queued",
           idempotencyKey: command.idempotencyKey,
           correlationId: context.correlationId,
           startedAt
@@ -414,7 +417,7 @@ export class ConversationWorkflow {
       const run = await this.options.agentRuntime.start(
         {
           agentName: prepared.run.agentName,
-          modelBindingId: command.modelBindingId,
+          modelBindingId: prepared.run.modelBindingId,
           conversationId,
           idempotencyKey: command.idempotencyKey,
           inputMessageId: prepared.userMessage.id,

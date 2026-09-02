@@ -152,9 +152,19 @@ export class LocalAgentRuntime implements AgentRuntime {
         ownerUserId: getRuntimeSubjectUserId(context),
         inputMessageId: input.inputMessageId,
         agentName: input.agentName,
+        modelBindingId: input.modelBindingId,
+        locale: context.locale,
+        status: "running",
         idempotencyKey: input.idempotencyKey,
         correlationId: context.correlationId,
         startedAt: state.startedAt
+      });
+    } else if (this.options.agentRunStore && input.preparedRun) {
+      await this.options.agentRunStore.updateAgentRunStatus({
+        clientInstanceId: context.clientInstanceId,
+        runId,
+        status: "running",
+        updatedAt: new Date().toISOString()
       });
     }
     this.runs.set(runId, state);
@@ -376,7 +386,7 @@ export class LocalAgentRuntime implements AgentRuntime {
           : undefined;
 
       if (completion.toolCalls.length === 0) {
-        if (isCancellationRequested(state.getStatus())) {
+        if (context.signal?.aborted || isCancellationRequested(state.getStatus())) {
           return;
         }
         const assistantText = completion.text || completedWithoutTextFallback(context.locale);
@@ -424,6 +434,7 @@ export class LocalAgentRuntime implements AgentRuntime {
       });
 
       for (const toolCall of completion.toolCalls) {
+        if (context.signal?.aborted) return;
         const result = await executeToolCall({
           runId,
           startInput: input,

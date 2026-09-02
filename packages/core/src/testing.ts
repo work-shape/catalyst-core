@@ -3,6 +3,7 @@ import {
   type AgentRun,
   type AgentRunId,
   type AgentRunStore,
+  type AppendClaimedRunObservationInput,
   type AppendAssistantMessageInput,
   type AppendRunObservationInput,
   type AuditEvent,
@@ -11,6 +12,7 @@ import {
   type ApiAccessStore,
   type ApiCredentialRecord,
   type ChatMessage,
+  type ClaimAgentRunInput,
   type ClaimRunStartCommandInput,
   type ClaimRunStartCommandResult,
   type ClientInstanceId,
@@ -35,6 +37,7 @@ import {
   type CreateConversationInput,
   type CreateWorkspaceInput,
   type CreateMessageInput,
+  type HeartbeatAgentRunInput,
   type ExecutionWorkspaceCleanupStore,
   type ExecutionWorkspaceFileStore,
   type ExecutionWorkspaceMetadataStore,
@@ -44,6 +47,8 @@ import {
   type ReleaseRunStartCommandInput,
   type RecoverStaleAgentRunInput,
   type RecoverStaleAgentRunResult,
+  type RecoverExpiredAgentRunsInput,
+  type RequestAgentRunCancellationInput,
   type RunObservation,
   type RunObservationStore,
   type RunStartCommand,
@@ -1052,7 +1057,7 @@ export class InMemoryPlatformStore
         claimedAt: userMessage.createdAt
       });
     }
-    const run = await this.createAgentRun(input.run);
+    const run = await this.createAgentRun({ ...input.run, status: input.run.status ?? "queued" });
     if (input.runStartCommand) {
       await this.completeRunStartCommand({
         clientInstanceId: input.clientInstanceId,
@@ -1103,7 +1108,9 @@ export class InMemoryPlatformStore
       ownerUserId: input.ownerUserId,
       inputMessageId: input.inputMessageId,
       agentName: input.agentName,
-      status: "running",
+      modelBindingId: input.modelBindingId,
+      locale: input.locale,
+      status: input.status ?? "running",
       idempotencyKey: input.idempotencyKey,
       startedAt: now,
       updatedAt: now,
@@ -1256,6 +1263,203 @@ export class InMemoryPlatformStore
       run: updated,
       observation
     };
+  }
+
+  async claimNextAgentRun(input: ClaimAgentRunInput): Promise<AgentRun | undefined> {
+    const run = [...this.agentRuns.values()]
+      .filter(
+        (candidate) =>
+          candidate.clientInstanceId === input.clientInstanceId && candidate.status === "queued"
+      )
+      .sort((left, right) =>
+        `${left.startedAt}:${left.id}`.localeCompare(`${right.startedAt}:${right.id}`)
+      )[0];
+    if (!run) return undefined;
+    const claimed: AgentRun = {
+      ...run,
+      status: "running",
+      leaseOwner: input.workerId,
+      leaseToken: input.leaseToken,
+      leaseExpiresAt: input.leaseExpiresAt,
+      heartbeatAt: input.now,
+      updatedAt: input.now
+    };
+    this.agentRuns.set(run.id, claimed);
+    return claimed;
+  }
+
+  async heartbeatAgentRun(input: HeartbeatAgentRunInput): Promise<AgentRun> {
+    const run = await this.requireActiveAgentRunLease(input, input.heartbeatAt);
+    const updated: AgentRun = {
+      ...run,
+      heartbeatAt: input.heartbeatAt,
+      leaseExpiresAt: input.leaseExpiresAt,
+      updatedAt: input.heartbeatAt
+    };
+    this.agentRuns.set(run.id, updated);
+    return updated;
+  }
+
+  async requestAgentRunCancellation(input: RequestAgentRunCancellationInput): Promise<AgentRun> {
+    const run = await this.getAgentRun(input);
+    if (!run) throw new AppError("NOT_FOUND", "Agent run is not available");
+    if (!isActiveAgentRunStatus(run.status)) return run;
+    if (run.status === "queued") {
+      const sequence = run.lastSequence + 1;
+      const event = {
+        type: "run_cancelled" as const,
+        runId: run.id,
+        sequence,
+        createdAt: input.requestedAt,
+        ...(input.reason ? { reason: input.reason } : {})
+      };
+      const observation: RunObservation = {
+        clientInstanceId: run.clientInstanceId,
+        runId: run.id,
+        conversationId: run.conversationId,
+        ownerUserId: run.ownerUserId,
+        sequence,
+        type: event.type,
+        payload: event,
+        createdAt: input.requestedAt
+      };
+      this.runObservations.set(run.id, [...(this.runObservations.get(run.id) ?? []), observation]);
+      const cancelled: AgentRun = {
+        ...run,
+        status: "cancelled",
+        cancellationRequestedAt: input.requestedAt,
+        cancellationReason: input.reason,
+        cancelledAt: input.requestedAt,
+        updatedAt: input.requestedAt,
+        lastSequence: sequence
+      };
+      this.agentRuns.set(run.id, cancelled);
+      return cancelled;
+    }
+    const cancelling: AgentRun = {
+      ...run,
+      status: "cancelling",
+      cancellationRequestedAt: input.requestedAt,
+      cancellationReason: input.reason,
+      updatedAt: input.requestedAt
+    };
+    this.agentRuns.set(run.id, cancelling);
+    return cancelling;
+  }
+
+  async appendClaimedRunObservation(
+    input: AppendClaimedRunObservationInput
+  ): Promise<RunObservation> {
+    const run = await this.requireActiveAgentRunLease(input, input.event.createdAt);
+    if (input.event.runId !== input.runId || input.event.sequence !== run.lastSequence + 1) {
+      throw new AppError("CONFLICT", "Agent run lease or observation sequence is stale");
+    }
+    const observation: RunObservation = {
+      clientInstanceId: run.clientInstanceId,
+      runId: run.id,
+      conversationId: run.conversationId,
+      ownerUserId: run.ownerUserId,
+      sequence: input.event.sequence,
+      type: input.event.type,
+      payload: input.event,
+      createdAt: input.event.createdAt
+    };
+    this.runObservations.set(run.id, [...(this.runObservations.get(run.id) ?? []), observation]);
+    let updated: AgentRun = {
+      ...run,
+      lastSequence: input.event.sequence,
+      updatedAt: input.event.createdAt
+    };
+    if (input.event.type === "tool_permission_requested") {
+      updated = { ...updated, status: "waiting_for_permission" };
+    } else if (isTerminalRunObservation(observation)) {
+      updated = {
+        ...terminalRunFromObservation(updated, observation),
+        leaseOwner: undefined,
+        leaseToken: undefined,
+        leaseExpiresAt: undefined,
+        heartbeatAt: undefined
+      };
+    }
+    this.agentRuns.set(run.id, updated);
+    return observation;
+  }
+
+  async recoverExpiredAgentRuns(input: RecoverExpiredAgentRunsInput): Promise<AgentRun[]> {
+    const stale = [...this.agentRuns.values()]
+      .filter(
+        (run) =>
+          run.clientInstanceId === input.clientInstanceId &&
+          (run.status === "running" ||
+            run.status === "waiting_for_permission" ||
+            run.status === "cancelling") &&
+          run.leaseExpiresAt !== undefined &&
+          run.leaseExpiresAt < input.leaseExpiredBefore
+      )
+      .sort((left, right) =>
+        `${left.leaseExpiresAt}:${left.id}`.localeCompare(`${right.leaseExpiresAt}:${right.id}`)
+      )
+      .slice(0, input.limit);
+    const recovered: AgentRun[] = [];
+    for (const run of stale) {
+      const sequence = run.lastSequence + 1;
+      const event = {
+        type: "run_failed" as const,
+        runId: run.id,
+        sequence,
+        createdAt: input.recoveredAt,
+        error: input.error
+      };
+      const observation: RunObservation = {
+        clientInstanceId: run.clientInstanceId,
+        runId: run.id,
+        conversationId: run.conversationId,
+        ownerUserId: run.ownerUserId,
+        sequence,
+        type: event.type,
+        payload: event,
+        createdAt: input.recoveredAt
+      };
+      this.runObservations.set(run.id, [...(this.runObservations.get(run.id) ?? []), observation]);
+      const failed: AgentRun = {
+        ...run,
+        status: "failed",
+        failedAt: input.recoveredAt,
+        updatedAt: input.recoveredAt,
+        lastSequence: sequence,
+        error: input.error,
+        leaseOwner: undefined,
+        leaseToken: undefined,
+        leaseExpiresAt: undefined,
+        heartbeatAt: undefined
+      };
+      this.agentRuns.set(run.id, failed);
+      recovered.push(failed);
+    }
+    return recovered;
+  }
+
+  private async requireActiveAgentRunLease(
+    input: {
+      clientInstanceId: ClientInstanceId;
+      runId: AgentRunId;
+      leaseToken: string;
+    },
+    validAt: string
+  ): Promise<AgentRun> {
+    const run = await this.getAgentRun(input);
+    if (
+      !run ||
+      run.leaseToken !== input.leaseToken ||
+      !run.leaseExpiresAt ||
+      run.leaseExpiresAt <= validAt ||
+      (run.status !== "running" &&
+        run.status !== "waiting_for_permission" &&
+        run.status !== "cancelling")
+    ) {
+      throw new AppError("CONFLICT", "Agent run lease is no longer active");
+    }
+    return run;
   }
 
   async appendRunObservation(input: AppendRunObservationInput): Promise<RunObservation> {

@@ -375,7 +375,7 @@ function appendAssistantFinalStatusForModel(
   return text.trim().length > 0 ? `${text}\n\n${marker}` : marker;
 }
 
-function readUserAttachmentManifest(
+export function readUserAttachmentManifest(
   metadata: JsonObject | undefined
 ): AttachmentManifest | undefined {
   const runtime = readUserMessageMetadata(metadata);

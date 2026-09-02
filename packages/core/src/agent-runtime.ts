@@ -4,6 +4,7 @@ import type { ISODateString } from "./time";
 import type { ManagedFileRef } from "./files";
 import type { AttachmentManifest } from "./files";
 import type { RuntimeCallContext } from "./identity";
+import type { LocaleCode } from "./localization";
 import type { ToolExecutionResult } from "./tool-execution";
 import type { ChatMessage } from "./conversation";
 
@@ -55,6 +56,8 @@ export interface AgentRun {
   ownerUserId: string;
   inputMessageId: MessageId;
   agentName: string;
+  modelBindingId?: string;
+  locale?: LocaleCode;
   status: AgentRunStatus;
   idempotencyKey?: string;
   startedAt: ISODateString;
@@ -66,8 +69,11 @@ export interface AgentRun {
   error?: AgentRunError;
   correlationId: string;
   leaseOwner?: string;
+  leaseToken?: string;
   leaseExpiresAt?: ISODateString;
   heartbeatAt?: ISODateString;
+  cancellationRequestedAt?: ISODateString;
+  cancellationReason?: string;
 }
 
 export interface ActiveRunSummary {
@@ -311,6 +317,9 @@ export interface CreateAgentRunInput {
   ownerUserId: string;
   inputMessageId: MessageId;
   agentName: string;
+  modelBindingId?: string;
+  locale?: LocaleCode;
+  status?: "queued" | "running";
   idempotencyKey?: string;
   correlationId: string;
   startedAt?: ISODateString;
@@ -358,6 +367,44 @@ export interface RecoverStaleAgentRunInput {
   staleUpdatedBefore: ISODateString;
   recoveredAt: ISODateString;
   error: AgentRunError;
+}
+
+export interface ClaimAgentRunInput {
+  clientInstanceId: ClientInstanceId;
+  workerId: string;
+  leaseToken: string;
+  now: ISODateString;
+  leaseExpiresAt: ISODateString;
+}
+
+export interface HeartbeatAgentRunInput {
+  clientInstanceId: ClientInstanceId;
+  runId: AgentRunId;
+  leaseToken: string;
+  heartbeatAt: ISODateString;
+  leaseExpiresAt: ISODateString;
+}
+
+export interface RequestAgentRunCancellationInput {
+  clientInstanceId: ClientInstanceId;
+  runId: AgentRunId;
+  requestedAt: ISODateString;
+  reason?: string;
+}
+
+export interface AppendClaimedRunObservationInput {
+  clientInstanceId: ClientInstanceId;
+  runId: AgentRunId;
+  leaseToken: string;
+  event: AgentRuntimeEvent;
+}
+
+export interface RecoverExpiredAgentRunsInput {
+  clientInstanceId: ClientInstanceId;
+  leaseExpiredBefore: ISODateString;
+  recoveredAt: ISODateString;
+  error: AgentRunError;
+  limit: number;
 }
 
 export type RecoverStaleAgentRunResult =
@@ -432,6 +479,11 @@ export interface AgentRunStore {
     limit: number;
   }): Promise<AgentRun[]>;
   recoverStaleAgentRun(input: RecoverStaleAgentRunInput): Promise<RecoverStaleAgentRunResult>;
+  claimNextAgentRun(input: ClaimAgentRunInput): Promise<AgentRun | undefined>;
+  heartbeatAgentRun(input: HeartbeatAgentRunInput): Promise<AgentRun>;
+  requestAgentRunCancellation(input: RequestAgentRunCancellationInput): Promise<AgentRun>;
+  appendClaimedRunObservation(input: AppendClaimedRunObservationInput): Promise<RunObservation>;
+  recoverExpiredAgentRuns(input: RecoverExpiredAgentRunsInput): Promise<AgentRun[]>;
 }
 
 export interface AppendRunObservationInput {

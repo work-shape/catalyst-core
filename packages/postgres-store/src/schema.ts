@@ -340,6 +340,8 @@ export const agentRuns = pgTable(
       .notNull()
       .references(() => messages.id, { onDelete: "cascade" }),
     agentName: text("agent_name").notNull(),
+    modelBindingId: text("model_binding_id"),
+    locale: text("locale").$type<AgentRun["locale"]>(),
     status: text("status").$type<AgentRun["status"]>().notNull(),
     idempotencyKey: text("idempotency_key"),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
@@ -351,8 +353,11 @@ export const agentRuns = pgTable(
     error: jsonb("error").$type<NonNullable<AgentRun["error"]>>(),
     correlationId: text("correlation_id").notNull(),
     leaseOwner: text("lease_owner"),
+    leaseToken: text("lease_token"),
     leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
-    heartbeatAt: timestamp("heartbeat_at", { withTimezone: true })
+    heartbeatAt: timestamp("heartbeat_at", { withTimezone: true }),
+    cancellationRequestedAt: timestamp("cancellation_requested_at", { withTimezone: true }),
+    cancellationReason: text("cancellation_reason")
   },
   (table) => [
     uniqueIndex("agent_runs_active_conversation_idx")
@@ -370,7 +375,9 @@ export const agentRuns = pgTable(
       table.clientInstanceId,
       table.ownerUserId,
       table.startedAt.desc()
-    )
+    ),
+    index("agent_runs_queue_idx").on(table.clientInstanceId, table.status, table.startedAt.asc()),
+    index("agent_runs_lease_idx").on(table.clientInstanceId, table.status, table.leaseExpiresAt)
   ]
 );
 
