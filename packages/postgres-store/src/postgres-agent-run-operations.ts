@@ -3,7 +3,9 @@ import {
   AppError,
   type AgentRun,
   type AgentRunId,
+  type AppendClaimedAgentRunMessageInput,
   type AgentRuntimeEvent,
+  type AssertClaimedAgentRunInput,
   type AppendClaimedRunObservationInput,
   type AppendRunObservationInput,
   type ClaimAgentRunInput,
@@ -26,6 +28,7 @@ import {
   asClientInstanceId,
   asConversationId,
   asMessageId,
+  createPlatformId,
   type RunStartCommand,
   type UpdateAgentRunStatusInput
 } from "@vivd-catalyst/core";
@@ -37,6 +40,7 @@ import {
   conversationAttachments,
   conversations,
   messages,
+  modelProviderContinuations,
   runStartCommands
 } from "./schema";
 
@@ -175,7 +179,6 @@ export async function prepareConversationRunStart(
         metadata: input.userMessage.metadata ?? {}
       })
       .returning();
-
     if (input.claimReadyDraftAttachments) {
       await tx
         .update(conversationAttachments)
@@ -204,6 +207,7 @@ export async function prepareConversationRunStart(
         agentName: input.run.agentName,
         modelBindingId: input.run.modelBindingId,
         locale: input.run.locale,
+        authorizationContext: input.run.authorization,
         status: input.run.status ?? "queued",
         idempotencyKey: input.run.idempotencyKey,
         startedAt: createdAt,
@@ -276,6 +280,7 @@ export async function createAgentRun(
       agentName: input.agentName,
       modelBindingId: input.modelBindingId,
       locale: input.locale,
+      authorizationContext: input.authorization,
       status: input.status ?? "running",
       idempotencyKey: input.idempotencyKey,
       startedAt: now,
@@ -653,7 +658,7 @@ export async function appendClaimedRunObservation(
           : {}),
         ...terminal
       })
-      .where(and(activeLeaseWhere(input), eq(agentRuns.lastSequence, input.event.sequence - 1)))
+      .where(and(eventLeaseWhere(input), eq(agentRuns.lastSequence, input.event.sequence - 1)))
       .returning();
     if (!run) throw new AppError("CONFLICT", "Agent run lease or observation sequence is stale");
 
@@ -671,6 +676,86 @@ export async function appendClaimedRunObservation(
       })
       .returning();
     return mapRunObservation(row);
+  });
+}
+
+export async function assertClaimedAgentRun(
+  db: PostgresDatabase,
+  input: AssertClaimedAgentRunInput
+): Promise<AgentRun> {
+  const [row] = await db.select().from(agentRuns).where(effectLeaseWhere(input)).limit(1);
+  if (!row) throw new AppError("CONFLICT", "Agent run lease is no longer active");
+  return mapAgentRun(row);
+}
+
+export async function appendClaimedAgentRunMessage(
+  db: PostgresDatabase,
+  input: AppendClaimedAgentRunMessageInput
+) {
+  return db.transaction(async (tx) => {
+    const [run] = await tx
+      .select()
+      .from(agentRuns)
+      .where(effectLeaseWhere(input))
+      .limit(1)
+      .for("update");
+    if (!run) throw new AppError("CONFLICT", "Agent run lease is no longer active");
+    if (input.message.conversationId !== run.conversationId) {
+      throw new AppError("CONFLICT", "Agent run message belongs to another conversation");
+    }
+    const createdAt = new Date();
+    const [row] = await tx
+      .insert(messages)
+      .values({
+        id: input.message.id ?? createPlatformId<"MessageId">("msg"),
+        clientInstanceId: input.clientInstanceId,
+        conversationId: run.conversationId,
+        role: input.message.role,
+        text: input.message.text,
+        metadata: input.message.metadata ?? {},
+        createdAt
+      })
+      .returning();
+    if (!row) throw new AppError("INTERNAL", "Agent run message was not persisted");
+    await tx
+      .update(conversations)
+      .set({ updatedAt: createdAt })
+      .where(
+        and(
+          eq(conversations.clientInstanceId, input.clientInstanceId),
+          eq(conversations.id, run.conversationId),
+          eq(conversations.status, "active")
+        )
+      );
+    if (input.message.role === "assistant" && input.message.providerContinuation) {
+      const continuation = input.message.providerContinuation;
+      await tx
+        .insert(modelProviderContinuations)
+        .values({
+          clientInstanceId: input.clientInstanceId,
+          conversationId: run.conversationId,
+          providerId: continuation.providerId,
+          state: continuation.state,
+          sourceMessageId: row.id,
+          sourceStorageOrdinal: row.storageOrdinal,
+          updatedAt: createdAt
+        })
+        .onConflictDoUpdate({
+          target: [
+            modelProviderContinuations.clientInstanceId,
+            modelProviderContinuations.conversationId,
+            modelProviderContinuations.providerId
+          ],
+          set: {
+            state: continuation.state,
+            sourceMessageId: row.id,
+            sourceStorageOrdinal: row.storageOrdinal,
+            updatedAt: createdAt
+          },
+          setWhere: lt(modelProviderContinuations.sourceStorageOrdinal, row.storageOrdinal)
+        });
+    }
+    return mapMessage(row);
   });
 }
 
@@ -870,6 +955,29 @@ function activeLeaseWhere(input: {
     eq(agentRuns.leaseToken, input.leaseToken),
     gt(agentRuns.leaseExpiresAt, drizzleSql`now()`),
     drizzleSql`${agentRuns.status} in ('running', 'waiting_for_permission', 'cancelling')`
+  );
+}
+
+function eventLeaseWhere(input: AppendClaimedRunObservationInput) {
+  return and(
+    activeLeaseWhere(input),
+    input.event.type === "run_cancelled"
+      ? drizzleSql`${agentRuns.status} in ('running', 'waiting_for_permission', 'cancelling')`
+      : drizzleSql`${agentRuns.status} in ('running', 'waiting_for_permission')`
+  );
+}
+
+function effectLeaseWhere(input: {
+  clientInstanceId: ClientInstanceId;
+  runId: AgentRunId;
+  leaseToken: string;
+}) {
+  return and(
+    eq(agentRuns.clientInstanceId, input.clientInstanceId),
+    eq(agentRuns.id, input.runId),
+    eq(agentRuns.leaseToken, input.leaseToken),
+    gt(agentRuns.leaseExpiresAt, drizzleSql`now()`),
+    drizzleSql`${agentRuns.status} in ('running', 'waiting_for_permission')`
   );
 }
 

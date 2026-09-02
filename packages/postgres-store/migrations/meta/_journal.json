@@ -169,6 +169,13 @@
       "when": 1788363116652,
       "tag": "0023_productive_strong_guy",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788364857584,
+      "tag": "0024_futuristic_power_pack",
+      "breakpoints": true
     }
   ]
 }

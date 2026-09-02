@@ -342,6 +342,7 @@ export const agentRuns = pgTable(
     agentName: text("agent_name").notNull(),
     modelBindingId: text("model_binding_id"),
     locale: text("locale").$type<AgentRun["locale"]>(),
+    authorizationContext: jsonb("authorization_context").$type<AgentRun["authorization"]>(),
     status: text("status").$type<AgentRun["status"]>().notNull(),
     idempotencyKey: text("idempotency_key"),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),

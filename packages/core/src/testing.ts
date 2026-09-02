@@ -3,6 +3,7 @@ import {
   type AgentRun,
   type AgentRunId,
   type AgentRunStore,
+  type AppendClaimedAgentRunMessageInput,
   type AppendClaimedRunObservationInput,
   type AppendAssistantMessageInput,
   type AppendRunObservationInput,
@@ -12,6 +13,7 @@ import {
   type ApiAccessStore,
   type ApiCredentialRecord,
   type ChatMessage,
+  type AssertClaimedAgentRunInput,
   type ClaimAgentRunInput,
   type ClaimRunStartCommandInput,
   type ClaimRunStartCommandResult,
@@ -1110,6 +1112,7 @@ export class InMemoryPlatformStore
       agentName: input.agentName,
       modelBindingId: input.modelBindingId,
       locale: input.locale,
+      authorization: input.authorization,
       status: input.status ?? "running",
       idempotencyKey: input.idempotencyKey,
       startedAt: now,
@@ -1354,6 +1357,9 @@ export class InMemoryPlatformStore
     if (input.event.runId !== input.runId || input.event.sequence !== run.lastSequence + 1) {
       throw new AppError("CONFLICT", "Agent run lease or observation sequence is stale");
     }
+    if (run.status === "cancelling" && input.event.type !== "run_cancelled") {
+      throw new AppError("CONFLICT", "Only cancellation may terminalize a cancelling agent run");
+    }
     const observation: RunObservation = {
       clientInstanceId: run.clientInstanceId,
       runId: run.id,
@@ -1383,6 +1389,22 @@ export class InMemoryPlatformStore
     }
     this.agentRuns.set(run.id, updated);
     return observation;
+  }
+
+  async assertClaimedAgentRun(input: AssertClaimedAgentRunInput): Promise<AgentRun> {
+    return this.requireActiveAgentRunLease(input, new Date().toISOString());
+  }
+
+  async appendClaimedAgentRunMessage(
+    input: AppendClaimedAgentRunMessageInput
+  ): Promise<ChatMessage> {
+    const run = await this.assertClaimedAgentRun(input);
+    if (input.message.conversationId !== run.conversationId) {
+      throw new AppError("CONFLICT", "Agent run message belongs to another conversation");
+    }
+    return input.message.role === "assistant"
+      ? this.appendAssistantMessage(input.message)
+      : this.appendMessage(input.message);
   }
 
   async recoverExpiredAgentRuns(input: RecoverExpiredAgentRunsInput): Promise<AgentRun[]> {

@@ -3,10 +3,10 @@ import type { JsonObject } from "./json";
 import type { ISODateString } from "./time";
 import type { ManagedFileRef } from "./files";
 import type { AttachmentManifest } from "./files";
-import type { RuntimeCallContext } from "./identity";
+import type { AuthPrincipal, AuthScope, DelegatedActor, RuntimeCallContext } from "./identity";
 import type { LocaleCode } from "./localization";
 import type { ToolExecutionResult } from "./tool-execution";
-import type { ChatMessage } from "./conversation";
+import type { AppendAssistantMessageInput, ChatMessage, CreateMessageInput } from "./conversation";
 
 export interface StartAgentRunInput {
   agentName: string;
@@ -49,6 +49,13 @@ export interface AgentRunError {
   category: AgentRunFailureCategory;
 }
 
+export interface AgentRunAuthorization {
+  principal: AuthPrincipal;
+  subjectUserId: string;
+  delegatedActor?: DelegatedActor;
+  scopes: AuthScope[];
+}
+
 export interface AgentRun {
   id: AgentRunId;
   clientInstanceId: ClientInstanceId;
@@ -58,6 +65,7 @@ export interface AgentRun {
   agentName: string;
   modelBindingId?: string;
   locale?: LocaleCode;
+  authorization?: AgentRunAuthorization;
   status: AgentRunStatus;
   idempotencyKey?: string;
   startedAt: ISODateString;
@@ -319,6 +327,7 @@ export interface CreateAgentRunInput {
   agentName: string;
   modelBindingId?: string;
   locale?: LocaleCode;
+  authorization?: AgentRunAuthorization;
   status?: "queued" | "running";
   idempotencyKey?: string;
   correlationId: string;
@@ -407,6 +416,20 @@ export interface RecoverExpiredAgentRunsInput {
   limit: number;
 }
 
+export interface AssertClaimedAgentRunInput {
+  clientInstanceId: ClientInstanceId;
+  runId: AgentRunId;
+  leaseToken: string;
+}
+
+export interface AppendClaimedAgentRunMessageInput {
+  clientInstanceId: ClientInstanceId;
+  runId: AgentRunId;
+  leaseToken: string;
+  message:
+    ({ role: "assistant" } & AppendAssistantMessageInput) | ({ role: "tool" } & CreateMessageInput);
+}
+
 export type RecoverStaleAgentRunResult =
   | {
       status: "recovered";
@@ -483,6 +506,8 @@ export interface AgentRunStore {
   heartbeatAgentRun(input: HeartbeatAgentRunInput): Promise<AgentRun>;
   requestAgentRunCancellation(input: RequestAgentRunCancellationInput): Promise<AgentRun>;
   appendClaimedRunObservation(input: AppendClaimedRunObservationInput): Promise<RunObservation>;
+  assertClaimedAgentRun(input: AssertClaimedAgentRunInput): Promise<AgentRun>;
+  appendClaimedAgentRunMessage(input: AppendClaimedAgentRunMessageInput): Promise<ChatMessage>;
   recoverExpiredAgentRuns(input: RecoverExpiredAgentRunsInput): Promise<AgentRun[]>;
 }
 

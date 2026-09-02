@@ -31,6 +31,8 @@ import {
   asAgentRunId,
   asToolCallId,
   createPlatformId,
+  getAuthPrincipal,
+  getAuthScopes,
   getRuntimeSubjectUserId,
   unknownToJsonValue,
   systemClock
@@ -90,6 +92,12 @@ export interface LocalAgentRuntimeOptions {
   clock?: Clock;
   fileReader?: ModelContextFileReader;
   runFailureReporter?: (report: LocalAgentRunFailureReport) => void | Promise<void>;
+  beforeEffect?: (effect: LocalAgentRuntimeEffect) => void | Promise<void>;
+}
+
+export interface LocalAgentRuntimeEffect {
+  kind: "provider_request" | "assistant_message" | "tool_dispatch" | "tool_result_message";
+  runId: AgentRunId;
 }
 
 export interface LocalAgentRunFailureReport {
@@ -154,6 +162,12 @@ export class LocalAgentRuntime implements AgentRuntime {
         agentName: input.agentName,
         modelBindingId: input.modelBindingId,
         locale: context.locale,
+        authorization: {
+          principal: context.principal ?? getAuthPrincipal(context.user),
+          subjectUserId: context.subjectUserId ?? getRuntimeSubjectUserId(context),
+          delegatedActor: context.delegatedActor ?? context.user.delegatedActor,
+          scopes: [...(context.scopes ?? getAuthScopes(context.user))]
+        },
         status: "running",
         idempotencyKey: input.idempotencyKey,
         correlationId: context.correlationId,
@@ -266,6 +280,7 @@ export class LocalAgentRuntime implements AgentRuntime {
     });
     let partialMessage: ChatMessage | undefined;
     if (partialText) {
+      await this.beforeEffect("assistant_message", runId);
       const conversationId =
         this.runInputs.get(runId)?.conversationId ??
         (
@@ -338,20 +353,22 @@ export class LocalAgentRuntime implements AgentRuntime {
 
     for (let step = 0; step < maxSteps; step += 1) {
       const modelResult = await this.withTransientModelRetry(context, state, (attempt) =>
-        this.options.usageGovernance.runModelCall(context.clientInstanceId, () =>
-          this.completeWithProvider(
-            {
-              providerId: modelSelection.provider.id,
-              model: modelSelection.model,
-              reasoningEffort: modelSelection.reasoningEffort,
-              continuation: providerContinuation,
-              messages,
-              tools
-            },
-            context,
-            state,
-            true,
-            attempt
+        this.beforeEffect("provider_request", runId).then(() =>
+          this.options.usageGovernance.runModelCall(context.clientInstanceId, () =>
+            this.completeWithProvider(
+              {
+                providerId: modelSelection.provider.id,
+                model: modelSelection.model,
+                reasoningEffort: modelSelection.reasoningEffort,
+                continuation: providerContinuation,
+                messages,
+                tools
+              },
+              context,
+              state,
+              true,
+              attempt
+            )
           )
         )
       );
@@ -390,6 +407,7 @@ export class LocalAgentRuntime implements AgentRuntime {
           return;
         }
         const assistantText = completion.text || completedWithoutTextFallback(context.locale);
+        await this.beforeEffect("assistant_message", runId);
         const persisted = await this.options.conversationHistory.appendAssistantMessage({
           clientInstanceId: context.clientInstanceId,
           conversationId: input.conversationId,
@@ -420,6 +438,7 @@ export class LocalAgentRuntime implements AgentRuntime {
         content: completion.text,
         toolCalls: completion.toolCalls
       });
+      await this.beforeEffect("assistant_message", runId);
       await this.options.conversationHistory.appendAssistantMessage({
         clientInstanceId: context.clientInstanceId,
         conversationId: input.conversationId,
@@ -447,11 +466,13 @@ export class LocalAgentRuntime implements AgentRuntime {
             repeatedToolCalls,
             toolCall.input,
             toolCall.toolName
-          )
+          ),
+          beforeDispatch: () => this.beforeEffect("tool_dispatch", runId)
         });
         if (isCancellationRequested(state.getStatus())) {
           return;
         }
+        await this.beforeEffect("tool_result_message", runId);
         await this.persistToolResult({
           runId,
           input,
@@ -480,6 +501,10 @@ export class LocalAgentRuntime implements AgentRuntime {
     } catch {
       // A diagnostics sink must not change the user-visible run outcome.
     }
+  }
+
+  private async beforeEffect(kind: LocalAgentRuntimeEffect["kind"], runId: AgentRunId) {
+    await this.options.beforeEffect?.({ kind, runId });
   }
 
   private async persistRunEvent(

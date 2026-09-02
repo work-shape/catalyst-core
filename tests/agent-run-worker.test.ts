@@ -1,18 +1,26 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   AppError,
   asAgentRunId,
   asClientInstanceId,
   asMessageId,
   type AgentRun,
+  type AgentRunAuthorization,
   type AgentRuntimeEvent,
   type AuthenticatedUser,
   type ClientInstanceId,
   type ConversationId,
+  type ModelProviderConfig,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
-import { AgentRunWorker, StoreBackedAgentRuntime } from "@vivd-catalyst/agent-runtime";
+import { InMemoryPlatformStore, createStaticConfigAssetSource } from "@vivd-catalyst/core/testing";
+import {
+  AgentRunWorker,
+  StoreBackedAgentRuntime,
+  createWorkerLocalAgentRunExecutor
+} from "@vivd-catalyst/agent-runtime";
+import { ToolRegistry } from "@vivd-catalyst/tool-execution";
+import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 
 describe("agent run worker", () => {
   it("lets only one competing worker claim a queued run", async () => {
@@ -91,6 +99,79 @@ describe("agent run worker", () => {
       leaseToken: "running-token",
       cancellationReason: "Stop"
     });
+    for (const event of [
+      {
+        type: "tool_permission_requested" as const,
+        runId: running.run.id,
+        sequence: 1,
+        createdAt: "2026-09-02T12:04:00.000Z",
+        toolCallId: "toolcall-cancel" as never,
+        toolName: "tool",
+        reason: "Approve"
+      },
+      completedEvent(running.run.id, 1, "2026-09-02T12:04:00.000Z"),
+      {
+        type: "run_failed" as const,
+        runId: running.run.id,
+        sequence: 1,
+        createdAt: "2026-09-02T12:04:00.000Z",
+        error: { code: "LATE", message: "Late failure", category: "internal_error" as const }
+      }
+    ]) {
+      await expect(
+        running.store.appendClaimedRunObservation({
+          clientInstanceId: running.clientInstanceId,
+          runId: running.run.id,
+          leaseToken: "running-token",
+          event
+        })
+      ).rejects.toMatchObject({ code: "CONFLICT" });
+    }
+    await running.store.appendClaimedRunObservation({
+      clientInstanceId: running.clientInstanceId,
+      runId: running.run.id,
+      leaseToken: "running-token",
+      event: {
+        type: "run_cancelled",
+        runId: running.run.id,
+        sequence: 1,
+        createdAt: "2026-09-02T12:04:00.000Z",
+        reason: "Stop"
+      }
+    });
+  });
+
+  it("finishes cancellation when it races with a terminal worker event", async () => {
+    const fixture = await createQueuedRun("cancellation-terminal-race");
+    const appendObservation = fixture.store.appendClaimedRunObservation.bind(fixture.store);
+    let cancellationInjected = false;
+    vi.spyOn(fixture.store, "appendClaimedRunObservation").mockImplementation(async (input) => {
+      if (!cancellationInjected && input.event.type !== "run_cancelled") {
+        cancellationInjected = true;
+        await fixture.store.requestAgentRunCancellation({
+          clientInstanceId: fixture.clientInstanceId,
+          runId: fixture.run.id,
+          requestedAt: "2026-09-02T12:00:30.000Z",
+          reason: "Stop during completion"
+        });
+      }
+      return appendObservation(input);
+    });
+    const worker = createWorker(fixture, async function* (input) {
+      yield completedEvent(input.preparedRun!.id, 1, "2026-09-02T12:01:00.000Z");
+    });
+
+    const result = await worker.runOnce();
+
+    expect(result.run).toMatchObject({
+      status: "cancelled",
+      cancellationReason: "Stop during completion"
+    });
+    const observations = await fixture.store.listRunObservations({
+      clientInstanceId: fixture.clientInstanceId,
+      runId: fixture.run.id
+    });
+    expect(observations.map((observation) => observation.type)).toEqual(["run_cancelled"]);
   });
 
   it("recovers an expired lease once and never replays it", async () => {
@@ -164,6 +245,117 @@ describe("agent run worker", () => {
     expect(seen).toEqual({ modelBindingId: "binding-fast", locale: "de-DE" });
   });
 
+  it("preserves the original scopes and delegated principal while loading the current user", async () => {
+    const fixture = await createQueuedRun("dispatch-authorization", {
+      authorization: {
+        principal: {
+          kind: "service",
+          id: "service-1",
+          displayLabel: "Automation",
+          clientInstanceId: asClientInstanceId("worker-dispatch-authorization"),
+          authSource: "api-key"
+        },
+        subjectUserId: "user-dispatch-authorization",
+        delegatedActor: {
+          kind: "service_principal",
+          id: "service-1",
+          displayLabel: "Automation",
+          authSource: "api-key"
+        },
+        scopes: ["conversation:read"]
+      }
+    });
+    fixture.user.scopes = ["*"];
+    let seen: RuntimeCallContext | undefined;
+    const worker = createWorker(fixture, async function* (input, context) {
+      seen = context;
+      yield completedEvent(input.preparedRun!.id, 1, "2026-09-02T12:01:00.000Z");
+    });
+    await worker.runOnce();
+    expect(seen).toMatchObject({
+      subjectUserId: fixture.user.id,
+      scopes: ["conversation:read"],
+      principal: { kind: "service", id: "service-1" },
+      delegatedActor: { id: "service-1" },
+      user: {
+        scopes: ["conversation:read"],
+        principal: { kind: "service", id: "service-1" },
+        delegatedActor: { id: "service-1" }
+      }
+    });
+  });
+
+  it("fails closed when a queued run has no authorization projection", async () => {
+    const fixture = await createQueuedRun("missing-authorization", { authorization: null });
+    const worker = createWorker(fixture, async function* () {
+      throw new Error("must not execute");
+    });
+    const result = await worker.runOnce();
+    expect(result.run).toMatchObject({
+      status: "failed",
+      error: { code: "FORBIDDEN", category: "app_error" }
+    });
+  });
+
+  it("terminalizes permission requests instead of exposing an unresumable approval", async () => {
+    const fixture = await createQueuedRun("permission-unsupported");
+    const worker = createWorker(fixture, async function* (input) {
+      yield {
+        type: "tool_permission_requested",
+        runId: input.preparedRun!.id,
+        sequence: 1,
+        createdAt: new Date().toISOString(),
+        toolCallId: "toolcall-1" as never,
+        toolName: "dangerous-tool",
+        reason: "Approval required"
+      };
+    });
+    const result = await worker.runOnce();
+    expect(result.run).toMatchObject({
+      status: "failed",
+      error: { code: "AGENT_RUN_PERMISSION_UNSUPPORTED" }
+    });
+    const observations = await fixture.store.listRunObservations({
+      clientInstanceId: fixture.clientInstanceId,
+      runId: fixture.run.id
+    });
+    expect(observations.map((observation) => observation.type)).toEqual(["run_failed"]);
+  });
+
+  it("writes one interrupted terminal event when a graceful stop aborts active work", async () => {
+    const fixture = await createQueuedRun("graceful-stop");
+    let started!: () => void;
+    const executionStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const worker = createWorker(fixture, async function* (_input, context) {
+      started();
+      await new Promise<void>((_resolve, reject) => {
+        context.signal!.addEventListener(
+          "abort",
+          () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })),
+          { once: true }
+        );
+      });
+    });
+    const loop = worker.start();
+    await executionStarted;
+    await worker.stop({ interruptActive: true });
+    await loop;
+
+    const observations = await fixture.store.listRunObservations({
+      clientInstanceId: fixture.clientInstanceId,
+      runId: fixture.run.id
+    });
+    expect(observations).toMatchObject([
+      {
+        type: "run_failed",
+        sequence: 1,
+        payload: { error: { code: "AGENT_RUN_RUNTIME_INTERRUPTED" } }
+      }
+    ]);
+  });
+
   it("fences a late worker after lease recovery so it cannot add a second terminal event", async () => {
     const fixture = await createQueuedRun("worker-loss");
     let now = "2026-09-02T12:00:00.000Z";
@@ -197,6 +389,83 @@ describe("agent run worker", () => {
     });
     expect(observations.map((observation) => observation.type)).toEqual(["run_failed"]);
   });
+
+  it("runs the real Local Runtime with the worker as its only run-state writer", async () => {
+    const fixture = await createQueuedRun("local-runtime");
+    const updateStatus = vi.spyOn(fixture.store, "updateAgentRunStatus");
+    const provider: ModelProviderConfig = {
+      id: "worker-provider",
+      type: "deterministic",
+      model: "worker-model"
+    };
+    const execute = createWorkerLocalAgentRunExecutor({
+      assetSource: createStaticConfigAssetSource({
+        defaultAgentName: "test-agent",
+        agents: [
+          {
+            name: "test-agent",
+            displayName: "Test agent",
+            instructions: "Answer briefly.",
+            modelProviderId: provider.id,
+            toolNames: [],
+            skillNames: [],
+            initialPrompts: []
+          }
+        ]
+      }),
+      modelProviders: [provider],
+      defaultModelProvider: provider,
+      modelProvider: {
+        id: provider.id,
+        async complete() {
+          return {
+            text: "Done.",
+            toolCalls: [],
+            usage: {
+              inputTokens: 0,
+              outputTokens: 0,
+              totalTokens: 0,
+              source: "not_reported",
+              webSearchCallCount: 0
+            }
+          };
+        }
+      },
+      toolRegistry: new ToolRegistry({ tools: [] }),
+      toolExecution: {
+        async authorize() {
+          throw new Error("No tools expected");
+        },
+        async execute() {
+          throw new Error("No tools expected");
+        }
+      },
+      usageGovernance: new ModelUsageGovernance({
+        store: fixture.store,
+        budget: {},
+        safeguards: {}
+      })
+    });
+    const worker = createWorker(fixture, execute);
+    const result = await worker.runOnce();
+
+    expect(result.run).toMatchObject({ status: "completed", lastSequence: 3 });
+    expect(updateStatus).not.toHaveBeenCalled();
+    const observations = await fixture.store.listRunObservations({
+      clientInstanceId: fixture.clientInstanceId,
+      runId: fixture.run.id
+    });
+    expect(observations.map((observation) => observation.type)).toEqual([
+      "message_delta",
+      "message_completed",
+      "run_completed"
+    ]);
+    const messages = await fixture.store.listMessages({
+      clientInstanceId: fixture.clientInstanceId,
+      conversationId: fixture.conversationId
+    });
+    expect(messages.filter((message) => message.role === "assistant")).toHaveLength(1);
+  });
 });
 
 interface Fixture {
@@ -210,7 +479,11 @@ interface Fixture {
 
 async function createQueuedRun(
   suffix: string,
-  options: { modelBindingId?: string; locale?: "de-DE" } = {}
+  options: {
+    modelBindingId?: string;
+    locale?: "de-DE";
+    authorization?: AgentRunAuthorization | null;
+  } = {}
 ): Promise<Fixture> {
   const store = new InMemoryPlatformStore();
   const clientInstanceId = asClientInstanceId(`worker-${suffix}`);
@@ -247,6 +520,21 @@ async function createQueuedRun(
     agentName: "test-agent",
     modelBindingId: options.modelBindingId,
     locale: options.locale,
+    authorization:
+      "authorization" in options
+        ? (options.authorization ?? undefined)
+        : {
+            principal: {
+              kind: "user",
+              id: user.id,
+              externalUserId: user.externalUserId,
+              displayLabel: user.displayLabel,
+              clientInstanceId,
+              authSource: user.authSource
+            },
+            subjectUserId: user.id,
+            scopes: ["run:start"]
+          },
     status: "queued",
     correlationId: `corr-${suffix}`,
     startedAt: "2026-09-02T12:00:00.000Z"

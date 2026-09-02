@@ -30,6 +30,7 @@ export async function executeToolCall(input: {
     count: number;
     limit: number;
   };
+  beforeDispatch?: () => void | Promise<void>;
 }): Promise<{
   result: ToolExecutionResult;
   modelOutput: ModelOutputProjection;
@@ -144,6 +145,7 @@ export async function executeToolCall(input: {
     );
   }
 
+  await input.beforeDispatch?.();
   const result = await input.toolExecution.execute(
     createApprovedToolRequest(request, decision),
     input.context

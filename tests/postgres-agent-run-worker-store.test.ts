@@ -114,6 +114,62 @@ describePostgres("Postgres agent run worker store", () => {
       { type: "run_failed", sequence: 1, payload: { error: { category: "runtime_interrupted" } } }
     ]);
   });
+
+  it("keeps cancellation monotonic against late permission and completion writes", async () => {
+    const fixture = await createQueuedRun(store);
+    await store.claimNextAgentRun(claimInput(fixture, "worker-a", "cancel-token"));
+    await secondStore.requestAgentRunCancellation({
+      clientInstanceId: fixture.clientInstanceId,
+      runId: fixture.run.id,
+      requestedAt: new Date().toISOString(),
+      reason: "Stop"
+    });
+    const createdAt = new Date().toISOString();
+    await expect(
+      store.appendClaimedRunObservation({
+        clientInstanceId: fixture.clientInstanceId,
+        runId: fixture.run.id,
+        leaseToken: "cancel-token",
+        event: {
+          type: "tool_permission_requested",
+          runId: fixture.run.id,
+          sequence: 1,
+          createdAt,
+          toolCallId: "toolcall-cancel" as never,
+          toolName: "tool",
+          reason: "Approve"
+        }
+      })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(
+      store.appendClaimedRunObservation({
+        clientInstanceId: fixture.clientInstanceId,
+        runId: fixture.run.id,
+        leaseToken: "cancel-token",
+        event: {
+          type: "run_completed",
+          runId: fixture.run.id,
+          sequence: 1,
+          createdAt
+        }
+      })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await store.appendClaimedRunObservation({
+      clientInstanceId: fixture.clientInstanceId,
+      runId: fixture.run.id,
+      leaseToken: "cancel-token",
+      event: {
+        type: "run_cancelled",
+        runId: fixture.run.id,
+        sequence: 1,
+        createdAt,
+        reason: "Stop"
+      }
+    });
+    await expect(
+      store.getAgentRun({ clientInstanceId: fixture.clientInstanceId, runId: fixture.run.id })
+    ).resolves.toMatchObject({ status: "cancelled", lastSequence: 1 });
+  });
 });
 
 async function createQueuedRun(store: PostgresPlatformStore): Promise<{
@@ -149,6 +205,18 @@ async function createQueuedRun(store: PostgresPlatformStore): Promise<{
     agentName: "worker-test",
     modelBindingId: "binding-test",
     locale: "de-DE",
+    authorization: {
+      principal: {
+        kind: "user",
+        id: user.id,
+        externalUserId: `external-${id}`,
+        displayLabel: user.displayLabel,
+        clientInstanceId,
+        authSource: "test"
+      },
+      subjectUserId: user.id,
+      scopes: ["run:start"]
+    },
     status: "queued",
     correlationId: `corr-${id}`,
     startedAt: "2026-09-02T12:00:00.000Z"

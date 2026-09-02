@@ -203,6 +203,7 @@ export function mapAgentRun(row: AgentRunRow | undefined): AgentRun {
     agentName: row.agentName,
     modelBindingId: row.modelBindingId ?? undefined,
     locale: row.locale ?? undefined,
+    authorization: row.authorizationContext ?? undefined,
     status: row.status,
     idempotencyKey: row.idempotencyKey ?? undefined,
     startedAt: row.startedAt.toISOString(),

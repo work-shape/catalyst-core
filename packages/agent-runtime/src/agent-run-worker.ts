@@ -3,16 +3,17 @@ import {
   AppError,
   type AgentRun,
   type AgentRunStore,
-  type AgentRuntime,
   type AgentRuntimeEvent,
   type AuthenticatedUser,
   type ClientInstanceId,
   type ConversationHistoryReader,
+  type ConversationHistoryStore,
   type RuntimeCallContext,
   type StartAgentRunInput,
-  authContextFromUser
+  getSubjectUserId
 } from "@vivd-catalyst/core";
 import { readUserAttachmentManifest } from "./model-context-projection";
+import { LocalAgentRuntime, type LocalAgentRuntimeOptions } from "./local-agent-runtime";
 
 const DEFAULT_POLL_INTERVAL_MS = 1000;
 const DEFAULT_LEASE_DURATION_MS = 10 * 60 * 1000;
@@ -24,6 +25,8 @@ const DEFAULT_STALE_RECOVERY_LIMIT = 50;
 export type AgentRunWorkerStore = Pick<
   AgentRunStore,
   | "appendClaimedRunObservation"
+  | "appendClaimedAgentRunMessage"
+  | "assertClaimedAgentRun"
   | "claimNextAgentRun"
   | "getAgentRun"
   | "heartbeatAgentRun"
@@ -32,8 +35,14 @@ export type AgentRunWorkerStore = Pick<
 
 export type ExecuteAgentRun = (
   input: StartAgentRunInput,
-  context: RuntimeCallContext
+  context: RuntimeCallContext,
+  control: AgentRunExecutionControl
 ) => AsyncIterable<AgentRuntimeEvent> | Promise<AsyncIterable<AgentRuntimeEvent>>;
+
+export interface AgentRunExecutionControl {
+  assertLease(): Promise<void>;
+  conversationHistory: ConversationHistoryStore;
+}
 
 export interface AgentRunWorkerOptions {
   clientInstanceId: ClientInstanceId;
@@ -74,6 +83,7 @@ export class AgentRunWorker {
   private readonly staleRecoveryLimit: number;
   private readonly now: () => string;
   private readonly activeControllers = new Set<AbortController>();
+  private readonly interruptedControllers = new WeakSet<AbortController>();
   private stopping = false;
   private loopPromise?: Promise<void>;
   private lastStaleRecoveryMs = 0;
@@ -136,6 +146,7 @@ export class AgentRunWorker {
     this.stopping = true;
     if (input.interruptActive) {
       for (const controller of this.activeControllers) {
+        this.interruptedControllers.add(controller);
         controller.abort(input.reason ?? "Agent run worker is stopping");
       }
     }
@@ -206,33 +217,72 @@ export class AgentRunWorker {
     try {
       const input = await this.reconstructInput(run);
       const user = await this.options.loadCurrentUser(run);
+      const authorization = requireAuthorization(run, user);
+      const executionUser: AuthenticatedUser = {
+        ...user,
+        principal: authorization.principal,
+        subjectUserId: authorization.subjectUserId,
+        delegatedActor: authorization.delegatedActor,
+        scopes: authorization.scopes
+      };
       const context: RuntimeCallContext = {
-        user,
+        user: executionUser,
         clientInstanceId: run.clientInstanceId,
         correlationId: run.correlationId,
         locale: run.locale,
-        subjectUserId: run.ownerUserId,
-        ...authContextFromUser(user),
+        ...authorization,
         signal: controller.signal
       };
-      const events = await this.options.execute(input, context);
+      const assertLease = async () => {
+        try {
+          await this.options.store.assertClaimedAgentRun({
+            clientInstanceId: run.clientInstanceId,
+            runId: run.id,
+            leaseToken
+          });
+        } catch (error) {
+          const latest = await this.options.store.getAgentRun({
+            clientInstanceId: run.clientInstanceId,
+            runId: run.id
+          });
+          if (
+            !latest ||
+            latest.leaseToken !== leaseToken ||
+            !latest.leaseExpiresAt ||
+            latest.leaseExpiresAt <= this.now()
+          ) {
+            leaseLost = true;
+            controller.abort("Agent run lease was lost");
+          }
+          throw error;
+        }
+      };
+      const conversationHistory = this.workerConversationHistory(run, leaseToken);
+      const events = await this.options.execute(input, context, {
+        assertLease,
+        conversationHistory
+      });
       for await (const sourceEvent of events) {
-        if (leaseLost || (this.stopping && controller.signal.aborted)) break;
+        if (leaseLost) break;
         const event = cancellationRequested
           ? cancelledEvent(run, sourceEvent.sequence, this.now(), cancellationReason)
-          : sourceEvent;
-        await this.options.store.appendClaimedRunObservation({
-          clientInstanceId: run.clientInstanceId,
-          runId: run.id,
+          : this.interruptedControllers.has(controller)
+            ? interruptedEvent(run, sourceEvent.sequence, this.now())
+            : sourceEvent.type === "tool_permission_requested"
+              ? permissionUnsupportedEvent(run, sourceEvent.sequence, this.now())
+              : sourceEvent;
+        const persistedEvent = await this.appendObservationWithCancellationFallback(
+          run,
           leaseToken,
           event
-        });
-        if (isTerminalEvent(event)) {
+        );
+        if (isTerminalEvent(persistedEvent)) {
           terminalWritten = true;
+          controller.abort("Agent run reached a terminal state");
           break;
         }
       }
-      if (!terminalWritten && !leaseLost && !(this.stopping && controller.signal.aborted)) {
+      if (!terminalWritten && !leaseLost) {
         const latest = await this.options.store.getAgentRun({
           clientInstanceId: run.clientInstanceId,
           runId: run.id
@@ -241,24 +291,25 @@ export class AgentRunWorker {
           const event =
             cancellationRequested || latest.status === "cancelling"
               ? cancelledEvent(run, latest.lastSequence + 1, this.now(), latest.cancellationReason)
-              : failedEvent(run, latest.lastSequence + 1, this.now(), {
-                  code: "AGENT_RUN_EXECUTOR_ENDED",
-                  message: "Agent run executor ended without a terminal event",
-                  category: "internal_error"
-                });
-          await this.options.store.appendClaimedRunObservation({
-            clientInstanceId: run.clientInstanceId,
-            runId: run.id,
-            leaseToken,
-            event
-          });
+              : this.interruptedControllers.has(controller)
+                ? interruptedEvent(run, latest.lastSequence + 1, this.now())
+                : failedEvent(run, latest.lastSequence + 1, this.now(), {
+                    code: "AGENT_RUN_EXECUTOR_ENDED",
+                    message: "Agent run executor ended without a terminal event",
+                    category: "internal_error"
+                  });
+          await this.appendObservationWithCancellationFallback(run, leaseToken, event);
         }
       }
     } catch (error) {
-      if (!leaseLost && !(this.stopping && controller.signal.aborted)) {
-        await this.finishAfterError(run, leaseToken, cancellationRequested, error).catch(
-          () => undefined
-        );
+      if (!leaseLost) {
+        await this.finishAfterError(
+          run,
+          leaseToken,
+          cancellationRequested,
+          this.interruptedControllers.has(controller),
+          error
+        ).catch(() => undefined);
       }
     } finally {
       clearInterval(heartbeatTimer);
@@ -296,10 +347,36 @@ export class AgentRunWorker {
     };
   }
 
+  private workerConversationHistory(run: AgentRun, leaseToken: string): ConversationHistoryStore {
+    return {
+      listMessages: (input) => this.options.conversationHistory.listMessages(input),
+      listRecentMessages: (input) => this.options.conversationHistory.listRecentMessages(input),
+      appendMessage: async (message) => {
+        if (message.role !== "tool") {
+          throw new AppError("VALIDATION_FAILED", "Worker runtime may only append tool messages");
+        }
+        return this.options.store.appendClaimedAgentRunMessage({
+          clientInstanceId: run.clientInstanceId,
+          runId: run.id,
+          leaseToken,
+          message: { ...message, role: "tool" }
+        });
+      },
+      appendAssistantMessage: (message) =>
+        this.options.store.appendClaimedAgentRunMessage({
+          clientInstanceId: run.clientInstanceId,
+          runId: run.id,
+          leaseToken,
+          message: { ...message, role: "assistant" }
+        })
+    };
+  }
+
   private async finishAfterError(
     run: AgentRun,
     leaseToken: string,
     cancellationRequested: boolean,
+    interrupted: boolean,
     error: unknown
   ): Promise<void> {
     const latest = await this.options.store.getAgentRun({
@@ -310,25 +387,135 @@ export class AgentRunWorker {
     const event =
       cancellationRequested || latest.status === "cancelling"
         ? cancelledEvent(run, latest.lastSequence + 1, this.now(), latest.cancellationReason)
-        : failedEvent(run, latest.lastSequence + 1, this.now(), workerFailure(error));
-    await this.options.store.appendClaimedRunObservation({
-      clientInstanceId: run.clientInstanceId,
-      runId: run.id,
-      leaseToken,
-      event
-    });
+        : interrupted
+          ? interruptedEvent(run, latest.lastSequence + 1, this.now())
+          : failedEvent(run, latest.lastSequence + 1, this.now(), workerFailure(error));
+    await this.appendObservationWithCancellationFallback(run, leaseToken, event);
+  }
+
+  private async appendObservationWithCancellationFallback(
+    run: AgentRun,
+    leaseToken: string,
+    event: AgentRuntimeEvent
+  ): Promise<AgentRuntimeEvent> {
+    try {
+      await this.options.store.appendClaimedRunObservation({
+        clientInstanceId: run.clientInstanceId,
+        runId: run.id,
+        leaseToken,
+        event
+      });
+      return event;
+    } catch (error) {
+      if (!(error instanceof AppError) || error.code !== "CONFLICT") throw error;
+      const latest = await this.options.store.getAgentRun({
+        clientInstanceId: run.clientInstanceId,
+        runId: run.id
+      });
+      if (
+        event.type === "run_cancelled" ||
+        latest?.leaseToken !== leaseToken ||
+        latest.status !== "cancelling"
+      ) {
+        throw error;
+      }
+      const cancellation = cancelledEvent(
+        run,
+        latest.lastSequence + 1,
+        this.now(),
+        latest.cancellationReason
+      );
+      await this.options.store.appendClaimedRunObservation({
+        clientInstanceId: run.clientInstanceId,
+        runId: run.id,
+        leaseToken,
+        event: cancellation
+      });
+      return cancellation;
+    }
   }
 }
 
-/**
- * The runtime must not persist Agent Run rows or Run Observations itself.
- * AgentRunWorker is the sole lease-fenced writer for that state.
- */
-export function executeWithAgentRuntime(runtime: AgentRuntime): ExecuteAgentRun {
-  return async (input, context) => {
+export type WorkerLocalAgentRuntimeOptions = Omit<
+  LocalAgentRuntimeOptions,
+  "agentRunStore" | "runObservationStore" | "conversationHistory" | "beforeEffect"
+> & {
+  agentRunStore?: never;
+  runObservationStore?: never;
+  conversationHistory?: never;
+  beforeEffect?: never;
+};
+
+export function createWorkerLocalAgentRunExecutor(
+  options: WorkerLocalAgentRuntimeOptions
+): ExecuteAgentRun {
+  const unsafe = options as unknown as Partial<LocalAgentRuntimeOptions>;
+  if (
+    unsafe.agentRunStore ||
+    unsafe.runObservationStore ||
+    unsafe.conversationHistory ||
+    unsafe.beforeEffect
+  ) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "Worker LocalAgentRuntime persistence must be supplied by AgentRunWorker"
+    );
+  }
+  return async function* (input, context, control) {
+    const runtime = new LocalAgentRuntime({
+      ...options,
+      conversationHistory: control.conversationHistory,
+      beforeEffect: () => control.assertLease()
+    });
     const handle = await runtime.start(input, context);
-    return runtime.observe(handle.runId, context);
+    const iterator = runtime.observe(handle.runId, context)[Symbol.asyncIterator]();
+    let lastSequence = 0;
+    while (true) {
+      const next = await nextEventOrAbort(iterator, context.signal);
+      if (next === "aborted") {
+        yield {
+          type: "run_failed",
+          runId: requirePreparedRunId(input),
+          sequence: lastSequence + 1,
+          createdAt: new Date().toISOString(),
+          error: {
+            code: "AGENT_RUN_ABORTED",
+            message: "Agent run execution was interrupted",
+            category: "abort_error"
+          }
+        };
+        return;
+      }
+      if (next.done) return;
+      lastSequence = next.value.sequence;
+      yield next.value;
+    }
   };
+}
+
+async function nextEventOrAbort(
+  iterator: AsyncIterator<AgentRuntimeEvent>,
+  signal: AbortSignal | undefined
+): Promise<IteratorResult<AgentRuntimeEvent> | "aborted"> {
+  if (!signal) return iterator.next();
+  if (signal.aborted) return "aborted";
+  let onAbort!: () => void;
+  const aborted = new Promise<"aborted">((resolve) => {
+    onAbort = () => resolve("aborted");
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([iterator.next(), aborted]);
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
+}
+
+function requirePreparedRunId(input: StartAgentRunInput) {
+  if (!input.preparedRun) {
+    throw new AppError("INTERNAL", "Worker execution requires a prepared Agent Run");
+  }
+  return input.preparedRun.id;
 }
 
 function cancelledEvent(
@@ -343,6 +530,46 @@ function cancelledEvent(
     sequence,
     createdAt,
     ...(reason ? { reason } : {})
+  };
+}
+
+function interruptedEvent(run: AgentRun, sequence: number, createdAt: string): AgentRuntimeEvent {
+  return failedEvent(run, sequence, createdAt, {
+    ...AGENT_RUN_INTERRUPTED_ERROR,
+    message: "Agent run worker stopped before completion"
+  });
+}
+
+function permissionUnsupportedEvent(
+  run: AgentRun,
+  sequence: number,
+  createdAt: string
+): AgentRuntimeEvent {
+  return failedEvent(run, sequence, createdAt, {
+    code: "AGENT_RUN_PERMISSION_UNSUPPORTED",
+    message: "Permission-required tools are not supported by the Agent Worker yet",
+    category: "internal_error"
+  });
+}
+
+function requireAuthorization(run: AgentRun, user: AuthenticatedUser) {
+  const authorization = run.authorization;
+  if (
+    !authorization ||
+    authorization.subjectUserId !== run.ownerUserId ||
+    getSubjectUserId(user) !== run.ownerUserId ||
+    user.clientInstanceId !== run.clientInstanceId ||
+    authorization.principal.clientInstanceId !== run.clientInstanceId ||
+    !Array.isArray(authorization.scopes) ||
+    authorization.scopes.some((scope) => typeof scope !== "string")
+  ) {
+    throw new AppError("FORBIDDEN", "Agent run authorization context is unavailable or invalid");
+  }
+  return {
+    principal: authorization.principal,
+    subjectUserId: authorization.subjectUserId,
+    delegatedActor: authorization.delegatedActor,
+    scopes: [...authorization.scopes]
   };
 }
 

@@ -8,6 +8,7 @@ import {
   type ApiAccessStore,
   type ApiCredentialRecord,
   type ChatMessage,
+  type AssertClaimedAgentRunInput,
   type ClientInstanceId,
   type CollaborationWorkspace,
   type CollaborationWorkspaceId,
@@ -24,6 +25,7 @@ import {
   type AgentRun,
   type AgentRunId,
   type AgentRunStore,
+  type AppendClaimedAgentRunMessageInput,
   type AppendClaimedRunObservationInput,
   type AppendAssistantMessageInput,
   type AppendRunObservationInput,
@@ -109,8 +111,10 @@ import {
   updateServicePrincipal as updatePostgresServicePrincipal
 } from "./postgres-api-access-operations";
 import {
+  appendClaimedAgentRunMessage as appendPostgresClaimedAgentRunMessage,
   appendClaimedRunObservation as appendPostgresClaimedRunObservation,
   appendRunObservation as appendPostgresRunObservation,
+  assertClaimedAgentRun as assertPostgresClaimedAgentRun,
   claimNextAgentRun as claimNextPostgresAgentRun,
   claimRunStartCommand as claimPostgresRunStartCommand,
   completeRunStartCommand as completePostgresRunStartCommand,
@@ -663,6 +667,16 @@ export class PostgresPlatformStore
     input: AppendClaimedRunObservationInput
   ): Promise<RunObservation> {
     return appendPostgresClaimedRunObservation(this.db, input);
+  }
+
+  async assertClaimedAgentRun(input: AssertClaimedAgentRunInput): Promise<AgentRun> {
+    return assertPostgresClaimedAgentRun(this.db, input);
+  }
+
+  async appendClaimedAgentRunMessage(
+    input: AppendClaimedAgentRunMessageInput
+  ): Promise<ChatMessage> {
+    return appendPostgresClaimedAgentRunMessage(this.db, input);
   }
 
   async recoverExpiredAgentRuns(input: RecoverExpiredAgentRunsInput): Promise<AgentRun[]> {

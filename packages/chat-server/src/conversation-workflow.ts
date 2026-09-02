@@ -25,6 +25,8 @@ import {
   asUserId,
   createUserMessageMetadata,
   createPlatformId,
+  getAuthPrincipal,
+  getAuthScopes,
   getSubjectUserId,
   withoutAssistantProviderContinuation,
   isAppError,
@@ -397,6 +399,12 @@ export class ConversationWorkflow {
           agentName: command.agentName ?? (await this.requireDefaultAgentName()),
           modelBindingId: command.modelBindingId,
           locale: context.locale,
+          authorization: {
+            principal: context.principal ?? getAuthPrincipal(user),
+            subjectUserId: context.subjectUserId ?? getSubjectUserId(user),
+            delegatedActor: context.delegatedActor ?? user.delegatedActor,
+            scopes: [...(context.scopes ?? getAuthScopes(user))]
+          },
           status: "queued",
           idempotencyKey: command.idempotencyKey,
           correlationId: context.correlationId,
