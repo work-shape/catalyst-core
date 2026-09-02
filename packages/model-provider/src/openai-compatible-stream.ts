@@ -393,38 +393,54 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 async function* readServerSentEventData(body: ReadableStream<Uint8Array>): AsyncIterable<string> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
-  let buffer = "";
+  const parser = new ServerSentEventDataLineParser();
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) {
       break;
     }
-    buffer += decoder.decode(value, { stream: true });
-    yield* readCompleteDataLines(buffer, (remainingBuffer) => {
-      buffer = remainingBuffer;
-    });
+    yield* parser.push(decoder.decode(value, { stream: true }));
   }
 
-  buffer += decoder.decode();
-  yield* readCompleteDataLines(`${buffer}\n`, () => {
-    buffer = "";
-  });
+  yield* parser.push(decoder.decode(), true);
 }
 
-function* readCompleteDataLines(
-  buffer: string,
-  setRemainingBuffer: (buffer: string) => void
-): Iterable<string> {
-  let remainingBuffer = buffer;
-  let newlineIndex = remainingBuffer.indexOf("\n");
-  while (newlineIndex >= 0) {
-    const line = remainingBuffer.slice(0, newlineIndex).trimEnd();
-    remainingBuffer = remainingBuffer.slice(newlineIndex + 1);
-    if (line.startsWith("data:")) {
-      yield line.slice("data:".length).trimStart();
+export class ServerSentEventDataLineParser {
+  private readonly pendingLineFragments: string[] = [];
+
+  push(chunk: string, end = false): string[] {
+    const dataLines: string[] = [];
+    let lineStart = 0;
+    let newlineIndex = chunk.indexOf("\n", lineStart);
+
+    while (newlineIndex >= 0) {
+      const lineFragment = chunk.slice(lineStart, newlineIndex);
+      dataLines.push(...this.completeLine(lineFragment));
+      lineStart = newlineIndex + 1;
+      newlineIndex = chunk.indexOf("\n", lineStart);
     }
-    newlineIndex = remainingBuffer.indexOf("\n");
+
+    if (lineStart < chunk.length) {
+      this.pendingLineFragments.push(chunk.slice(lineStart));
+    }
+    if (end && this.pendingLineFragments.length > 0) {
+      dataLines.push(...this.completeLine(""));
+    }
+
+    return dataLines;
   }
-  setRemainingBuffer(remainingBuffer);
+
+  private completeLine(finalFragment: string): string[] {
+    const line =
+      this.pendingLineFragments.length === 0
+        ? finalFragment
+        : [...this.pendingLineFragments, finalFragment].join("");
+    this.pendingLineFragments.length = 0;
+    const normalizedLine = line.trimEnd();
+    if (!normalizedLine.startsWith("data:")) {
+      return [];
+    }
+    return [normalizedLine.slice("data:".length).trimStart()];
+  }
 }

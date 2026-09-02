@@ -6,10 +6,24 @@ import {
   OpenAiCompatibleChatProvider,
   type ModelCompletionStreamEvent
 } from "@vivd-catalyst/model-provider";
+import { ServerSentEventDataLineParser } from "../packages/model-provider/src/openai-compatible-stream";
 
 describe("OpenAI-compatible model provider", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("emits fragmented SSE data only after completing each line", () => {
+    const parser = new ServerSentEventDataLineParser();
+    const payloadFragments = Array.from({ length: 1_024 }, () => "x".repeat(1_024));
+
+    expect(parser.push("da")).toEqual([]);
+    expect(parser.push("ta: ")).toEqual([]);
+    for (const fragment of payloadFragments) {
+      expect(parser.push(fragment)).toEqual([]);
+    }
+    expect(parser.push("\r\nignored: line\r\ndata: second")).toEqual([payloadFragments.join("")]);
+    expect(parser.push("", true)).toEqual(["second"]);
   });
 
   it("round-trips provider tool names without dot/underscore collisions", async () => {
@@ -1053,6 +1067,70 @@ describe("OpenAI-compatible model provider", () => {
     });
   });
 
+  it("extracts a large fragmented Responses compaction checkpoint", async () => {
+    const encryptedContent = `ä${"x".repeat(8 * 1024 * 1024)}🙂`;
+    const completedEvent = `data: ${JSON.stringify({
+      type: "response.completed",
+      response: {
+        output: [
+          {
+            id: "cmp_large",
+            type: "compaction",
+            encrypted_content: encryptedContent
+          }
+        ],
+        usage: {
+          input_tokens: 270_001,
+          output_tokens: 1,
+          total_tokens: 270_002
+        }
+      }
+    })}\r\n\r\n`;
+    const splitInsideFirstUtf8Character =
+      new TextEncoder().encode(completedEvent.slice(0, completedEvent.indexOf("ä"))).length + 1;
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        createFragmentedTextStream(completedEvent, splitInsideFirstUtf8Character, 1_024),
+        {
+          status: 200,
+          headers: { "content-type": "text/event-stream" }
+        }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = new OpenAiCompatibleChatProvider({
+      id: "azure-eu",
+      api: "responses",
+      model: "gpt-5.5",
+      baseUrl: "https://example.test/openai/v1",
+      apiKey: "test"
+    });
+    const events: ModelCompletionStreamEvent[] = [];
+    for await (const event of provider.stream?.(
+      {
+        providerId: "azure-eu",
+        model: "gpt-5.5",
+        messages: [{ role: "user", content: "continue" }],
+        tools: []
+      },
+      createModelProviderTestContext()
+    ) ?? []) {
+      events.push(event);
+    }
+
+    const completed = events.find((event) => event.type === "completed");
+    expect(completed?.completion.contextManagement).toEqual({ compacted: true });
+    expect(completed?.completion.continuation?.state).toMatchObject({
+      kind: "openai_responses",
+      compactionItem: {
+        id: "cmp_large",
+        type: "compaction",
+        encrypted_content: encryptedContent
+      }
+    });
+  });
+
   it("rejects a chat-completions stream that closes before its completion marker", async () => {
     const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       const requestBody = JSON.parse(String(init?.body)) as {
@@ -1271,6 +1349,25 @@ function createSseStream(chunks: unknown[], includeDone = true): ReadableStream<
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       }
       controller.close();
+    }
+  });
+}
+
+function createFragmentedTextStream(
+  text: string,
+  firstChunkSize: number,
+  chunkSize: number
+): ReadableStream<Uint8Array> {
+  const bytes = new TextEncoder().encode(text);
+  let offset = 0;
+  return new ReadableStream({
+    pull(controller) {
+      const nextChunkSize = offset === 0 ? firstChunkSize : chunkSize;
+      controller.enqueue(bytes.subarray(offset, offset + nextChunkSize));
+      offset += nextChunkSize;
+      if (offset >= bytes.length) {
+        controller.close();
+      }
     }
   });
 }
