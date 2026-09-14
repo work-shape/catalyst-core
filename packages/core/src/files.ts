@@ -698,7 +698,10 @@ export function resolveFilePreviewCapability(input: {
   if (containsSpreadsheetSignal(descriptor)) {
     return "spreadsheet";
   }
-  if (input.mimeType?.toLowerCase().startsWith("image/")) {
+  if (
+    input.mimeType?.toLowerCase().startsWith("image/") ||
+    /\.(png|jpe?g|webp|gif|svg)$/iu.test(input.filename ?? "")
+  ) {
     return "native_image";
   }
   if (descriptor.includes("markdown") || hasArtifactPreviewExtension(descriptor, ["md", "mdx"])) {

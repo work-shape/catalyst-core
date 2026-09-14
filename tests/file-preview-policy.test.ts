@@ -25,6 +25,21 @@ describe("file preview policy", () => {
     expect(resolveFilePreviewCapability({ filename, mimeType })).toBe(expected);
   });
 
+  it.each(["IMG_0851.jpeg", "PHOTO.JPG", "chart.png", "photo.webp", "animation.gif", "icon.svg"])(
+    "previews %s when image MIME metadata is unavailable",
+    (filename) => {
+      for (const mimeType of [undefined, "application/octet-stream"]) {
+        expect(resolveFilePreviewCapability({ filename, mimeType })).toBe("native_image");
+        expect(getSourceFilePreviewKind(filename, mimeType)).toBe("image");
+      }
+    }
+  );
+
+  it("does not infer an image from a filename containing an image extension before its suffix", () => {
+    expect(resolveFilePreviewCapability({ filename: "photo.jpeg.zip" })).toBeUndefined();
+    expect(resolveFilePreviewCapability({ filename: "jpeg" })).toBeUndefined();
+  });
+
   it("keeps the renderer source mapping for explicit page-image requests", () => {
     expect(detectArtifactPreviewSourceKind({ filename: "report.pdf" })).toBe("pdf");
     expect(detectArtifactPreviewSourceKind({ filename: "deck.pptx" })).toBe("presentation");

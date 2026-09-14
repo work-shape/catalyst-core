@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "../packages/chat-ui/node_modules/react";
 import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
-import type { ArtifactPreviewResponse } from "@vivd-catalyst/api-client";
+import { createApiClient, type ArtifactPreviewResponse } from "@vivd-catalyst/api-client";
 import {
+  ArtifactPreview,
   ARTIFACT_PREVIEW_POLL_DELAYS_MS,
   artifactPreviewPollDelayMs,
   createArtifactPreviewView,
@@ -12,8 +13,43 @@ import {
 } from "../packages/chat-ui/src/artifact-preview";
 import { ArtifactPreviewMessage } from "../packages/chat-ui/src/artifact-preview-shell";
 import type { ToolArtifactDownloadRef } from "../packages/chat-ui/src/tool-artifacts";
+import { conversationFileFromResource } from "../packages/chat-ui/src/conversation-file-presentation";
+import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 
 describe("chat UI artifact preview state", () => {
+  it("renders a generated JPEG resource without MIME metadata as an inline image", () => {
+    const file = conversationFileFromResource({
+      resourceType: "generated_file",
+      resourceId: "generated_file:art_image",
+      title: "IMG_0851.jpeg",
+      createdAt: "2026-09-14T12:00:00.000Z",
+      updatedAt: "2026-09-14T12:00:00.000Z",
+      preview: { kind: "artifact", artifactId: "art_image" },
+      download: { kind: "artifact", artifactId: "art_image", filename: "IMG_0851.jpeg" }
+    });
+    if (file.preview.kind !== "artifact") {
+      throw new Error("Expected an artifact preview");
+    }
+    const markup = renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { locale: "de" },
+        createElement(ArtifactPreview, {
+          artifact: file.preview.artifact,
+          client: createApiClient({ baseUrl: "https://example.test" }),
+          conversationId: "conversation/1"
+        })
+      )
+    );
+
+    expect(markup).toContain("<img");
+    expect(markup).toContain('alt="IMG_0851.jpeg"');
+    expect(markup).toContain(
+      'src="https://example.test/api/conversations/conversation%2F1/artifacts/art_image/content?inline=true"'
+    );
+    expect(markup).not.toContain("Vorschau nicht verfügbar");
+  });
+
   it("wraps long preview details inside the status card", () => {
     const markup = renderToStaticMarkup(
       createElement(ArtifactPreviewMessage, {
