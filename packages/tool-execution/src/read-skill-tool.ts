@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { createSkillSourceVersion, type ConfigAssetSource } from "@vivd-catalyst/core";
+import type { ConfigAssetSource } from "@vivd-catalyst/core";
+import { createSkillSourceVersion } from "./skill-source-version";
 import {
   defineTool,
   toolFailed,

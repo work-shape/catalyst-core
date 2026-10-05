@@ -1,7 +1,6 @@
 import { z } from "zod";
 import {
   AppError,
-  createSkillSourceVersion,
   isJsonObject,
   unknownToJsonValue,
   type AgentSkillChangesPolicy,
@@ -20,6 +19,7 @@ import {
   toolSuccess,
   type AnyToolDefinition
 } from "@vivd-catalyst/tool-sdk";
+import { createSkillSourceVersion } from "./skill-source-version";
 
 export const proposeSkillChangeInputSchema = z
   .object({

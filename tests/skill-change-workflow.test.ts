@@ -4,7 +4,6 @@ import {
   asClientInstanceId,
   asConversationId,
   asToolCallId,
-  createSkillSourceVersion,
   isJsonObject,
   StoreBackedAuditRecorder,
   unknownToJsonValue,
@@ -22,7 +21,10 @@ import {
   ApprovalRequestWorkflow,
   createSkillChangeApprovalHandler
 } from "@vivd-catalyst/chat-server";
-import { createProposeSkillChangeTool } from "@vivd-catalyst/tool-execution";
+import {
+  createProposeSkillChangeTool,
+  createSkillSourceVersion
+} from "@vivd-catalyst/tool-execution";
 import { createClientInstanceExecutionAssembly } from "../packages/client-assembly/src/app";
 import { createConfigAssetSource } from "../packages/client-assembly/src/config-asset-source";
 import { findConfigAssetAgentValidationIssues } from "../packages/client-assembly/src/assembly-validation";

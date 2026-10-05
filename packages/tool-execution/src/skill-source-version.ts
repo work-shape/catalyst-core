@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { SkillConfig } from "./config";
+import type { SkillConfig } from "@vivd-catalyst/core";
 
 export function createSkillSourceVersion(skill: SkillConfig): string {
   const hash = createHash("sha256")
