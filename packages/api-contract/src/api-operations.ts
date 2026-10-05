@@ -133,7 +133,6 @@ export const apiOperations = {
     path: "/api/collaboration-workspaces",
     responseSchema: z.array(collaborationWorkspaceWithRoleSchema)
   }),
-  createCollaborationWorkspace: defineJsonApiOperation({
   requestPasswordReset: defineJsonApiOperation({
     operationId: "requestPasswordReset",
     method: "POST",
@@ -149,6 +148,7 @@ export const apiOperations = {
     requestSchema: completePasswordSetupRequestSchema,
     responseSchema: completePasswordSetupResponseSchema
   }),
+  createCollaborationWorkspace: defineJsonApiOperation({
     operationId: "createCollaborationWorkspace",
     method: "POST",
     path: "/api/collaboration-workspaces",
@@ -548,13 +548,13 @@ export const apiOperations = {
     requestSchema: updateServicePrincipalRequestSchema,
     responseSchema: servicePrincipalDetailSchema
   }),
-  createApiCredential: defineJsonApiOperation({
   sendAdministeredUserInvitation: defineJsonApiOperation({
     operationId: "sendAdministeredUserInvitation",
     method: "POST",
     path: "/api/superadmin/users/:userId/invitation",
     responseSchema: sendAdministeredUserInvitationResponseSchema
   }),
+  createApiCredential: defineJsonApiOperation({
     operationId: "createApiCredential",
     method: "POST",
     path: "/api/superadmin/api-access/service-principals/:servicePrincipalId/credentials",

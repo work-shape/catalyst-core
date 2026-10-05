@@ -311,7 +311,6 @@ function createUsersClient(transport: ApiClientTransport) {
         }),
         apiOperations.resetAdministeredUserPassword.responseSchema
       ),
-    deleteIdentity: (userId: string, authSource: string, externalUserId: string) =>
     sendInvitation: (userId: string) =>
       transport.unwrapJson(
         generatedSdk.sendAdministeredUserInvitation({
@@ -320,6 +319,7 @@ function createUsersClient(transport: ApiClientTransport) {
         }),
         apiOperations.sendAdministeredUserInvitation.responseSchema
       ),
+    deleteIdentity: (userId: string, authSource: string, externalUserId: string) =>
       transport.unwrapJson(
         generatedSdk.deleteAdministeredUserIdentity({
           client: transport.generatedClient,

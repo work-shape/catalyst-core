@@ -40,6 +40,21 @@ export const changeCurrentUserPassword = <ThrowOnError extends boolean = false>(
     }
 });
 
+export const getBranding = <ThrowOnError extends boolean = false>(options?: Options<GetBrandingData, ThrowOnError>): RequestResult<GetBrandingResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetBrandingResponses, unknown, ThrowOnError>({ url: '/api/branding', ...options });
+
+export const getConfig = <ThrowOnError extends boolean = false>(options?: Options<GetConfigData, ThrowOnError>): RequestResult<GetConfigResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetConfigResponses, unknown, ThrowOnError>({ url: '/api/config', ...options });
+
+export const listCollaborationWorkspaces = <ThrowOnError extends boolean = false>(options?: Options<ListCollaborationWorkspacesData, ThrowOnError>): RequestResult<ListCollaborationWorkspacesResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListCollaborationWorkspacesResponses, unknown, ThrowOnError>({ url: '/api/collaboration-workspaces', ...options });
+
+export const createCollaborationWorkspace = <ThrowOnError extends boolean = false>(options: Options<CreateCollaborationWorkspaceData, ThrowOnError>): RequestResult<CreateCollaborationWorkspaceResponses, unknown, ThrowOnError> => (options.client ?? client).post<CreateCollaborationWorkspaceResponses, unknown, ThrowOnError>({
+    url: '/api/collaboration-workspaces',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
 export const requestPasswordReset = <ThrowOnError extends boolean = false>(options: Options<RequestPasswordResetData, ThrowOnError>): RequestResult<RequestPasswordResetResponses, unknown, ThrowOnError> => (options.client ?? client).post<RequestPasswordResetResponses, unknown, ThrowOnError>({
     url: '/api/password-reset',
     ...options,
@@ -51,21 +66,6 @@ export const requestPasswordReset = <ThrowOnError extends boolean = false>(optio
 
 export const completePasswordSetup = <ThrowOnError extends boolean = false>(options: Options<CompletePasswordSetupData, ThrowOnError>): RequestResult<CompletePasswordSetupResponses, unknown, ThrowOnError> => (options.client ?? client).post<CompletePasswordSetupResponses, unknown, ThrowOnError>({
     url: '/api/password-setup',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
-
-export const getBranding = <ThrowOnError extends boolean = false>(options?: Options<GetBrandingData, ThrowOnError>): RequestResult<GetBrandingResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetBrandingResponses, unknown, ThrowOnError>({ url: '/api/branding', ...options });
-
-export const getConfig = <ThrowOnError extends boolean = false>(options?: Options<GetConfigData, ThrowOnError>): RequestResult<GetConfigResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetConfigResponses, unknown, ThrowOnError>({ url: '/api/config', ...options });
-
-export const listCollaborationWorkspaces = <ThrowOnError extends boolean = false>(options?: Options<ListCollaborationWorkspacesData, ThrowOnError>): RequestResult<ListCollaborationWorkspacesResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListCollaborationWorkspacesResponses, unknown, ThrowOnError>({ url: '/api/collaboration-workspaces', ...options });
-
-export const createCollaborationWorkspace = <ThrowOnError extends boolean = false>(options: Options<CreateCollaborationWorkspaceData, ThrowOnError>): RequestResult<CreateCollaborationWorkspaceResponses, unknown, ThrowOnError> => (options.client ?? client).post<CreateCollaborationWorkspaceResponses, unknown, ThrowOnError>({
-    url: '/api/collaboration-workspaces',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -344,8 +344,6 @@ export const resetAdministeredUserPassword = <ThrowOnError extends boolean = fal
     }
 });
 
-export const sendAdministeredUserInvitation = <ThrowOnError extends boolean = false>(options: Options<SendAdministeredUserInvitationData, ThrowOnError>): RequestResult<SendAdministeredUserInvitationResponses, unknown, ThrowOnError> => (options.client ?? client).post<SendAdministeredUserInvitationResponses, unknown, ThrowOnError>({ url: '/api/superadmin/users/{userId}/invitation', ...options });
-
 export const listServicePrincipals = <ThrowOnError extends boolean = false>(options?: Options<ListServicePrincipalsData, ThrowOnError>): RequestResult<ListServicePrincipalsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListServicePrincipalsResponses, unknown, ThrowOnError>({ url: '/api/superadmin/api-access/service-principals', ...options });
 
 export const createServicePrincipal = <ThrowOnError extends boolean = false>(options: Options<CreateServicePrincipalData, ThrowOnError>): RequestResult<CreateServicePrincipalResponses, unknown, ThrowOnError> => (options.client ?? client).post<CreateServicePrincipalResponses, unknown, ThrowOnError>({
@@ -365,6 +363,8 @@ export const updateServicePrincipal = <ThrowOnError extends boolean = false>(opt
         ...options.headers
     }
 });
+
+export const sendAdministeredUserInvitation = <ThrowOnError extends boolean = false>(options: Options<SendAdministeredUserInvitationData, ThrowOnError>): RequestResult<SendAdministeredUserInvitationResponses, unknown, ThrowOnError> => (options.client ?? client).post<SendAdministeredUserInvitationResponses, unknown, ThrowOnError>({ url: '/api/superadmin/users/{userId}/invitation', ...options });
 
 export const createApiCredential = <ThrowOnError extends boolean = false>(options: Options<CreateApiCredentialData, ThrowOnError>): RequestResult<CreateApiCredentialResponses, unknown, ThrowOnError> => (options.client ?? client).post<CreateApiCredentialResponses, unknown, ThrowOnError>({
     url: '/api/superadmin/api-access/service-principals/{servicePrincipalId}/credentials',

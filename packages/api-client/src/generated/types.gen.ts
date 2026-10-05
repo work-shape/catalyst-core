@@ -131,49 +131,6 @@ export type ChangeCurrentUserPasswordResponses = {
 
 export type ChangeCurrentUserPasswordResponse = ChangeCurrentUserPasswordResponses[keyof ChangeCurrentUserPasswordResponses];
 
-export type RequestPasswordResetData = {
-    body: {
-        email: string;
-    };
-    path?: never;
-    query?: {
-        locale?: string;
-    };
-    url: '/api/password-reset';
-};
-
-export type RequestPasswordResetResponses = {
-    /**
-     * Successful response
-     */
-    200: {
-        ok: true;
-    };
-};
-
-export type RequestPasswordResetResponse = RequestPasswordResetResponses[keyof RequestPasswordResetResponses];
-
-export type CompletePasswordSetupData = {
-    body: {
-        token: string;
-        password: string;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/password-setup';
-};
-
-export type CompletePasswordSetupResponses = {
-    /**
-     * Successful response
-     */
-    200: {
-        ok: true;
-    };
-};
-
-export type CompletePasswordSetupResponse = CompletePasswordSetupResponses[keyof CompletePasswordSetupResponses];
-
 export type GetBrandingData = {
     body?: never;
     path?: never;
@@ -411,6 +368,49 @@ export type CreateCollaborationWorkspaceResponses = {
 };
 
 export type CreateCollaborationWorkspaceResponse = CreateCollaborationWorkspaceResponses[keyof CreateCollaborationWorkspaceResponses];
+
+export type RequestPasswordResetData = {
+    body: {
+        email: string;
+    };
+    path?: never;
+    query?: {
+        locale?: string;
+    };
+    url: '/api/password-reset';
+};
+
+export type RequestPasswordResetResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        ok: true;
+    };
+};
+
+export type RequestPasswordResetResponse = RequestPasswordResetResponses[keyof RequestPasswordResetResponses];
+
+export type CompletePasswordSetupData = {
+    body: {
+        token: string;
+        password: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/password-setup';
+};
+
+export type CompletePasswordSetupResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        ok: true;
+    };
+};
+
+export type CompletePasswordSetupResponse = CompletePasswordSetupResponses[keyof CompletePasswordSetupResponses];
 
 export type ListCollaborationWorkspaceDirectoryData = {
     body?: never;
@@ -3682,26 +3682,6 @@ export type ResetAdministeredUserPasswordResponses = {
 
 export type ResetAdministeredUserPasswordResponse = ResetAdministeredUserPasswordResponses[keyof ResetAdministeredUserPasswordResponses];
 
-export type SendAdministeredUserInvitationData = {
-    body?: never;
-    path: {
-        userId: string;
-    };
-    query?: never;
-    url: '/api/superadmin/users/{userId}/invitation';
-};
-
-export type SendAdministeredUserInvitationResponses = {
-    /**
-     * Successful response
-     */
-    200: {
-        ok: true;
-    };
-};
-
-export type SendAdministeredUserInvitationResponse = SendAdministeredUserInvitationResponses[keyof SendAdministeredUserInvitationResponses];
-
 export type ListServicePrincipalsData = {
     body?: never;
     path?: never;
@@ -3839,6 +3819,26 @@ export type UpdateServicePrincipalResponses = {
 };
 
 export type UpdateServicePrincipalResponse = UpdateServicePrincipalResponses[keyof UpdateServicePrincipalResponses];
+
+export type SendAdministeredUserInvitationData = {
+    body?: never;
+    path: {
+        userId: string;
+    };
+    query?: never;
+    url: '/api/superadmin/users/{userId}/invitation';
+};
+
+export type SendAdministeredUserInvitationResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        ok: true;
+    };
+};
+
+export type SendAdministeredUserInvitationResponse = SendAdministeredUserInvitationResponses[keyof SendAdministeredUserInvitationResponses];
 
 export type CreateApiCredentialData = {
     body: {

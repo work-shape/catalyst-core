@@ -92,13 +92,10 @@ export interface ChatServerOptions {
     | "setOrCreatePasswordSignIn"
     | "changePassword"
     | "deletePasswordSignIn"
-  >;
-  sessionToken?: {
-    issuer: HmacSessionTokenIssuer;
     | "findPasswordSignIn"
     | "createPasswordSetupToken"
     | "completePasswordSetup"
-    serverCredential: string;
+  >;
   mail?: {
     sender: MailSender;
     /** Public URL of the chat UI; emailed links point here. */
@@ -106,6 +103,9 @@ export interface ChatServerOptions {
     /** Present only with the capture provider; backs the development inspection route. */
     listCaptured?(): CapturedMail[];
   };
+  sessionToken?: {
+    issuer: HmacSessionTokenIssuer;
+    serverCredential: string;
   };
   serviceAccessToken?: {
     exchange: ApiKeyAccessTokenExchange;

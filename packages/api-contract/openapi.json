@@ -593,6 +593,10 @@
                     },
                     "environment": {
                       "type": "string"
+                    },
+                    "passwordResetEnabled": {
+                      "default": false,
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -829,6 +833,21 @@
                             "allowAgentDeletion",
                             "allowDefaultAgentChange",
                             "allowSkillEditing"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "userInvitations": {
+                          "default": {
+                            "enabled": false
+                          },
+                          "type": "object",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "enabled"
                           ],
                           "additionalProperties": false
                         }
@@ -1423,6 +1442,40 @@
                     "role": {
                       "type": "string",
                       "enum": [
+                        "owner",
+                        "admin",
+                        "member"
+                      ]
+                    },
+                    "pendingAccessRequestCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "clientInstanceId",
+                    "kind",
+                    "name",
+                    "description",
+                    "visibility",
+                    "emoji",
+                    "accentColor",
+                    "personalUserId",
+                    "createdAt",
+                    "updatedAt",
+                    "role",
+                    "pendingAccessRequestCount"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/password-reset": {
       "post": {
         "operationId": "requestPasswordReset",
@@ -1525,40 +1578,6 @@
                   },
                   "required": [
                     "ok"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-                        "owner",
-                        "admin",
-                        "member"
-                      ]
-                    },
-                    "pendingAccessRequestCount": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 9007199254740991
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "clientInstanceId",
-                    "kind",
-                    "name",
-                    "description",
-                    "visibility",
-                    "emoji",
-                    "accentColor",
-                    "personalUserId",
-                    "createdAt",
-                    "updatedAt",
-                    "role",
-                    "pendingAccessRequestCount"
                   ],
                   "additionalProperties": false
                 }
@@ -1699,10 +1718,6 @@
                       ]
                     },
                     "name": {
-                    },
-                    "passwordResetEnabled": {
-                      "default": false,
-                      "type": "boolean"
                       "type": "string"
                     },
                     "description": {
@@ -1940,21 +1955,6 @@
                     "visibility": {
                       "type": "string",
                       "enum": [
-                        },
-                        "userInvitations": {
-                          "default": {
-                            "enabled": false
-                          },
-                          "type": "object",
-                          "properties": {
-                            "enabled": {
-                              "type": "boolean"
-                            }
-                          },
-                          "required": [
-                            "enabled"
-                          ],
-                          "additionalProperties": false
                         "discoverable",
                         "private"
                       ]
@@ -14347,6 +14347,43 @@
         }
       }
     },
+    "/api/superadmin/users/{userId}/invitation": {
+      "post": {
+        "operationId": "sendAdministeredUserInvitation",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/superadmin/api-access/service-principals/{servicePrincipalId}/credentials": {
       "post": {
         "operationId": "createApiCredential",
@@ -14818,43 +14855,6 @@
                   "type": "object",
                   "properties": {
                     "chatSessionToken": {
-    "/api/superadmin/users/{userId}/invitation": {
-      "post": {
-        "operationId": "sendAdministeredUserInvitation",
-        "parameters": [
-          {
-            "name": "userId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "ok": {
-                      "type": "boolean",
-                      "const": true
-                    }
-                  },
-                  "required": [
-                    "ok"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
                       "type": "string"
                     },
                     "expiresAt": {

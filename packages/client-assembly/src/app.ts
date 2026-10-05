@@ -45,8 +45,8 @@ import {
 } from "./assembly-validation";
 import { createConfigAssetSource } from "./config-asset-source";
 import { createClientInstanceAuth } from "./auth";
-import type {
 import { createClientInstanceMail } from "./mail";
+import type {
   ClientInstanceAttachmentHandler,
   ClientInstanceCapabilityContribution,
   ClientInstanceCapability,
@@ -167,10 +167,10 @@ export async function createClientInstanceApp(
     modelProvider,
     corsOrigin: input.corsOrigin,
     standaloneAuth,
+    mail: createClientInstanceMail({ config, env }),
     sessionToken,
     serviceAccessToken
   });
-    mail: createClientInstanceMail({ config, env }),
 
   return {
     config,
