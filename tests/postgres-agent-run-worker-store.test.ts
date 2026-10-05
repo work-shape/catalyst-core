@@ -181,6 +181,7 @@ async function createQueuedRun(store: PostgresPlatformStore): Promise<{
   const user = await store.createUser({ clientInstanceId, displayLabel: "Agent worker owner" });
   const workspace = await store.ensurePersonalWorkspace({ clientInstanceId, userId: user.id });
   const conversation = await store.createConversation({
+    visibility: "workspace",
     clientInstanceId,
     collaborationWorkspaceId: workspace.id,
     createdByUserId: user.id,

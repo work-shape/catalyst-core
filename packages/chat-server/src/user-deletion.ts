@@ -76,7 +76,8 @@ export async function cleanupProductUserData(input: {
   const conversations = personalWorkspace
     ? await options.conversationStore.listConversationsForWorkspace({
         clientInstanceId: options.clientInstanceId,
-        collaborationWorkspaceId: personalWorkspace.id
+        collaborationWorkspaceId: personalWorkspace.id,
+        scope: { kind: "lifecycle" }
       })
     : [];
   const totals: UserDeletionTotals = {

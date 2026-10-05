@@ -135,6 +135,7 @@ async function expectManagedArtifactEnsureContract(
     userId: user.id
   });
   const conversation = await store.createConversation({
+    visibility: "workspace",
     clientInstanceId,
     collaborationWorkspaceId: personalWorkspace.id,
     createdByUserId: user.id,
@@ -725,6 +726,7 @@ async function createPreviewFixture(store: PreviewJobIdentityStore): Promise<{
     userId: user.id
   });
   const conversation = await store.createConversation({
+    visibility: "workspace",
     clientInstanceId,
     collaborationWorkspaceId: personalWorkspace.id,
     createdByUserId: user.id,

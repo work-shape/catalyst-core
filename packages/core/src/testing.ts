@@ -33,6 +33,7 @@ import {
   type RuntimeAssetSnapshot,
   type CompleteRunStartCommandInput,
   type Conversation,
+  type ConversationListScope,
   type ConversationId,
   type ConversationRetentionStore,
   type ConversationStore,
@@ -40,6 +41,7 @@ import {
   type ModelProviderContinuationStore,
   type CreateAgentRunInput,
   type CreateConversationInput,
+  type MoveConversationInput,
   type CreateWorkspaceInput,
   type CreateMessageInput,
   type HeartbeatAgentRunInput,
@@ -361,6 +363,7 @@ export class InMemoryPlatformStore
       name: input.name,
       description: input.description ?? null,
       visibility: input.kind === "personal" ? "private" : (input.visibility ?? "discoverable"),
+      defaultConversationVisibility: input.defaultConversationVisibility ?? "workspace",
       emoji: input.emoji ?? null,
       accentColor: input.accentColor ?? null,
       personalUserId: input.kind === "personal" ? (input.personalUserId ?? null) : null,
@@ -429,12 +432,20 @@ export class InMemoryPlatformStore
       if (input.visibility !== undefined && input.visibility !== "private") {
         throw new AppError("VALIDATION_FAILED", "A Personal Workspace must remain private");
       }
+      if (input.defaultConversationVisibility === "private") {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          "A Personal Workspace cannot default to private conversations"
+        );
+      }
     }
     const updated: CollaborationWorkspace = {
       ...workspace,
       name: input.name ?? workspace.name,
       description: input.description === undefined ? workspace.description : input.description,
       visibility: input.visibility ?? workspace.visibility,
+      defaultConversationVisibility:
+        input.defaultConversationVisibility ?? workspace.defaultConversationVisibility,
       emoji: input.emoji === undefined ? workspace.emoji : input.emoji,
       accentColor: input.accentColor === undefined ? workspace.accentColor : input.accentColor,
       updatedAt: new Date().toISOString()
@@ -763,6 +774,7 @@ export class InMemoryPlatformStore
       collaborationWorkspaceId: input.collaborationWorkspaceId,
       createdByUserId: input.createdByUserId,
       createdByExternalUserId: input.createdByExternalUserId,
+      visibility: input.visibility,
       title: input.title,
       status: "active",
       createdAt: now,
@@ -775,7 +787,7 @@ export class InMemoryPlatformStore
   }
 
   async createConversationForTesting(
-    input: Omit<CreateConversationInput, "collaborationWorkspaceId">
+    input: Omit<CreateConversationInput, "collaborationWorkspaceId" | "visibility">
   ): Promise<Conversation> {
     let user = this.users.get(input.createdByUserId);
     if (!user) {
@@ -801,7 +813,11 @@ export class InMemoryPlatformStore
       clientInstanceId: input.clientInstanceId,
       userId: user.id
     });
-    return this.createConversation({ ...input, collaborationWorkspaceId: workspace.id });
+    return this.createConversation({
+      ...input,
+      collaborationWorkspaceId: workspace.id,
+      visibility: "workspace"
+    });
   }
 
   async getConversation(
@@ -818,23 +834,36 @@ export class InMemoryPlatformStore
   async listConversationsForWorkspace(input: {
     clientInstanceId: ClientInstanceId;
     collaborationWorkspaceId: CollaborationWorkspaceId;
+    scope: ConversationListScope;
   }): Promise<Conversation[]> {
+    const { scope } = input;
     return [...this.conversations.values()]
       .filter(
         (conversation) =>
           conversation.clientInstanceId === input.clientInstanceId &&
           conversation.collaborationWorkspaceId === input.collaborationWorkspaceId &&
-          conversation.status === "active"
+          conversation.status === "active" &&
+          (scope.kind === "lifecycle" ||
+            conversation.visibility === "workspace" ||
+            conversation.createdByUserId === scope.userId)
       )
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   }
 
-  async moveConversation(input: {
+  async listPrivateConversationsCreatedByUser(input: {
     clientInstanceId: ClientInstanceId;
-    conversationId: ConversationId;
-    fromCollaborationWorkspaceId: CollaborationWorkspaceId;
-    toCollaborationWorkspaceId: CollaborationWorkspaceId;
-  }): Promise<Conversation> {
+    userId: string;
+  }): Promise<Conversation[]> {
+    return [...this.conversations.values()].filter(
+      (conversation) =>
+        conversation.clientInstanceId === input.clientInstanceId &&
+        conversation.status === "active" &&
+        conversation.visibility === "private" &&
+        conversation.createdByUserId === input.userId
+    );
+  }
+
+  async moveConversation(input: MoveConversationInput): Promise<Conversation> {
     this.requireWorkspace(input.clientInstanceId, input.toCollaborationWorkspaceId);
     const conversation = await this.getConversation(input.clientInstanceId, input.conversationId);
     if (
@@ -846,7 +875,8 @@ export class InMemoryPlatformStore
     }
     const moved = {
       ...conversation,
-      collaborationWorkspaceId: input.toCollaborationWorkspaceId
+      collaborationWorkspaceId: input.toCollaborationWorkspaceId,
+      visibility: input.visibility
     };
     this.conversations.set(input.conversationId, moved);
     return moved;

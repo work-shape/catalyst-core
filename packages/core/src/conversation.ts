@@ -11,12 +11,22 @@ import type { ISODateString } from "./time";
 
 export type ConversationStatus = "active" | "deleted" | "retention_expired";
 
+/** `private` restricts a Conversation in a Shared Workspace to the user who created it. */
+export type ConversationVisibility = "workspace" | "private";
+
+/**
+ * Who a workspace Conversation listing is for. `viewer` hides other users' private
+ * Conversations; `lifecycle` is for retention and deletion workflows that must see every row.
+ */
+export type ConversationListScope = { kind: "viewer"; userId: string } | { kind: "lifecycle" };
+
 export interface Conversation {
   id: ConversationId;
   clientInstanceId: ClientInstanceId;
   collaborationWorkspaceId: CollaborationWorkspaceId;
   createdByUserId: string;
   createdByExternalUserId: string;
+  visibility: ConversationVisibility;
   title: string;
   status: ConversationStatus;
   createdAt: ISODateString;
@@ -72,6 +82,7 @@ export interface CreateConversationInput {
   collaborationWorkspaceId: CollaborationWorkspaceId;
   createdByUserId: string;
   createdByExternalUserId: string;
+  visibility: ConversationVisibility;
   title: string;
   retainedUntil: ISODateString;
 }
@@ -109,6 +120,7 @@ export interface MoveConversationInput {
   conversationId: ConversationId;
   fromCollaborationWorkspaceId: CollaborationWorkspaceId;
   toCollaborationWorkspaceId: CollaborationWorkspaceId;
+  visibility: ConversationVisibility;
 }
 
 export interface ConversationStore extends ConversationHistoryStore {
@@ -120,6 +132,12 @@ export interface ConversationStore extends ConversationHistoryStore {
   listConversationsForWorkspace(input: {
     clientInstanceId: ClientInstanceId;
     collaborationWorkspaceId: CollaborationWorkspaceId;
+    scope: ConversationListScope;
+  }): Promise<Conversation[]>;
+  /** Lifecycle only: every active private Conversation the user created, in any workspace. */
+  listPrivateConversationsCreatedByUser(input: {
+    clientInstanceId: ClientInstanceId;
+    userId: string;
   }): Promise<Conversation[]>;
   moveConversation(input: MoveConversationInput): Promise<Conversation>;
   updateConversationTitle(input: UpdateConversationTitleInput): Promise<Conversation>;

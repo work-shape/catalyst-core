@@ -1,3 +1,4 @@
+import type { ConversationVisibility } from "./conversation";
 import { AppError } from "./errors";
 import type {
   ClientInstanceId,
@@ -42,6 +43,7 @@ export interface CollaborationWorkspace {
   name: string;
   description: string | null;
   visibility: WorkspaceVisibility;
+  defaultConversationVisibility: ConversationVisibility;
   emoji: string | null;
   accentColor: WorkspaceAccentColor | null;
   personalUserId: UserId | null;
@@ -82,6 +84,7 @@ export interface CreateWorkspaceInput {
   name: string;
   description?: string | null;
   visibility?: WorkspaceVisibility;
+  defaultConversationVisibility?: ConversationVisibility;
   emoji?: string | null;
   accentColor?: WorkspaceAccentColor | null;
   personalUserId?: UserId | null;
@@ -94,6 +97,7 @@ export interface UpdateWorkspaceInput {
   name?: string;
   description?: string | null;
   visibility?: WorkspaceVisibility;
+  defaultConversationVisibility?: ConversationVisibility;
   emoji?: string | null;
   accentColor?: WorkspaceAccentColor | null;
 }
@@ -200,6 +204,12 @@ export function validateWorkspaceCreation(input: CreateWorkspaceInput): void {
     }
     if (input.visibility && input.visibility !== "private") {
       throw new AppError("VALIDATION_FAILED", "A Personal Workspace must be private");
+    }
+    if (input.defaultConversationVisibility === "private") {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "A Personal Workspace cannot default to private conversations"
+      );
     }
     return;
   }

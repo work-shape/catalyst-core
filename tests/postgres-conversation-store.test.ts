@@ -22,6 +22,7 @@ describePostgres("Postgres conversation store", () => {
       userId: user.id
     });
     const conversation = await store.createConversation({
+      visibility: "workspace",
       clientInstanceId,
       collaborationWorkspaceId: personalWorkspace.id,
       createdByUserId: user.id,
@@ -110,7 +111,8 @@ describePostgres("Postgres conversation store", () => {
       await expect(
         store.listConversationsForWorkspace({
           clientInstanceId,
-          collaborationWorkspaceId: personalWorkspace.id
+          collaborationWorkspaceId: personalWorkspace.id,
+          scope: { kind: "lifecycle" }
         })
       ).resolves.toEqual([expect.objectContaining({ id: conversation.id })]);
     } finally {

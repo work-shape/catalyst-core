@@ -116,7 +116,8 @@ export class ConversationWorkflow {
     await this.workspaces.requireActiveMembership(user, collaborationWorkspaceId);
     const conversations = await this.options.conversationStore.listConversationsForWorkspace({
       clientInstanceId: this.options.clientInstanceId,
-      collaborationWorkspaceId
+      collaborationWorkspaceId,
+      scope: { kind: "viewer", userId: getSubjectUserId(user) }
     });
     return Promise.all(
       conversations.map(async (conversation): Promise<ConversationListItem> => {
@@ -156,6 +157,7 @@ export class ConversationWorkflow {
       collaborationWorkspaceId,
       createdByUserId: subjectUserId,
       createdByExternalUserId: user.externalUserId,
+      visibility: "workspace",
       title: command.title ?? "New conversation",
       retainedUntil: addDays(
         new Date(),
@@ -288,7 +290,8 @@ export class ConversationWorkflow {
       clientInstanceId: this.options.clientInstanceId,
       conversationId,
       fromCollaborationWorkspaceId: conversation.collaborationWorkspaceId,
-      toCollaborationWorkspaceId: command.collaborationWorkspaceId
+      toCollaborationWorkspaceId: command.collaborationWorkspaceId,
+      visibility: conversation.visibility
     });
     await this.options.auditRecorder.record({
       type: "conversation.moved",

@@ -150,6 +150,7 @@ describe("InMemoryPlatformStore Collaboration Workspaces", () => {
       userId: requester.id
     });
     const conversation = await store.createConversation({
+      visibility: "workspace",
       clientInstanceId,
       collaborationWorkspaceId: source.id,
       createdByUserId: owner.id,
@@ -163,7 +164,8 @@ describe("InMemoryPlatformStore Collaboration Workspaces", () => {
         clientInstanceId,
         conversationId: conversation.id,
         fromCollaborationWorkspaceId: source.id,
-        toCollaborationWorkspaceId: destination.id
+        toCollaborationWorkspaceId: destination.id,
+        visibility: "workspace"
       })
     ).resolves.toMatchObject({ collaborationWorkspaceId: destination.id });
     await expect(
@@ -171,7 +173,8 @@ describe("InMemoryPlatformStore Collaboration Workspaces", () => {
         clientInstanceId,
         conversationId: conversation.id,
         fromCollaborationWorkspaceId: source.id,
-        toCollaborationWorkspaceId: destination.id
+        toCollaborationWorkspaceId: destination.id,
+        visibility: "workspace"
       })
     ).rejects.toMatchObject({ code: "CONFLICT" });
 
@@ -185,5 +188,78 @@ describe("InMemoryPlatformStore Collaboration Workspaces", () => {
       collaborationWorkspaceId: destination.id
     });
     await expect(store.getWorkspace(clientInstanceId, destination.id)).resolves.toBeUndefined();
+  });
+
+  it("scopes conversation listings by visibility and keeps Personal Workspaces open", async () => {
+    const store = new InMemoryPlatformStore();
+    const clientInstanceId = asClientInstanceId("workspace-unit-visibility");
+    const author = await store.createUser({ clientInstanceId, displayLabel: "Author" });
+    const colleague = await store.createUser({ clientInstanceId, displayLabel: "Colleague" });
+    const workspace = await store.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Shared",
+      defaultConversationVisibility: "private",
+      creatorUserId: author.id
+    });
+    expect(workspace.defaultConversationVisibility).toBe("private");
+    const create = (visibility: "workspace" | "private", createdByUserId: string) =>
+      store.createConversation({
+        clientInstanceId,
+        collaborationWorkspaceId: workspace.id,
+        createdByUserId,
+        createdByExternalUserId: createdByUserId,
+        visibility,
+        title: visibility,
+        retainedUntil: "2030-01-01T00:00:00.000Z"
+      });
+    const open = await create("workspace", author.id);
+    const authorsPrivate = await create("private", author.id);
+    const colleaguesPrivate = await create("private", colleague.id);
+    const list = async (
+      scope: Parameters<typeof store.listConversationsForWorkspace>[0]["scope"]
+    ) =>
+      (
+        await store.listConversationsForWorkspace({
+          clientInstanceId,
+          collaborationWorkspaceId: workspace.id,
+          scope
+        })
+      )
+        .map((conversation) => conversation.id)
+        .sort();
+
+    await expect(list({ kind: "viewer", userId: author.id })).resolves.toEqual(
+      [open.id, authorsPrivate.id].sort()
+    );
+    await expect(list({ kind: "viewer", userId: colleague.id })).resolves.toEqual(
+      [open.id, colleaguesPrivate.id].sort()
+    );
+    await expect(list({ kind: "lifecycle" })).resolves.toEqual(
+      [open.id, authorsPrivate.id, colleaguesPrivate.id].sort()
+    );
+    await expect(
+      store.listPrivateConversationsCreatedByUser({ clientInstanceId, userId: author.id })
+    ).resolves.toEqual([expect.objectContaining({ id: authorsPrivate.id })]);
+
+    const personal = await store.ensurePersonalWorkspace({ clientInstanceId, userId: author.id });
+    expect(personal.defaultConversationVisibility).toBe("workspace");
+    await expect(
+      store.updateWorkspace({
+        clientInstanceId,
+        collaborationWorkspaceId: personal.id,
+        defaultConversationVisibility: "private"
+      })
+    ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+    await expect(
+      store.updateWorkspace({
+        clientInstanceId,
+        collaborationWorkspaceId: workspace.id,
+        defaultConversationVisibility: "workspace"
+      })
+    ).resolves.toMatchObject({ defaultConversationVisibility: "workspace" });
+    await expect(store.getConversation(clientInstanceId, authorsPrivate.id)).resolves.toMatchObject(
+      { visibility: "private" }
+    );
   });
 });

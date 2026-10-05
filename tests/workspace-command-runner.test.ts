@@ -1062,6 +1062,7 @@ async function createRunnerHarness(
     userId: asUserId(owner.id)
   });
   const conversation = await store.createConversation({
+    visibility: "workspace",
     clientInstanceId,
     collaborationWorkspaceId: personalWorkspace!.id,
     createdByUserId: ownerUserId,

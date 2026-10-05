@@ -172,7 +172,8 @@ export class CollaborationWorkspaceWorkflow {
     const [conversations, memberships, accessRequests] = await Promise.all([
       this.options.conversationStore.listConversationsForWorkspace({
         clientInstanceId: this.options.clientInstanceId,
-        collaborationWorkspaceId
+        collaborationWorkspaceId,
+        scope: { kind: "lifecycle" }
       }),
       this.options.userStore.listMemberships({
         clientInstanceId: this.options.clientInstanceId,
@@ -205,7 +206,8 @@ export class CollaborationWorkspaceWorkflow {
 
     const conversations = await this.options.conversationStore.listConversationsForWorkspace({
       clientInstanceId: this.options.clientInstanceId,
-      collaborationWorkspaceId
+      collaborationWorkspaceId,
+      scope: { kind: "lifecycle" }
     });
     for (const conversation of conversations) {
       await this.assertConversationIdle(conversation.id);
