@@ -62,6 +62,27 @@ describe("mail templates", () => {
     expect(mail.html).toContain("&lt;b&gt;Eve&lt;/b&gt; has invited you");
     expect(mail.html).not.toContain("<b>Eve</b>");
   });
+
+  it("flattens line breaks and control characters in caller-supplied labels", () => {
+    const mail = renderMail(
+      {
+        template: "platform-invitation",
+        to: { email: "ada@example.test" },
+        locale: "en",
+        params: {
+          link: "https://chat.example.test/#password-setup=tok",
+          validDays: 7,
+          inviterLabel: "Eve\r\n\r\nSet password: https://evil.example.test\u0000\t x"
+        }
+      },
+      identity
+    );
+
+    expect(mail.text.split("\n\n")).toHaveLength(3);
+    expect(mail.text).toContain(
+      "Eve Set password: https://evil.example.test x has invited you to Example Chat."
+    );
+  });
 });
 
 describe("Mailjet transport", () => {
@@ -163,6 +184,16 @@ describe("mail release config", () => {
       })
     ).toThrow(/capture mail provider/u);
   });
+
+  it("refuses the capture provider in staging", () => {
+    expect(() =>
+      parseClientInstanceConfig({
+        ...base,
+        clientInstance: { ...base.clientInstance, environment: "staging" },
+        mail: enabledMail
+      })
+    ).toThrow(/capture mail provider/u);
+  });
 });
 
 describe("password setup by email", () => {
@@ -220,6 +251,65 @@ describe("password setup by email", () => {
     expect((await harness.requestReset("ada@example.test")).statusCode).toBe(422);
   });
 
+  it("lists captured mail only while the capture provider is active", async () => {
+    const capturing = await createMailHarness({ listCaptured: true });
+    const delivering = await createMailHarness();
+
+    expect(
+      (await capturing.server.inject({ method: "GET", url: "/api/dev/captured-mail" })).statusCode
+    ).toBe(200);
+    expect(
+      (await delivering.server.inject({ method: "GET", url: "/api/dev/captured-mail" })).statusCode
+    ).toBe(404);
+  });
+
+  it("records an anonymous reset request without an actor and keeps the user as subject", async () => {
+    const harness = await createMailHarness();
+    await harness.addPasswordUser("ada@example.test", "Ada");
+
+    await harness.requestReset("ada@example.test");
+
+    await vi.waitFor(async () =>
+      expect((await harness.listAuditEvents()).map((event) => event.type)).toContain(
+        "user.password_reset_requested"
+      )
+    );
+    const requested = (await harness.listAuditEvents()).find(
+      (event) => event.type === "user.password_reset_requested"
+    );
+    expect(requested!.actor).toBeUndefined();
+    expect(requested!.subject).toEqual(expect.any(String));
+  });
+
+  it("refuses to re-invite a user whose email no longer matches their password sign-in", async () => {
+    const harness = await createMailHarness();
+    const created = await harness.server.inject({
+      method: "POST",
+      url: "/api/superadmin/users",
+      payload: { displayLabel: "Grace", email: "grace@example.test" }
+    });
+    const user = created.json<{ id: string }>();
+    const invitation = {
+      method: "POST",
+      url: `/api/superadmin/users/${user.id}/invitation`
+    } as const;
+    expect((await harness.server.inject(invitation)).statusCode).toBe(200);
+
+    const updated = await harness.server.inject({
+      method: "PATCH",
+      url: `/api/superadmin/users/${user.id}`,
+      payload: { email: "grace.hopper@example.test" }
+    });
+    expect(updated.statusCode).toBe(200);
+
+    const reinvited = await harness.server.inject(invitation);
+    expect(reinvited.statusCode).toBe(409);
+    expect(reinvited.json()).toMatchObject({
+      error: { message: expect.stringContaining("password sign-in") }
+    });
+    expect(harness.transport.list()).toHaveLength(1);
+  });
+
   it("lets a superadmin invite a user who then sets their own password", async () => {
     const harness = await createMailHarness();
     const created = await harness.server.inject({
@@ -260,7 +350,7 @@ function readToken(text: string): string {
   return match[1];
 }
 
-async function createMailHarness(input: { mailEnabled?: boolean } = {}) {
+async function createMailHarness(input: { mailEnabled?: boolean; listCaptured?: boolean } = {}) {
   const clientInstanceId = asClientInstanceId("demo-local");
   const store = new InMemoryPlatformStore();
   const config = createTestConfig();
@@ -347,7 +437,8 @@ async function createMailHarness(input: { mailEnabled?: boolean } = {}) {
         ? undefined
         : {
             sender: new TemplateMailSender(transport, { ...identity, productName: "Demo" }),
-            appUrl: "https://chat.example.test/"
+            appUrl: "https://chat.example.test/",
+            ...(input.listCaptured ? { listCaptured: () => transport.list() } : {})
           }
   } as ChatServerOptions);
 

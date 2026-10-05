@@ -285,10 +285,12 @@ mail:
   API key. Use a separate Mailjet sub-account and key per client instance.
 - Startup fails when mail is enabled and either named environment variable is missing.
 - `provider: capture` keeps mails in memory and lists them at `GET /api/dev/captured-mail`.
-  Use it for local development and end-to-end tests; production config rejects it.
+  That route needs no sign-in, so only `environment: development` config accepts it; staging
+  and production config reject it.
 
 Reset links are valid for 60 minutes and invitation links for 7 days. A link stops working once
-it is used, once a newer link is issued, or once the password changes another way. Reset
+it is used, once a newer link is issued, or once the password changes another way. A reset
+request therefore also replaces a pending invitation link for the same user. Reset
 requests always get the same answer, whether or not an account exists, and are limited to three
 per address per hour.
 

@@ -36,13 +36,13 @@ const copy: {
   "platform-invitation": {
     en: (params, productName) => ({
       subject: `You have been invited to ${productName}`,
-      intro: `${params.inviterLabel} has invited you to ${productName}. Set a password to activate your account.`,
+      intro: `${toSingleLine(params.inviterLabel)} has invited you to ${productName}. Set a password to activate your account.`,
       action: "Set password",
       footer: `The link is valid for ${params.validDays} days and can be used once.`
     }),
     de: (params, productName) => ({
       subject: `Einladung zu ${productName}`,
-      intro: `${params.inviterLabel} hat dich zu ${productName} eingeladen. Lege ein Passwort fest, um dein Konto zu aktivieren.`,
+      intro: `${toSingleLine(params.inviterLabel)} hat dich zu ${productName} eingeladen. Lege ein Passwort fest, um dein Konto zu aktivieren.`,
       action: "Passwort festlegen",
       footer: `Der Link ist ${params.validDays} Tage gültig und kann einmal verwendet werden.`
     })
@@ -62,6 +62,14 @@ export function renderMail(message: MailMessage, identity: MailSenderIdentity): 
       `<p>${escapeHtml(resolved.footer)}</p>`
     ].join("\n")
   };
+}
+
+/**
+ * User-controlled labels reach the plain-text part unescaped, where a line break or control
+ * character could forge extra lines, so they are flattened to one line.
+ */
+function toSingleLine(value: string): string {
+  return value.replace(/[\s\p{Cc}]+/gu, " ").trim();
 }
 
 function resolveCopy(message: MailMessage, productName: string): MailCopy {

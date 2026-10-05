@@ -17,6 +17,7 @@ export function parseClientInstanceConfig(input: unknown): ClientInstanceConfig 
 
   assertModelProviderContextManagement(parsed.data);
   assertProductionSafeAuthConfig(parsed.data);
+  assertCaptureMailIsDevelopmentOnly(parsed.data);
   assertExecutionWorkspaceRunnerBoundary(parsed.data);
   assertConfigReferences(parsed.data);
   assertSpendBudgetPricingCoverage(parsed.data, []);
@@ -50,13 +51,6 @@ function assertProductionSafeAuthConfig(config: ClientInstanceConfig): void {
     );
   }
 
-  if (config.mail.enabled && config.mail.provider === "capture") {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      "The capture mail provider must not be enabled in production config"
-    );
-  }
-
   const seedUserWithDevelopmentPassword = config.auth.standalone?.seedUsers.find(
     (seedUser) => seedUser.developmentPassword
   );
@@ -67,6 +61,22 @@ function assertProductionSafeAuthConfig(config: ClientInstanceConfig): void {
   throw new AppError(
     "VALIDATION_FAILED",
     `Standalone auth seed user '${seedUserWithDevelopmentPassword.email}' uses developmentPassword in production config`
+  );
+}
+
+function assertCaptureMailIsDevelopmentOnly(config: ClientInstanceConfig): void {
+  if (
+    !config.mail.enabled ||
+    config.mail.provider !== "capture" ||
+    config.clientInstance.environment === "development"
+  ) {
+    return;
+  }
+
+  // Captured mails, including password setup links, are listed by an unauthenticated route.
+  throw new AppError(
+    "VALIDATION_FAILED",
+    "The capture mail provider is only allowed for development client instances"
   );
 }
 

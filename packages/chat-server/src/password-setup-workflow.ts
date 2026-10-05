@@ -130,7 +130,7 @@ export class PasswordSetupWorkflow {
     await this.options.auditRecorder.record({
       type: "user.password_reset_requested",
       status: result.ok ? "success" : "failed",
-      actor: selfActor(user),
+      // Requested anonymously: no actor, so the event is not attributed to the affected user.
       subject: user.id,
       correlationId: context.correlationId,
       metadata: {
