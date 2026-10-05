@@ -4,6 +4,264 @@ export type ClientOptions = {
     baseUrl: `${string}://${string}` | (string & {});
 };
 
+export type GetApprovalRequestData = {
+    body?: never;
+    path: {
+        requestId: string;
+    };
+    query?: never;
+    url: '/api/approval-requests/{requestId}';
+};
+
+export type GetApprovalRequestResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        id: string;
+        clientInstanceId: string;
+        kind: string;
+        summary: string;
+        payload: {
+            [key: string]: unknown;
+        };
+        requestedBy: {
+            id: string;
+            displayLabel: string;
+        };
+        origin?: {
+            conversationId: string;
+            agentRunId: string;
+            toolCallId: string;
+            agentName: string;
+        };
+        status: 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn';
+        decision?: {
+            approved: boolean;
+            decidedBy: string;
+            decidedByLabel: string;
+            decidedAt: string;
+            reason?: string;
+            comment?: string;
+        };
+        checks: Array<{
+            id: string;
+            status: 'passed' | 'warned' | 'blocked';
+            message: string;
+        }>;
+        applyResult?: {
+            [key: string]: unknown;
+        };
+        createdAt: string;
+        updatedAt: string;
+        preview: {
+            [key: string]: unknown;
+        };
+        canDecide: boolean;
+        canWithdraw: boolean;
+    };
+};
+
+export type GetApprovalRequestResponse = GetApprovalRequestResponses[keyof GetApprovalRequestResponses];
+
+export type ListApprovalRequestsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        status?: string;
+    };
+    url: '/api/approval-requests';
+};
+
+export type ListApprovalRequestsResponses = {
+    /**
+     * Successful response
+     */
+    200: Array<{
+        id: string;
+        clientInstanceId: string;
+        kind: string;
+        summary: string;
+        payload: {
+            [key: string]: unknown;
+        };
+        requestedBy: {
+            id: string;
+            displayLabel: string;
+        };
+        origin?: {
+            conversationId: string;
+            agentRunId: string;
+            toolCallId: string;
+            agentName: string;
+        };
+        status: 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn';
+        decision?: {
+            approved: boolean;
+            decidedBy: string;
+            decidedByLabel: string;
+            decidedAt: string;
+            reason?: string;
+            comment?: string;
+        };
+        checks: Array<{
+            id: string;
+            status: 'passed' | 'warned' | 'blocked';
+            message: string;
+        }>;
+        applyResult?: {
+            [key: string]: unknown;
+        };
+        createdAt: string;
+        updatedAt: string;
+        preview: {
+            [key: string]: unknown;
+        };
+        canDecide: boolean;
+        canWithdraw: boolean;
+    }>;
+};
+
+export type ListApprovalRequestsResponse = ListApprovalRequestsResponses[keyof ListApprovalRequestsResponses];
+
+export type CountPendingApprovalRequestsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/approval-requests/pending-count';
+};
+
+export type CountPendingApprovalRequestsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        count: number;
+        canReview: boolean;
+    };
+};
+
+export type CountPendingApprovalRequestsResponse = CountPendingApprovalRequestsResponses[keyof CountPendingApprovalRequestsResponses];
+
+export type DecideApprovalRequestData = {
+    body: {
+        decision: 'approve';
+        comment?: string;
+    } | {
+        decision: 'reject';
+        comment?: string;
+    } | {
+        decision: 'request_changes';
+        comment: string;
+    };
+    path: {
+        requestId: string;
+    };
+    query?: never;
+    url: '/api/approval-requests/{requestId}/decide';
+};
+
+export type DecideApprovalRequestResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        id: string;
+        clientInstanceId: string;
+        kind: string;
+        summary: string;
+        payload: {
+            [key: string]: unknown;
+        };
+        requestedBy: {
+            id: string;
+            displayLabel: string;
+        };
+        origin?: {
+            conversationId: string;
+            agentRunId: string;
+            toolCallId: string;
+            agentName: string;
+        };
+        status: 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn';
+        decision?: {
+            approved: boolean;
+            decidedBy: string;
+            decidedByLabel: string;
+            decidedAt: string;
+            reason?: string;
+            comment?: string;
+        };
+        checks: Array<{
+            id: string;
+            status: 'passed' | 'warned' | 'blocked';
+            message: string;
+        }>;
+        applyResult?: {
+            [key: string]: unknown;
+        };
+        createdAt: string;
+        updatedAt: string;
+    };
+};
+
+export type DecideApprovalRequestResponse = DecideApprovalRequestResponses[keyof DecideApprovalRequestResponses];
+
+export type WithdrawApprovalRequestData = {
+    body?: never;
+    path: {
+        requestId: string;
+    };
+    query?: never;
+    url: '/api/approval-requests/{requestId}/withdraw';
+};
+
+export type WithdrawApprovalRequestResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        id: string;
+        clientInstanceId: string;
+        kind: string;
+        summary: string;
+        payload: {
+            [key: string]: unknown;
+        };
+        requestedBy: {
+            id: string;
+            displayLabel: string;
+        };
+        origin?: {
+            conversationId: string;
+            agentRunId: string;
+            toolCallId: string;
+            agentName: string;
+        };
+        status: 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn';
+        decision?: {
+            approved: boolean;
+            decidedBy: string;
+            decidedByLabel: string;
+            decidedAt: string;
+            reason?: string;
+            comment?: string;
+        };
+        checks: Array<{
+            id: string;
+            status: 'passed' | 'warned' | 'blocked';
+            message: string;
+        }>;
+        applyResult?: {
+            [key: string]: unknown;
+        };
+        createdAt: string;
+        updatedAt: string;
+    };
+};
+
+export type WithdrawApprovalRequestResponse = WithdrawApprovalRequestResponses[keyof WithdrawApprovalRequestResponses];
+
 export type DeleteCurrentUserData = {
     body?: never;
     path?: never;

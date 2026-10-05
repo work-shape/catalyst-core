@@ -33,8 +33,10 @@ import type { ChatAttachmentService } from "./attachments";
 import type { ConversationRetentionJobOptions } from "./retention";
 import type { RunRecoveryOptions } from "./run-recovery";
 import type { ExecutionWorkspaceCleanupJobOptions } from "./workspace-cleanup";
+import type { ApprovalRequestWorkflowOptions } from "./approval-request-workflow";
 
 export interface ChatServerOptions {
+  approvalRequests?: Pick<ApprovalRequestWorkflowOptions, "store" | "handlers" | "onDecided">;
   config: ClientInstanceConfig;
   clientInstanceId: ClientInstanceId;
   authAdapter: AuthAdapter;
@@ -92,13 +94,10 @@ export interface ChatServerOptions {
     | "setOrCreatePasswordSignIn"
     | "changePassword"
     | "deletePasswordSignIn"
-  >;
-  sessionToken?: {
-    issuer: HmacSessionTokenIssuer;
     | "findPasswordSignIn"
     | "createPasswordSetupToken"
     | "completePasswordSetup"
-    serverCredential: string;
+  >;
   mail?: {
     sender: MailSender;
     /** Public URL of the chat UI; emailed links point here. */
@@ -106,6 +105,9 @@ export interface ChatServerOptions {
     /** Present only with the capture provider; backs the development inspection route. */
     listCaptured?(): CapturedMail[];
   };
+  sessionToken?: {
+    issuer: HmacSessionTokenIssuer;
+    serverCredential: string;
   };
   serviceAccessToken?: {
     exchange: ApiKeyAccessTokenExchange;

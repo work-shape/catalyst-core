@@ -1,4 +1,9 @@
-import { apiOperations, type ConfigAssetKind, type LocaleCode } from "@vivd-catalyst/api-contract";
+import {
+  apiOperations,
+  type ApprovalRequestStatus,
+  type ConfigAssetKind,
+  type LocaleCode
+} from "@vivd-catalyst/api-contract";
 import * as generatedSdk from "./generated/sdk.gen";
 import type { ApiClientTransport, OperationRequestInput } from "./transport";
 
@@ -100,6 +105,7 @@ export function createInstanceClients(transport: ApiClientTransport) {
           apiOperations.getUsageSummary.responseSchema
         )
     },
+    approvalRequests: createApprovalRequestsClient(transport),
     configAssets: createConfigAssetsClient(transport),
     apiAccess: createApiAccessClient(transport),
     users: createUsersClient(transport)
@@ -311,7 +317,6 @@ function createUsersClient(transport: ApiClientTransport) {
         }),
         apiOperations.resetAdministeredUserPassword.responseSchema
       ),
-    deleteIdentity: (userId: string, authSource: string, externalUserId: string) =>
     sendInvitation: (userId: string) =>
       transport.unwrapJson(
         generatedSdk.sendAdministeredUserInvitation({
@@ -320,12 +325,53 @@ function createUsersClient(transport: ApiClientTransport) {
         }),
         apiOperations.sendAdministeredUserInvitation.responseSchema
       ),
+    deleteIdentity: (userId: string, authSource: string, externalUserId: string) =>
       transport.unwrapJson(
         generatedSdk.deleteAdministeredUserIdentity({
           client: transport.generatedClient,
           path: { userId, authSource, externalUserId }
         }),
         apiOperations.deleteAdministeredUserIdentity.responseSchema
+      )
+  };
+}
+
+function createApprovalRequestsClient(transport: ApiClientTransport) {
+  return {
+    get: (requestId: string) =>
+      transport.unwrapJson(
+        generatedSdk.getApprovalRequest({ client: transport.generatedClient, path: { requestId } }),
+        apiOperations.getApprovalRequest.responseSchema
+      ),
+    list: (status?: ApprovalRequestStatus) =>
+      transport.unwrapJson(
+        generatedSdk.listApprovalRequests({ client: transport.generatedClient, query: { status } }),
+        apiOperations.listApprovalRequests.responseSchema
+      ),
+    pendingCount: () =>
+      transport.unwrapJson(
+        generatedSdk.countPendingApprovalRequests({ client: transport.generatedClient }),
+        apiOperations.countPendingApprovalRequests.responseSchema
+      ),
+    decide: (
+      requestId: string,
+      input: OperationRequestInput<typeof apiOperations.decideApprovalRequest>
+    ) =>
+      transport.unwrapJson(
+        generatedSdk.decideApprovalRequest({
+          client: transport.generatedClient,
+          path: { requestId },
+          body: apiOperations.decideApprovalRequest.requestSchema.parse(input)
+        }),
+        apiOperations.decideApprovalRequest.responseSchema
+      ),
+    withdraw: (requestId: string) =>
+      transport.unwrapJson(
+        generatedSdk.withdrawApprovalRequest({
+          client: transport.generatedClient,
+          path: { requestId }
+        }),
+        apiOperations.withdrawApprovalRequest.responseSchema
       )
   };
 }

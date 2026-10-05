@@ -5,6 +5,867 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/api/approval-requests/{requestId}": {
+      "get": {
+        "operationId": "getApprovalRequest",
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "summary": {
+                      "type": "string"
+                    },
+                    "payload": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    },
+                    "requestedBy": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "displayLabel": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "displayLabel"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "origin": {
+                      "type": "object",
+                      "properties": {
+                        "conversationId": {
+                          "type": "string"
+                        },
+                        "agentRunId": {
+                          "type": "string"
+                        },
+                        "toolCallId": {
+                          "type": "string"
+                        },
+                        "agentName": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "conversationId",
+                        "agentRunId",
+                        "toolCallId",
+                        "agentName"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "approved",
+                        "rejected",
+                        "changes_requested",
+                        "superseded",
+                        "withdrawn"
+                      ]
+                    },
+                    "decision": {
+                      "type": "object",
+                      "properties": {
+                        "approved": {
+                          "type": "boolean"
+                        },
+                        "decidedBy": {
+                          "type": "string"
+                        },
+                        "decidedByLabel": {
+                          "type": "string"
+                        },
+                        "decidedAt": {
+                          "type": "string"
+                        },
+                        "reason": {
+                          "type": "string"
+                        },
+                        "comment": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "approved",
+                        "decidedBy",
+                        "decidedByLabel",
+                        "decidedAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "checks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "passed",
+                              "warned",
+                              "blocked"
+                            ]
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "status",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "applyResult": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "preview": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    },
+                    "canDecide": {
+                      "type": "boolean"
+                    },
+                    "canWithdraw": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "clientInstanceId",
+                    "kind",
+                    "summary",
+                    "payload",
+                    "requestedBy",
+                    "status",
+                    "checks",
+                    "createdAt",
+                    "updatedAt",
+                    "preview",
+                    "canDecide",
+                    "canWithdraw"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/approval-requests": {
+      "get": {
+        "operationId": "listApprovalRequests",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "clientInstanceId": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "type": "string"
+                      },
+                      "summary": {
+                        "type": "string"
+                      },
+                      "payload": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {}
+                      },
+                      "requestedBy": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "displayLabel": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "displayLabel"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "origin": {
+                        "type": "object",
+                        "properties": {
+                          "conversationId": {
+                            "type": "string"
+                          },
+                          "agentRunId": {
+                            "type": "string"
+                          },
+                          "toolCallId": {
+                            "type": "string"
+                          },
+                          "agentName": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "conversationId",
+                          "agentRunId",
+                          "toolCallId",
+                          "agentName"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "pending",
+                          "approved",
+                          "rejected",
+                          "changes_requested",
+                          "superseded",
+                          "withdrawn"
+                        ]
+                      },
+                      "decision": {
+                        "type": "object",
+                        "properties": {
+                          "approved": {
+                            "type": "boolean"
+                          },
+                          "decidedBy": {
+                            "type": "string"
+                          },
+                          "decidedByLabel": {
+                            "type": "string"
+                          },
+                          "decidedAt": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "comment": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "approved",
+                          "decidedBy",
+                          "decidedByLabel",
+                          "decidedAt"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "checks": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "passed",
+                                "warned",
+                                "blocked"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "status",
+                            "message"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "applyResult": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {}
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      },
+                      "updatedAt": {
+                        "type": "string"
+                      },
+                      "preview": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {}
+                      },
+                      "canDecide": {
+                        "type": "boolean"
+                      },
+                      "canWithdraw": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "clientInstanceId",
+                      "kind",
+                      "summary",
+                      "payload",
+                      "requestedBy",
+                      "status",
+                      "checks",
+                      "createdAt",
+                      "updatedAt",
+                      "preview",
+                      "canDecide",
+                      "canWithdraw"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/approval-requests/pending-count": {
+      "get": {
+        "operationId": "countPendingApprovalRequests",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "canReview": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "count",
+                    "canReview"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/approval-requests/{requestId}/decide": {
+      "post": {
+        "operationId": "decideApprovalRequest",
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "decision": {
+                        "type": "string",
+                        "const": "approve"
+                      },
+                      "comment": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "decision"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "decision": {
+                        "type": "string",
+                        "const": "reject"
+                      },
+                      "comment": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "decision"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "decision": {
+                        "type": "string",
+                        "const": "request_changes"
+                      },
+                      "comment": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "decision",
+                      "comment"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "summary": {
+                      "type": "string"
+                    },
+                    "payload": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    },
+                    "requestedBy": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "displayLabel": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "displayLabel"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "origin": {
+                      "type": "object",
+                      "properties": {
+                        "conversationId": {
+                          "type": "string"
+                        },
+                        "agentRunId": {
+                          "type": "string"
+                        },
+                        "toolCallId": {
+                          "type": "string"
+                        },
+                        "agentName": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "conversationId",
+                        "agentRunId",
+                        "toolCallId",
+                        "agentName"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "approved",
+                        "rejected",
+                        "changes_requested",
+                        "superseded",
+                        "withdrawn"
+                      ]
+                    },
+                    "decision": {
+                      "type": "object",
+                      "properties": {
+                        "approved": {
+                          "type": "boolean"
+                        },
+                        "decidedBy": {
+                          "type": "string"
+                        },
+                        "decidedByLabel": {
+                          "type": "string"
+                        },
+                        "decidedAt": {
+                          "type": "string"
+                        },
+                        "reason": {
+                          "type": "string"
+                        },
+                        "comment": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "approved",
+                        "decidedBy",
+                        "decidedByLabel",
+                        "decidedAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "checks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "passed",
+                              "warned",
+                              "blocked"
+                            ]
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "status",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "applyResult": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "clientInstanceId",
+                    "kind",
+                    "summary",
+                    "payload",
+                    "requestedBy",
+                    "status",
+                    "checks",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/approval-requests/{requestId}/withdraw": {
+      "post": {
+        "operationId": "withdrawApprovalRequest",
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "summary": {
+                      "type": "string"
+                    },
+                    "payload": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    },
+                    "requestedBy": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "displayLabel": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "displayLabel"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "origin": {
+                      "type": "object",
+                      "properties": {
+                        "conversationId": {
+                          "type": "string"
+                        },
+                        "agentRunId": {
+                          "type": "string"
+                        },
+                        "toolCallId": {
+                          "type": "string"
+                        },
+                        "agentName": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "conversationId",
+                        "agentRunId",
+                        "toolCallId",
+                        "agentName"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "approved",
+                        "rejected",
+                        "changes_requested",
+                        "superseded",
+                        "withdrawn"
+                      ]
+                    },
+                    "decision": {
+                      "type": "object",
+                      "properties": {
+                        "approved": {
+                          "type": "boolean"
+                        },
+                        "decidedBy": {
+                          "type": "string"
+                        },
+                        "decidedByLabel": {
+                          "type": "string"
+                        },
+                        "decidedAt": {
+                          "type": "string"
+                        },
+                        "reason": {
+                          "type": "string"
+                        },
+                        "comment": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "approved",
+                        "decidedBy",
+                        "decidedByLabel",
+                        "decidedAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "checks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "passed",
+                              "warned",
+                              "blocked"
+                            ]
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "status",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "applyResult": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "clientInstanceId",
+                    "kind",
+                    "summary",
+                    "payload",
+                    "requestedBy",
+                    "status",
+                    "checks",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/me": {
       "get": {
         "operationId": "getCurrentUser",
@@ -428,6 +1289,117 @@
         }
       }
     },
+    "/api/password-reset": {
+      "post": {
+        "operationId": "requestPasswordReset",
+        "parameters": [
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  }
+                },
+                "required": [
+                  "email"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/password-setup": {
+      "post": {
+        "operationId": "completePasswordSetup",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 8
+                  }
+                },
+                "required": [
+                  "token",
+                  "password"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/branding": {
       "get": {
         "operationId": "getBranding",
@@ -593,6 +1565,10 @@
                     },
                     "environment": {
                       "type": "string"
+                    },
+                    "passwordResetEnabled": {
+                      "default": false,
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -829,6 +1805,21 @@
                             "allowAgentDeletion",
                             "allowDefaultAgentChange",
                             "allowSkillEditing"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "userInvitations": {
+                          "default": {
+                            "enabled": false
+                          },
+                          "type": "object",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "enabled"
                           ],
                           "additionalProperties": false
                         }
@@ -1423,117 +2414,6 @@
                     "role": {
                       "type": "string",
                       "enum": [
-    "/api/password-reset": {
-      "post": {
-        "operationId": "requestPasswordReset",
-        "parameters": [
-          {
-            "name": "locale",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "email": {
-                    "type": "string",
-                    "format": "email",
-                    "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
-                  }
-                },
-                "required": [
-                  "email"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "ok": {
-                      "type": "boolean",
-                      "const": true
-                    }
-                  },
-                  "required": [
-                    "ok"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/password-setup": {
-      "post": {
-        "operationId": "completePasswordSetup",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "token": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "password": {
-                    "type": "string",
-                    "minLength": 8
-                  }
-                },
-                "required": [
-                  "token",
-                  "password"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "ok": {
-                      "type": "boolean",
-                      "const": true
-                    }
-                  },
-                  "required": [
-                    "ok"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
                         "owner",
                         "admin",
                         "member"
@@ -1699,10 +2579,6 @@
                       ]
                     },
                     "name": {
-                    },
-                    "passwordResetEnabled": {
-                      "default": false,
-                      "type": "boolean"
                       "type": "string"
                     },
                     "description": {
@@ -1940,21 +2816,6 @@
                     "visibility": {
                       "type": "string",
                       "enum": [
-                        },
-                        "userInvitations": {
-                          "default": {
-                            "enabled": false
-                          },
-                          "type": "object",
-                          "properties": {
-                            "enabled": {
-                              "type": "boolean"
-                            }
-                          },
-                          "required": [
-                            "enabled"
-                          ],
-                          "additionalProperties": false
                         "discoverable",
                         "private"
                       ]
@@ -13825,6 +14686,43 @@
         }
       }
     },
+    "/api/superadmin/users/{userId}/invitation": {
+      "post": {
+        "operationId": "sendAdministeredUserInvitation",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/superadmin/api-access/service-principals": {
       "get": {
         "operationId": "listServicePrincipals",
@@ -14818,43 +15716,6 @@
                   "type": "object",
                   "properties": {
                     "chatSessionToken": {
-    "/api/superadmin/users/{userId}/invitation": {
-      "post": {
-        "operationId": "sendAdministeredUserInvitation",
-        "parameters": [
-          {
-            "name": "userId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "ok": {
-                      "type": "boolean",
-                      "const": true
-                    }
-                  },
-                  "required": [
-                    "ok"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
                       "type": "string"
                     },
                     "expiresAt": {

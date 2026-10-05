@@ -2,6 +2,7 @@ import { AppError } from "./errors";
 import type { AuthenticatedServicePrincipal, AuthenticatedUser } from "./identity";
 
 export const PERMISSIONS = [
+  "agent_skills.approve",
   "config_assets.read",
   "config_assets.write",
   "config_assets.release",

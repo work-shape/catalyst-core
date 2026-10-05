@@ -7,6 +7,7 @@ import {
 import {
   REASONING_EFFORTS,
   StoreBackedAuditRecorder,
+  type ApprovalRequestHandlerRegistry,
   type StructuredDataPublicationReviewer
 } from "@vivd-catalyst/core";
 import { createChatServer } from "@vivd-catalyst/chat-server";
@@ -45,8 +46,8 @@ import {
 } from "./assembly-validation";
 import { createConfigAssetSource } from "./config-asset-source";
 import { createClientInstanceAuth } from "./auth";
-import type {
 import { createClientInstanceMail } from "./mail";
+import type {
   ClientInstanceAttachmentHandler,
   ClientInstanceCapabilityContribution,
   ClientInstanceCapability,
@@ -69,6 +70,7 @@ export interface CreateClientInstanceAppInput {
   tools: ToolAssemblyDefinition[];
   capabilities?: ClientInstanceCapability[];
   structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
+  approvalRequestHandlers?: ApprovalRequestHandlerRegistry;
   corsOrigin?: string | string[];
   agentRuntimeMode?: "local" | "worker";
 }
@@ -126,6 +128,7 @@ export async function createClientInstanceApp(
     apiAccessStore: store,
     usageGovernance,
     auditRecorder,
+    approvalRequests: { store, handlers: input.approvalRequestHandlers ?? new Map() },
     configAssets: {
       store,
       source: assetSource,
@@ -167,10 +170,10 @@ export async function createClientInstanceApp(
     modelProvider,
     corsOrigin: input.corsOrigin,
     standaloneAuth,
+    mail: createClientInstanceMail({ config, env }),
     sessionToken,
     serviceAccessToken
   });
-    mail: createClientInstanceMail({ config, env }),
 
   return {
     config,

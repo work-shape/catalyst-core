@@ -1,3 +1,9 @@
+import {
+  approvalRequestSchema,
+  approvalRequestViewSchema,
+  decideApprovalRequestSchema,
+  pendingApprovalRequestCountSchema
+} from "./approval-requests";
 import { z } from "zod";
 import { defineBlobApiOperation, defineJsonApiOperation } from "./http-operation";
 import {
@@ -63,9 +69,9 @@ import {
   apiUserSchema,
   changeCurrentUserPasswordRequestSchema,
   changeCurrentUserPasswordResponseSchema,
-  createAdministeredUserRequestSchema,
   completePasswordSetupRequestSchema,
   completePasswordSetupResponseSchema,
+  createAdministeredUserRequestSchema,
   createApiCredentialRequestSchema,
   createApiCredentialResponseSchema,
   createServicePrincipalRequestSchema,
@@ -73,12 +79,12 @@ import {
   exchangeApiKeyResponseSchema,
   issueSessionTokenRequestSchema,
   issueSessionTokenResponseSchema,
-  resetAdministeredUserPasswordRequestSchema,
   requestPasswordResetRequestSchema,
   requestPasswordResetResponseSchema,
+  resetAdministeredUserPasswordRequestSchema,
   resetAdministeredUserPasswordResponseSchema,
-  servicePrincipalDetailSchema,
   sendAdministeredUserInvitationResponseSchema,
+  servicePrincipalDetailSchema,
   updateAdministeredUserRequestSchema,
   updateCurrentUserRequestSchema,
   updateServicePrincipalRequestSchema,
@@ -87,6 +93,38 @@ import {
 import { auditActivitySchema, auditEventSchema, usageSummarySchema } from "./governance";
 
 export const apiOperations = {
+  getApprovalRequest: defineJsonApiOperation({
+    operationId: "getApprovalRequest",
+    method: "GET",
+    path: "/api/approval-requests/:requestId",
+    responseSchema: approvalRequestViewSchema
+  }),
+  listApprovalRequests: defineJsonApiOperation({
+    operationId: "listApprovalRequests",
+    method: "GET",
+    path: "/api/approval-requests",
+    queryParams: ["status"],
+    responseSchema: z.array(approvalRequestViewSchema)
+  }),
+  countPendingApprovalRequests: defineJsonApiOperation({
+    operationId: "countPendingApprovalRequests",
+    method: "GET",
+    path: "/api/approval-requests/pending-count",
+    responseSchema: pendingApprovalRequestCountSchema
+  }),
+  decideApprovalRequest: defineJsonApiOperation({
+    operationId: "decideApprovalRequest",
+    method: "POST",
+    path: "/api/approval-requests/:requestId/decide",
+    requestSchema: decideApprovalRequestSchema,
+    responseSchema: approvalRequestSchema
+  }),
+  withdrawApprovalRequest: defineJsonApiOperation({
+    operationId: "withdrawApprovalRequest",
+    method: "POST",
+    path: "/api/approval-requests/:requestId/withdraw",
+    responseSchema: approvalRequestSchema
+  }),
   getCurrentUser: defineJsonApiOperation({
     operationId: "getCurrentUser",
     method: "GET",
@@ -113,6 +151,21 @@ export const apiOperations = {
     path: "/api/me",
     responseSchema: deleteCurrentUserResponseSchema
   }),
+  requestPasswordReset: defineJsonApiOperation({
+    operationId: "requestPasswordReset",
+    method: "POST",
+    path: "/api/password-reset",
+    queryParams: ["locale"],
+    requestSchema: requestPasswordResetRequestSchema,
+    responseSchema: requestPasswordResetResponseSchema
+  }),
+  completePasswordSetup: defineJsonApiOperation({
+    operationId: "completePasswordSetup",
+    method: "POST",
+    path: "/api/password-setup",
+    requestSchema: completePasswordSetupRequestSchema,
+    responseSchema: completePasswordSetupResponseSchema
+  }),
   getBranding: defineJsonApiOperation({
     operationId: "getBranding",
     method: "GET",
@@ -134,21 +187,6 @@ export const apiOperations = {
     responseSchema: z.array(collaborationWorkspaceWithRoleSchema)
   }),
   createCollaborationWorkspace: defineJsonApiOperation({
-  requestPasswordReset: defineJsonApiOperation({
-    operationId: "requestPasswordReset",
-    method: "POST",
-    path: "/api/password-reset",
-    queryParams: ["locale"],
-    requestSchema: requestPasswordResetRequestSchema,
-    responseSchema: requestPasswordResetResponseSchema
-  }),
-  completePasswordSetup: defineJsonApiOperation({
-    operationId: "completePasswordSetup",
-    method: "POST",
-    path: "/api/password-setup",
-    requestSchema: completePasswordSetupRequestSchema,
-    responseSchema: completePasswordSetupResponseSchema
-  }),
     operationId: "createCollaborationWorkspace",
     method: "POST",
     path: "/api/collaboration-workspaces",
@@ -528,6 +566,12 @@ export const apiOperations = {
     requestSchema: resetAdministeredUserPasswordRequestSchema,
     responseSchema: resetAdministeredUserPasswordResponseSchema
   }),
+  sendAdministeredUserInvitation: defineJsonApiOperation({
+    operationId: "sendAdministeredUserInvitation",
+    method: "POST",
+    path: "/api/superadmin/users/:userId/invitation",
+    responseSchema: sendAdministeredUserInvitationResponseSchema
+  }),
   listServicePrincipals: defineJsonApiOperation({
     operationId: "listServicePrincipals",
     method: "GET",
@@ -549,12 +593,6 @@ export const apiOperations = {
     responseSchema: servicePrincipalDetailSchema
   }),
   createApiCredential: defineJsonApiOperation({
-  sendAdministeredUserInvitation: defineJsonApiOperation({
-    operationId: "sendAdministeredUserInvitation",
-    method: "POST",
-    path: "/api/superadmin/users/:userId/invitation",
-    responseSchema: sendAdministeredUserInvitationResponseSchema
-  }),
     operationId: "createApiCredential",
     method: "POST",
     path: "/api/superadmin/api-access/service-principals/:servicePrincipalId/credentials",

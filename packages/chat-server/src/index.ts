@@ -1,3 +1,4 @@
+import { registerApprovalRequestRoutes } from "./routes/approval-request-routes";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import Fastify, { type FastifyInstance } from "fastify";
@@ -6,8 +7,8 @@ import { registerAuditRoutes } from "./routes/audit-routes";
 import { registerApiAccessAdministrationRoutes } from "./routes/api-access-administration-routes";
 import { registerAgentRunRoutes } from "./routes/agent-run-routes";
 import { registerBetterAuthRoutes } from "./routes/better-auth-routes";
-import { registerConfigRoutes } from "./routes/config-routes";
 import { registerDevMailRoutes } from "./routes/dev-mail-routes";
+import { registerConfigRoutes } from "./routes/config-routes";
 import { registerCollaborationWorkspaceRoutes } from "./routes/collaboration-workspace-routes";
 import { registerConfigAssetRoutes } from "./routes/config-asset-routes";
 import { registerConversationFileRoutes } from "./routes/conversation-file-routes";
@@ -87,13 +88,14 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
   }));
 
   registerBetterAuthRoutes(app, options);
-  registerSessionTokenRoutes(app, options);
   registerDevMailRoutes(app, options);
+  registerSessionTokenRoutes(app, options);
   registerServiceAccessTokenRoutes(app, options);
   registerAgentRunRoutes(app, options);
   registerConfigRoutes(app, options);
   registerCollaborationWorkspaceRoutes(app, options);
   registerConfigAssetRoutes(app, options);
+  registerApprovalRequestRoutes(app, options);
   registerUserAccountRoutes(app, options);
   registerConversationRoutes(app, options);
   registerConversationResourceRoutes(app, options);
@@ -105,3 +107,9 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
 
   return app;
 }
+
+export { ApprovalRequestWorkflow } from "./approval-request-workflow";
+export type {
+  ApprovalRequestWorkflowOptions,
+  ApprovalRequestView
+} from "./approval-request-workflow";

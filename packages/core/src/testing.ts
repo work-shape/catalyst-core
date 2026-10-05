@@ -27,6 +27,7 @@ import {
   type ConfigAssetSource,
   type ConfigAssetState,
   type ConfigAssetStore,
+  type ApprovalRequestStore,
   type RuntimeAssetSnapshot,
   type CompleteRunStartCommandInput,
   type Conversation,
@@ -86,6 +87,7 @@ import {
 } from "./index";
 import { InMemoryApiAccessStore } from "./testing-in-memory-api-access-store";
 import type { AgentConfig, SkillConfig } from "./config";
+import { InMemoryApprovalRequestStore } from "./testing-in-memory-approval-request-store";
 import { InMemoryConfigAssetStore } from "./testing-in-memory-config-asset-store";
 import {
   createInMemoryExecutionWorkspaceStore,
@@ -114,6 +116,7 @@ export class InMemoryPlatformStore
     UserStore,
     ApiAccessStore,
     ConfigAssetStore,
+    ApprovalRequestStore,
     StructuredDataStore
 {
   private readonly conversations = new Map<string, Conversation>();
@@ -154,6 +157,7 @@ export class InMemoryPlatformStore
       return user?.clientInstanceId === clientInstanceId;
     }
   });
+  private readonly approvalRequestStore = new InMemoryApprovalRequestStore();
   private readonly configAssetStore = new InMemoryConfigAssetStore();
 
   async getStructuredDataResource(
@@ -201,6 +205,30 @@ export class InMemoryPlatformStore
     };
     this.structuredDataResources.set(resource.id, resource);
     return resource;
+  }
+
+  createApprovalRequest(input: Parameters<ApprovalRequestStore["createApprovalRequest"]>[0]) {
+    return this.approvalRequestStore.createApprovalRequest(input);
+  }
+
+  getApprovalRequest(input: Parameters<ApprovalRequestStore["getApprovalRequest"]>[0]) {
+    return this.approvalRequestStore.getApprovalRequest(input);
+  }
+
+  listApprovalRequests(input: Parameters<ApprovalRequestStore["listApprovalRequests"]>[0]) {
+    return this.approvalRequestStore.listApprovalRequests(input);
+  }
+
+  countPendingApprovalRequests(
+    input: Parameters<ApprovalRequestStore["countPendingApprovalRequests"]>[0]
+  ) {
+    return this.approvalRequestStore.countPendingApprovalRequests(input);
+  }
+
+  transitionPendingApprovalRequest(
+    input: Parameters<ApprovalRequestStore["transitionPendingApprovalRequest"]>[0]
+  ) {
+    return this.approvalRequestStore.transitionPendingApprovalRequest(input);
   }
 
   async getConfigAssetState(

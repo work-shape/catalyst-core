@@ -6,6 +6,7 @@ import type {
   ModelProviderContinuationStore
 } from "./conversation";
 import type { CollaborationWorkspaceStore } from "./collaboration-workspace";
+import type { ApprovalRequestStore } from "./approval-requests";
 import type { ConfigAssetStore } from "./config-assets";
 import type {
   ExecutionWorkspaceCleanupStore,
@@ -37,6 +38,7 @@ export interface PlatformStore
     UserStore,
     ApiAccessStore,
     ConfigAssetStore,
+    ApprovalRequestStore,
     StructuredDataStore {
   close?: () => Promise<void>;
 }

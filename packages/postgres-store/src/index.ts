@@ -1,3 +1,4 @@
+import * as approvalRequestOperations from "./postgres-approval-request-operations";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import type { Notice, Sql } from "postgres";
@@ -18,6 +19,7 @@ import {
   type ConfigAssetRevisionRecord,
   type ConfigAssetState,
   type ConfigAssetStore,
+  type ApprovalRequestStore,
   type Conversation,
   type ConversationId,
   type ConversationRetentionStore,
@@ -242,6 +244,7 @@ export class PostgresPlatformStore
     UserStore,
     ApiAccessStore,
     ConfigAssetStore,
+    ApprovalRequestStore,
     StructuredDataStore
 {
   private readonly postgresClient: Sql;
@@ -278,6 +281,30 @@ export class PostgresPlatformStore
 
   async migrate(): Promise<void> {
     await runPostgresMigrations(this.postgresClient, this.db);
+  }
+
+  createApprovalRequest(input: Parameters<ApprovalRequestStore["createApprovalRequest"]>[0]) {
+    return approvalRequestOperations.createApprovalRequest(this.db, input);
+  }
+
+  getApprovalRequest(input: Parameters<ApprovalRequestStore["getApprovalRequest"]>[0]) {
+    return approvalRequestOperations.getApprovalRequest(this.db, input);
+  }
+
+  listApprovalRequests(input: Parameters<ApprovalRequestStore["listApprovalRequests"]>[0]) {
+    return approvalRequestOperations.listApprovalRequests(this.db, input);
+  }
+
+  countPendingApprovalRequests(
+    input: Parameters<ApprovalRequestStore["countPendingApprovalRequests"]>[0]
+  ) {
+    return approvalRequestOperations.countPendingApprovalRequests(this.db, input);
+  }
+
+  transitionPendingApprovalRequest(
+    input: Parameters<ApprovalRequestStore["transitionPendingApprovalRequest"]>[0]
+  ) {
+    return approvalRequestOperations.transitionPendingApprovalRequest(this.db, input);
   }
 
   async getConfigAssetState(

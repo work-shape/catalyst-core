@@ -18,3 +18,4 @@ export function createOpenApiDocument() {
 export const openApiDocument = createOpenApiDocument();
 
 export type ApiOperationName = keyof typeof apiOperations;
+export * from "./approval-requests";

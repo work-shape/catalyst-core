@@ -1,6 +1,7 @@
 import {
   AppError,
   type AgentRun,
+  type ApprovalRequest,
   type ArtifactPreviewJobRecord,
   type ArtifactPreviewManifest,
   type AuditEvent,
@@ -44,6 +45,7 @@ import {
   asWorkspaceAccessRequestId
 } from "@vivd-catalyst/core";
 import type {
+  approvalRequests,
   agentRunObservations,
   agentRuns,
   artifactPreviewJobs,
@@ -645,5 +647,17 @@ export function mapConfigAssetRevision(
     actor: row.actor,
     globalVersion: row.globalVersion,
     createdAt: row.createdAt.toISOString()
+  };
+}
+
+export function mapApprovalRequest(row: typeof approvalRequests.$inferSelect): ApprovalRequest {
+  return {
+    ...row,
+    clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    origin: row.origin ?? undefined,
+    decision: row.decision ?? undefined,
+    applyResult: row.applyResult ?? undefined,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString()
   };
 }
