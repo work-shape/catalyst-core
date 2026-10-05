@@ -7,7 +7,10 @@ import {
 import { z } from "zod";
 import { defineBlobApiOperation, defineJsonApiOperation } from "./http-operation";
 import {
+  administeredCollaborationWorkspaceSchema,
+  agentAvailabilitySchema,
   clientBrandingSchema,
+  collaborationWorkspaceAgentsSchema,
   configAssetBundleSchema,
   configAssetMutationVersionRequestSchema,
   configAssetMutationVersionResponseSchema,
@@ -18,8 +21,10 @@ import {
   putConfigAssetRequestSchema,
   putConfigAssetResponseSchema,
   replaceConfigAssetsRequestSchema,
+  replaceConfigAssetsResponseSchema,
   revertConfigAssetRequestSchema,
   safeConfigSchema,
+  setConfigAgentAvailabilityRequestSchema,
   setDefaultConfigAgentRequestSchema,
   validateConfigAssetsResponseSchema
 } from "./configuration";
@@ -210,6 +215,13 @@ export const apiOperations = {
     method: "GET",
     path: "/api/collaboration-workspaces/:collaborationWorkspaceId",
     responseSchema: collaborationWorkspaceWithRoleSchema
+  }),
+  listCollaborationWorkspaceAgents: defineJsonApiOperation({
+    operationId: "listCollaborationWorkspaceAgents",
+    method: "GET",
+    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/agents",
+    queryParams: ["locale"],
+    responseSchema: collaborationWorkspaceAgentsSchema
   }),
   updateCollaborationWorkspace: defineJsonApiOperation({
     operationId: "updateCollaborationWorkspace",
@@ -499,6 +511,19 @@ export const apiOperations = {
     requestSchema: setDefaultConfigAgentRequestSchema,
     responseSchema: configAssetMutationVersionResponseSchema
   }),
+  setConfigAgentAvailability: defineJsonApiOperation({
+    operationId: "setConfigAgentAvailability",
+    method: "PUT",
+    path: "/api/admin/config/agents/:name/availability",
+    requestSchema: setConfigAgentAvailabilityRequestSchema,
+    responseSchema: agentAvailabilitySchema
+  }),
+  listAdministeredCollaborationWorkspaces: defineJsonApiOperation({
+    operationId: "listAdministeredCollaborationWorkspaces",
+    method: "GET",
+    path: "/api/admin/collaboration-workspaces",
+    responseSchema: z.array(administeredCollaborationWorkspaceSchema)
+  }),
   listConfigAssetRevisions: defineJsonApiOperation({
     operationId: "listConfigAssetRevisions",
     method: "GET",
@@ -523,7 +548,7 @@ export const apiOperations = {
     method: "POST",
     path: "/api/admin/config/import",
     requestSchema: replaceConfigAssetsRequestSchema,
-    responseSchema: configAssetMutationVersionResponseSchema
+    responseSchema: replaceConfigAssetsResponseSchema
   }),
   validateConfigAssets: defineJsonApiOperation({
     operationId: "validateConfigAssets",

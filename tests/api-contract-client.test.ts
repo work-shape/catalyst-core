@@ -67,6 +67,75 @@ describe("api operation catalog and client", () => {
     expect(apiOperations.updateCollaborationWorkspace.requestSchema.parse({})).toEqual({});
   });
 
+  it("exposes agent availability operations through the contract and client", async () => {
+    expect(
+      apiOperations.setConfigAgentAvailability.requestSchema.parse({ mode: "selected" })
+    ).toEqual({ mode: "selected" });
+    expect(() =>
+      apiOperations.setConfigAgentAvailability.requestSchema.parse({ mode: "some" })
+    ).toThrow();
+    expect(
+      apiOperations.replaceConfigAssets.responseSchema.parse({
+        version: 2,
+        hiddenAgentNames: ["a"]
+      })
+    ).toEqual({ version: 2, hiddenAgentNames: ["a"] });
+    expect(apiOperations.replaceConfigAssets.responseSchema.parse({ version: 2 })).toEqual({
+      version: 2
+    });
+
+    const requests: Array<{ method: string; path: string; body?: unknown }> = [];
+    const availability = {
+      mode: "selected",
+      personalWorkspaces: false,
+      collaborationWorkspaceIds: ["cws_1"]
+    };
+    const client = createApiClient({
+      baseUrl: "https://chat.example/",
+      fetchImpl: async (input, init) => {
+        const request = input instanceof Request ? input : new Request(input, init);
+        const url = new URL(request.url);
+        requests.push({
+          method: request.method,
+          path: `${url.pathname}${url.search}`,
+          ...(request.method === "GET" ? {} : { body: await request.json() })
+        });
+        if (url.pathname.endsWith("/availability")) return Response.json(availability);
+        if (url.pathname.endsWith("/agents")) {
+          return Response.json({
+            defaultAgentName: "kai",
+            agents: [{ name: "kai", displayName: "KAI", initialPrompts: [] }]
+          });
+        }
+        return Response.json([{ id: "cws_1", name: "KAI", visibility: "private" }]);
+      }
+    });
+
+    await expect(
+      client.configAssets.setAgentAvailability("kai", {
+        mode: "selected",
+        collaborationWorkspaceIds: ["cws_1"]
+      })
+    ).resolves.toEqual(availability);
+    // The admin picker carries the id and name only.
+    await expect(client.configAssets.listAdministeredWorkspaces()).resolves.toEqual([
+      { id: "cws_1", name: "KAI" }
+    ]);
+    await expect(client.collaborationWorkspaces.listAgents("cws_1", "de")).resolves.toMatchObject({
+      defaultAgentName: "kai",
+      agents: [{ name: "kai" }]
+    });
+    expect(requests).toEqual([
+      {
+        method: "PUT",
+        path: "/api/admin/config/agents/kai/availability",
+        body: { mode: "selected", collaborationWorkspaceIds: ["cws_1"] }
+      },
+      { method: "GET", path: "/api/admin/collaboration-workspaces" },
+      { method: "GET", path: "/api/collaboration-workspaces/cws_1/agents?locale=de" }
+    ]);
+  });
+
   it("carries conversation visibility through the workspace, conversation and move contracts", async () => {
     const moveOperation = openApiDocument.paths["/api/conversations/{conversationId}/move"].post;
     const conversationSchema = moveOperation.responses["200"].content["application/json"].schema;

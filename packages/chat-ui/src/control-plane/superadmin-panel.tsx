@@ -24,6 +24,7 @@ import {
   useSuperadminUserMutations
 } from "../api/workspace-mutations";
 import {
+  useAdministeredCollaborationWorkspacesQuery,
   useConfigAssetsExportQuery,
   useConfigAssetsOverviewQuery,
   useServicePrincipalsQuery,
@@ -123,6 +124,12 @@ export function SuperadminPanel({
     client,
     enabled: editConfigAssets
   });
+  const administeredWorkspacesQuery = useAdministeredCollaborationWorkspacesQuery({
+    apiBaseUrl,
+    authScope,
+    client,
+    enabled: editConfigAssets
+  });
   const configAssetMutations = useConfigAssetMutations({ apiBaseUrl, authScope, client });
   const queryClient = useQueryClient();
   const users = usersQuery.data ?? [];
@@ -160,6 +167,10 @@ export function SuperadminPanel({
     overview: configAssetsOverviewQuery.data,
     agents: namedBundleEntries(configAssetsExportQuery.data?.agents),
     skills: namedBundleEntries(configAssetsExportQuery.data?.skills),
+    administeredWorkspaces: administeredWorkspacesQuery.data ?? [],
+    administeredWorkspacesError: administeredWorkspacesQuery.error
+      ? apiErrorMessage(administeredWorkspacesQuery.error, undefined)
+      : undefined,
     loading: configAssetsOverviewQuery.isLoading || configAssetsExportQuery.isLoading,
     error:
       configAssetsOverviewQuery.error || configAssetsExportQuery.error
@@ -172,6 +183,7 @@ export function SuperadminPanel({
     onSaveAsset: (input) => configAssetMutations.putAsset.mutateAsync(input),
     onDeleteAsset: (input) => configAssetMutations.deleteAsset.mutateAsync(input),
     onSetDefaultAgent: (input) => configAssetMutations.setDefaultAgent.mutateAsync(input),
+    onSetAgentAvailability: (input) => configAssetMutations.setAgentAvailability.mutateAsync(input),
     onRevertAsset: (input) => configAssetMutations.revertAsset.mutateAsync(input),
     onLoadRevisions: (kind, name) => client.configAssets.listRevisions(kind, name),
     onReload: () =>

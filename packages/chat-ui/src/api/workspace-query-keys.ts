@@ -15,6 +15,21 @@ export const workspaceQueryKeys = {
   ) => ["conversations", apiBaseUrl, authScope, collaborationWorkspaceId] as const,
   collaborationWorkspaces: (apiBaseUrl: string, authScope: string) =>
     ["collaboration-workspaces", apiBaseUrl, authScope] as const,
+  collaborationWorkspaceAgentsScope: (apiBaseUrl: string, authScope: string) =>
+    ["collaboration-workspace-agents", apiBaseUrl, authScope] as const,
+  collaborationWorkspaceAgents: (
+    apiBaseUrl: string,
+    authScope: string,
+    collaborationWorkspaceId: string | undefined,
+    localePreference: LocaleCode | undefined
+  ) =>
+    [
+      "collaboration-workspace-agents",
+      apiBaseUrl,
+      authScope,
+      collaborationWorkspaceId,
+      localePreference ?? "auto"
+    ] as const,
   collaborationWorkspaceDirectory: (apiBaseUrl: string, authScope: string) =>
     ["collaboration-workspace-directory", apiBaseUrl, authScope] as const,
   collaborationWorkspaceMembers: (
@@ -92,5 +107,7 @@ export const workspaceQueryKeys = {
   servicePrincipals: (apiBaseUrl: string, authScope: string) =>
     ["service-principals", apiBaseUrl, authScope] as const,
   configAssetsOverview: (apiBaseUrl: string, authScope: string) =>
-    ["config-assets-overview", apiBaseUrl, authScope] as const
+    ["config-assets-overview", apiBaseUrl, authScope] as const,
+  administeredCollaborationWorkspaces: (apiBaseUrl: string, authScope: string) =>
+    ["administered-collaboration-workspaces", apiBaseUrl, authScope] as const
 };

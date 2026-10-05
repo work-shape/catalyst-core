@@ -1,9 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { asClientInstanceId, createPlatformId, type ConfigAssetStore } from "@vivd-catalyst/core";
+import {
+  asClientInstanceId,
+  createPlatformId,
+  type CollaborationWorkspaceStore,
+  type ConfigAssetStore,
+  type UserStore
+} from "@vivd-catalyst/core";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 import { PostgresPlatformStore } from "@vivd-catalyst/postgres-store";
 
-interface ConfigAssetStoreFixture extends ConfigAssetStore {
+interface ConfigAssetStoreFixture extends ConfigAssetStore, CollaborationWorkspaceStore, UserStore {
   close?: () => Promise<void>;
 }
 
@@ -489,6 +495,240 @@ function runConfigAssetStoreSuite(
         "skill:active"
       ]);
       expect(skills.map((asset) => asset.name)).toEqual(["active"]);
+    });
+
+    it("gives new agents an availability record and removes it with the agent", async () => {
+      const clientInstanceId = createClientInstanceId();
+      await store.applyConfigAssetMutations({
+        clientInstanceId,
+        mutations: [
+          { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") },
+          { type: "upsert", kind: "skill", name: "research", config: skillConfig("v1") }
+        ]
+      });
+      const everywhere = {
+        mode: "all" as const,
+        personalWorkspaces: false,
+        collaborationWorkspaceIds: []
+      };
+      expect([...(await store.listAgentAvailability({ clientInstanceId }))]).toEqual([
+        ["assistant", everywhere]
+      ]);
+
+      await store.applyConfigAssetMutations({
+        clientInstanceId,
+        mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v2") }]
+      });
+      await store.setAgentAvailability({
+        clientInstanceId,
+        agentName: "assistant",
+        availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
+      });
+      await store.applyConfigAssetMutations({
+        clientInstanceId,
+        mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v3") }]
+      });
+      // An update never widens what an admin restricted.
+      expect([...(await store.listAgentAvailability({ clientInstanceId }))]).toEqual([
+        ["assistant", { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }]
+      ]);
+
+      await store.applyConfigAssetMutations({
+        clientInstanceId,
+        mutations: [{ type: "delete", kind: "agent", name: "assistant" }]
+      });
+      expect((await store.listAgentAvailability({ clientInstanceId })).size).toBe(0);
+      await expect(
+        store.setAgentAvailability({
+          clientInstanceId,
+          agentName: "assistant",
+          availability: everywhere
+        })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+      // A revived agent starts from the initial availability, not from its old record.
+      await store.applyConfigAssetMutations({
+        clientInstanceId,
+        mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v4") }]
+      });
+      expect([...(await store.listAgentAvailability({ clientInstanceId }))]).toEqual([
+        ["assistant", everywhere]
+      ]);
+      await store.applyConfigAssetMutations({
+        clientInstanceId,
+        mutations: [{ type: "delete", kind: "agent", name: "assistant" }]
+      });
+      await store.applyConfigAssetMutations({
+        clientInstanceId,
+        initialAgentAvailability: "selected",
+        mutations: [
+          { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v5") },
+          { type: "upsert", kind: "agent", name: "second", config: agentConfig("v1") }
+        ]
+      });
+      const hidden = { mode: "selected", personalWorkspaces: false, collaborationWorkspaceIds: [] };
+      expect([...(await store.listAgentAvailability({ clientInstanceId }))].sort()).toEqual([
+        ["assistant", hidden],
+        ["second", hidden]
+      ]);
+    });
+
+    it("starts agents hidden when the same batch deletes a selected agent", async () => {
+      const clientInstanceId = createClientInstanceId();
+      await store.applyConfigAssetMutations({
+        clientInstanceId,
+        mutations: [
+          { type: "upsert", kind: "agent", name: "open", config: agentConfig("v1") },
+          { type: "upsert", kind: "agent", name: "restricted", config: agentConfig("v1") }
+        ]
+      });
+      await store.setAgentAvailability({
+        clientInstanceId,
+        agentName: "restricted",
+        availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
+      });
+
+      // Replacing an unrestricted agent keeps the default.
+      await store.applyConfigAssetMutations({
+        clientInstanceId,
+        initialAgentAvailability: "selected_when_replacing_selected",
+        mutations: [
+          { type: "delete", kind: "agent", name: "open" },
+          { type: "upsert", kind: "agent", name: "open-renamed", config: agentConfig("v1") }
+        ]
+      });
+      expect((await store.listAgentAvailability({ clientInstanceId })).get("open-renamed")).toEqual(
+        { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] }
+      );
+
+      // The rule applies regardless of mutation order and leaves existing agents alone.
+      await store.applyConfigAssetMutations({
+        clientInstanceId,
+        initialAgentAvailability: "selected_when_replacing_selected",
+        mutations: [
+          { type: "upsert", kind: "agent", name: "restricted-renamed", config: agentConfig("v1") },
+          { type: "delete", kind: "agent", name: "restricted" }
+        ]
+      });
+      const availability = await store.listAgentAvailability({ clientInstanceId });
+      expect(availability.has("restricted")).toBe(false);
+      expect(availability.get("restricted-renamed")).toEqual({
+        mode: "selected",
+        personalWorkspaces: false,
+        collaborationWorkspaceIds: []
+      });
+      expect(availability.get("open-renamed")?.mode).toBe("all");
+
+      // Without the push rule, a batch that deletes a restricted agent still creates `all`.
+      await store.applyConfigAssetMutations({
+        clientInstanceId,
+        mutations: [
+          { type: "delete", kind: "agent", name: "restricted-renamed" },
+          { type: "upsert", kind: "agent", name: "interactive", config: agentConfig("v1") }
+        ]
+      });
+      expect(
+        (await store.listAgentAvailability({ clientInstanceId })).get("interactive")?.mode
+      ).toBe("all");
+    });
+
+    it("keeps the default agent available everywhere", async () => {
+      const clientInstanceId = createClientInstanceId();
+      await store.applyConfigAssetMutations({
+        clientInstanceId,
+        mutations: [
+          { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") },
+          { type: "upsert", kind: "agent", name: "restricted", config: agentConfig("v1") },
+          { type: "setDefaultAgent", agentName: "assistant" }
+        ]
+      });
+      const restricted = {
+        mode: "selected" as const,
+        personalWorkspaces: true,
+        collaborationWorkspaceIds: []
+      };
+      await expect(
+        store.setAgentAvailability({
+          clientInstanceId,
+          agentName: "assistant",
+          availability: restricted
+        })
+      ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+      expect((await store.listAgentAvailability({ clientInstanceId })).get("assistant")?.mode).toBe(
+        "all"
+      );
+
+      await store.setAgentAvailability({
+        clientInstanceId,
+        agentName: "restricted",
+        availability: restricted
+      });
+      await expect(
+        store.applyConfigAssetMutations({
+          clientInstanceId,
+          mutations: [{ type: "setDefaultAgent", agentName: "restricted" }]
+        })
+      ).rejects.toMatchObject({
+        code: "VALIDATION_FAILED",
+        message: "Default agent 'restricted' must be available in all workspaces"
+      });
+      await expect(store.getConfigAssetState({ clientInstanceId })).resolves.toEqual({
+        version: 1,
+        defaultAgentName: "assistant"
+      });
+    });
+
+    it("stores selected workspaces and drops them with the workspace", async () => {
+      const clientInstanceId = createClientInstanceId();
+      const owner = await store.createUser({ clientInstanceId, displayLabel: "Owner" });
+      const [kept, removed] = await Promise.all(
+        ["Kept", "Removed"].map((name) =>
+          store.createWorkspace({
+            clientInstanceId,
+            kind: "shared",
+            name,
+            creatorUserId: owner.id
+          })
+        )
+      );
+      await store.applyConfigAssetMutations({
+        clientInstanceId,
+        mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") }]
+      });
+      await expect(
+        store.setAgentAvailability({
+          clientInstanceId,
+          agentName: "assistant",
+          availability: {
+            mode: "selected",
+            personalWorkspaces: false,
+            collaborationWorkspaceIds: [kept!.id, removed!.id, kept!.id]
+          }
+        })
+      ).resolves.toEqual({
+        mode: "selected",
+        personalWorkspaces: false,
+        collaborationWorkspaceIds: [kept!.id, removed!.id].sort()
+      });
+
+      await store.deleteWorkspace({ clientInstanceId, collaborationWorkspaceId: removed!.id });
+      expect((await store.listAgentAvailability({ clientInstanceId })).get("assistant")).toEqual({
+        mode: "selected",
+        personalWorkspaces: false,
+        collaborationWorkspaceIds: [kept!.id]
+      });
+
+      // Replacing the selection removes workspaces that are no longer listed.
+      await store.setAgentAvailability({
+        clientInstanceId,
+        agentName: "assistant",
+        availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
+      });
+      expect((await store.listAgentAvailability({ clientInstanceId })).get("assistant")).toEqual({
+        mode: "selected",
+        personalWorkspaces: true,
+        collaborationWorkspaceIds: []
+      });
     });
   });
 }

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { AddressInfo } from "net";
-import { asAgentRunId, asClientInstanceId } from "@vivd-catalyst/core";
+import {
+  asAgentRunId,
+  asClientInstanceId,
+  asCollaborationWorkspaceId,
+  type AgentAvailability
+} from "@vivd-catalyst/core";
 import { createTestConfig, createClientInstanceApp, type TestServer } from "./chat-server-harness";
 import {
   injectStartConversationRun,
@@ -898,4 +903,292 @@ async function waitForAuditEvents(
     });
   }
   return [];
+}
+
+describe("agent availability per Collaboration Workspace", () => {
+  it("rejects an agent that is not available in the conversation's workspace", async () => {
+    const fixture = await createAvailabilityFixture();
+    const { app, sharedWorkspaceId, personalWorkspaceId } = fixture;
+    try {
+      const notDefined = (agentName: string) => ({
+        error: { code: "NOT_FOUND", message: `Agent '${agentName}' is not defined` }
+      });
+
+      const shared = await fixture.createConversation(sharedWorkspaceId);
+      // Unavailable and unknown agents are indistinguishable, and nothing is persisted.
+      for (const agentName of ["personal_only", "hidden", "unknown"]) {
+        const rejected = await fixture.startRun(shared, agentName);
+        expect(rejected.statusCode).toBe(404);
+        expect(rejected.json()).toMatchObject(notDefined(agentName));
+      }
+      const messages = await app.server.inject({
+        method: "GET",
+        url: `/api/conversations/${shared}/messages`
+      });
+      expect(messages.json()).toEqual([]);
+      const allowed = await fixture.startRun(shared, "shared_only");
+      expect(allowed.statusCode).toBe(200);
+      expect(allowed.json()).toMatchObject({ run: { agentName: "shared_only" } });
+
+      const personal = await fixture.createConversation();
+      for (const agentName of ["shared_only", "hidden"]) {
+        const rejected = await fixture.startRun(personal, agentName);
+        expect(rejected.statusCode).toBe(404);
+        expect(rejected.json()).toMatchObject(notDefined(agentName));
+      }
+      const allowedPersonal = await fixture.startRun(personal, "personal_only");
+      expect(allowedPersonal.statusCode).toBe(200);
+      expect(allowedPersonal.json()).toMatchObject({ run: { agentName: "personal_only" } });
+
+      // The create-and-run entry point applies the same rule before creating anything.
+      const listUrl = (workspaceId: string) =>
+        `/api/conversations?collaborationWorkspaceId=${workspaceId}`;
+      const personalBefore = (
+        await app.server.inject({ method: "GET", url: listUrl(personalWorkspaceId) })
+      ).json() as unknown[];
+      const createRejected = await app.server.inject({
+        method: "POST",
+        url: "/api/conversations/runs",
+        payload: {
+          agentName: "shared_only",
+          idempotencyKey: "create-rejected",
+          message: { text: "Not here" }
+        }
+      });
+      expect(createRejected.statusCode).toBe(404);
+      expect(createRejected.json()).toMatchObject(notDefined("shared_only"));
+      expect(
+        (await app.server.inject({ method: "GET", url: listUrl(personalWorkspaceId) })).json()
+      ).toHaveLength(personalBefore.length);
+      const createAllowed = await app.server.inject({
+        method: "POST",
+        url: "/api/conversations/runs",
+        payload: {
+          agentName: "shared_only",
+          idempotencyKey: "create-allowed",
+          message: { text: "Here" },
+          conversation: { collaborationWorkspaceId: sharedWorkspaceId }
+        }
+      });
+      expect(createAllowed.statusCode).toBe(200);
+      expect(createAllowed.json()).toMatchObject({
+        conversation: { collaborationWorkspaceId: sharedWorkspaceId },
+        run: { agentName: "shared_only" }
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("resolves the default agent for the workspace", async () => {
+    const fixture = await createAvailabilityFixture();
+    const { app, clientInstanceId, sharedWorkspaceId } = fixture;
+    try {
+      const withDefault = await fixture.startRun(
+        await fixture.createConversation(sharedWorkspaceId)
+      );
+      expect(withDefault.json()).toMatchObject({ run: { agentName: "test_agent" } });
+
+      // Without an instance default available here, the first available agent is used.
+      await app.store.applyConfigAssetMutations({
+        clientInstanceId,
+        mutations: [{ type: "setDefaultAgent", agentName: undefined }]
+      });
+      await fixture.setAvailability("test_agent", SELECTED_NOWHERE);
+      const sharedFallback = await fixture.startRun(
+        await fixture.createConversation(sharedWorkspaceId)
+      );
+      expect(sharedFallback.json()).toMatchObject({ run: { agentName: "shared_only" } });
+      const personalFallback = await fixture.startRun(await fixture.createConversation());
+      expect(personalFallback.json()).toMatchObject({ run: { agentName: "personal_only" } });
+
+      await fixture.setAvailability("personal_only", SELECTED_NOWHERE);
+      const nothingAvailable = await fixture.startRun(await fixture.createConversation());
+      expect(nothingAvailable.statusCode).toBe(422);
+      expect(nothingAvailable.json()).toMatchObject({ error: { code: "VALIDATION_FAILED" } });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("keeps the stored agent of a queued run when availability is revoked", async () => {
+    const fixture = await createAvailabilityFixture();
+    const { app, clientInstanceId, sharedWorkspaceId } = fixture;
+    try {
+      const started = await fixture.startRun(
+        await fixture.createConversation(sharedWorkspaceId),
+        "shared_only"
+      );
+      const { run } = started.json() as { run: { id: string; status: string } };
+      expect(run.status).toBe("queued");
+
+      await fixture.setAvailability("shared_only", SELECTED_NOWHERE);
+
+      await expect(
+        app.store.getAgentRun({ clientInstanceId, runId: asAgentRunId(run.id) })
+      ).resolves.toMatchObject({ agentName: "shared_only", status: "queued" });
+      const next = await fixture.startRun(
+        await fixture.createConversation(sharedWorkspaceId),
+        "shared_only"
+      );
+      expect(next.statusCode).toBe(404);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("lists the agents of a workspace for its members only", async () => {
+    const fixture = await createAvailabilityFixture();
+    const { app, sharedWorkspaceId, personalWorkspaceId } = fixture;
+    try {
+      const shared = await app.server.inject({
+        method: "GET",
+        url: `/api/collaboration-workspaces/${sharedWorkspaceId}/agents`
+      });
+      expect(shared.statusCode).toBe(200);
+      expect(shared.json()).toMatchObject({
+        defaultAgentName: "test_agent",
+        agents: [{ name: "shared_only" }, { name: "test_agent", displayName: "Test Agent" }]
+      });
+      expect(Object.keys((shared.json() as { agents: object[] }).agents[0]!).sort()).toEqual([
+        "displayName",
+        "initialPrompts",
+        "name"
+      ]);
+
+      const personal = await app.server.inject({
+        method: "GET",
+        url: `/api/collaboration-workspaces/${personalWorkspaceId}/agents`
+      });
+      expect(
+        (personal.json() as { agents: Array<{ name: string }> }).agents.map((agent) => agent.name)
+      ).toEqual(["personal_only", "test_agent"]);
+
+      // The instance-wide list is the caller's Personal Workspace view.
+      const config = await app.server.inject({ method: "GET", url: "/api/config" });
+      expect(config.json()).toMatchObject({ defaultAgentName: "test_agent" });
+      expect(
+        (config.json() as { agents: Array<{ name: string }> }).agents.map((agent) => agent.name)
+      ).toEqual(["personal_only", "test_agent"]);
+
+      for (const url of [
+        `/api/collaboration-workspaces/${sharedWorkspaceId}/agents`,
+        `/api/collaboration-workspaces/${personalWorkspaceId}/agents`,
+        "/api/collaboration-workspaces/cws_missing/agents"
+      ]) {
+        const outsider = await app.server.inject({
+          method: "GET",
+          url,
+          headers: { "x-dev-user-id": "outsider" }
+        });
+        expect(outsider.statusCode).toBe(404);
+        expect(outsider.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
+      }
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+const SELECTED_NOWHERE: AgentAvailability = {
+  mode: "selected",
+  personalWorkspaces: false,
+  collaborationWorkspaceIds: []
+};
+
+/**
+ * `test_agent` is the instance default (`all`); the other agents are restricted to the shared
+ * workspace, to Personal Workspaces, and to nothing. Runs stay queued (worker runtime).
+ */
+async function createAvailabilityFixture() {
+  const identity = (id: string, roles: string[]) => ({
+    id,
+    externalUserId: id,
+    displayLabel: id,
+    email: `${id}@example.test`,
+    emailVerified: true,
+    roles,
+    permissionRefs: []
+  });
+  const app = await createClientInstanceApp({
+    config: createTestConfig({
+      developmentAuth: {
+        enabled: true,
+        defaultUserId: "owner",
+        users: [identity("owner", ["user", "admin"]), identity("outsider", ["user"])]
+      }
+    }),
+    env: {},
+    storeMode: "memory",
+    agentRuntimeMode: "worker",
+    tools: []
+  });
+  const clientInstanceId = asClientInstanceId(app.config.clientInstance.id);
+  const created = await app.server.inject({
+    method: "POST",
+    url: "/api/collaboration-workspaces",
+    payload: { name: "KAI" }
+  });
+  expect(created.statusCode).toBe(200);
+  const sharedWorkspaceId = (created.json() as { id: string }).id;
+  const workspaces = (
+    await app.server.inject({ method: "GET", url: "/api/collaboration-workspaces" })
+  ).json() as Array<{ id: string; kind: string }>;
+  const personalWorkspaceId = workspaces.find((workspace) => workspace.kind === "personal")!.id;
+
+  const setAvailability = (agentName: string, availability: AgentAvailability) =>
+    app.store.setAgentAvailability({ clientInstanceId, agentName, availability });
+  const names = ["shared_only", "personal_only", "hidden"];
+  await app.store.applyConfigAssetMutations({
+    clientInstanceId,
+    mutations: names.map((name) => ({
+      type: "upsert" as const,
+      kind: "agent" as const,
+      name,
+      config: {
+        name,
+        displayName: name,
+        instructions: "Use configured tools only.",
+        modelProviderId: "local",
+        toolNames: [],
+        initialPrompts: []
+      }
+    }))
+  });
+  await setAvailability("shared_only", {
+    ...SELECTED_NOWHERE,
+    collaborationWorkspaceIds: [asCollaborationWorkspaceId(sharedWorkspaceId)]
+  });
+  await setAvailability("personal_only", { ...SELECTED_NOWHERE, personalWorkspaces: true });
+  await setAvailability("hidden", SELECTED_NOWHERE);
+
+  let runCount = 0;
+  return {
+    app,
+    clientInstanceId,
+    sharedWorkspaceId,
+    personalWorkspaceId,
+    setAvailability,
+    async createConversation(collaborationWorkspaceId?: string): Promise<string> {
+      const response = await app.server.inject({
+        method: "POST",
+        url: "/api/conversations",
+        payload: { title: "Availability", collaborationWorkspaceId }
+      });
+      expect(response.statusCode).toBe(200);
+      return (response.json() as { id: string }).id;
+    },
+    startRun(conversationId: string, agentName?: string) {
+      runCount += 1;
+      return app.server.inject({
+        method: "POST",
+        url: `/api/conversations/${conversationId}/runs`,
+        payload: {
+          agentName,
+          idempotencyKey: `availability-run-${runCount}`,
+          message: { text: "Hello" }
+        }
+      });
+    }
+  };
 }

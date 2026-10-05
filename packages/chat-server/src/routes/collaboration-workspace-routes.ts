@@ -1,4 +1,5 @@
 import { apiOperations } from "@vivd-catalyst/api-contract";
+import { createSafeConfigView } from "@vivd-catalyst/config-schema";
 import {
   AppError,
   asCollaborationWorkspaceId,
@@ -7,7 +8,7 @@ import {
 } from "@vivd-catalyst/core";
 import type { FastifyInstance } from "fastify";
 import { CollaborationWorkspaceWorkflow } from "../collaboration-workspace-workflow";
-import { authenticateRequest, parseBody } from "../request-context";
+import { authenticateRequest, parseBody, resolveRequestLocale } from "../request-context";
 import type { ChatServerOptions } from "../types";
 
 export function registerCollaborationWorkspaceRoutes(
@@ -39,6 +40,19 @@ export function registerCollaborationWorkspaceRoutes(
     const { user } = await authenticateRequest(options, request);
     requireAuthScope(user, "collaboration_workspace:read");
     return workspaces.getWorkspace(user, getCollaborationWorkspaceId(request.params));
+  });
+
+  app.get(apiOperations.listCollaborationWorkspaceAgents.path, async (request) => {
+    const { user } = await authenticateRequest(options, request);
+    requireAuthScope(user, "config:read");
+    const assets = await workspaces.getAssetSnapshot(
+      user,
+      getCollaborationWorkspaceId(request.params)
+    );
+    const { defaultAgentName, agents } = createSafeConfigView(options.config, assets, {
+      requestedLocale: resolveRequestLocale(options, request)
+    });
+    return { defaultAgentName, agents };
   });
 
   app.patch(apiOperations.updateCollaborationWorkspace.path, async (request) => {

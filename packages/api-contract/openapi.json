@@ -3348,6 +3348,104 @@
         }
       }
     },
+    "/api/collaboration-workspaces/{collaborationWorkspaceId}/agents": {
+      "get": {
+        "operationId": "listCollaborationWorkspaceAgents",
+        "parameters": [
+          {
+            "name": "collaborationWorkspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "defaultAgentName": {
+                      "type": "string"
+                    },
+                    "agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "defaultModelBindingId": {
+                            "type": "string"
+                          },
+                          "compactThresholdTokens": {
+                            "type": "number"
+                          },
+                          "welcomeMessage": {
+                            "type": "string"
+                          },
+                          "welcomeSubtitle": {
+                            "type": "string"
+                          },
+                          "initialPrompts": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "title": {
+                                  "type": "string"
+                                },
+                                "prompt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "title",
+                                "prompt"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "displayName",
+                          "initialPrompts"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "agents"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/collaboration-workspaces/{collaborationWorkspaceId}/deletion-impact": {
       "get": {
         "operationId": "getCollaborationWorkspaceDeletionImpact",
@@ -13810,6 +13908,33 @@
                           },
                           "updatedAt": {
                             "type": "string"
+                          },
+                          "availability": {
+                            "type": "object",
+                            "properties": {
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "all",
+                                  "selected"
+                                ]
+                              },
+                              "personalWorkspaces": {
+                                "type": "boolean"
+                              },
+                              "collaborationWorkspaceIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "mode",
+                              "personalWorkspaces",
+                              "collaborationWorkspaceIds"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -14154,6 +14279,124 @@
                     "version"
                   ],
                   "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/config/agents/{name}/availability": {
+      "put": {
+        "operationId": "setConfigAgentAvailability",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "all",
+                      "selected"
+                    ]
+                  },
+                  "personalWorkspaces": {
+                    "type": "boolean"
+                  },
+                  "collaborationWorkspaceIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "all",
+                        "selected"
+                      ]
+                    },
+                    "personalWorkspaces": {
+                      "type": "boolean"
+                    },
+                    "collaborationWorkspaceIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "mode",
+                    "personalWorkspaces",
+                    "collaborationWorkspaceIds"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/collaboration-workspaces": {
+      "get": {
+        "operationId": "listAdministeredCollaborationWorkspaces",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name"
+                    ],
+                    "additionalProperties": false
+                  }
                 }
               }
             }
@@ -14619,6 +14862,12 @@
                       "type": "integer",
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
+                    },
+                    "hiddenAgentNames": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [

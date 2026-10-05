@@ -2,6 +2,9 @@ import {
   AppError,
   assertConfigAssetBases,
   createPlatformId,
+  resolveInitialAgentAvailabilityMode,
+  type AgentAvailability,
+  type CollaborationWorkspaceId,
   type ConfigAssetRecord,
   type ConfigAssetRevisionRecord,
   type ConfigAssetState,
@@ -12,6 +15,8 @@ export class InMemoryConfigAssetStore implements ConfigAssetStore {
   private states = new Map<string, ConfigAssetState>();
   private assets = new Map<string, ConfigAssetRecord>();
   private revisions = new Map<string, ConfigAssetRevisionRecord[]>();
+  /** Keyed by asset id. */
+  private availability = new Map<string, AgentAvailability>();
 
   async getConfigAssetState(
     input: Parameters<ConfigAssetStore["getConfigAssetState"]>[0]
@@ -80,6 +85,26 @@ export class InMemoryConfigAssetStore implements ConfigAssetStore {
         ([assetId, records]) => [assetId, records.map(cloneRevision)] as const
       )
     );
+    const availability = new Map(
+      [...this.availability].map(([assetId, record]) => [assetId, cloneAvailability(record)])
+    );
+    const initialAvailability = (): AgentAvailability => ({
+      mode: initialAgentMode,
+      personalWorkspaces: false,
+      collaborationWorkspaceIds: []
+    });
+    const initialAgentMode = resolveInitialAgentAvailabilityMode(
+      input.initialAgentAvailability,
+      input.mutations.some((mutation) => {
+        if (mutation.type !== "delete" || mutation.kind !== "agent") {
+          return false;
+        }
+        const asset = assets.get(
+          createAssetKey({ clientInstanceId: input.clientInstanceId, ...mutation })
+        );
+        return asset !== undefined && availability.get(asset.id)?.mode === "selected";
+      })
+    );
     const version = currentState.version + 1;
     let defaultAgentName = currentState.defaultAgentName;
     const now = new Date().toISOString();
@@ -113,6 +138,7 @@ export class InMemoryConfigAssetStore implements ConfigAssetStore {
           config: null,
           updatedAt: now
         });
+        availability.delete(existing.id);
         continue;
       }
 
@@ -133,6 +159,9 @@ export class InMemoryConfigAssetStore implements ConfigAssetStore {
           updatedAt: now
         };
         assets.set(key, asset);
+        if (mutation.kind === "agent") {
+          availability.set(assetId, initialAvailability());
+        }
         revisions.set(assetId, [
           {
             id: revisionId,
@@ -168,6 +197,9 @@ export class InMemoryConfigAssetStore implements ConfigAssetStore {
         config,
         updatedAt: now
       });
+      if (existing.kind === "agent" && existing.status === "deleted") {
+        availability.set(existing.id, initialAvailability());
+      }
     }
 
     if (defaultAgentName !== undefined) {
@@ -184,6 +216,12 @@ export class InMemoryConfigAssetStore implements ConfigAssetStore {
           `Default agent '${defaultAgentName}' is not an active config asset`
         );
       }
+      if (availability.get(defaultAgent.id)?.mode !== "all") {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `Default agent '${defaultAgentName}' must be available in all workspaces`
+        );
+      }
     }
 
     states.set(input.clientInstanceId, {
@@ -193,7 +231,61 @@ export class InMemoryConfigAssetStore implements ConfigAssetStore {
     this.states = states;
     this.assets = assets;
     this.revisions = revisions;
+    this.availability = availability;
     return { version };
+  }
+
+  async listAgentAvailability(
+    input: Parameters<ConfigAssetStore["listAgentAvailability"]>[0]
+  ): Promise<Map<string, AgentAvailability>> {
+    const result = new Map<string, AgentAvailability>();
+    for (const asset of this.assets.values()) {
+      const record = this.availability.get(asset.id);
+      if (
+        record &&
+        asset.clientInstanceId === input.clientInstanceId &&
+        asset.kind === "agent" &&
+        asset.status === "active"
+      ) {
+        result.set(asset.name, cloneAvailability(record));
+      }
+    }
+    return result;
+  }
+
+  async setAgentAvailability(
+    input: Parameters<ConfigAssetStore["setAgentAvailability"]>[0]
+  ): Promise<AgentAvailability> {
+    const asset = this.assets.get(
+      createAssetKey({
+        clientInstanceId: input.clientInstanceId,
+        kind: "agent",
+        name: input.agentName
+      })
+    );
+    if (!asset || asset.status !== "active") {
+      throw new AppError("NOT_FOUND", `Config agent '${input.agentName}' was not found`);
+    }
+    if (
+      input.availability.mode !== "all" &&
+      this.states.get(input.clientInstanceId)?.defaultAgentName === input.agentName
+    ) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `Default agent '${input.agentName}' must be available in all workspaces`
+      );
+    }
+    this.availability.set(asset.id, cloneAvailability(input.availability));
+    return cloneAvailability(input.availability);
+  }
+
+  /** Mirrors the database cascade from a deleted Collaboration Workspace. */
+  removeWorkspaceAvailability(collaborationWorkspaceId: CollaborationWorkspaceId): void {
+    for (const record of this.availability.values()) {
+      record.collaborationWorkspaceIds = record.collaborationWorkspaceIds.filter(
+        (id) => id !== collaborationWorkspaceId
+      );
+    }
   }
 }
 
@@ -231,6 +323,13 @@ function cloneAsset(asset: ConfigAssetRecord): ConfigAssetRecord {
   return {
     ...asset,
     config: asset.config ? structuredClone(asset.config) : null
+  };
+}
+
+function cloneAvailability(availability: AgentAvailability): AgentAvailability {
+  return {
+    ...availability,
+    collaborationWorkspaceIds: [...new Set(availability.collaborationWorkspaceIds)].sort()
   };
 }
 

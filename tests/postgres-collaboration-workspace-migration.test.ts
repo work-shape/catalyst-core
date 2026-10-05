@@ -379,6 +379,48 @@ describePostgres("Collaboration Workspace migration 0020", () => {
       await sql.end();
     }
   });
+
+  it("backfills every active agent to availability 'all' in 0028", async () => {
+    const { sql } = await createFreshDatabase();
+    try {
+      await applyMigrationsThrough(sql, 27);
+      for (const [id, kind, status] of [
+        ["cfga_active", "agent", "active"],
+        ["cfga_deleted", "agent", "deleted"],
+        ["cfga_skill", "skill", "active"]
+      ] as const) {
+        await sql`
+          insert into config_assets (
+            id, client_instance_id, kind, name, status, active_revision_id, created_at, updated_at
+          ) values (
+            ${id}, 'migration-test-client', ${kind}, ${id}, ${status}, ${`${id}_rev`}, now(), now()
+          )
+        `;
+      }
+
+      await applyMigration(sql, "0028_agent_availability");
+
+      await expect(
+        sql`
+          select asset_id, client_instance_id, mode, personal_workspaces
+          from config_asset_availability
+        `
+      ).resolves.toEqual([
+        {
+          asset_id: "cfga_active",
+          client_instance_id: "migration-test-client",
+          mode: "all",
+          personal_workspaces: false
+        }
+      ]);
+      await expect(
+        sql`update config_asset_availability set mode = 'some' where asset_id = 'cfga_active'`
+      ).rejects.toMatchObject({ constraint_name: "config_asset_availability_mode_check" });
+      await expect(sql`select * from config_asset_workspace_availability`).resolves.toEqual([]);
+    } finally {
+      await sql.end();
+    }
+  });
 });
 
 async function applyMigrationsThrough(sql: Sql, finalIndex: number): Promise<void> {

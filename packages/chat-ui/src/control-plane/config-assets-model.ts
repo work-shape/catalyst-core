@@ -38,6 +38,62 @@ export interface SkillResourceFormState {
   content: string;
 }
 
+/** Mirrors the availability contract; an agent without a stored row is hidden everywhere. */
+export interface AgentAvailabilityForm {
+  mode: "all" | "selected";
+  personalWorkspaces: boolean;
+  collaborationWorkspaceIds: string[];
+}
+
+export type AgentAvailabilitySummary =
+  | { kind: "all" }
+  | { kind: "hidden" }
+  | { kind: "personal" }
+  | { kind: "workspaces"; count: number; personalWorkspaces: boolean };
+
+export function agentAvailabilityToForm(
+  availability: AgentAvailabilityForm | undefined
+): AgentAvailabilityForm {
+  return availability
+    ? { ...availability, collaborationWorkspaceIds: [...availability.collaborationWorkspaceIds] }
+    : { mode: "selected", personalWorkspaces: false, collaborationWorkspaceIds: [] };
+}
+
+export function agentAvailabilitySummary(
+  availability: AgentAvailabilityForm | undefined
+): AgentAvailabilitySummary {
+  if (availability?.mode === "all") {
+    return { kind: "all" };
+  }
+  const count = availability?.collaborationWorkspaceIds.length ?? 0;
+  if (count > 0) {
+    return {
+      kind: "workspaces",
+      count,
+      personalWorkspaces: availability?.personalWorkspaces ?? false
+    };
+  }
+  return availability?.personalWorkspaces ? { kind: "personal" } : { kind: "hidden" };
+}
+
+export function agentAvailabilityFormsEqual(
+  left: AgentAvailabilityForm,
+  right: AgentAvailabilityForm
+): boolean {
+  if (left.mode !== right.mode) {
+    return false;
+  }
+  if (left.mode === "all") {
+    return true;
+  }
+  const rightIds = new Set(right.collaborationWorkspaceIds);
+  return (
+    left.personalWorkspaces === right.personalWorkspaces &&
+    left.collaborationWorkspaceIds.length === rightIds.size &&
+    left.collaborationWorkspaceIds.every((id) => rightIds.has(id))
+  );
+}
+
 export const EMPTY_LOCALIZED_PAIR: LocalizedPair = { en: "", de: "" };
 
 export function localizedToPair(value: unknown): LocalizedPair {

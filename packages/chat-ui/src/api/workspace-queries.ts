@@ -107,6 +107,35 @@ export function useCollaborationWorkspacesQuery(
   });
 }
 
+/**
+ * The agents one Collaboration Workspace offers, with that workspace's default.
+ * `placeholderData` keeps the previous workspace's agents on screen while the
+ * next workspace loads, so switching does not blank the picker.
+ */
+export function useCollaborationWorkspaceAgentsQuery(
+  input: WorkspaceQueryInput & {
+    collaborationWorkspaceId: string | undefined;
+    localePreference: LocaleCode | undefined;
+    enabled: boolean;
+  }
+) {
+  return useQuery({
+    queryKey: workspaceQueryKeys.collaborationWorkspaceAgents(
+      input.apiBaseUrl,
+      input.authScope,
+      input.collaborationWorkspaceId,
+      input.localePreference
+    ),
+    queryFn: () =>
+      input.client.collaborationWorkspaces.listAgents(
+        input.collaborationWorkspaceId ?? "",
+        input.localePreference
+      ),
+    placeholderData: (previousData) => previousData,
+    enabled: input.enabled && Boolean(input.collaborationWorkspaceId)
+  });
+}
+
 export function useCollaborationWorkspaceDirectoryQuery(
   input: WorkspaceQueryInput & {
     enabled: boolean;
@@ -314,6 +343,21 @@ export function useConfigAssetsOverviewQuery(
   return useQuery({
     queryKey: workspaceQueryKeys.configAssetsOverview(input.apiBaseUrl, input.authScope),
     queryFn: input.client.configAssets.getOverview,
+    enabled: input.enabled
+  });
+}
+
+export function useAdministeredCollaborationWorkspacesQuery(
+  input: WorkspaceQueryInput & {
+    enabled: boolean;
+  }
+) {
+  return useQuery({
+    queryKey: workspaceQueryKeys.administeredCollaborationWorkspaces(
+      input.apiBaseUrl,
+      input.authScope
+    ),
+    queryFn: input.client.configAssets.listAdministeredWorkspaces,
     enabled: input.enabled
   });
 }

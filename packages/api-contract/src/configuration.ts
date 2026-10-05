@@ -144,15 +144,40 @@ export const safeConfigSchema = z.object({
   ui: clientUiBrandingSchema
 });
 
+export const collaborationWorkspaceAgentsSchema = z.object({
+  defaultAgentName: z.string().optional(),
+  agents: safeConfigSchema.shape.agents
+});
+
 export const usageSafeguardsSchema = safeConfigSchema.shape.usage.shape.safeguards;
 
 export const configAssetKindSchema = z.enum(["agent", "skill"]);
+
+export const agentAvailabilitySchema = z.object({
+  mode: z.enum(["all", "selected"]),
+  personalWorkspaces: z.boolean(),
+  collaborationWorkspaceIds: z.array(z.string())
+});
+
+export const setConfigAgentAvailabilityRequestSchema = z.object({
+  mode: agentAvailabilitySchema.shape.mode,
+  // Both apply to `selected` only and are ignored for `all`.
+  personalWorkspaces: z.boolean().optional(),
+  collaborationWorkspaceIds: z.array(z.string().min(1)).optional()
+});
+
+export const administeredCollaborationWorkspaceSchema = z.object({
+  id: z.string(),
+  name: z.string()
+});
 
 export const configAssetSummarySchema = z.object({
   kind: configAssetKindSchema,
   name: z.string(),
   revision: z.number().int().positive(),
-  updatedAt: z.string()
+  updatedAt: z.string(),
+  // Agents only. An agent without availability is hidden in every workspace.
+  availability: agentAvailabilitySchema.optional()
 });
 
 // Agent and skill configs are validated against their full schemas by the
@@ -245,6 +270,11 @@ export const replaceConfigAssetsRequestSchema = configAssetBundleSchema.extend({
   deleteAssets: z.array(z.object({ kind: configAssetKindSchema, name: z.string() })).optional()
 });
 
+export const replaceConfigAssetsResponseSchema = configAssetMutationVersionResponseSchema.extend({
+  // Agents written by this push that are not available in any workspace afterwards.
+  hiddenAgentNames: z.array(z.string()).optional()
+});
+
 export const validateConfigAssetsResponseSchema = z.object({
   valid: z.literal(true)
 });
@@ -257,4 +287,9 @@ export type ConfigAssetSummary = z.infer<typeof configAssetSummarySchema>;
 export type ConfigAsset = z.infer<typeof configAssetSchema>;
 export type ConfigAssetRevision = z.infer<typeof configAssetRevisionSchema>;
 export type ConfigAssetsOverview = z.infer<typeof configAssetsOverviewSchema>;
+export type AgentAvailability = z.infer<typeof agentAvailabilitySchema>;
+export type CollaborationWorkspaceAgents = z.infer<typeof collaborationWorkspaceAgentsSchema>;
+export type AdministeredCollaborationWorkspace = z.infer<
+  typeof administeredCollaborationWorkspaceSchema
+>;
 export type ConfigAssetBundle = z.infer<typeof configAssetBundleSchema>;

@@ -5,7 +5,11 @@ import { describe, expect, it } from "vitest";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 import { CollaborationWorkspaceSelector } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-selector";
 import { WorkspaceRail } from "../packages/chat-ui/src/workspace/workspace-rail";
-import { collaborationWorkspaceChromeVisibleFor } from "../packages/chat-ui/src/workspace/workspace-chat-model";
+import {
+  activeAgentNameFor,
+  collaborationWorkspaceChromeVisibleFor,
+  workspaceScopedConfigFor
+} from "../packages/chat-ui/src/workspace/workspace-chat-model";
 
 const noop = () => undefined;
 
@@ -222,6 +226,75 @@ describe("collaboration workspace chrome feature flag", () => {
         config: undefined
       })
     ).toBe(false);
+  });
+});
+
+describe("workspace-scoped agents", () => {
+  const agent = (name: string) => ({ name, displayName: name }) as SafeConfig["agents"][number];
+  const instanceConfig = {
+    ...railConfig,
+    defaultAgentName: "general",
+    agents: [agent("general"), agent("research")]
+  } as SafeConfig;
+  const scoped = (
+    input: Partial<Parameters<typeof workspaceScopedConfigFor>[0]>
+  ): ReturnType<typeof workspaceScopedConfigFor> =>
+    workspaceScopedConfigFor({
+      config: instanceConfig,
+      collaborationWorkspacesAvailable: true,
+      workspaceAgents: undefined,
+      instanceViewApplies: false,
+      ...input
+    });
+
+  it("offers the active workspace's agents and default instead of the instance view", () => {
+    const result = scoped({
+      workspaceAgents: { defaultAgentName: "contracts", agents: [agent("contracts")] }
+    });
+
+    expect(result.config?.agents.map((entry) => entry.name)).toEqual(["contracts"]);
+    expect(result.config?.defaultAgentName).toBe("contracts");
+    expect(result).toMatchObject({ agentsLoading: false, workspaceScoped: true });
+  });
+
+  it("shows no agents rather than the wrong ones while a workspace's list loads", () => {
+    const result = scoped({});
+
+    expect(result.config?.agents).toEqual([]);
+    expect(result.agentsLoading).toBe(true);
+  });
+
+  it("reports a workspace without agents as empty, not as loading", () => {
+    const result = scoped({ workspaceAgents: { agents: [] } });
+
+    expect(result.config?.agents).toEqual([]);
+    expect(result).toMatchObject({ agentsLoading: false, workspaceScoped: true });
+  });
+
+  it("keeps the instance view for embedded sessions and the Personal Workspace", () => {
+    expect(scoped({ collaborationWorkspacesAvailable: false }).config).toBe(instanceConfig);
+    expect(scoped({ instanceViewApplies: true })).toEqual({
+      config: instanceConfig,
+      agentsLoading: false,
+      workspaceScoped: false
+    });
+  });
+
+  it("falls back to the workspace default when the picked agent is not offered there", () => {
+    const workspace = {
+      defaultAgentName: "contracts",
+      agents: [agent("contracts"), agent("general")]
+    };
+
+    expect(activeAgentNameFor(workspace, "general")).toBe("general");
+    expect(activeAgentNameFor(workspace, "research")).toBe("contracts");
+    expect(activeAgentNameFor(workspace, undefined)).toBe("contracts");
+    expect(activeAgentNameFor({ defaultAgentName: "gone", agents: [agent("general")] }, "x")).toBe(
+      "general"
+    );
+    expect(
+      activeAgentNameFor({ defaultAgentName: undefined, agents: [] }, "general")
+    ).toBeUndefined();
   });
 });
 

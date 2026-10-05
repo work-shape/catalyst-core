@@ -161,6 +161,25 @@ function createConfigAssetsClient(transport: ApiClientTransport) {
         }),
         apiOperations.setDefaultConfigAgent.responseSchema
       ),
+    setAgentAvailability: (
+      name: string,
+      input: OperationRequestInput<typeof apiOperations.setConfigAgentAvailability>
+    ) =>
+      transport.unwrapJson(
+        generatedSdk.setConfigAgentAvailability({
+          client: transport.generatedClient,
+          path: { name },
+          body: apiOperations.setConfigAgentAvailability.requestSchema.parse(input)
+        }),
+        apiOperations.setConfigAgentAvailability.responseSchema
+      ),
+    listAdministeredWorkspaces: () =>
+      transport.unwrapJson(
+        generatedSdk.listAdministeredCollaborationWorkspaces({
+          client: transport.generatedClient
+        }),
+        apiOperations.listAdministeredCollaborationWorkspaces.responseSchema
+      ),
     listRevisions: (kind: ConfigAssetKind, name: string) =>
       transport.unwrapJson(
         generatedSdk.listConfigAssetRevisions({

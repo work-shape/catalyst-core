@@ -880,6 +880,41 @@ export type UpdateCollaborationWorkspaceResponses = {
 
 export type UpdateCollaborationWorkspaceResponse = UpdateCollaborationWorkspaceResponses[keyof UpdateCollaborationWorkspaceResponses];
 
+export type ListCollaborationWorkspaceAgentsData = {
+    body?: never;
+    path: {
+        collaborationWorkspaceId: string;
+    };
+    query?: {
+        locale?: string;
+    };
+    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/agents';
+};
+
+export type ListCollaborationWorkspaceAgentsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        defaultAgentName?: string;
+        agents: Array<{
+            name: string;
+            displayName: string;
+            description?: string;
+            defaultModelBindingId?: string;
+            compactThresholdTokens?: number;
+            welcomeMessage?: string;
+            welcomeSubtitle?: string;
+            initialPrompts: Array<{
+                title: string;
+                prompt: string;
+            }>;
+        }>;
+    };
+};
+
+export type ListCollaborationWorkspaceAgentsResponse = ListCollaborationWorkspaceAgentsResponses[keyof ListCollaborationWorkspaceAgentsResponses];
+
 export type GetCollaborationWorkspaceDeletionImpactData = {
     body?: never;
     path: {
@@ -3597,6 +3632,11 @@ export type GetConfigAssetsOverviewResponses = {
             name: string;
             revision: number;
             updatedAt: string;
+            availability?: {
+                mode: 'all' | 'selected';
+                personalWorkspaces: boolean;
+                collaborationWorkspaceIds: Array<string>;
+            };
         }>;
         references: {
             modelProviderIds: Array<string>;
@@ -3710,6 +3750,51 @@ export type SetDefaultConfigAgentResponses = {
 };
 
 export type SetDefaultConfigAgentResponse = SetDefaultConfigAgentResponses[keyof SetDefaultConfigAgentResponses];
+
+export type SetConfigAgentAvailabilityData = {
+    body: {
+        mode: 'all' | 'selected';
+        personalWorkspaces?: boolean;
+        collaborationWorkspaceIds?: Array<string>;
+    };
+    path: {
+        name: string;
+    };
+    query?: never;
+    url: '/api/admin/config/agents/{name}/availability';
+};
+
+export type SetConfigAgentAvailabilityResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        mode: 'all' | 'selected';
+        personalWorkspaces: boolean;
+        collaborationWorkspaceIds: Array<string>;
+    };
+};
+
+export type SetConfigAgentAvailabilityResponse = SetConfigAgentAvailabilityResponses[keyof SetConfigAgentAvailabilityResponses];
+
+export type ListAdministeredCollaborationWorkspacesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/collaboration-workspaces';
+};
+
+export type ListAdministeredCollaborationWorkspacesResponses = {
+    /**
+     * Successful response
+     */
+    200: Array<{
+        id: string;
+        name: string;
+    }>;
+};
+
+export type ListAdministeredCollaborationWorkspacesResponse = ListAdministeredCollaborationWorkspacesResponses[keyof ListAdministeredCollaborationWorkspacesResponses];
 
 export type ListConfigAssetRevisionsData = {
     body?: never;
@@ -3845,6 +3930,7 @@ export type ReplaceConfigAssetsResponses = {
      */
     200: {
         version: number;
+        hiddenAgentNames?: Array<string>;
     };
 };
 

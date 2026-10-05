@@ -42,6 +42,21 @@ export function registerConfigAssetRoutes(app: FastifyInstance, options: ChatSer
     return workflow.setDefaultAgent(identity, context, body);
   });
 
+  app.put(apiOperations.setConfigAgentAvailability.path, async (request) => {
+    const { identity, context } = await authenticateConfigAssetRequest(options, request);
+    const body = parseBody(apiOperations.setConfigAgentAvailability.requestSchema, request.body);
+    const { name } = request.params as { name?: string };
+    if (!name) {
+      throw new AppError("BAD_REQUEST", "Missing config asset name");
+    }
+    return workflow.setAgentAvailability(identity, context, { agentName: name, ...body });
+  });
+
+  app.get(apiOperations.listAdministeredCollaborationWorkspaces.path, async (request) => {
+    const { identity } = await authenticateConfigAssetRequest(options, request);
+    return workflow.listAdministeredWorkspaces(identity);
+  });
+
   app.get(apiOperations.listConfigAssetRevisions.path, async (request) => {
     const { identity, context } = await authenticateConfigAssetRequest(options, request);
     return workflow.listRevisions(identity, context, getAssetParams(request.params));

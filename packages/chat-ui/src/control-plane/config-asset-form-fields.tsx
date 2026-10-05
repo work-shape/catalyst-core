@@ -74,6 +74,7 @@ export function LocalizedField({
 export function CheckboxGroup({
   label,
   options,
+  optionLabel,
   selected,
   emptyHint,
   hint,
@@ -82,6 +83,8 @@ export function CheckboxGroup({
 }: {
   label: string;
   options: string[];
+  /** Human-readable text for options that are ids rather than names. */
+  optionLabel?: (option: string) => string;
   selected: string[];
   emptyHint: string;
   hint?: string;
@@ -127,7 +130,14 @@ export function CheckboxGroup({
                       )
                     }
                   />
-                  <span className="min-w-0 break-words font-mono text-xs leading-5">{option}</span>
+                  <span
+                    className={cn(
+                      "min-w-0 break-words leading-5",
+                      optionLabel ? "text-sm" : "font-mono text-xs"
+                    )}
+                  >
+                    {optionLabel ? optionLabel(option) : option}
+                  </span>
                 </label>
               );
             })}

@@ -15,6 +15,7 @@ import {
   uniqueIndex
 } from "drizzle-orm/pg-core";
 import type {
+  AgentAvailability,
   AgentRun,
   ApprovalRequest,
   ArtifactPreviewImageFormat,
@@ -903,6 +904,51 @@ export const configAssetRevisions = pgTable(
       table.assetId,
       table.revision.desc()
     )
+  ]
+);
+
+/** One row per active agent asset. An agent without a row is hidden everywhere. */
+export const configAssetAvailability = pgTable(
+  "config_asset_availability",
+  {
+    assetId: text("asset_id")
+      .primaryKey()
+      .references(() => configAssets.id, { onDelete: "cascade" }),
+    clientInstanceId: text("client_instance_id").notNull(),
+    mode: text("mode").$type<AgentAvailability["mode"]>().notNull(),
+    personalWorkspaces: boolean("personal_workspaces").notNull().default(false),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    index("config_asset_availability_client_idx").on(table.clientInstanceId),
+    check("config_asset_availability_mode_check", sql`${table.mode} in ('all', 'selected')`)
+  ]
+);
+
+export const configAssetWorkspaceAvailability = pgTable(
+  "config_asset_workspace_availability",
+  {
+    assetId: text("asset_id").notNull(),
+    collaborationWorkspaceId: text("collaboration_workspace_id")
+      .$type<CollaborationWorkspace["id"]>()
+      .notNull()
+  },
+  (table) => [
+    primaryKey({
+      name: "config_asset_workspace_availability_pk",
+      columns: [table.assetId, table.collaborationWorkspaceId]
+    }),
+    foreignKey({
+      name: "config_asset_workspace_availability_asset_fk",
+      columns: [table.assetId],
+      foreignColumns: [configAssetAvailability.assetId]
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "config_asset_workspace_availability_workspace_fk",
+      columns: [table.collaborationWorkspaceId],
+      foreignColumns: [collaborationWorkspaces.id]
+    }).onDelete("cascade"),
+    index("config_asset_workspace_availability_workspace_idx").on(table.collaborationWorkspaceId)
   ]
 );
 

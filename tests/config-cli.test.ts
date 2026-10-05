@@ -647,6 +647,47 @@ skills:
     expect(stderr.join("")).toContain("--prune cannot be combined with --only");
   });
 
+  it("prints the agents a push left hidden in every workspace", async () => {
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    await mkdir(resolve(directory, "agents"), { recursive: true });
+    await writeFile(
+      resolve(directory, "agents", "kai-tax.agent.yaml"),
+      serializeAgentYaml(agentConfig("Tax", { name: "kai-tax" })),
+      "utf8"
+    );
+    await writeStateFile(resolve(directory, STATE_FILENAME), {
+      instances: { local: pulledBaseline(3, { agents: [], skills: [] }) }
+    });
+    const remote = { version: 3, agents: [], skills: [] };
+    const push = async (hiddenAgentNames?: string[]) => {
+      const stdout: string[] = [];
+      const fallback = configApiFetch(remote, [], 4);
+      const exitCode = await runCli(["config", "push", "--force"], {
+        cwd: directory,
+        env: { CATALYST_API_KEY: "cat_hidden" },
+        stdout: (text) => stdout.push(text),
+        fetchImpl: async (input, init) => {
+          const url = new URL(input instanceof Request ? input.url : String(input));
+          return hiddenAgentNames && url.pathname.endsWith("/api/admin/config/import")
+            ? jsonResponse(200, { version: 4, hiddenAgentNames })
+            : fallback(input, init);
+        }
+      });
+      expect(exitCode).toBe(0);
+      return stdout.join("");
+    };
+
+    const hidden = await push(["kai-tax"]);
+    expect(hidden).toContain("Pushed 1 agent, 0 skills, version 4.");
+    expect(hidden).toContain(
+      "Hidden in every workspace until an instance admin sets their availability:\n  agent:kai-tax\n"
+    );
+    // Servers without availability, and pushes that hide nothing, print no notice.
+    expect(await push()).not.toContain("Hidden in every workspace");
+    expect(await push([])).not.toContain("Hidden in every workspace");
+  });
+
   it("rewrites only selected pull files without changing the recorded version", async () => {
     const directory = await createTemporaryDirectory();
     await writeMinimalManifest(directory, "https://catalyst.test");
