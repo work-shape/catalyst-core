@@ -146,6 +146,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
           ...(comment ? { comment } : {})
         };
         if (command.decision !== "approve") {
+          await this.assertNotApplied(pending, context);
           return {
             status: command.decision === "reject" ? "rejected" : "changes_requested",
             decision
@@ -177,15 +178,18 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     const updated = await this.options.store.transitionPendingApprovalRequest({
       clientInstanceId: this.options.clientInstanceId,
       requestId,
-      resolve: async () => ({
-        status: "withdrawn",
-        decision: {
-          approved: false,
-          decidedBy: user.id,
-          decidedByLabel: user.displayLabel,
-          decidedAt: new Date().toISOString()
-        }
-      })
+      resolve: async (pending) => {
+        await this.assertNotApplied(pending, context);
+        return {
+          status: "withdrawn",
+          decision: {
+            approved: false,
+            decidedBy: user.id,
+            decidedByLabel: user.displayLabel,
+            decidedAt: new Date().toISOString()
+          }
+        };
+      }
     });
     await this.record(user, context, "approval_request.withdrawn", updated);
     await this.options.onDecided?.(updated);
@@ -223,6 +227,20 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     await this.record(user, context, "approval_request.reverted", updated);
     await this.options.onDecided?.(updated);
     return updated;
+  }
+
+  /**
+   * Apply may have committed before recording the approval failed. Such a request must not end
+   * as rejected or withdrawn while its change is live; approving it again records the outcome.
+   */
+  private async assertNotApplied(pending: ApprovalRequest, context: CallContext): Promise<void> {
+    const handler = this.options.handlers.get(pending.kind);
+    if (await handler?.isApplied?.(pending.payload, this.handlerContext(pending, context))) {
+      throw new AppError(
+        "CONFLICT",
+        "This request's change is already applied; approve it to record the outcome"
+      );
+    }
   }
 
   private async visibleRequest(

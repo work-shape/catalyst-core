@@ -303,6 +303,22 @@ describe("approval request workflow", () => {
     ).resolves.toMatchObject({ status: "rejected" });
   });
 
+  it("refuses to reject or withdraw a request whose change is already applied", async () => {
+    const f = fixture();
+    const request = await f.create();
+    f.handler.isApplied = async () => true;
+    await expect(
+      f.workflow.decideRequest(reviewer, context, { requestId: request.id, decision: "reject" })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(f.workflow.withdrawRequest(requester, context, request.id)).rejects.toMatchObject({
+      code: "CONFLICT"
+    });
+    expect(f.onDecided).not.toHaveBeenCalled();
+    await expect(
+      f.workflow.decideRequest(reviewer, context, { requestId: request.id, decision: "approve" })
+    ).resolves.toMatchObject({ status: "approved" });
+  });
+
   it("limits the queue and count to permitted kinds, including status filtering", async () => {
     const f = fixture();
     const visible = await f.create();
