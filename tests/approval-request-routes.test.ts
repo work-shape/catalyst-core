@@ -245,6 +245,76 @@ describe("approval routes and generated instance client", () => {
     }
   });
 
+  it("keeps chat-scoped session tokens out of the review queue and decisions", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        sessionToken: { issuer: "demo-client-instance", ttlSeconds: 900 }
+      }),
+      env: {
+        CHAT_SESSION_TOKEN_SECRET: "a-development-session-token-secret",
+        CHAT_SERVER_CREDENTIAL: "server-credential"
+      },
+      storeMode: "memory",
+      tools: [],
+      approvalRequestHandlers: new Map([[fakeHandler.kind, fakeHandler]])
+    });
+    try {
+      const issued = await app.server.inject({
+        method: "POST",
+        url: "/api/superadmin/session-tokens",
+        headers: { "x-server-credential": "server-credential" },
+        payload: {
+          externalUserId: "embedded-admin",
+          displayLabel: "Embedded Admin",
+          roles: ["admin"]
+        }
+      });
+      const headers = {
+        authorization: `Bearer ${issued.json<{ chatSessionToken: string }>().chatSessionToken}`
+      };
+      const me = await app.server.inject({ method: "GET", url: "/api/me", headers });
+      const admin = me.json<{ id: string; displayLabel: string }>();
+      const clientInstanceId = asClientInstanceId(app.config.clientInstance.id);
+      const create = () =>
+        app.store.createApprovalRequest({
+          clientInstanceId,
+          kind: "fake",
+          summary: "Proposed",
+          payload: { value: "new" },
+          requestedBy: { id: admin.id, displayLabel: admin.displayLabel }
+        });
+      const pending = await create();
+      const call = (method: "GET" | "POST", url: string, payload?: object) =>
+        app.server.inject({ method, url, headers, ...(payload ? { payload } : {}) });
+
+      expect((await call("GET", `/api/approval-requests/${pending.id}`)).statusCode).toBe(200);
+      expect((await call("GET", "/api/approval-requests/pending-count")).statusCode).toBe(200);
+      const listed = await call("GET", "/api/approval-requests");
+      expect(listed.statusCode).toBe(403);
+      expect(listed.json()).toMatchObject({
+        error: { message: "Missing auth scope 'governance:read'" }
+      });
+      const decided = await call("POST", `/api/approval-requests/${pending.id}/decide`, {
+        decision: "approve"
+      });
+      expect(decided.statusCode).toBe(403);
+      expect(decided.json()).toMatchObject({
+        error: { message: "Missing auth scope 'governance:write'" }
+      });
+      expect((await call("POST", `/api/approval-requests/${pending.id}/revert`)).statusCode).toBe(
+        403
+      );
+      expect(
+        await app.store.getApprovalRequest({ clientInstanceId, requestId: pending.id })
+      ).toMatchObject({ status: "pending" });
+      expect((await call("POST", `/api/approval-requests/${pending.id}/withdraw`)).statusCode).toBe(
+        200
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
   it("assembles and registers the routes with no handlers", async () => {
     const f = await fixture(true);
     try {
