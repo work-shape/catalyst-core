@@ -109,7 +109,7 @@ approvalChecks:
 
 Checks run concurrently when a request is created. For skill changes, the summary and proposed new text are sent to the configured model provider; existing skill text and replaced text are excluded. Select a provider and binding approved for that content. Checks use the instance's usage budgets and safeguards, with usage recorded against the originating conversation and run when available.
 
-`warn` stores a visible warning and leaves the decision with the approver. `block` refuses a violating proposal and returns the reason to the agent without storing a request. If a check cannot be evaluated, including provider failures or the 10-second timeout, it stores a neutral warning for either setting. Checks are not repeated when a request is decided. Request kinds without a proposed-content extractor are not checked.
+`warn` stores a visible warning and leaves the decision with the approver. `block` refuses a violating proposal and returns the reason to the agent without storing a request. If a check cannot be evaluated, including provider failures or the 10-second timeout, `warn` stores a neutral warning and `block` refuses the proposal, so a blocking rule never lets unchecked content through. Checks are not repeated when a request is decided. Request kinds without a proposed-content extractor are not checked.
 
 Creation audit metadata contains only check ids and statuses, never proposed content or reasons. Stored check messages remain part of the approval request.
 

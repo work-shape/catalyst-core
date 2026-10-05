@@ -121,6 +121,16 @@ function fixture(checks: ApprovalCheckConfig[] = [rule]) {
 }
 afterEach(() => vi.useRealTimers());
 
+function unevaluated(onFail: "warn" | "block") {
+  return onFail === "block"
+    ? {
+        id: rule.id,
+        status: "blocked",
+        message: `Check '${rule.id}' could not be evaluated. Try again later.`
+      }
+    : { id: rule.id, status: "warned", message: "" };
+}
+
 describe("approval check runner", () => {
   it("passes, resolves the binding and sends only summary and new content as untrusted data", async () => {
     const f = fixture();
@@ -175,13 +185,11 @@ describe("approval check runner", () => {
   );
 
   it.each(["warn", "block"] as const)(
-    "warns neutrally on provider failure even with onFail %s",
+    "does not leak provider failures and fails closed only for block: onFail %s",
     async (onFail) => {
       const f = fixture([{ ...rule, onFail }]);
       f.complete.mockRejectedValue(new Error("secret provider detail"));
-      expect(await f.runner.run(handler, command, context)).toEqual([
-        { id: rule.id, status: "warned", message: "" }
-      ]);
+      expect(await f.runner.run(handler, command, context)).toEqual([unevaluated(onFail)]);
       expect(await f.store.listModelUsageEvents({ clientInstanceId })).toEqual([
         expect.objectContaining({ source: "not_reported", totalTokens: 0 })
       ]);
@@ -195,12 +203,10 @@ describe("approval check runner", () => {
     '{"violates":true,"reason":""}',
     '{"violates":true,"reason":"Bad","extra":true}',
     '{"reason":"Missing verdict"}'
-  ])("warns on an invalid verdict: %s", async (text) => {
+  ])("blocks a block rule on an invalid verdict: %s", async (text) => {
     const f = fixture([{ ...rule, onFail: "block" }]);
     f.complete.mockResolvedValue(completion(text));
-    expect(await f.runner.run(handler, command, context)).toEqual([
-      { id: rule.id, status: "warned", message: "" }
-    ]);
+    expect(await f.runner.run(handler, command, context)).toEqual([unevaluated("block")]);
     expect(await f.store.listModelUsageEvents({ clientInstanceId })).toHaveLength(1);
   });
 
@@ -212,7 +218,7 @@ describe("approval check runner", () => {
       f.complete.mockImplementation(() => new Promise<ModelCompletion>(() => {}));
       const result = f.runner.run(handler, command, context);
       await vi.advanceTimersByTimeAsync(10_000);
-      expect(await result).toEqual([{ id: rule.id, status: "warned", message: "" }]);
+      expect(await result).toEqual([unevaluated(onFail)]);
       expect(f.complete.mock.calls[0]?.[1].signal?.aborted).toBe(true);
       expect(await f.store.listModelUsageEvents({ clientInstanceId })).toEqual([
         expect.objectContaining({ source: "not_reported" })
@@ -255,7 +261,11 @@ describe("approval check runner", () => {
     releaseFirst?.(completion('{"violates":false,"reason":"OK"}'));
     expect(await pending).toEqual([
       { id: rule.id, status: "passed", message: "" },
-      { id: "second", status: "warned", message: "" }
+      {
+        id: "second",
+        status: "blocked",
+        message: "Check 'second' could not be evaluated. Try again later."
+      }
     ]);
     expect(await f.store.listModelUsageEvents({ clientInstanceId })).toHaveLength(2);
   });
@@ -342,11 +352,23 @@ describe("approval checks at creation", () => {
     expect(f.complete).toHaveBeenCalledTimes(1);
   });
 
-  it("stores passed checks and permits creation when a block rule cannot be evaluated", async () => {
+  it("stores passed checks and refuses creation when a block rule cannot be evaluated", async () => {
     const f = fixture([{ ...rule, onFail: "block" }]);
     expect((await f.workflow.createRequest(user, context, command)).checks[0]?.status).toBe(
       "passed"
     );
+    f.complete.mockRejectedValueOnce(new Error("Unavailable"));
+    await expect(f.workflow.createRequest(user, context, command)).rejects.toMatchObject({
+      code: "VALIDATION_FAILED",
+      message: `Approval request blocked: Check '${rule.id}' could not be evaluated. Try again later.`
+    });
+    expect(
+      await f.store.listApprovalRequests({ clientInstanceId, kinds: [command.kind] })
+    ).toHaveLength(1);
+  });
+
+  it("stores a neutral warning when a warn rule cannot be evaluated", async () => {
+    const f = fixture();
     f.complete.mockRejectedValueOnce(new Error("Unavailable"));
     const request = await f.workflow.createRequest(user, context, command);
     expect(await f.workflow.getRequest(user, context, request.id)).toMatchObject({
