@@ -140,7 +140,29 @@ export function useCollaborationWorkspaceModel(
   )?.id;
   const fallbackCollaborationWorkspaceId =
     personalCollaborationWorkspaceId ?? collaborationWorkspaces[0]?.id;
-  const activeCollaborationWorkspaceId = routeCollaborationWorkspaceId(route);
+  // Settings, approvals and administration have no workspace in their URL. The
+  // rail still shows the workspace the user came from, so its conversations
+  // stay in reach; the membership check keeps a stale stored id out.
+  const routedCollaborationWorkspaceId = routeCollaborationWorkspaceId(route);
+  const activeCollaborationWorkspaceId = useMemo(() => {
+    if (routedCollaborationWorkspaceId || !isPageOutsideCollaborationWorkspace(route)) {
+      return routedCollaborationWorkspaceId;
+    }
+    const storedCollaborationWorkspaceId = userId
+      ? readStoredCollaborationWorkspaceId(apiBaseUrl, userId)
+      : undefined;
+    const restored = collaborationWorkspaces.find(
+      (collaborationWorkspace) => collaborationWorkspace.id === storedCollaborationWorkspaceId
+    );
+    return restored?.id ?? fallbackCollaborationWorkspaceId;
+  }, [
+    apiBaseUrl,
+    collaborationWorkspaces,
+    fallbackCollaborationWorkspaceId,
+    route,
+    routedCollaborationWorkspaceId,
+    userId
+  ]);
   const activeCollaborationWorkspace = collaborationWorkspaces.find(
     (collaborationWorkspace) => collaborationWorkspace.id === activeCollaborationWorkspaceId
   );
@@ -239,12 +261,12 @@ export function useCollaborationWorkspaceModel(
 
   const selectCollaborationWorkspace = useCallback(
     (collaborationWorkspaceId: string) => {
-      if (collaborationWorkspaceId === activeCollaborationWorkspaceId) {
+      if (collaborationWorkspaceId === routedCollaborationWorkspaceId) {
         return;
       }
       goToCollaborationWorkspace(collaborationWorkspaceId);
     },
-    [activeCollaborationWorkspaceId, goToCollaborationWorkspace]
+    [goToCollaborationWorkspace, routedCollaborationWorkspaceId]
   );
 
   const openCreateDialog = useCallback(() => setDialog({ kind: "create" }), []);
@@ -314,4 +336,8 @@ export function useCollaborationWorkspaceModel(
     conversationMoved,
     collaborationWorkspaceDeleted
   };
+}
+
+function isPageOutsideCollaborationWorkspace(route: WorkspaceRoute): boolean {
+  return route.kind === "settings" || route.kind === "approvals" || route.kind === "superadmin";
 }
