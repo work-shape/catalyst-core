@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, lt, lte, ne } from "drizzle-orm";
+import { and, asc, desc, eq, lt, lte, ne, or } from "drizzle-orm";
 import {
   AppError,
   createApprovalDecisionMessage,
@@ -8,6 +8,7 @@ import {
   type ClientInstanceId,
   type Conversation,
   type ConversationId,
+  type ConversationListScope,
   type CreateConversationInput,
   type CreateMessageInput,
   type MoveConversationInput,
@@ -37,6 +38,7 @@ export async function createConversation(
       collaborationWorkspaceId: input.collaborationWorkspaceId,
       createdByUserId: input.createdByUserId,
       createdByExternalUserId: input.createdByExternalUserId,
+      visibility: input.visibility,
       title: input.title,
       status: "active",
       createdAt: now,
@@ -70,8 +72,10 @@ export async function listConversationsForWorkspace(
   input: {
     clientInstanceId: ClientInstanceId;
     collaborationWorkspaceId: Conversation["collaborationWorkspaceId"];
+    scope: ConversationListScope;
   }
 ): Promise<Conversation[]> {
+  const { scope } = input;
   const rows = await db
     .select()
     .from(conversations)
@@ -79,10 +83,34 @@ export async function listConversationsForWorkspace(
       and(
         eq(conversations.clientInstanceId, input.clientInstanceId),
         eq(conversations.collaborationWorkspaceId, input.collaborationWorkspaceId),
-        eq(conversations.status, "active")
+        eq(conversations.status, "active"),
+        scope.kind === "lifecycle"
+          ? undefined
+          : or(
+              eq(conversations.visibility, "workspace"),
+              eq(conversations.createdByUserId, scope.userId)
+            )
       )
     )
     .orderBy(desc(conversations.updatedAt));
+  return rows.map(mapConversation);
+}
+
+export async function listPrivateConversationsCreatedByUser(
+  db: PostgresDatabase,
+  input: { clientInstanceId: ClientInstanceId; userId: string }
+): Promise<Conversation[]> {
+  const rows = await db
+    .select()
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.clientInstanceId, input.clientInstanceId),
+        eq(conversations.status, "active"),
+        eq(conversations.visibility, "private"),
+        eq(conversations.createdByUserId, input.userId)
+      )
+    );
   return rows.map(mapConversation);
 }
 
@@ -92,7 +120,10 @@ export async function moveConversation(
 ): Promise<Conversation> {
   const [row] = await db
     .update(conversations)
-    .set({ collaborationWorkspaceId: input.toCollaborationWorkspaceId })
+    .set({
+      collaborationWorkspaceId: input.toCollaborationWorkspaceId,
+      visibility: input.visibility
+    })
     .where(
       and(
         eq(conversations.clientInstanceId, input.clientInstanceId),

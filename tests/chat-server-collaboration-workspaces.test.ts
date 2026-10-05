@@ -1247,7 +1247,8 @@ describe("Collaboration Workspace API", () => {
           clientInstanceId,
           conversationId: asConversationId(moved),
           fromCollaborationWorkspaceId: asCollaborationWorkspaceId(workspaceId),
-          toCollaborationWorkspaceId: asCollaborationWorkspaceId(destinationId)
+          toCollaborationWorkspaceId: asCollaborationWorkspaceId(destinationId),
+          visibility: "workspace"
         });
       }
       return getConversation(requestedClientInstanceId, conversationId);
@@ -1276,6 +1277,487 @@ describe("Collaboration Workspace API", () => {
     await app.close();
   });
 });
+
+describe("Conversation visibility", () => {
+  it("hides a private conversation from every non-author role on every conversation route", async () => {
+    const fixture = await createPrivateConversationFixture();
+    const { app, workspaceId, conversationId, sharedConversationId } = fixture;
+    const routes = conversationRoutes(fixture);
+
+    for (const actor of ["owner", "admin", "member", "outsider"]) {
+      for (const route of routes) {
+        const denied = await route.send(actor, conversationId);
+        const missing = await route.send(actor, "conv_missing");
+        expect(
+          { route: route.name, actor, status: denied.statusCode, body: denied.json() },
+          `${actor} ${route.name}`
+        ).toEqual({
+          route: route.name,
+          actor,
+          status: 404,
+          body: { error: { code: "NOT_FOUND", message: "Conversation is not available" } }
+        });
+        expect({ status: denied.statusCode, body: denied.body }).toEqual({
+          status: missing.statusCode,
+          body: missing.body
+        });
+      }
+    }
+
+    for (const actor of ["owner", "admin", "member"]) {
+      const listed = await inject(app.server, actor, {
+        method: "GET",
+        url: `/api/conversations?collaborationWorkspaceId=${workspaceId}`
+      });
+      expect(listed.statusCode).toBe(200);
+      expect((listed.json() as Array<{ id: string }>).map((row) => row.id)).toEqual([
+        sharedConversationId
+      ]);
+    }
+    const listedByAuthor = await inject(app.server, "direct", {
+      method: "GET",
+      url: `/api/conversations?collaborationWorkspaceId=${workspaceId}`
+    });
+    expect((listedByAuthor.json() as Array<{ id: string }>).map((row) => row.id).sort()).toEqual(
+      [conversationId, sharedConversationId].sort()
+    );
+
+    // Nothing a non-author sent may have changed the conversation: still the two fixture
+    // messages and the one draft attachment.
+    await expect(
+      app.store.getConversation(clientInstanceId, asConversationId(conversationId))
+    ).resolves.toMatchObject({
+      status: "active",
+      title: "Private thread",
+      visibility: "private",
+      collaborationWorkspaceId: workspaceId
+    });
+    await expect(
+      app.store.listMessages({ clientInstanceId, conversationId: asConversationId(conversationId) })
+    ).resolves.toHaveLength(2);
+    await expect(
+      app.store.listDraftAttachments({
+        clientInstanceId,
+        conversationId: asConversationId(conversationId)
+      })
+    ).resolves.toHaveLength(1);
+
+    // The deletion impact keeps counting every conversation, private ones included.
+    const impact = await inject(app.server, "owner", {
+      method: "GET",
+      url: `/api/collaboration-workspaces/${workspaceId}/deletion-impact`
+    });
+    expect(impact.json()).toMatchObject({ conversationCount: 2 });
+
+    // Positive control: the author passes the access check on every route, so the matrix above
+    // cannot pass because of a mistyped URL.
+    for (const route of routes) {
+      const allowed = await route.send("direct", conversationId);
+      expect(
+        allowed.statusCode === 404 &&
+          (allowed.json() as { error?: { message?: string } }).error?.message ===
+            "Conversation is not available",
+        `author ${route.name} -> ${allowed.statusCode} ${allowed.body.slice(0, 200)}`
+      ).toBe(false);
+    }
+    await app.close();
+  });
+
+  it("keeps a private conversation closed while its author is not a member", async () => {
+    const { app, workspaceId, conversationId, author } = await createPrivateConversationFixture();
+    const thread = { method: "GET" as const, url: `/api/conversations/${conversationId}/thread` };
+
+    const removed = await inject(app.server, "owner", {
+      method: "DELETE",
+      url: `/api/collaboration-workspaces/${workspaceId}/members/${author.id}`
+    });
+    expect(removed.statusCode).toBe(200);
+    for (const actor of ["direct", "owner", "admin", "member"]) {
+      expect((await inject(app.server, actor, thread)).statusCode, actor).toBe(404);
+    }
+    await expect(
+      app.store.getConversation(clientInstanceId, asConversationId(conversationId))
+    ).resolves.toMatchObject({ status: "active", visibility: "private" });
+
+    await addWorkspaceMember(app.server, "owner", workspaceId, "direct@example.test");
+    expect((await inject(app.server, "direct", thread)).statusCode).toBe(200);
+    for (const actor of ["owner", "admin", "member"]) {
+      expect((await inject(app.server, actor, thread)).statusCode, actor).toBe(404);
+    }
+    await app.close();
+  });
+
+  it("stamps the workspace default at creation and never rewrites existing conversations", async () => {
+    const app = await createWorkspaceApp();
+    for (const actor of ["owner", "admin", "member"]) await currentUser(app.server, actor);
+    const admin = await currentUser(app.server, "admin");
+    const created = await inject(app.server, "owner", {
+      method: "POST",
+      url: "/api/collaboration-workspaces",
+      payload: { name: "Private by default", defaultConversationVisibility: "private" }
+    });
+    expect(created.statusCode).toBe(200);
+    expect(created.json()).toMatchObject({ defaultConversationVisibility: "private" });
+    const workspaceId = (created.json() as { id: string }).id;
+    await addWorkspaceMember(app.server, "owner", workspaceId, "admin@example.test");
+    await addWorkspaceMember(app.server, "owner", workspaceId, "member@example.test");
+    await inject(app.server, "owner", {
+      method: "PATCH",
+      url: `/api/collaboration-workspaces/${workspaceId}/members/${admin.id}`,
+      payload: { role: "admin" }
+    });
+
+    const defaultWorkspaceId = await createSharedWorkspace(app.server, "owner", "Open by default");
+    const workspaces = await inject(app.server, "owner", {
+      method: "GET",
+      url: "/api/collaboration-workspaces"
+    });
+    expect(workspaces.json()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: defaultWorkspaceId,
+          defaultConversationVisibility: "workspace"
+        }),
+        expect.objectContaining({ kind: "personal", defaultConversationVisibility: "workspace" })
+      ])
+    );
+
+    const privateConversation = await inject(app.server, "member", {
+      method: "POST",
+      url: "/api/conversations",
+      payload: { title: "Stamped private", collaborationWorkspaceId: workspaceId }
+    });
+    expect(privateConversation.json()).toMatchObject({ visibility: "private" });
+    const privateConversationId = (privateConversation.json() as { id: string }).id;
+    const createdWithRun = await inject(app.server, "member", {
+      method: "POST",
+      url: "/api/conversations/runs",
+      payload: {
+        idempotencyKey: "stamped-create-and-run",
+        message: { text: "Hello" },
+        conversation: { title: "Stamped by create-and-run", collaborationWorkspaceId: workspaceId }
+      }
+    });
+    expect(createdWithRun.statusCode).toBe(200);
+    expect(createdWithRun.json()).toMatchObject({
+      conversation: { visibility: "private" },
+      thread: { conversation: { visibility: "private" } }
+    });
+    const personalConversation = await inject(app.server, "member", {
+      method: "POST",
+      url: "/api/conversations",
+      payload: { title: "Personal" }
+    });
+    expect(personalConversation.json()).toMatchObject({ visibility: "workspace" });
+
+    const byMember = await inject(app.server, "member", {
+      method: "PATCH",
+      url: `/api/collaboration-workspaces/${workspaceId}`,
+      payload: { defaultConversationVisibility: "workspace" }
+    });
+    expect(byMember.statusCode).toBe(403);
+    const byAdmin = await inject(app.server, "admin", {
+      method: "PATCH",
+      url: `/api/collaboration-workspaces/${workspaceId}`,
+      payload: { defaultConversationVisibility: "workspace" }
+    });
+    expect(byAdmin.statusCode).toBe(200);
+    expect(byAdmin.json()).toMatchObject({ defaultConversationVisibility: "workspace" });
+
+    const openConversation = await inject(app.server, "member", {
+      method: "POST",
+      url: "/api/conversations",
+      payload: { title: "Stamped open", collaborationWorkspaceId: workspaceId }
+    });
+    expect(openConversation.json()).toMatchObject({ visibility: "workspace" });
+    const openConversationId = (openConversation.json() as { id: string }).id;
+    await expect(
+      app.store.getConversation(clientInstanceId, asConversationId(privateConversationId))
+    ).resolves.toMatchObject({ visibility: "private" });
+    expect(
+      (
+        await inject(app.server, "owner", {
+          method: "GET",
+          url: `/api/conversations/${privateConversationId}/thread`
+        })
+      ).statusCode
+    ).toBe(404);
+
+    await inject(app.server, "owner", {
+      method: "PATCH",
+      url: `/api/collaboration-workspaces/${workspaceId}`,
+      payload: { defaultConversationVisibility: "private" }
+    });
+    await expect(
+      app.store.getConversation(clientInstanceId, asConversationId(openConversationId))
+    ).resolves.toMatchObject({ visibility: "workspace" });
+    expect(
+      (
+        await inject(app.server, "owner", {
+          method: "GET",
+          url: `/api/conversations/${openConversationId}/thread`
+        })
+      ).statusCode
+    ).toBe(200);
+
+    const personalWorkspaceId = (
+      personalConversation.json() as { collaborationWorkspaceId: string }
+    ).collaborationWorkspaceId;
+    await expect(
+      app.store.updateWorkspace({
+        clientInstanceId,
+        collaborationWorkspaceId: asCollaborationWorkspaceId(personalWorkspaceId),
+        defaultConversationVisibility: "private"
+      })
+    ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+    await app.close();
+  });
+
+  it("applies the move visibility rule", async () => {
+    const app = await createWorkspaceApp();
+    for (const actor of ["owner", "member"]) await currentUser(app.server, actor);
+    const openId = await createSharedWorkspace(app.server, "owner", "Open");
+    const otherOpenId = await createSharedWorkspace(app.server, "owner", "Other open");
+    const privateDefault = await inject(app.server, "owner", {
+      method: "POST",
+      url: "/api/collaboration-workspaces",
+      payload: { name: "Private default", defaultConversationVisibility: "private" }
+    });
+    const privateDefaultId = (privateDefault.json() as { id: string }).id;
+    for (const workspaceId of [openId, otherOpenId, privateDefaultId]) {
+      await addWorkspaceMember(app.server, "owner", workspaceId, "member@example.test");
+    }
+    const personalWorkspaceId = (
+      (
+        await inject(app.server, "member", { method: "GET", url: "/api/collaboration-workspaces" })
+      ).json() as Array<{ id: string; kind: string }>
+    ).find((workspace) => workspace.kind === "personal")!.id;
+    const move = (
+      actor: string,
+      conversationId: string,
+      collaborationWorkspaceId: string,
+      visibility?: "workspace" | "private"
+    ) =>
+      inject(app.server, actor, {
+        method: "POST",
+        url: `/api/conversations/${conversationId}/move`,
+        payload: { collaborationWorkspaceId, ...(visibility ? { visibility } : {}) }
+      });
+
+    // A private conversation stays private unless the request says otherwise.
+    const privateId = await createConversation(app.server, "member", privateDefaultId, "Private");
+    const keptPrivate = await move("member", privateId, openId);
+    expect(keptPrivate.statusCode).toBe(200);
+    expect(keptPrivate.json()).toMatchObject({
+      collaborationWorkspaceId: openId,
+      visibility: "private"
+    });
+    expect((await move("owner", privateId, otherOpenId)).statusCode).toBe(404);
+    const opened = await move("member", privateId, otherOpenId, "workspace");
+    expect(opened.json()).toMatchObject({
+      collaborationWorkspaceId: otherOpenId,
+      visibility: "workspace"
+    });
+
+    // A workspace-visible conversation takes the destination default.
+    const creatorIntoPrivateDefault = await move("member", privateId, privateDefaultId);
+    expect(creatorIntoPrivateDefault.json()).toMatchObject({ visibility: "private" });
+    const ownersId = await createConversation(app.server, "owner", openId, "Owner's");
+    const nonCreatorIntoPrivateDefault = await move("member", ownersId, privateDefaultId);
+    expect(nonCreatorIntoPrivateDefault.statusCode).toBe(422);
+    expect(nonCreatorIntoPrivateDefault.json()).toMatchObject({
+      error: { code: "VALIDATION_FAILED" }
+    });
+    expect((await move("member", ownersId, otherOpenId, "private")).statusCode).toBe(422);
+    await expect(
+      app.store.getConversation(clientInstanceId, asConversationId(ownersId))
+    ).resolves.toMatchObject({ collaborationWorkspaceId: openId, visibility: "workspace" });
+    const nonCreatorExplicit = await move("member", ownersId, privateDefaultId, "workspace");
+    expect(nonCreatorExplicit.statusCode).toBe(200);
+    expect(nonCreatorExplicit.json()).toMatchObject({
+      collaborationWorkspaceId: privateDefaultId,
+      visibility: "workspace"
+    });
+    const explicitOverDefault = await move("owner", ownersId, openId, "private");
+    expect(explicitOverDefault.json()).toMatchObject({ visibility: "private" });
+
+    // A Personal Workspace only holds workspace-visible conversations.
+    const intoPersonal = await move("member", privateId, personalWorkspaceId, "private");
+    expect(intoPersonal.statusCode).toBe(200);
+    expect(intoPersonal.json()).toMatchObject({
+      collaborationWorkspaceId: personalWorkspaceId,
+      visibility: "workspace"
+    });
+    await app.close();
+  });
+});
+
+type ConversationRouteCase = {
+  name: string;
+  send(actor: string, conversationId: string): ReturnType<typeof inject>;
+};
+
+async function createPrivateConversationFixture() {
+  const app = await createWorkspaceApp();
+  await currentUser(app.server, "owner");
+  const admin = await currentUser(app.server, "admin");
+  await currentUser(app.server, "member");
+  await currentUser(app.server, "outsider");
+  const author = await currentUser(app.server, "direct");
+  const created = await inject(app.server, "owner", {
+    method: "POST",
+    url: "/api/collaboration-workspaces",
+    payload: { name: "Visibility matrix", defaultConversationVisibility: "private" }
+  });
+  const workspaceId = (created.json() as { id: string }).id;
+  for (const email of ["admin@example.test", "member@example.test", "direct@example.test"]) {
+    await addWorkspaceMember(app.server, "owner", workspaceId, email);
+  }
+  const promoted = await inject(app.server, "owner", {
+    method: "PATCH",
+    url: `/api/collaboration-workspaces/${workspaceId}/members/${admin.id}`,
+    payload: { role: "admin" }
+  });
+  expect(promoted.statusCode).toBe(200);
+
+  const conversationId = await createConversation(
+    app.server,
+    "direct",
+    workspaceId,
+    "Private thread"
+  );
+  await app.store.appendMessage({
+    clientInstanceId,
+    conversationId: asConversationId(conversationId),
+    role: "user",
+    text: "private content"
+  });
+  const upload = createMultipartFilePayload({
+    fieldName: "file",
+    filename: "private.csv",
+    contentType: "text/csv",
+    content: "value\n42\n"
+  });
+  const uploaded = await app.server.inject({
+    method: "POST",
+    url: `/api/conversations/${conversationId}/draft-attachments`,
+    headers: { ...upload.headers, "x-dev-user-id": "direct" },
+    payload: upload.payload
+  });
+  expect(uploaded.statusCode).toBe(200);
+  const attachment = (uploaded.json() as { attachment: { id: string; fileId: string } }).attachment;
+  const artifact = await app.store.createManagedArtifact({
+    clientInstanceId,
+    conversationId: asConversationId(conversationId),
+    kind: "file",
+    objectKey: "private-matrix-artifact",
+    filename: "private.txt",
+    mimeType: "text/plain",
+    byteSize: 7,
+    checksum: "private"
+  });
+  const runId = await createCompletedRun(app, conversationId, author.id);
+
+  // A workspace-visible neighbour proves the list filter is per conversation, not per workspace.
+  await inject(app.server, "owner", {
+    method: "PATCH",
+    url: `/api/collaboration-workspaces/${workspaceId}`,
+    payload: { defaultConversationVisibility: "workspace" }
+  });
+  const sharedConversationId = await createConversation(
+    app.server,
+    "direct",
+    workspaceId,
+    "Shared thread"
+  );
+  return {
+    app,
+    author,
+    workspaceId,
+    conversationId,
+    sharedConversationId,
+    attachmentId: attachment.id,
+    fileId: attachment.fileId,
+    artifactId: artifact.id,
+    runId
+  };
+}
+
+function conversationRoutes(
+  fixture: Awaited<ReturnType<typeof createPrivateConversationFixture>>
+): ConversationRouteCase[] {
+  const { app, workspaceId, attachmentId, fileId, artifactId, runId } = fixture;
+  const json =
+    (
+      method: "GET" | "POST" | "PATCH" | "DELETE",
+      path: string,
+      payload?: unknown
+    ): ConversationRouteCase["send"] =>
+    (actor, conversationId) =>
+      inject(app.server, actor, {
+        method,
+        url: `/api/conversations/${conversationId}${path}`,
+        ...(payload === undefined ? {} : { payload })
+      });
+  return [
+    { name: "thread", send: json("GET", "/thread") },
+    { name: "messages", send: json("GET", "/messages") },
+    { name: "resources", send: json("GET", "/resources") },
+    { name: "structured data", send: json("GET", "/structured-data/sdr_missing") },
+    { name: "generate title", send: json("POST", "/title") },
+    { name: "rename", send: json("PATCH", "/title", { title: "Renamed by someone else" }) },
+    {
+      name: "start run",
+      // The unknown model binding stops the author's positive control after the access check.
+      send: json("POST", "/runs", {
+        idempotencyKey: "visibility-matrix",
+        message: { text: "Hello" },
+        modelBindingId: "not-selectable"
+      })
+    },
+    { name: "run events", send: json("GET", `/runs/${runId}/events`) },
+    { name: "cancel run", send: json("POST", `/runs/${runId}/cancel`, {}) },
+    {
+      name: "command run",
+      send: json("POST", `/runs/${runId}/commands`, { command: { type: "continue" } })
+    },
+    { name: "list draft attachments", send: json("GET", "/draft-attachments") },
+    {
+      name: "upload draft attachment",
+      send: (actor, conversationId) => {
+        const upload = createMultipartFilePayload({
+          fieldName: "file",
+          filename: "intruder.csv",
+          contentType: "text/csv",
+          content: "value\n1\n"
+        });
+        return app.server.inject({
+          method: "POST",
+          url: `/api/conversations/${conversationId}/draft-attachments`,
+          headers: { ...upload.headers, "x-dev-user-id": actor },
+          payload: upload.payload
+        });
+      }
+    },
+    {
+      name: "retry draft attachment",
+      send: json("POST", `/draft-attachments/${attachmentId}/retry`)
+    },
+    { name: "file content", send: json("GET", `/files/${fileId}/content`) },
+    { name: "file download", send: json("GET", `/files/${fileId}/content?download=true`) },
+    { name: "artifact content", send: json("GET", `/artifacts/${artifactId}/content`) },
+    { name: "artifact preview", send: json("GET", `/artifacts/${artifactId}/preview`) },
+    { name: "attachment preview", send: json("GET", `/attachments/${attachmentId}/preview`) },
+    {
+      name: "retry artifact preview",
+      send: json("POST", `/artifacts/${artifactId}/preview/retry`)
+    },
+    { name: "delete draft attachment", send: json("DELETE", `/draft-attachments/${attachmentId}`) },
+    // Same-workspace move: denied for non-authors, a validation error for the author.
+    { name: "move", send: json("POST", "/move", { collaborationWorkspaceId: workspaceId }) },
+    { name: "delete", send: json("DELETE", "") }
+  ];
+}
 
 const WORKSPACE_OBJECT_ROOT = "/tmp/vivd-catalyst-phase-d-workspace-objects";
 

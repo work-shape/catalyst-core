@@ -23,6 +23,7 @@ describePostgres("Postgres approval request store", () => {
     const owner = await store.createUser({ clientInstanceId, displayLabel: "Owner" });
     const workspace = await store.ensurePersonalWorkspace({ clientInstanceId, userId: owner.id });
     const conversation = await store.createConversation({
+      visibility: "workspace",
       clientInstanceId,
       collaborationWorkspaceId: workspace.id,
       createdByUserId: owner.id,

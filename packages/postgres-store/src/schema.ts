@@ -162,6 +162,10 @@ export const collaborationWorkspaces = pgTable(
     name: text("name").notNull(),
     description: text("description"),
     visibility: text("visibility").$type<CollaborationWorkspace["visibility"]>().notNull(),
+    defaultConversationVisibility: text("default_conversation_visibility")
+      .$type<Conversation["visibility"]>()
+      .notNull()
+      .default("workspace"),
     emoji: text("emoji"),
     accentColor: text("accent_color").$type<CollaborationWorkspace["accentColor"]>(),
     personalUserId: text("personal_user_id"),
@@ -185,6 +189,10 @@ export const collaborationWorkspaces = pgTable(
     check(
       "collaboration_workspaces_personal_visibility_check",
       sql`${table.kind} <> 'personal' or ${table.visibility} = 'private'`
+    ),
+    check(
+      "collaboration_workspaces_personal_conversation_visibility_check",
+      sql`${table.kind} <> 'personal' or ${table.defaultConversationVisibility} = 'workspace'`
     )
   ]
 );
@@ -257,6 +265,7 @@ export const conversations = pgTable(
     collaborationWorkspaceId: text("collaboration_workspace_id").notNull(),
     createdByUserId: text("created_by_user_id").notNull(),
     createdByExternalUserId: text("created_by_external_user_id").notNull(),
+    visibility: text("visibility").$type<Conversation["visibility"]>().notNull(),
     title: text("title").notNull(),
     status: text("status").$type<Conversation["status"]>().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
@@ -278,6 +287,12 @@ export const conversations = pgTable(
     index("conversations_collaboration_workspace_idx").on(
       table.clientInstanceId,
       table.collaborationWorkspaceId
+    ),
+    index("conversations_workspace_visibility_idx").on(
+      table.clientInstanceId,
+      table.collaborationWorkspaceId,
+      table.visibility,
+      table.createdByUserId
     )
   ]
 );

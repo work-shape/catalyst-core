@@ -305,6 +305,80 @@ describePostgres("Collaboration Workspace migration 0020", () => {
       await sql.end();
     }
   });
+
+  it("backfills existing conversations and workspaces to workspace visibility in 0027", async () => {
+    const { sql } = await createFreshDatabase();
+    try {
+      await applyMigrationsThrough(sql, 19);
+      await seedProductUser(sql, "visibility_user", "active");
+      await seedConversation(sql, "conv_personal", "visibility_user");
+      await applyMigrationsThrough26From20(sql);
+      await sql`
+        insert into collaboration_workspaces (
+          id, client_instance_id, kind, name, visibility, created_at, updated_at
+        ) values (
+          'cws_shared', 'migration-test-client', 'shared', 'Shared', 'discoverable', now(), now()
+        )
+      `;
+      await sql`
+        insert into conversations (
+          id, client_instance_id, collaboration_workspace_id, created_by_user_id,
+          created_by_external_user_id, title, status, created_at, updated_at, retained_until
+        ) values (
+          'conv_shared', 'migration-test-client', 'cws_shared', 'visibility_user',
+          'visibility_user', 'Shared', 'active', now(), now(), now() + interval '1 year'
+        )
+      `;
+
+      await applyMigration(sql, "0027_conversation_visibility");
+
+      await expect(sql`select id, visibility from conversations order by id`).resolves.toEqual([
+        { id: "conv_personal", visibility: "workspace" },
+        { id: "conv_shared", visibility: "workspace" }
+      ]);
+      await expect(
+        sql`select kind, default_conversation_visibility from collaboration_workspaces order by kind`
+      ).resolves.toEqual([
+        { kind: "personal", default_conversation_visibility: "workspace" },
+        { kind: "shared", default_conversation_visibility: "workspace" }
+      ]);
+
+      // The backfill default is gone: an insert that forgets visibility must fail.
+      await expect(
+        sql`
+          insert into conversations (
+            id, client_instance_id, collaboration_workspace_id, created_by_user_id,
+            created_by_external_user_id, title, status, created_at, updated_at, retained_until
+          ) values (
+            'conv_unstamped', 'migration-test-client', 'cws_shared', 'visibility_user',
+            'visibility_user', 'Unstamped', 'active', now(), now(), now() + interval '1 year'
+          )
+        `
+      ).rejects.toMatchObject({ code: "23502" });
+      await expect(
+        sql`
+          update collaboration_workspaces
+          set default_conversation_visibility = 'private'
+          where kind = 'personal'
+        `
+      ).rejects.toMatchObject({
+        constraint_name: "collaboration_workspaces_personal_conversation_visibility_check"
+      });
+      await sql`
+        update collaboration_workspaces
+        set default_conversation_visibility = 'private'
+        where id = 'cws_shared'
+      `;
+      await expect(
+        sql`
+          select indexname from pg_indexes
+          where schemaname = 'public' and indexname = 'conversations_workspace_visibility_idx'
+        `
+      ).resolves.toHaveLength(1);
+    } finally {
+      await sql.end();
+    }
+  });
 });
 
 async function applyMigrationsThrough(sql: Sql, finalIndex: number): Promise<void> {
@@ -312,6 +386,17 @@ async function applyMigrationsThrough(sql: Sql, finalIndex: number): Promise<voi
     await readFile(resolve(migrationsDirectory, "meta/_journal.json"), "utf8")
   ) as { entries: Array<{ idx: number; tag: string }> };
   for (const entry of journal.entries.filter((candidate) => candidate.idx <= finalIndex)) {
+    await applyMigration(sql, entry.tag);
+  }
+}
+
+async function applyMigrationsThrough26From20(sql: Sql): Promise<void> {
+  const journal = JSON.parse(
+    await readFile(resolve(migrationsDirectory, "meta/_journal.json"), "utf8")
+  ) as { entries: Array<{ idx: number; tag: string }> };
+  for (const entry of journal.entries.filter(
+    (candidate) => candidate.idx >= 20 && candidate.idx <= 26
+  )) {
     await applyMigration(sql, entry.tag);
   }
 }

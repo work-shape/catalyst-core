@@ -64,7 +64,7 @@ export function registerAgentRunRoutes(app: FastifyInstance, options: ChatServer
     conversationId: ConversationId,
     user: AuthenticatedUser
   ): Promise<Conversation> {
-    return conversations.requireActiveConversationMembership(conversationId, user);
+    return conversations.requireConversationAccess(conversationId, user);
   }
 
   app.post(apiOperations.generateConversationTitle.path, async (request) => {

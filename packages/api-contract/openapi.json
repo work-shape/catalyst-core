@@ -2455,6 +2455,13 @@
                           "private"
                         ]
                       },
+                      "defaultConversationVisibility": {
+                        "type": "string",
+                        "enum": [
+                          "workspace",
+                          "private"
+                        ]
+                      },
                       "emoji": {
                         "anyOf": [
                           {
@@ -2532,6 +2539,7 @@
                       "name",
                       "description",
                       "visibility",
+                      "defaultConversationVisibility",
                       "emoji",
                       "accentColor",
                       "personalUserId",
@@ -2578,6 +2586,13 @@
                     "type": "string",
                     "enum": [
                       "discoverable",
+                      "private"
+                    ]
+                  },
+                  "defaultConversationVisibility": {
+                    "type": "string",
+                    "enum": [
+                      "workspace",
                       "private"
                     ]
                   },
@@ -2672,6 +2687,13 @@
                         "private"
                       ]
                     },
+                    "defaultConversationVisibility": {
+                      "type": "string",
+                      "enum": [
+                        "workspace",
+                        "private"
+                      ]
+                    },
                     "emoji": {
                       "anyOf": [
                         {
@@ -2749,6 +2771,7 @@
                     "name",
                     "description",
                     "visibility",
+                    "defaultConversationVisibility",
                     "emoji",
                     "accentColor",
                     "personalUserId",
@@ -2915,6 +2938,13 @@
                         "private"
                       ]
                     },
+                    "defaultConversationVisibility": {
+                      "type": "string",
+                      "enum": [
+                        "workspace",
+                        "private"
+                      ]
+                    },
                     "emoji": {
                       "anyOf": [
                         {
@@ -2992,6 +3022,7 @@
                     "name",
                     "description",
                     "visibility",
+                    "defaultConversationVisibility",
                     "emoji",
                     "accentColor",
                     "personalUserId",
@@ -3046,6 +3077,13 @@
                     "type": "string",
                     "enum": [
                       "discoverable",
+                      "private"
+                    ]
+                  },
+                  "defaultConversationVisibility": {
+                    "type": "string",
+                    "enum": [
+                      "workspace",
                       "private"
                     ]
                   },
@@ -3137,6 +3175,13 @@
                         "private"
                       ]
                     },
+                    "defaultConversationVisibility": {
+                      "type": "string",
+                      "enum": [
+                        "workspace",
+                        "private"
+                      ]
+                    },
                     "emoji": {
                       "anyOf": [
                         {
@@ -3214,6 +3259,7 @@
                     "name",
                     "description",
                     "visibility",
+                    "defaultConversationVisibility",
                     "emoji",
                     "accentColor",
                     "personalUserId",
@@ -4045,6 +4091,13 @@
                       "createdByExternalUserId": {
                         "type": "string"
                       },
+                      "visibility": {
+                        "type": "string",
+                        "enum": [
+                          "workspace",
+                          "private"
+                        ]
+                      },
                       "title": {
                         "type": "string"
                       },
@@ -4126,6 +4179,7 @@
                       "collaborationWorkspaceId",
                       "createdByUserId",
                       "createdByExternalUserId",
+                      "visibility",
                       "title",
                       "status",
                       "createdAt",
@@ -4194,6 +4248,13 @@
                     "createdByExternalUserId": {
                       "type": "string"
                     },
+                    "visibility": {
+                      "type": "string",
+                      "enum": [
+                        "workspace",
+                        "private"
+                      ]
+                    },
                     "title": {
                       "type": "string"
                     },
@@ -4219,6 +4280,7 @@
                     "collaborationWorkspaceId",
                     "createdByUserId",
                     "createdByExternalUserId",
+                    "visibility",
                     "title",
                     "status",
                     "createdAt",
@@ -4269,6 +4331,13 @@
                     "createdByExternalUserId": {
                       "type": "string"
                     },
+                    "visibility": {
+                      "type": "string",
+                      "enum": [
+                        "workspace",
+                        "private"
+                      ]
+                    },
                     "title": {
                       "type": "string"
                     },
@@ -4294,6 +4363,7 @@
                     "collaborationWorkspaceId",
                     "createdByUserId",
                     "createdByExternalUserId",
+                    "visibility",
                     "title",
                     "status",
                     "createdAt",
@@ -4363,6 +4433,13 @@
                     "createdByExternalUserId": {
                       "type": "string"
                     },
+                    "visibility": {
+                      "type": "string",
+                      "enum": [
+                        "workspace",
+                        "private"
+                      ]
+                    },
                     "title": {
                       "type": "string"
                     },
@@ -4388,6 +4465,7 @@
                     "collaborationWorkspaceId",
                     "createdByUserId",
                     "createdByExternalUserId",
+                    "visibility",
                     "title",
                     "status",
                     "createdAt",
@@ -4425,6 +4503,13 @@
                   "collaborationWorkspaceId": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "visibility": {
+                    "type": "string",
+                    "enum": [
+                      "workspace",
+                      "private"
+                    ]
                   }
                 },
                 "required": [
@@ -4458,6 +4543,13 @@
                     "createdByExternalUserId": {
                       "type": "string"
                     },
+                    "visibility": {
+                      "type": "string",
+                      "enum": [
+                        "workspace",
+                        "private"
+                      ]
+                    },
                     "title": {
                       "type": "string"
                     },
@@ -4483,6 +4575,7 @@
                     "collaborationWorkspaceId",
                     "createdByUserId",
                     "createdByExternalUserId",
+                    "visibility",
                     "title",
                     "status",
                     "createdAt",
@@ -4536,6 +4629,13 @@
                         "createdByExternalUserId": {
                           "type": "string"
                         },
+                        "visibility": {
+                          "type": "string",
+                          "enum": [
+                            "workspace",
+                            "private"
+                          ]
+                        },
                         "title": {
                           "type": "string"
                         },
@@ -4561,6 +4661,7 @@
                         "collaborationWorkspaceId",
                         "createdByUserId",
                         "createdByExternalUserId",
+                        "visibility",
                         "title",
                         "status",
                         "createdAt",
@@ -6839,6 +6940,13 @@
                         "createdByExternalUserId": {
                           "type": "string"
                         },
+                        "visibility": {
+                          "type": "string",
+                          "enum": [
+                            "workspace",
+                            "private"
+                          ]
+                        },
                         "title": {
                           "type": "string"
                         },
@@ -6864,6 +6972,7 @@
                         "collaborationWorkspaceId",
                         "createdByUserId",
                         "createdByExternalUserId",
+                        "visibility",
                         "title",
                         "status",
                         "createdAt",
@@ -7427,6 +7536,13 @@
                             "createdByExternalUserId": {
                               "type": "string"
                             },
+                            "visibility": {
+                              "type": "string",
+                              "enum": [
+                                "workspace",
+                                "private"
+                              ]
+                            },
                             "title": {
                               "type": "string"
                             },
@@ -7452,6 +7568,7 @@
                             "collaborationWorkspaceId",
                             "createdByUserId",
                             "createdByExternalUserId",
+                            "visibility",
                             "title",
                             "status",
                             "createdAt",
@@ -8576,6 +8693,13 @@
                         "createdByExternalUserId": {
                           "type": "string"
                         },
+                        "visibility": {
+                          "type": "string",
+                          "enum": [
+                            "workspace",
+                            "private"
+                          ]
+                        },
                         "title": {
                           "type": "string"
                         },
@@ -8601,6 +8725,7 @@
                         "collaborationWorkspaceId",
                         "createdByUserId",
                         "createdByExternalUserId",
+                        "visibility",
                         "title",
                         "status",
                         "createdAt",
@@ -9164,6 +9289,13 @@
                             "createdByExternalUserId": {
                               "type": "string"
                             },
+                            "visibility": {
+                              "type": "string",
+                              "enum": [
+                                "workspace",
+                                "private"
+                              ]
+                            },
                             "title": {
                               "type": "string"
                             },
@@ -9189,6 +9321,7 @@
                             "collaborationWorkspaceId",
                             "createdByUserId",
                             "createdByExternalUserId",
+                            "visibility",
                             "title",
                             "status",
                             "createdAt",
@@ -10998,6 +11131,13 @@
                     "createdByExternalUserId": {
                       "type": "string"
                     },
+                    "visibility": {
+                      "type": "string",
+                      "enum": [
+                        "workspace",
+                        "private"
+                      ]
+                    },
                     "title": {
                       "type": "string"
                     },
@@ -11023,6 +11163,7 @@
                     "collaborationWorkspaceId",
                     "createdByUserId",
                     "createdByExternalUserId",
+                    "visibility",
                     "title",
                     "status",
                     "createdAt",

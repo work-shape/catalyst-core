@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ApiClient, CollaborationWorkspaceWithRole } from "@vivd-catalyst/api-client";
+import type {
+  ApiClient,
+  CollaborationWorkspaceWithRole,
+  ConversationListItem
+} from "@vivd-catalyst/api-client";
 import { useCollaborationWorkspacesQuery } from "../api/workspace-queries";
 import {
   clearStoredCollaborationWorkspaceId,
@@ -17,7 +21,13 @@ export type CollaborationWorkspaceDialogState =
   | { kind: "create" }
   | { kind: "browse" }
   | { kind: "settings"; collaborationWorkspaceId: string }
-  | { kind: "move-conversation"; conversationId: string; conversationTitle: string };
+  | {
+      kind: "move-conversation";
+      conversationId: string;
+      conversationTitle: string;
+      conversationVisibility: ConversationListItem["visibility"];
+      movedByCreator: boolean;
+    };
 
 export interface CollaborationWorkspaceModel {
   collaborationWorkspaces: CollaborationWorkspaceWithRole[];
@@ -32,7 +42,9 @@ export interface CollaborationWorkspaceModel {
   openCreateDialog(): void;
   openBrowseDialog(): void;
   openSettingsDialog(collaborationWorkspaceId: string): void;
-  openMoveConversationDialog(conversationId: string, conversationTitle: string): void;
+  openMoveConversationDialog(
+    conversation: Pick<ConversationListItem, "id" | "title" | "visibility" | "createdByUserId">
+  ): void;
   closeDialog(): void;
   conversationMoved(conversationId: string, destinationCollaborationWorkspaceId: string): void;
   collaborationWorkspaceDeleted(collaborationWorkspaceId: string): void;
@@ -242,9 +254,15 @@ export function useCollaborationWorkspaceModel(
     []
   );
   const openMoveConversationDialog = useCallback(
-    (conversationId: string, conversationTitle: string) =>
-      setDialog({ kind: "move-conversation", conversationId, conversationTitle }),
-    []
+    (conversation: Pick<ConversationListItem, "id" | "title" | "visibility" | "createdByUserId">) =>
+      setDialog({
+        kind: "move-conversation",
+        conversationId: conversation.id,
+        conversationTitle: conversation.title,
+        conversationVisibility: conversation.visibility,
+        movedByCreator: conversation.createdByUserId === userId
+      }),
+    [userId]
   );
   const closeDialog = useCallback(() => setDialog({ kind: "none" }), []);
 

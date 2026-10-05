@@ -30,15 +30,18 @@ import {
 } from "./collaboration-workspace-dialog-chrome";
 import {
   CollaborationWorkspaceAccentField,
+  CollaborationWorkspaceConversationVisibilityField,
   CollaborationWorkspaceEmojiField,
   CollaborationWorkspaceVisibilityField,
-  type CollaborationWorkspaceVisibility
+  type CollaborationWorkspaceVisibility,
+  type ConversationVisibility
 } from "./collaboration-workspace-fields";
 
 export interface CollaborationWorkspaceSettingsValues {
   name: string;
   description: string | null;
   visibility: CollaborationWorkspaceVisibility;
+  defaultConversationVisibility: ConversationVisibility;
   emoji: string | null;
   accentColor: CollaborationWorkspaceAccentColor;
 }
@@ -359,6 +362,8 @@ export function CollaborationWorkspaceGeneralTab({
   const [visibility, setVisibility] = useState<CollaborationWorkspaceVisibility>(
     collaborationWorkspace.visibility
   );
+  const [defaultConversationVisibility, setDefaultConversationVisibility] =
+    useState<ConversationVisibility>(collaborationWorkspace.defaultConversationVisibility);
   const [accentColor, setAccentColor] = useState<CollaborationWorkspaceAccentColor>(
     resolveCollaborationWorkspaceAccentColor(collaborationWorkspace)
   );
@@ -375,6 +380,7 @@ export function CollaborationWorkspaceGeneralTab({
     setDescription(collaborationWorkspace.description ?? "");
     setEmoji(collaborationWorkspace.emoji ?? "");
     setVisibility(collaborationWorkspace.visibility);
+    setDefaultConversationVisibility(collaborationWorkspace.defaultConversationVisibility);
     setAccentColor(resolveCollaborationWorkspaceAccentColor(collaborationWorkspace));
   }, [collaborationWorkspace]);
 
@@ -406,6 +412,7 @@ export function CollaborationWorkspaceGeneralTab({
             name: trimmedName,
             description: description.trim() ? description.trim() : null,
             visibility,
+            defaultConversationVisibility,
             emoji: emoji.trim() ? emoji.trim() : null,
             accentColor
           });
@@ -450,6 +457,13 @@ export function CollaborationWorkspaceGeneralTab({
             disabled={savePending}
             onChange={setVisibility}
           />
+          {collaborationWorkspace.kind === "shared" ? (
+            <CollaborationWorkspaceConversationVisibilityField
+              value={defaultConversationVisibility}
+              disabled={savePending}
+              onChange={setDefaultConversationVisibility}
+            />
+          ) : null}
           <CollaborationWorkspaceEmojiField
             value={emoji}
             disabled={savePending}

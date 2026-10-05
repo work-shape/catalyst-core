@@ -255,6 +255,7 @@ describe("client instance app vertical slice", () => {
     expect(personalWorkspace).toMatchObject({ kind: "personal", role: "owner" });
     expect(otherPersonalWorkspace).toMatchObject({ kind: "personal", role: "owner" });
     const conversation = await store.createConversation({
+      visibility: "workspace",
       clientInstanceId,
       collaborationWorkspaceId: personalWorkspace!.id,
       createdByUserId: user.id,
@@ -269,6 +270,7 @@ describe("client instance app vertical slice", () => {
       text: "remove this message"
     });
     const otherConversation = await store.createConversation({
+      visibility: "workspace",
       clientInstanceId,
       collaborationWorkspaceId: otherPersonalWorkspace!.id,
       createdByUserId: otherUser.id,
@@ -446,6 +448,7 @@ describe("client instance app vertical slice", () => {
     });
     expect(personal).toMatchObject({ kind: "personal", role: "owner" });
     const personalConversation = await app.store.createConversation({
+      visibility: "workspace",
       clientInstanceId,
       collaborationWorkspaceId: personal!.id,
       createdByUserId: deletedUserId,
@@ -466,11 +469,45 @@ describe("client instance app vertical slice", () => {
       role: "member"
     });
     const sharedConversation = await app.store.createConversation({
+      visibility: "workspace",
       clientInstanceId,
       collaborationWorkspaceId: shared.id,
       createdByUserId: deletedUserId,
       createdByExternalUserId: deletedUserId,
       title: "Preserve shared data",
+      retainedUntil: "2030-01-01T00:00:00.000Z"
+    });
+    const privateInShared = await app.store.createConversation({
+      visibility: "private",
+      clientInstanceId,
+      collaborationWorkspaceId: shared.id,
+      createdByUserId: deletedUserId,
+      createdByExternalUserId: deletedUserId,
+      title: "Delete private data in a shared workspace",
+      retainedUntil: "2030-01-01T00:00:00.000Z"
+    });
+    const otherUsersPrivate = await app.store.createConversation({
+      visibility: "private",
+      clientInstanceId,
+      collaborationWorkspaceId: shared.id,
+      createdByUserId: superadmin!.id,
+      createdByExternalUserId: superadmin!.id,
+      title: "Preserve another user's private data",
+      retainedUntil: "2030-01-01T00:00:00.000Z"
+    });
+    const formerWorkspace = await app.store.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Left before deletion",
+      creatorUserId: superadmin!.id
+    });
+    const privateInFormerWorkspace = await app.store.createConversation({
+      visibility: "private",
+      clientInstanceId,
+      collaborationWorkspaceId: formerWorkspace.id,
+      createdByUserId: deletedUserId,
+      createdByExternalUserId: deletedUserId,
+      title: "Delete private data nobody else can open",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
     const requestTarget = await app.store.createWorkspace({
@@ -496,6 +533,14 @@ describe("client instance app vertical slice", () => {
     await expect(
       app.store.getConversation(clientInstanceId, sharedConversation.id)
     ).resolves.toMatchObject({ status: "active" });
+    for (const conversation of [privateInShared, privateInFormerWorkspace]) {
+      await expect(
+        app.store.getConversation(clientInstanceId, conversation.id)
+      ).resolves.toMatchObject({ status: "deleted" });
+    }
+    await expect(
+      app.store.getConversation(clientInstanceId, otherUsersPrivate.id)
+    ).resolves.toMatchObject({ status: "active", visibility: "private" });
     await expect(
       app.store.getMembership({
         clientInstanceId,

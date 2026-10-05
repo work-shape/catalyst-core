@@ -1,12 +1,15 @@
 import { z } from "zod";
 import { localeCodeSchema } from "./configuration";
 
+export const conversationVisibilitySchema = z.enum(["workspace", "private"]);
+
 export const conversationSchema = z.object({
   id: z.string(),
   clientInstanceId: z.string(),
   collaborationWorkspaceId: z.string(),
   createdByUserId: z.string(),
   createdByExternalUserId: z.string(),
+  visibility: conversationVisibilitySchema,
   title: z.string(),
   status: z.string(),
   createdAt: z.string(),
@@ -16,7 +19,8 @@ export const conversationSchema = z.object({
 });
 
 export const moveConversationRequestSchema = z.object({
-  collaborationWorkspaceId: z.string().min(1)
+  collaborationWorkspaceId: z.string().min(1),
+  visibility: conversationVisibilitySchema.optional()
 });
 
 export const messageMetadataVersionSchema = z.literal(1);
@@ -686,6 +690,7 @@ export const cancelRunResponseSchema = z.object({
 });
 
 export type Conversation = z.infer<typeof conversationSchema>;
+export type ConversationVisibility = z.infer<typeof conversationVisibilitySchema>;
 export type ConversationListItem = z.infer<typeof conversationListItemSchema>;
 export type RenameConversationRequest = z.infer<typeof renameConversationRequestSchema>;
 export type Message = z.infer<typeof messageSchema>;

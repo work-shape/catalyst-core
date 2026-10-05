@@ -159,6 +159,7 @@ import {
   expireConversation as expirePostgresConversation,
   getConversation as getPostgresConversation,
   listConversationsForWorkspace as listPostgresConversationsForWorkspace,
+  listPrivateConversationsCreatedByUser as listPostgresPrivateConversationsCreatedByUser,
   moveConversation as movePostgresConversation,
   listExpiredConversations as listPostgresExpiredConversations,
   listMessages as listPostgresMessages,
@@ -553,6 +554,12 @@ export class PostgresPlatformStore
     input: Parameters<ConversationStore["listConversationsForWorkspace"]>[0]
   ): Promise<Conversation[]> {
     return listPostgresConversationsForWorkspace(this.db, input);
+  }
+
+  async listPrivateConversationsCreatedByUser(
+    input: Parameters<ConversationStore["listPrivateConversationsCreatedByUser"]>[0]
+  ): Promise<Conversation[]> {
+    return listPostgresPrivateConversationsCreatedByUser(this.db, input);
   }
 
   async moveConversation(

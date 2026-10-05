@@ -708,6 +708,7 @@ export type ListCollaborationWorkspacesResponses = {
         name: string;
         description: string | null;
         visibility: 'discoverable' | 'private';
+        defaultConversationVisibility: 'workspace' | 'private';
         emoji: string | null;
         accentColor: 'garnet' | 'ruby' | 'mahogany' | 'copper' | 'amber' | 'olive' | 'jade' | 'emerald' | 'teal' | 'turquoise' | 'azure' | 'sapphire' | 'indigo' | 'violet' | 'magenta' | 'rose' | 'stone' | 'slate' | null;
         personalUserId: string | null;
@@ -725,6 +726,7 @@ export type CreateCollaborationWorkspaceData = {
         name: string;
         description?: string | null;
         visibility?: 'discoverable' | 'private';
+        defaultConversationVisibility?: 'workspace' | 'private';
         emoji?: string | null;
         accentColor?: 'garnet' | 'ruby' | 'mahogany' | 'copper' | 'amber' | 'olive' | 'jade' | 'emerald' | 'teal' | 'turquoise' | 'azure' | 'sapphire' | 'indigo' | 'violet' | 'magenta' | 'rose' | 'stone' | 'slate' | null;
     };
@@ -744,6 +746,7 @@ export type CreateCollaborationWorkspaceResponses = {
         name: string;
         description: string | null;
         visibility: 'discoverable' | 'private';
+        defaultConversationVisibility: 'workspace' | 'private';
         emoji: string | null;
         accentColor: 'garnet' | 'ruby' | 'mahogany' | 'copper' | 'amber' | 'olive' | 'jade' | 'emerald' | 'teal' | 'turquoise' | 'azure' | 'sapphire' | 'indigo' | 'violet' | 'magenta' | 'rose' | 'stone' | 'slate' | null;
         personalUserId: string | null;
@@ -824,6 +827,7 @@ export type GetCollaborationWorkspaceResponses = {
         name: string;
         description: string | null;
         visibility: 'discoverable' | 'private';
+        defaultConversationVisibility: 'workspace' | 'private';
         emoji: string | null;
         accentColor: 'garnet' | 'ruby' | 'mahogany' | 'copper' | 'amber' | 'olive' | 'jade' | 'emerald' | 'teal' | 'turquoise' | 'azure' | 'sapphire' | 'indigo' | 'violet' | 'magenta' | 'rose' | 'stone' | 'slate' | null;
         personalUserId: string | null;
@@ -841,6 +845,7 @@ export type UpdateCollaborationWorkspaceData = {
         name?: string;
         description?: string | null;
         visibility?: 'discoverable' | 'private';
+        defaultConversationVisibility?: 'workspace' | 'private';
         emoji?: string | null;
         accentColor?: 'garnet' | 'ruby' | 'mahogany' | 'copper' | 'amber' | 'olive' | 'jade' | 'emerald' | 'teal' | 'turquoise' | 'azure' | 'sapphire' | 'indigo' | 'violet' | 'magenta' | 'rose' | 'stone' | 'slate' | null;
     };
@@ -862,6 +867,7 @@ export type UpdateCollaborationWorkspaceResponses = {
         name: string;
         description: string | null;
         visibility: 'discoverable' | 'private';
+        defaultConversationVisibility: 'workspace' | 'private';
         emoji: string | null;
         accentColor: 'garnet' | 'ruby' | 'mahogany' | 'copper' | 'amber' | 'olive' | 'jade' | 'emerald' | 'teal' | 'turquoise' | 'azure' | 'sapphire' | 'indigo' | 'violet' | 'magenta' | 'rose' | 'stone' | 'slate' | null;
         personalUserId: string | null;
@@ -1164,6 +1170,7 @@ export type ListConversationsResponses = {
         collaborationWorkspaceId: string;
         createdByUserId: string;
         createdByExternalUserId: string;
+        visibility: 'workspace' | 'private';
         title: string;
         status: string;
         createdAt: string;
@@ -1208,6 +1215,7 @@ export type CreateConversationResponses = {
         collaborationWorkspaceId: string;
         createdByUserId: string;
         createdByExternalUserId: string;
+        visibility: 'workspace' | 'private';
         title: string;
         status: string;
         createdAt: string;
@@ -1240,6 +1248,7 @@ export type RenameConversationResponses = {
         collaborationWorkspaceId: string;
         createdByUserId: string;
         createdByExternalUserId: string;
+        visibility: 'workspace' | 'private';
         title: string;
         status: string;
         createdAt: string;
@@ -1270,6 +1279,7 @@ export type GenerateConversationTitleResponses = {
         collaborationWorkspaceId: string;
         createdByUserId: string;
         createdByExternalUserId: string;
+        visibility: 'workspace' | 'private';
         title: string;
         status: string;
         createdAt: string;
@@ -1284,6 +1294,7 @@ export type GenerateConversationTitleResponse = GenerateConversationTitleRespons
 export type MoveConversationData = {
     body: {
         collaborationWorkspaceId: string;
+        visibility?: 'workspace' | 'private';
     };
     path: {
         conversationId: string;
@@ -1302,6 +1313,7 @@ export type MoveConversationResponses = {
         collaborationWorkspaceId: string;
         createdByUserId: string;
         createdByExternalUserId: string;
+        visibility: 'workspace' | 'private';
         title: string;
         status: string;
         createdAt: string;
@@ -1333,6 +1345,7 @@ export type GetConversationThreadResponses = {
             collaborationWorkspaceId: string;
             createdByUserId: string;
             createdByExternalUserId: string;
+            visibility: 'workspace' | 'private';
             title: string;
             status: string;
             createdAt: string;
@@ -1886,6 +1899,7 @@ export type StartConversationRunResponses = {
             collaborationWorkspaceId: string;
             createdByUserId: string;
             createdByExternalUserId: string;
+            visibility: 'workspace' | 'private';
             title: string;
             status: string;
             createdAt: string;
@@ -2020,6 +2034,7 @@ export type StartConversationRunResponses = {
                 collaborationWorkspaceId: string;
                 createdByUserId: string;
                 createdByExternalUserId: string;
+                visibility: 'workspace' | 'private';
                 title: string;
                 status: string;
                 createdAt: string;
@@ -2276,6 +2291,7 @@ export type CreateConversationRunResponses = {
             collaborationWorkspaceId: string;
             createdByUserId: string;
             createdByExternalUserId: string;
+            visibility: 'workspace' | 'private';
             title: string;
             status: string;
             createdAt: string;
@@ -2410,6 +2426,7 @@ export type CreateConversationRunResponses = {
                 collaborationWorkspaceId: string;
                 createdByUserId: string;
                 createdByExternalUserId: string;
+                visibility: 'workspace' | 'private';
                 title: string;
                 status: string;
                 createdAt: string;
@@ -2841,6 +2858,7 @@ export type DeleteConversationResponses = {
         collaborationWorkspaceId: string;
         createdByUserId: string;
         createdByExternalUserId: string;
+        visibility: 'workspace' | 'private';
         title: string;
         status: string;
         createdAt: string;

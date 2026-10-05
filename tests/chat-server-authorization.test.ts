@@ -401,6 +401,98 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
+  it("binds a private conversation to the delegated subject, not the service principal", async () => {
+    const clientInstanceId = asClientInstanceId("demo-local");
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        sessionToken: {
+          issuer: "demo-client-instance",
+          ttlSeconds: 900
+        }
+      }),
+      env: {
+        CHAT_SESSION_TOKEN_SECRET: "a-development-session-token-secret",
+        CHAT_SERVER_CREDENTIAL: "server-credential"
+      },
+      storeMode: "memory",
+      tools: []
+    });
+    const issueFor = async (externalUserId: string) => {
+      const issued = await app.server.inject({
+        method: "POST",
+        url: "/api/superadmin/session-tokens",
+        headers: { "x-server-credential": "server-credential" },
+        payload: {
+          externalUserId,
+          displayLabel: externalUserId,
+          roles: ["user"],
+          permissionRefs: ["demo-tools"],
+          delegatedActor: {
+            kind: "service_principal",
+            id: "svc-customer-api",
+            displayLabel: "Customer API",
+            authSource: "customer-app"
+          }
+        }
+      });
+      expect(issued.statusCode).toBe(200);
+      const authorization = `Bearer ${(issued.json() as { chatSessionToken: string }).chatSessionToken}`;
+      const me = await app.server.inject({
+        method: "GET",
+        url: "/api/me",
+        headers: { authorization }
+      });
+      expect(me.statusCode).toBe(200);
+      return { authorization, userId: asUserId((me.json() as { id: string }).id) };
+    };
+    const jane = await issueFor("customer-jane");
+    const john = await issueFor("customer-john");
+    const workspace = await app.store.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Delegated",
+      defaultConversationVisibility: "private",
+      creatorUserId: john.userId
+    });
+    await app.store.addMembership({
+      clientInstanceId,
+      collaborationWorkspaceId: workspace.id,
+      userId: jane.userId,
+      role: "member"
+    });
+
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      headers: { authorization: jane.authorization },
+      payload: { title: "Jane only", collaborationWorkspaceId: workspace.id }
+    });
+    expect(created.statusCode).toBe(200);
+    expect(created.json()).toMatchObject({ visibility: "private", createdByUserId: jane.userId });
+    const conversationId = (created.json() as { id: string }).id;
+
+    const thread = (authorization: string) =>
+      app.server.inject({
+        method: "GET",
+        url: `/api/conversations/${conversationId}/thread`,
+        headers: { authorization }
+      });
+    expect((await thread(jane.authorization)).statusCode).toBe(200);
+    const sameServiceOtherSubject = await thread(john.authorization);
+    expect(sameServiceOtherSubject.statusCode).toBe(404);
+    expect(sameServiceOtherSubject.json()).toEqual({
+      error: { code: "NOT_FOUND", message: "Conversation is not available" }
+    });
+    const listed = await app.server.inject({
+      method: "GET",
+      url: `/api/conversations?collaborationWorkspaceId=${workspace.id}`,
+      headers: { authorization: john.authorization }
+    });
+    expect(listed.json()).toEqual([]);
+
+    await app.close();
+  });
+
   it("creates and resets standalone password sign-ins from superadmin user administration", async () => {
     const clientInstanceId = asClientInstanceId("demo-local");
     const store = new InMemoryPlatformStore();

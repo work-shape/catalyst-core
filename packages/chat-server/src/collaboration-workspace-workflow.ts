@@ -9,6 +9,7 @@ import {
   type CollaborationWorkspaceId,
   type CollaborationWorkspaceWithRole,
   type ConversationId,
+  type ConversationVisibility,
   type RuntimeCallContext,
   type UserRecord,
   type WorkspaceAccentColor,
@@ -73,6 +74,7 @@ export interface CreateSharedWorkspaceCommand {
   name: string;
   description?: string | null;
   visibility?: WorkspaceVisibility;
+  defaultConversationVisibility?: ConversationVisibility;
   emoji?: string | null;
   accentColor?: WorkspaceAccentColor | null;
 }
@@ -81,6 +83,7 @@ export interface UpdateWorkspaceSettingsCommand {
   name?: string;
   description?: string | null;
   visibility?: WorkspaceVisibility;
+  defaultConversationVisibility?: ConversationVisibility;
   emoji?: string | null;
   accentColor?: WorkspaceAccentColor | null;
 }
@@ -136,6 +139,7 @@ export class CollaborationWorkspaceWorkflow {
       name: normalizeRequiredName(command.name),
       description: normalizeDescription(command.description),
       visibility: command.visibility ?? "discoverable",
+      defaultConversationVisibility: command.defaultConversationVisibility ?? "workspace",
       emoji: normalizeEmoji(command.emoji),
       accentColor: validateAccentColor(command.accentColor),
       creatorUserId: asUserId(getSubjectUserId(user))
@@ -172,7 +176,8 @@ export class CollaborationWorkspaceWorkflow {
     const [conversations, memberships, accessRequests] = await Promise.all([
       this.options.conversationStore.listConversationsForWorkspace({
         clientInstanceId: this.options.clientInstanceId,
-        collaborationWorkspaceId
+        collaborationWorkspaceId,
+        scope: { kind: "lifecycle" }
       }),
       this.options.userStore.listMemberships({
         clientInstanceId: this.options.clientInstanceId,
@@ -205,7 +210,8 @@ export class CollaborationWorkspaceWorkflow {
 
     const conversations = await this.options.conversationStore.listConversationsForWorkspace({
       clientInstanceId: this.options.clientInstanceId,
-      collaborationWorkspaceId
+      collaborationWorkspaceId,
+      scope: { kind: "lifecycle" }
     });
     for (const conversation of conversations) {
       await this.assertConversationIdle(conversation.id);
@@ -332,6 +338,9 @@ export class CollaborationWorkspaceWorkflow {
         ? { description: normalizeDescription(command.description) }
         : {}),
       ...(command.visibility !== undefined ? { visibility: command.visibility } : {}),
+      ...(command.defaultConversationVisibility !== undefined
+        ? { defaultConversationVisibility: command.defaultConversationVisibility }
+        : {}),
       ...(command.emoji !== undefined ? { emoji: normalizeEmoji(command.emoji) } : {}),
       ...(command.accentColor !== undefined
         ? { accentColor: validateAccentColor(command.accentColor) }
@@ -885,7 +894,14 @@ function workspaceChangedFields(
   workspace: CollaborationWorkspace,
   update: UpdateWorkspaceSettingsCommand
 ): string[] {
-  return (["name", "description", "visibility", "emoji", "accentColor"] as const).filter(
-    (field) => update[field] !== undefined && update[field] !== workspace[field]
-  );
+  return (
+    [
+      "name",
+      "description",
+      "visibility",
+      "defaultConversationVisibility",
+      "emoji",
+      "accentColor"
+    ] as const
+  ).filter((field) => update[field] !== undefined && update[field] !== workspace[field]);
 }

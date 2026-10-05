@@ -121,12 +121,21 @@ export async function updateWorkspace(
     if (input.visibility !== undefined && input.visibility !== "private") {
       throw new AppError("VALIDATION_FAILED", "A Personal Workspace must remain private");
     }
+    if (input.defaultConversationVisibility === "private") {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "A Personal Workspace cannot default to private conversations"
+      );
+    }
   }
 
   const set: Partial<typeof collaborationWorkspaces.$inferInsert> = { updatedAt: new Date() };
   if (input.name !== undefined) set.name = input.name;
   if (input.description !== undefined) set.description = input.description;
   if (input.visibility !== undefined) set.visibility = input.visibility;
+  if (input.defaultConversationVisibility !== undefined) {
+    set.defaultConversationVisibility = input.defaultConversationVisibility;
+  }
   if (input.emoji !== undefined) set.emoji = input.emoji;
   if (input.accentColor !== undefined) set.accentColor = input.accentColor;
   const [row] = await db
@@ -636,6 +645,7 @@ async function createWorkspaceRecords(
       name: input.name,
       description: input.description ?? null,
       visibility: input.kind === "personal" ? "private" : (input.visibility ?? "discoverable"),
+      defaultConversationVisibility: input.defaultConversationVisibility ?? "workspace",
       emoji: input.emoji ?? null,
       accentColor: input.accentColor ?? null,
       personalUserId: input.kind === "personal" ? input.personalUserId : null,

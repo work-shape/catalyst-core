@@ -1,4 +1,4 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
+import { apiOperations, type ConversationVisibility } from "@vivd-catalyst/api-contract";
 import * as generatedSdk from "./generated/sdk.gen";
 import type { ApiClientTransport, OperationRequestInput } from "./transport";
 
@@ -63,12 +63,19 @@ export function createConversationsClient(transport: ApiClientTransport) {
         }),
         apiOperations.renameConversation.responseSchema
       ),
-    move: (conversationId: string, collaborationWorkspaceId: string) =>
+    move: (
+      conversationId: string,
+      collaborationWorkspaceId: string,
+      visibility?: ConversationVisibility
+    ) =>
       transport.unwrapJson(
         generatedSdk.moveConversation({
           client: transport.generatedClient,
           path: { conversationId },
-          body: apiOperations.moveConversation.requestSchema.parse({ collaborationWorkspaceId })
+          body: apiOperations.moveConversation.requestSchema.parse({
+            collaborationWorkspaceId,
+            visibility
+          })
         }),
         apiOperations.moveConversation.responseSchema
       ),

@@ -667,6 +667,7 @@ async function createWorkspaceFixture(store: PostgresPlatformStore): Promise<{
     userId: user.id
   });
   const conversation = await store.createConversation({
+    visibility: "workspace",
     clientInstanceId,
     collaborationWorkspaceId: personalWorkspace.id,
     createdByUserId: ownerUserId,

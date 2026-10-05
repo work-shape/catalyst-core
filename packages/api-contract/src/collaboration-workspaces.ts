@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { conversationVisibilitySchema } from "./conversations";
 
 export const workspaceVisibilitySchema = z.enum(["discoverable", "private"]);
 export const workspaceMembershipRoleSchema = z.enum(["owner", "admin", "member"]);
@@ -31,6 +32,7 @@ export const collaborationWorkspaceSchema = z.object({
   name: z.string(),
   description: z.string().nullable(),
   visibility: workspaceVisibilitySchema,
+  defaultConversationVisibility: conversationVisibilitySchema,
   emoji: z.string().nullable(),
   accentColor: workspaceAccentColorSchema.nullable(),
   personalUserId: z.string().nullable(),
@@ -97,6 +99,7 @@ export const createCollaborationWorkspaceRequestSchema = z.object({
   name: workspaceNameSchema,
   description: workspaceDescriptionSchema.optional(),
   visibility: workspaceVisibilitySchema.optional(),
+  defaultConversationVisibility: conversationVisibilitySchema.optional(),
   emoji: workspaceEmojiSchema.optional(),
   accentColor: workspaceAccentColorSchema.nullable().optional()
 });
@@ -105,6 +108,7 @@ export const updateCollaborationWorkspaceRequestSchema = z.object({
   name: workspaceNameSchema.optional(),
   description: workspaceDescriptionSchema.optional(),
   visibility: workspaceVisibilitySchema.optional(),
+  defaultConversationVisibility: conversationVisibilitySchema.optional(),
   emoji: workspaceEmojiSchema.optional(),
   accentColor: workspaceAccentColorSchema.nullable().optional()
 });
