@@ -8,7 +8,8 @@ export const approvalRequestStatusSchema = z.enum([
   "rejected",
   "changes_requested",
   "superseded",
-  "withdrawn"
+  "withdrawn",
+  "reverted"
 ]);
 
 export const approvalCheckResultSchema = z.object({
@@ -43,6 +44,9 @@ export const approvalRequestSchema = z.object({
       comment: z.string().optional()
     })
     .optional(),
+  reversion: z
+    .object({ revertedBy: z.string(), revertedByLabel: z.string(), revertedAt: z.string() })
+    .optional(),
   checks: z.array(approvalCheckResultSchema),
   applyResult: jsonObjectSchema.optional(),
   createdAt: z.string(),
@@ -52,7 +56,8 @@ export const approvalRequestSchema = z.object({
 export const approvalRequestViewSchema = approvalRequestSchema.extend({
   preview: jsonObjectSchema,
   canDecide: z.boolean(),
-  canWithdraw: z.boolean()
+  canWithdraw: z.boolean(),
+  canRevert: z.boolean()
 });
 
 export const listApprovalRequestsQuerySchema = z.object({

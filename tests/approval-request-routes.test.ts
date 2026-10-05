@@ -10,7 +10,8 @@ const fakeHandler: ApprovalRequestHandler = {
   validate: (payload) => payload,
   preview: async (payload) => ({ proposed: payload.value ?? null }),
   isStale: async () => false,
-  apply: async (_payload, actor) => ({ actorId: actor.id })
+  apply: async (_payload, actor) => ({ actorId: actor.id }),
+  revert: async (_request, actor) => ({ actorId: actor.id })
 };
 
 async function fixture(empty = false) {
@@ -143,6 +144,31 @@ describe("approval routes and generated instance client", () => {
       await expect(
         f.reviewer.approvalRequests.decide(request.id, { decision: "reject" })
       ).rejects.toMatchObject({ status: 409 });
+    } finally {
+      await f.app.close();
+    }
+  });
+
+  it("reverts through the generated client only for permitted reviewers", async () => {
+    const f = await fixture();
+    try {
+      const request = await f.create();
+      await expect(f.reviewer.approvalRequests.revert(request.id)).rejects.toMatchObject({
+        status: 409
+      });
+      await f.reviewer.approvalRequests.decide(request.id, { decision: "approve" });
+      expect(await f.reviewer.approvalRequests.get(request.id)).toMatchObject({ canRevert: true });
+      await expect(f.requester.approvalRequests.revert(request.id)).rejects.toMatchObject({
+        status: 403
+      });
+      expect(await f.reviewer.approvalRequests.revert(request.id)).toMatchObject({
+        status: "reverted",
+        reversion: { revertedByLabel: "Reviewer" }
+      });
+      expect(await f.reviewer.approvalRequests.get(request.id)).toMatchObject({ canRevert: false });
+      await expect(f.reviewer.approvalRequests.revert(request.id)).rejects.toMatchObject({
+        status: 409
+      });
     } finally {
       await f.app.close();
     }

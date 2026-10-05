@@ -35,7 +35,7 @@ export type GetApprovalRequestResponses = {
             toolCallId: string;
             agentName: string;
         };
-        status: 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn';
+        status: 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn' | 'reverted';
         decision?: {
             approved: boolean;
             decidedBy: string;
@@ -43,6 +43,11 @@ export type GetApprovalRequestResponses = {
             decidedAt: string;
             reason?: string;
             comment?: string;
+        };
+        reversion?: {
+            revertedBy: string;
+            revertedByLabel: string;
+            revertedAt: string;
         };
         checks: Array<{
             id: string;
@@ -59,6 +64,7 @@ export type GetApprovalRequestResponses = {
         };
         canDecide: boolean;
         canWithdraw: boolean;
+        canRevert: boolean;
     };
 };
 
@@ -95,7 +101,7 @@ export type ListApprovalRequestsResponses = {
             toolCallId: string;
             agentName: string;
         };
-        status: 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn';
+        status: 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn' | 'reverted';
         decision?: {
             approved: boolean;
             decidedBy: string;
@@ -103,6 +109,11 @@ export type ListApprovalRequestsResponses = {
             decidedAt: string;
             reason?: string;
             comment?: string;
+        };
+        reversion?: {
+            revertedBy: string;
+            revertedByLabel: string;
+            revertedAt: string;
         };
         checks: Array<{
             id: string;
@@ -119,6 +130,7 @@ export type ListApprovalRequestsResponses = {
         };
         canDecide: boolean;
         canWithdraw: boolean;
+        canRevert: boolean;
     }>;
 };
 
@@ -183,7 +195,7 @@ export type DecideApprovalRequestResponses = {
             toolCallId: string;
             agentName: string;
         };
-        status: 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn';
+        status: 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn' | 'reverted';
         decision?: {
             approved: boolean;
             decidedBy: string;
@@ -191,6 +203,11 @@ export type DecideApprovalRequestResponses = {
             decidedAt: string;
             reason?: string;
             comment?: string;
+        };
+        reversion?: {
+            revertedBy: string;
+            revertedByLabel: string;
+            revertedAt: string;
         };
         checks: Array<{
             id: string;
@@ -238,7 +255,7 @@ export type WithdrawApprovalRequestResponses = {
             toolCallId: string;
             agentName: string;
         };
-        status: 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn';
+        status: 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn' | 'reverted';
         decision?: {
             approved: boolean;
             decidedBy: string;
@@ -246,6 +263,11 @@ export type WithdrawApprovalRequestResponses = {
             decidedAt: string;
             reason?: string;
             comment?: string;
+        };
+        reversion?: {
+            revertedBy: string;
+            revertedByLabel: string;
+            revertedAt: string;
         };
         checks: Array<{
             id: string;
@@ -261,6 +283,66 @@ export type WithdrawApprovalRequestResponses = {
 };
 
 export type WithdrawApprovalRequestResponse = WithdrawApprovalRequestResponses[keyof WithdrawApprovalRequestResponses];
+
+export type RevertApprovalRequestData = {
+    body?: never;
+    path: {
+        requestId: string;
+    };
+    query?: never;
+    url: '/api/approval-requests/{requestId}/revert';
+};
+
+export type RevertApprovalRequestResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        id: string;
+        clientInstanceId: string;
+        kind: string;
+        summary: string;
+        payload: {
+            [key: string]: unknown;
+        };
+        requestedBy: {
+            id: string;
+            displayLabel: string;
+        };
+        origin?: {
+            conversationId: string;
+            agentRunId: string;
+            toolCallId: string;
+            agentName: string;
+        };
+        status: 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn' | 'reverted';
+        decision?: {
+            approved: boolean;
+            decidedBy: string;
+            decidedByLabel: string;
+            decidedAt: string;
+            reason?: string;
+            comment?: string;
+        };
+        reversion?: {
+            revertedBy: string;
+            revertedByLabel: string;
+            revertedAt: string;
+        };
+        checks: Array<{
+            id: string;
+            status: 'passed' | 'warned' | 'blocked';
+            message: string;
+        }>;
+        applyResult?: {
+            [key: string]: unknown;
+        };
+        createdAt: string;
+        updatedAt: string;
+    };
+};
+
+export type RevertApprovalRequestResponse = RevertApprovalRequestResponses[keyof RevertApprovalRequestResponses];
 
 export type DeleteCurrentUserData = {
     body?: never;
@@ -540,6 +622,10 @@ export type GetConfigResponses = {
                 allowAgentDeletion: boolean;
                 allowDefaultAgentChange: boolean;
                 allowSkillEditing: boolean;
+                agentSkillChanges: {
+                    enabled: boolean;
+                    allowSkillCreation: boolean;
+                };
             };
             userInvitations: {
                 enabled: boolean;
@@ -3578,6 +3664,11 @@ export type ListConfigAssetRevisionsResponses = {
                 authSource: string;
             };
         } | null;
+        origin?: {
+            kind: 'approval_request';
+            requestId: string;
+            summary: string;
+        };
         globalVersion: number;
         createdAt: string;
     }>;

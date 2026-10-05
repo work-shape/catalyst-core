@@ -113,3 +113,5 @@ export type {
   ApprovalRequestWorkflowOptions,
   ApprovalRequestView
 } from "./approval-request-workflow";
+
+export * from "./skill-change-approval-handler";

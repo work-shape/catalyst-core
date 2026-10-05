@@ -5,7 +5,13 @@ import type { Permission } from "./permissions";
 import type { ToolPermissionDecision } from "./tool-execution";
 
 export type ApprovalRequestStatus =
-  "pending" | "approved" | "rejected" | "changes_requested" | "superseded" | "withdrawn";
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "changes_requested"
+  | "superseded"
+  | "withdrawn"
+  | "reverted";
 
 export interface ApprovalCheckResult {
   id: string;
@@ -28,6 +34,7 @@ export interface ApprovalRequest {
   };
   status: ApprovalRequestStatus;
   decision?: ToolPermissionDecision & { decidedByLabel: string; comment?: string };
+  reversion?: { revertedBy: string; revertedByLabel: string; revertedAt: string };
   checks: ApprovalCheckResult[];
   applyResult?: JsonObject;
   createdAt: string;
@@ -39,12 +46,19 @@ export interface ApprovalRequestContext {
   requestId: string;
   correlationId: string;
   origin?: ApprovalRequest["origin"];
+  status?: ApprovalRequestStatus;
+  summary?: string;
 }
 
 export interface ApprovalRequestHandler<TPayload extends JsonObject = JsonObject> {
   kind: string;
   requiredPermission: Permission;
   validate(payload: JsonObject): TPayload;
+  revert?(
+    request: ApprovalRequest,
+    user: AuthenticatedUser,
+    context: ApprovalRequestContext
+  ): Promise<JsonObject>;
   preview(payload: TPayload, context: ApprovalRequestContext): Promise<JsonObject>;
   isStale(payload: TPayload, context: ApprovalRequestContext): Promise<boolean>;
   apply(
@@ -60,6 +74,7 @@ export interface ApprovalRequestOutcome {
   status: Exclude<ApprovalRequestStatus, "pending">;
   decision?: ApprovalRequest["decision"];
   applyResult?: JsonObject;
+  reversion?: ApprovalRequest["reversion"];
 }
 
 export interface ApprovalRequestStore {
@@ -93,4 +108,18 @@ export interface ApprovalRequestStore {
     requestId: string;
     resolve(request: ApprovalRequest): Promise<ApprovalRequestOutcome>;
   }): Promise<ApprovalRequest>;
+  /** Same exclusive compare-and-set guarantee as the pending transition, for revert. */
+  transitionApprovedApprovalRequest(input: {
+    clientInstanceId: ClientInstanceId;
+    requestId: string;
+    resolve(request: ApprovalRequest): Promise<ApprovalRequestOutcome>;
+  }): Promise<ApprovalRequest>;
+}
+
+export interface ApprovalRequestCreator {
+  createRequest(
+    user: AuthenticatedUser,
+    context: { correlationId: string },
+    command: Pick<ApprovalRequest, "kind" | "summary" | "payload" | "origin">
+  ): Promise<ApprovalRequest>;
 }

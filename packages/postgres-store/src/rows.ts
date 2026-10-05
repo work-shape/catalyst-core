@@ -645,17 +645,24 @@ export function mapConfigAssetRevision(
     operation: row.operation,
     config: row.config,
     actor: row.actor,
+    origin: row.origin ?? undefined,
     globalVersion: row.globalVersion,
     createdAt: row.createdAt.toISOString()
   };
 }
 
 export function mapApprovalRequest(row: typeof approvalRequests.$inferSelect): ApprovalRequest {
+  let decision: ApprovalRequest["decision"];
+  if (row.decision) {
+    const { reversion: _reversion, ...storedDecision } = row.decision;
+    decision = storedDecision;
+  }
   return {
     ...row,
     clientInstanceId: row.clientInstanceId as ClientInstanceId,
     origin: row.origin ?? undefined,
-    decision: row.decision ?? undefined,
+    decision,
+    reversion: row.decision?.reversion,
     applyResult: row.applyResult ?? undefined,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()

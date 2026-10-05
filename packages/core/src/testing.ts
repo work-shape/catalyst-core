@@ -231,6 +231,12 @@ export class InMemoryPlatformStore
     return this.approvalRequestStore.transitionPendingApprovalRequest(input);
   }
 
+  transitionApprovedApprovalRequest(
+    input: Parameters<ApprovalRequestStore["transitionApprovedApprovalRequest"]>[0]
+  ) {
+    return this.approvalRequestStore.transitionApprovedApprovalRequest(input);
+  }
+
   async getConfigAssetState(
     input: Parameters<ConfigAssetStore["getConfigAssetState"]>[0]
   ): Promise<ConfigAssetState> {

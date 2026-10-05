@@ -150,6 +150,7 @@ export async function applyConfigAssetMutations(
           operation: "delete",
           config: null,
           actor: input.actor,
+          origin: input.origin,
           globalVersion: version,
           now,
           status: "deleted"
@@ -178,6 +179,7 @@ export async function applyConfigAssetMutations(
           operation: mutation.operation ?? "create",
           config: mutation.config,
           actor: input.actor ?? null,
+          origin: input.origin ?? null,
           globalVersion: version,
           createdAt: now
         });
@@ -189,6 +191,7 @@ export async function applyConfigAssetMutations(
         operation: mutation.operation ?? (asset.status === "deleted" ? "create" : "update"),
         config: mutation.config,
         actor: input.actor,
+        origin: input.origin,
         globalVersion: version,
         now,
         status: "active"
@@ -246,6 +249,7 @@ async function appendAndActivateRevision(
     operation: ConfigAssetRevisionRecord["operation"];
     config: ConfigAssetRevisionRecord["config"];
     actor: Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0]["actor"];
+    origin: ConfigAssetRevisionRecord["origin"];
     globalVersion: number;
     now: Date;
     status: ConfigAssetRecord["status"];
@@ -268,6 +272,7 @@ async function appendAndActivateRevision(
     operation: input.operation,
     config: input.config,
     actor: input.actor ?? null,
+    origin: input.origin ?? null,
     globalVersion: input.globalVersion,
     createdAt: input.now
   });

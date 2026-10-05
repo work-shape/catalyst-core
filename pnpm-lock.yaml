@@ -685,6 +685,9 @@ importers:
 
   packages/tool-execution:
     dependencies:
+      '@vivd-catalyst/config-schema':
+        specifier: workspace:*
+        version: link:../config-schema
       '@vivd-catalyst/core':
         specifier: workspace:*
         version: link:../core

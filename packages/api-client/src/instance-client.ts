@@ -365,6 +365,14 @@ function createApprovalRequestsClient(transport: ApiClientTransport) {
         }),
         apiOperations.decideApprovalRequest.responseSchema
       ),
+    revert: (requestId: string) =>
+      transport.unwrapJson(
+        generatedSdk.revertApprovalRequest({
+          client: transport.generatedClient,
+          path: { requestId }
+        }),
+        apiOperations.revertApprovalRequest.responseSchema
+      ),
     withdraw: (requestId: string) =>
       transport.unwrapJson(
         generatedSdk.withdrawApprovalRequest({

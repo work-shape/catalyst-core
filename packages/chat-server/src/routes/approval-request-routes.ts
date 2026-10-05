@@ -41,6 +41,10 @@ export function registerApprovalRequestRoutes(
     const { user, context } = await authenticateRequest(options, request);
     return workflow.withdrawRequest(user, context, requestId(request.params));
   });
+  app.post(apiOperations.revertApprovalRequest.path, async (request) => {
+    const { user, context } = await authenticateRequest(options, request);
+    return workflow.revertRequest(user, context, requestId(request.params));
+  });
 }
 
 function requestId(params: unknown): string {

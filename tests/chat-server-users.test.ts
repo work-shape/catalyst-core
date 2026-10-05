@@ -516,6 +516,73 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
+  it("validates only changed permission entries while preserving restricted grants and revocations", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        developmentAuth: {
+          enabled: true,
+          defaultUserId: "admin",
+          users: [
+            {
+              id: "admin",
+              externalUserId: "admin",
+              displayLabel: "Admin",
+              roles: ["admin"],
+              permissionRefs: []
+            }
+          ]
+        }
+      }),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+    const clientInstanceId = asClientInstanceId(app.config.clientInstance.id);
+    try {
+      for (const restrictedEntry of ["api_access.manage", "!api_access.manage"]) {
+        const managedUser = await app.store.createUser({
+          clientInstanceId,
+          displayLabel: "Managed user",
+          roles: ["user"],
+          permissions: [restrictedEntry]
+        });
+        const updatePermissions = (permissions: string[]) =>
+          app.server.inject({
+            method: "PATCH",
+            url: `/api/superadmin/users/${managedUser.id}`,
+            payload: { permissions }
+          });
+        const granted = await updatePermissions([restrictedEntry, "agent_skills.approve"]);
+        expect(granted.statusCode).toBe(200);
+        expect(granted.json()).toMatchObject({
+          permissions: [restrictedEntry, "agent_skills.approve"]
+        });
+        const revoked = await updatePermissions([restrictedEntry, "!agent_skills.approve"]);
+        expect(revoked.statusCode).toBe(200);
+        expect(revoked.json()).toMatchObject({
+          permissions: [restrictedEntry, "!agent_skills.approve"]
+        });
+        // Removing an existing restricted grant or denial is also a protected change.
+        expect((await updatePermissions(["!agent_skills.approve"])).statusCode).toBe(403);
+        const oppositeEntry = restrictedEntry.startsWith("!")
+          ? "api_access.manage"
+          : "!api_access.manage";
+        expect((await updatePermissions([restrictedEntry, oppositeEntry])).statusCode).toBe(403);
+        expect((await updatePermissions([oppositeEntry])).statusCode).toBe(403);
+        const unchanged = await updatePermissions(["!agent_skills.approve", restrictedEntry]);
+        expect(unchanged.statusCode).toBe(200);
+      }
+      const newGrant = await app.server.inject({
+        method: "POST",
+        url: "/api/superadmin/users",
+        payload: { displayLabel: "New user", roles: ["user"], permissions: ["api_access.manage"] }
+      });
+      expect(newGrant.statusCode).toBe(403);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("lets admins administer non-superadmin users without escalating superadmin access", async () => {
     const app = await createClientInstanceApp({
       config: createTestConfig({

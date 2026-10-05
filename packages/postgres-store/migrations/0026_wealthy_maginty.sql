@@ -1,0 +1,1 @@
+ALTER TABLE "config_asset_revisions" ADD COLUMN "origin" jsonb;

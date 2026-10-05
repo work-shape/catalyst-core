@@ -92,6 +92,7 @@ export class InMemoryConfigAssetStore implements ConfigAssetStore {
           operation: "delete",
           config: null,
           actor: input.actor,
+          origin: input.origin,
           globalVersion: version,
           createdAt: now
         });
@@ -132,6 +133,7 @@ export class InMemoryConfigAssetStore implements ConfigAssetStore {
             operation: mutation.operation ?? "create",
             config: structuredClone(config),
             actor: input.actor ? structuredClone(input.actor) : null,
+            ...(input.origin ? { origin: structuredClone(input.origin) } : {}),
             globalVersion: version,
             createdAt: now
           }
@@ -145,6 +147,7 @@ export class InMemoryConfigAssetStore implements ConfigAssetStore {
         operation: mutation.operation ?? (existing.status === "deleted" ? "create" : "update"),
         config,
         actor: input.actor,
+        origin: input.origin,
         globalVersion: version,
         createdAt: now
       });
@@ -195,6 +198,7 @@ function appendRevision(input: {
   operation: ConfigAssetRevisionRecord["operation"];
   config: ConfigAssetRevisionRecord["config"];
   actor: Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0]["actor"];
+  origin: ConfigAssetRevisionRecord["origin"];
   globalVersion: number;
   createdAt: string;
 }): ConfigAssetRevisionRecord {
@@ -206,6 +210,7 @@ function appendRevision(input: {
     operation: input.operation,
     config: input.config ? structuredClone(input.config) : null,
     actor: input.actor ? structuredClone(input.actor) : null,
+    ...(input.origin ? { origin: structuredClone(input.origin) } : {}),
     globalVersion: input.globalVersion,
     createdAt: input.createdAt
   };
@@ -224,6 +229,7 @@ function cloneRevision(revision: ConfigAssetRevisionRecord): ConfigAssetRevision
   return {
     ...revision,
     config: revision.config ? structuredClone(revision.config) : null,
+    ...(revision.origin ? { origin: structuredClone(revision.origin) } : {}),
     actor: revision.actor ? structuredClone(revision.actor) : null
   };
 }

@@ -1,6 +1,5 @@
-import { createHash } from "node:crypto";
 import { z } from "zod";
-import type { ConfigAssetSource, SkillConfig } from "@vivd-catalyst/core";
+import { createSkillSourceVersion, type ConfigAssetSource } from "@vivd-catalyst/core";
 import {
   defineTool,
   toolFailed,
@@ -146,28 +145,4 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
       );
     }
   });
-}
-
-function createSkillSourceVersion(skill: SkillConfig): string {
-  const hash = createHash("sha256")
-    .update(skill.name)
-    .update("\0")
-    .update(skill.title)
-    .update("\0")
-    .update(skill.description)
-    .update("\0")
-    .update(skill.content);
-  for (const resource of [...(skill.resources ?? [])].sort((left, right) =>
-    left.path.localeCompare(right.path)
-  )) {
-    hash
-      .update("\0")
-      .update(resource.path)
-      .update("\0")
-      .update(resource.mediaType)
-      .update("\0")
-      .update(resource.content);
-  }
-  const digest = hash.digest("hex");
-  return `sha256:${digest}`;
 }

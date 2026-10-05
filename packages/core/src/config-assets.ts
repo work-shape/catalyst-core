@@ -37,6 +37,7 @@ export interface ConfigAssetRevisionRecord {
   operation: "create" | "update" | "delete" | "revert";
   config: JsonObject | null;
   actor: AuditActor | null;
+  origin?: { kind: "approval_request"; requestId: string; summary: string };
   globalVersion: number;
   createdAt: string;
 }
@@ -77,6 +78,7 @@ export interface ConfigAssetStore {
     clientInstanceId: ClientInstanceId;
     baseVersion?: number;
     actor?: AuditActor;
+    origin?: ConfigAssetRevisionRecord["origin"];
     mutations: ConfigAssetMutation[];
   }): Promise<{ version: number }>;
 }

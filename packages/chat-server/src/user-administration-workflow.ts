@@ -119,7 +119,7 @@ export class UserAdministrationWorkflow {
     const existing = await this.getUserOrThrow(command.userId);
     this.requireManageableUser(actor, existing);
     this.requireAssignableRoles(actor, command.roles);
-    this.requireAssignablePermissions(actor, command.permissions);
+    this.requireAssignablePermissions(actor, command.permissions, existing.permissions);
     const updated = await this.options.userStore.updateUser({
       clientInstanceId: this.options.clientInstanceId,
       userId: command.userId,
@@ -462,15 +462,28 @@ export class UserAdministrationWorkflow {
 
   private requireAssignablePermissions(
     actor: AuthenticatedUser,
-    permissions: string[] | undefined
+    permissions: string[] | undefined,
+    existingPermissions: readonly string[] = []
   ): void {
-    if (permissions?.includes("config_assets.release")) {
+    if (permissions === undefined) {
+      return;
+    }
+    const previous = new Set(existingPermissions);
+    const submitted = new Set(permissions);
+    const changedEntries = [
+      ...permissions.filter((permission) => !previous.has(permission)),
+      ...existingPermissions.filter((permission) => !submitted.has(permission))
+    ];
+    if (changedEntries.includes("config_assets.release")) {
       throw new AppError(
         "VALIDATION_FAILED",
         "Release permission can only be carried by service tokens"
       );
     }
-    if (permissions?.includes("api_access.manage") && !this.isSuperadmin(actor)) {
+    if (
+      changedEntries.some((permission) => permission.replace(/^!/u, "") === "api_access.manage") &&
+      !this.isSuperadmin(actor)
+    ) {
       throw new AppError(
         "FORBIDDEN",
         "Only superadmins can assign API Access administration permission"

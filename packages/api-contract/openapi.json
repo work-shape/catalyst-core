@@ -93,7 +93,8 @@
                         "rejected",
                         "changes_requested",
                         "superseded",
-                        "withdrawn"
+                        "withdrawn",
+                        "reverted"
                       ]
                     },
                     "decision": {
@@ -123,6 +124,26 @@
                         "decidedBy",
                         "decidedByLabel",
                         "decidedAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "reversion": {
+                      "type": "object",
+                      "properties": {
+                        "revertedBy": {
+                          "type": "string"
+                        },
+                        "revertedByLabel": {
+                          "type": "string"
+                        },
+                        "revertedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "revertedBy",
+                        "revertedByLabel",
+                        "revertedAt"
                       ],
                       "additionalProperties": false
                     },
@@ -179,6 +200,9 @@
                     },
                     "canWithdraw": {
                       "type": "boolean"
+                    },
+                    "canRevert": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -194,7 +218,8 @@
                     "updatedAt",
                     "preview",
                     "canDecide",
-                    "canWithdraw"
+                    "canWithdraw",
+                    "canRevert"
                   ],
                   "additionalProperties": false
                 }
@@ -294,7 +319,8 @@
                           "rejected",
                           "changes_requested",
                           "superseded",
-                          "withdrawn"
+                          "withdrawn",
+                          "reverted"
                         ]
                       },
                       "decision": {
@@ -324,6 +350,26 @@
                           "decidedBy",
                           "decidedByLabel",
                           "decidedAt"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "reversion": {
+                        "type": "object",
+                        "properties": {
+                          "revertedBy": {
+                            "type": "string"
+                          },
+                          "revertedByLabel": {
+                            "type": "string"
+                          },
+                          "revertedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "revertedBy",
+                          "revertedByLabel",
+                          "revertedAt"
                         ],
                         "additionalProperties": false
                       },
@@ -380,6 +426,9 @@
                       },
                       "canWithdraw": {
                         "type": "boolean"
+                      },
+                      "canRevert": {
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -395,7 +444,8 @@
                       "updatedAt",
                       "preview",
                       "canDecide",
-                      "canWithdraw"
+                      "canWithdraw",
+                      "canRevert"
                     ],
                     "additionalProperties": false
                   }
@@ -588,7 +638,8 @@
                         "rejected",
                         "changes_requested",
                         "superseded",
-                        "withdrawn"
+                        "withdrawn",
+                        "reverted"
                       ]
                     },
                     "decision": {
@@ -618,6 +669,26 @@
                         "decidedBy",
                         "decidedByLabel",
                         "decidedAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "reversion": {
+                      "type": "object",
+                      "properties": {
+                        "revertedBy": {
+                          "type": "string"
+                        },
+                        "revertedByLabel": {
+                          "type": "string"
+                        },
+                        "revertedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "revertedBy",
+                        "revertedByLabel",
+                        "revertedAt"
                       ],
                       "additionalProperties": false
                     },
@@ -771,7 +842,8 @@
                         "rejected",
                         "changes_requested",
                         "superseded",
-                        "withdrawn"
+                        "withdrawn",
+                        "reverted"
                       ]
                     },
                     "decision": {
@@ -801,6 +873,230 @@
                         "decidedBy",
                         "decidedByLabel",
                         "decidedAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "reversion": {
+                      "type": "object",
+                      "properties": {
+                        "revertedBy": {
+                          "type": "string"
+                        },
+                        "revertedByLabel": {
+                          "type": "string"
+                        },
+                        "revertedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "revertedBy",
+                        "revertedByLabel",
+                        "revertedAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "checks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "passed",
+                              "warned",
+                              "blocked"
+                            ]
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "status",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "applyResult": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "clientInstanceId",
+                    "kind",
+                    "summary",
+                    "payload",
+                    "requestedBy",
+                    "status",
+                    "checks",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/approval-requests/{requestId}/revert": {
+      "post": {
+        "operationId": "revertApprovalRequest",
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "summary": {
+                      "type": "string"
+                    },
+                    "payload": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    },
+                    "requestedBy": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "displayLabel": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "displayLabel"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "origin": {
+                      "type": "object",
+                      "properties": {
+                        "conversationId": {
+                          "type": "string"
+                        },
+                        "agentRunId": {
+                          "type": "string"
+                        },
+                        "toolCallId": {
+                          "type": "string"
+                        },
+                        "agentName": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "conversationId",
+                        "agentRunId",
+                        "toolCallId",
+                        "agentName"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "approved",
+                        "rejected",
+                        "changes_requested",
+                        "superseded",
+                        "withdrawn",
+                        "reverted"
+                      ]
+                    },
+                    "decision": {
+                      "type": "object",
+                      "properties": {
+                        "approved": {
+                          "type": "boolean"
+                        },
+                        "decidedBy": {
+                          "type": "string"
+                        },
+                        "decidedByLabel": {
+                          "type": "string"
+                        },
+                        "decidedAt": {
+                          "type": "string"
+                        },
+                        "reason": {
+                          "type": "string"
+                        },
+                        "comment": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "approved",
+                        "decidedBy",
+                        "decidedByLabel",
+                        "decidedAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "reversion": {
+                      "type": "object",
+                      "properties": {
+                        "revertedBy": {
+                          "type": "string"
+                        },
+                        "revertedByLabel": {
+                          "type": "string"
+                        },
+                        "revertedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "revertedBy",
+                        "revertedByLabel",
+                        "revertedAt"
                       ],
                       "additionalProperties": false
                     },
@@ -1796,6 +2092,26 @@
                             "allowSkillEditing": {
                               "default": false,
                               "type": "boolean"
+                            },
+                            "agentSkillChanges": {
+                              "default": {
+                                "enabled": false,
+                                "allowSkillCreation": false
+                              },
+                              "type": "object",
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "allowSkillCreation": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "enabled",
+                                "allowSkillCreation"
+                              ],
+                              "additionalProperties": false
                             }
                           },
                           "required": [
@@ -1804,7 +2120,8 @@
                             "allowAgentCreation",
                             "allowAgentDeletion",
                             "allowDefaultAgentChange",
-                            "allowSkillEditing"
+                            "allowSkillEditing",
+                            "agentSkillChanges"
                           ],
                           "additionalProperties": false
                         },
@@ -13495,6 +13812,27 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "origin": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "approval_request"
+                          },
+                          "requestId": {
+                            "type": "string"
+                          },
+                          "summary": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "requestId",
+                          "summary"
+                        ],
+                        "additionalProperties": false
                       },
                       "globalVersion": {
                         "type": "integer",

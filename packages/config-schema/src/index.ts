@@ -8,3 +8,5 @@ export * from "./safe-config";
 export * from "./branding";
 export * from "./localization";
 export * from "./development-auth";
+
+export * from "./skill-change";

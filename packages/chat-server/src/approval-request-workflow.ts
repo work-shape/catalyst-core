@@ -5,6 +5,7 @@ import {
   requirePermission,
   type ApprovalRequest,
   type ApprovalRequestContext,
+  type ApprovalRequestCreator,
   type ApprovalRequestHandler,
   type ApprovalRequestHandlerRegistry,
   type ApprovalRequestStatus,
@@ -30,9 +31,10 @@ export interface ApprovalRequestView extends ApprovalRequest {
   preview: JsonObject;
   canDecide: boolean;
   canWithdraw: boolean;
+  canRevert: boolean;
 }
 
-export class ApprovalRequestWorkflow {
+export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
   constructor(private readonly options: ApprovalRequestWorkflowOptions) {}
 
   async createRequest(
@@ -160,6 +162,39 @@ export class ApprovalRequestWorkflow {
     return updated;
   }
 
+  async revertRequest(
+    user: AuthenticatedUser,
+    context: CallContext,
+    requestId: string
+  ): Promise<ApprovalRequest> {
+    const request = await this.visibleRequest(user, requestId);
+    const handler = this.handler(request.kind);
+    requirePermission(user, handler.requiredPermission);
+    const revert = handler.revert?.bind(handler);
+    if (!revert)
+      throw new AppError("CONFLICT", "This approval request kind does not support revert");
+    const updated = await this.options.store.transitionApprovedApprovalRequest({
+      clientInstanceId: this.options.clientInstanceId,
+      requestId,
+      resolve: async (approved) => {
+        await revert(approved, user, this.handlerContext(approved, context));
+        return {
+          status: "reverted",
+          decision: approved.decision,
+          applyResult: approved.applyResult,
+          reversion: {
+            revertedBy: user.id,
+            revertedByLabel: user.displayLabel,
+            revertedAt: new Date().toISOString()
+          }
+        };
+      }
+    });
+    await this.record(user, context, "approval_request.reverted", updated);
+    await this.options.onDecided?.(updated);
+    return updated;
+  }
+
   private async visibleRequest(
     user: AuthenticatedUser,
     requestId: string
@@ -192,6 +227,10 @@ export class ApprovalRequestWorkflow {
         handler.validate(request.payload),
         this.handlerContext(request, context)
       ),
+      canRevert:
+        request.status === "approved" &&
+        Boolean(handler.revert) &&
+        hasPermission(user, handler.requiredPermission),
       canDecide: request.status === "pending" && hasPermission(user, handler.requiredPermission),
       canWithdraw: request.status === "pending" && request.requestedBy.id === user.id
     };
@@ -216,7 +255,9 @@ export class ApprovalRequestWorkflow {
       clientInstanceId: this.options.clientInstanceId,
       requestId: request.id,
       correlationId: context.correlationId,
-      origin: request.origin
+      origin: request.origin,
+      status: request.status,
+      summary: request.summary
     };
   }
 

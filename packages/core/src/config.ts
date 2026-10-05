@@ -86,6 +86,11 @@ export interface AgentConfig {
   initialPrompts: AgentInitialPromptConfig[];
 }
 
+export interface AgentSkillChangesPolicy {
+  enabled: boolean;
+  allowSkillCreation: boolean;
+}
+
 export interface SkillConfig {
   name: string;
   title: string;

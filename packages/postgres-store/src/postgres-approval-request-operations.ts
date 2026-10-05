@@ -91,6 +91,19 @@ export async function transitionPendingApprovalRequest(
   db: PostgresDatabase,
   input: Parameters<ApprovalRequestStore["transitionPendingApprovalRequest"]>[0]
 ): Promise<ApprovalRequest> {
+  return transition(db, input, "pending");
+}
+export async function transitionApprovedApprovalRequest(
+  db: PostgresDatabase,
+  input: Parameters<ApprovalRequestStore["transitionApprovedApprovalRequest"]>[0]
+): Promise<ApprovalRequest> {
+  return transition(db, input, "approved");
+}
+async function transition(
+  db: PostgresDatabase,
+  input: Parameters<ApprovalRequestStore["transitionPendingApprovalRequest"]>[0],
+  expectedStatus: "pending" | "approved"
+): Promise<ApprovalRequest> {
   return db.transaction(async (tx) => {
     const identity = and(
       eq(approvalRequests.clientInstanceId, input.clientInstanceId),
@@ -98,20 +111,22 @@ export async function transitionPendingApprovalRequest(
     );
     const [row] = await tx.select().from(approvalRequests).where(identity).for("update").limit(1);
     if (!row) throw new AppError("NOT_FOUND", "Approval request was not found");
-    if (row.status !== "pending")
-      throw new AppError("CONFLICT", "Approval request is no longer pending");
+    if (row.status !== expectedStatus)
+      throw new AppError("CONFLICT", `Approval request is no longer ${expectedStatus}`);
     const outcome = await input.resolve(mapApprovalRequest(row));
     const [updated] = await tx
       .update(approvalRequests)
       .set({
         status: outcome.status,
-        decision: outcome.decision ?? null,
+        decision: outcome.decision
+          ? { ...outcome.decision, ...(outcome.reversion ? { reversion: outcome.reversion } : {}) }
+          : null,
         applyResult: outcome.applyResult ?? null,
         updatedAt: new Date()
       })
-      .where(and(identity, eq(approvalRequests.status, "pending")))
+      .where(and(identity, eq(approvalRequests.status, expectedStatus)))
       .returning();
-    if (!updated) throw new AppError("CONFLICT", "Approval request is no longer pending");
+    if (!updated) throw new AppError("CONFLICT", `Approval request is no longer ${expectedStatus}`);
     return mapApprovalRequest(updated);
   });
 }

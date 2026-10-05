@@ -22,6 +22,8 @@ export interface SystemSkillMetadata {
 export interface CreateSystemInstructionsOptions {
   currentDate?: Date;
   skills?: readonly SystemSkillMetadata[];
+  agentToolNames?: readonly string[];
+  agentSkillChangesEnabled?: boolean;
 }
 
 export function createSystemInstructions(
@@ -44,6 +46,15 @@ export function createSystemInstructions(
         "",
         "These are metadata summaries only. When one matches the user's task, call read_skill with that skill name before applying its instructions."
       ].join("\n")
+    );
+  }
+
+  if (
+    options.agentSkillChangesEnabled &&
+    options.agentToolNames?.includes("propose_skill_change")
+  ) {
+    sections.push(
+      "Skill change proposals:\nRead the skill with read_skill first. Use propose_skill_change for one small, exact change per call. Skills are shared by all users: never include personal or customer-specific data. In your reply, explain what would change and that it needs a person's approval. A proposal is not active until approved."
     );
   }
 

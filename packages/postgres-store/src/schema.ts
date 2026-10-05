@@ -877,6 +877,7 @@ export const configAssetRevisions = pgTable(
     operation: text("operation").$type<ConfigAssetRevisionRecord["operation"]>().notNull(),
     config: jsonb("config").$type<JsonObject>(),
     actor: jsonb("actor").$type<AuditActor>(),
+    origin: jsonb("origin").$type<ConfigAssetRevisionRecord["origin"]>(),
     globalVersion: bigint("global_version", { mode: "number" }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull()
   },
@@ -901,7 +902,10 @@ export const approvalRequests = pgTable(
     requestedBy: jsonb("requested_by").$type<ApprovalRequest["requestedBy"]>().notNull(),
     origin: jsonb("origin").$type<ApprovalRequest["origin"]>(),
     status: text("status").$type<ApprovalRequest["status"]>().notNull(),
-    decision: jsonb("decision").$type<ApprovalRequest["decision"]>(),
+    // Reversion metadata shares the decision JSON; the public request exposes it separately.
+    decision: jsonb("decision").$type<
+      ApprovalRequest["decision"] & { reversion?: ApprovalRequest["reversion"] }
+    >(),
     checks: jsonb("checks").$type<ApprovalRequest["checks"]>().notNull().default([]),
     applyResult: jsonb("apply_result").$type<JsonObject>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),

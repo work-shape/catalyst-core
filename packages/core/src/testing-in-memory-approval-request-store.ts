@@ -68,12 +68,23 @@ export class InMemoryApprovalRequestStore implements ApprovalRequestStore {
   async transitionPendingApprovalRequest(
     input: Parameters<ApprovalRequestStore["transitionPendingApprovalRequest"]>[0]
   ): Promise<ApprovalRequest> {
+    return this.transition(input, "pending");
+  }
+  async transitionApprovedApprovalRequest(
+    input: Parameters<ApprovalRequestStore["transitionApprovedApprovalRequest"]>[0]
+  ): Promise<ApprovalRequest> {
+    return this.transition(input, "approved");
+  }
+  private async transition(
+    input: Parameters<ApprovalRequestStore["transitionPendingApprovalRequest"]>[0],
+    expectedStatus: "pending" | "approved"
+  ): Promise<ApprovalRequest> {
     const request = this.requests.get(input.requestId);
     if (!request || request.clientInstanceId !== input.clientInstanceId) {
       throw new AppError("NOT_FOUND", "Approval request was not found");
     }
-    if (request.status !== "pending" || this.locks.has(request.id)) {
-      throw new AppError("CONFLICT", "Approval request is no longer pending");
+    if (request.status !== expectedStatus || this.locks.has(request.id)) {
+      throw new AppError("CONFLICT", `Approval request is no longer ${expectedStatus}`);
     }
     this.locks.add(request.id);
     try {

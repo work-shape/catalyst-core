@@ -10,7 +10,11 @@ import {
   type ApprovalRequestHandlerRegistry,
   type StructuredDataPublicationReviewer
 } from "@vivd-catalyst/core";
-import { createChatServer } from "@vivd-catalyst/chat-server";
+import {
+  ApprovalRequestWorkflow,
+  createSkillChangeApprovalHandler,
+  createChatServer
+} from "@vivd-catalyst/chat-server";
 import type { ChatAttachmentService } from "@vivd-catalyst/chat-server";
 import { createManagedObjectAccess } from "@vivd-catalyst/capability-sdk";
 import { AppError, type PlatformStore } from "@vivd-catalyst/core";
@@ -33,6 +37,7 @@ import {
   createConsoleWorkspaceCommandTelemetry,
   createLocalWorkspaceFileByteStore,
   createReadSkillTool,
+  createProposeSkillChangeTool,
   createStructuredDataToolDefinitions,
   createWorkspaceToolDefinitions,
   InProcessToolExecution,
@@ -128,28 +133,8 @@ export async function createClientInstanceApp(
     apiAccessStore: store,
     usageGovernance,
     auditRecorder,
-    approvalRequests: { store, handlers: input.approvalRequestHandlers ?? new Map() },
-    configAssets: {
-      store,
-      source: assetSource,
-      validationRefs: {
-        modelProviderIds: config.modelProviders.map((provider) => provider.id),
-        modelBindingIds: config.modelBindings
-          .filter((binding) => binding.agentSelectable !== false)
-          .map((binding) => binding.id),
-        modelBindings: config.modelBindings
-          .filter((binding) => binding.agentSelectable !== false)
-          .map((binding) => ({
-            id: binding.id,
-            model:
-              binding.model ??
-              config.modelProviders.find((provider) => provider.id === binding.providerId)!.model
-          })),
-        reasoningEfforts: [...REASONING_EFFORTS],
-        enabledToolNames: [...getEnabledToolNames(config)]
-      },
-      validateAgents: (agents) => findConfigAssetAgentValidationIssues(config, agents)
-    },
+    approvalRequests: { store, handlers: execution.approvalRequestHandlers },
+    configAssets: execution.configAssets,
     agentRuntime,
     attachments,
     managedObjects,
@@ -253,6 +238,42 @@ export async function createClientInstanceExecutionAssembly(
     ...capabilityContributions.flatMap((contribution) => contribution.managedObjects ?? [])
   ]);
   const assetSource = createConfigAssetSource({ store, clientInstanceId });
+  const configAssets: Parameters<typeof createChatServer>[0]["configAssets"] = {
+    store,
+    source: assetSource,
+    validationRefs: {
+      modelProviderIds: config.modelProviders.map((provider) => provider.id),
+      modelBindingIds: config.modelBindings
+        .filter((binding) => binding.agentSelectable !== false)
+        .map((binding) => binding.id),
+      modelBindings: config.modelBindings
+        .filter((binding) => binding.agentSelectable !== false)
+        .map((binding) => ({
+          id: binding.id,
+          model:
+            binding.model ??
+            config.modelProviders.find((provider) => provider.id === binding.providerId)!.model
+        })),
+      reasoningEfforts: [...REASONING_EFFORTS],
+      enabledToolNames: [...getEnabledToolNames(config)]
+    },
+    validateAgents: (agents) => findConfigAssetAgentValidationIssues(config, agents)
+  };
+  const approvalRequestHandlers = new Map(input.approvalRequestHandlers ?? []);
+  const skillPolicy = config.administration.agentConfiguration.agentSkillChanges;
+  if (skillPolicy.enabled) {
+    if (approvalRequestHandlers.has("skill_change")) {
+      throw new AppError("VALIDATION_FAILED", "The skill_change approval kind is platform-owned");
+    }
+    const handler = createSkillChangeApprovalHandler({ config, clientInstanceId, configAssets });
+    approvalRequestHandlers.set(handler.kind, handler);
+  }
+  const approvalRequestCreator = new ApprovalRequestWorkflow({
+    clientInstanceId,
+    store,
+    handlers: approvalRequestHandlers,
+    auditRecorder
+  });
   const workspaceTools = config.executionWorkspaces.enabled
     ? createWorkspaceToolDefinitions({
         store,
@@ -287,6 +308,15 @@ export async function createClientInstanceExecutionAssembly(
         : []),
       ...createDataSourceTools({ dataSources }),
       createReadSkillTool({ assetSource }),
+      ...(skillPolicy.enabled
+        ? [
+            createProposeSkillChangeTool({
+              assetSource,
+              policy: skillPolicy,
+              creator: approvalRequestCreator
+            })
+          ]
+        : []),
       ...capabilityContributions.flatMap((contribution) => contribution.tools ?? []),
       ...input.tools
     ]
@@ -324,6 +354,7 @@ export async function createClientInstanceExecutionAssembly(
     toolExecution,
     usageGovernance,
     webAccess: config.webAccess,
+    agentSkillChangesEnabled: skillPolicy.enabled,
     maxSteps: config.runtime.maxSteps,
     repeatedToolCallLimit: config.runtime.repeatedToolCallLimit,
     modelContext: config.modelContext,
@@ -350,6 +381,13 @@ export async function createClientInstanceExecutionAssembly(
     }
   });
 
+  const agentIssues = findConfigAssetAgentValidationIssues(config, assets.agents);
+  if (agentIssues.length) {
+    throw new AppError("VALIDATION_FAILED", "Client instance assembly is invalid", {
+      issues: agentIssues.map((message) => ({ message }))
+    });
+  }
+
   return {
     env,
     config,
@@ -364,6 +402,8 @@ export async function createClientInstanceExecutionAssembly(
     usageGovernance,
     modelProvider,
     localAgentRuntimeOptions,
+    configAssets,
+    approvalRequestHandlers,
     async close() {
       await closeCapabilityContributions(capabilityContributions);
       await store.close?.();

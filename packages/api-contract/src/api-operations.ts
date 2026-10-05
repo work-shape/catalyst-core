@@ -125,6 +125,12 @@ export const apiOperations = {
     path: "/api/approval-requests/:requestId/withdraw",
     responseSchema: approvalRequestSchema
   }),
+  revertApprovalRequest: defineJsonApiOperation({
+    operationId: "revertApprovalRequest",
+    method: "POST",
+    path: "/api/approval-requests/:requestId/revert",
+    responseSchema: approvalRequestSchema
+  }),
   getCurrentUser: defineJsonApiOperation({
     operationId: "getCurrentUser",
     method: "GET",

@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@vivd-catalyst/core": "workspace:*",
+    "@vivd-catalyst/config-schema": "workspace:*",
     "@vivd-catalyst/document-execution": "workspace:*",
     "@vivd-catalyst/tool-sdk": "workspace:*",
     "xlsx": "0.18.5",

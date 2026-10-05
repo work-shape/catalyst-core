@@ -109,7 +109,10 @@ export const safeConfigSchema = z.object({
       allowAgentCreation: z.boolean().default(false),
       allowAgentDeletion: z.boolean().default(false),
       allowDefaultAgentChange: z.boolean().default(false),
-      allowSkillEditing: z.boolean().default(false)
+      allowSkillEditing: z.boolean().default(false),
+      agentSkillChanges: z
+        .object({ enabled: z.boolean(), allowSkillCreation: z.boolean() })
+        .default({ enabled: false, allowSkillCreation: false })
     }),
     userInvitations: z.object({ enabled: z.boolean() }).default({ enabled: false })
   }),
@@ -169,6 +172,9 @@ export const configAssetRevisionSchema = z.object({
   operation: z.enum(["create", "update", "delete", "revert"]),
   config: configAssetConfigSchema.nullable(),
   actor: auditActorSchema.nullable(),
+  origin: z
+    .object({ kind: z.literal("approval_request"), requestId: z.string(), summary: z.string() })
+    .optional(),
   globalVersion: z.number().int().positive(),
   createdAt: z.string()
 });

@@ -17,9 +17,9 @@ import {
   type SkillConfig
 } from "@vivd-catalyst/core";
 import {
-  assertSpendBudgetPricingCoverage,
-  validateConfigAssetBundle
-} from "@vivd-catalyst/config-schema";
+  validateConfigAssetCandidate,
+  applyValidatedConfigAssetMutations
+} from "./config-asset-writer";
 import { authorizeGovernanceAction } from "./governance-actions";
 import type { ChatServerOptions } from "./types";
 
@@ -116,7 +116,7 @@ export class ConfigAssetWorkflow {
     if (setInitialDefault) {
       mutations.push({ type: "setDefaultAgent", agentName: command.name });
     }
-    const result = await this.options.configAssets.store.applyConfigAssetMutations({
+    const result = await applyValidatedConfigAssetMutations(this.options, {
       clientInstanceId: this.options.clientInstanceId,
       baseVersion: command.baseVersion,
       actor: auditActorFromIdentity(user),
@@ -153,7 +153,7 @@ export class ConfigAssetWorkflow {
     if (clearLastDefault) {
       mutations.push({ type: "setDefaultAgent", agentName: undefined });
     }
-    const result = await this.options.configAssets.store.applyConfigAssetMutations({
+    const result = await applyValidatedConfigAssetMutations(this.options, {
       clientInstanceId: this.options.clientInstanceId,
       baseVersion: command.baseVersion,
       actor: auditActorFromIdentity(user),
@@ -183,7 +183,7 @@ export class ConfigAssetWorkflow {
       skills: current.skills,
       ...(command.agentName === undefined ? {} : { defaultAgentName: command.agentName })
     });
-    const result = await this.options.configAssets.store.applyConfigAssetMutations({
+    const result = await applyValidatedConfigAssetMutations(this.options, {
       clientInstanceId: this.options.clientInstanceId,
       baseVersion: command.baseVersion,
       actor: auditActorFromIdentity(user),
@@ -211,6 +211,7 @@ export class ConfigAssetWorkflow {
       operation: revision.operation,
       config: revision.config,
       actor: revision.actor,
+      origin: revision.origin,
       globalVersion: revision.globalVersion,
       createdAt: revision.createdAt
     }));
@@ -265,7 +266,7 @@ export class ConfigAssetWorkflow {
     if (setInitialDefault) {
       mutations.push({ type: "setDefaultAgent", agentName: command.name });
     }
-    const result = await this.options.configAssets.store.applyConfigAssetMutations({
+    const result = await applyValidatedConfigAssetMutations(this.options, {
       clientInstanceId: this.options.clientInstanceId,
       baseVersion: command.baseVersion,
       actor: auditActorFromIdentity(user),
@@ -353,7 +354,7 @@ export class ConfigAssetWorkflow {
     if (!merge || command.defaultAgentName !== undefined) {
       mutations.push({ type: "setDefaultAgent", agentName: command.defaultAgentName });
     }
-    const result = await this.options.configAssets.store.applyConfigAssetMutations({
+    const result = await applyValidatedConfigAssetMutations(this.options, {
       clientInstanceId: this.options.clientInstanceId,
       ...(command.baseVersion === null ? {} : { baseVersion: command.baseVersion }),
       actor: auditActorFromIdentity(user),
@@ -474,18 +475,7 @@ export class ConfigAssetWorkflow {
     agents: AgentConfig[];
     skills: SkillConfig[];
   } {
-    const validated = validateConfigAssetBundle({
-      ...input,
-      refs: this.options.configAssets.validationRefs
-    });
-    assertSpendBudgetPricingCoverage(this.options.config, validated.agents);
-    const issues = this.options.configAssets.validateAgents?.(validated.agents) ?? [];
-    if (issues.length > 0) {
-      throw new AppError("VALIDATION_FAILED", "Config asset bundle is invalid", {
-        issues: issues.map((message) => ({ message }))
-      });
-    }
-    return validated;
+    return validateConfigAssetCandidate(this.options, input);
   }
 
   private async loadCurrentBundle(): Promise<ConfigAssetBundleInput> {

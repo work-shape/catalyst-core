@@ -702,7 +702,13 @@ export const administrationConfigSchema = z
         allowAgentCreation: z.boolean().default(false),
         allowAgentDeletion: z.boolean().default(false),
         allowDefaultAgentChange: z.boolean().default(false),
-        allowSkillEditing: z.boolean().default(false)
+        allowSkillEditing: z.boolean().default(false),
+        agentSkillChanges: z
+          .object({
+            enabled: z.boolean().default(false),
+            allowSkillCreation: z.boolean().default(false)
+          })
+          .default({ enabled: false, allowSkillCreation: false })
       })
       .default({
         enabled: false,
@@ -710,7 +716,8 @@ export const administrationConfigSchema = z
         allowAgentCreation: false,
         allowAgentDeletion: false,
         allowDefaultAgentChange: false,
-        allowSkillEditing: false
+        allowSkillEditing: false,
+        agentSkillChanges: { enabled: false, allowSkillCreation: false }
       })
   })
   .default({
@@ -720,7 +727,8 @@ export const administrationConfigSchema = z
       allowAgentCreation: false,
       allowAgentDeletion: false,
       allowDefaultAgentChange: false,
-      allowSkillEditing: false
+      allowSkillEditing: false,
+      agentSkillChanges: { enabled: false, allowSkillCreation: false }
     }
   });
 

@@ -84,6 +84,7 @@ export interface LocalAgentRuntimeOptions {
   toolExecution: ToolExecution;
   usageGovernance: ModelCallGovernance;
   webAccess?: WebAccessConfig;
+  agentSkillChangesEnabled?: boolean;
   historyMessageLimit?: number;
   maxSteps?: number;
   repeatedToolCallLimit?: number;
@@ -339,7 +340,9 @@ export class LocalAgentRuntime implements AgentRuntime {
         role: "system",
         content: createSystemInstructions(agent.instructions, context.locale, {
           currentDate: this.options.clock?.now() ?? systemClock.now(),
-          skills: getSnapshotSkillMetadataForAgent(assets, agent)
+          skills: getSnapshotSkillMetadataForAgent(assets, agent),
+          agentToolNames: agent.toolNames,
+          agentSkillChangesEnabled: this.options.agentSkillChangesEnabled
         })
       },
       ...history.messages,

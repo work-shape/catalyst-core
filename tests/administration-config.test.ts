@@ -13,7 +13,8 @@ describe("administration config", () => {
       allowAgentCreation: false,
       allowAgentDeletion: false,
       allowDefaultAgentChange: false,
-      allowSkillEditing: false
+      allowSkillEditing: false,
+      agentSkillChanges: { enabled: false, allowSkillCreation: false }
     });
   });
 
@@ -37,7 +38,8 @@ describe("administration config", () => {
       allowAgentCreation: true,
       allowAgentDeletion: false,
       allowDefaultAgentChange: false,
-      allowSkillEditing: false
+      allowSkillEditing: false,
+      agentSkillChanges: { enabled: false, allowSkillCreation: false }
     });
   });
 

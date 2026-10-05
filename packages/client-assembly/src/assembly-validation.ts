@@ -30,6 +30,14 @@ export function findConfigAssetAgentValidationIssues(
   agents: AgentConfig[]
 ): string[] {
   return agents.flatMap((agent) => {
+    if (
+      agent.toolNames.includes("propose_skill_change") &&
+      !config.administration.agentConfiguration.agentSkillChanges.enabled
+    ) {
+      return [
+        `Agent '${agent.name}' references propose_skill_change but agent skill changes are disabled`
+      ];
+    }
     if (!agent.toolNames.includes(WEB_SEARCH_MODEL_TOOL_NAME)) {
       return [];
     }

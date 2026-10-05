@@ -19,3 +19,5 @@ export * from "./artifact-preview-settings";
 export * from "./artifact-preview-worker";
 export * from "./structured-data-tools";
 export * from "./structured-data-tool-schemas";
+
+export * from "./propose-skill-change-tool";

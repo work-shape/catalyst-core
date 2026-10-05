@@ -87,12 +87,49 @@ Set `enabled: true`, leave `editableAgentFields` empty, and set all interactive 
 
 Optimistic concurrency protects both surfaces: UI saves carry the loaded config version, and a save after a concurrent CLI push surfaces a conflict dialog instead of silently overwriting.
 
+## Agent skill changes
+
+Agents can propose small changes to their assigned skills through
+`propose_skill_change`. Enable the policy in release config, enable the tool
+in `tools`, and add it to the agent's `toolNames` alongside `read_skill`:
+
+```yaml
+administration:
+  agentConfiguration:
+    agentSkillChanges:
+      enabled: true
+      allowSkillCreation: true
+```
+
+Both switches default to `false`. This policy is independent of interactive
+skill editing and editable agent fields. Any user of an agent with the tool
+can propose a change. Skills are shared by all users; proposals must never
+include personal or customer-specific data.
+
+A proposal stays pending until someone with `agent_skills.approve` approves it.
+Admins and superadmins hold this permission by default; individual grants and
+revocations also apply. Reviewers see whole paragraphs for replacements and
+the added text for additions. Approval applies the operations to the current skill. A request becomes
+superseded only when its operations no longer apply cleanly, or a proposed new
+skill already exists. Independent changes to the same skill can both be approved. The original preview remains available in history.
+
+Approval writes a skill revision with the approving user as actor and the
+request ID and summary as provenance. Creating a skill adds it to the proposing
+agent in the same atomic write. Proposals are limited to 4,000 characters per
+operation text, 60,000 per root or resource, and 30 resources per skill.
+
+The same permission allows reverting an approved request. Revert writes a new
+revision restoring the previous content and records the reverting user. It is
+blocked if the skill has newer revisions. Reverting a newly created skill
+removes it and its agent reference together; other agents' references must be
+removed first. Reverting retains the original approval and proposal history.
+
 ## Permissions
 
-| Permission | Grants | Default roles |
-| --- | --- | --- |
-| `config_assets.read` | View assets, revisions, and the export bundle | admin, superadmin |
-| `config_assets.write` | Interactive edits within `editableAgentFields`, skill editing, default agent | admin, superadmin |
-| `config_assets.release` | Full replace via `catalyst config push` | none (service tokens only) |
+| Permission              | Grants                                                                       | Default roles              |
+| ----------------------- | ---------------------------------------------------------------------------- | -------------------------- |
+| `config_assets.read`    | View assets, revisions, and the export bundle                                | admin, superadmin          |
+| `config_assets.write`   | Interactive edits within `editableAgentFields`, skill editing, default agent | admin, superadmin          |
+| `config_assets.release` | Full replace via `catalyst config push`                                      | none (service tokens only) |
 
 Effective permissions resolve from role defaults plus per-user grants (`"config_assets.write"`) and revocations (`"!config_assets.write"`) stored on the product user.

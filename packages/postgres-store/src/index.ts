@@ -307,6 +307,12 @@ export class PostgresPlatformStore
     return approvalRequestOperations.transitionPendingApprovalRequest(this.db, input);
   }
 
+  transitionApprovedApprovalRequest(
+    input: Parameters<ApprovalRequestStore["transitionApprovedApprovalRequest"]>[0]
+  ) {
+    return approvalRequestOperations.transitionApprovedApprovalRequest(this.db, input);
+  }
+
   async getConfigAssetState(
     input: Parameters<ConfigAssetStore["getConfigAssetState"]>[0]
   ): Promise<ConfigAssetState> {
