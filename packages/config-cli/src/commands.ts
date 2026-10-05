@@ -284,6 +284,15 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
       options,
       `Pushed ${formatCount(touched.agents.length, "agent")}, ${formatCount(touched.skills.length, "skill")}, version ${result.version}.`
     );
+    if (result.hiddenAgentNames?.length) {
+      writeOutput(
+        options,
+        [
+          "Hidden in every workspace until an instance admin sets their availability:",
+          ...result.hiddenAgentNames.map((name) => `  agent:${name}`)
+        ].join("\n")
+      );
+    }
     return 0;
   } catch (error) {
     if (error instanceof ConfigApiError && error.status === 409) {
