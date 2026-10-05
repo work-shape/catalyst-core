@@ -241,6 +241,38 @@ id rather than an arbitrary provider or model name, and an omitted choice keeps
 the agent's configured binding. Put shared reasoning defaults on the provider
 or agent; add one to a binding only when that model needs a different fallback.
 
+## Mail
+
+Mail is off by default. Enabling it adds a forgot-password link to the login panel and lets user
+administrators email a set-password link instead of sharing an initial password. Both need
+standalone auth.
+
+```yaml
+mail:
+  enabled: true
+  provider: mailjet
+  apiKeyEnvName: MAILJET_API_KEY
+  apiSecretEnvName: MAILJET_API_SECRET
+  appUrl: https://chat.example.com
+  sender:
+    fromAddress: noreply@mail.example.com
+    fromName: Example Chat # defaults to the client instance display name
+    replyTo: support@example.com # optional
+```
+
+- `appUrl` is the public URL of the chat UI. Emailed links point there and carry a single-use
+  token in the URL fragment.
+- The sender domain must be validated with SPF and DKIM in the Mailjet account that owns the
+  API key. Use a separate Mailjet sub-account and key per client instance.
+- Startup fails when mail is enabled and either named environment variable is missing.
+- `provider: capture` keeps mails in memory and lists them at `GET /api/dev/captured-mail`.
+  Use it for local development and end-to-end tests; production config rejects it.
+
+Reset links are valid for 60 minutes and invitation links for 7 days. A link stops working once
+it is used, once a newer link is issued, or once the password changes another way. Reset
+requests always get the same answer, whether or not an account exists, and are limited to three
+per address per hour.
+
 ## Config Is Not A Secret Store
 
 Release config may reference secrets, but it must not contain secret values.
@@ -248,6 +280,7 @@ Release config may reference secrets, but it must not contain secret values.
 Use runtime env files or a secret manager for:
 
 - model provider API keys
+- mail provider API keys
 - database passwords
 - customer API credentials
 - object storage credentials
