@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "../i18n";
-import { MarkdownArtifact } from "../markdown-text";
 import { cn } from "../ui/cn";
 import {
   SKILL_ROOT_TARGET,
@@ -12,6 +11,8 @@ import {
 /**
  * Plain-language view of a proposed skill change for people who never see the
  * skill source: whole paragraphs as "before" and "new", never a unified diff.
+ * The text itself is shown as source, not rendered Markdown: the agent reads the
+ * source, so comments, link definitions and raw HTML must stay visible to the reviewer.
  * Renders nothing for a preview it cannot read; the card's summary remains.
  */
 export function SkillChangeBody({ preview }: { preview: unknown }) {
@@ -60,7 +61,7 @@ function SkillChange({ change }: { change: SkillChangePreviewChange }) {
   if (change.type === "add") {
     return (
       <ChangeBlock label={t("skillChangeAdded")} detail={location} tone="new">
-        <MarkdownArtifact>{change.after}</MarkdownArtifact>
+        <SourceText>{change.after}</SourceText>
       </ChangeBlock>
     );
   }
@@ -69,7 +70,7 @@ function SkillChange({ change }: { change: SkillChangePreviewChange }) {
     <div className="grid min-w-0 gap-2">
       {change.before !== undefined ? (
         <ChangeBlock label={t("skillChangeBefore")} detail={location} tone="before">
-          <MarkdownArtifact>{change.before}</MarkdownArtifact>
+          <SourceText>{change.before}</SourceText>
         </ChangeBlock>
       ) : null}
       <ChangeBlock
@@ -77,7 +78,7 @@ function SkillChange({ change }: { change: SkillChangePreviewChange }) {
         detail={change.before === undefined ? location : undefined}
         tone="new"
       >
-        <MarkdownArtifact>{change.after}</MarkdownArtifact>
+        <SourceText>{change.after}</SourceText>
       </ChangeBlock>
     </div>
   );
@@ -128,6 +129,14 @@ function ChangeBlock({
   );
 }
 
+function SourceText({ children }: { children: string }) {
+  return (
+    <pre className="min-w-0 whitespace-pre-wrap font-mono text-[0.8125rem] leading-5 [overflow-wrap:anywhere]">
+      {children}
+    </pre>
+  );
+}
+
 /** Long bodies stay one click away so a card in the thread keeps its shape. */
 function CollapsedContent({ children }: { children: string }) {
   const { t } = useTranslation();
@@ -137,7 +146,7 @@ function CollapsedContent({ children }: { children: string }) {
         {t("skillChangeShowContent")}
       </summary>
       <div className="mt-2 min-w-0">
-        <MarkdownArtifact>{children}</MarkdownArtifact>
+        <SourceText>{children}</SourceText>
       </div>
     </details>
   );

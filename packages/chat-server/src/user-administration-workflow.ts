@@ -309,6 +309,14 @@ export class UserAdministrationWorkflow {
     if (!identity || !email) {
       throw new AppError("VALIDATION_FAILED", "Email is required to send an invitation");
     }
+    if (user.email && user.email.trim().toLowerCase() !== email.trim().toLowerCase()) {
+      // The password sign-in keeps the address it was created with; changing the user's email
+      // does not move it, so the link would go to the old address.
+      throw new AppError(
+        "CONFLICT",
+        "The user's email no longer matches the email of their password sign-in, so an invitation cannot be sent"
+      );
+    }
 
     const token = await standaloneAuth.createPasswordSetupToken({
       externalUserId: identity.externalUserId,

@@ -1,6 +1,7 @@
 import {
   AppError,
   auditActorFromUser,
+  hasAuthScope,
   hasPermission,
   requirePermission,
   type ApprovalRequest,
@@ -18,6 +19,10 @@ import {
 } from "@vivd-catalyst/core";
 
 import type { ApprovalCheckRunner } from "./approval-check-runner";
+
+/** Scopes the approval routes require; the view flags use the same ones. */
+export const APPROVAL_DECIDE_AUTH_SCOPE = "governance:write";
+export const APPROVAL_WITHDRAW_AUTH_SCOPE = "conversation:write";
 
 type CallContext = Pick<RuntimeCallContext, "correlationId"> &
   Partial<Omit<RuntimeCallContext, "user" | "clientInstanceId" | "correlationId">>;
@@ -146,6 +151,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
           ...(comment ? { comment } : {})
         };
         if (command.decision !== "approve") {
+          await this.assertNotApplied(pending, context);
           return {
             status: command.decision === "reject" ? "rejected" : "changes_requested",
             decision
@@ -177,15 +183,18 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     const updated = await this.options.store.transitionPendingApprovalRequest({
       clientInstanceId: this.options.clientInstanceId,
       requestId,
-      resolve: async () => ({
-        status: "withdrawn",
-        decision: {
-          approved: false,
-          decidedBy: user.id,
-          decidedByLabel: user.displayLabel,
-          decidedAt: new Date().toISOString()
-        }
-      })
+      resolve: async (pending) => {
+        await this.assertNotApplied(pending, context);
+        return {
+          status: "withdrawn",
+          decision: {
+            approved: false,
+            decidedBy: user.id,
+            decidedByLabel: user.displayLabel,
+            decidedAt: new Date().toISOString()
+          }
+        };
+      }
     });
     await this.record(user, context, "approval_request.withdrawn", updated);
     await this.options.onDecided?.(updated);
@@ -225,6 +234,20 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     return updated;
   }
 
+  /**
+   * Apply may have committed before recording the approval failed. Such a request must not end
+   * as rejected or withdrawn while its change is live; approving it again records the outcome.
+   */
+  private async assertNotApplied(pending: ApprovalRequest, context: CallContext): Promise<void> {
+    const handler = this.options.handlers.get(pending.kind);
+    if (await handler?.isApplied?.(pending.payload, this.handlerContext(pending, context))) {
+      throw new AppError(
+        "CONFLICT",
+        "This request's change is already applied; approve it to record the outcome"
+      );
+    }
+  }
+
   private async visibleRequest(
     user: AuthenticatedUser,
     requestId: string
@@ -251,18 +274,27 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     request: ApprovalRequest
   ): Promise<ApprovalRequestView> {
     const handler = this.handler(request.kind);
+    const canDecideWithToken = hasAuthScope(user, APPROVAL_DECIDE_AUTH_SCOPE);
     return {
       ...request,
       preview: await handler.preview(
         handler.validate(request.payload),
         this.handlerContext(request, context)
       ),
+      // A flag is true only if the route would also accept the caller's token scopes.
       canRevert:
         request.status === "approved" &&
         Boolean(handler.revert) &&
+        canDecideWithToken &&
         hasPermission(user, handler.requiredPermission),
-      canDecide: request.status === "pending" && hasPermission(user, handler.requiredPermission),
-      canWithdraw: request.status === "pending" && request.requestedBy.id === user.id
+      canDecide:
+        request.status === "pending" &&
+        canDecideWithToken &&
+        hasPermission(user, handler.requiredPermission),
+      canWithdraw:
+        request.status === "pending" &&
+        request.requestedBy.id === user.id &&
+        hasAuthScope(user, APPROVAL_WITHDRAW_AUTH_SCOPE)
     };
   }
 

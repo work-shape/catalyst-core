@@ -303,6 +303,22 @@ describe("approval request workflow", () => {
     ).resolves.toMatchObject({ status: "rejected" });
   });
 
+  it("refuses to reject or withdraw a request whose change is already applied", async () => {
+    const f = fixture();
+    const request = await f.create();
+    f.handler.isApplied = async () => true;
+    await expect(
+      f.workflow.decideRequest(reviewer, context, { requestId: request.id, decision: "reject" })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(f.workflow.withdrawRequest(requester, context, request.id)).rejects.toMatchObject({
+      code: "CONFLICT"
+    });
+    expect(f.onDecided).not.toHaveBeenCalled();
+    await expect(
+      f.workflow.decideRequest(reviewer, context, { requestId: request.id, decision: "approve" })
+    ).resolves.toMatchObject({ status: "approved" });
+  });
+
   it("limits the queue and count to permitted kinds, including status filtering", async () => {
     const f = fixture();
     const visible = await f.create();
@@ -395,6 +411,35 @@ describe("approval request workflow", () => {
     await expect(f.workflow.getRequest(selfApprover, context, request.id)).resolves.toMatchObject({
       canDecide: false,
       canWithdraw: false
+    });
+  });
+
+  it("offers no action the caller's token scopes would be refused", async () => {
+    const f = fixture();
+    f.handler.revert = async () => ({});
+    const pending = await f.create();
+    const chatScoped = (user: AuthenticatedUser, scopes: string[]) => ({ ...user, scopes });
+    await expect(
+      f.workflow.getRequest(chatScoped(reviewer, ["conversation:read"]), context, pending.id)
+    ).resolves.toMatchObject({ canDecide: false });
+    await expect(
+      f.workflow.getRequest(chatScoped(requester, ["conversation:read"]), context, pending.id)
+    ).resolves.toMatchObject({ canWithdraw: false });
+    await expect(
+      f.workflow.getRequest(chatScoped(requester, ["conversation:write"]), context, pending.id)
+    ).resolves.toMatchObject({ canWithdraw: true });
+    await expect(
+      f.workflow.getRequest(chatScoped(reviewer, ["governance:write"]), context, pending.id)
+    ).resolves.toMatchObject({ canDecide: true });
+    await f.workflow.decideRequest(reviewer, context, {
+      requestId: pending.id,
+      decision: "approve"
+    });
+    await expect(
+      f.workflow.getRequest(chatScoped(reviewer, ["conversation:read"]), context, pending.id)
+    ).resolves.toMatchObject({ canRevert: false });
+    await expect(f.workflow.getRequest(reviewer, context, pending.id)).resolves.toMatchObject({
+      canRevert: true
     });
   });
 

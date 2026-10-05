@@ -128,6 +128,14 @@ export class ApprovalCheckRunner {
       if (usageRecordingFailed) {
         throw error;
       }
+      if (check.onFail === "block") {
+        // A blocking rule must not let unchecked content through; the agent gets this reason.
+        return {
+          id: check.id,
+          status: "blocked",
+          message: `Check '${check.id}' could not be evaluated. Try again later.`
+        };
+      }
       // No message: the card words an unevaluated check in the reader's language.
       return { id: check.id, status: "warned", message: "" };
     }

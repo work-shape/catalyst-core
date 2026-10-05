@@ -115,7 +115,7 @@ administration:
       allowSkillCreation: true
 ```
 
-Both switches default to `false`. This policy is independent of interactive
+Both switches default to `false`. Remove `propose_skill_change` from every agent's `toolNames` before setting `enabled` back to `false`. This policy is independent of interactive
 skill editing and editable agent fields. Any user of an agent with the tool
 can propose a change. Skills are shared by all users; proposals must never
 include personal or customer-specific data.
@@ -123,7 +123,7 @@ include personal or customer-specific data.
 A proposal stays pending until someone with `agent_skills.approve` approves it.
 Admins and superadmins hold this permission by default; individual grants and
 revocations also apply. Reviewers see whole paragraphs for replacements and
-the added text for additions. Approval applies the operations to the current skill. A request becomes
+the added text for additions, as source text exactly as the agent will read it. Approval applies the operations to the current skill. A request becomes
 superseded only when its operations no longer apply cleanly, or a proposed new
 skill already exists. Independent changes to the same skill can both be approved. The original preview remains available in history.
 

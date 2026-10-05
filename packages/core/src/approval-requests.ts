@@ -63,6 +63,11 @@ export interface ApprovalRequestHandler<TPayload extends JsonObject = JsonObject
   ): Promise<JsonObject>;
   preview(payload: TPayload, context: ApprovalRequestContext): Promise<JsonObject>;
   isStale(payload: TPayload, context: ApprovalRequestContext): Promise<boolean>;
+  /**
+   * True when this request's change is already live because apply committed but recording the
+   * outcome failed. Takes the stored payload, so it must not require a valid one.
+   */
+  isApplied?(payload: JsonObject, context: ApprovalRequestContext): Promise<boolean>;
   apply(
     payload: TPayload,
     approver: AuthenticatedUser,

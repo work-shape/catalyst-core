@@ -109,7 +109,7 @@ approvalChecks:
 
 Checks run concurrently when a request is created. For skill changes, the summary and proposed new text are sent to the configured model provider; existing skill text and replaced text are excluded. Select a provider and binding approved for that content. Checks use the instance's usage budgets and safeguards, with usage recorded against the originating conversation and run when available.
 
-`warn` stores a visible warning and leaves the decision with the approver. `block` refuses a violating proposal and returns the reason to the agent without storing a request. If a check cannot be evaluated, including provider failures or the 10-second timeout, it stores a neutral warning for either setting. Checks are not repeated when a request is decided. Request kinds without a proposed-content extractor are not checked.
+`warn` stores a visible warning and leaves the decision with the approver. `block` refuses a violating proposal and returns the reason to the agent without storing a request. If a check cannot be evaluated, including provider failures or the 10-second timeout, `warn` stores a neutral warning and `block` refuses the proposal, so a blocking rule never lets unchecked content through. Checks are not repeated when a request is decided. Request kinds without a proposed-content extractor are not checked.
 
 Creation audit metadata contains only check ids and statuses, never proposed content or reasons. Stored check messages remain part of the approval request.
 
@@ -285,10 +285,12 @@ mail:
   API key. Use a separate Mailjet sub-account and key per client instance.
 - Startup fails when mail is enabled and either named environment variable is missing.
 - `provider: capture` keeps mails in memory and lists them at `GET /api/dev/captured-mail`.
-  Use it for local development and end-to-end tests; production config rejects it.
+  That route needs no sign-in, so only `environment: development` config accepts it; staging
+  and production config reject it.
 
 Reset links are valid for 60 minutes and invitation links for 7 days. A link stops working once
-it is used, once a newer link is issued, or once the password changes another way. Reset
+it is used, once a newer link is issued, or once the password changes another way. A reset
+request therefore also replaces a pending invitation link for the same user. Reset
 requests always get the same answer, whether or not an account exists, and are limited to three
 per address per hour.
 

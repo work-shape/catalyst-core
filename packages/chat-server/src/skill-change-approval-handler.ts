@@ -121,6 +121,13 @@ export function createSkillChangeApprovalHandler(
         return false;
       }
       const snapshot = await options.configAssets.source.getSnapshot();
+      // The proposing agent was deleted or the skill detached from it: the request can never
+      // be in scope again, unlike a disabled policy, which stays a refusal.
+      const agent = snapshot.agents.find((candidate) => candidate.name === data.agentName);
+      const creation = data.operations[0]?.type === "create_skill";
+      if (!agent || (!creation && !agent.skillNames.includes(data.skillName))) {
+        return true;
+      }
       const skill = snapshot.skills.find((candidate) => candidate.name === data.skillName);
       try {
         applySkillChange(skill, data.operations);
@@ -132,9 +139,21 @@ export function createSkillChangeApprovalHandler(
         throw error;
       }
     },
+    async isApplied(payload, context) {
+      return (
+        typeof payload.skillName === "string" &&
+        Boolean(await findProducedRevision(payload.skillName, context.requestId))
+      );
+    },
     async apply(payload, user, context) {
       const data = validatePayload(payload);
       const snapshot = await loadMutationSnapshot();
+      // Before the scope check: an already committed write is recovered even if the agent or
+      // its skill assignment changed since.
+      const previous = await findProducedRevision(data.skillName, context.requestId);
+      if (previous) {
+        return revisionResult(data.skillName, previous);
+      }
       const agent = snapshot.agents.find((candidate) => candidate.name === data.agentName);
       assertSkillChangeScope({
         policy: options.config.administration.agentConfiguration.agentSkillChanges,
@@ -142,10 +161,6 @@ export function createSkillChangeApprovalHandler(
         skillName: data.skillName,
         operations: data.operations
       });
-      const previous = await findProducedRevision(data.skillName, context.requestId);
-      if (previous) {
-        return revisionResult(data.skillName, previous);
-      }
       const current = snapshot.skills.find((candidate) => candidate.name === data.skillName);
       const skill = applySkillChange(current, data.operations);
       const mutations: ConfigAssetMutation[] = [

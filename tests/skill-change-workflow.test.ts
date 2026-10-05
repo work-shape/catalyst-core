@@ -288,12 +288,22 @@ describe("skill change approval workflow", () => {
     expect(await f.approve(request.id)).toMatchObject({ status: "superseded" });
     expect(await f.revisions()).toHaveLength(2);
   });
-  it("rejects disabled policy, creation permission, missing agents and out-of-scope skills", async () => {
+  it("refuses approval while the policy or skill creation is disabled", async () => {
     const f = await fixture();
     const request = await f.propose();
     f.config.administration.agentConfiguration.agentSkillChanges.enabled = false;
     await expect(f.approve(request.id)).rejects.toThrow("disabled");
     f.config.administration.agentConfiguration.agentSkillChanges.enabled = true;
+    const newRequest = await f.propose(creation, "new_skill");
+    f.config.administration.agentConfiguration.agentSkillChanges.allowSkillCreation = false;
+    await expect(f.approve(newRequest.id)).rejects.toThrow("creation is disabled");
+    expect(await f.revisions()).toHaveLength(1);
+  });
+  it("supersedes a request whose skill was detached or whose agent was deleted", async () => {
+    const f = await fixture();
+    const detached = await f.propose();
+    const orphaned = await f.propose();
+    const orphanedCreation = await f.propose(creation, "new_skill");
     await f.store.applyConfigAssetMutations({
       clientInstanceId,
       mutations: [
@@ -305,10 +315,7 @@ describe("skill change approval workflow", () => {
         }
       ]
     });
-    await expect(f.approve(request.id)).rejects.toThrow("outside");
-    const newRequest = await f.propose(creation, "new_skill");
-    f.config.administration.agentConfiguration.agentSkillChanges.allowSkillCreation = false;
-    await expect(f.approve(newRequest.id)).rejects.toThrow("creation is disabled");
+    expect(await f.approve(detached.id)).toMatchObject({ status: "superseded" });
     await f.store.applyConfigAssetMutations({
       clientInstanceId,
       mutations: [
@@ -316,8 +323,49 @@ describe("skill change approval workflow", () => {
         { type: "setDefaultAgent", agentName: undefined }
       ]
     });
-    await expect(f.approve(request.id)).rejects.toThrow("does not exist");
+    expect(await f.approve(orphaned.id)).toMatchObject({ status: "superseded" });
+    expect(await f.approve(orphanedCreation.id)).toMatchObject({ status: "superseded" });
     expect(await f.revisions()).toHaveLength(1);
+  });
+  it("recovers an interrupted approval after the skill was detached and refuses to reject or withdraw it", async () => {
+    const f = await fixture();
+    const request = await f.propose();
+    const handlerContext = {
+      ...context,
+      clientInstanceId,
+      requestId: request.id,
+      summary: request.summary
+    };
+    const applied = await f.handler.apply(request.payload, reviewer, handlerContext);
+    await f.store.applyConfigAssetMutations({
+      clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: f.agent.name,
+          config: json({ ...f.agent, skillNames: [] })
+        }
+      ]
+    });
+    await expect(
+      f.workflow.decideRequest(reviewer, context, { requestId: request.id, decision: "reject" })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(
+      f.workflow.decideRequest(reviewer, context, {
+        requestId: request.id,
+        decision: "request_changes",
+        comment: "Please shorten"
+      })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(f.workflow.withdrawRequest(requester, context, request.id)).rejects.toMatchObject({
+      code: "CONFLICT"
+    });
+    expect(await f.approve(request.id)).toMatchObject({
+      status: "approved",
+      applyResult: applied
+    });
+    expect(await f.revisions()).toHaveLength(2);
   });
   it("creates and removes a skill and agent reference in one versioned batch each", async () => {
     const f = await fixture();
