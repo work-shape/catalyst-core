@@ -1,4 +1,8 @@
-import { apiOperations, type WorkspaceMembershipRole } from "@vivd-catalyst/api-contract";
+import {
+  apiOperations,
+  type LocaleCode,
+  type WorkspaceMembershipRole
+} from "@vivd-catalyst/api-contract";
 import * as generatedSdk from "./generated/sdk.gen";
 import type { ApiClientTransport, OperationRequestInput } from "./transport";
 
@@ -31,6 +35,15 @@ export function createCollaborationWorkspacesClient(transport: ApiClientTranspor
           path: { collaborationWorkspaceId }
         }),
         apiOperations.getCollaborationWorkspace.responseSchema
+      ),
+    listAgents: (collaborationWorkspaceId: string, locale?: LocaleCode) =>
+      transport.unwrapJson(
+        generatedSdk.listCollaborationWorkspaceAgents({
+          client: transport.generatedClient,
+          path: { collaborationWorkspaceId },
+          query: { locale }
+        }),
+        apiOperations.listCollaborationWorkspaceAgents.responseSchema
       ),
     update: (
       collaborationWorkspaceId: string,

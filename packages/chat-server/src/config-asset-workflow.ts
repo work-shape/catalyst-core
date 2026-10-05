@@ -1,7 +1,9 @@
 import {
   AGENT_EDITABLE_FIELDS,
   AppError,
+  asCollaborationWorkspaceId,
   assertConfigAssetBases,
+  type AgentAvailability,
   type ConfigAssetRevisionRecord,
   auditActorFromIdentity,
   isJsonObject,
@@ -55,11 +57,14 @@ export class ConfigAssetWorkflow {
 
   async getOverview(user: AuthenticatedIdentity, context: ConfigAssetCallContext) {
     await this.authorizeAuditedRead(user, context);
-    const [state, assets] = await Promise.all([
+    const [state, assets, availability] = await Promise.all([
       this.options.configAssets.store.getConfigAssetState({
         clientInstanceId: this.options.clientInstanceId
       }),
       this.options.configAssets.store.listActiveConfigAssets({
+        clientInstanceId: this.options.clientInstanceId
+      }),
+      this.options.configAssets.store.listAgentAvailability({
         clientInstanceId: this.options.clientInstanceId
       })
     ]);
@@ -70,7 +75,10 @@ export class ConfigAssetWorkflow {
         kind: asset.kind,
         name: asset.name,
         revision: asset.revision,
-        updatedAt: asset.updatedAt
+        updatedAt: asset.updatedAt,
+        ...(asset.kind === "agent" && availability.has(asset.name)
+          ? { availability: availability.get(asset.name) }
+          : {})
       })),
       references: this.options.configAssets.validationRefs
     };
@@ -196,6 +204,62 @@ export class ConfigAssetWorkflow {
       version: result.version
     });
     return result;
+  }
+
+  async setAgentAvailability(
+    user: AuthenticatedIdentity,
+    context: ConfigAssetCallContext,
+    command: {
+      agentName: string;
+      mode: AgentAvailability["mode"];
+      personalWorkspaces?: boolean;
+      collaborationWorkspaceIds?: string[];
+    }
+  ): Promise<AgentAvailability> {
+    await this.authorizeInteractiveWrite(user, context);
+    const selected = command.mode === "selected";
+    const collaborationWorkspaceIds = selected
+      ? (command.collaborationWorkspaceIds ?? []).map(asCollaborationWorkspaceId)
+      : [];
+    for (const collaborationWorkspaceId of collaborationWorkspaceIds) {
+      const workspace = await this.options.userStore.getWorkspace(
+        this.options.clientInstanceId,
+        collaborationWorkspaceId
+      );
+      if (workspace?.kind !== "shared") {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `'${collaborationWorkspaceId}' is not a Shared Workspace of this client instance`
+        );
+      }
+    }
+    const availability = await this.options.configAssets.store.setAgentAvailability({
+      clientInstanceId: this.options.clientInstanceId,
+      agentName: command.agentName,
+      availability: {
+        mode: command.mode,
+        personalWorkspaces: selected && command.personalWorkspaces === true,
+        collaborationWorkspaceIds
+      }
+    });
+    await this.recordMutation(user, context, "config_asset.availability_set", {
+      kind: "agent",
+      name: command.agentName,
+      mode: availability.mode,
+      personalWorkspaces: availability.personalWorkspaces,
+      collaborationWorkspaceIds: availability.collaborationWorkspaceIds
+    });
+    return availability;
+  }
+
+  /** The Shared Workspaces an instance admin can make an agent available in. */
+  async listAdministeredWorkspaces(user: AuthenticatedIdentity) {
+    requireAuthScope(user, "config_assets:write");
+    requirePermission(user, "config_assets.write");
+    const workspaces = await this.options.userStore.listSharedWorkspaces({
+      clientInstanceId: this.options.clientInstanceId
+    });
+    return workspaces.map((workspace) => ({ id: workspace.id, name: workspace.name }));
   }
 
   async listRevisions(
@@ -451,12 +515,20 @@ export class ConfigAssetWorkflow {
       baseRevisions: command.baseRevisions,
       baseDefaultAgentName: command.baseDefaultAgentName,
       actor: auditActorFromIdentity(user),
+      initialAgentAvailability: "selected_when_replacing_selected",
       mutations
     });
     await this.recordMutation(user, context, "config_assets.replaced", {
       version: result.version
     });
-    return result;
+    const availability = await this.options.configAssets.store.listAgentAvailability({
+      clientInstanceId: this.options.clientInstanceId
+    });
+    const hiddenAgentNames = validated.agents
+      .filter((agent) => providedAgentNames.has(agent.name))
+      .map((agent) => agent.name)
+      .filter((name) => isHiddenEverywhere(availability.get(name)));
+    return { ...result, ...(hiddenAgentNames.length > 0 ? { hiddenAgentNames } : {}) };
   }
 
   async validateAssets(
@@ -615,6 +687,15 @@ export class ConfigAssetWorkflow {
       metadata
     });
   }
+}
+
+function isHiddenEverywhere(availability: AgentAvailability | undefined): boolean {
+  return (
+    !availability ||
+    (availability.mode === "selected" &&
+      !availability.personalWorkspaces &&
+      availability.collaborationWorkspaceIds.length === 0)
+  );
 }
 
 function projectConfigAsset(asset: ConfigAssetRecord) {

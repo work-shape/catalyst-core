@@ -10,6 +10,7 @@ import {
   type CollaborationWorkspaceWithRole,
   type ConversationId,
   type ConversationVisibility,
+  type RuntimeAssetSnapshot,
   type RuntimeCallContext,
   type UserRecord,
   type WorkspaceAccentColor,
@@ -18,6 +19,7 @@ import {
   type WorkspaceMembershipRole,
   type WorkspaceVisibility
 } from "@vivd-catalyst/core";
+import { getWorkspaceAssetSnapshot } from "./agent-availability";
 import type { ChatServerOptions } from "./types";
 import { deleteConversationAggregate } from "./user-deletion";
 
@@ -104,6 +106,18 @@ export class CollaborationWorkspaceWorkflow {
       throw new AppError("NOT_FOUND", "Collaboration Workspace is not available");
     }
     return membership;
+  }
+
+  /** The runtime assets a member sees in this workspace. */
+  async getAssetSnapshot(
+    user: AuthenticatedUser,
+    collaborationWorkspaceId: CollaborationWorkspaceId
+  ): Promise<RuntimeAssetSnapshot> {
+    await this.requireActiveMembership(user, collaborationWorkspaceId);
+    return getWorkspaceAssetSnapshot(
+      this.options,
+      await this.requireWorkspace(collaborationWorkspaceId)
+    );
   }
 
   async listWorkspaces(user: AuthenticatedUser): Promise<WorkspaceListItem[]> {

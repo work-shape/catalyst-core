@@ -37,6 +37,7 @@ import {
 } from "@vivd-catalyst/core";
 import { getModelSelectionForConversationTitles } from "@vivd-catalyst/config-schema";
 import type { ModelMessage } from "@vivd-catalyst/model-provider";
+import { getWorkspaceAssetSnapshot } from "./agent-availability";
 import { createEmptyAttachmentManifest } from "./attachments";
 import { CollaborationWorkspaceWorkflow } from "./collaboration-workspace-workflow";
 import {
@@ -95,8 +96,21 @@ export class ConversationWorkflow {
     this.workspaces = new CollaborationWorkspaceWorkflow(options);
   }
 
-  private async requireDefaultAgentName(): Promise<string> {
-    const assets = await this.options.configAssets.source.getSnapshot();
+  /**
+   * An agent that is unknown and one that is not available in this workspace are
+   * indistinguishable to the caller.
+   */
+  private async resolveRunAgentName(
+    workspace: CollaborationWorkspace,
+    requestedAgentName: string | undefined
+  ): Promise<string> {
+    const assets = await getWorkspaceAssetSnapshot(this.options, workspace);
+    if (requestedAgentName !== undefined) {
+      if (!assets.agents.some((agent) => agent.name === requestedAgentName)) {
+        throw new AppError("NOT_FOUND", `Agent '${requestedAgentName}' is not defined`);
+      }
+      return requestedAgentName;
+    }
     if (!assets.defaultAgentName) {
       throw new AppError(
         "VALIDATION_FAILED",
@@ -146,12 +160,7 @@ export class ConversationWorkflow {
     command: CreateConversationCommand
   ): Promise<Conversation> {
     const subjectUserId = getSubjectUserId(user);
-    const workspace = command.collaborationWorkspaceId
-      ? await this.requireMemberWorkspace(user, command.collaborationWorkspaceId)
-      : await this.options.userStore.ensurePersonalWorkspace({
-          clientInstanceId: this.options.clientInstanceId,
-          userId: asUserId(subjectUserId)
-        });
+    const workspace = await this.resolveTargetWorkspace(user, command.collaborationWorkspaceId);
     const conversation = await this.options.conversationStore.createConversation({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId: workspace.id,
@@ -367,7 +376,7 @@ export class ConversationWorkflow {
     context: RuntimeCallContext,
     command: SendConversationMessageCommand
   ): Promise<StartedConversationMessageRun> {
-    await this.requireConversationAccess(conversationId, user);
+    const conversation = await this.requireConversationAccess(conversationId, user);
     this.assertUserSelectableModelBinding(command.modelBindingId);
     let runStartCommand: RunStartCommand | undefined;
     if (command.idempotencyKey) {
@@ -384,6 +393,10 @@ export class ConversationWorkflow {
     }
 
     try {
+      const agentName = await this.resolveRunAgentName(
+        await this.requireMemberWorkspace(user, conversation.collaborationWorkspaceId),
+        command.agentName
+      );
       const attachments = this.options.attachments;
       const draftAttachments = attachments
         ? await attachments.listDraftAttachments(conversationId)
@@ -412,7 +425,7 @@ export class ConversationWorkflow {
           conversationId,
           ownerUserId: getSubjectUserId(user),
           inputMessageId: userMessageId,
-          agentName: command.agentName ?? (await this.requireDefaultAgentName()),
+          agentName,
           modelBindingId: command.modelBindingId,
           locale: context.locale,
           authorization: {
@@ -538,6 +551,11 @@ export class ConversationWorkflow {
     }
 
     try {
+      // Checked before the Conversation exists so a rejected agent leaves nothing behind.
+      await this.resolveRunAgentName(
+        await this.resolveTargetWorkspace(user, command.collaborationWorkspaceId),
+        command.agentName
+      );
       const conversation = await this.createConversation(user, context, {
         title: command.title ?? createConversationTitle(command.text),
         collaborationWorkspaceId: command.collaborationWorkspaceId
@@ -994,6 +1012,18 @@ export class ConversationWorkflow {
       throw new AppError("NOT_FOUND", "Conversation is not available");
     }
     return conversation;
+  }
+
+  private async resolveTargetWorkspace(
+    user: AuthenticatedUser,
+    collaborationWorkspaceId: CollaborationWorkspaceId | undefined
+  ): Promise<CollaborationWorkspace> {
+    return collaborationWorkspaceId
+      ? this.requireMemberWorkspace(user, collaborationWorkspaceId)
+      : this.options.userStore.ensurePersonalWorkspace({
+          clientInstanceId: this.options.clientInstanceId,
+          userId: asUserId(getSubjectUserId(user))
+        });
   }
 
   private async requireMemberWorkspace(

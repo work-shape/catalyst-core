@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { asClientInstanceId } from "@vivd-catalyst/core";
 import { createClientInstanceApp as createUnseededClientInstanceApp } from "@vivd-catalyst/client-assembly";
 import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 import { createTestConfig, createClientInstanceApp } from "./chat-server-harness";
@@ -378,6 +379,56 @@ describe("client instance app vertical slice", () => {
     });
 
     await app.close();
+  });
+
+  it("limits safe config agents to those available in Personal Workspaces", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig(),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+    try {
+      const clientInstanceId = asClientInstanceId(app.config.clientInstance.id);
+      const names = ["personal", "restricted"];
+      await app.store.applyConfigAssetMutations({
+        clientInstanceId,
+        mutations: names.map((name) => ({
+          type: "upsert" as const,
+          kind: "agent" as const,
+          name,
+          config: {
+            name,
+            displayName: name,
+            instructions: "Use configured tools only.",
+            modelProviderId: "local",
+            toolNames: [],
+            initialPrompts: []
+          }
+        }))
+      });
+      const readAgentNames = async () =>
+        (
+          (await app.server.inject({ method: "GET", url: "/api/config" })).json() as {
+            agents: Array<{ name: string }>;
+          }
+        ).agents.map((agent) => agent.name);
+      expect(await readAgentNames()).toEqual(["personal", "restricted", "test_agent"]);
+
+      await app.store.setAgentAvailability({
+        clientInstanceId,
+        agentName: "personal",
+        availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
+      });
+      await app.store.setAgentAvailability({
+        clientInstanceId,
+        agentName: "restricted",
+        availability: { mode: "selected", personalWorkspaces: false, collaborationWorkspaceIds: [] }
+      });
+      expect(await readAgentNames()).toEqual(["personal", "test_agent"]);
+    } finally {
+      await app.close();
+    }
   });
 
   it("resolves localized agent content in safe config", async () => {

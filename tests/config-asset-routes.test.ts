@@ -614,6 +614,259 @@ describe("config asset admin routes", () => {
     });
   });
 
+  it("lets config admins set agent availability and keeps the default agent open", async () => {
+    const fixture = await createFixture();
+    const token = await mintToken(fixture.server);
+    const { clientInstanceId, store } = fixture;
+    const owner = await store.createUser({ clientInstanceId, displayLabel: "Owner" });
+    const shared = await store.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "KAI",
+      visibility: "private",
+      creatorUserId: owner.id
+    });
+    const personal = await store.ensurePersonalWorkspace({ clientInstanceId, userId: owner.id });
+    const foreignInstanceId = asClientInstanceId("another-instance");
+    const foreign = await store.createWorkspace({
+      clientInstanceId: foreignInstanceId,
+      kind: "shared",
+      name: "Foreign",
+      creatorUserId: (
+        await store.createUser({ clientInstanceId: foreignInstanceId, displayLabel: "Foreign" })
+      ).id
+    });
+    const imported = await request(fixture.server, token, {
+      method: "POST",
+      url: "/api/admin/config/import",
+      payload: {
+        baseVersion: null,
+        defaultAgentName: "assistant",
+        agents: [agentConfig("Default"), agentConfig("KAI", { name: "kai" })],
+        skills: [skillConfig("Research")]
+      }
+    });
+    expect(imported.json()).toEqual({ version: 1 });
+    const everywhere = { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] };
+    const readAssets = async () =>
+      (
+        (
+          await request(fixture.server, token, { method: "GET", url: "/api/admin/config/assets" })
+        ).json() as { assets: Array<{ kind: string; name: string; availability?: unknown }> }
+      ).assets.map(({ kind, name, availability }) => ({ kind, name, availability }));
+    expect(await readAssets()).toEqual([
+      { kind: "agent", name: "assistant", availability: everywhere },
+      { kind: "agent", name: "kai", availability: everywhere },
+      { kind: "skill", name: "research", availability: undefined }
+    ]);
+
+    const workspaces = await request(fixture.server, token, {
+      method: "GET",
+      url: "/api/admin/collaboration-workspaces"
+    });
+    expect(workspaces.statusCode).toBe(200);
+    expect(workspaces.json()).toEqual([{ id: shared.id, name: "KAI" }]);
+
+    const setKai = (payload: unknown, name = "kai") =>
+      request(fixture.server, token, {
+        method: "PUT",
+        url: `/api/admin/config/agents/${name}/availability`,
+        payload
+      });
+    const selected = await setKai({
+      mode: "selected",
+      personalWorkspaces: true,
+      collaborationWorkspaceIds: [shared.id]
+    });
+    expect(selected.statusCode).toBe(200);
+    expect(selected.json()).toEqual({
+      mode: "selected",
+      personalWorkspaces: true,
+      collaborationWorkspaceIds: [shared.id]
+    });
+    expect((await readAssets())[1]).toEqual({
+      kind: "agent",
+      name: "kai",
+      availability: selected.json()
+    });
+    expect(
+      (await store.listAuditEvents({ clientInstanceId })).some(
+        (event) => event.type === "config_asset.availability_set" && event.metadata?.name === "kai"
+      )
+    ).toBe(true);
+
+    // Workspace ids must be Shared Workspaces of this instance.
+    for (const collaborationWorkspaceId of [personal.id, foreign.id, "cws_missing"]) {
+      const rejected = await setKai({
+        mode: "selected",
+        collaborationWorkspaceIds: [collaborationWorkspaceId]
+      });
+      expect(rejected.statusCode).toBe(422);
+      expect(rejected.json()).toMatchObject({ error: { code: "VALIDATION_FAILED" } });
+    }
+    expect((await readAssets())[1]?.availability).toEqual(selected.json());
+
+    const unknownAgent = await setKai({ mode: "all" }, "missing");
+    expect(unknownAgent.statusCode).toBe(404);
+    const invalidMode = await setKai({ mode: "some" });
+    expect(invalidMode.statusCode).toBe(422);
+
+    // The instance default agent must stay available everywhere, in both directions.
+    const hideDefault = await setKai({ mode: "selected", personalWorkspaces: true }, "assistant");
+    expect(hideDefault.statusCode).toBe(422);
+    expect(hideDefault.json()).toMatchObject({
+      error: {
+        code: "VALIDATION_FAILED",
+        message: "Default agent 'assistant' must be available in all workspaces"
+      }
+    });
+    const defaultToRestricted = await request(fixture.server, token, {
+      method: "PUT",
+      url: "/api/admin/config/default-agent",
+      payload: { agentName: "kai" }
+    });
+    expect(defaultToRestricted.statusCode).toBe(422);
+    expect(defaultToRestricted.json()).toMatchObject({
+      error: { message: "Default agent 'kai' must be available in all workspaces" }
+    });
+    const pushedDefault = await request(fixture.server, token, {
+      method: "POST",
+      url: "/api/admin/config/import",
+      payload: { baseVersion: null, mode: "merge", defaultAgentName: "kai", agents: [], skills: [] }
+    });
+    expect(pushedDefault.statusCode).toBe(422);
+    expect(
+      (
+        await request(fixture.server, token, { method: "GET", url: "/api/admin/config/assets" })
+      ).json()
+    ).toMatchObject({ version: 1, defaultAgentName: "assistant" });
+
+    // `all` clears the selection.
+    const reopened = await setKai({
+      mode: "all",
+      personalWorkspaces: true,
+      collaborationWorkspaceIds: [shared.id]
+    });
+    expect(reopened.json()).toEqual(everywhere);
+  });
+
+  it("requires the config write permission and scope for availability administration", async () => {
+    const fixture = await createFixture();
+    const token = await mintToken(fixture.server);
+    await request(fixture.server, token, {
+      method: "POST",
+      url: "/api/admin/config/import",
+      payload: {
+        baseVersion: null,
+        defaultAgentName: "assistant",
+        agents: [agentConfig("Default"), agentConfig("KAI", { name: "kai" })],
+        skills: []
+      }
+    });
+    const denied = [
+      await mintToken(fixture.server, {
+        scopes: ["config_assets:read", "config_assets:write"],
+        permissions: ["config_assets.read", "config_assets.release"]
+      }),
+      await mintToken(fixture.server, {
+        scopes: ["config_assets:read", "config_assets:release"],
+        permissions: ["config_assets.read", "config_assets.write", "config_assets.release"]
+      })
+    ];
+    for (const deniedToken of denied) {
+      const set = await request(fixture.server, deniedToken, {
+        method: "PUT",
+        url: "/api/admin/config/agents/kai/availability",
+        payload: { mode: "selected" }
+      });
+      expect(set.statusCode).toBe(403);
+      const list = await request(fixture.server, deniedToken, {
+        method: "GET",
+        url: "/api/admin/collaboration-workspaces"
+      });
+      expect(list.statusCode).toBe(403);
+    }
+    const unauthenticated = await fixture.server.inject({
+      method: "PUT",
+      url: "/api/admin/config/agents/kai/availability",
+      payload: { mode: "selected" }
+    });
+    expect(unauthenticated.statusCode).toBe(401);
+    expect(
+      (
+        await fixture.store.listAgentAvailability({ clientInstanceId: fixture.clientInstanceId })
+      ).get("kai")?.mode
+    ).toBe("all");
+
+    const disabled = await createFixture({ agentConfiguration: { enabled: false } });
+    const disabledToken = await mintToken(disabled.server);
+    const whileDisabled = await request(disabled.server, disabledToken, {
+      method: "PUT",
+      url: "/api/admin/config/agents/kai/availability",
+      payload: { mode: "all" }
+    });
+    expect(whileDisabled.statusCode).toBe(403);
+  });
+
+  it("hides the agents of a push that renames a restricted agent and reports them", async () => {
+    const fixture = await createFixture();
+    const token = await mintToken(fixture.server);
+    const push = (payload: Record<string, unknown>) =>
+      request(fixture.server, token, {
+        method: "POST",
+        url: "/api/admin/config/import",
+        payload: { baseVersion: null, mode: "merge", skills: [], ...payload }
+      });
+    await push({
+      defaultAgentName: "assistant",
+      agents: [agentConfig("Default"), agentConfig("KAI", { name: "kai" })]
+    });
+    await fixture.store.setAgentAvailability({
+      clientInstanceId: fixture.clientInstanceId,
+      agentName: "kai",
+      availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
+    });
+
+    // A push that only adds an agent keeps the default.
+    const added = await push({ agents: [agentConfig("Open", { name: "open" })] });
+    expect(added.json()).toEqual({ version: 2 });
+
+    const renamed = await push({
+      agents: [agentConfig("KAI", { name: "kai-tax" }), agentConfig("Default v2")],
+      deleteAssets: [{ kind: "agent", name: "kai" }]
+    });
+    expect(renamed.statusCode).toBe(200);
+    expect(renamed.json()).toEqual({ version: 3, hiddenAgentNames: ["kai-tax"] });
+    const availability = await fixture.store.listAgentAvailability({
+      clientInstanceId: fixture.clientInstanceId
+    });
+    expect(availability.get("kai-tax")).toEqual({
+      mode: "selected",
+      personalWorkspaces: false,
+      collaborationWorkspaceIds: []
+    });
+    expect(availability.has("kai")).toBe(false);
+    expect(availability.get("assistant")?.mode).toBe("all");
+    expect(availability.get("open")?.mode).toBe("all");
+
+    // A mirror push that drops a restricted agent is the same rename.
+    await fixture.store.setAgentAvailability({
+      clientInstanceId: fixture.clientInstanceId,
+      agentName: "kai-tax",
+      availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
+    });
+    const mirrored = await push({
+      mode: "mirror",
+      defaultAgentName: "assistant",
+      agents: [
+        agentConfig("Default v2"),
+        agentConfig("Open", { name: "open" }),
+        agentConfig("KAI", { name: "kai-law" })
+      ]
+    });
+    expect(mirrored.json()).toEqual({ version: 4, hiddenAgentNames: ["kai-law"] });
+  });
+
   it("requires the release-sync permission for bundle replacement", async () => {
     const fixture = await createFixture();
     const interactiveToken = await mintToken(fixture.server, {
