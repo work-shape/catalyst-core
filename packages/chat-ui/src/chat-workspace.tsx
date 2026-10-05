@@ -85,6 +85,12 @@ function ChatWorkspaceContent({
     collaborationWorkspacesAvailable
   });
   const [displayPanelWidth, setDisplayPanelWidth] = useState(0);
+  const [passwordSetupToken, setPasswordSetupToken] = useState(readPasswordSetupToken);
+
+  function clearPasswordSetupToken() {
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    setPasswordSetupToken(undefined);
+  }
   const resourcesEnabled = model.config.config?.features.resources.enabled ?? false;
   const resourcesConversationId = model.route.selectedConversationId;
   const resourcesAvailable = isResourcesPanelAvailable({
@@ -98,7 +104,7 @@ function ChatWorkspaceContent({
   const displayPanel = useToolDisplayPanel();
   const resourcesVisible = resourcesPanel.open && !displayPanel.open;
 
-  if (model.auth.loginRequired) {
+  if (model.auth.loginRequired || passwordSetupToken) {
     return (
       <TranslationProvider locale={model.config.activeLocale}>
         <LoginPanel
@@ -107,6 +113,8 @@ function ChatWorkspaceContent({
           fallbackLocale={model.config.activeLocale}
           onLocaleChange={model.config.selectLocale}
           manageDocumentTitle={manageDocumentTitle}
+          passwordSetupToken={passwordSetupToken}
+          onPasswordSetupClosed={clearPasswordSetupToken}
           onSignedIn={model.auth.invalidateCurrentUser}
         />
       </TranslationProvider>
@@ -299,4 +307,14 @@ function ChatWorkspaceContent({
       </main>
     </TranslationProvider>
   );
+}
+
+const PASSWORD_SETUP_HASH_PREFIX = "#password-setup=";
+
+/** Emailed links carry their token in the URL fragment so it never reaches the server. */
+function readPasswordSetupToken(): string | undefined {
+  const hash = typeof window === "undefined" ? "" : window.location.hash;
+  return hash.startsWith(PASSWORD_SETUP_HASH_PREFIX)
+    ? hash.slice(PASSWORD_SETUP_HASH_PREFIX.length) || undefined
+    : undefined;
 }

@@ -606,7 +606,8 @@
                     "theme",
                     "darkTheme",
                     "defaultThemeMode",
-                    "environment"
+                    "environment",
+                    "passwordResetEnabled"
                   ],
                   "additionalProperties": false
                 }
@@ -836,7 +837,8 @@
                         "attachments",
                         "resources",
                         "collaborationWorkspaces",
-                        "configAssets"
+                        "configAssets",
+                        "userInvitations"
                       ],
                       "additionalProperties": false
                     },
@@ -1421,6 +1423,117 @@
                     "role": {
                       "type": "string",
                       "enum": [
+    "/api/password-reset": {
+      "post": {
+        "operationId": "requestPasswordReset",
+        "parameters": [
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  }
+                },
+                "required": [
+                  "email"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/password-setup": {
+      "post": {
+        "operationId": "completePasswordSetup",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 8
+                  }
+                },
+                "required": [
+                  "token",
+                  "password"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
                         "owner",
                         "admin",
                         "member"
@@ -1586,6 +1699,10 @@
                       ]
                     },
                     "name": {
+                    },
+                    "passwordResetEnabled": {
+                      "default": false,
+                      "type": "boolean"
                       "type": "string"
                     },
                     "description": {
@@ -1823,6 +1940,21 @@
                     "visibility": {
                       "type": "string",
                       "enum": [
+                        },
+                        "userInvitations": {
+                          "default": {
+                            "enabled": false
+                          },
+                          "type": "object",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "enabled"
+                          ],
+                          "additionalProperties": false
                         "discoverable",
                         "private"
                       ]
@@ -14686,6 +14818,43 @@
                   "type": "object",
                   "properties": {
                     "chatSessionToken": {
+    "/api/superadmin/users/{userId}/invitation": {
+      "post": {
+        "operationId": "sendAdministeredUserInvitation",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
                       "type": "string"
                     },
                     "expiresAt": {

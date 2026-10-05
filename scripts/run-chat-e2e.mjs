@@ -16,6 +16,7 @@ const requiredBuilds = [
   ["packages/auth", "build"],
   ["packages/capability-sdk", "build"],
   ["packages/tool-sdk", "build"],
+  ["packages/mail", "build"],
   ["packages/model-provider", "build"],
   ["packages/usage-governance", "build"],
   ["packages/data-source", "build"],

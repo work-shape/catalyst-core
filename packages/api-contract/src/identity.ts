@@ -181,6 +181,27 @@ export const resetAdministeredUserPasswordResponseSchema = z.object({
   ok: z.literal(true)
 });
 
+export const requestPasswordResetRequestSchema = z.object({
+  email: z.string().email()
+});
+
+export const requestPasswordResetResponseSchema = z.object({
+  ok: z.literal(true)
+});
+
+export const completePasswordSetupRequestSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8)
+});
+
+export const completePasswordSetupResponseSchema = z.object({
+  ok: z.literal(true)
+});
+
+export const sendAdministeredUserInvitationResponseSchema = z.object({
+  ok: z.literal(true)
+});
+
 export const servicePrincipalStatusSchema = z.enum(["active", "disabled"]);
 
 export const servicePrincipalPermissionSchema = z.enum([

@@ -40,6 +40,12 @@ export interface ClientBranding {
     borderColor: string;
   };
   defaultThemeMode: "light" | "dark" | "system";
+  passwordResetEnabled: boolean;
+}
+
+/** Emailed password setup links need both a mail sender and standalone password sign-in. */
+export function isPasswordMailEnabled(config: ClientInstanceConfig): boolean {
+  return config.mail.enabled && Boolean(config.auth.standalone?.enabled);
 }
 
 export function createClientBranding(
@@ -75,6 +81,7 @@ export function createClientBranding(
       accentColor
     },
     darkTheme: config.ui.darkTheme,
-    defaultThemeMode: config.ui.defaultThemeMode
+    defaultThemeMode: config.ui.defaultThemeMode,
+    passwordResetEnabled: isPasswordMailEnabled(config)
   };
 }

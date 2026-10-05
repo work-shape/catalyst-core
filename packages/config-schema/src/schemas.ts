@@ -724,6 +724,48 @@ export const administrationConfigSchema = z
     }
   });
 
+export const mailConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    provider: z.enum(["mailjet", "capture"]).default("mailjet"),
+    apiKeyEnvName: z.string().min(1).default("MAILJET_API_KEY"),
+    apiSecretEnvName: z.string().min(1).default("MAILJET_API_SECRET"),
+    /** Public URL of the chat UI; emailed links point here. */
+    appUrl: z.string().url().optional(),
+    sender: z
+      .object({
+        fromAddress: z.string().email(),
+        fromName: z.string().min(1).optional(),
+        replyTo: z.string().email().optional()
+      })
+      .optional()
+  })
+  .default({
+    enabled: false,
+    provider: "mailjet",
+    apiKeyEnvName: "MAILJET_API_KEY",
+    apiSecretEnvName: "MAILJET_API_SECRET"
+  })
+  .superRefine((mail, context) => {
+    if (!mail.enabled) {
+      return;
+    }
+    if (!mail.appUrl) {
+      context.addIssue({
+        code: "custom",
+        path: ["appUrl"],
+        message: "mail.appUrl is required when mail is enabled"
+      });
+    }
+    if (!mail.sender) {
+      context.addIssue({
+        code: "custom",
+        path: ["sender"],
+        message: "mail.sender is required when mail is enabled"
+      });
+    }
+  });
+
 export const clientInstanceConfigSchema = z.object({
   version: z.literal(1).default(1),
   clientInstance: z.object({
@@ -773,6 +815,7 @@ export const clientInstanceConfigSchema = z.object({
   webAccess: webAccessConfigSchema,
   executionWorkspaces: executionWorkspacesConfigSchema,
   administration: administrationConfigSchema,
+  mail: mailConfigSchema,
   capabilities: z.record(z.string(), z.unknown()).default({}),
   usage: z
     .object({
@@ -845,4 +888,5 @@ export type {
   UsageSafeguardsConfig,
   WebAccessConfig
 };
+export type MailConfig = z.infer<typeof mailConfigSchema>;
 export type ClientInstanceConfig = z.infer<typeof clientInstanceConfigSchema>;

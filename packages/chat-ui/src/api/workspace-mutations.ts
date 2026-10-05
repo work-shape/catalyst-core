@@ -693,6 +693,13 @@ export function useSuperadminUserMutations(input: WorkspaceMutationInput) {
       invalidateAuditEvents();
     }
   });
+  const sendUserInvitation = useMutation({
+    mutationFn: (userId: string) => input.client.users.sendInvitation(userId),
+    onSuccess: () => {
+      invalidateSuperadminUsers();
+      invalidateAuditEvents();
+    }
+  });
 
   return {
     createUser,
@@ -701,13 +708,15 @@ export function useSuperadminUserMutations(input: WorkspaceMutationInput) {
     upsertUserIdentity,
     deleteUserIdentity,
     resetUserPassword,
+    sendUserInvitation,
     isPending:
       createUser.isPending ||
       updateUser.isPending ||
       deleteUser.isPending ||
       upsertUserIdentity.isPending ||
       deleteUserIdentity.isPending ||
-      resetUserPassword.isPending
+      resetUserPassword.isPending ||
+      sendUserInvitation.isPending
   };
 }
 

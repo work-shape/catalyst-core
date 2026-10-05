@@ -19,12 +19,16 @@ import { createEnvironmentDocumentTitle } from "./workspace-utils";
 
 const DEFAULT_LOGIN_LOCALES: LocaleCode[] = ["en", "de"];
 
+type LoginMode = "signIn" | "requestReset" | "setPassword";
+
 export function LoginPanel({
   apiBaseUrl,
   localePreference,
   fallbackLocale,
   onLocaleChange,
   manageDocumentTitle,
+  passwordSetupToken,
+  onPasswordSetupClosed,
   onSignedIn
 }: {
   apiBaseUrl: string;
@@ -32,12 +36,17 @@ export function LoginPanel({
   fallbackLocale: LocaleCode;
   onLocaleChange(locale: LocaleCode): void;
   manageDocumentTitle?: boolean;
+  /** Token from an emailed link; shows the set-password form instead of sign-in. */
+  passwordSetupToken?: string;
+  onPasswordSetupClosed?: () => void;
   onSignedIn: () => void;
 }) {
   const { t, localeName } = useTranslation();
+  const [mode, setMode] = useState<LoginMode>(passwordSetupToken ? "setPassword" : "signIn");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | undefined>();
+  const [notice, setNotice] = useState<string | undefined>();
   const [pending, setPending] = useState(false);
   const [systemThemeMode, setSystemThemeMode] = useState(() => readSystemThemeMode());
   const client = useMemo(() => createApiClient({ baseUrl: apiBaseUrl }), [apiBaseUrl]);
@@ -110,6 +119,60 @@ export function LoginPanel({
     onSignedIn();
   }
 
+  function showMode(nextMode: LoginMode) {
+    setMode(nextMode);
+    setPassword("");
+    setError(undefined);
+    setNotice(undefined);
+  }
+
+  function closePasswordSetup(nextNotice?: string) {
+    onPasswordSetupClosed?.();
+    showMode("signIn");
+    setNotice(nextNotice);
+  }
+
+  async function onRequestReset(event: FormEvent) {
+    event.preventDefault();
+    setPending(true);
+    setError(undefined);
+    try {
+      await client.passwordSetup.requestReset({ email }, activeLocale);
+      showMode("signIn");
+      setNotice(t("passwordResetSent"));
+    } catch {
+      setError(t("tryAgain"));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function onSetPassword(event: FormEvent) {
+    event.preventDefault();
+    if (!passwordSetupToken) {
+      return;
+    }
+    setPending(true);
+    setError(undefined);
+    try {
+      await client.passwordSetup.complete({ token: passwordSetupToken, password });
+      closePasswordSetup(t("passwordSetupDone"));
+    } catch {
+      setError(t("passwordSetupFailed"));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const title =
+    mode === "setPassword"
+      ? t("passwordSetupTitle")
+      : mode === "requestReset"
+        ? t("passwordResetTitle")
+        : clientName
+          ? t("signInTo", { clientName })
+          : t("signIn");
+
   return (
     <main
       className="relative grid h-dvh w-full place-items-center overflow-hidden bg-sidebar p-5 text-foreground"
@@ -149,38 +212,84 @@ export function LoginPanel({
               </span>
             </div>
           ) : null}
-          <CardTitle className="leading-tight">
-            {clientName ? t("signInTo", { clientName }) : t("signIn")}
-          </CardTitle>
+          <CardTitle className="leading-tight">{title}</CardTitle>
         </CardHeader>
         <CardContent>
-          <form className="grid gap-4" onSubmit={onSubmit}>
-            <label className="grid gap-1.5 text-sm font-medium">
-              <span>{t("email")}</span>
-              <Input
-                autoComplete="email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-              />
-            </label>
-            <label className="grid gap-1.5 text-sm font-medium">
-              <span>{t("password")}</span>
-              <Input
-                autoComplete="current-password"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-              />
-            </label>
+          <form
+            className="grid gap-4"
+            onSubmit={
+              mode === "setPassword"
+                ? onSetPassword
+                : mode === "requestReset"
+                  ? onRequestReset
+                  : onSubmit
+            }
+          >
+            {mode === "requestReset" ? (
+              <p className="text-sm text-muted-foreground">{t("passwordResetDescription")}</p>
+            ) : null}
+            {notice ? (
+              <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm" role="status">
+                {notice}
+              </p>
+            ) : null}
+            {mode !== "setPassword" ? (
+              <label className="grid gap-1.5 text-sm font-medium">
+                <span>{t("email")}</span>
+                <Input
+                  autoComplete="email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                />
+              </label>
+            ) : null}
+            {mode !== "requestReset" ? (
+              <label className="grid gap-1.5 text-sm font-medium">
+                <span>{mode === "setPassword" ? t("newPassword") : t("password")}</span>
+                <Input
+                  autoComplete={mode === "setPassword" ? "new-password" : "current-password"}
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+              </label>
+            ) : null}
+            {mode === "setPassword" && password.length > 0 && password.length < 8 ? (
+              <p className="text-sm text-muted-foreground">{t("newPasswordTooShort")}</p>
+            ) : null}
             {error ? (
               <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {error}
               </p>
             ) : null}
-            <Button type="submit" disabled={pending || !email || !password}>
-              {pending ? t("signingIn") : t("signIn")}
-            </Button>
+            {mode === "setPassword" ? (
+              <Button type="submit" disabled={pending || password.length < 8}>
+                {pending ? t("saving") : t("passwordSetupSubmit")}
+              </Button>
+            ) : mode === "requestReset" ? (
+              <Button type="submit" disabled={pending || !email}>
+                {t("passwordResetSend")}
+              </Button>
+            ) : (
+              <Button type="submit" disabled={pending || !email || !password}>
+                {pending ? t("signingIn") : t("signIn")}
+              </Button>
+            )}
+            {mode === "signIn" && branding?.passwordResetEnabled ? (
+              <Button type="button" variant="ghost" onClick={() => showMode("requestReset")}>
+                {t("passwordResetForgot")}
+              </Button>
+            ) : null}
+            {mode !== "signIn" ? (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => (mode === "setPassword" ? closePasswordSetup() : showMode("signIn"))}
+              >
+                {t("passwordSetupBack")}
+              </Button>
+            ) : null}
           </form>
           <div className="mt-4 flex items-center justify-between gap-3 border-t pt-4">
             <span className="text-sm text-muted-foreground">{localeName(activeLocale)}</span>

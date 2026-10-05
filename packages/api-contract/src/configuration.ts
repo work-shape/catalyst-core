@@ -69,7 +69,8 @@ const clientUiBrandingSchema = z.object({
 });
 
 export const clientBrandingSchema = clientUiBrandingSchema.extend({
-  environment: z.string()
+  environment: z.string(),
+  passwordResetEnabled: z.boolean().default(false)
 });
 
 export const safeConfigSchema = z.object({
@@ -109,7 +110,8 @@ export const safeConfigSchema = z.object({
       allowAgentDeletion: z.boolean().default(false),
       allowDefaultAgentChange: z.boolean().default(false),
       allowSkillEditing: z.boolean().default(false)
-    })
+    }),
+    userInvitations: z.object({ enabled: z.boolean() }).default({ enabled: false })
   }),
   defaultAgentName: z.string().optional(),
   selectableModels: z.array(

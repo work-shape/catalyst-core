@@ -41,6 +41,28 @@ export function createInstanceClients(transport: ApiClientTransport) {
           apiOperations.deleteCurrentUser.responseSchema
         )
     },
+    passwordSetup: {
+      requestReset: (
+        input: OperationRequestInput<typeof apiOperations.requestPasswordReset>,
+        locale?: LocaleCode
+      ) =>
+        transport.unwrapJson(
+          generatedSdk.requestPasswordReset({
+            client: transport.generatedClient,
+            query: { locale },
+            body: apiOperations.requestPasswordReset.requestSchema.parse(input)
+          }),
+          apiOperations.requestPasswordReset.responseSchema
+        ),
+      complete: (input: OperationRequestInput<typeof apiOperations.completePasswordSetup>) =>
+        transport.unwrapJson(
+          generatedSdk.completePasswordSetup({
+            client: transport.generatedClient,
+            body: apiOperations.completePasswordSetup.requestSchema.parse(input)
+          }),
+          apiOperations.completePasswordSetup.responseSchema
+        )
+    },
     branding: {
       get: (locale?: LocaleCode) =>
         transport.unwrapJson(
@@ -290,6 +312,14 @@ function createUsersClient(transport: ApiClientTransport) {
         apiOperations.resetAdministeredUserPassword.responseSchema
       ),
     deleteIdentity: (userId: string, authSource: string, externalUserId: string) =>
+    sendInvitation: (userId: string) =>
+      transport.unwrapJson(
+        generatedSdk.sendAdministeredUserInvitation({
+          client: transport.generatedClient,
+          path: { userId }
+        }),
+        apiOperations.sendAdministeredUserInvitation.responseSchema
+      ),
       transport.unwrapJson(
         generatedSdk.deleteAdministeredUserIdentity({
           client: transport.generatedClient,

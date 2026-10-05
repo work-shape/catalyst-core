@@ -64,6 +64,8 @@ import {
   changeCurrentUserPasswordRequestSchema,
   changeCurrentUserPasswordResponseSchema,
   createAdministeredUserRequestSchema,
+  completePasswordSetupRequestSchema,
+  completePasswordSetupResponseSchema,
   createApiCredentialRequestSchema,
   createApiCredentialResponseSchema,
   createServicePrincipalRequestSchema,
@@ -72,8 +74,11 @@ import {
   issueSessionTokenRequestSchema,
   issueSessionTokenResponseSchema,
   resetAdministeredUserPasswordRequestSchema,
+  requestPasswordResetRequestSchema,
+  requestPasswordResetResponseSchema,
   resetAdministeredUserPasswordResponseSchema,
   servicePrincipalDetailSchema,
+  sendAdministeredUserInvitationResponseSchema,
   updateAdministeredUserRequestSchema,
   updateCurrentUserRequestSchema,
   updateServicePrincipalRequestSchema,
@@ -129,6 +134,21 @@ export const apiOperations = {
     responseSchema: z.array(collaborationWorkspaceWithRoleSchema)
   }),
   createCollaborationWorkspace: defineJsonApiOperation({
+  requestPasswordReset: defineJsonApiOperation({
+    operationId: "requestPasswordReset",
+    method: "POST",
+    path: "/api/password-reset",
+    queryParams: ["locale"],
+    requestSchema: requestPasswordResetRequestSchema,
+    responseSchema: requestPasswordResetResponseSchema
+  }),
+  completePasswordSetup: defineJsonApiOperation({
+    operationId: "completePasswordSetup",
+    method: "POST",
+    path: "/api/password-setup",
+    requestSchema: completePasswordSetupRequestSchema,
+    responseSchema: completePasswordSetupResponseSchema
+  }),
     operationId: "createCollaborationWorkspace",
     method: "POST",
     path: "/api/collaboration-workspaces",
@@ -529,6 +549,12 @@ export const apiOperations = {
     responseSchema: servicePrincipalDetailSchema
   }),
   createApiCredential: defineJsonApiOperation({
+  sendAdministeredUserInvitation: defineJsonApiOperation({
+    operationId: "sendAdministeredUserInvitation",
+    method: "POST",
+    path: "/api/superadmin/users/:userId/invitation",
+    responseSchema: sendAdministeredUserInvitationResponseSchema
+  }),
     operationId: "createApiCredential",
     method: "POST",
     path: "/api/superadmin/api-access/service-principals/:servicePrincipalId/credentials",

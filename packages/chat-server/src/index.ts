@@ -7,6 +7,7 @@ import { registerApiAccessAdministrationRoutes } from "./routes/api-access-admin
 import { registerAgentRunRoutes } from "./routes/agent-run-routes";
 import { registerBetterAuthRoutes } from "./routes/better-auth-routes";
 import { registerConfigRoutes } from "./routes/config-routes";
+import { registerDevMailRoutes } from "./routes/dev-mail-routes";
 import { registerCollaborationWorkspaceRoutes } from "./routes/collaboration-workspace-routes";
 import { registerConfigAssetRoutes } from "./routes/config-asset-routes";
 import { registerConversationFileRoutes } from "./routes/conversation-file-routes";
@@ -87,6 +88,7 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
 
   registerBetterAuthRoutes(app, options);
   registerSessionTokenRoutes(app, options);
+  registerDevMailRoutes(app, options);
   registerServiceAccessTokenRoutes(app, options);
   registerAgentRunRoutes(app, options);
   registerConfigRoutes(app, options);

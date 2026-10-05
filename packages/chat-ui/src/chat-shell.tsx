@@ -37,6 +37,7 @@ export interface ChatShellAdminPanelInput {
   client: ApiClient;
   user: ApiUser;
   configAssetManagement: SafeConfig["features"]["configAssets"] | undefined;
+  userInvitationsEnabled: boolean;
   selectedTab: SuperadminRouteTab;
   onSelectTab(tab: SuperadminRouteTab): void;
 }

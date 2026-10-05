@@ -36,6 +36,13 @@ auth:
   sessionToken:
     issuer: demo-client-instance
     ttlSeconds: 900
+mail:
+  enabled: true
+  # Mails are kept in memory and listed at /api/dev/captured-mail instead of being delivered.
+  provider: capture
+  appUrl: http://127.0.0.1:5173
+  sender:
+    fromAddress: noreply@example.test
 retention:
   conversationDays: 30
   auditDays: 365

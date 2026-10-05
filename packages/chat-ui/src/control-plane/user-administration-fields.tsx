@@ -75,10 +75,12 @@ export function UserFields({
 export function CreateUserFields({
   form,
   canManageSuperadminAccess,
+  invitationsEnabled,
   onChange
 }: {
   form: CreateUserFormState;
   canManageSuperadminAccess: boolean;
+  invitationsEnabled: boolean;
   onChange(nextForm: CreateUserFormState): void;
 }) {
   return (
@@ -92,7 +94,13 @@ export function CreateUserFields({
         </Field>
         <Field
           label="Email"
-          hint={form.createPasswordSignIn ? "Required for password sign-in." : undefined}
+          hint={
+            form.sendInvitation
+              ? "The invitation is sent to this address."
+              : form.createPasswordSignIn
+                ? "Required for password sign-in."
+                : undefined
+          }
         >
           <Input
             type="email"
@@ -119,15 +127,27 @@ export function CreateUserFields({
           </Select>
         </Field>
       </div>
-      <label className="inline-flex w-fit items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={form.createPasswordSignIn}
-          onChange={(event) => onChange({ ...form, createPasswordSignIn: event.target.checked })}
-        />
-        <span>Create password sign-in</span>
-      </label>
-      {form.createPasswordSignIn ? (
+      {invitationsEnabled ? (
+        <label className="inline-flex w-fit items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={form.sendInvitation}
+            onChange={(event) => onChange({ ...form, sendInvitation: event.target.checked })}
+          />
+          <span>Email an invitation to set a password</span>
+        </label>
+      ) : null}
+      {form.sendInvitation ? null : (
+        <label className="inline-flex w-fit items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={form.createPasswordSignIn}
+            onChange={(event) => onChange({ ...form, createPasswordSignIn: event.target.checked })}
+          />
+          <span>Create password sign-in</span>
+        </label>
+      )}
+      {form.createPasswordSignIn && !form.sendInvitation ? (
         <Field
           label="Initial password"
           hint="At least 8 characters. Share it with the user securely."

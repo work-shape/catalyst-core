@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { and, eq, like } from "drizzle-orm";
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -16,6 +16,7 @@ import {
   authAccounts,
   authSessions,
   authUsers,
+  authVerifications,
   standaloneAuthProfiles,
   standaloneAuthSchema
 } from "./standalone-auth-schema";
@@ -72,6 +73,24 @@ export interface DeleteStandalonePasswordSignInInput {
   externalUserId: string;
 }
 
+export interface FindStandalonePasswordSignInInput {
+  email: string;
+}
+
+export interface CreateStandalonePasswordSetupTokenInput {
+  externalUserId: string;
+  ttlMs: number;
+}
+
+export interface CompleteStandalonePasswordSetupInput {
+  token: string;
+  password: string;
+}
+
+export interface CompletedStandalonePasswordSetup {
+  externalUserId: string;
+}
+
 export interface StandaloneAuthRuntime {
   handleRequest(request: Request): Promise<Response>;
   authAdapter: AuthAdapter;
@@ -83,6 +102,14 @@ export interface StandaloneAuthRuntime {
   ): Promise<StandalonePasswordSignIn>;
   changePassword(input: ChangeStandalonePasswordInput): Promise<void>;
   deletePasswordSignIn(input: DeleteStandalonePasswordSignInInput): Promise<void>;
+  findPasswordSignIn(
+    input: FindStandalonePasswordSignInInput
+  ): Promise<StandalonePasswordSignIn | undefined>;
+  /** Issues a single-use emailed-link token; any earlier token for the user stops working. */
+  createPasswordSetupToken(input: CreateStandalonePasswordSetupTokenInput): Promise<string>;
+  completePasswordSetup(
+    input: CompleteStandalonePasswordSetupInput
+  ): Promise<CompletedStandalonePasswordSetup>;
   close(): Promise<void>;
 }
 
@@ -142,6 +169,9 @@ export async function createStandaloneAuthRuntime(
     setOrCreatePasswordSignIn: (input) => profileStore.setOrCreatePasswordSignIn(input),
     changePassword: (input) => profileStore.changePassword(input),
     deletePasswordSignIn: (input) => profileStore.deletePasswordSignIn(input),
+    findPasswordSignIn: (input) => profileStore.findPasswordSignIn(input),
+    createPasswordSetupToken: (input) => profileStore.createPasswordSetupToken(input),
+    completePasswordSetup: (input) => profileStore.completePasswordSetup(input),
     async close() {
       await sql.end();
     }
@@ -303,6 +333,70 @@ class StandaloneAuthProfileStore {
     });
   }
 
+  async findPasswordSignIn(
+    input: FindStandalonePasswordSignInInput
+  ): Promise<StandalonePasswordSignIn | undefined> {
+    const email = input.email.trim().toLowerCase();
+    const [row] = await this.db
+      .select({
+        externalUserId: standaloneAuthProfiles.externalUserId,
+        displayLabel: standaloneAuthProfiles.displayLabel,
+        email: authUsers.email,
+        emailVerified: authUsers.emailVerified
+      })
+      .from(standaloneAuthProfiles)
+      .innerJoin(authUsers, eq(authUsers.id, standaloneAuthProfiles.authUserId))
+      .where(
+        and(
+          eq(standaloneAuthProfiles.clientInstanceId, this.clientInstanceId),
+          eq(authUsers.email, email)
+        )
+      )
+      .limit(1);
+    return row;
+  }
+
+  async createPasswordSetupToken(input: CreateStandalonePasswordSetupTokenInput): Promise<string> {
+    const profile = await this.getProfileByExternalUserId(input.externalUserId);
+    if (!profile) {
+      throw new AppError("NOT_FOUND", "No standalone auth account exists for this user");
+    }
+    const token = randomBytes(32).toString("base64url");
+    const now = new Date();
+    await this.db.transaction(async (tx) => {
+      await tx.delete(authVerifications).where(passwordSetupTokensOf(profile.authUserId));
+      await tx.insert(authVerifications).values({
+        id: createAuthId("ver"),
+        identifier: passwordSetupIdentifier(token),
+        value: profile.authUserId,
+        expiresAt: new Date(now.getTime() + input.ttlMs),
+        createdAt: now,
+        updatedAt: now
+      });
+    });
+    return token;
+  }
+
+  async completePasswordSetup(
+    input: CompleteStandalonePasswordSetupInput
+  ): Promise<CompletedStandalonePasswordSetup> {
+    // Deleting first makes the token single-use even under concurrent submissions.
+    const [verification] = await this.db
+      .delete(authVerifications)
+      .where(eq(authVerifications.identifier, passwordSetupIdentifier(input.token)))
+      .returning();
+    const profile =
+      verification && verification.expiresAt.getTime() > Date.now()
+        ? await this.getProfile(verification.value)
+        : undefined;
+    if (!profile) {
+      throw new AppError("VALIDATION_FAILED", "This link is invalid or has expired");
+    }
+    await this.upsertCredentialAccount(profile.authUserId, input.password);
+    await this.db.delete(authSessions).where(eq(authSessions.userId, profile.authUserId));
+    return { externalUserId: profile.externalUserId };
+  }
+
   async seedUser(seedUser: StandaloneAuthSeedUser): Promise<void> {
     const email = seedUser.email.toLowerCase();
     const authUser = await this.upsertAuthUser(email, seedUser.displayLabel);
@@ -381,6 +475,8 @@ class StandaloneAuthProfileStore {
           updatedAt: now
         }
       });
+    // A changed password invalidates every outstanding emailed setup link.
+    await this.db.delete(authVerifications).where(passwordSetupTokensOf(authUserId));
   }
 
   private async upsertProfile(input: {
@@ -417,6 +513,20 @@ class StandaloneAuthProfileStore {
         }
       });
   }
+}
+
+const PASSWORD_SETUP_IDENTIFIER_PREFIX = "password-setup:";
+
+/** Only the hash is stored, so a database read does not yield usable links. */
+function passwordSetupIdentifier(token: string): string {
+  return `${PASSWORD_SETUP_IDENTIFIER_PREFIX}${createHash("sha256").update(token).digest("hex")}`;
+}
+
+function passwordSetupTokensOf(authUserId: string) {
+  return and(
+    eq(authVerifications.value, authUserId),
+    like(authVerifications.identifier, `${PASSWORD_SETUP_IDENTIFIER_PREFIX}%`)
+  );
 }
 
 function createAuthId(prefix: string): string {

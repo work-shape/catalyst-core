@@ -64,6 +64,7 @@ export function SuperadminPanel({
   client,
   user,
   configAssetManagement,
+  userInvitationsEnabled,
   selectedTab,
   onSelectTab
 }: ChatShellAdminPanelInput) {
@@ -271,6 +272,11 @@ export function SuperadminPanel({
             }
             onResetPassword={(userId, password) =>
               userMutations.resetUserPassword.mutateAsync({ userId, password })
+            }
+            onSendInvitation={
+              userInvitationsEnabled
+                ? (userId) => userMutations.sendUserInvitation.mutateAsync(userId)
+                : undefined
             }
           />
         ) : null}

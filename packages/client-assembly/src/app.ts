@@ -46,6 +46,7 @@ import {
 import { createConfigAssetSource } from "./config-asset-source";
 import { createClientInstanceAuth } from "./auth";
 import type {
+import { createClientInstanceMail } from "./mail";
   ClientInstanceAttachmentHandler,
   ClientInstanceCapabilityContribution,
   ClientInstanceCapability,
@@ -169,6 +170,7 @@ export async function createClientInstanceApp(
     sessionToken,
     serviceAccessToken
   });
+    mail: createClientInstanceMail({ config, env }),
 
   return {
     config,

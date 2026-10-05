@@ -18,6 +18,8 @@ export interface UserFormState {
 }
 
 export interface CreateUserFormState extends UserFormState {
+  /** Email a set-password link instead of choosing an initial password. */
+  sendInvitation: boolean;
   createPasswordSignIn: boolean;
   password: string;
 }
@@ -64,10 +66,11 @@ export const emptyUserForm: UserFormState = {
   status: "active"
 };
 
-export function createEmptyCreateUserForm(): CreateUserFormState {
+export function createEmptyCreateUserForm(invitationsEnabled = false): CreateUserFormState {
   return {
     ...emptyUserForm,
-    createPasswordSignIn: true,
+    sendInvitation: invitationsEnabled,
+    createPasswordSignIn: !invitationsEnabled,
     password: generatePassword()
   };
 }
@@ -164,7 +167,8 @@ export function formToCreateInput(form: CreateUserFormState): CreateAdministered
     roles: accessLevelToRoles(form.accessLevel),
     permissionRefs: parseList(form.permissionRefs),
     status: form.status,
-    passwordSignIn: form.createPasswordSignIn ? { password: form.password } : undefined
+    passwordSignIn:
+      form.createPasswordSignIn && !form.sendInvitation ? { password: form.password } : undefined
   };
 }
 

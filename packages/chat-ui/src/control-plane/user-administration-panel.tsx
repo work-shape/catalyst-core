@@ -49,6 +49,8 @@ interface UserAdministrationPanelProps {
   ): Promise<AdministeredUser>;
   onDeleteIdentity(userId: string, identity: AdministeredUserIdentity): Promise<AdministeredUser>;
   onResetPassword(userId: string, password: string): Promise<unknown>;
+  /** Absent while invitation emails are unavailable for this client instance. */
+  onSendInvitation?(userId: string): Promise<unknown>;
 }
 
 export function UserAdministrationPanel({
@@ -62,7 +64,8 @@ export function UserAdministrationPanel({
   onDeleteUser,
   onUpsertIdentity,
   onDeleteIdentity,
-  onResetPassword
+  onResetPassword,
+  onSendInvitation
 }: UserAdministrationPanelProps) {
   const [selectedUserId, setSelectedUserId] = useState<string | undefined>();
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(() => new Set());
@@ -100,6 +103,7 @@ export function UserAdministrationPanel({
         onUpsertIdentity={onUpsertIdentity}
         onDeleteIdentity={onDeleteIdentity}
         onResetPassword={onResetPassword}
+        onSendInvitation={onSendInvitation}
       />
     );
   }
@@ -374,6 +378,7 @@ export function UserAdministrationPanel({
         mutating={mutating}
         onClose={() => setCreateOpen(false)}
         onCreateUser={onCreateUser}
+        onSendInvitation={onSendInvitation}
         onCreated={(user) => {
           setCreateOpen(false);
           setSelectedUserId(user.id);
@@ -389,6 +394,7 @@ function CreateUserDialog({
   mutating,
   onClose,
   onCreateUser,
+  onSendInvitation,
   onCreated
 }: {
   open: boolean;
@@ -396,9 +402,13 @@ function CreateUserDialog({
   mutating: boolean;
   onClose(): void;
   onCreateUser(input: CreateAdministeredUserRequest): Promise<AdministeredUser>;
+  onSendInvitation?(userId: string): Promise<unknown>;
   onCreated(user: AdministeredUser): void;
 }) {
-  const [form, setForm] = useState<CreateUserFormState>(() => createEmptyCreateUserForm());
+  const invitationsEnabled = Boolean(onSendInvitation);
+  const [form, setForm] = useState<CreateUserFormState>(() =>
+    createEmptyCreateUserForm(invitationsEnabled)
+  );
   const [createdResult, setCreatedResult] = useState<{
     user: AdministeredUser;
     password?: string;
@@ -407,17 +417,30 @@ function CreateUserDialog({
 
   useEffect(() => {
     if (open) {
-      setForm(createEmptyCreateUserForm());
+      setForm(createEmptyCreateUserForm(invitationsEnabled));
       setCreatedResult(undefined);
       setNotice(undefined);
     }
-  }, [open]);
+  }, [open, invitationsEnabled]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setNotice(undefined);
     try {
       const created = await onCreateUser(formToCreateInput(form));
+      if (form.sendInvitation && onSendInvitation) {
+        setCreatedResult({ user: created });
+        try {
+          await onSendInvitation(created.id);
+          setNotice({ kind: "success", text: "User created. The invitation email was sent." });
+        } catch (error) {
+          setNotice({
+            kind: "error",
+            text: `User created, but the invitation was not sent: ${errorMessage(error)} You can resend it from the user's page.`
+          });
+        }
+        return;
+      }
       if (form.createPasswordSignIn) {
         setCreatedResult({ user: created, password: form.password });
         setNotice({
@@ -426,7 +449,7 @@ function CreateUserDialog({
         });
         return;
       }
-      setForm(createEmptyCreateUserForm());
+      setForm(createEmptyCreateUserForm(invitationsEnabled));
       onCreated(created);
     } catch (error) {
       setNotice({ kind: "error", text: errorMessage(error) });
@@ -493,6 +516,7 @@ function CreateUserDialog({
         <CreateUserFields
           form={form}
           canManageSuperadminAccess={canManageSuperadminAccess}
+          invitationsEnabled={invitationsEnabled}
           onChange={setForm}
         />
         <FormNotice notice={notice} />
@@ -505,7 +529,9 @@ function CreateUserDialog({
             disabled={
               mutating ||
               !form.displayLabel.trim() ||
-              (form.createPasswordSignIn && (!form.email.trim() || form.password.length < 8))
+              (form.sendInvitation
+                ? !form.email.trim() || form.status !== "active"
+                : form.createPasswordSignIn && (!form.email.trim() || form.password.length < 8))
             }
           >
             <UserPlus size={16} aria-hidden="true" />

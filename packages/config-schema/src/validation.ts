@@ -46,6 +46,13 @@ function assertProductionSafeAuthConfig(config: ClientInstanceConfig): void {
     );
   }
 
+  if (config.mail.enabled && config.mail.provider === "capture") {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "The capture mail provider must not be enabled in production config"
+    );
+  }
+
   const seedUserWithDevelopmentPassword = config.auth.standalone?.seedUsers.find(
     (seedUser) => seedUser.developmentPassword
   );

@@ -427,6 +427,7 @@ export function useWorkspaceChatModel({
     adminPanel,
     user: meQuery.data,
     configAssetManagement: config?.features.configAssets,
+    userInvitationsEnabled: config?.features.userInvitations.enabled ?? false,
     isAuthenticated,
     route,
     view,

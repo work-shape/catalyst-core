@@ -28,6 +28,7 @@ export interface ControlPlaneModelInput {
   adminPanel: ChatShellAdminPanel | undefined;
   user: ApiUser | undefined;
   configAssetManagement: SafeConfig["features"]["configAssets"] | undefined;
+  userInvitationsEnabled: boolean;
   isAuthenticated: boolean;
   route: WorkspaceRoute;
   view: WorkspaceRouteView;
@@ -74,6 +75,7 @@ export function useControlPlaneModel({
   adminPanel,
   user,
   configAssetManagement,
+  userInvitationsEnabled,
   isAuthenticated,
   route,
   view,
@@ -147,6 +149,7 @@ export function useControlPlaneModel({
             client,
             user,
             configAssetManagement,
+            userInvitationsEnabled,
             selectedTab: selectedAdministrationTab,
             onSelectTab: showSuperadmin
           }

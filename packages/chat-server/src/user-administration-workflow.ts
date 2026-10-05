@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { STANDALONE_AUTH_SOURCE } from "@vivd-catalyst/auth";
 import {
   AppError,
@@ -11,6 +12,7 @@ import {
 } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "./types";
 import { authorizeGovernanceAction } from "./governance-actions";
+import { createPasswordSetupLink, PLATFORM_INVITATION_VALID_DAYS } from "./password-setup-workflow";
 import { cleanupProductUserData, type UserDeletionTotals } from "./user-deletion";
 
 interface CreateUserCommand {
@@ -51,6 +53,10 @@ interface DeleteUserIdentityCommand {
 }
 
 interface DeleteUserCommand {
+  userId: UserId;
+}
+
+interface SendUserInvitationCommand {
   userId: UserId;
 }
 
@@ -264,6 +270,74 @@ export class UserAdministrationWorkflow {
         authSource: identity.authSource
       }
     });
+    return { ok: true };
+  }
+
+  /**
+   * Emails a single-use link that lets the user set their own password. A user without a
+   * password sign-in gets one with an unguessable placeholder password first; an existing
+   * password keeps working until the link is used.
+   */
+  async sendInvitation(
+    actor: AuthenticatedUser,
+    context: RuntimeCallContext,
+    command: SendUserInvitationCommand
+  ): Promise<{ ok: true }> {
+    await this.authorize(actor, context, "governance.user_invitation_authorized");
+    const { mail, standaloneAuth } = this.options;
+    if (!mail || !standaloneAuth) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "Invitations require mail and standalone auth to be enabled for this client instance"
+      );
+    }
+    let user = await this.getUserOrThrow(command.userId);
+    this.requireManageableUser(actor, user);
+    if (user.status !== "active") {
+      throw new AppError("VALIDATION_FAILED", "Only active users can be invited");
+    }
+    if (!user.identities.some((identity) => identity.authSource === STANDALONE_AUTH_SOURCE)) {
+      user = await this.setOrCreatePasswordSignIn(actor, context, user, {
+        password: randomBytes(32).toString("base64url"),
+        auditType: "user.password_sign_in_created"
+      });
+    }
+    const identity = user.identities.find(
+      (candidate) => candidate.authSource === STANDALONE_AUTH_SOURCE
+    );
+    const email = identity?.email ?? user.email;
+    if (!identity || !email) {
+      throw new AppError("VALIDATION_FAILED", "Email is required to send an invitation");
+    }
+
+    const token = await standaloneAuth.createPasswordSetupToken({
+      externalUserId: identity.externalUserId,
+      ttlMs: PLATFORM_INVITATION_VALID_DAYS * 24 * 60 * 60 * 1000
+    });
+    const result = await mail.sender.send({
+      template: "platform-invitation",
+      to: { email, displayLabel: user.displayLabel },
+      locale: this.options.config.localization.defaultLocale,
+      params: {
+        link: createPasswordSetupLink(mail.appUrl, token),
+        validDays: PLATFORM_INVITATION_VALID_DAYS,
+        inviterLabel: actor.displayLabel
+      }
+    });
+    await this.options.auditRecorder.record({
+      type: "user.invitation_sent",
+      status: result.ok ? "success" : "failed",
+      actor: auditActorFromUser(actor),
+      subject: user.id,
+      correlationId: context.correlationId,
+      metadata: {
+        template: "platform-invitation",
+        ...(result.ok ? {} : { reason: result.reason })
+      }
+    });
+    if (!result.ok) {
+      throw new AppError("INTERNAL", "The invitation email could not be sent");
+    }
     return { ok: true };
   }
 

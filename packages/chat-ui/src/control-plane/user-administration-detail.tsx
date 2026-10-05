@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { ArrowLeft, KeyRound, Link2, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, KeyRound, Link2, Mail, Plus, Save, Trash2 } from "lucide-react";
 import type {
   AdministeredUser,
   AdministeredUserIdentity,
@@ -38,7 +38,8 @@ export function UserDetail({
   onDeleted,
   onUpsertIdentity,
   onDeleteIdentity,
-  onResetPassword
+  onResetPassword,
+  onSendInvitation
 }: {
   user: AdministeredUser;
   canManageSuperadminAccess: boolean;
@@ -54,6 +55,7 @@ export function UserDetail({
   ): Promise<AdministeredUser>;
   onDeleteIdentity(userId: string, identity: AdministeredUserIdentity): Promise<AdministeredUser>;
   onResetPassword(userId: string, password: string): Promise<unknown>;
+  onSendInvitation?(userId: string): Promise<unknown>;
 }) {
   const canManageUser = canManageSuperadminAccess || !user.roles.includes("superadmin");
   const managementDisabledReason = canManageUser
@@ -107,6 +109,7 @@ export function UserDetail({
             disabledReason={managementDisabledReason}
             mutating={mutating}
             onResetPassword={onResetPassword}
+            onSendInvitation={onSendInvitation}
           />
           <DeleteUserCard
             user={user}
@@ -394,12 +397,14 @@ function PasswordCard({
   user,
   disabledReason,
   mutating,
-  onResetPassword
+  onResetPassword,
+  onSendInvitation
 }: {
   user: AdministeredUser;
   disabledReason?: string;
   mutating: boolean;
   onResetPassword(userId: string, password: string): Promise<unknown>;
+  onSendInvitation?(userId: string): Promise<unknown>;
 }) {
   const [password, setPassword] = useState("");
   const [notice, setNotice] = useState<FormNoticeState>();
@@ -423,6 +428,19 @@ function PasswordCard({
           ? "Password updated. The user was signed out everywhere."
           : "Password sign-in created."
       });
+    } catch (error) {
+      setNotice({ kind: "error", text: errorMessage(error) });
+    }
+  }
+
+  async function sendInvitation() {
+    if (!onSendInvitation) {
+      return;
+    }
+    setNotice(undefined);
+    try {
+      await onSendInvitation(user.id);
+      setNotice({ kind: "success", text: "A link to set a password was emailed to the user." });
     } catch (error) {
       setNotice({ kind: "error", text: errorMessage(error) });
     }
@@ -484,6 +502,19 @@ function PasswordCard({
             <KeyRound size={16} aria-hidden="true" />
             {hasPasswordIdentity ? "Reset password" : "Create password sign-in"}
           </Button>
+          {onSendInvitation ? (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={
+                mutating || Boolean(disabledReason) || !user.email || user.status !== "active"
+              }
+              onClick={() => void sendInvitation()}
+            >
+              <Mail size={16} aria-hidden="true" />
+              Email a set-password link
+            </Button>
+          ) : null}
           <FormNotice notice={notice} />
         </form>
       </CardContent>

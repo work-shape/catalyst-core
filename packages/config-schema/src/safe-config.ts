@@ -1,6 +1,6 @@
 import type { ModelProviderConfig, RuntimeAssetSnapshot } from "@vivd-catalyst/core";
 import type { ClientInstanceConfig } from "./schemas";
-import { createClientBranding } from "./branding";
+import { createClientBranding, isPasswordMailEnabled } from "./branding";
 import { getModelSelectionForAgent } from "./selectors";
 import {
   resolveConfigLocale,
@@ -14,7 +14,11 @@ export function createSafeConfigView(
   localeInput: ConfigLocaleInput = {}
 ) {
   const locale = resolveConfigLocale(config.localization, localeInput);
-  const { environment: _environment, ...ui } = createClientBranding(config, {
+  const {
+    environment: _environment,
+    passwordResetEnabled: _passwordResetEnabled,
+    ...ui
+  } = createClientBranding(config, {
     requestedLocale: locale
   });
   const selectableModels = config.modelBindings
@@ -58,6 +62,9 @@ export function createSafeConfigView(
       },
       configAssets: {
         ...config.administration.agentConfiguration
+      },
+      userInvitations: {
+        enabled: isPasswordMailEnabled(config)
       }
     },
     defaultAgentName: assets.defaultAgentName,

@@ -26,6 +26,7 @@ import type {
 import type { AuditRecorder } from "@vivd-catalyst/core";
 import type { AuthAdapter } from "@vivd-catalyst/auth";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import type { CapturedMail, MailSender } from "@vivd-catalyst/mail";
 import type { ModelProvider } from "@vivd-catalyst/model-provider";
 import type { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import type { ChatAttachmentService } from "./attachments";
@@ -94,7 +95,17 @@ export interface ChatServerOptions {
   >;
   sessionToken?: {
     issuer: HmacSessionTokenIssuer;
+    | "findPasswordSignIn"
+    | "createPasswordSetupToken"
+    | "completePasswordSetup"
     serverCredential: string;
+  mail?: {
+    sender: MailSender;
+    /** Public URL of the chat UI; emailed links point here. */
+    appUrl: string;
+    /** Present only with the capture provider; backs the development inspection route. */
+    listCaptured?(): CapturedMail[];
+  };
   };
   serviceAccessToken?: {
     exchange: ApiKeyAccessTokenExchange;
