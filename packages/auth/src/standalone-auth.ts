@@ -231,8 +231,11 @@ class StandaloneAuthProfileStore {
     private readonly clientInstanceId: ClientInstanceId
   ) {}
 
-  async getProfile(authUserId: string): Promise<StandaloneProfileRow | undefined> {
-    const [row] = await this.db
+  async getProfile(
+    authUserId: string,
+    db: Pick<StandaloneAuthDatabase, "select"> = this.db
+  ): Promise<StandaloneProfileRow | undefined> {
+    const [row] = await db
       .select()
       .from(standaloneAuthProfiles)
       .where(
@@ -380,21 +383,27 @@ class StandaloneAuthProfileStore {
   async completePasswordSetup(
     input: CompleteStandalonePasswordSetupInput
   ): Promise<CompletedStandalonePasswordSetup> {
-    // Deleting first makes the token single-use even under concurrent submissions.
-    const [verification] = await this.db
-      .delete(authVerifications)
-      .where(eq(authVerifications.identifier, passwordSetupIdentifier(input.token)))
-      .returning();
-    const profile =
-      verification && verification.expiresAt.getTime() > Date.now()
-        ? await this.getProfile(verification.value)
-        : undefined;
-    if (!profile) {
-      throw new AppError("VALIDATION_FAILED", "This link is invalid or has expired");
-    }
-    await this.upsertCredentialAccount(profile.authUserId, input.password);
-    await this.db.delete(authSessions).where(eq(authSessions.userId, profile.authUserId));
-    return { externalUserId: profile.externalUserId };
+    // Hashing is slow, so it happens before the transaction opens.
+    const passwordHash = await hashPassword(input.password);
+    // One transaction: a failed write must not burn the link. Deleting first still makes the
+    // token single-use under concurrent submissions, because the second delete waits for the
+    // first transaction and then finds no row.
+    return this.db.transaction(async (tx) => {
+      const [verification] = await tx
+        .delete(authVerifications)
+        .where(eq(authVerifications.identifier, passwordSetupIdentifier(input.token)))
+        .returning();
+      const profile =
+        verification && verification.expiresAt.getTime() > Date.now()
+          ? await this.getProfile(verification.value, tx)
+          : undefined;
+      if (!profile) {
+        throw new AppError("VALIDATION_FAILED", "This link is invalid or has expired");
+      }
+      await this.writeCredentialAccount(tx, profile.authUserId, passwordHash);
+      await tx.delete(authSessions).where(eq(authSessions.userId, profile.authUserId));
+      return { externalUserId: profile.externalUserId };
+    });
   }
 
   async seedUser(seedUser: StandaloneAuthSeedUser): Promise<void> {
@@ -455,9 +464,16 @@ class StandaloneAuthProfileStore {
   }
 
   private async upsertCredentialAccount(authUserId: string, password: string): Promise<void> {
+    await this.writeCredentialAccount(this.db, authUserId, await hashPassword(password));
+  }
+
+  private async writeCredentialAccount(
+    db: Pick<StandaloneAuthDatabase, "insert" | "delete">,
+    authUserId: string,
+    passwordHash: string
+  ): Promise<void> {
     const now = new Date();
-    const passwordHash = await hashPassword(password);
-    await this.db
+    await db
       .insert(authAccounts)
       .values({
         id: createAuthId("acc"),
@@ -476,7 +492,7 @@ class StandaloneAuthProfileStore {
         }
       });
     // A changed password invalidates every outstanding emailed setup link.
-    await this.db.delete(authVerifications).where(passwordSetupTokensOf(authUserId));
+    await db.delete(authVerifications).where(passwordSetupTokensOf(authUserId));
   }
 
   private async upsertProfile(input: {

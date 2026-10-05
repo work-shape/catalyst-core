@@ -77,6 +77,40 @@ describePostgres("standalone auth password setup tokens", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("keeps the link usable when a write fails after the token was taken", async () => {
+    const token = await auth.createPasswordSetupToken({ externalUserId, ttlMs: 60_000 });
+    const suffix = Date.now();
+    const failure = `fail_session_delete_${suffix}`;
+    await sql`
+      insert into session (id, "expiresAt", token, "createdAt", "updatedAt", "userId")
+      values (${`ses_tx_${suffix}`}, now() + interval '1 day', ${`tok_tx_${suffix}`}, now(), now(), ${externalUserId})
+    `;
+    await sql.unsafe(`
+      create function ${failure}() returns trigger language plpgsql as
+        $$ begin raise exception 'session delete failed'; end $$;
+      create trigger ${failure} before delete on session for each row
+        when (old."userId" = '${externalUserId}') execute function ${failure}();
+    `);
+    try {
+      await expect(
+        auth.completePasswordSetup({ token, password: "rolled-back-password" })
+      ).rejects.toThrow();
+    } finally {
+      await sql.unsafe(`drop trigger ${failure} on session; drop function ${failure}();`);
+    }
+
+    await expect(
+      auth.changePassword({
+        externalUserId,
+        currentPassword: "rolled-back-password",
+        newPassword: "unused-password"
+      })
+    ).rejects.toThrow(/incorrect/u);
+    await expect(
+      auth.completePasswordSetup({ token, password: "retried-password" })
+    ).resolves.toEqual({ externalUserId });
+  });
+
   it("invalidates older and expired tokens", async () => {
     const older = await auth.createPasswordSetupToken({ externalUserId, ttlMs: 60_000 });
     const newer = await auth.createPasswordSetupToken({ externalUserId, ttlMs: 60_000 });
