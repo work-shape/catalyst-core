@@ -108,6 +108,9 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
   return app;
 }
 
+export { ApprovalCheckRunner } from "./approval-check-runner";
+export type { ApprovalCheckRunnerOptions } from "./approval-check-runner";
+
 export { ApprovalRequestWorkflow } from "./approval-request-workflow";
 export type {
   ApprovalRequestWorkflowOptions,

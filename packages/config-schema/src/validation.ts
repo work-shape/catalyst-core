@@ -1,7 +1,11 @@
 import { AppError } from "@vivd-catalyst/core";
 import { clientInstanceConfigSchema, type AgentConfig, type ClientInstanceConfig } from "./schemas";
 import { findDuplicates } from "./reference-validation";
-import { getModelSelectionForAgent, getModelSelectionForConversationTitles } from "./selectors";
+import {
+  getModelSelectionForAgent,
+  getModelSelectionForConversationTitles,
+  resolveModelBinding
+} from "./selectors";
 
 export function parseClientInstanceConfig(input: unknown): ClientInstanceConfig {
   const parsed = clientInstanceConfigSchema.safeParse(input);
@@ -104,6 +108,14 @@ function assertConfigReferences(config: ClientInstanceConfig): void {
   }
 
   const modelBindingIds = new Set(config.modelBindings.map((binding) => binding.id));
+  for (const check of config.approvalChecks) {
+    if (!modelBindingIds.has(check.modelBindingId)) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `Approval check '${check.id}' references missing model binding '${check.modelBindingId}'`
+      );
+    }
+  }
   for (const binding of config.modelBindings) {
     if (!providerIds.has(binding.providerId)) {
       throw new AppError(
@@ -174,6 +186,13 @@ export function assertSpendBudgetPricingCoverage(
 
   if (config.conversationTitles.enabled) {
     const selection = getModelSelectionForConversationTitles(config);
+    if (selection.provider.type !== "deterministic") {
+      requiredPrices.add(createPricingKey(selection.provider.id, selection.model));
+    }
+  }
+
+  for (const check of config.approvalChecks) {
+    const selection = resolveModelBinding(config, check.modelBindingId);
     if (selection.provider.type !== "deterministic") {
       requiredPrices.add(createPricingKey(selection.provider.id, selection.model));
     }

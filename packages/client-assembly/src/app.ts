@@ -11,6 +11,7 @@ import {
   type StructuredDataPublicationReviewer
 } from "@vivd-catalyst/core";
 import {
+  ApprovalCheckRunner,
   ApprovalRequestWorkflow,
   createSkillChangeApprovalHandler,
   createChatServer
@@ -272,10 +273,23 @@ export async function createClientInstanceExecutionAssembly(
     const handler = createSkillChangeApprovalHandler({ config, clientInstanceId, configAssets });
     approvalRequestHandlers.set(handler.kind, handler);
   }
+  const usageGovernance = new ModelUsageGovernance({
+    store,
+    budget: config.usage.budget,
+    safeguards: config.usage.safeguards,
+    costs: config.usage.costs
+  });
+  const modelProvider = createModelProviderRegistry({ configs: config.modelProviders, env });
   const approvalRequestCreator = new ApprovalRequestWorkflow({
     clientInstanceId,
     store,
     handlers: approvalRequestHandlers,
+    checkRunner: new ApprovalCheckRunner({
+      clientInstanceId,
+      config,
+      modelProvider,
+      usageGovernance
+    }),
     onDecided: (request) => store.appendApprovalDecision(request),
     auditRecorder
   });
@@ -326,13 +340,7 @@ export async function createClientInstanceExecutionAssembly(
       ...input.tools
     ]
   });
-  assertClientAssemblyValid({ config, tools });
-  const usageGovernance = new ModelUsageGovernance({
-    store,
-    budget: config.usage.budget,
-    safeguards: config.usage.safeguards,
-    costs: config.usage.costs
-  });
+  assertClientAssemblyValid({ config, tools, approvalRequestHandlers });
   const toolRegistry = new ToolRegistry({ tools, enabledToolNames: getEnabledToolNames(config) });
   const toolExecution = new InProcessToolExecution({
     registry: toolRegistry,
@@ -343,7 +351,6 @@ export async function createClientInstanceExecutionAssembly(
     auditRecorder,
     usageRecorder: usageGovernance
   });
-  const modelProvider = createModelProviderRegistry({ configs: config.modelProviders, env });
   const defaultModelProvider = config.modelProviders[0];
   if (!defaultModelProvider) {
     throw new AppError("VALIDATION_FAILED", "At least one model provider is required");

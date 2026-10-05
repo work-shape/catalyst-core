@@ -19,7 +19,7 @@ export class InMemoryApprovalRequestStore implements ApprovalRequestStore {
       ...structuredClone(input),
       id: createPlatformId("apr"),
       status: "pending",
-      checks: [],
+      checks: structuredClone(input.checks ?? []),
       createdAt: now,
       updatedAt: now
     };

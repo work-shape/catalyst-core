@@ -21,7 +21,7 @@ export async function createApprovalRequest(
       ...input,
       id: createPlatformId("apr"),
       status: "pending",
-      checks: [],
+      checks: input.checks ?? [],
       createdAt: now,
       updatedAt: now
     })

@@ -4,6 +4,7 @@ import {
   asClientInstanceId,
   asAgentRunId,
   asToolCallId,
+  type ApprovalCheckResult,
   readApprovalDecisionMetadata
 } from "@vivd-catalyst/core";
 import { PostgresPlatformStore } from "@vivd-catalyst/postgres-store";
@@ -29,11 +30,15 @@ describePostgres("Postgres approval request store", () => {
       title: "Approval origin",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
+    const checks: ApprovalCheckResult[] = [
+      { id: "example_check", status: "warned", message: "Review the proposed content." }
+    ];
     try {
       const request = await store.createApprovalRequest({
         clientInstanceId,
         kind: "fake",
         summary: "Proposed",
+        checks,
         payload: { value: "new" },
         requestedBy: { id: "requester", displayLabel: "Requester" },
         origin: {
@@ -43,7 +48,7 @@ describePostgres("Postgres approval request store", () => {
           agentName: "agent"
         }
       });
-      expect(request).toMatchObject({ status: "pending", checks: [] });
+      expect(request).toMatchObject({ status: "pending", checks });
       expect(
         await store.getApprovalRequest({
           clientInstanceId: asClientInstanceId("other"),
@@ -129,6 +134,7 @@ describePostgres("Postgres approval request store", () => {
         await store.getApprovalRequest({ clientInstanceId, requestId: request.id })
       ).toMatchObject({
         status: "reverted",
+        checks,
         applyResult: { value: "applied" },
         decision: { decidedByLabel: "Reviewer" }
       });

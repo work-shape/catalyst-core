@@ -54,6 +54,8 @@ export interface ApprovalRequestHandler<TPayload extends JsonObject = JsonObject
   kind: string;
   requiredPermission: Permission;
   validate(payload: JsonObject): TPayload;
+  /** Proposed new content only; the workflow adds the request summary. */
+  checkContent?(payload: TPayload): string;
   revert?(
     request: ApprovalRequest,
     user: AuthenticatedUser,
@@ -89,7 +91,7 @@ export interface ApprovalRequestStore {
     input: Pick<
       ApprovalRequest,
       "clientInstanceId" | "kind" | "summary" | "payload" | "requestedBy" | "origin"
-    >
+    > & { checks?: ApprovalCheckResult[] }
   ): Promise<ApprovalRequest>;
   getApprovalRequest(input: {
     clientInstanceId: ClientInstanceId;

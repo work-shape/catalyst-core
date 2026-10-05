@@ -71,7 +71,7 @@ export function getModelSelectionForConversationTitles(
   };
 }
 
-function resolveModelBinding(
+export function resolveModelBinding(
   config: ClientInstanceConfig,
   bindingId: string
 ): ResolvedModelSelection {

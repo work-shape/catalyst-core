@@ -94,6 +94,25 @@ Daily and monthly spend limits use `usage.costs.customer.currency`. Set it to th
 
 The customer rate card uses exact `providerId` and `model` rows and prices uncached and cached input separately. Its `version` must change when any rate changes. Usage Governance persists the applied rates and billable amount with every new usage event, so changing the active card affects only future usage.
 
+## Approval checks
+
+`approvalChecks` defines model-evaluated rules for proposed approval requests. It defaults to an empty list. Each check needs a unique id, a registered request kind, and an existing model binding. Instructions may be written in any language.
+
+```yaml
+approvalChecks:
+  - id: no_personal_data
+    appliesTo: skill_change
+    modelBindingId: guardrailCheck
+    instruction: Check whether the proposed content contains personal data.
+    onFail: warn
+```
+
+Checks run concurrently when a request is created. For skill changes, the summary and proposed new text are sent to the configured model provider; existing skill text and replaced text are excluded. Select a provider and binding approved for that content. Checks use the instance's usage budgets and safeguards, with usage recorded against the originating conversation and run when available.
+
+`warn` stores a visible warning and leaves the decision with the approver. `block` refuses a violating proposal and returns the reason to the agent without storing a request. If a check cannot be evaluated, including provider failures or the 10-second timeout, it stores a neutral warning for either setting. Checks are not repeated when a request is decided. Request kinds without a proposed-content extractor are not checked.
+
+Creation audit metadata contains only check ids and statuses, never proposed content or reasons. Stored check messages remain part of the approval request.
+
 ## Sharing Config Across Environments With `extends`
 
 A config file can start from another config file and override only what differs:

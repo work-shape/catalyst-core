@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type {
   AgentConfig,
+  ApprovalCheckConfig,
   DataSourceConfig,
   CapabilityConfigMap,
   LocalizationConfig,
@@ -352,6 +353,31 @@ export const usageCostConfigSchema = z
     customer: usageRateCardConfigSchema.optional()
   })
   .default({});
+
+export const approvalCheckConfigSchema = z.object({
+  id: z.string().trim().min(1),
+  appliesTo: z.string().trim().min(1),
+  modelBindingId: z.string().trim().min(1),
+  instruction: z.string().trim().min(1),
+  onFail: z.enum(["warn", "block"])
+}) satisfies z.ZodType<ApprovalCheckConfig>;
+
+const approvalChecksConfigSchema = z
+  .array(approvalCheckConfigSchema)
+  .superRefine((checks, context) => {
+    const ids = new Set<string>();
+    checks.forEach((check, index) => {
+      if (ids.has(check.id)) {
+        context.addIssue({
+          code: "custom",
+          path: [index, "id"],
+          message: `Duplicate approval check id '${check.id}'`
+        });
+      }
+      ids.add(check.id);
+    });
+  })
+  .default([]);
 
 export const conversationTitleConfigSchema = z
   .object({
@@ -818,6 +844,7 @@ export const clientInstanceConfigSchema = z.object({
   modelBindings: z.array(modelBindingConfigSchema).default([]),
   localization: localizationConfigSchema,
   conversationTitles: conversationTitleConfigSchema,
+  approvalChecks: approvalChecksConfigSchema,
   runtime: agentRuntimeConfigSchema,
   modelContext: modelContextConfigSchema,
   webAccess: webAccessConfigSchema,
@@ -879,6 +906,7 @@ export type StandaloneSeedUserConfig = z.infer<typeof standaloneSeedUserSchema>;
 export type ToolInstanceConfig = z.infer<typeof toolInstanceConfigSchema>;
 export type {
   AgentConfig,
+  ApprovalCheckConfig,
   DataSourceConfig,
   CapabilityConfigMap,
   ExecutionWorkspacesConfig,

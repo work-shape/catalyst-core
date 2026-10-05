@@ -79,6 +79,28 @@ export function createSkillChangeApprovalHandler(
     validate(payload) {
       return toJsonObject(validatePayload(payload));
     },
+    checkContent(payload) {
+      const data = validatePayload(payload);
+      return JSON.stringify(
+        data.operations.map((operation) => {
+          switch (operation.type) {
+            case "replace_text":
+              return { newText: operation.newText };
+            case "append_text":
+              return { sectionHeading: operation.sectionHeading, text: operation.text };
+            case "create_resource":
+              return { content: operation.content };
+            case "create_skill":
+              return {
+                name: operation.name,
+                title: operation.title,
+                description: operation.description,
+                content: operation.content
+              };
+          }
+        })
+      );
+    },
     async preview(payload, context) {
       const data = validatePayload(payload);
       if (context.status !== "pending") {

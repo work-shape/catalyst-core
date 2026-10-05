@@ -1,5 +1,5 @@
 import { findModelToolMaterializationIssues } from "@vivd-catalyst/agent-runtime";
-import { AppError } from "@vivd-catalyst/core";
+import { type ApprovalRequestHandlerRegistry, AppError } from "@vivd-catalyst/core";
 import { WEB_SEARCH_MODEL_TOOL_NAME } from "@vivd-catalyst/model-provider";
 import {
   getModelSelectionForAgent,
@@ -11,9 +11,17 @@ import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
 export function assertClientAssemblyValid(input: {
   config: ClientInstanceConfig;
   tools: AnyToolDefinition[];
+  approvalRequestHandlers?: ApprovalRequestHandlerRegistry;
 }): void {
   const issues = [
     ...findDuplicateToolImplementations(input.tools),
+    ...input.config.approvalChecks.flatMap((check) =>
+      input.approvalRequestHandlers?.has(check.appliesTo)
+        ? []
+        : [
+            `Approval check '${check.id}' references approval request kind '${check.appliesTo}' with no registered handler`
+          ]
+    ),
     ...findModelProviderReferenceIssues(input.config),
     ...findToolReferenceIssues(input.config, input.tools)
   ];
@@ -122,6 +130,14 @@ function findModelProviderReferenceIssues(config: ClientInstanceConfig): string[
     issues.push(
       `Conversation title generation references model binding '${config.conversationTitles.modelBindingId}' that is missing from release config`
     );
+  }
+
+  for (const check of config.approvalChecks) {
+    if (!configuredModelBindingIds.has(check.modelBindingId)) {
+      issues.push(
+        `Approval check '${check.id}' references model binding '${check.modelBindingId}' that is missing from release config`
+      );
+    }
   }
 
   return issues;

@@ -17,13 +17,17 @@ import {
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
 
-type CallContext = Pick<RuntimeCallContext, "correlationId">;
+import type { ApprovalCheckRunner } from "./approval-check-runner";
+
+type CallContext = Pick<RuntimeCallContext, "correlationId"> &
+  Partial<Omit<RuntimeCallContext, "user" | "clientInstanceId" | "correlationId">>;
 
 export interface ApprovalRequestWorkflowOptions {
   clientInstanceId: ClientInstanceId;
   store: ApprovalRequestStore;
   handlers: ApprovalRequestHandlerRegistry;
   auditRecorder: AuditRecorder;
+  checkRunner?: ApprovalCheckRunner;
   onDecided?(request: ApprovalRequest): void | Promise<void>;
 }
 
@@ -48,9 +52,27 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     if (!command.summary.trim()) {
       throw new AppError("VALIDATION_FAILED", "Approval request summary is required");
     }
+    const checks =
+      (await this.options.checkRunner?.run(
+        handler,
+        { ...command, payload },
+        {
+          ...context,
+          user,
+          clientInstanceId: this.options.clientInstanceId
+        }
+      )) ?? [];
+    const blocked = checks.filter((check) => check.status === "blocked");
+    if (blocked.length > 0) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `Approval request blocked: ${blocked.map((check) => check.message).join("; ")}`
+      );
+    }
     const request = await this.options.store.createApprovalRequest({
       ...command,
       payload,
+      checks,
       clientInstanceId: this.options.clientInstanceId,
       requestedBy: { id: user.id, displayLabel: user.displayLabel }
     });
@@ -286,7 +308,14 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       status: "success",
       actor: auditActorFromUser(user),
       correlationId: context.correlationId,
-      metadata: { requestId: request.id, kind: request.kind, status: request.status }
+      metadata: {
+        requestId: request.id,
+        kind: request.kind,
+        status: request.status,
+        ...(type === "approval_request.created" && request.checks.length > 0
+          ? { checks: request.checks.map((check) => ({ id: check.id, status: check.status })) }
+          : {})
+      }
     });
   }
 }
