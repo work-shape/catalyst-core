@@ -67,6 +67,70 @@ describe("api operation catalog and client", () => {
     expect(apiOperations.updateCollaborationWorkspace.requestSchema.parse({})).toEqual({});
   });
 
+  it("carries conversation visibility through the workspace, conversation and move contracts", async () => {
+    const moveOperation = openApiDocument.paths["/api/conversations/{conversationId}/move"].post;
+    const conversationSchema = moveOperation.responses["200"].content["application/json"].schema;
+    expect(moveOperation.requestBody.content["application/json"].schema.required).toEqual([
+      "collaborationWorkspaceId"
+    ]);
+    expect(conversationSchema.required).toContain("visibility");
+    expect(
+      apiOperations.createCollaborationWorkspace.requestSchema.parse({
+        name: "Product",
+        defaultConversationVisibility: "private"
+      })
+    ).toEqual({ name: "Product", defaultConversationVisibility: "private" });
+    expect(() =>
+      apiOperations.updateCollaborationWorkspace.requestSchema.parse({
+        defaultConversationVisibility: "secret"
+      })
+    ).toThrow();
+    expect(() =>
+      apiOperations.moveConversation.requestSchema.parse({
+        collaborationWorkspaceId: "cws_1",
+        visibility: "secret"
+      })
+    ).toThrow();
+
+    const bodies: unknown[] = [];
+    const conversation = {
+      id: "conv_1",
+      clientInstanceId: "client_1",
+      collaborationWorkspaceId: "cws_2",
+      createdByUserId: "user_1",
+      createdByExternalUserId: "user_1",
+      visibility: "private",
+      title: "Moved",
+      status: "active",
+      createdAt: "2026-06-27T00:00:00.000Z",
+      updatedAt: "2026-06-27T00:00:00.000Z",
+      retainedUntil: "2026-07-27T00:00:00.000Z"
+    };
+    const client = createApiClient({
+      baseUrl: "https://chat.example/",
+      fetchImpl: async (input, init) => {
+        const request = input instanceof Request ? input : new Request(input, init);
+        bodies.push(await request.json());
+        return Response.json(conversation);
+      }
+    });
+
+    await expect(client.conversations.move("conv_1", "cws_2")).resolves.toMatchObject({
+      visibility: "private"
+    });
+    await client.conversations.move("conv_1", "cws_2", "private");
+    expect(bodies).toEqual([
+      { collaborationWorkspaceId: "cws_2" },
+      { collaborationWorkspaceId: "cws_2", visibility: "private" }
+    ]);
+    // A response without visibility is a contract violation, not a silently shared conversation.
+    const legacyClient = createApiClient({
+      baseUrl: "https://chat.example/",
+      fetchImpl: async () => Response.json({ ...conversation, visibility: undefined })
+    });
+    await expect(legacyClient.conversations.move("conv_1", "cws_2")).rejects.toBeDefined();
+  });
+
   it("builds encoded paths from operation params and query values", () => {
     expect(
       apiOperations.listConversationMessages.buildPath({
@@ -418,6 +482,7 @@ describe("api operation catalog and client", () => {
           collaborationWorkspaceId: "cws_1",
           createdByUserId: "user_1",
           createdByExternalUserId: "user_1",
+          visibility: "workspace",
           title: "Started",
           status: "active",
           createdAt: "2026-06-27T00:00:00.000Z",
@@ -453,6 +518,7 @@ describe("api operation catalog and client", () => {
             collaborationWorkspaceId: "cws_1",
             createdByUserId: "user_1",
             createdByExternalUserId: "user_1",
+            visibility: "workspace",
             title: "Started",
             status: "active",
             createdAt: "2026-06-27T00:00:00.000Z",

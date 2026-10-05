@@ -12,10 +12,12 @@ import {
   type AuthenticatedUser,
   type ChatMessage,
   type Conversation,
+  type CollaborationWorkspace,
   type CollaborationWorkspaceId,
   type ConversationListItem,
   type ConversationThreadSnapshot,
   type ConversationId,
+  type ConversationVisibility,
   type JsonObject,
   type RuntimeCallContext,
   type RunObservation,
@@ -69,6 +71,7 @@ export interface SendConversationMessageCommand {
 
 export interface MoveConversationCommand {
   collaborationWorkspaceId: CollaborationWorkspaceId;
+  visibility?: ConversationVisibility;
 }
 
 export interface StartedConversationMessageRun {
@@ -143,21 +146,18 @@ export class ConversationWorkflow {
     command: CreateConversationCommand
   ): Promise<Conversation> {
     const subjectUserId = getSubjectUserId(user);
-    const collaborationWorkspaceId = command.collaborationWorkspaceId
-      ? (await this.workspaces.requireActiveMembership(user, command.collaborationWorkspaceId))
-          .collaborationWorkspaceId
-      : (
-          await this.options.userStore.ensurePersonalWorkspace({
-            clientInstanceId: this.options.clientInstanceId,
-            userId: asUserId(subjectUserId)
-          })
-        ).id;
+    const workspace = command.collaborationWorkspaceId
+      ? await this.requireMemberWorkspace(user, command.collaborationWorkspaceId)
+      : await this.options.userStore.ensurePersonalWorkspace({
+          clientInstanceId: this.options.clientInstanceId,
+          userId: asUserId(subjectUserId)
+        });
     const conversation = await this.options.conversationStore.createConversation({
       clientInstanceId: this.options.clientInstanceId,
-      collaborationWorkspaceId,
+      collaborationWorkspaceId: workspace.id,
       createdByUserId: subjectUserId,
       createdByExternalUserId: user.externalUserId,
-      visibility: "workspace",
+      visibility: workspace.defaultConversationVisibility,
       title: command.title ?? "New conversation",
       retainedUntil: addDays(
         new Date(),
@@ -182,7 +182,7 @@ export class ConversationWorkflow {
     conversationId: ConversationId,
     user: AuthenticatedUser
   ): Promise<ChatMessage[]> {
-    await this.requireActiveConversationMembership(conversationId, user);
+    await this.requireConversationAccess(conversationId, user);
     const messages = await this.options.conversationStore.listMessages({
       clientInstanceId: this.options.clientInstanceId,
       conversationId
@@ -194,7 +194,7 @@ export class ConversationWorkflow {
     conversationId: ConversationId,
     user: AuthenticatedUser
   ): Promise<ConversationThreadSnapshot> {
-    const conversation = await this.requireActiveConversationMembership(conversationId, user);
+    const conversation = await this.requireConversationAccess(conversationId, user);
     const messages = await this.options.conversationStore.listMessages({
       clientInstanceId: this.options.clientInstanceId,
       conversationId
@@ -249,7 +249,7 @@ export class ConversationWorkflow {
     user: AuthenticatedUser,
     context: RuntimeCallContext
   ): Promise<Conversation> {
-    const conversation = await this.requireActiveConversationMembership(conversationId, user);
+    const conversation = await this.requireConversationAccess(conversationId, user);
     if (conversation.title === title) {
       return conversation;
     }
@@ -280,10 +280,23 @@ export class ConversationWorkflow {
     context: RuntimeCallContext,
     command: MoveConversationCommand
   ): Promise<Conversation> {
-    const conversation = await this.requireActiveConversationMembership(conversationId, user);
-    await this.workspaces.requireActiveMembership(user, command.collaborationWorkspaceId);
+    const conversation = await this.requireConversationAccess(conversationId, user);
+    const destination = await this.requireMemberWorkspace(user, command.collaborationWorkspaceId);
     if (conversation.collaborationWorkspaceId === command.collaborationWorkspaceId) {
       throw new AppError("VALIDATION_FAILED", "Conversation already belongs to this workspace");
+    }
+    const visibility: ConversationVisibility =
+      destination.kind === "personal"
+        ? "workspace"
+        : (command.visibility ??
+          (conversation.visibility === "private"
+            ? "private"
+            : destination.defaultConversationVisibility));
+    if (visibility === "private" && conversation.createdByUserId !== getSubjectUserId(user)) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "Only the creator of a conversation can make it private"
+      );
     }
     await this.workspaces.assertConversationIdle(conversationId);
     const moved = await this.options.conversationStore.moveConversation({
@@ -291,7 +304,7 @@ export class ConversationWorkflow {
       conversationId,
       fromCollaborationWorkspaceId: conversation.collaborationWorkspaceId,
       toCollaborationWorkspaceId: command.collaborationWorkspaceId,
-      visibility: conversation.visibility
+      visibility
     });
     await this.options.auditRecorder.record({
       type: "conversation.moved",
@@ -354,7 +367,7 @@ export class ConversationWorkflow {
     context: RuntimeCallContext,
     command: SendConversationMessageCommand
   ): Promise<StartedConversationMessageRun> {
-    await this.requireActiveConversationMembership(conversationId, user);
+    await this.requireConversationAccess(conversationId, user);
     this.assertUserSelectableModelBinding(command.modelBindingId);
     let runStartCommand: RunStartCommand | undefined;
     if (command.idempotencyKey) {
@@ -512,7 +525,7 @@ export class ConversationWorkflow {
         user
       });
       if (claim.status === "resolved") {
-        const conversation = await this.requireActiveConversationMembership(
+        const conversation = await this.requireConversationAccess(
           claim.started.run.conversationId,
           user
         );
@@ -576,7 +589,7 @@ export class ConversationWorkflow {
       yield* this.options.agentRuntime.observe(runId, context, options);
       return;
     }
-    await this.requireActiveConversationMembership(persistedRun.conversationId, context.user);
+    await this.requireConversationAccess(persistedRun.conversationId, context.user);
 
     let lastSequence = options.afterSequence ?? 0;
     const observations = await this.options.conversationStore.listRunObservations({
@@ -628,7 +641,7 @@ export class ConversationWorkflow {
       runId
     });
     if (run) {
-      await this.requireActiveConversationMembership(run.conversationId, context.user);
+      await this.requireConversationAccess(run.conversationId, context.user);
       return run.status;
     }
     return this.options.agentRuntime.getStatus(runId, context);
@@ -640,7 +653,7 @@ export class ConversationWorkflow {
       runId
     });
     if (!run) return undefined;
-    await this.requireActiveConversationMembership(run.conversationId, user);
+    await this.requireConversationAccess(run.conversationId, user);
     return run;
   }
 
@@ -649,7 +662,7 @@ export class ConversationWorkflow {
     runId: AgentRunId,
     user: AuthenticatedUser
   ): Promise<AgentRun | undefined> {
-    await this.requireActiveConversationMembership(conversationId, user);
+    await this.requireConversationAccess(conversationId, user);
     const run = await this.options.conversationStore.getConversationAgentRun({
       clientInstanceId: this.options.clientInstanceId,
       conversationId,
@@ -770,7 +783,7 @@ export class ConversationWorkflow {
       return undefined;
     }
 
-    const conversation = await this.requireActiveConversationMembership(conversationId, user);
+    const conversation = await this.requireConversationAccess(conversationId, user);
     const messages = await this.options.conversationStore.listMessages({
       clientInstanceId: this.options.clientInstanceId,
       conversationId
@@ -917,7 +930,7 @@ export class ConversationWorkflow {
         "User conversation deletion is disabled for this client instance"
       );
     }
-    await this.requireActiveConversationMembership(conversationId, user);
+    await this.requireConversationAccess(conversationId, user);
     const deletedAt = new Date().toISOString();
     const attachmentDeletion = this.options.attachments
       ? await this.options.attachments.deleteConversationAttachments({
@@ -950,7 +963,12 @@ export class ConversationWorkflow {
     return deleted;
   }
 
-  async requireActiveConversationMembership(
+  /**
+   * The single access check for a Conversation and everything that hangs off it. A missing
+   * Conversation, one in a workspace the caller is not a member of, and another member's
+   * private Conversation are indistinguishable to the caller.
+   */
+  async requireConversationAccess(
     conversationId: ConversationId,
     user: AuthenticatedUser
   ): Promise<Conversation> {
@@ -969,7 +987,28 @@ export class ConversationWorkflow {
       }
       throw error;
     }
+    if (
+      conversation.visibility === "private" &&
+      conversation.createdByUserId !== getSubjectUserId(user)
+    ) {
+      throw new AppError("NOT_FOUND", "Conversation is not available");
+    }
     return conversation;
+  }
+
+  private async requireMemberWorkspace(
+    user: AuthenticatedUser,
+    collaborationWorkspaceId: CollaborationWorkspaceId
+  ): Promise<CollaborationWorkspace> {
+    await this.workspaces.requireActiveMembership(user, collaborationWorkspaceId);
+    const workspace = await this.options.userStore.getWorkspace(
+      this.options.clientInstanceId,
+      collaborationWorkspaceId
+    );
+    if (!workspace) {
+      throw new AppError("NOT_FOUND", "Collaboration Workspace is not available");
+    }
+    return workspace;
   }
 
   private async claimOrResolveRunStartCommand(input: {
@@ -1027,7 +1066,7 @@ export class ConversationWorkflow {
     if (expectedConversationId && command.conversationId !== expectedConversationId) {
       throw new AppError("NOT_FOUND", "Agent run is not available");
     }
-    await this.requireActiveConversationMembership(command.conversationId, user);
+    await this.requireConversationAccess(command.conversationId, user);
     const run = await this.options.conversationStore.getConversationAgentRun({
       clientInstanceId: this.options.clientInstanceId,
       conversationId: command.conversationId,

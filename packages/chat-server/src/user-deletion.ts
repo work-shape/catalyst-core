@@ -73,13 +73,23 @@ export async function cleanupProductUserData(input: {
     );
   }
 
-  const conversations = personalWorkspace
-    ? await options.conversationStore.listConversationsForWorkspace({
+  // Private conversations in Shared Workspaces are readable only by their creator, so they
+  // are part of the user's own data rather than a shared resource that outlives the account.
+  const conversations = [
+    ...(personalWorkspace
+      ? await options.conversationStore.listConversationsForWorkspace({
+          clientInstanceId: options.clientInstanceId,
+          collaborationWorkspaceId: personalWorkspace.id,
+          scope: { kind: "lifecycle" }
+        })
+      : []),
+    ...(
+      await options.conversationStore.listPrivateConversationsCreatedByUser({
         clientInstanceId: options.clientInstanceId,
-        collaborationWorkspaceId: personalWorkspace.id,
-        scope: { kind: "lifecycle" }
+        userId: input.userId
       })
-    : [];
+    ).filter((conversation) => conversation.collaborationWorkspaceId !== personalWorkspace?.id)
+  ];
   const totals: UserDeletionTotals = {
     conversationCount: 0,
     attachmentCount: 0,

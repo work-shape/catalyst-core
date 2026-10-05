@@ -69,7 +69,8 @@ export function registerConversationRoutes(app: FastifyInstance, options: ChatSe
     requireAuthScope(user, "conversation:write");
     const body = parseBody(apiOperations.moveConversation.requestSchema, request.body);
     return conversations.moveConversation(getConversationId(request), user, context, {
-      collaborationWorkspaceId: asCollaborationWorkspaceId(body.collaborationWorkspaceId)
+      collaborationWorkspaceId: asCollaborationWorkspaceId(body.collaborationWorkspaceId),
+      visibility: body.visibility
     });
   });
 

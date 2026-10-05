@@ -23,7 +23,7 @@ export function registerDraftAttachmentRoutes(
     const { user } = await authenticateRequest(options, request);
     requireAuthScope(user, "conversation:read");
     const conversationId = getConversationId(request);
-    await conversations.requireActiveConversationMembership(conversationId, user);
+    await conversations.requireConversationAccess(conversationId, user);
     return attachments(options).listDraftAttachments(conversationId);
   });
 
@@ -31,7 +31,7 @@ export function registerDraftAttachmentRoutes(
     const { user } = await authenticateRequest(options, request);
     requireAuthScope(user, "conversation:write");
     const conversationId = getConversationId(request);
-    await conversations.requireActiveConversationMembership(conversationId, user);
+    await conversations.requireConversationAccess(conversationId, user);
     const file = await request.file();
     if (!file) {
       throw new AppError("VALIDATION_FAILED", "A file upload is required");
@@ -63,7 +63,7 @@ export function registerDraftAttachmentRoutes(
     const { user } = await authenticateRequest(options, request);
     requireAuthScope(user, "conversation:write");
     const conversationId = getConversationId(request);
-    await conversations.requireActiveConversationMembership(conversationId, user);
+    await conversations.requireConversationAccess(conversationId, user);
     const service = attachments(options);
     const attachment = await service.retryDraftAttachment({
       conversationId,
@@ -79,7 +79,7 @@ export function registerDraftAttachmentRoutes(
     const { user } = await authenticateRequest(options, request);
     requireAuthScope(user, "conversation:write");
     const conversationId = getConversationId(request);
-    await conversations.requireActiveConversationMembership(conversationId, user);
+    await conversations.requireConversationAccess(conversationId, user);
     return attachments(options).deleteDraftAttachment({
       conversationId,
       attachmentId: getAttachmentId(request)
