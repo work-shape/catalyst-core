@@ -356,6 +356,71 @@ describe("agent run worker", () => {
     ]);
   });
 
+  it("lets active work finish when a stop drains within the timeout", async () => {
+    const fixture = await createQueuedRun("drain-completes");
+    let started!: () => void;
+    const executionStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let aborted = false;
+    const worker = createWorker(fixture, async function* (input, context) {
+      context.signal!.addEventListener("abort", () => (aborted = true), { once: true });
+      started();
+      await released;
+      if (!aborted) yield completedEvent(input.preparedRun!.id, 1, new Date().toISOString());
+    });
+    const loop = worker.start();
+    await executionStarted;
+    const stopped = worker.stop({ drainTimeoutMs: 60_000 });
+    release();
+    await stopped;
+    await loop;
+
+    const observations = await fixture.store.listRunObservations({
+      clientInstanceId: fixture.clientInstanceId,
+      runId: fixture.run.id
+    });
+    expect(observations.map((observation) => observation.type)).toEqual(["run_completed"]);
+  });
+
+  it("interrupts active work once the drain timeout elapses", async () => {
+    const fixture = await createQueuedRun("drain-timeout");
+    let started!: () => void;
+    const executionStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const worker = createWorker(fixture, async function* (_input, context) {
+      started();
+      await new Promise<void>((_resolve, reject) => {
+        context.signal!.addEventListener(
+          "abort",
+          () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })),
+          { once: true }
+        );
+      });
+    });
+    const loop = worker.start();
+    await executionStarted;
+    await worker.stop({ drainTimeoutMs: 10 });
+    await loop;
+
+    const observations = await fixture.store.listRunObservations({
+      clientInstanceId: fixture.clientInstanceId,
+      runId: fixture.run.id
+    });
+    expect(observations).toMatchObject([
+      {
+        type: "run_failed",
+        sequence: 1,
+        payload: { error: { code: "AGENT_RUN_RUNTIME_INTERRUPTED" } }
+      }
+    ]);
+  });
+
   it("fences a late worker after lease recovery so it cannot add a second terminal event", async () => {
     const fixture = await createQueuedRun("worker-loss");
     let now = "2026-09-02T12:00:00.000Z";

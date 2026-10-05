@@ -61,6 +61,12 @@ export interface AgentRunWorkerOptions {
   now?: () => string;
 }
 
+export interface AgentRunWorkerStopInput {
+  interruptActive?: boolean;
+  drainTimeoutMs?: number;
+  reason?: string;
+}
+
 export interface AgentRunWorkerRunOnceResult {
   status: "claimed" | "idle";
   run?: AgentRun;
@@ -142,15 +148,26 @@ export class AgentRunWorker {
     return this.start();
   }
 
-  async stop(input: { interruptActive?: boolean; reason?: string } = {}): Promise<void> {
+  // Stops claiming new runs. Active runs finish on their own unless interruptActive is set
+  // or drainTimeoutMs elapses first; then they end as runtime_interrupted.
+  async stop(input: AgentRunWorkerStopInput = {}): Promise<void> {
     this.stopping = true;
-    if (input.interruptActive) {
+    const interrupt = () => {
       for (const controller of this.activeControllers) {
         this.interruptedControllers.add(controller);
         controller.abort(input.reason ?? "Agent run worker is stopping");
       }
+    };
+    let drainTimer: ReturnType<typeof setTimeout> | undefined;
+    if (input.interruptActive) interrupt();
+    else if (input.drainTimeoutMs !== undefined) {
+      drainTimer = setTimeout(interrupt, input.drainTimeoutMs);
     }
-    await this.loopPromise;
+    try {
+      await this.loopPromise;
+    } finally {
+      clearTimeout(drainTimer);
+    }
     this.loopPromise = undefined;
   }
 
