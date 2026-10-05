@@ -124,7 +124,39 @@ describe("model usage governance", () => {
     });
 
     const summary = await governance.createSafeSummary({ clientInstanceId });
-    expect(summary.recentEvents.map((event) => event.fastMode).sort()).toEqual([false, true]);
+    expect(summary.recentEvents.map((event) => event.billedAsFast).sort()).toEqual([false, true]);
+  });
+
+  it("settles a fast request by the tier the provider reports", async () => {
+    const { governance, clientInstanceId } = createGovernance();
+    const record = (providerServiceTier?: string) =>
+      governance.recordModelUsage(
+        usageInput(clientInstanceId, {
+          inputTokens: 1_000_000,
+          cachedInputTokens: 800_000,
+          outputTokens: 100_000,
+          totalTokens: 1_100_000,
+          fastMode: true,
+          ...(providerServiceTier === undefined ? {} : { providerServiceTier })
+        })
+      );
+
+    // Downgraded by the provider: normal rates, but both tiers stay on record.
+    const downgraded = await record("default");
+    expect(downgraded).toMatchObject({ fastMode: true, providerServiceTier: "default" });
+    expect(downgraded.customerBillableCost).toMatchObject({
+      status: "settled",
+      appliedRates: { outputPricePerMillionTokens: 30 },
+      totalCostMicros: 4_400_000
+    });
+    // No reported tier: the requested tier wins.
+    expect((await record()).customerBillableCost).toMatchObject({ totalCostMicros: 8_800_000 });
+    expect((await record("priority")).customerBillableCost).toMatchObject({
+      totalCostMicros: 8_800_000
+    });
+
+    const summary = await governance.createSafeSummary({ clientInstanceId });
+    expect(summary.recentEvents.filter((event) => event.billedAsFast)).toHaveLength(2);
   });
 
   it("never settles a fast call with the normal rates when fast rates are missing", async () => {

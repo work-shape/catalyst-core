@@ -3593,7 +3593,7 @@ export type GetUsageSummaryResponses = {
             outputTokens: number;
             totalTokens: number;
             webSearchCallCount: number;
-            fastMode: boolean;
+            billedAsFast: boolean;
             source: 'provider_reported' | 'not_reported' | 'estimated';
             correlationId: string;
             createdAt: string;

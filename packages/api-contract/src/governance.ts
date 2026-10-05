@@ -55,7 +55,7 @@ export const modelUsageVolumeEventSchema = z.object({
   outputTokens: z.number(),
   totalTokens: z.number(),
   webSearchCallCount: z.number().int().nonnegative(),
-  fastMode: z.boolean(),
+  billedAsFast: z.boolean(),
   source: z.enum(["provider_reported", "not_reported", "estimated"]),
   correlationId: z.string(),
   createdAt: z.string()

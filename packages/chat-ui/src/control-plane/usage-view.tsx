@@ -151,7 +151,7 @@ export function UsageView({ usage }: { usage: UsageSummary | undefined }) {
                     </TableCell>
                     <TableCell className="font-medium break-words">
                       {event.model}
-                      {event.fastMode ? " · fast" : ""}
+                      {event.billedAsFast ? " · fast" : ""}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
                       {event.totalTokens.toLocaleString()}

@@ -65,7 +65,7 @@ export interface ModelUsageEvent extends ModelTokenUsage {
   providerId: string;
   model: string;
   webSearchCallCount: number;
-  /** The call was requested in fast mode and is settled with the fast rates. */
+  /** The call was requested in fast mode. See `isBilledAsFast` for the rates it is settled with. */
   fastMode: boolean;
   /** Service tier the provider reported for the call, where it reports one. */
   providerServiceTier?: string;
@@ -91,6 +91,20 @@ export interface ModelUsageEventRecordInput extends ModelUsageEventInput {
   webSearchCallCount: number;
   fastMode: boolean;
   customerBillableCost: UsageCostRecord;
+}
+
+/**
+ * A call requested as fast is settled with the fast rates unless the provider explicitly
+ * reported another tier, as it does when it downgrades the call to standard processing.
+ */
+export function isBilledAsFast(event: {
+  fastMode?: boolean;
+  providerServiceTier?: string;
+}): boolean {
+  return (
+    event.fastMode === true &&
+    (event.providerServiceTier === undefined || event.providerServiceTier === "priority")
+  );
 }
 
 export interface ModelUsageWindowSummary {

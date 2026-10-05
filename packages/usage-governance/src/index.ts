@@ -15,7 +15,8 @@ import {
   type UsageRateCardConfig,
   type UsageRateCardTokenRatesConfig,
   type UsageSafeguardsConfig,
-  createModelUsageWindowBounds
+  createModelUsageWindowBounds,
+  isBilledAsFast
 } from "@vivd-catalyst/core";
 
 export interface ModelUsageGovernanceOptions {
@@ -71,10 +72,12 @@ export type SafeModelUsageEvent = Pick<
   | "totalTokens"
   | "source"
   | "webSearchCallCount"
-  | "fastMode"
   | "correlationId"
   | "createdAt"
->;
+> & {
+  /** The call was settled with the fast rates. */
+  billedAsFast: boolean;
+};
 
 export interface SafeCostedModelUsageEvent extends SafeModelUsageEvent {
   cost: SafeModelUsageBillableCost;
@@ -386,8 +389,8 @@ export function calculateUsageCost(
   if (!modelRate) {
     return incompleteCost("unpriced", source, ["model_rate"], rateCard);
   }
-  // A fast call is never settled with the normal rates.
-  const tokenRates = event.fastMode ? modelRate.fast : modelRate;
+  // A call billed as fast is never settled with the normal rates.
+  const tokenRates = isBilledAsFast(event) ? modelRate.fast : modelRate;
   if (!tokenRates) {
     return incompleteCost("unpriced", source, ["fast_model_rate"], rateCard);
   }
@@ -621,7 +624,7 @@ function toSafeEvent(
     totalTokens: event.totalTokens,
     source: event.source,
     webSearchCallCount: event.webSearchCallCount,
-    fastMode: event.fastMode,
+    billedAsFast: isBilledAsFast(event),
     correlationId: event.correlationId,
     createdAt: event.createdAt,
     cost: {

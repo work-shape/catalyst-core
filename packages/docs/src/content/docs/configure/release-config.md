@@ -112,7 +112,7 @@ usage:
             outputPricePerMillionTokens: 60
 ```
 
-Every model binding with `supportsFastMode: true` needs these rates; startup validation fails without them. A model call requested in fast mode is recorded as fast and settled with the `fast` rates, never with the normal ones. The usage event also stores the service tier the provider reported for the call. Adding or changing fast rates is a rate change and needs a new card `version`; earlier usage is not re-rated.
+Every model binding with `supportsFastMode: true` needs these rates; startup validation fails without them. The usage event records both that the call was requested in fast mode and the service tier the provider reported. A fast request is settled with the `fast` rates unless the provider explicitly reported another tier, for example `default` after a downgrade to standard processing; then it is settled with the normal rates. When the provider reports no tier, the `fast` rates apply. The usage view marks a call as fast only when it was billed that way. Adding or changing fast rates is a rate change and needs a new card `version`; earlier usage is not re-rated.
 
 ## Approval checks
 
