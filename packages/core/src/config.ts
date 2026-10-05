@@ -61,6 +61,14 @@ export const AGENT_EDITABLE_FIELDS = [
 ] as const;
 export type AgentEditableField = (typeof AGENT_EDITABLE_FIELDS)[number];
 
+/** Governed by the `agent_models.manage` permission instead of `editableAgentFields`. */
+export const AGENT_MODEL_SETTING_FIELDS = [
+  "modelBindingId",
+  "reasoningEffort",
+  "fastMode"
+] as const;
+export type AgentModelSettingField = (typeof AGENT_MODEL_SETTING_FIELDS)[number];
+
 export interface ModelBindingConfig {
   id: string;
   providerId: string;
@@ -68,6 +76,7 @@ export interface ModelBindingConfig {
   reasoningEffort?: ReasoningEffortConfig;
   agentSelectable?: boolean;
   userSelectable?: boolean;
+  supportsFastMode?: boolean;
 }
 
 export interface AgentConfig {
@@ -80,6 +89,7 @@ export interface AgentConfig {
   modelProviderId?: string;
   modelBindingId?: string;
   reasoningEffort?: ReasoningEffortConfig;
+  fastMode?: boolean;
   maxSteps?: number;
   toolNames: string[];
   skillNames: string[];
@@ -136,12 +146,17 @@ export interface UsageSafeguardsConfig {
   tokensPerMonth?: number;
 }
 
-export interface UsageRateCardModelConfig {
-  providerId: string;
-  model: string;
+export interface UsageRateCardTokenRatesConfig {
   uncachedInputPricePerMillionTokens: number;
   cachedInputPricePerMillionTokens: number;
   outputPricePerMillionTokens: number;
+}
+
+export interface UsageRateCardModelConfig extends UsageRateCardTokenRatesConfig {
+  providerId: string;
+  model: string;
+  /** Rates for fast-mode model calls. Required for every binding that supports fast mode. */
+  fast?: UsageRateCardTokenRatesConfig;
 }
 
 export interface UsageRateCardWebSearchConfig {

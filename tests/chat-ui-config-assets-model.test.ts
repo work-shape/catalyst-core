@@ -8,6 +8,7 @@ import {
   configAssetMutationErrorMessage,
   localizedToPair,
   pairToLocalized,
+  selectAgentModelBinding,
   skillConfigToForm,
   skillFormToConfig
 } from "../packages/chat-ui/src/control-plane/config-assets-model";
@@ -51,6 +52,31 @@ describe("config assets form model", () => {
     expect(config.modelBindingId).toBe("fast");
     expect(config.reasoningEffort).toBe("xhigh");
     expect(config).not.toHaveProperty("modelProviderId");
+  });
+
+  it("round-trips fast mode and clears it when the selected binding does not support it", () => {
+    const config = {
+      name: "a",
+      displayName: "Agent",
+      instructions: "x",
+      modelBindingId: "fast",
+      fastMode: true,
+      toolNames: [],
+      skillNames: [],
+      initialPrompts: []
+    };
+    const form = agentConfigToForm(config);
+
+    expect(agentFormToConfig(form)).toEqual(config);
+    expect(agentFormToConfig({ ...form, fastMode: false })).not.toHaveProperty("fastMode");
+    expect(selectAgentModelBinding(form, "alsoFast", ["fast", "alsoFast"])).toMatchObject({
+      modelBindingId: "alsoFast",
+      fastMode: true
+    });
+    expect(selectAgentModelBinding(form, "plain", ["fast"])).toMatchObject({
+      modelBindingId: "plain",
+      fastMode: false
+    });
   });
 
   it("collapses identical locales to a plain string and drops empty localized fields", () => {

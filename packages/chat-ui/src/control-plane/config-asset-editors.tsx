@@ -17,6 +17,7 @@ import {
 import {
   agentAvailabilityFormsEqual,
   agentAvailabilityToForm,
+  selectAgentModelBinding,
   type AgentAvailabilityForm,
   type AgentFormState,
   type SkillFormState
@@ -28,6 +29,7 @@ import { cn } from "../ui/cn";
 import { Input, Textarea } from "../ui/input";
 import { Select } from "../ui/select";
 import { Spinner } from "../ui/spinner";
+import { Switch } from "../ui/switch";
 import { apiErrorMessage } from "../workspace-utils";
 
 interface MutationOutcome {
@@ -41,6 +43,7 @@ export function AgentEditor({
   isDefault,
   references,
   editableAgentFields,
+  canManageAgentModels,
   skillNames,
   mutating,
   onSave,
@@ -54,6 +57,8 @@ export function AgentEditor({
   isDefault: boolean;
   references: ConfigAssetsOverview["references"] | undefined;
   editableAgentFields: string[];
+  /** Model, reasoning effort and fast mode follow this permission, not `editableAgentFields`. */
+  canManageAgentModels: boolean;
   skillNames: string[];
   mutating: boolean;
   onSave(form: AgentFormState): Promise<MutationOutcome>;
@@ -68,14 +73,16 @@ export function AgentEditor({
   const [error, setError] = useState<string | undefined>(undefined);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const canEdit = (field: string) => editableAgentFields.includes(field);
-  const canEditModel = canEdit("modelBindingId");
-  const canEditReasoningEffort = canEdit("reasoningEffort");
+  const canEditModel = canManageAgentModels;
+  const canEditReasoningEffort = canManageAgentModels;
   const canEditMaxSteps = canEdit("maxSteps");
   const modelBindings =
     references?.modelBindings ?? references?.modelBindingIds.map((id) => ({ id, model: id })) ?? [];
   const showModel = canEditModel || Boolean(form.modelBindingId || form.modelProviderId);
   const showReasoningEffort = canEditReasoningEffort || Boolean(form.reasoningEffort);
   const showMaxSteps = canEditMaxSteps || Boolean(form.maxSteps);
+  const fastModeModelBindingIds = references?.fastModeModelBindingIds ?? [];
+  const showFastMode = form.fastMode || fastModeModelBindingIds.includes(form.modelBindingId);
   const configuredModelLabel = form.modelBindingId
     ? modelBindingLabel(
         modelBindings.find((binding) => binding.id === form.modelBindingId) ?? {
@@ -194,12 +201,12 @@ export function AgentEditor({
             onChange={(event) => update({ instructions: event.target.value })}
           />
         </Field>
-        {showModel || showReasoningEffort || showMaxSteps ? (
+        {showModel || showReasoningEffort || showFastMode || showMaxSteps ? (
           <div
             className={cn(
               "grid gap-5",
-              [showModel, showReasoningEffort, showMaxSteps].filter(Boolean).length > 1 &&
-                "sm:grid-cols-2"
+              [showModel, showReasoningEffort, showFastMode, showMaxSteps].filter(Boolean).length >
+                1 && "sm:grid-cols-2"
             )}
           >
             {showModel ? (
@@ -208,7 +215,9 @@ export function AgentEditor({
                   <Select
                     value={form.modelBindingId}
                     onChange={(event) =>
-                      update({ modelBindingId: event.target.value, modelProviderId: "" })
+                      setForm((value) =>
+                        selectAgentModelBinding(value, event.target.value, fastModeModelBindingIds)
+                      )
                     }
                   >
                     <option value="">{t("configInstanceDefault")}</option>
@@ -241,6 +250,16 @@ export function AgentEditor({
                     </option>
                   ))}
                 </Select>
+              </Field>
+            ) : null}
+            {showFastMode ? (
+              <Field label={t("configFastMode")} hint={t("configFastModeHint")}>
+                <Switch
+                  checked={form.fastMode}
+                  disabled={!canManageAgentModels}
+                  aria-label={t("configFastMode")}
+                  onCheckedChange={(fastMode) => update({ fastMode })}
+                />
               </Field>
             ) : null}
             {showMaxSteps ? (
@@ -302,7 +321,7 @@ export function AgentEditor({
 
       {revisions}
 
-      {editableAgentFields.length > 0 ? (
+      {editableAgentFields.length > 0 || canManageAgentModels ? (
         <SaveBar
           label={isNew ? t("configCreateAgent") : t("configSaveChanges")}
           mutating={mutating}

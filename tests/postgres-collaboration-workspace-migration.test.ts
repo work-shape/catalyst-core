@@ -380,6 +380,47 @@ describePostgres("Collaboration Workspace migration 0020", () => {
     }
   });
 
+  it("marks existing usage events as not fast in 0029 without touching their settlement", async () => {
+    const { sql } = await createFreshDatabase();
+    try {
+      await applyMigrationsThrough(sql, 28);
+      await sql`
+        insert into model_usage_events (
+          id, client_instance_id, conversation_id, agent_run_id, agent_name, provider_id, model,
+          input_tokens, output_tokens, total_tokens, source, customer_billable_cost,
+          correlation_id, created_at
+        ) values (
+          'usage_before', 'migration-test-client', 'conv_1', 'run_1', 'agent', 'azure-eu', 'gpt',
+          10, 5, 15, 'provider_reported', ${sql.json({ status: "settled", totalCostMicros: 42 })},
+          'corr_1', now()
+        )
+      `;
+
+      await applyMigration(sql, "0029_usage_fast_mode");
+
+      await expect(
+        sql`
+          select fast_mode, provider_service_tier, customer_billable_cost
+          from model_usage_events
+        `
+      ).resolves.toEqual([
+        {
+          fast_mode: false,
+          provider_service_tier: null,
+          customer_billable_cost: { status: "settled", totalCostMicros: 42 }
+        }
+      ]);
+      await sql`
+        update model_usage_events set fast_mode = true, provider_service_tier = 'priority'
+      `;
+      await expect(
+        sql`select count(*)::int as fast from model_usage_events where fast_mode`
+      ).resolves.toEqual([{ fast: 1 }]);
+    } finally {
+      await sql.end();
+    }
+  });
+
   it("backfills every active agent to availability 'all' in 0028", async () => {
     const { sql } = await createFreshDatabase();
     try {

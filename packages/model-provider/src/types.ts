@@ -80,6 +80,8 @@ export interface ModelCompletionRequest {
   providerId: string;
   model: string;
   reasoningEffort?: ReasoningEffortConfig;
+  /** Requests the provider's fast processing tier. The adapter maps it to the provider parameter. */
+  fastMode?: boolean;
   continuation?: ModelProviderContinuation;
   messages: ModelMessage[];
   tools: ModelTool[];
@@ -101,6 +103,8 @@ export interface ModelCompletion {
   citations?: MessageCitation[];
   usage: ModelTokenUsage & {
     webSearchCallCount: number;
+    /** Service tier the provider reported for this call, where it reports one. */
+    providerServiceTier?: string;
   };
 }
 

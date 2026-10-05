@@ -73,9 +73,11 @@ export function UserPermissionsCard({
             const label = copy ? t(copy.label) : state.permission;
             const held =
               savedChange?.permission === state.permission ? savedChange.held : state.held;
-            // The server lets only superadmins hand out API access administration.
+            // The server lets only superadmins hand out these two permissions.
             const superadminOnly =
-              state.permission === "api_access.manage" && !canManageSuperadminAccess;
+              (state.permission === "api_access.manage" ||
+                state.permission === "agent_models.manage") &&
+              !canManageSuperadminAccess;
             return (
               <li
                 key={state.permission}

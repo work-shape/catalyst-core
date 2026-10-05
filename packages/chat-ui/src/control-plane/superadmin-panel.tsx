@@ -48,6 +48,7 @@ import { createApiAccessAuthorityKey } from "./api-access-reveal-controller";
 import { ControlPlanePage } from "./control-plane-page";
 import {
   canEditConfigAssets,
+  canManageAgentModels,
   canManageApiAccess,
   canManageUsers,
   canViewAudit,
@@ -160,6 +161,7 @@ export function SuperadminPanel({
   };
   const configAssets: ConfigAssetsPanelInput = {
     editableAgentFields: configAssetManagement?.editableAgentFields ?? [],
+    canManageAgentModels: canManageAgentModels(user),
     allowAgentCreation: configAssetManagement?.allowAgentCreation ?? false,
     allowAgentDeletion: configAssetManagement?.allowAgentDeletion ?? false,
     allowDefaultAgentChange: configAssetManagement?.allowDefaultAgentChange ?? false,

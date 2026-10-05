@@ -31,10 +31,12 @@ describe("config asset editors", () => {
           modelProviderIds: ["azure-eu"],
           modelBindingIds: [],
           modelBindings: [],
+          fastModeModelBindingIds: [],
           reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
           enabledToolNames: []
         },
         editableAgentFields: [],
+        canManageAgentModels: false,
         skillNames: [],
         mutating: false,
         onSave: async () => ({ ok: true }),
@@ -67,10 +69,12 @@ describe("config asset editors", () => {
           modelProviderIds: ["azure-eu"],
           modelBindingIds: ["reasoning"],
           modelBindings: [{ id: "reasoning", model: "gpt-5" }],
+          fastModeModelBindingIds: [],
           reasoningEfforts: [],
           enabledToolNames: []
         },
         editableAgentFields: ["modelProviderId"],
+        canManageAgentModels: false,
         skillNames: [],
         mutating: false,
         onSave: async () => ({ ok: true }),
@@ -81,6 +85,65 @@ describe("config asset editors", () => {
     expect(markup).toContain('value="azure-eu"');
     expect(markup).toContain("disabled");
     expect(markup).not.toContain("reasoning");
+  });
+
+  it("makes model, reasoning effort and fast mode editable by permission, not by edit policy", () => {
+    const render = (canManageAgentModels: boolean, modelBindingId = "fast") =>
+      renderToStaticMarkup(
+        createElement(AgentEditor, {
+          initialForm: agentConfigToForm({
+            name: "assistant",
+            displayName: "Assistant",
+            instructions: "Help the user.",
+            modelBindingId,
+            reasoningEffort: "high",
+            fastMode: modelBindingId === "fast",
+            toolNames: [],
+            skillNames: [],
+            initialPrompts: []
+          }),
+          isNew: false,
+          isDefault: true,
+          references: {
+            modelProviderIds: ["azure-eu"],
+            modelBindingIds: ["fast", "plain"],
+            modelBindings: [
+              { id: "fast", model: "gpt-fast" },
+              { id: "plain", model: "gpt-plain" }
+            ],
+            fastModeModelBindingIds: ["fast"],
+            reasoningEfforts: ["low", "high"],
+            enabledToolNames: []
+          },
+          // The legacy entries no longer make the model settings editable.
+          editableAgentFields: canManageAgentModels ? [] : ["modelBindingId", "reasoningEffort"],
+          canManageAgentModels,
+          skillNames: [],
+          mutating: false,
+          onSave: async () => ({ ok: true }),
+          revisions: null
+        })
+      );
+    const fastSwitch = (markup: string) => /<button[^>]*role="switch"[^>]*>/u.exec(markup)?.[0];
+    const effortSelect = (markup: string) =>
+      /<select[^>]*>(?=<option value="">Model default)/u.exec(markup)?.[0];
+
+    const editable = render(true);
+    expect(editable).toContain('<option value="fast" selected="">');
+    expect(effortSelect(editable)).not.toContain('disabled=""');
+    expect(fastSwitch(editable)).toContain('aria-checked="true"');
+    expect(fastSwitch(editable)).not.toContain('disabled=""');
+    expect(editable).toContain("Fast runs are billed at a higher rate.");
+    expect(editable).toContain("Save changes");
+
+    const readOnly = render(false);
+    expect(readOnly).not.toContain('<option value="fast"');
+    expect(readOnly).toContain('value="gpt-fast"');
+    expect(effortSelect(readOnly)).toContain('disabled=""');
+    expect(fastSwitch(readOnly)).toContain('disabled=""');
+
+    // No fast-mode control for a binding that does not support it.
+    expect(fastSwitch(render(true, "plain"))).toBeUndefined();
   });
 
   it("keeps a read-only skill package navigable without mutation controls", () => {

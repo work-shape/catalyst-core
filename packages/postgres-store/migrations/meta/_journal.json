@@ -204,6 +204,13 @@
       "when": 1791200948490,
       "tag": "0028_agent_availability",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1791208221526,
+      "tag": "0029_usage_fast_mode",
+      "breakpoints": true
     }
   ]
 }

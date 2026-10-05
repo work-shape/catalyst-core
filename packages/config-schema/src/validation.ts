@@ -20,6 +20,7 @@ export function parseClientInstanceConfig(input: unknown): ClientInstanceConfig 
   assertCaptureMailIsDevelopmentOnly(parsed.data);
   assertExecutionWorkspaceRunnerBoundary(parsed.data);
   assertConfigReferences(parsed.data);
+  assertFastModePricingCoverage(parsed.data);
   assertSpendBudgetPricingCoverage(parsed.data, []);
   return parsed.data;
 }
@@ -166,6 +167,29 @@ function assertConfigReferences(config: ClientInstanceConfig): void {
       "VALIDATION_FAILED",
       `Conversation title generation references missing model binding '${config.conversationTitles.modelBindingId}'`
     );
+  }
+}
+
+/** A fast run must never be settled with the normal rates, so fast rates are mandatory. */
+function assertFastModePricingCoverage(config: ClientInstanceConfig): void {
+  const models = config.usage.costs.customer?.models ?? [];
+  for (const binding of config.modelBindings) {
+    if (!binding.supportsFastMode) {
+      continue;
+    }
+    const selection = resolveModelBinding(config, binding.id);
+    const hasFastRates = models.some(
+      (price) =>
+        price.providerId === selection.provider.id &&
+        price.model === selection.model &&
+        price.fast !== undefined
+    );
+    if (!hasFastRates) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `Model binding '${binding.id}' declares supportsFastMode, but the customer rate card has no fast rates for model ${createPricingKey(selection.provider.id, selection.model)}`
+      );
+    }
   }
 }
 

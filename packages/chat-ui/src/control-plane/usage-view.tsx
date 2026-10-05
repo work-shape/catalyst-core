@@ -149,7 +149,10 @@ export function UsageView({ usage }: { usage: UsageSummary | undefined }) {
                     <TableCell className="whitespace-nowrap text-muted-foreground">
                       {formatDateTime(event.createdAt)}
                     </TableCell>
-                    <TableCell className="font-medium break-words">{event.model}</TableCell>
+                    <TableCell className="font-medium break-words">
+                      {event.model}
+                      {event.billedAsFast ? " · fast" : ""}
+                    </TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
                       {event.totalTokens.toLocaleString()}
                     </TableCell>

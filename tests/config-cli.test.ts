@@ -88,6 +88,19 @@ describe("config CLI serialization", () => {
     ]);
   });
 
+  it("round-trips fastMode and leaves it out of the YAML when it is off", () => {
+    const fast = { ...agentConfig("Fast"), modelBindingId: "primary", fastMode: true };
+    const serialized = serializeAgentYaml(fast);
+
+    expect(serialized).toContain("fastMode: true\n");
+    expect(parseAgentYaml(serialized)).toMatchObject({ fastMode: true });
+    expect(serializeAgentYaml(parseAgentYaml(serialized))).toBe(serialized);
+    expect(serializeAgentYaml({ ...fast, fastMode: false })).not.toContain("fastMode");
+    expect(serializeAgentYaml({ ...fast, fastMode: false })).toBe(
+      serializeAgentYaml({ ...agentConfig("Fast"), modelBindingId: "primary" })
+    );
+  });
+
   it("round-trips SKILL.md with provenance comments inside frontmatter", () => {
     const skill = {
       name: "review",
@@ -1467,6 +1480,7 @@ async function createFixture() {
         modelProviderIds: ["local"],
         modelBindingIds: [],
         modelBindings: [],
+        fastModeModelBindingIds: [],
         reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
         enabledToolNames: ["known.tool"]
       }

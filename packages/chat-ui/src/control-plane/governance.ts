@@ -34,6 +34,10 @@ export function canEditConfigAssets(user: ApiUser | undefined): boolean {
   return hasPermission(user, "config_assets.read");
 }
 
+export function canManageAgentModels(user: ApiUser | undefined): boolean {
+  return hasPermission(user, "agent_models.manage");
+}
+
 function hasPermission(user: ApiUser | undefined, permission: string): boolean {
   return Boolean(user?.permissions.includes(permission));
 }

@@ -79,6 +79,8 @@ export async function appendModelUsageEvent(
       outputTokens: input.outputTokens,
       totalTokens: input.totalTokens,
       webSearchCallCount: input.webSearchCallCount ?? 0,
+      fastMode: input.fastMode,
+      providerServiceTier: input.providerServiceTier ?? null,
       source: input.source,
       customerBillableCost: input.customerBillableCost,
       correlationId: input.correlationId,

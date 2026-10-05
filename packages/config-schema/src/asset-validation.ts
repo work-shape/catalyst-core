@@ -20,6 +20,7 @@ export function validateConfigAssetBundle(input: {
   refs: {
     modelProviderIds: string[];
     modelBindingIds: string[];
+    fastModeModelBindingIds: string[];
     enabledToolNames: string[];
   };
 }): { agents: AgentConfig[]; skills: SkillConfig[] } {
@@ -41,7 +42,8 @@ export function validateConfigAssetBundle(input: {
     ...findAgentModelReferenceIssues({
       agents,
       modelProviderIds: input.refs.modelProviderIds,
-      modelBindingIds: input.refs.modelBindingIds
+      modelBindingIds: input.refs.modelBindingIds,
+      fastModeModelBindingIds: input.refs.fastModeModelBindingIds
     }).map(toValidationIssue),
     ...findMissingAgentSkillReferences(
       agents,

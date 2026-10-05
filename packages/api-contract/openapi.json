@@ -13758,6 +13758,9 @@
                             "minimum": 0,
                             "maximum": 9007199254740991
                           },
+                          "billedAsFast": {
+                            "type": "boolean"
+                          },
                           "source": {
                             "type": "string",
                             "enum": [
@@ -13838,6 +13841,7 @@
                           "outputTokens",
                           "totalTokens",
                           "webSearchCallCount",
+                          "billedAsFast",
                           "source",
                           "correlationId",
                           "createdAt",
@@ -13980,6 +13984,12 @@
                             "additionalProperties": false
                           }
                         },
+                        "fastModeModelBindingIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "reasoningEfforts": {
                           "type": "array",
                           "items": {
@@ -14004,6 +14014,7 @@
                         "modelProviderIds",
                         "modelBindingIds",
                         "modelBindings",
+                        "fastModeModelBindingIds",
                         "reasoningEfforts",
                         "enabledToolNames"
                       ],

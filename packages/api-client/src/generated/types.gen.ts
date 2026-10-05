@@ -3593,6 +3593,7 @@ export type GetUsageSummaryResponses = {
             outputTokens: number;
             totalTokens: number;
             webSearchCallCount: number;
+            billedAsFast: boolean;
             source: 'provider_reported' | 'not_reported' | 'estimated';
             correlationId: string;
             createdAt: string;
@@ -3645,6 +3646,7 @@ export type GetConfigAssetsOverviewResponses = {
                 id: string;
                 model: string;
             }>;
+            fastModeModelBindingIds: Array<string>;
             reasoningEfforts: Array<'none' | 'low' | 'medium' | 'high' | 'xhigh'>;
             enabledToolNames: Array<string>;
         };

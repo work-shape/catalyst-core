@@ -264,7 +264,8 @@ export const modelBindingConfigSchema = z.object({
   model: z.string().min(1).optional(),
   reasoningEffort: z.enum(REASONING_EFFORTS).optional(),
   agentSelectable: z.boolean().default(true),
-  userSelectable: z.boolean().default(false)
+  userSelectable: z.boolean().default(false),
+  supportsFastMode: z.boolean().default(false)
 });
 
 const welcomeSubtitleSchema = z.union([
@@ -290,6 +291,7 @@ export const agentConfigSchema = z.object({
   modelProviderId: z.string().min(1).optional(),
   modelBindingId: z.string().min(1).optional(),
   reasoningEffort: z.enum(REASONING_EFFORTS).optional(),
+  fastMode: z.boolean().optional(),
   maxSteps: z.number().int().positive().optional(),
   toolNames: z.array(z.string().min(1)).default([]),
   skillNames: z.array(skillNameSchema).default([]),
@@ -319,6 +321,12 @@ export const usageSafeguardsConfigSchema = z
   })
   .default({});
 
+const usageRateCardTokenRatesShape = {
+  uncachedInputPricePerMillionTokens: z.number().nonnegative(),
+  cachedInputPricePerMillionTokens: z.number().nonnegative(),
+  outputPricePerMillionTokens: z.number().nonnegative()
+};
+
 export const usageRateCardConfigSchema = z.object({
   id: z.string().min(1),
   version: z.string().min(1),
@@ -331,9 +339,8 @@ export const usageRateCardConfigSchema = z.object({
       z.object({
         providerId: z.string().min(1),
         model: z.string().min(1),
-        uncachedInputPricePerMillionTokens: z.number().nonnegative(),
-        cachedInputPricePerMillionTokens: z.number().nonnegative(),
-        outputPricePerMillionTokens: z.number().nonnegative()
+        ...usageRateCardTokenRatesShape,
+        fast: z.object(usageRateCardTokenRatesShape).optional()
       })
     )
     .default([]),

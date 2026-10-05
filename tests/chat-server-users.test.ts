@@ -584,7 +584,12 @@ describe("client instance app vertical slice", () => {
     });
     const clientInstanceId = asClientInstanceId(app.config.clientInstance.id);
     try {
-      for (const restrictedEntry of ["api_access.manage", "!api_access.manage"]) {
+      for (const restrictedEntry of [
+        "api_access.manage",
+        "!api_access.manage",
+        "agent_models.manage",
+        "!agent_models.manage"
+      ]) {
         const managedUser = await app.store.createUser({
           clientInstanceId,
           displayLabel: "Managed user",
@@ -610,19 +615,21 @@ describe("client instance app vertical slice", () => {
         // Removing an existing restricted grant or denial is also a protected change.
         expect((await updatePermissions(["!agent_skills.approve"])).statusCode).toBe(403);
         const oppositeEntry = restrictedEntry.startsWith("!")
-          ? "api_access.manage"
-          : "!api_access.manage";
+          ? restrictedEntry.slice(1)
+          : `!${restrictedEntry}`;
         expect((await updatePermissions([restrictedEntry, oppositeEntry])).statusCode).toBe(403);
         expect((await updatePermissions([oppositeEntry])).statusCode).toBe(403);
         const unchanged = await updatePermissions(["!agent_skills.approve", restrictedEntry]);
         expect(unchanged.statusCode).toBe(200);
       }
-      const newGrant = await app.server.inject({
-        method: "POST",
-        url: "/api/superadmin/users",
-        payload: { displayLabel: "New user", roles: ["user"], permissions: ["api_access.manage"] }
-      });
-      expect(newGrant.statusCode).toBe(403);
+      for (const permission of ["api_access.manage", "agent_models.manage"]) {
+        const newGrant = await app.server.inject({
+          method: "POST",
+          url: "/api/superadmin/users",
+          payload: { displayLabel: "New user", roles: ["user"], permissions: [permission] }
+        });
+        expect(newGrant.statusCode).toBe(403);
+      }
     } finally {
       await app.close();
     }

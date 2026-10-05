@@ -18,8 +18,11 @@ export interface OpenAiResponsesUsage {
   };
 }
 
+export type OpenAiServiceTierRequest = "priority";
+
 export interface OpenAiCompatibleResponse {
   usage?: OpenAiCompatibleUsage;
+  service_tier?: string | null;
   choices?: Array<{
     message?: {
       content?: string | null;
@@ -39,6 +42,7 @@ export interface OpenAiCompatibleRequestBody {
   model: string;
   messages: OpenAiCompatibleMessage[];
   reasoning_effort?: ReasoningEffortConfig;
+  service_tier?: OpenAiServiceTierRequest;
   tools: Array<{
     type: "function";
     function: {
@@ -64,6 +68,7 @@ export interface OpenAiResponsesRequestBody {
   tools: OpenAiResponsesTool[];
   include?: string[];
   tool_choice?: "auto";
+  service_tier?: OpenAiServiceTierRequest;
   stream?: boolean;
   store?: boolean;
 }
@@ -135,6 +140,7 @@ export interface OpenAiResponsesResponse {
   output?: OpenAiResponsesOutputItem[];
   output_text?: string;
   usage?: OpenAiResponsesUsage;
+  service_tier?: string | null;
 }
 
 export type OpenAiResponsesOutputItem =

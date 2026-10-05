@@ -1,17 +1,20 @@
 import {
   AGENT_EDITABLE_FIELDS,
+  AGENT_MODEL_SETTING_FIELDS,
   AppError,
   asCollaborationWorkspaceId,
   assertConfigAssetBases,
   type AgentAvailability,
   type ConfigAssetRevisionRecord,
   auditActorFromIdentity,
+  hasPermission,
   isJsonObject,
   requireAuthScope,
   requirePermission,
   unknownToJsonValue,
   type AgentConfig,
   type AgentEditableField,
+  type AgentModelSettingField,
   type AuthenticatedIdentity,
   type ConfigAssetKind,
   type ConfigAssetMutation,
@@ -103,13 +106,23 @@ export class ConfigAssetWorkflow {
     requireMatchingConfigName(command.config, command.name);
     const current = await this.loadCurrentBundle();
     const setInitialDefault = shouldSetInitialDefault(current, command.kind);
-    const replaced = replaceBundleAsset(current, command);
+    const replaced = replaceBundleAsset(current, {
+      ...command,
+      config:
+        command.kind === "agent"
+          ? this.clearFastModeOnBindingSwitch(
+              findBundleConfig(current, "agent", command.name),
+              command.config
+            )
+          : command.config
+    });
     const candidate = setInitialDefault
       ? { ...replaced, defaultAgentName: command.name }
       : replaced;
     const validated = this.validateBundle(candidate);
     const config = findValidatedConfig(validated, command.kind, command.name);
     this.assertInteractiveAssetUpsertAllowed({
+      user,
       kind: command.kind,
       name: command.name,
       currentConfig: findBundleConfig(current, command.kind, command.name),
@@ -315,6 +328,7 @@ export class ConfigAssetWorkflow {
     const validated = this.validateBundle(candidate);
     const config = findValidatedConfig(validated, command.kind, command.name);
     this.assertInteractiveAssetUpsertAllowed({
+      user,
       kind: command.kind,
       name: command.name,
       currentConfig: findBundleConfig(current, command.kind, command.name),
@@ -604,7 +618,27 @@ export class ConfigAssetWorkflow {
     }
   }
 
+  /** Switching to a binding without fast-mode support clears the flag instead of failing the save. */
+  private clearFastModeOnBindingSwitch(
+    currentConfig: AgentConfig | SkillConfig | undefined,
+    nextConfig: Record<string, unknown>
+  ): Record<string, unknown> {
+    const currentBindingId = (currentConfig as AgentConfig | undefined)?.modelBindingId;
+    const nextBindingId = nextConfig.modelBindingId;
+    if (
+      nextConfig.fastMode !== true ||
+      nextBindingId === currentBindingId ||
+      (typeof nextBindingId === "string" &&
+        this.options.configAssets.validationRefs.fastModeModelBindingIds.includes(nextBindingId))
+    ) {
+      return nextConfig;
+    }
+    const { fastMode: _fastMode, ...withoutFastMode } = nextConfig;
+    return withoutFastMode;
+  }
+
   private assertInteractiveAssetUpsertAllowed(input: {
+    user: AuthenticatedIdentity;
     kind: ConfigAssetKind;
     name: string;
     currentConfig: AgentConfig | SkillConfig | undefined;
@@ -627,7 +661,23 @@ export class ConfigAssetWorkflow {
     const changedFields = AGENT_EDITABLE_FIELDS.filter(
       (field) => !configValuesEqual(currentAgent?.[field], nextAgent[field])
     );
-    const protectedFields = changedFields.filter((field) => !editableFields.has(field));
+    // Model settings are governed by a permission, not by the editable-field policy.
+    const changedModelSettings = AGENT_MODEL_SETTING_FIELDS.filter(
+      (field) =>
+        !configValuesEqual(
+          modelSettingValue(currentAgent, field),
+          modelSettingValue(nextAgent, field)
+        )
+    );
+    if (changedModelSettings.length > 0 && !hasPermission(input.user, "agent_models.manage")) {
+      throw new AppError(
+        "FORBIDDEN",
+        `Changing agent model settings (${changedModelSettings.join(", ")}) requires 'agent_models.manage' permission`
+      );
+    }
+    const protectedFields = changedFields.filter(
+      (field) => !editableFields.has(field) && !isAgentModelSettingField(field)
+    );
     if (protectedFields.length > 0) {
       throw new AppError(
         "FORBIDDEN",
@@ -687,6 +737,14 @@ export class ConfigAssetWorkflow {
       metadata
     });
   }
+}
+
+function isAgentModelSettingField(field: string): field is AgentModelSettingField {
+  return (AGENT_MODEL_SETTING_FIELDS as readonly string[]).includes(field);
+}
+
+function modelSettingValue(agent: AgentConfig | undefined, field: AgentModelSettingField) {
+  return field === "fastMode" ? (agent?.fastMode ?? false) : agent?.[field];
 }
 
 function isHiddenEverywhere(availability: AgentAvailability | undefined): boolean {

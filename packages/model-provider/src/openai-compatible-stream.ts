@@ -3,6 +3,7 @@ import type { ModelCompletionStreamEvent, ModelProviderContinuation } from "./ty
 import { WEB_SEARCH_MODEL_TOOL_NAME } from "./types";
 import {
   noReportedUsage,
+  readProviderServiceTier,
   createOpenAiResponsesContinuation,
   didOpenAiResponsesCompact,
   readOpenAiResponsesText,
@@ -16,6 +17,7 @@ import type { OpenAiCompatibleResponse, OpenAiResponsesResponse } from "./openai
 
 interface OpenAiCompatibleStreamChunk {
   usage?: OpenAiCompatibleResponse["usage"];
+  service_tier?: string | null;
   choices?: Array<{
     delta?: {
       content?: string | null;
@@ -47,6 +49,7 @@ interface OpenAiResponsesStreamEvent {
   response?: {
     output?: OpenAiResponsesResponse["output"];
     output_text?: OpenAiResponsesResponse["output_text"];
+    service_tier?: OpenAiResponsesResponse["service_tier"];
     usage?: {
       input_tokens: number;
       output_tokens: number;
@@ -80,6 +83,7 @@ export async function* streamOpenAiCompatibleCompletion(
 ): AsyncIterable<ModelCompletionStreamEvent> {
   let text = "";
   let usage = noReportedUsage();
+  let serviceTier: { providerServiceTier?: string } = {};
   let completed = false;
   const toolCalls = new Map<number, Partial<OpenAiCompatibleStreamingToolCall>>();
   const announcedToolCalls = new Set<number>();
@@ -93,6 +97,7 @@ export async function* streamOpenAiCompatibleCompletion(
     if (payload.usage) {
       usage = toModelUsage(payload.usage);
     }
+    serviceTier = { ...serviceTier, ...readProviderServiceTier(payload) };
 
     for (const choice of payload.choices ?? []) {
       const delta = choice.delta;
@@ -149,7 +154,7 @@ export async function* streamOpenAiCompatibleCompletion(
         })),
       sources: [],
       citations: [],
-      usage
+      usage: { ...usage, ...serviceTier }
     }
   };
 }
@@ -310,7 +315,8 @@ export async function* streamOpenAiResponsesCompletion(
       },
       usage: {
         ...usage,
-        webSearchCallCount
+        webSearchCallCount,
+        ...readProviderServiceTier(finalResponse)
       }
     }
   };

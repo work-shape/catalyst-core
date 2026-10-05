@@ -364,6 +364,7 @@ export class LocalAgentRuntime implements AgentRuntime {
                 providerId: modelSelection.provider.id,
                 model: modelSelection.model,
                 reasoningEffort: modelSelection.reasoningEffort,
+                fastMode: modelSelection.fastMode,
                 continuation: providerContinuation,
                 messages,
                 tools
@@ -383,6 +384,7 @@ export class LocalAgentRuntime implements AgentRuntime {
         context,
         provider: modelSelection.provider,
         model: modelSelection.model,
+        fastMode: modelSelection.fastMode,
         completion: modelResult.completion
       });
       const { completion, emittedDeltas, reasoning } = modelResult;
@@ -593,6 +595,7 @@ export class LocalAgentRuntime implements AgentRuntime {
     provider: ModelProviderConfig;
     model: string;
     reasoningEffort?: ReasoningEffortConfig;
+    fastMode: boolean;
   } {
     const bindingId = userSelectedBindingId ?? agent.modelBindingId;
     if (bindingId) {
@@ -613,7 +616,9 @@ export class LocalAgentRuntime implements AgentRuntime {
         reasoningEffort:
           agent.reasoningEffort ??
           binding.reasoningEffort ??
-          (provider.type === "openai-compatible" ? provider.reasoningEffort : undefined)
+          (provider.type === "openai-compatible" ? provider.reasoningEffort : undefined),
+        // A user-selected binding gets fast mode only when that binding supports it.
+        fastMode: agent.fastMode === true && binding.supportsFastMode === true
       };
     }
 
@@ -625,7 +630,8 @@ export class LocalAgentRuntime implements AgentRuntime {
       model: provider.model,
       reasoningEffort:
         agent.reasoningEffort ??
-        (provider.type === "openai-compatible" ? provider.reasoningEffort : undefined)
+        (provider.type === "openai-compatible" ? provider.reasoningEffort : undefined),
+      fastMode: false
     };
   }
 

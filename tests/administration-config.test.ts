@@ -43,6 +43,57 @@ describe("administration config", () => {
     });
   });
 
+  it("fails assembly validation when a fast-mode binding has no fast rates", () => {
+    const fastConfig = (fast: boolean, withRateCard = true) =>
+      baseConfig({
+        modelBindings: [
+          { id: "plain", providerId: "local" },
+          { id: "fast", providerId: "local", supportsFastMode: true }
+        ],
+        ...(withRateCard
+          ? {
+              usage: {
+                costs: {
+                  customer: {
+                    id: "customer",
+                    version: "1",
+                    currency: "EUR",
+                    models: [
+                      {
+                        providerId: "local",
+                        model: "local",
+                        uncachedInputPricePerMillionTokens: 1,
+                        cachedInputPricePerMillionTokens: 1,
+                        outputPricePerMillionTokens: 2,
+                        ...(fast
+                          ? {
+                              fast: {
+                                uncachedInputPricePerMillionTokens: 2,
+                                cachedInputPricePerMillionTokens: 2,
+                                outputPricePerMillionTokens: 4
+                              }
+                            }
+                          : {})
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          : {})
+      });
+
+    expect(() => parseClientInstanceConfig(fastConfig(false))).toThrow(
+      "Model binding 'fast' declares supportsFastMode, but the customer rate card has no fast rates for model local/local"
+    );
+    expect(() => parseClientInstanceConfig(fastConfig(false, false))).toThrow(
+      "declares supportsFastMode"
+    );
+    const config = parseClientInstanceConfig(fastConfig(true));
+    expect(config.modelBindings.map((binding) => binding.supportsFastMode)).toEqual([false, true]);
+    expect(config.usage.costs.customer?.models[0]?.fast?.outputPricePerMillionTokens).toBe(4);
+  });
+
   it("rejects legacy provider editing as an interactive policy", () => {
     expect(() =>
       parseClientInstanceConfig(
