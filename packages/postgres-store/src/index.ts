@@ -97,6 +97,7 @@ import {
   listAccessRequestsForWorkspace as listPostgresAccessRequestsForWorkspace,
   listDiscoverableWorkspaces as listPostgresDiscoverableWorkspaces,
   listMemberships as listPostgresMemberships,
+  listSharedWorkspaces as listPostgresSharedWorkspaces,
   searchMemberCandidates as searchPostgresMemberCandidates,
   listWorkspacesForUser as listPostgresWorkspacesForUser,
   removeMembership as removePostgresMembership,
@@ -149,7 +150,9 @@ import {
   getConfigAsset as getPostgresConfigAsset,
   getConfigAssetState as getPostgresConfigAssetState,
   listActiveConfigAssets as listActivePostgresConfigAssets,
-  listConfigAssetRevisions as listPostgresConfigAssetRevisions
+  listAgentAvailability as listPostgresAgentAvailability,
+  listConfigAssetRevisions as listPostgresConfigAssetRevisions,
+  setAgentAvailability as setPostgresAgentAvailability
 } from "./postgres-config-asset-operations";
 import {
   appendAssistantMessage as appendPostgresAssistantMessage,
@@ -350,6 +353,18 @@ export class PostgresPlatformStore
     return applyPostgresConfigAssetMutations(this.db, input);
   }
 
+  async listAgentAvailability(
+    input: Parameters<ConfigAssetStore["listAgentAvailability"]>[0]
+  ): ReturnType<ConfigAssetStore["listAgentAvailability"]> {
+    return listPostgresAgentAvailability(this.db, input);
+  }
+
+  async setAgentAvailability(
+    input: Parameters<ConfigAssetStore["setAgentAvailability"]>[0]
+  ): ReturnType<ConfigAssetStore["setAgentAvailability"]> {
+    return setPostgresAgentAvailability(this.db, input);
+  }
+
   async resolveUserIdentity(input: ResolveUserIdentityInput) {
     return resolvePostgresUserIdentity(this.db, input, (event) => this.appendAuditEvent(event));
   }
@@ -447,6 +462,12 @@ export class PostgresPlatformStore
     input: Parameters<CollaborationWorkspaceStore["listDiscoverableWorkspaces"]>[0]
   ): Promise<CollaborationWorkspace[]> {
     return listPostgresDiscoverableWorkspaces(this.db, input);
+  }
+
+  async listSharedWorkspaces(
+    input: Parameters<CollaborationWorkspaceStore["listSharedWorkspaces"]>[0]
+  ): Promise<CollaborationWorkspace[]> {
+    return listPostgresSharedWorkspaces(this.db, input);
   }
 
   async updateWorkspace(input: UpdateWorkspaceInput): Promise<CollaborationWorkspace> {

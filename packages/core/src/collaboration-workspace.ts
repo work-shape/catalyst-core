@@ -115,6 +115,10 @@ export interface CollaborationWorkspaceStore {
   listDiscoverableWorkspaces(input: {
     clientInstanceId: ClientInstanceId;
   }): Promise<CollaborationWorkspace[]>;
+  /** Every Shared Workspace of the instance, regardless of membership or visibility. */
+  listSharedWorkspaces(input: {
+    clientInstanceId: ClientInstanceId;
+  }): Promise<CollaborationWorkspace[]>;
   updateWorkspace(input: UpdateWorkspaceInput): Promise<CollaborationWorkspace>;
   deleteWorkspace(input: {
     clientInstanceId: ClientInstanceId;

@@ -297,6 +297,18 @@ export class InMemoryPlatformStore
     return this.configAssetStore.applyConfigAssetMutations(input);
   }
 
+  async listAgentAvailability(
+    input: Parameters<ConfigAssetStore["listAgentAvailability"]>[0]
+  ): ReturnType<ConfigAssetStore["listAgentAvailability"]> {
+    return this.configAssetStore.listAgentAvailability(input);
+  }
+
+  async setAgentAvailability(
+    input: Parameters<ConfigAssetStore["setAgentAvailability"]>[0]
+  ): ReturnType<ConfigAssetStore["setAgentAvailability"]> {
+    return this.configAssetStore.setAgentAvailability(input);
+  }
+
   async listServicePrincipals(
     input: Parameters<ApiAccessStore["listServicePrincipals"]>[0]
   ): Promise<ServicePrincipalRecord[]> {
@@ -419,6 +431,17 @@ export class InMemoryPlatformStore
           workspace.clientInstanceId === input.clientInstanceId &&
           workspace.kind === "shared" &&
           workspace.visibility === "discoverable"
+      )
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  }
+
+  async listSharedWorkspaces(input: {
+    clientInstanceId: ClientInstanceId;
+  }): Promise<CollaborationWorkspace[]> {
+    return [...this.collaborationWorkspaces.values()]
+      .filter(
+        (workspace) =>
+          workspace.clientInstanceId === input.clientInstanceId && workspace.kind === "shared"
       )
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
   }
@@ -2401,6 +2424,7 @@ export class InMemoryPlatformStore
         this.workspaceAccessRequests.delete(key);
       }
     }
+    this.configAssetStore.removeWorkspaceAvailability(collaborationWorkspaceId);
     this.collaborationWorkspaces.delete(collaborationWorkspaceId);
   }
 

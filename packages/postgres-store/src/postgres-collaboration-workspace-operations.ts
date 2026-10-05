@@ -105,6 +105,23 @@ export async function listDiscoverableWorkspaces(
   return rows.map(mapCollaborationWorkspace);
 }
 
+export async function listSharedWorkspaces(
+  db: PostgresDatabase,
+  input: Parameters<CollaborationWorkspaceStore["listSharedWorkspaces"]>[0]
+): Promise<CollaborationWorkspace[]> {
+  const rows = await db
+    .select()
+    .from(collaborationWorkspaces)
+    .where(
+      and(
+        eq(collaborationWorkspaces.clientInstanceId, input.clientInstanceId),
+        eq(collaborationWorkspaces.kind, "shared")
+      )
+    )
+    .orderBy(asc(collaborationWorkspaces.createdAt));
+  return rows.map(mapCollaborationWorkspace);
+}
+
 export async function updateWorkspace(
   db: PostgresDatabase,
   input: UpdateWorkspaceInput

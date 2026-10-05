@@ -1,8 +1,10 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import {
   AppError,
   assertConfigAssetBases,
   createPlatformId,
+  resolveInitialAgentAvailabilityMode,
+  type AgentAvailability,
   type ConfigAssetRecord,
   type ConfigAssetRevisionRecord,
   type ConfigAssetState,
@@ -15,7 +17,13 @@ import {
   mapConfigAssetState,
   type ConfigAssetRow
 } from "./rows";
-import { configAssetRevisions, configAssets, configAssetState } from "./schema";
+import {
+  configAssetAvailability,
+  configAssetRevisions,
+  configAssets,
+  configAssetState,
+  configAssetWorkspaceAvailability
+} from "./schema";
 
 export async function getConfigAssetState(
   db: PostgresDatabase,
@@ -157,6 +165,39 @@ export async function applyConfigAssetMutations(
     }
     assertConfigAssetBases(input, mapConfigAssetState(state), current);
 
+    const deletedAgentNames = input.mutations.flatMap((mutation) =>
+      mutation.type === "delete" && mutation.kind === "agent" ? [mutation.name] : []
+    );
+    const [deletedSelectedAgent] =
+      input.initialAgentAvailability === "selected_when_replacing_selected" &&
+      deletedAgentNames.length > 0
+        ? await tx
+            .select({ assetId: configAssetAvailability.assetId })
+            .from(configAssetAvailability)
+            .innerJoin(configAssets, eq(configAssets.id, configAssetAvailability.assetId))
+            .where(
+              and(
+                eq(configAssets.clientInstanceId, input.clientInstanceId),
+                eq(configAssets.kind, "agent"),
+                inArray(configAssets.name, deletedAgentNames),
+                eq(configAssetAvailability.mode, "selected")
+              )
+            )
+            .limit(1)
+        : [];
+    const initialAgentMode = resolveInitialAgentAvailabilityMode(
+      input.initialAgentAvailability,
+      deletedSelectedAgent !== undefined
+    );
+    const insertInitialAvailability = (assetId: string) =>
+      tx.insert(configAssetAvailability).values({
+        assetId,
+        clientInstanceId: input.clientInstanceId,
+        mode: initialAgentMode,
+        personalWorkspaces: false,
+        updatedAt: now
+      });
+
     const version = state.version + 1;
     let defaultAgentName = state.defaultAgentName ?? undefined;
     for (const mutation of input.mutations) {
@@ -183,6 +224,9 @@ export async function applyConfigAssetMutations(
           now,
           status: "deleted"
         });
+        await tx
+          .delete(configAssetAvailability)
+          .where(eq(configAssetAvailability.assetId, asset.id));
         continue;
       }
 
@@ -211,6 +255,9 @@ export async function applyConfigAssetMutations(
           globalVersion: version,
           createdAt: now
         });
+        if (mutation.kind === "agent") {
+          await insertInitialAvailability(assetId);
+        }
         continue;
       }
 
@@ -224,6 +271,9 @@ export async function applyConfigAssetMutations(
         now,
         status: "active"
       });
+      if (asset.kind === "agent" && asset.status === "deleted") {
+        await insertInitialAvailability(asset.id);
+      }
     }
 
     if (defaultAgentName !== undefined) {
@@ -238,6 +288,17 @@ export async function applyConfigAssetMutations(
           `Default agent '${defaultAgentName}' is not an active config asset`
         );
       }
+      const [availability] = await tx
+        .select({ mode: configAssetAvailability.mode })
+        .from(configAssetAvailability)
+        .where(eq(configAssetAvailability.assetId, defaultAgent.id))
+        .limit(1);
+      if (availability?.mode !== "all") {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `Default agent '${defaultAgentName}' must be available in all workspaces`
+        );
+      }
     }
 
     await tx
@@ -249,6 +310,114 @@ export async function applyConfigAssetMutations(
       })
       .where(eq(configAssetState.clientInstanceId, input.clientInstanceId));
     return { version };
+  });
+}
+
+export async function listAgentAvailability(
+  db: PostgresDatabase,
+  input: Parameters<ConfigAssetStore["listAgentAvailability"]>[0]
+): Promise<Map<string, AgentAvailability>> {
+  const rows = await db
+    .select({
+      assetId: configAssets.id,
+      name: configAssets.name,
+      mode: configAssetAvailability.mode,
+      personalWorkspaces: configAssetAvailability.personalWorkspaces
+    })
+    .from(configAssetAvailability)
+    .innerJoin(configAssets, eq(configAssets.id, configAssetAvailability.assetId))
+    .where(
+      and(
+        eq(configAssets.clientInstanceId, input.clientInstanceId),
+        eq(configAssets.kind, "agent"),
+        eq(configAssets.status, "active")
+      )
+    );
+  const workspaceRows = await db
+    .select({
+      assetId: configAssetWorkspaceAvailability.assetId,
+      collaborationWorkspaceId: configAssetWorkspaceAvailability.collaborationWorkspaceId
+    })
+    .from(configAssetWorkspaceAvailability)
+    .innerJoin(
+      configAssetAvailability,
+      eq(configAssetAvailability.assetId, configAssetWorkspaceAvailability.assetId)
+    )
+    .where(eq(configAssetAvailability.clientInstanceId, input.clientInstanceId))
+    .orderBy(asc(configAssetWorkspaceAvailability.collaborationWorkspaceId));
+  return new Map(
+    rows.map((row) => [
+      row.name,
+      {
+        mode: row.mode,
+        personalWorkspaces: row.personalWorkspaces,
+        collaborationWorkspaceIds: workspaceRows
+          .filter((workspaceRow) => workspaceRow.assetId === row.assetId)
+          .map((workspaceRow) => workspaceRow.collaborationWorkspaceId)
+      }
+    ])
+  );
+}
+
+export async function setAgentAvailability(
+  db: PostgresDatabase,
+  input: Parameters<ConfigAssetStore["setAgentAvailability"]>[0]
+): Promise<AgentAvailability> {
+  return db.transaction(async (tx) => {
+    // Serializes with default-agent changes, which lock the same row.
+    const [state] = await tx
+      .select()
+      .from(configAssetState)
+      .where(eq(configAssetState.clientInstanceId, input.clientInstanceId))
+      .for("update")
+      .limit(1);
+    const asset = await findConfigAssetRow(tx, {
+      clientInstanceId: input.clientInstanceId,
+      kind: "agent",
+      name: input.agentName
+    });
+    if (!asset || asset.status !== "active") {
+      throw new AppError("NOT_FOUND", `Config agent '${input.agentName}' was not found`);
+    }
+    if (input.availability.mode !== "all" && state?.defaultAgentName === input.agentName) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `Default agent '${input.agentName}' must be available in all workspaces`
+      );
+    }
+    const now = new Date();
+    const collaborationWorkspaceIds = [
+      ...new Set(input.availability.collaborationWorkspaceIds)
+    ].sort();
+    await tx
+      .insert(configAssetAvailability)
+      .values({
+        assetId: asset.id,
+        clientInstanceId: input.clientInstanceId,
+        mode: input.availability.mode,
+        personalWorkspaces: input.availability.personalWorkspaces,
+        updatedAt: now
+      })
+      .onConflictDoUpdate({
+        target: configAssetAvailability.assetId,
+        set: {
+          mode: input.availability.mode,
+          personalWorkspaces: input.availability.personalWorkspaces,
+          updatedAt: now
+        }
+      });
+    await tx
+      .delete(configAssetWorkspaceAvailability)
+      .where(eq(configAssetWorkspaceAvailability.assetId, asset.id));
+    if (collaborationWorkspaceIds.length > 0) {
+      await tx.insert(configAssetWorkspaceAvailability).values(
+        collaborationWorkspaceIds.map((collaborationWorkspaceId) => ({
+          assetId: asset.id,
+          collaborationWorkspaceId
+        }))
+      );
+    }
+    return { ...input.availability, collaborationWorkspaceIds };
   });
 }
 
