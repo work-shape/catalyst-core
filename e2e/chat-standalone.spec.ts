@@ -132,6 +132,70 @@ test("composer grows for multiline input", async ({ page }) => {
     .toBeGreaterThan(initialHeight);
 });
 
+test("start page centres the composer and settles it at the bottom after the first message", async ({
+  page
+}) => {
+  await signInViaUi(page, normalUser);
+  await page.goto("/");
+
+  const chat = page.getByRole("region", { name: "Chat" });
+  const input = page.getByPlaceholder("Message");
+  await expect(input).toBeVisible();
+
+  // Distance of the composer's centre from the centre of the chat area, and
+  // the gap between the composer and the lower edge of the chat area.
+  const composerPlacement = () =>
+    chat.evaluate((region) => {
+      const composer = region.querySelector("textarea")?.closest("form");
+      if (!composer) throw new Error("composer not found");
+      const regionBox = region.getBoundingClientRect();
+      const composerBox = composer.getBoundingClientRect();
+      return {
+        centreOffset: Math.abs(
+          composerBox.top + composerBox.height / 2 - (regionBox.top + regionBox.height / 2)
+        ),
+        bottomGap: regionBox.bottom - composerBox.bottom,
+        headingAbove:
+          (region.querySelector("h2")?.getBoundingClientRect().bottom ?? Infinity) <=
+          composerBox.top
+      };
+    });
+
+  const start = await composerPlacement();
+  expect(start.centreOffset).toBeLessThan(80);
+  expect(start.bottomGap).toBeGreaterThan(150);
+  expect(start.headingAbove).toBe(true);
+  await expect(chat.locator('[data-slot="workspace-apps"]')).toHaveCount(1);
+  await expect(chat.locator('[data-slot="workspace-apps"] > *')).toHaveCount(0);
+
+  const agentCards = chat.getByRole("group", { name: "Select agent" }).getByRole("button");
+  await expect(agentCards).toHaveCount(2);
+  await expect(agentCards.filter({ hasText: "Application Assistant" })).toContainText(
+    "Help with application and document review."
+  );
+
+  await input.fill("Draft that survives choosing an agent");
+  await agentCards.filter({ hasText: "Research Assistant" }).click();
+  await expect(agentCards.filter({ hasText: "Research Assistant" })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  );
+  await expect(chat.getByRole("button", { name: "Summarize policy" })).toBeVisible();
+  await expect(chat.getByRole("button", { name: "Find review risks" })).toHaveCount(0);
+  await agentCards.filter({ hasText: "Application Assistant" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(chat.getByRole("button", { name: "Find review risks" })).toBeVisible();
+  await expect(input).toHaveValue("Draft that survives choosing an agent");
+
+  await input.press("Enter");
+  await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
+  await expect(agentCards).toHaveCount(0);
+  await expect(chat.locator('[data-slot="workspace-apps"]')).toHaveCount(0);
+  await expect(chat.getByText("Draft that survives choosing an agent")).toBeVisible();
+  await expect(input).toHaveValue("");
+  await expect.poll(async () => (await composerPlacement()).bottomGap).toBeLessThan(40);
+});
+
 test("composer sends on Enter and inserts a newline on Shift+Enter", async ({ page }) => {
   await signInViaUi(page, normalUser);
   let createRunRequests = 0;

@@ -183,6 +183,7 @@ export interface SelectedChatModel {
         compactThresholdTokens: number;
       }
     | undefined;
+  selectAgentName(agentName: string): void;
   selectModelBindingId(modelBindingId: string): void;
   draftAttachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
@@ -716,6 +717,7 @@ export function useWorkspaceChatModel({
         configuredCompactThresholdTokens,
         controller.activeRun?.projection
       ),
+      selectAgentName: setSelectedAgentName,
       selectModelBindingId: setSelectedModelBindingId,
       draftAttachments: draftAttachmentController.draftAttachments,
       localUploadingAttachments: draftAttachmentController.visibleUploadingAttachments,
