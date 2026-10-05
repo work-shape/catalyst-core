@@ -10,6 +10,7 @@ import type {
   RunObservation,
   StartConversationRunResponse
 } from "@vivd-catalyst/api-client";
+import { approvalRequestQueryKeys } from "../approvals/approval-request-api";
 import { workspaceQueryKeys } from "./workspace-query-keys";
 
 interface WorkspaceQueryInput {
@@ -474,14 +475,22 @@ export function useWorkspaceCacheActions(
       }
       invalidateUsage();
       invalidateAuditEvents();
+      // A run can submit an Approval Request or supersede an earlier one, which
+      // the cards and the pending count only learn from their own queries.
+      void queryClient.invalidateQueries({
+        queryKey: approvalRequestQueryKeys.all(apiBaseUrl, authScope)
+      });
     },
     [
+      apiBaseUrl,
+      authScope,
       invalidateAuditEvents,
       invalidateConversations,
       invalidateConversationResources,
       invalidateDraftAttachmentsScope,
       invalidateThread,
-      invalidateUsage
+      invalidateUsage,
+      queryClient
     ]
   );
 

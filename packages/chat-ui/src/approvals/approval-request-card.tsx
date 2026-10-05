@@ -1,7 +1,9 @@
 import { CircleAlert, TriangleAlert } from "lucide-react";
 import { useId, useState, type FormEvent } from "react";
-import type { ApprovalRequestView, LocaleCode } from "@vivd-catalyst/api-client";
+import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
+import { useAttachmentContentContext } from "../attachment-content";
+import { useToolDisplayActions } from "../domain-ui-widgets";
 import { useTranslation } from "../i18n";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -21,7 +23,9 @@ import { ApprovalRequestBody } from "./approval-request-bodies";
 import {
   approvalStatusPresentation,
   canRevertApprovalRequest,
+  formatApprovalDate,
   readApprovalReversion,
+  shouldSendApprovalFollowUp,
   visibleApprovalChecks,
   type ApprovalStatusTone
 } from "./approval-request-model";
@@ -44,10 +48,32 @@ export interface ApprovalRequestCardActions {
 
 /** Card for the thread: fetches the request's live state by id. */
 export function ApprovalRequestCard({ requestId }: { requestId: string }) {
+  const { t } = useTranslation();
   const { apiBaseUrl, client } = useWorkspaceApiClient();
   const api = { apiBaseUrl, authScope: APPROVAL_AUTH_SCOPE, client };
   const query = useApprovalRequestQuery({ ...api, requestId });
-  const actions = useApprovalRequestActions({ ...api, requestId });
+  const originConversationId = query.data?.origin?.conversationId;
+  const openConversationId = useAttachmentContentContext()?.selectedConversationId;
+  // Absent while the open conversation cannot take a message, a running run included.
+  const sendMessage = useToolDisplayActions()?.sendMessage;
+  const actions = useApprovalRequestActions({
+    ...api,
+    requestId,
+    originConversationId,
+    onDecided(decision) {
+      const followUp = shouldSendApprovalFollowUp({
+        decision: decision.decision,
+        originConversationId,
+        openConversationId,
+        canSendMessage: Boolean(sendMessage)
+      });
+      if (followUp) {
+        // The comment is in the decision the agent reads; this only starts the run.
+        sendMessage?.(t("approvalFollowUpMessage"));
+      }
+      return followUp;
+    }
+  });
 
   const state: ApprovalRequestCardState = query.data
     ? { status: "ready", request: query.data }
@@ -67,7 +93,8 @@ export function ListedApprovalRequestCard({ request }: { request: ApprovalReques
     apiBaseUrl,
     authScope: APPROVAL_AUTH_SCOPE,
     client,
-    requestId: request.id
+    requestId: request.id,
+    originConversationId: request.origin?.conversationId
   });
 
   return (
@@ -417,10 +444,3 @@ const STATUS_BADGE_CLASS: Record<ApprovalStatusTone, string | undefined> = {
   negative: "border-destructive/40 text-destructive",
   neutral: "text-muted-foreground"
 };
-
-function formatApprovalDate(value: string, locale: LocaleCode): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(date);
-}

@@ -21,6 +21,7 @@ import {
   User
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ApprovalDecisionLine } from "../approvals/approval-decision-line";
 import { managedFileIdFromUrl, useAttachmentContentContext } from "../attachment-content";
 import { MessageAttachments } from "../message-attachments";
 import {
@@ -69,7 +70,33 @@ export function ThreadMessage({
     return <UserMessage />;
   }
 
+  if (role === "system") {
+    return <ApprovalDecisionMessage />;
+  }
+
   return <AssistantMessage activeRunId={activeRunId} conversationRunning={conversationRunning} />;
+}
+
+/**
+ * The only system message the thread shows. It is a record between turns, so
+ * it gets no bubble and no actions, and sits closer to the message it follows.
+ */
+function ApprovalDecisionMessage() {
+  const decision = useAuiState(
+    (state) =>
+      (state.message.metadata.custom as AssistantUiMessageCustomMetadata | undefined)
+        ?.approvalDecision
+  );
+
+  if (!decision) {
+    return null;
+  }
+
+  return (
+    <MessagePrimitive.Root className="mx-auto -mt-3 w-full max-w-5xl px-1" data-role="system">
+      <ApprovalDecisionLine decision={decision} showSummary={decision.ambiguous} />
+    </MessagePrimitive.Root>
+  );
 }
 
 function AssistantMessage({

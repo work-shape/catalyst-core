@@ -1,4 +1,5 @@
-import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
+import type { ApprovalRequestView, LocaleCode, Message } from "@vivd-catalyst/api-client";
+import { readApprovalDecisionMetadata } from "@vivd-catalyst/core";
 import type { TranslationKey } from "../i18n";
 
 /** Display kind a tool result carries to render its Approval Request inline in the thread. */
@@ -86,6 +87,81 @@ export function readApprovalReversion(request: object): ApprovalReversion | unde
     typeof reversion.revertedAt === "string"
     ? { revertedByLabel: reversion.revertedByLabel, revertedAt: reversion.revertedAt }
     : undefined;
+}
+
+/** A decision on a request, as its origin conversation stores it in the history. */
+export interface ApprovalDecisionEvent {
+  requestId: string;
+  status: ApprovalDecisionStatus;
+  decidedByLabel: string;
+  decidedAt: string;
+  summary: string;
+  comment?: string;
+}
+
+export type ApprovalDecisionStatus = Exclude<ApprovalRequestView["status"], "pending">;
+
+export function readApprovalDecisionEvent(
+  message: Pick<Message, "metadata" | "role">
+): ApprovalDecisionEvent | undefined {
+  const decision =
+    message.role === "system" ? readApprovalDecisionMetadata(message.metadata) : undefined;
+  if (!decision) {
+    return undefined;
+  }
+  const comment = decision.comment?.trim();
+  return {
+    requestId: decision.requestId,
+    status: decision.status,
+    decidedByLabel: decision.decidedByLabel,
+    decidedAt: decision.decidedAt,
+    summary: decision.summary,
+    ...(comment ? { comment } : {})
+  };
+}
+
+/**
+ * Wording of the status line in the thread. Withdrawing and superseding are
+ * not somebody's verdict on the proposal, so those lines name no one.
+ */
+const DECISION_LINE_LABEL_KEY: Record<ApprovalDecisionStatus, TranslationKey> = {
+  approved: "approvalDecisionApproved",
+  rejected: "approvalDecisionRejected",
+  changes_requested: "approvalDecisionChangesRequested",
+  superseded: "approvalDecisionSuperseded",
+  withdrawn: "approvalDecisionWithdrawn",
+  reverted: "approvalDecisionReverted"
+};
+
+export function approvalDecisionLineLabelKey(status: ApprovalDecisionStatus): TranslationKey {
+  return DECISION_LINE_LABEL_KEY[status];
+}
+
+/**
+ * Whether a stored decision is followed by a user message that makes the
+ * agent revise right away. Only for "request changes" decided on the card
+ * inside the thread the request came from, and only while that thread accepts
+ * a message. The review queue never has an open conversation to pass.
+ */
+export function shouldSendApprovalFollowUp(input: {
+  decision: "approve" | "reject" | "request_changes";
+  originConversationId: string | undefined;
+  openConversationId: string | undefined;
+  canSendMessage: boolean;
+}): boolean {
+  return (
+    input.decision === "request_changes" &&
+    input.originConversationId !== undefined &&
+    input.originConversationId === input.openConversationId &&
+    input.canSendMessage
+  );
+}
+
+export function formatApprovalDate(value: string, locale: LocaleCode): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

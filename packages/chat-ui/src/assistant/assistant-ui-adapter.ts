@@ -18,6 +18,12 @@ import {
   type PersistedToolResult
 } from "./assistant-message-compat";
 import {
+  readApprovalDecisionEvent,
+  readApprovalRequestDisplay,
+  type ApprovalDecisionEvent
+} from "../approvals/approval-request-model";
+import { readToolDisplayPayloadFromToolResult } from "../domain-ui-widgets";
+import {
   WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE,
   createWorkspacePromotedArtifactsData,
   dedupeToolArtifactRefs,
@@ -47,6 +53,13 @@ export interface AssistantUiMessageCustomMetadata {
   completedRunId?: string;
   runDurationMs?: number;
   contextCompacted?: boolean;
+  approvalDecision?: AssistantUiApprovalDecision;
+}
+
+/** An Approval Request decision in the history: a status line, never a chat message. */
+export interface AssistantUiApprovalDecision extends ApprovalDecisionEvent {
+  /** The thread holds several proposals, so the line has to say which one it means. */
+  ambiguous: boolean;
 }
 
 export interface AssistantUiMessageMetadata {
@@ -139,10 +152,21 @@ function toPersistedUiMessages(
   const toolResultsByToolCallId = new Map<string, PersistedToolResult>();
   const surfacedArtifactsByRunId = new Map<string, ToolArtifactDownloadRef[]>();
   const surfacedSurfacesByRunId = new Map<string, ToolSurfaceRef[]>();
+  const approvalRequestIds = new Set<string>();
   for (const message of messages) {
+    const approvalDecision = readApprovalDecisionEvent(message);
+    if (approvalDecision) {
+      approvalRequestIds.add(approvalDecision.requestId);
+    }
     const toolResult = readCompatiblePersistedToolResult(message);
     if (toolResult) {
       toolResultsByToolCallId.set(toolResult.toolCallId, toolResult);
+      const approvalRequest = readApprovalRequestDisplay(
+        readToolDisplayPayloadFromToolResult(toolResult.output)
+      );
+      if (approvalRequest) {
+        approvalRequestIds.add(approvalRequest.requestId);
+      }
       const runId = readCompatibleMessageRunId(message);
       const artifacts = readSurfacedToolArtifactRefs(toolResult.output, toolResult.toolName);
       if (runId && artifacts.length > 0) {
@@ -166,6 +190,19 @@ function toPersistedUiMessages(
 
   const assistantRunMessageGroups = createAssistantRunMessageGroups(messages);
   return messages.flatMap((message): UIMessage[] => {
+    if (message.role === "system") {
+      // The stored text is a note for the model. Only a decision has a place
+      // in the thread, and it is rendered from its metadata.
+      const approvalDecision = readApprovalDecisionEvent(message);
+      return approvalDecision
+        ? [
+            toApprovalDecisionUiMessage(message, {
+              ...approvalDecision,
+              ambiguous: approvalRequestIds.size > 1
+            })
+          ]
+        : [];
+    }
     if (!isRenderableMessage(message)) {
       return [];
     }
@@ -210,6 +247,19 @@ function toPersistedUiMessages(
       )
     ];
   });
+}
+
+function toApprovalDecisionUiMessage(
+  message: Message,
+  approvalDecision: AssistantUiApprovalDecision
+): UIMessage {
+  return {
+    id: message.id,
+    role: "system",
+    metadata: { custom: { approvalDecision } } satisfies AssistantUiMessageMetadata,
+    // assistant-ui accepts a system message only with exactly one text part.
+    parts: [{ type: "text", text: "", state: "done" }]
+  };
 }
 
 function toPersistedUiMessage(
@@ -443,7 +493,7 @@ function createAssistantRunMessageGroups(
 }
 
 function isRenderableMessage(message: Message): boolean {
-  return message.role === "user" || message.role === "assistant" || message.role === "system";
+  return message.role === "user" || message.role === "assistant";
 }
 
 function createPersistedUiMessageMetadata(
