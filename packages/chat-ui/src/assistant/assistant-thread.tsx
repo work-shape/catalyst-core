@@ -330,7 +330,7 @@ function ThreadWelcomeHeading({
   fallbackWelcomeMessage: string | undefined;
 }) {
   return (
-    <div className="flex flex-1 basis-0 flex-col items-center justify-end gap-3 pb-4 text-center">
+    <div className="flex flex-[2] basis-0 flex-col items-center justify-end gap-3 pb-4 text-center">
       <span className="grid size-10 place-items-center rounded-lg border bg-card text-primary shadow-xs">
         <Bot size={20} aria-hidden="true" />
       </span>
@@ -365,7 +365,7 @@ function ThreadStartBlock({
   onSelectAgent: (agentName: string) => void;
 }) {
   return (
-    <div className="grid flex-1 basis-0 content-start gap-5 pb-8 pt-2">
+    <div className="grid flex-[3] basis-0 content-start gap-5 pb-8 pt-2">
       {initialPrompts.length > 0 ? (
         <div className="grid gap-2 sm:grid-cols-3">
           {initialPrompts.map((initialPrompt) => (
