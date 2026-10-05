@@ -14,15 +14,18 @@ import {
 } from "./collaboration-workspace-dialog-chrome";
 import {
   CollaborationWorkspaceAccentField,
+  CollaborationWorkspaceConversationVisibilityField,
   CollaborationWorkspaceEmojiField,
   CollaborationWorkspaceVisibilityField,
-  type CollaborationWorkspaceVisibility
+  type CollaborationWorkspaceVisibility,
+  type ConversationVisibility
 } from "./collaboration-workspace-fields";
 
 export interface CreateCollaborationWorkspaceValues {
   name: string;
   description: string | null;
   visibility: CollaborationWorkspaceVisibility;
+  defaultConversationVisibility: ConversationVisibility;
   emoji: string | null;
   accentColor: CollaborationWorkspaceAccentColor;
 }
@@ -48,6 +51,8 @@ export function CreateCollaborationWorkspaceDialog({
   const [description, setDescription] = useState("");
   const [emoji, setEmoji] = useState("");
   const [visibility, setVisibility] = useState<CollaborationWorkspaceVisibility>("discoverable");
+  const [defaultConversationVisibility, setDefaultConversationVisibility] =
+    useState<ConversationVisibility>("workspace");
   /*
    * Picked once per dialog opening rather than derived from the name: deriving
    * it re-rolled the accent on every keystroke, so the preview cycled through
@@ -68,6 +73,7 @@ export function CreateCollaborationWorkspaceDialog({
     setDescription("");
     setEmoji("");
     setVisibility("discoverable");
+    setDefaultConversationVisibility("workspace");
     setAccentColor(initialAccentColor ?? randomCollaborationWorkspaceAccentColor());
     setNameTouched(false);
   }, [open, initialAccentColor]);
@@ -81,6 +87,7 @@ export function CreateCollaborationWorkspaceDialog({
       name: trimmedName,
       description: description.trim() ? description.trim() : null,
       visibility,
+      defaultConversationVisibility,
       emoji: emoji.trim() ? emoji.trim() : null,
       accentColor
     });
@@ -167,6 +174,11 @@ export function CreateCollaborationWorkspaceDialog({
             value={visibility}
             disabled={pending}
             onChange={setVisibility}
+          />
+          <CollaborationWorkspaceConversationVisibilityField
+            value={defaultConversationVisibility}
+            disabled={pending}
+            onChange={setDefaultConversationVisibility}
           />
           <CollaborationWorkspaceEmojiField value={emoji} disabled={pending} onChange={setEmoji} />
           <CollaborationWorkspaceAccentField

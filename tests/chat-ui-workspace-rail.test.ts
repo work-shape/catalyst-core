@@ -1,6 +1,6 @@
 import { createElement, type ReactNode } from "../packages/chat-ui/node_modules/react";
 import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
-import type { SafeConfig } from "@vivd-catalyst/api-client";
+import type { ConversationListItem, SafeConfig } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 import { CollaborationWorkspaceSelector } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-selector";
@@ -92,7 +92,8 @@ const railConfig = {
 
 function renderRail(
   collaborationWorkspaceSelector?: ReactNode,
-  approvals?: { pendingCount: number }
+  approvals?: { pendingCount: number },
+  conversations: ConversationListItem[] = []
 ): string {
   return renderToStaticMarkup(
     createElement(
@@ -101,7 +102,7 @@ function renderRail(
       createElement(WorkspaceRail, {
         config: railConfig,
         collaborationWorkspaceSelector,
-        conversations: [],
+        conversations,
         selectedConversationId: undefined,
         canViewAdministration: false,
         approvals,
@@ -242,5 +243,39 @@ describe("workspace rail approvals entry", () => {
 
     expect(markup).toContain('aria-label="Open approvals"');
     expect(markup).not.toContain("rounded-full bg-primary");
+  });
+});
+
+describe("workspace rail private conversation marker", () => {
+  const conversation = {
+    id: "conv_1",
+    clientInstanceId: "client",
+    collaborationWorkspaceId: "cw_shared",
+    createdByUserId: "user_1",
+    createdByExternalUserId: "external_1",
+    visibility: "workspace",
+    title: "Angebot Q3",
+    status: "active",
+    createdAt: "2026-08-01T10:00:00.000Z",
+    updatedAt: "2026-08-01T10:00:00.000Z",
+    retainedUntil: "2027-08-01T10:00:00.000Z"
+  } as ConversationListItem;
+
+  it("marks a private conversation with a labelled lock", () => {
+    const markup = renderRail(undefined, undefined, [
+      conversation,
+      { ...conversation, id: "conv_2", title: "Notizen", visibility: "private" }
+    ]);
+
+    expect(markup.match(/data-testid="conversation-row"/gu)).toHaveLength(2);
+    expect(markup.match(/data-testid="conversation-private-marker"/gu)).toHaveLength(1);
+    expect(markup).toContain('aria-label="Private, only you can open it"');
+  });
+
+  it("leaves workspace-visible conversations unmarked", () => {
+    const markup = renderRail(undefined, undefined, [conversation]);
+
+    expect(markup).toContain("Angebot Q3");
+    expect(markup).not.toContain("conversation-private-marker");
   });
 });

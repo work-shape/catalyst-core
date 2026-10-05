@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ThreadListItemMorePrimitive } from "@assistant-ui/react";
-import { FolderInput, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { FolderInput, Lock, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import type { ConversationListItem } from "@vivd-catalyst/api-client";
 import { useTranslation } from "../i18n";
 import { Button } from "../ui/button";
@@ -187,6 +187,17 @@ export function ConversationButton({
                 >
                   <AnimatedConversationTitle title={conversation.title} />
                 </span>
+                {conversation.visibility === "private" ? (
+                  <span
+                    className="shrink-0 text-muted-foreground"
+                    data-testid="conversation-private-marker"
+                    role="img"
+                    aria-label={t("conversationPrivate")}
+                    title={t("conversationPrivate")}
+                  >
+                    <Lock size={12} aria-hidden="true" />
+                  </span>
+                ) : null}
                 {unread ? (
                   <span
                     className="size-1.5 shrink-0 rounded-full bg-primary"

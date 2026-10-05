@@ -5,7 +5,7 @@ import {
   useAuiState,
   useThreadViewportStore
 } from "@assistant-ui/react";
-import { ArrowDown, Bot, CircleAlert, Sparkles } from "lucide-react";
+import { ArrowDown, Bot, CircleAlert, Lock, Sparkles } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef } from "react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
 import { AssistantActivityStatus } from "./assistant-activity-status";
@@ -22,6 +22,7 @@ export function AssistantThread({
   showContextIndicator,
   contextSnapshot,
   notice,
+  newConversationPrivate,
   draftAttachments,
   localUploadingAttachments,
   sendBlockedReason,
@@ -51,6 +52,7 @@ export function AssistantThread({
       }
     | undefined;
   notice: string | undefined;
+  newConversationPrivate?: boolean;
   draftAttachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
   sendBlockedReason?: string;
@@ -144,6 +146,15 @@ export function AssistantThread({
                     <CircleAlert size={17} className="shrink-0" aria-hidden="true" />
                     <span>{notice}</span>
                   </div>
+                ) : null}
+                {newConversationPrivate ? (
+                  <p
+                    className="mb-2 flex items-center gap-1.5 px-1 text-xs text-muted-foreground"
+                    data-testid="new-conversation-private-hint"
+                  >
+                    <Lock size={12} className="shrink-0" aria-hidden="true" />
+                    <span>{t("newConversationPrivateHint")}</span>
+                  </p>
                 ) : null}
                 <div className="relative">
                   {messagesEnabled ? (

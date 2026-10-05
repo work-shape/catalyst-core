@@ -250,10 +250,15 @@ export function useMoveConversationMutation(
     workspaceQueryKeys.conversations(input.apiBaseUrl, input.authScope, collaborationWorkspaceId);
 
   return useMutation({
-    mutationFn: (mutationInput: { conversationId: string; collaborationWorkspaceId: string }) =>
+    mutationFn: (mutationInput: {
+      conversationId: string;
+      collaborationWorkspaceId: string;
+      visibility?: ConversationListItem["visibility"];
+    }) =>
       input.client.conversations.move(
         mutationInput.conversationId,
-        mutationInput.collaborationWorkspaceId
+        mutationInput.collaborationWorkspaceId,
+        mutationInput.visibility
       ),
     onSuccess: (movedConversation, { collaborationWorkspaceId }) => {
       // Dropped from the source list before the refetch lands so the rail never

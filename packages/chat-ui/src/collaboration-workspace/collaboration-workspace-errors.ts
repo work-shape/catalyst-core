@@ -62,6 +62,11 @@ export function collaborationWorkspaceErrorKey(
       return "collaborationWorkspaceErrorAlreadyMember";
     case "BAD_REQUEST":
     case "VALIDATION_FAILED":
+      // The one validation a move from this dialog can fail: a result of
+      // private for someone who did not create the conversation.
+      if (action === "moveConversation" && code === "VALIDATION_FAILED") {
+        return "collaborationWorkspaceErrorMovePrivateCreatorOnly";
+      }
       if (action === "deleteCollaborationWorkspace") {
         return "collaborationWorkspaceErrorNameMismatch";
       }

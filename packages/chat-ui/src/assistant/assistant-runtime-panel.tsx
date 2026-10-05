@@ -60,6 +60,7 @@ function AssistantRuntimePane({
     client,
     config,
     collaborationWorkspaceId,
+    newConversationPrivate,
     selectedConversationId,
     messagesLoaded,
     notice,
@@ -293,6 +294,7 @@ function AssistantRuntimePane({
           showContextIndicator={showContextIndicator}
           contextSnapshot={contextSnapshot}
           notice={visibleNotice}
+          newConversationPrivate={newConversationPrivate}
           draftAttachments={draftAttachments}
           localUploadingAttachments={localUploadingAttachments}
           sendBlockedReason={sendDisabledReason}
