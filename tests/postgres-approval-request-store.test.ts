@@ -179,7 +179,7 @@ describePostgres("Postgres approval request store", () => {
       await sql`delete from approval_requests where client_instance_id = ${clientInstanceId}`;
       await sql`delete from conversations where client_instance_id = ${clientInstanceId}`;
       await sql`delete from collaboration_workspaces where client_instance_id = ${clientInstanceId}`;
-      await sql`delete from users where client_instance_id = ${clientInstanceId}`;
+      await sql`delete from product_users where client_instance_id = ${clientInstanceId}`;
       await sql.end();
       await store.close();
     }
