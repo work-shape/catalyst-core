@@ -204,7 +204,9 @@ export const configAssetBundleSchema = z.object({
 });
 
 export const exportConfigAssetsResponseSchema = configAssetBundleSchema.extend({
-  version: z.number().int().nonnegative()
+  version: z.number().int().nonnegative(),
+  perAssetConcurrency: z.literal(true).optional(),
+  revisions: z.record(z.string(), z.number().int().positive()).optional()
 });
 
 export const putConfigAssetRequestSchema = z.object({
@@ -237,7 +239,10 @@ export const revertConfigAssetRequestSchema = z.object({
 
 export const replaceConfigAssetsRequestSchema = configAssetBundleSchema.extend({
   baseVersion: z.number().int().nonnegative().nullable(),
-  mode: z.enum(["mirror", "merge"]).optional()
+  mode: z.enum(["mirror", "merge"]).optional(),
+  baseRevisions: z.record(z.string(), z.number().int().positive().nullable()).optional(),
+  baseDefaultAgentName: z.string().nullable().optional(),
+  deleteAssets: z.array(z.object({ kind: configAssetKindSchema, name: z.string() })).optional()
 });
 
 export const validateConfigAssetsResponseSchema = z.object({

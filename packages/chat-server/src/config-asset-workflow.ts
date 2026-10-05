@@ -1,6 +1,8 @@
 import {
   AGENT_EDITABLE_FIELDS,
   AppError,
+  assertConfigAssetBases,
+  type ConfigAssetRevisionRecord,
   auditActorFromIdentity,
   isJsonObject,
   requireAuthScope,
@@ -294,6 +296,10 @@ export class ConfigAssetWorkflow {
     ]);
     return {
       version: state.version,
+      perAssetConcurrency: true as const,
+      revisions: Object.fromEntries(
+        assets.map((asset) => [assetKey(asset.kind, asset.name), asset.revision])
+      ),
       ...(state.defaultAgentName === undefined ? {} : { defaultAgentName: state.defaultAgentName }),
       agents: assetConfigs(assets, "agent"),
       skills: assetConfigs(assets, "skill")
@@ -306,6 +312,9 @@ export class ConfigAssetWorkflow {
     command: ConfigAssetBundleInput & {
       baseVersion: number | null;
       mode?: "mirror" | "merge";
+      baseRevisions?: Record<string, number | null>;
+      baseDefaultAgentName?: string | null;
+      deleteAssets?: Array<{ kind: ConfigAssetKind; name: string }>;
     }
   ) {
     await this.authorizeReleaseWrite(user, context);
@@ -318,9 +327,81 @@ export class ConfigAssetWorkflow {
       })
     ]);
     const merge = command.mode === "merge";
-    const candidate = merge
+    let candidate = merge
       ? mergeBundle(assetBundle(currentAssets, currentState.defaultAgentName), command)
       : command;
+    for (const asset of command.deleteAssets ?? []) {
+      candidate = removeBundleAsset(candidate, asset);
+    }
+    if (command.baseDefaultAgentName !== undefined) {
+      candidate = { ...candidate, defaultAgentName: command.defaultAgentName };
+    }
+    if (command.baseRevisions !== undefined) {
+      const touched = [
+        ...command.agents.map((config) => ({
+          kind: "agent" as const,
+          name: requireConfigName(config)
+        })),
+        ...command.skills.map((config) => ({
+          kind: "skill" as const,
+          name: requireConfigName(config)
+        })),
+        ...(command.deleteAssets ?? []),
+        ...(!merge
+          ? currentAssets.filter(
+              (asset) =>
+                !candidate.agents.some(
+                  (config) => asset.kind === "agent" && readConfigName(config) === asset.name
+                ) &&
+                !candidate.skills.some(
+                  (config) => asset.kind === "skill" && readConfigName(config) === asset.name
+                )
+            )
+          : [])
+      ];
+      const current = new Map<
+        string,
+        { status: "active" | "deleted"; revision: ConfigAssetRevisionRecord }
+      >();
+      for (const asset of touched) {
+        const revisions = await this.options.configAssets.store.listConfigAssetRevisions({
+          clientInstanceId: this.options.clientInstanceId,
+          kind: asset.kind,
+          name: asset.name
+        });
+        const revision = revisions.at(-1);
+        if (revision) {
+          current.set(assetKey(asset.kind, asset.name), {
+            status: revision.operation === "delete" ? "deleted" : "active",
+            revision
+          });
+        }
+      }
+      const guards: ConfigAssetMutation[] = touched.map((asset) => ({
+        type: "delete",
+        kind: asset.kind,
+        name: asset.name
+      }));
+      if (
+        !merge ||
+        command.defaultAgentName !== undefined ||
+        command.baseDefaultAgentName !== undefined
+      ) {
+        guards.push({ type: "setDefaultAgent", agentName: command.defaultAgentName });
+      }
+      // Report stale assets before validating references changed or deleted remotely.
+      // The store repeats these checks under its lock before applying the batch.
+      assertConfigAssetBases(
+        {
+          clientInstanceId: this.options.clientInstanceId,
+          baseRevisions: command.baseRevisions,
+          baseDefaultAgentName: command.baseDefaultAgentName,
+          mutations: guards
+        },
+        currentState,
+        current
+      );
+    }
     const validated = this.validateBundle(candidate);
     const providedAgentNames = new Set(command.agents.map(readConfigName));
     const providedSkillNames = new Set(command.skills.map(readConfigName));
@@ -333,6 +414,12 @@ export class ConfigAssetWorkflow {
       : currentAssets
           .filter((asset) => !desiredKeys.has(assetKey(asset.kind, asset.name)))
           .map((asset) => ({ type: "delete", kind: asset.kind, name: asset.name }));
+    mutations.push(
+      ...(command.deleteAssets ?? []).map((asset) => ({
+        type: "delete" as const,
+        ...asset
+      }))
+    );
     mutations.push(
       ...validated.agents
         .filter((agent) => providedAgentNames.has(agent.name))
@@ -351,12 +438,18 @@ export class ConfigAssetWorkflow {
           config: toJsonObject(skill)
         }))
     );
-    if (!merge || command.defaultAgentName !== undefined) {
+    if (
+      !merge ||
+      command.defaultAgentName !== undefined ||
+      command.baseDefaultAgentName !== undefined
+    ) {
       mutations.push({ type: "setDefaultAgent", agentName: command.defaultAgentName });
     }
     const result = await applyValidatedConfigAssetMutations(this.options, {
       clientInstanceId: this.options.clientInstanceId,
       ...(command.baseVersion === null ? {} : { baseVersion: command.baseVersion }),
+      baseRevisions: command.baseRevisions,
+      baseDefaultAgentName: command.baseDefaultAgentName,
       actor: auditActorFromIdentity(user),
       mutations
     });
@@ -617,6 +710,14 @@ function requireMatchingConfigName(config: unknown, expectedName: string): void 
   if (readConfigName(config) !== expectedName) {
     throw new AppError("VALIDATION_FAILED", "Config asset name must match the request path");
   }
+}
+
+function requireConfigName(config: unknown): string {
+  const name = readConfigName(config);
+  if (name === undefined) {
+    throw new AppError("VALIDATION_FAILED", "Config asset must have a name");
+  }
+  return name;
 }
 
 function readConfigName(config: unknown): string | undefined {

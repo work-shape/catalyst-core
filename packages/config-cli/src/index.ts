@@ -23,7 +23,7 @@ Sync local config assets with a live Catalyst instance.
 Commands:
   pull       Sync remote config assets into the local working copy
   push       Merge local config assets into the remote instance
-  diff       Compare canonical remote and local config assets
+  diff       Show local changes, remote newer assets, and conflicts
   validate   Validate local assets and remote references
   list       List local and remote config assets and their sync status
   show       Print a remote asset: show <agent|skill> <name>

@@ -1,5 +1,6 @@
 import {
   AppError,
+  assertConfigAssetBases,
   createPlatformId,
   type ConfigAssetRecord,
   type ConfigAssetRevisionRecord,
@@ -55,12 +56,20 @@ export class InMemoryConfigAssetStore implements ConfigAssetStore {
     input: Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0]
   ): Promise<{ version: number }> {
     const currentState = this.states.get(input.clientInstanceId) ?? { version: 0 };
-    if (input.baseVersion !== undefined && input.baseVersion !== currentState.version) {
-      throw new AppError("CONFLICT", "Config version mismatch", {
-        currentVersion: currentState.version,
-        baseVersion: input.baseVersion
-      });
+    const current = new Map<
+      string,
+      { status: "active" | "deleted"; revision: ConfigAssetRevisionRecord }
+    >();
+    for (const asset of this.assets.values()) {
+      if (asset.clientInstanceId !== input.clientInstanceId) {
+        continue;
+      }
+      const revision = this.revisions.get(asset.id)?.at(-1);
+      if (revision) {
+        current.set(`${asset.kind}:${asset.name}`, { status: asset.status, revision });
+      }
     }
+    assertConfigAssetBases(input, currentState, current);
 
     const states = new Map(this.states);
     const assets = new Map(

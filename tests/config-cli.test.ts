@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -27,6 +28,7 @@ import {
   STATE_FILENAME,
   canonicalBundleFiles,
   canonicalizeAgentConfig,
+  canonicalizeSkillConfig,
   createConfigApi,
   createUnifiedDiff,
   parseAgentYaml,
@@ -41,7 +43,8 @@ import {
   runConfigCommand,
   serializeAgentYaml,
   serializeSkillMarkdown,
-  writeStateFile
+  writeStateFile,
+  updateManifestDefaultAgent
 } from "../packages/config-cli/src/index";
 
 const servers: FastifyInstance[] = [];
@@ -227,7 +230,7 @@ describe("config CLI command flows", () => {
     );
 
     await writeStateFile(resolve(directory, STATE_FILENAME), {
-      instances: { local: { lastPulledVersion: 0 } }
+      instances: { local: { lastPulledVersion: 0, assets: {}, defaultAgentName: null } }
     });
     const pushed: unknown[] = [];
     expect(
@@ -305,9 +308,6 @@ describe("config CLI command flows", () => {
       "utf8"
     );
     await writeFile(resolve(skillDirectory, "references", "checks.md"), "local\n", "utf8");
-    await writeStateFile(resolve(directory, STATE_FILENAME), {
-      instances: { local: { lastPulledVersion: 4 } }
-    });
     const remoteSkill = {
       ...skillConfig("review", "Same root"),
       resources: [
@@ -318,6 +318,9 @@ describe("config CLI command flows", () => {
         }
       ]
     };
+    await writeStateFile(resolve(directory, STATE_FILENAME), {
+      instances: { local: pulledBaseline(4, { agents: [], skills: [remoteSkill] }) }
+    });
     const stdout: string[] = [];
 
     expect(
@@ -402,8 +405,14 @@ skills:
     const pulledAgent = parseAgentYaml(await readFile(agentPath, "utf8"));
     expect(pulledAgent.instructions).toBe("Remote instructions");
     await expect(readFile(obsoleteAgentPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
-    expect(await readStateFile(resolve(directory, STATE_FILENAME))).toEqual({
-      instances: { local: { lastPulledVersion: 1 } }
+    expect(await readStateFile(resolve(directory, STATE_FILENAME))).toMatchObject({
+      instances: {
+        local: {
+          lastPulledVersion: 1,
+          assets: { "agent:assistant": { revision: 1, hash: expect.any(String) } },
+          defaultAgentName: "assistant"
+        }
+      }
     });
     expect(await readFile(resolve(directory, "catalyst.yaml"), "utf8")).toContain(
       "# Keep this manifest comment"
@@ -448,7 +457,9 @@ skills:
     );
     stderr.length = 0;
     expect(await runConfigCommand("push", commandOptions)).toBe(1);
-    expect(stderr.join("")).toContain("remote is at version 3; you last pulled 2");
+    expect(stderr.join("")).toContain("agent:assistant: revision 3, update");
+    expect(stderr.join("")).toContain("catalyst config pull --only agent:assistant");
+    expect(stderr.join("")).toContain("Commit or stash local edits in git first");
     expect(stderr.join("")).toContain("catalyst config diff");
     expect(stderr.join("")).toContain("--force");
   });
@@ -525,9 +536,6 @@ skills:
       serializeAgentYaml(agentConfig("New", { name: "new" })),
       "utf8"
     );
-    await writeStateFile(resolve(directory, STATE_FILENAME), {
-      instances: { local: { lastPulledVersion: 4 } }
-    });
     const remote = {
       version: 4,
       defaultAgentName: "assistant",
@@ -537,6 +545,9 @@ skills:
       ],
       skills: []
     };
+    await writeStateFile(resolve(directory, STATE_FILENAME), {
+      instances: { local: pulledBaseline(4, remote) }
+    });
     const mergeRequests: unknown[] = [];
     const mergeStdout: string[] = [];
     expect(
@@ -552,10 +563,14 @@ skills:
     );
     expect(mergeStdout.join("")).toContain("- agent:remote-only");
     expect(mergeStdout.join("")).toContain("Use --prune to delete them.");
-    expect(mergeRequests.at(-1)).toMatchObject({ mode: "merge", baseVersion: 4 });
+    expect(mergeRequests.at(-1)).toMatchObject({
+      mode: "merge",
+      baseVersion: null,
+      baseRevisions: { "agent:assistant": 1, "agent:new": null }
+    });
 
     await writeStateFile(resolve(directory, STATE_FILENAME), {
-      instances: { local: { lastPulledVersion: 4 } }
+      instances: { local: pulledBaseline(4, remote) }
     });
     const pruneRequests: unknown[] = [];
     const pruneStdout: string[] = [];
@@ -571,7 +586,11 @@ skills:
     expect(pruneStdout.join("")).toContain("Push plan (mirror):");
     expect(pruneStdout.join("")).toContain("Deleted: 1");
     expect(pruneStdout.join("")).toContain("Assets to delete:\n- agent:remote-only");
-    expect(pruneRequests.at(-1)).toMatchObject({ mode: "mirror", baseVersion: 4 });
+    expect(pruneRequests.at(-1)).toMatchObject({
+      mode: "merge",
+      baseVersion: null,
+      deleteAssets: [{ kind: "agent", name: "remote-only" }]
+    });
   });
 
   it("sends only selected assets on push and rejects --prune with --only", async () => {
@@ -595,7 +614,7 @@ skills:
       "utf8"
     );
     await writeStateFile(resolve(directory, STATE_FILENAME), {
-      instances: { local: { lastPulledVersion: 3 } }
+      instances: { local: pulledBaseline(3, { agents: [agentConfig("Remote")], skills: [] }) }
     });
     const requests: unknown[] = [];
     expect(
@@ -612,7 +631,9 @@ skills:
     expect(requests.at(-1)).toEqual({
       agents: [canonicalizeAgentConfig(agentConfig("Selected"))],
       skills: [skillConfig("review", "Review")],
-      baseVersion: 3,
+      baseVersion: null,
+      baseRevisions: { "agent:assistant": 1, "skill:review": null },
+      deleteAssets: [],
       mode: "merge"
     });
 
@@ -658,9 +679,400 @@ skills:
     expect(parseAgentYaml(await readFile(selectedPath, "utf8")).instructions).toBe("New selected");
     expect(parseAgentYaml(await readFile(otherPath, "utf8")).instructions).toBe("Old other");
     expect(await readStateFile(resolve(directory, STATE_FILENAME))).toEqual({
-      instances: { local: { lastPulledVersion: 5 } }
+      instances: {
+        local: {
+          lastPulledVersion: 5,
+          assets: { "agent:assistant": { revision: 1, hash: expect.any(String) } }
+        }
+      }
     });
-    expect(stdout.join("")).toContain("recorded version unchanged");
+    expect(stdout.join("")).toContain("selected asset baselines updated");
+  });
+
+  it("migrates legacy state by refusing an unguarded push, and refuses an older server even with force", async () => {
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    await writeStateFile(resolve(directory, STATE_FILENAME), {
+      instances: { local: { lastPulledVersion: 8 } }
+    });
+    const errors: string[] = [];
+    expect(
+      await runConfigCommand("push", { cwd: directory, stderr: (text) => errors.push(text) })
+    ).toBe(1);
+    expect(errors.join("")).toContain("No per-asset baseline");
+    expect(errors.join("")).toContain("catalyst config pull");
+    const requests: string[] = [];
+    const olderServerFetch: typeof fetch = async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      requests.push(new URL(request.url).pathname);
+      return new URL(request.url).pathname.endsWith("access-token")
+        ? jsonResponse(200, { accessToken: "token", expiresAt: "2030-01-01T00:00:00.000Z" })
+        : jsonResponse(200, { version: 8, agents: [], skills: [] });
+    };
+    errors.length = 0;
+    expect(
+      await runConfigCommand("push", {
+        cwd: directory,
+        force: true,
+        env: { CATALYST_API_KEY: "cat_old_server" },
+        fetchImpl: olderServerFetch,
+        stderr: (text) => errors.push(text)
+      })
+    ).toBe(1);
+    expect(errors.join("")).toContain("Upgrade the server before pushing");
+    expect(requests).not.toContain("/api/admin/config/import");
+  });
+
+  it("prints all conflicts and an exact scoped pull command with the selected instance and directory", async () => {
+    const parent = await createTemporaryDirectory();
+    const directory = resolve(parent, "working copy");
+    await mkdir(directory, { recursive: true });
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    await mkdir(resolve(directory, "skills", "review"), { recursive: true });
+    await writeFile(
+      resolve(directory, "skills", "review", "SKILL.md"),
+      serializeSkillMarkdown(skillConfig("review", "Local")),
+      "utf8"
+    );
+    await writeStateFile(resolve(directory, STATE_FILENAME), {
+      instances: { local: { lastPulledVersion: 0, assets: {}, defaultAgentName: null } }
+    });
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      if (new URL(request.url).pathname.endsWith("/import")) {
+        return jsonResponse(409, {
+          error: {
+            code: "CONFLICT",
+            message: "Conflict",
+            details: {
+              conflicts: [
+                {
+                  kind: "skill",
+                  name: "review",
+                  currentRevision: 3,
+                  actorLabel: "Reviewer",
+                  timestamp: "2026-10-05T10:00:00Z",
+                  operation: "update"
+                },
+                {
+                  kind: "agent",
+                  name: "assistant",
+                  currentRevision: 2,
+                  actorLabel: "Admin",
+                  timestamp: "2026-10-05T11:00:00Z",
+                  operation: "revert"
+                }
+              ]
+            }
+          }
+        });
+      }
+      return configApiFetch({ version: 0, agents: [], skills: [] })(input, init);
+    };
+    const errors: string[] = [];
+    expect(
+      await runConfigCommand("push", {
+        cwd: parent,
+        dir: "working copy",
+        instance: "local",
+        env: { CATALYST_API_KEY: "cat_conflicts" },
+        fetchImpl,
+        stdout: () => {},
+        stderr: (text) => errors.push(text)
+      })
+    ).toBe(1);
+    expect(errors.join("")).toContain(
+      "skill:review: revision 3, update by Reviewer at 2026-10-05T10:00:00Z"
+    );
+    expect(errors.join("")).toContain(
+      "agent:assistant: revision 2, revert by Admin at 2026-10-05T11:00:00Z"
+    );
+    expect(errors.join("")).toContain(
+      "catalyst config pull --dir 'working copy' --instance local --only skill:review --only agent:assistant"
+    );
+    expect(errors.join("")).toContain("Commit or stash local edits in git first");
+  });
+
+  it("classifies local, remote and conflicting changes and pushes only local edits", async () => {
+    const fixture = await createFixture();
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    await fixture.store.applyConfigAssetMutations({
+      clientInstanceId: fixture.clientInstanceId,
+      mutations: [
+        ...["local", "remote", "both"].map((name) => ({
+          type: "upsert" as const,
+          kind: "skill" as const,
+          name,
+          config: skillConfig(name, "Baseline")
+        }))
+      ]
+    });
+    const output: string[] = [];
+    const errors: string[] = [];
+    const options = {
+      cwd: directory,
+      env: { CATALYST_API_KEY: fixture.apiKey },
+      fetchImpl: createFastifyFetch(fixture.server),
+      stdout: (text: string) => output.push(text),
+      stderr: (text: string) => errors.push(text)
+    };
+    expect(await runConfigCommand("pull", options)).toBe(0);
+    const before = (await readStateFile(resolve(directory, STATE_FILENAME))).instances.local;
+    for (const name of ["local", "both"]) {
+      await writeFile(
+        resolve(directory, "skills", name, "SKILL.md"),
+        serializeSkillMarkdown(skillConfig(name, "Local edit")),
+        "utf8"
+      );
+    }
+    await fixture.store.applyConfigAssetMutations({
+      clientInstanceId: fixture.clientInstanceId,
+      actor: { displayLabel: "Skill reviewer", roles: ["admin"] },
+      mutations: ["remote", "both"].map((name) => ({
+        type: "upsert" as const,
+        kind: "skill" as const,
+        name,
+        config: skillConfig(name, "Remote edit")
+      }))
+    });
+    output.length = 0;
+    expect(await runConfigCommand("diff", options)).toBe(1);
+    expect(output.join("")).toContain("skill:local: changed locally");
+    expect(output.join("")).toContain("skill:remote: remote newer");
+    expect(output.join("")).toContain("skill:both: conflict");
+    expect(output.join("")).not.toContain("skills/remote/SKILL.md");
+    expect(await runConfigCommand("push", options)).toBe(1);
+    expect(errors.join("")).toContain("skill:both: revision 2, update by Skill reviewer at");
+    expect(errors.join("")).toContain("catalyst config pull --only skill:both");
+    expect(
+      await fixture.store.getConfigAsset({
+        clientInstanceId: fixture.clientInstanceId,
+        kind: "skill",
+        name: "local"
+      })
+    ).toMatchObject({ revision: 1 });
+    expect(await runConfigCommand("push", { ...options, only: ["skill:local"] })).toBe(0);
+    expect(
+      await fixture.store.getConfigAsset({
+        clientInstanceId: fixture.clientInstanceId,
+        kind: "skill",
+        name: "remote"
+      })
+    ).toMatchObject({ revision: 2, config: skillConfig("remote", "Remote edit") });
+    expect(await runConfigCommand("pull", { ...options, only: ["skill:both"] })).toBe(0);
+    const after = (await readStateFile(resolve(directory, STATE_FILENAME))).instances.local;
+    expect(after?.assets?.["skill:both"]).toMatchObject({ revision: 2 });
+    expect(after?.assets?.["skill:remote"]).toEqual(before?.assets?.["skill:remote"]);
+    expect(after?.assets?.["skill:local"]).toMatchObject({ revision: 2 });
+    expect(after?.defaultAgentName).toBe(before?.defaultAgentName);
+    output.length = 0;
+    expect(await runConfigCommand("push", options)).toBe(0);
+    expect(output.join("")).toContain("No local changes to push");
+    expect(output.join("")).toContain("Unchanged: 3");
+  });
+
+  it("baselines the serialized content so pull normalization and YAML formatting are not local edits", async () => {
+    const fixture = await createFixture();
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    await fixture.store.applyConfigAssetMutations({
+      clientInstanceId: fixture.clientInstanceId,
+      mutations: [
+        { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("Baseline") },
+        { type: "setDefaultAgent", agentName: "assistant" },
+        {
+          type: "upsert",
+          kind: "skill",
+          name: "review",
+          config: {
+            ...skillConfig("review", "\n# Review\n\n"),
+            resources: [
+              { path: "z.md", mediaType: "text/markdown", content: "Last\n" },
+              { path: "a.md", mediaType: "text/markdown", content: "First\n" }
+            ]
+          }
+        }
+      ]
+    });
+    const output: string[] = [];
+    const options = {
+      cwd: directory,
+      env: { CATALYST_API_KEY: fixture.apiKey },
+      fetchImpl: createFastifyFetch(fixture.server),
+      stdout: (text: string) => output.push(text)
+    };
+    expect(await runConfigCommand("pull", options)).toBe(0);
+    const path = resolve(directory, "agents", "assistant.agent.yaml");
+    await writeFile(
+      path,
+      (await readFile(path, "utf8")).replace("instructions: Baseline", "instructions: 'Baseline'"),
+      "utf8"
+    );
+    expect(await runConfigCommand("diff", options)).toBe(0);
+    expect(await runConfigCommand("push", options)).toBe(0);
+    expect(output.join("")).toContain("No local changes to push");
+    expect(
+      await fixture.store.getConfigAssetState({ clientInstanceId: fixture.clientInstanceId })
+    ).toMatchObject({ version: 1 });
+  });
+
+  it("keeps a remotely changed default unless the local manifest changes it", async () => {
+    const fixture = await createFixture();
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    await fixture.store.applyConfigAssetMutations({
+      clientInstanceId: fixture.clientInstanceId,
+      mutations: [
+        ...["assistant", "other", "third"].map((name) => ({
+          type: "upsert" as const,
+          kind: "agent" as const,
+          name,
+          config: agentConfig("Baseline", { name })
+        })),
+        {
+          type: "upsert",
+          kind: "skill",
+          name: "review",
+          config: skillConfig("review", "Baseline")
+        },
+        { type: "setDefaultAgent", agentName: "assistant" }
+      ]
+    });
+    const errors: string[] = [];
+    const options = {
+      cwd: directory,
+      env: { CATALYST_API_KEY: fixture.apiKey },
+      fetchImpl: createFastifyFetch(fixture.server),
+      stdout: () => {},
+      stderr: (text: string) => errors.push(text)
+    };
+    expect(await runConfigCommand("pull", options)).toBe(0);
+    await fixture.store.applyConfigAssetMutations({
+      clientInstanceId: fixture.clientInstanceId,
+      mutations: [{ type: "setDefaultAgent", agentName: "other" }]
+    });
+    await writeFile(
+      resolve(directory, "skills", "review", "SKILL.md"),
+      serializeSkillMarkdown(skillConfig("review", "Local")),
+      "utf8"
+    );
+    expect(await runConfigCommand("push", options)).toBe(0);
+    expect(
+      await fixture.store.getConfigAssetState({ clientInstanceId: fixture.clientInstanceId })
+    ).toMatchObject({ defaultAgentName: "other" });
+    await updateManifestDefaultAgent(resolve(directory, "catalyst.yaml"), "third");
+    expect(await runConfigCommand("push", options)).toBe(1);
+    expect(errors.join("")).toContain(
+      "default agent changed on the instance; a full pull is required"
+    );
+    expect(errors.join("")).toContain("a full pull overwrites the local working copy");
+    expect(errors.join("")).toContain("\ncatalyst config pull\n");
+    expect(await runConfigCommand("pull", options)).toBe(0);
+    expect(
+      (await readStateFile(resolve(directory, STATE_FILENAME))).instances.local?.defaultAgentName
+    ).toBe("other");
+  });
+
+  it("pulls a deleted conflict by removing just that asset and leaves other baselines alone", async () => {
+    const fixture = await createFixture();
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    await fixture.store.applyConfigAssetMutations({
+      clientInstanceId: fixture.clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "skill",
+          name: "review",
+          config: skillConfig("review", "Baseline")
+        },
+        { type: "upsert", kind: "skill", name: "other", config: skillConfig("other", "Other") }
+      ]
+    });
+    const errors: string[] = [];
+    const options = {
+      cwd: directory,
+      env: { CATALYST_API_KEY: fixture.apiKey },
+      fetchImpl: createFastifyFetch(fixture.server),
+      stderr: (text: string) => errors.push(text),
+      stdout: () => {}
+    };
+    expect(await runConfigCommand("pull", options)).toBe(0);
+    const before = (await readStateFile(resolve(directory, STATE_FILENAME))).instances.local;
+    await writeFile(
+      resolve(directory, "skills", "review", "SKILL.md"),
+      serializeSkillMarkdown(skillConfig("review", "Local")),
+      "utf8"
+    );
+    await fixture.store.applyConfigAssetMutations({
+      clientInstanceId: fixture.clientInstanceId,
+      actor: { displayLabel: "Remote editor", roles: ["admin"] },
+      mutations: [{ type: "delete", kind: "skill", name: "review" }]
+    });
+    expect(await runConfigCommand("push", options)).toBe(1);
+    expect(errors.join("")).toContain("skill:review: revision 2, delete by Remote editor");
+    expect(await runConfigCommand("pull", { ...options, only: ["skill:review"] })).toBe(0);
+    await expect(
+      readFile(resolve(directory, "skills", "review", "SKILL.md"), "utf8")
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    const after = (await readStateFile(resolve(directory, STATE_FILENAME))).instances.local;
+    expect(after?.assets?.["skill:review"]).toBeUndefined();
+    expect(after?.assets?.["skill:other"]).toEqual(before?.assets?.["skill:other"]);
+  });
+
+  it("guards prune deletions and refreshes force-written assets", async () => {
+    const fixture = await createFixture();
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    await fixture.store.applyConfigAssetMutations({
+      clientInstanceId: fixture.clientInstanceId,
+      mutations: [
+        { type: "upsert", kind: "skill", name: "review", config: skillConfig("review", "Baseline") }
+      ]
+    });
+    const options = {
+      cwd: directory,
+      env: { CATALYST_API_KEY: fixture.apiKey },
+      fetchImpl: createFastifyFetch(fixture.server),
+      stdout: () => {},
+      stderr: () => {}
+    };
+    expect(await runConfigCommand("pull", options)).toBe(0);
+    await rm(resolve(directory, "skills", "review"), { recursive: true });
+    await fixture.store.applyConfigAssetMutations({
+      clientInstanceId: fixture.clientInstanceId,
+      mutations: [
+        { type: "upsert", kind: "skill", name: "review", config: skillConfig("review", "Remote") }
+      ]
+    });
+    expect(await runConfigCommand("push", { ...options, prune: true })).toBe(1);
+    expect(await runConfigCommand("push", { ...options, prune: true, force: true })).toBe(0);
+    expect(
+      await fixture.store.getConfigAsset({
+        clientInstanceId: fixture.clientInstanceId,
+        kind: "skill",
+        name: "review"
+      })
+    ).toMatchObject({ status: "deleted", revision: 3 });
+    expect(
+      (await readStateFile(resolve(directory, STATE_FILENAME))).instances.local?.assets?.[
+        "skill:review"
+      ]
+    ).toBeUndefined();
+    await mkdir(resolve(directory, "skills", "review"), { recursive: true });
+    await writeFile(
+      resolve(directory, "skills", "review", "SKILL.md"),
+      serializeSkillMarkdown(skillConfig("review", "Deliberate overwrite")),
+      "utf8"
+    );
+    expect(await runConfigCommand("push", { ...options, force: true })).toBe(0);
+    expect(
+      (await readStateFile(resolve(directory, STATE_FILENAME))).instances.local?.assets?.[
+        "skill:review"
+      ]
+    ).toMatchObject({ revision: 4, hash: expect.any(String) });
+    expect(await runConfigCommand("push", options)).toBe(0);
   });
 
   it("lists sync status and shows round-trippable remote assets", async () => {
@@ -1044,6 +1456,35 @@ function jsonResponse(status: number, payload: unknown): Response {
   });
 }
 
+function pulledBaseline(
+  version: number,
+  bundle: { defaultAgentName?: string; agents: unknown[]; skills: unknown[] }
+) {
+  const contents = [
+    ...bundle.agents.map((asset) => {
+      const agent = canonicalizeAgentConfig(asset);
+      return { key: `agent:${agent.name}`, contents: serializeAgentYaml(agent) };
+    }),
+    ...bundle.skills.map((asset) => {
+      const skill = canonicalizeSkillConfig(asset);
+      return {
+        key: `skill:${skill.name}`,
+        contents: JSON.stringify({ ...skill, content: skill.content.trim() })
+      };
+    })
+  ];
+  return {
+    lastPulledVersion: version,
+    defaultAgentName: bundle.defaultAgentName ?? null,
+    assets: Object.fromEntries(
+      contents.map((asset) => [
+        asset.key,
+        { revision: 1, hash: createHash("sha256").update(asset.contents).digest("hex") }
+      ])
+    )
+  };
+}
+
 function configApiFetch(
   remote: {
     version: number;
@@ -1064,7 +1505,14 @@ function configApiFetch(
       });
     }
     if (url.pathname.endsWith("/api/admin/config/export")) {
-      return jsonResponse(200, remote);
+      return jsonResponse(200, {
+        ...remote,
+        perAssetConcurrency: true,
+        revisions: Object.fromEntries([
+          ...remote.agents.map((asset) => [`agent:${(asset as { name: string }).name}`, 1]),
+          ...remote.skills.map((asset) => [`skill:${(asset as { name: string }).name}`, 1])
+        ])
+      });
     }
     if (url.pathname.endsWith("/api/admin/config/import")) {
       requests.push(JSON.parse(await request.clone().text()));

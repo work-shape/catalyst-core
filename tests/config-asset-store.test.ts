@@ -118,6 +118,185 @@ function runConfigAssetStoreSuite(
       ).resolves.toHaveLength(1);
     });
 
+    it.each(["update", "delete", "create"] as const)(
+      "rejects a remote %s atomically with revision provenance",
+      async (operation) => {
+        const clientInstanceId = createClientInstanceId();
+        if (operation !== "create") {
+          await store.applyConfigAssetMutations({
+            clientInstanceId,
+            mutations: [
+              { type: "upsert", kind: "skill", name: "research", config: skillConfig("baseline") }
+            ]
+          });
+        }
+        await store.applyConfigAssetMutations({
+          clientInstanceId,
+          actor: { displayLabel: "Remote editor", roles: ["admin"] },
+          mutations:
+            operation === "delete"
+              ? [{ type: "delete", kind: "skill", name: "research" }]
+              : [{ type: "upsert", kind: "skill", name: "research", config: skillConfig("remote") }]
+        });
+        const before = await store.getConfigAssetState({ clientInstanceId });
+        await expect(
+          store.applyConfigAssetMutations({
+            clientInstanceId,
+            baseRevisions: {
+              "skill:research": operation === "create" ? null : 1,
+              "skill:other": null
+            },
+            mutations: [
+              {
+                type: "upsert",
+                kind: "skill",
+                name: "other",
+                config: { name: "other", content: "new" }
+              },
+              { type: "upsert", kind: "skill", name: "research", config: skillConfig("local") }
+            ]
+          })
+        ).rejects.toMatchObject({
+          code: "CONFLICT",
+          details: {
+            conflicts: [
+              {
+                kind: "skill",
+                name: "research",
+                currentRevision: operation === "create" ? 1 : 2,
+                actorLabel: "Remote editor",
+                timestamp: expect.any(String),
+                operation
+              }
+            ]
+          }
+        });
+        expect(await store.getConfigAssetState({ clientInstanceId })).toEqual(before);
+        expect(
+          await store.getConfigAsset({ clientInstanceId, kind: "skill", name: "other" })
+        ).toBeUndefined();
+      }
+    );
+
+    it("lists every conflicting asset before applying any mutation", async () => {
+      const clientInstanceId = createClientInstanceId();
+      await store.applyConfigAssetMutations({
+        clientInstanceId,
+        mutations: [
+          { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("remote") },
+          { type: "upsert", kind: "skill", name: "research", config: skillConfig("remote") }
+        ]
+      });
+      await expect(
+        store.applyConfigAssetMutations({
+          clientInstanceId,
+          baseRevisions: { "agent:assistant": null, "skill:research": null },
+          mutations: [
+            { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("local") },
+            { type: "delete", kind: "skill", name: "research" }
+          ]
+        })
+      ).rejects.toMatchObject({
+        code: "CONFLICT",
+        details: {
+          conflicts: [
+            { kind: "agent", name: "assistant", currentRevision: 1, operation: "create" },
+            { kind: "skill", name: "research", currentRevision: 1, operation: "create" }
+          ]
+        }
+      });
+      expect(await store.getConfigAssetState({ clientInstanceId })).toEqual({ version: 1 });
+    });
+
+    it("ignores untouched remote changes and guards explicit deletions", async () => {
+      const clientInstanceId = createClientInstanceId();
+      await store.applyConfigAssetMutations({
+        clientInstanceId,
+        mutations: [
+          { type: "upsert", kind: "skill", name: "research", config: skillConfig("baseline") },
+          {
+            type: "upsert",
+            kind: "skill",
+            name: "other",
+            config: { name: "other", content: "baseline" }
+          }
+        ]
+      });
+      await store.applyConfigAssetMutations({
+        clientInstanceId,
+        mutations: [
+          { type: "upsert", kind: "skill", name: "research", config: skillConfig("remote") }
+        ]
+      });
+      await expect(
+        store.applyConfigAssetMutations({
+          clientInstanceId,
+          baseVersion: 0,
+          baseRevisions: { "skill:other": 1 },
+          mutations: [{ type: "delete", kind: "skill", name: "other" }]
+        })
+      ).resolves.toEqual({ version: 3 });
+      expect(
+        await store.getConfigAsset({ clientInstanceId, kind: "skill", name: "research" })
+      ).toMatchObject({ revision: 2, config: skillConfig("remote") });
+      await expect(
+        store.applyConfigAssetMutations({
+          clientInstanceId,
+          baseRevisions: { "skill:research": 1 },
+          mutations: [{ type: "delete", kind: "skill", name: "research" }]
+        })
+      ).rejects.toMatchObject({ code: "CONFLICT" });
+    });
+
+    it("guards the default pointer only when changed and requires every touched baseline", async () => {
+      const clientInstanceId = createClientInstanceId();
+      await store.applyConfigAssetMutations({
+        clientInstanceId,
+        mutations: [
+          { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("baseline") },
+          { type: "setDefaultAgent", agentName: "assistant" }
+        ]
+      });
+      await expect(
+        store.applyConfigAssetMutations({
+          clientInstanceId,
+          baseRevisions: {},
+          baseDefaultAgentName: null,
+          mutations: [{ type: "setDefaultAgent", agentName: undefined }]
+        })
+      ).rejects.toMatchObject({
+        code: "CONFLICT",
+        details: { defaultAgentConflict: { currentAgentName: "assistant" } }
+      });
+      await expect(
+        store.applyConfigAssetMutations({
+          clientInstanceId,
+          baseRevisions: {},
+          mutations: [
+            { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("local") }
+          ]
+        })
+      ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+      await expect(
+        store.applyConfigAssetMutations({
+          clientInstanceId,
+          baseRevisions: { "agent:assistant": 1 },
+          baseDefaultAgentName: null,
+          mutations: [
+            { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("local") }
+          ]
+        })
+      ).resolves.toEqual({ version: 2 });
+      await expect(
+        store.applyConfigAssetMutations({
+          clientInstanceId,
+          baseRevisions: {},
+          baseDefaultAgentName: "assistant",
+          mutations: [{ type: "setDefaultAgent", agentName: undefined }]
+        })
+      ).resolves.toEqual({ version: 3 });
+    });
+
     it("numbers revisions independently per asset", async () => {
       const clientInstanceId = createClientInstanceId();
       await store.applyConfigAssetMutations({

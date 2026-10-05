@@ -77,6 +77,8 @@ export interface ConfigAssetStore {
   applyConfigAssetMutations(input: {
     clientInstanceId: ClientInstanceId;
     baseVersion?: number;
+    baseRevisions?: Record<string, number | null>;
+    baseDefaultAgentName?: string | null;
     actor?: AuditActor;
     origin?: ConfigAssetRevisionRecord["origin"];
     mutations: ConfigAssetMutation[];

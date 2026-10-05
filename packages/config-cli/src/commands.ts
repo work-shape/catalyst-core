@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import {
@@ -28,6 +29,7 @@ import {
   skillAssetPath,
   updateManifestDefaultAgent,
   writeStateFile,
+  type InstanceBaseline,
   type WorkingCopyBundle
 } from "./working-copy";
 
@@ -81,7 +83,9 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
   const exported = await api.exportAssets();
   const remote = parseExportBundle(exported);
   const selectors = parseOnlySelectors(options.only);
-  const selected = selectBundle(remote, selectors, true);
+  const selected = selectBundle(remote, selectors, false);
+  const selectedKeys = new Set(assetEntries(selected).map((asset) => asset.key));
+  const absentSelectors = selectors.filter((selector) => !selectedKeys.has(selector.key));
   const agents = selected.agents.sort(byName);
   const skills = selected.skills.sort(byName);
   const provenance = { instance: instance.key, version: exported.version };
@@ -106,17 +110,45 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
   for (const { skill, path } of skillTargets) {
     await replaceSkillPackage(path, skill, provenance);
   }
+  for (const selector of absentSelectors) {
+    const path =
+      selector.kind === "agent"
+        ? agentAssetPath(workingDir, selector.name)
+        : skillAssetPath(workingDir, selector.name);
+    if (
+      !matchesManifestPath(
+        workingDir,
+        path,
+        selector.kind === "agent" ? manifest.agents : manifest.skills
+      )
+    ) {
+      throw new Error(`Selected asset path is not matched by catalyst.yaml: ${selector.key}`);
+    }
+    await rm(selector.kind === "agent" ? path : dirname(path), {
+      recursive: selector.kind === "skill",
+      force: true
+    });
+  }
   if (selectors.length === 0) {
     await removeStaleManifestAssets(workingDir, manifest, desiredPaths);
     await updateManifestDefaultAgent(
       resolve(workingDir, MANIFEST_FILENAME),
       exported.defaultAgentName
     );
-    await updateStateVersion(workingDir, instance.key, exported.version);
   }
+  await recordBaseline(
+    workingDir,
+    instance.key,
+    exported.version,
+    selected,
+    exported.revisions,
+    selectors.length === 0,
+    selectors.length === 0 ? (exported.defaultAgentName ?? null) : undefined,
+    absentSelectors.map((selector) => selector.key)
+  );
   writeOutput(
     options,
-    `Pulled ${formatCount(agents.length, "agent")}, ${formatCount(skills.length, "skill")}, version ${exported.version}.${selectors.length === 0 ? "" : " Scoped pull; recorded version unchanged."}`
+    `Pulled ${formatCount(agents.length, "agent")}, ${formatCount(skills.length, "skill")}, version ${exported.version}.${selectors.length === 0 ? "" : " Scoped pull; selected asset baselines updated."}`
   );
   return 0;
 }
@@ -153,42 +185,109 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
   }
   const bundle = selectBundle(local, selectors, true);
   const state = await readStateFile(resolve(workingDir, STATE_FILENAME));
-  const lastPulledVersion = state.instances[instance.key]?.lastPulledVersion;
-  if (!options.force && lastPulledVersion === undefined) {
+  const baseline = state.instances[instance.key];
+  if (!options.force && baseline?.assets === undefined) {
     throw new Error(
-      `No pulled version is recorded for '${instance.key}'. Run 'catalyst config pull' first or use 'catalyst config push --force'.`
+      `No per-asset baseline is recorded for '${instance.key}'. Run 'catalyst config pull' first or use 'catalyst config push --force'.`
     );
   }
   const api = await connectApi(instance.url, options);
-  const remote = parseExportBundle(await api.exportAssets());
-  const plannedRemote = selectBundle(remote, selectors, false);
+  const exported = await api.exportAssets();
+  if (exported.perAssetConcurrency !== true || exported.revisions === undefined) {
+    throw new Error(
+      "This server does not support per-asset config conflicts. Upgrade the server before pushing with this CLI."
+    );
+  }
+  const remote = parseExportBundle(exported);
+  const touchedKeys = new Set(
+    assetEntries(bundle)
+      .filter(
+        (asset) =>
+          options.force || baseline?.assets?.[asset.key]?.hash !== assetHash(asset.contents)
+      )
+      .map((asset) => asset.key)
+  );
+  const touched: WorkingCopyBundle = {
+    agents: bundle.agents.filter((asset) => touchedKeys.has(`agent:${asset.name}`)),
+    skills: bundle.skills.filter((asset) => touchedKeys.has(`skill:${asset.name}`))
+  };
+  const localKeys = new Set(assetEntries(local).map((asset) => asset.key));
+  const deleteAssets = options.prune
+    ? assetEntries(remote)
+        .filter((asset) => !localKeys.has(asset.key))
+        .map(({ kind, name }) => ({ kind, name }))
+    : [];
+  const changesDefault =
+    selectors.length === 0 &&
+    (options.force || (bundle.defaultAgentName ?? null) !== baseline?.defaultAgentName);
+  if (changesDefault && !options.force && baseline?.defaultAgentName === undefined) {
+    throw new Error(
+      "No default-agent baseline is recorded. Run 'catalyst config pull' before changing the default agent."
+    );
+  }
   writeOutput(
     options,
-    formatPushPlan(createPushPlan(bundle, plannedRemote), options.prune === true)
+    formatPushPlan(
+      createPushPlan(bundle, selectBundle(remote, selectors, false), touchedKeys),
+      options.prune === true
+    )
+  );
+  if (!touchedKeys.size && !deleteAssets.length && !changesDefault) {
+    writeOutput(options, "No local changes to push.");
+    return 0;
+  }
+  const baseRevisions = Object.fromEntries(
+    [...touchedKeys, ...deleteAssets.map((asset) => `${asset.kind}:${asset.name}`)].map((key) => [
+      key,
+      baseline?.assets?.[key]?.revision ?? null
+    ])
   );
   try {
     const result = await api.replaceAssets({
-      ...bundle,
-      baseVersion: options.force ? null : lastPulledVersion,
-      mode: options.prune ? "mirror" : "merge"
+      ...touched,
+      ...(changesDefault && bundle.defaultAgentName !== undefined
+        ? { defaultAgentName: bundle.defaultAgentName }
+        : {}),
+      baseVersion: null,
+      ...(!options.force ? { baseRevisions } : {}),
+      ...(changesDefault ? { baseDefaultAgentName: baseline?.defaultAgentName ?? null } : {}),
+      deleteAssets,
+      mode: "merge"
     });
-    await updateStateVersion(workingDir, instance.key, result.version);
+    // Refresh only applied assets whose exported content still matches the local files.
+    // A concurrent change stays guarded by the revision this push applied.
+    const updated = await api.exportAssets();
+    const applied = parseExportBundle(updated);
+    const appliedContents = new Map(
+      assetEntries(applied).map((asset) => [asset.key, asset.contents])
+    );
+    const revisions: Record<string, number> = {};
+    for (const asset of assetEntries(touched)) {
+      const revision = updated.revisions?.[asset.key];
+      if (revision !== undefined && appliedContents.get(asset.key) === asset.contents) {
+        revisions[asset.key] = revision;
+      } else if (!options.force && baseRevisions[asset.key] !== null) {
+        revisions[asset.key] = (baseRevisions[asset.key] ?? 0) + 1;
+      }
+    }
+    await recordBaseline(
+      workingDir,
+      instance.key,
+      result.version,
+      touched,
+      revisions,
+      false,
+      changesDefault ? (bundle.defaultAgentName ?? null) : undefined,
+      deleteAssets.map((asset) => `${asset.kind}:${asset.name}`)
+    );
     writeOutput(
       options,
-      `Pushed ${formatCount(bundle.agents.length, "agent")}, ${formatCount(bundle.skills.length, "skill")}, version ${result.version}.`
+      `Pushed ${formatCount(touched.agents.length, "agent")}, ${formatCount(touched.skills.length, "skill")}, version ${result.version}.`
     );
     return 0;
   } catch (error) {
     if (error instanceof ConfigApiError && error.status === 409) {
-      const currentVersion = readDetailNumber(error.details, "currentVersion");
-      writeError(
-        options,
-        [
-          `Push conflict: remote is at version ${currentVersion ?? "unknown"}; you last pulled ${lastPulledVersion ?? "none"}.`,
-          "Run 'catalyst config diff', then 'catalyst config pull', re-apply your changes, and push again.",
-          "Use 'catalyst config push --force' only when you intend to overwrite the remote configuration."
-        ].join("\n")
-      );
+      writeError(options, formatPushConflict(error, options));
       return 1;
     }
     if (isValidationApiError(error)) {
@@ -207,23 +306,79 @@ export async function diffConfig(options: ConfigCommandOptions): Promise<number>
   const api = await connectApi(instance.url, options);
   const remoteExport = await api.exportAssets();
   const remote = parseExportBundle(remoteExport);
-  const remoteFiles = canonicalBundleFiles(remote);
-  const localFiles = canonicalBundleFiles(local);
-  const paths = [...new Set([...remoteFiles.keys(), ...localFiles.keys()])].sort();
-  const output = paths
-    .map((path) =>
-      createUnifiedDiff(
-        { path, contents: remoteFiles.get(path) },
-        { path, contents: localFiles.get(path) }
-      )
-    )
-    .join("");
-  if (!output) {
-    writeOutput(options, "No differences.");
-    return 0;
+  const baseline = (await readStateFile(resolve(workingDir, STATE_FILENAME))).instances[
+    instance.key
+  ];
+  if (baseline?.assets === undefined || remoteExport.revisions === undefined) {
+    writeOutput(
+      options,
+      "No per-asset baseline is available. Run 'catalyst config pull' first; local and remote changes cannot yet be distinguished."
+    );
+    return 1;
   }
-  writeOutput(options, output.trimEnd());
-  return 1;
+  const localAssets = new Map(assetEntries(local).map((asset) => [asset.key, asset]));
+  const remoteAssets = new Map(assetEntries(remote).map((asset) => [asset.key, asset]));
+  const keys = [
+    ...new Set([...localAssets.keys(), ...remoteAssets.keys(), ...Object.keys(baseline.assets)])
+  ].sort();
+  const output: string[] = [];
+  for (const key of keys) {
+    const localAsset = localAssets.get(key);
+    const remoteAsset = remoteAssets.get(key);
+    const base = baseline.assets[key];
+    const localChanged = localAsset
+      ? assetHash(localAsset.contents) !== base?.hash
+      : base !== undefined;
+    const remoteChanged = (remoteExport.revisions[key] ?? null) !== (base?.revision ?? null);
+    if (!localChanged && !remoteChanged) {
+      continue;
+    }
+    output.push(
+      `${key}: ${localChanged && remoteChanged ? "conflict" : remoteChanged ? "remote newer" : "changed locally"}`
+    );
+    if (localChanged && !remoteChanged) {
+      const localFiles = canonicalBundleFiles({
+        agents:
+          localAsset?.kind === "agent"
+            ? local.agents.filter((asset) => asset.name === localAsset.name)
+            : [],
+        skills:
+          localAsset?.kind === "skill"
+            ? local.skills.filter((asset) => asset.name === localAsset.name)
+            : []
+      });
+      const remoteFiles = canonicalBundleFiles({
+        agents:
+          remoteAsset?.kind === "agent"
+            ? remote.agents.filter((asset) => asset.name === remoteAsset.name)
+            : [],
+        skills:
+          remoteAsset?.kind === "skill"
+            ? remote.skills.filter((asset) => asset.name === remoteAsset.name)
+            : []
+      });
+      for (const path of [...new Set([...localFiles.keys(), ...remoteFiles.keys()])].sort()) {
+        const diff = createUnifiedDiff(
+          { path, contents: remoteFiles.get(path) },
+          { path, contents: localFiles.get(path) }
+        );
+        if (diff) {
+          output.push(diff.trimEnd());
+        }
+      }
+    }
+  }
+  if (baseline.defaultAgentName !== undefined) {
+    const localChanged = (local.defaultAgentName ?? null) !== baseline.defaultAgentName;
+    const remoteChanged = (remote.defaultAgentName ?? null) !== baseline.defaultAgentName;
+    if (localChanged || remoteChanged) {
+      output.push(
+        `default agent: ${localChanged && remoteChanged ? "conflict" : remoteChanged ? "remote newer" : "changed locally"}`
+      );
+    }
+  }
+  writeOutput(options, output.length ? output.join("\n") : "No differences.");
+  return output.length ? 1 : 0;
 }
 
 export async function validateConfig(options: ConfigCommandOptions): Promise<number> {
@@ -413,7 +568,8 @@ function assetEntries(bundle: WorkingCopyBundle): Array<{
       key: `skill:${skill.name}`,
       kind: "skill" as const,
       name: skill.name,
-      contents: JSON.stringify(canonicalizeSkillConfig(skill))
+      // Match the root serializer/parser, which trims surrounding Markdown whitespace.
+      contents: JSON.stringify({ ...canonicalizeSkillConfig(skill), content: skill.content.trim() })
     }))
   ];
 }
@@ -508,7 +664,11 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
 }
 
-function createPushPlan(local: WorkingCopyBundle, remote: WorkingCopyBundle): PushPlan {
+function createPushPlan(
+  local: WorkingCopyBundle,
+  remote: WorkingCopyBundle,
+  touchedKeys: Set<string>
+): PushPlan {
   const localAssets = new Map(assetEntries(local).map((asset) => [asset.key, asset]));
   const remoteAssets = new Map(assetEntries(remote).map((asset) => [asset.key, asset]));
   let added = 0;
@@ -516,7 +676,9 @@ function createPushPlan(local: WorkingCopyBundle, remote: WorkingCopyBundle): Pu
   let unchanged = 0;
   for (const [key, asset] of localAssets) {
     const remoteAsset = remoteAssets.get(key);
-    if (!remoteAsset) {
+    if (!touchedKeys.has(key)) {
+      unchanged += 1;
+    } else if (!remoteAsset) {
       added += 1;
     } else if (remoteAsset.contents === asset.contents) {
       unchanged += 1;
@@ -576,19 +738,84 @@ async function connectApi(url: string, options: ConfigCommandOptions) {
   });
 }
 
-async function updateStateVersion(
+function assetHash(contents: string): string {
+  return createHash("sha256").update(contents).digest("hex");
+}
+
+async function recordBaseline(
   workingDir: string,
   instanceKey: string,
-  version: number
+  version: number,
+  bundle: WorkingCopyBundle,
+  revisions: Record<string, number> | undefined,
+  fullPull: boolean,
+  defaultAgentName?: string | null,
+  deletedKeys: string[] = []
 ): Promise<void> {
   const path = resolve(workingDir, STATE_FILENAME);
   const state = await readStateFile(path);
-  await writeStateFile(path, {
-    instances: {
-      ...state.instances,
-      [instanceKey]: { lastPulledVersion: version }
+  const previous = state.instances[instanceKey];
+  const baseline: InstanceBaseline = {
+    ...previous,
+    lastPulledVersion: fullPull ? version : (previous?.lastPulledVersion ?? version)
+  };
+  if (revisions !== undefined) {
+    baseline.assets = fullPull ? {} : { ...previous?.assets };
+    for (const asset of assetEntries(bundle)) {
+      const revision = revisions[asset.key];
+      if (revision !== undefined) {
+        baseline.assets[asset.key] = { revision, hash: assetHash(asset.contents) };
+      }
     }
-  });
+    for (const key of deletedKeys) {
+      delete baseline.assets[key];
+    }
+  } else if (fullPull) {
+    delete baseline.assets;
+  }
+  if (defaultAgentName !== undefined) {
+    baseline.defaultAgentName = defaultAgentName;
+  }
+  await writeStateFile(path, { instances: { ...state.instances, [instanceKey]: baseline } });
+}
+
+function formatPushConflict(error: ConfigApiError, options: ConfigCommandOptions): string {
+  const details = isRecord(error.details) ? error.details : {};
+  const conflicts = Array.isArray(details.conflicts) ? details.conflicts.filter(isRecord) : [];
+  const selectors = conflicts.map((asset) => `${String(asset.kind)}:${String(asset.name)}`);
+  const argumentsList = [
+    "catalyst config pull",
+    ...(options.dir ? ["--dir", shellQuote(options.dir)] : []),
+    ...(options.instance ? ["--instance", shellQuote(options.instance)] : []),
+    ...selectors.flatMap((selector) => ["--only", shellQuote(selector)])
+  ];
+  if (details.defaultAgentConflict) {
+    // A full pull refreshes the manifest's default-agent pointer as well as assets.
+    argumentsList.splice(
+      argumentsList.indexOf("--only") === -1
+        ? argumentsList.length
+        : argumentsList.indexOf("--only")
+    );
+  }
+  return [
+    "Push conflict; nothing was applied.",
+    ...conflicts.map(
+      (asset) =>
+        `- ${String(asset.kind)}:${String(asset.name)}: revision ${String(asset.currentRevision ?? "absent")}, ${String(asset.operation ?? "unknown operation")} by ${String(asset.actorLabel ?? "unknown actor")} at ${String(asset.timestamp ?? "unknown time")}`
+    ),
+    ...(details.defaultAgentConflict
+      ? ["- default agent changed on the instance; a full pull is required."]
+      : []),
+    details.defaultAgentConflict
+      ? "Commit or stash local edits in git first: a full pull overwrites the local working copy."
+      : "Commit or stash local edits in git first: pull overwrites the local files for these assets.",
+    argumentsList.join(" "),
+    "Review with 'catalyst config diff', re-apply local edits, and push again. Use --force only for a deliberate overwrite."
+  ].join("\n");
+}
+
+function shellQuote(value: string): string {
+  return /^[a-zA-Z0-9_:./-]+$/u.test(value) ? value : "'" + value.replaceAll("'", "'\"'\"'") + "'";
 }
 
 function resolveWorkingDir(options: ConfigCommandOptions): string {
@@ -653,14 +880,6 @@ function formatCommandError(error: unknown): string {
     return `${error.code ? `${error.code}: ` : ""}${error.message}`;
   }
   return error instanceof Error ? error.message : String(error);
-}
-
-function readDetailNumber(details: unknown, key: string): number | undefined {
-  if (!isRecord(details)) {
-    return undefined;
-  }
-  const value = details[key];
-  return typeof value === "number" ? value : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

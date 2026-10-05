@@ -316,6 +316,132 @@ describe("config asset admin routes", () => {
     });
   });
 
+  it.each(["update", "delete", "create"] as const)(
+    "reports a remote %s and rejects the whole per-asset import",
+    async (operation) => {
+      const fixture = await createFixture();
+      const token = await mintToken(fixture.server);
+      if (operation !== "create") {
+        await fixture.store.applyConfigAssetMutations({
+          clientInstanceId: fixture.clientInstanceId,
+          mutations: [
+            { type: "upsert", kind: "skill", name: "research", config: skillConfig("Baseline") }
+          ]
+        });
+      }
+      await fixture.store.applyConfigAssetMutations({
+        clientInstanceId: fixture.clientInstanceId,
+        actor: { displayLabel: "Remote editor", roles: ["admin"] },
+        mutations:
+          operation === "delete"
+            ? [{ type: "delete", kind: "skill", name: "research" }]
+            : [{ type: "upsert", kind: "skill", name: "research", config: skillConfig("Remote") }]
+      });
+      const response = await request(fixture.server, token, {
+        method: "POST",
+        url: "/api/admin/config/import",
+        payload: {
+          baseVersion: null,
+          mode: "merge",
+          baseRevisions: { "skill:research": operation === "create" ? null : 1, "skill:new": null },
+          agents: [],
+          skills: [skillConfig("Local"), { ...skillConfig("New"), name: "new" }]
+        }
+      });
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toMatchObject({
+        error: {
+          details: {
+            conflicts: [
+              {
+                kind: "skill",
+                name: "research",
+                currentRevision: operation === "create" ? 1 : 2,
+                actorLabel: "Remote editor",
+                timestamp: expect.any(String),
+                operation
+              }
+            ]
+          }
+        }
+      });
+      expect(
+        await fixture.store.getConfigAsset({
+          clientInstanceId: fixture.clientInstanceId,
+          kind: "skill",
+          name: "new"
+        })
+      ).toBeUndefined();
+    }
+  );
+
+  it("advertises guards and preserves untouched remote assets and default agent", async () => {
+    const fixture = await createFixture();
+    const token = await mintToken(fixture.server);
+    await fixture.store.applyConfigAssetMutations({
+      clientInstanceId: fixture.clientInstanceId,
+      mutations: [
+        { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("Remote") },
+        { type: "setDefaultAgent", agentName: "assistant" },
+        { type: "upsert", kind: "skill", name: "research", config: skillConfig("Remote") }
+      ]
+    });
+    const exported = await request(fixture.server, token, {
+      method: "GET",
+      url: "/api/admin/config/export"
+    });
+    expect(exported.json()).toMatchObject({
+      perAssetConcurrency: true,
+      revisions: { "agent:assistant": 1, "skill:research": 1 }
+    });
+    const response = await request(fixture.server, token, {
+      method: "POST",
+      url: "/api/admin/config/import",
+      payload: {
+        baseVersion: 0,
+        mode: "merge",
+        baseRevisions: { "skill:new": null },
+        agents: [],
+        skills: [{ ...skillConfig("New"), name: "new" }]
+      }
+    });
+    expect(response.statusCode).toBe(200);
+    expect(
+      await fixture.store.getConfigAsset({
+        clientInstanceId: fixture.clientInstanceId,
+        kind: "skill",
+        name: "research"
+      })
+    ).toMatchObject({ revision: 1, config: skillConfig("Remote") });
+    const staleDefault = await request(fixture.server, token, {
+      method: "POST",
+      url: "/api/admin/config/import",
+      payload: {
+        baseVersion: null,
+        mode: "merge",
+        baseRevisions: {},
+        baseDefaultAgentName: null,
+        agents: [],
+        skills: []
+      }
+    });
+    expect(staleDefault.statusCode).toBe(409);
+    const oldRequest = await request(fixture.server, token, {
+      method: "POST",
+      url: "/api/admin/config/import",
+      payload: {
+        baseVersion: 0,
+        mode: "merge",
+        agents: [],
+        skills: []
+      }
+    });
+    expect(oldRequest.statusCode).toBe(409);
+    expect(oldRequest.json()).toMatchObject({
+      error: { details: { currentVersion: 2, baseVersion: 0 } }
+    });
+  });
+
   it("returns 409 for a stale base version", async () => {
     const fixture = await createFixture();
     const token = await mintToken(fixture.server);
@@ -921,6 +1047,10 @@ function request(
     ...input,
     headers: { authorization: `Bearer ${token}` }
   });
+}
+
+function skillConfig(content: string) {
+  return { name: "research", title: "Research", description: "Research guidance", content };
 }
 
 function agentConfig(

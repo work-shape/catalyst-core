@@ -28,8 +28,19 @@ export interface ResolvedInstance {
   url: string;
 }
 
+export interface AssetBaseline {
+  revision: number;
+  hash: string;
+}
+
+export interface InstanceBaseline {
+  lastPulledVersion: number;
+  assets?: Record<string, AssetBaseline>;
+  defaultAgentName?: string | null;
+}
+
 export interface CatalystState {
-  instances: Record<string, { lastPulledVersion: number }>;
+  instances: Record<string, InstanceBaseline>;
 }
 
 export interface WorkingCopyBundle {
@@ -128,7 +139,34 @@ export async function readStateFile(path: string): Promise<CatalystState> {
     ) {
       throw new Error(`${path} has an invalid lastPulledVersion for '${name}'`);
     }
-    instances[name] = { lastPulledVersion: value.lastPulledVersion };
+    const baseline: InstanceBaseline = { lastPulledVersion: value.lastPulledVersion };
+    if (value.assets !== undefined) {
+      if (!isRecord(value.assets)) {
+        throw new Error(`${path} has invalid asset baselines for '${name}'`);
+      }
+      baseline.assets = {};
+      for (const [key, asset] of Object.entries(value.assets)) {
+        if (
+          !/^(agent|skill):.+$/u.test(key) ||
+          !isRecord(asset) ||
+          typeof asset.revision !== "number" ||
+          !Number.isInteger(asset.revision) ||
+          asset.revision < 1 ||
+          typeof asset.hash !== "string" ||
+          !/^[a-f0-9]{64}$/u.test(asset.hash)
+        ) {
+          throw new Error(`${path} has an invalid asset baseline for '${key}'`);
+        }
+        baseline.assets[key] = { revision: asset.revision, hash: asset.hash };
+      }
+    }
+    if (value.defaultAgentName !== undefined) {
+      if (value.defaultAgentName !== null && typeof value.defaultAgentName !== "string") {
+        throw new Error(`${path} has an invalid default-agent baseline for '${name}'`);
+      }
+      baseline.defaultAgentName = value.defaultAgentName;
+    }
+    instances[name] = baseline;
   }
   return { instances };
 }

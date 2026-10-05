@@ -1,6 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 import {
   AppError,
+  assertConfigAssetBases,
   createPlatformId,
   type ConfigAssetRecord,
   type ConfigAssetRevisionRecord,
@@ -122,12 +123,39 @@ export async function applyConfigAssetMutations(
     if (!state) {
       throw new AppError("INTERNAL", "Failed to lock config asset state");
     }
-    if (input.baseVersion !== undefined && input.baseVersion !== state.version) {
-      throw new AppError("CONFLICT", "Config version mismatch", {
-        currentVersion: state.version,
-        baseVersion: input.baseVersion
-      });
+    const current = new Map<
+      string,
+      { status: "active" | "deleted"; revision: ConfigAssetRevisionRecord }
+    >();
+    if (input.baseRevisions !== undefined) {
+      for (const mutation of input.mutations) {
+        if (mutation.type === "setDefaultAgent") {
+          continue;
+        }
+        const [row] = await tx
+          .select({ asset: configAssets, revision: configAssetRevisions })
+          .from(configAssets)
+          .innerJoin(
+            configAssetRevisions,
+            eq(configAssetRevisions.id, configAssets.activeRevisionId)
+          )
+          .where(
+            and(
+              eq(configAssets.clientInstanceId, input.clientInstanceId),
+              eq(configAssets.kind, mutation.kind),
+              eq(configAssets.name, mutation.name)
+            )
+          )
+          .limit(1);
+        if (row) {
+          current.set(`${mutation.kind}:${mutation.name}`, {
+            status: row.asset.status,
+            revision: mapConfigAssetRevision(row.revision)
+          });
+        }
+      }
     }
+    assertConfigAssetBases(input, mapConfigAssetState(state), current);
 
     const version = state.version + 1;
     let defaultAgentName = state.defaultAgentName ?? undefined;

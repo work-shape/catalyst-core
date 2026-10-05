@@ -20,12 +20,26 @@ The repo's YAML and Markdown files are a **working copy**, not the live configur
 
 ```sh
 catalyst config pull        # replace the working copy with the live assets
-catalyst config diff        # compare working copy against the live instance
+catalyst config diff        # show local changes, remote newer assets, and conflicts
 catalyst config validate    # schema + cross-reference check without writing
-catalyst config push        # replace the live assets with the working copy
+catalyst config push        # merge changed local assets into the live instance
 ```
 
-A `catalyst.yaml` manifest in the working-copy root names instances and the asset file globs; `.catalyst-state.json` (gitignored) records the config version you last pulled. `push` sends that version and is rejected with a conflict when the live configuration moved — pull, re-apply, and push again, exactly like a rejected git push. `push --force` overwrites deliberately.
+A `catalyst.yaml` manifest in the working-copy root names instances and the asset file globs. The database is the live authoring source; the folder is a pulled working copy. `.catalyst-state.json` (gitignored) records each pulled asset's revision and content hash, plus the default agent. Skill hashes cover the root and all resources. YAML formatting and provenance comments do not count as edits.
+
+`push` sends only assets changed locally since their last pull. Unchanged files leave instance edits alone. Assets missing locally stay on the instance unless you use `--prune`, which explicitly deletes them. `--force` deliberately bypasses conflict protection and sends all selected local assets; it does not imply deletion.
+
+If a touched asset was updated, deleted, or created on the instance since its baseline, the server rejects the **whole push** without applying anything. The CLI lists every conflicting asset with its current revision, last operation, actor, and timestamp, then prints a scoped pull command:
+
+```sh
+catalyst config pull --only skill:support_review --only agent:assistant
+```
+
+Commit or stash local edits in git before running that command: pull overwrites the selected files and removes selected assets deleted on the instance. Re-apply your edits to the pulled content, review with `diff`, and push again. There is no automatic content merge or conflict resolution.
+
+`diff` labels assets **changed locally**, **remote newer**, or **conflict** when both sides changed. Remote-newer assets are not local updates. A full pull refreshes all written asset baselines and the manifest's default agent; `pull --only` refreshes only the selected assets. The default-agent pointer is guarded only when you change it locally. Resolving a default-agent conflict requires a full pull.
+
+State files from an older CLI remain readable, but their global version is not a per-asset baseline. Pull before a guarded push. Older CLIs keep their global-version guard against a newer server. This CLI refuses to push to a server that does not advertise per-asset conflict support, including with `--force`; upgrade the server first.
 
 The canonical skill package layout is:
 
@@ -130,6 +144,6 @@ removed first. Reverting retains the original approval and proposal history.
 | ----------------------- | ---------------------------------------------------------------------------- | -------------------------- |
 | `config_assets.read`    | View assets, revisions, and the export bundle                                | admin, superadmin          |
 | `config_assets.write`   | Interactive edits within `editableAgentFields`, skill editing, default agent | admin, superadmin          |
-| `config_assets.release` | Full replace via `catalyst config push`                                      | none (service tokens only) |
+| `config_assets.release` | Release synchronization via `catalyst config push`                           | none (service tokens only) |
 
 Effective permissions resolve from role defaults plus per-user grants (`"config_assets.write"`) and revocations (`"!config_assets.write"`) stored on the product user.
