@@ -46,7 +46,11 @@ export type { ChatServerOptions } from "./types";
 
 export async function createChatServer(options: ChatServerOptions): Promise<FastifyInstance> {
   const app = Fastify({
-    logger: true
+    logger: true,
+    // Assumes the API is reachable only through a reverse proxy on a private network (the
+    // Compose network). X-Forwarded-For is honoured only when the direct peer is a loopback or
+    // private address, so a public peer cannot choose its own request.ip.
+    trustProxy: ["loopback", "uniquelocal"]
   });
 
   await app.register(cors, {

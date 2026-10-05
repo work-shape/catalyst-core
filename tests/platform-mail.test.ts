@@ -246,6 +246,55 @@ describe("password setup by email", () => {
     expect(harness.transport.list()).toHaveLength(3);
   });
 
+  it("limits reset requests per forwarded client behind a private proxy, not per spoofed header", async () => {
+    const harness = await createMailHarness();
+    await harness.addPasswordUser("ada@example.test", "Ada");
+    const reset = (remoteAddress: string, forwardedFor: string, email: string) =>
+      harness.server.inject({
+        method: "POST",
+        url: "/api/password-reset",
+        remoteAddress,
+        headers: { "x-forwarded-for": forwardedFor },
+        payload: { email }
+      });
+
+    // One client exhausts its own allowance through the proxy; another client is unaffected.
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await reset("172.18.0.5", "203.0.113.7", `nobody-${attempt}@example.test`);
+    }
+    await reset("172.18.0.5", "203.0.113.7", "ada@example.test");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(harness.transport.list()).toHaveLength(0);
+    await reset("172.18.0.5", "203.0.113.8", "ada@example.test");
+    await vi.waitFor(() => expect(harness.transport.list()).toHaveLength(1));
+
+    // A public peer cannot escape its allowance by rotating X-Forwarded-For.
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await reset("198.51.100.9", `203.0.113.${100 + attempt}`, `nobody-${attempt}@example.test`);
+    }
+    await reset("198.51.100.9", "203.0.113.200", "ada@example.test");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(harness.transport.list()).toHaveLength(1);
+  });
+
+  it("resolves request.ip to the forwarded client only for a private peer", async () => {
+    const harness = await createMailHarness();
+    harness.server.get("/test/ip", async (request) => ({ ip: request.ip }));
+    const ip = async (remoteAddress: string) =>
+      (
+        await harness.server.inject({
+          method: "GET",
+          url: "/test/ip",
+          remoteAddress,
+          headers: { "x-forwarded-for": "203.0.113.7" }
+        })
+      ).json<{ ip: string }>().ip;
+
+    expect(await ip("172.18.0.5")).toBe("203.0.113.7");
+    expect(await ip("127.0.0.1")).toBe("203.0.113.7");
+    expect(await ip("198.51.100.9")).toBe("198.51.100.9");
+  });
+
   it("rejects reset requests while mail is disabled", async () => {
     const harness = await createMailHarness({ mailEnabled: false });
     expect((await harness.requestReset("ada@example.test")).statusCode).toBe(422);

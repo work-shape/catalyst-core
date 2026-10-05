@@ -12,8 +12,8 @@ export const PASSWORD_RESET_VALID_MINUTES = 60;
 export const PLATFORM_INVITATION_VALID_DAYS = 7;
 
 const RESET_REQUESTS_PER_EMAIL_PER_HOUR = 3;
-// Behind a reverse proxy without trusted forwarding headers every request shares the proxy
-// address, so this acts as an instance-wide cap rather than a per-client one.
+// Per client when the reverse proxy forwards the client address (see trustProxy in index.ts);
+// otherwise every request shares the proxy address and this is an instance-wide cap.
 const RESET_REQUESTS_PER_ADDRESS_PER_HOUR = 20;
 const HOUR_MS = 60 * 60 * 1000;
 
