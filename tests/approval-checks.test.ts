@@ -180,7 +180,7 @@ describe("approval check runner", () => {
       const f = fixture([{ ...rule, onFail }]);
       f.complete.mockRejectedValue(new Error("secret provider detail"));
       expect(await f.runner.run(handler, command, context)).toEqual([
-        { id: rule.id, status: "warned", message: "This approval check could not be evaluated." }
+        { id: rule.id, status: "warned", message: "" }
       ]);
       expect(await f.store.listModelUsageEvents({ clientInstanceId })).toEqual([
         expect.objectContaining({ source: "not_reported", totalTokens: 0 })
@@ -199,7 +199,7 @@ describe("approval check runner", () => {
     const f = fixture([{ ...rule, onFail: "block" }]);
     f.complete.mockResolvedValue(completion(text));
     expect(await f.runner.run(handler, command, context)).toEqual([
-      { id: rule.id, status: "warned", message: "This approval check could not be evaluated." }
+      { id: rule.id, status: "warned", message: "" }
     ]);
     expect(await f.store.listModelUsageEvents({ clientInstanceId })).toHaveLength(1);
   });
@@ -212,9 +212,7 @@ describe("approval check runner", () => {
       f.complete.mockImplementation(() => new Promise<ModelCompletion>(() => {}));
       const result = f.runner.run(handler, command, context);
       await vi.advanceTimersByTimeAsync(10_000);
-      expect(await result).toEqual([
-        { id: rule.id, status: "warned", message: "This approval check could not be evaluated." }
-      ]);
+      expect(await result).toEqual([{ id: rule.id, status: "warned", message: "" }]);
       expect(f.complete.mock.calls[0]?.[1].signal?.aborted).toBe(true);
       expect(await f.store.listModelUsageEvents({ clientInstanceId })).toEqual([
         expect.objectContaining({ source: "not_reported" })
@@ -257,7 +255,7 @@ describe("approval check runner", () => {
     releaseFirst?.(completion('{"violates":false,"reason":"OK"}'));
     expect(await pending).toEqual([
       { id: rule.id, status: "passed", message: "" },
-      { id: "second", status: "warned", message: "This approval check could not be evaluated." }
+      { id: "second", status: "warned", message: "" }
     ]);
     expect(await f.store.listModelUsageEvents({ clientInstanceId })).toHaveLength(2);
   });
@@ -353,9 +351,7 @@ describe("approval checks at creation", () => {
     const request = await f.workflow.createRequest(user, context, command);
     expect(await f.workflow.getRequest(user, context, request.id)).toMatchObject({
       status: "pending",
-      checks: [
-        { id: rule.id, status: "warned", message: "This approval check could not be evaluated." }
-      ]
+      checks: [{ id: rule.id, status: "warned", message: "" }]
     });
   });
 });

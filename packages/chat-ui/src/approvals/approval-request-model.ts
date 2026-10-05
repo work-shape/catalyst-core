@@ -43,7 +43,7 @@ const STATUS_PRESENTATION: Record<string, ApprovalStatusPresentation> = {
   approved: { labelKey: "approvalStatusApproved", tone: "positive" },
   rejected: { labelKey: "approvalStatusRejected", tone: "negative" },
   changes_requested: { labelKey: "approvalStatusChangesRequested", tone: "neutral" },
-  superseded: { labelKey: "approvalStatusSuperseded", tone: "neutral" },
+  superseded: { labelKey: "approvalDecisionSuperseded", tone: "neutral" },
   withdrawn: { labelKey: "approvalStatusWithdrawn", tone: "neutral" },
   reverted: { labelKey: "approvalStatusReverted", tone: "neutral" }
 };
@@ -142,18 +142,26 @@ export function approvalDecisionLineLabelKey(status: ApprovalDecisionStatus): Tr
  * agent revise right away. Only for "request changes" decided on the card
  * inside the thread the request came from, and only while that thread accepts
  * a message. The review queue never has an open conversation to pass.
+ *
+ * A run start takes the conversation's draft attachments with it and clears
+ * the composer, so anything the user has prepared there holds the follow-up
+ * back; their own next message then lets the agent revise.
  */
 export function shouldSendApprovalFollowUp(input: {
   decision: "approve" | "reject" | "request_changes";
   originConversationId: string | undefined;
   openConversationId: string | undefined;
   canSendMessage: boolean;
+  composerDraftText: string;
+  draftAttachmentCount: number;
 }): boolean {
   return (
     input.decision === "request_changes" &&
     input.originConversationId !== undefined &&
     input.originConversationId === input.openConversationId &&
-    input.canSendMessage
+    input.canSendMessage &&
+    input.composerDraftText.trim().length === 0 &&
+    input.draftAttachmentCount === 0
   );
 }
 

@@ -259,7 +259,9 @@ describe("follow-up after requesting changes", () => {
     decision: "request_changes",
     originConversationId: "conv_1",
     openConversationId: "conv_1",
-    canSendMessage: true
+    canSendMessage: true,
+    composerDraftText: "",
+    draftAttachmentCount: 0
   } as const;
 
   it("is sent from the card in the thread the request came from", () => {
@@ -287,6 +289,17 @@ describe("follow-up after requesting changes", () => {
 
   it("is not sent while a run is active or sending is otherwise unavailable", () => {
     expect(shouldSendApprovalFollowUp({ ...inOriginThread, canSendMessage: false })).toBe(false);
+  });
+
+  it("is not sent while the composer holds draft text", () => {
+    expect(shouldSendApprovalFollowUp({ ...inOriginThread, composerDraftText: "Noch etwas" })).toBe(
+      false
+    );
+    expect(shouldSendApprovalFollowUp({ ...inOriginThread, composerDraftText: "  \n" })).toBe(true);
+  });
+
+  it("is not sent while the composer holds a draft attachment", () => {
+    expect(shouldSendApprovalFollowUp({ ...inOriginThread, draftAttachmentCount: 1 })).toBe(false);
   });
 
   it("is not sent for any other decision", () => {

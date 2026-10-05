@@ -14,7 +14,6 @@ import type { ModelCompletion, ModelProvider } from "@vivd-catalyst/model-provid
 import type { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 
 const CHECK_TIMEOUT_MS = 10_000;
-const UNEVALUATED_MESSAGE = "This approval check could not be evaluated.";
 const verdictSchema = z
   .object({
     violates: z.boolean(),
@@ -129,7 +128,8 @@ export class ApprovalCheckRunner {
       if (usageRecordingFailed) {
         throw error;
       }
-      return { id: check.id, status: "warned", message: UNEVALUATED_MESSAGE };
+      // No message: the card words an unevaluated check in the reader's language.
+      return { id: check.id, status: "warned", message: "" };
     }
   }
 }

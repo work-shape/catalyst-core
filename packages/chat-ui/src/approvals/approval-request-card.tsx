@@ -1,6 +1,8 @@
 import { CircleAlert, TriangleAlert } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useId, useState, type FormEvent } from "react";
-import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
+import type { ApprovalRequestView, DraftAttachment } from "@vivd-catalyst/api-client";
+import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { useAttachmentContentContext } from "../attachment-content";
 import { useToolDisplayActions } from "../domain-ui-widgets";
@@ -11,6 +13,7 @@ import { Card } from "../ui/card";
 import { cn } from "../ui/cn";
 import { Textarea } from "../ui/input";
 import { Spinner } from "../ui/spinner";
+import { useWorkspaceDraftController } from "../workspace/workspace-drafts";
 import {
   APPROVAL_AUTH_SCOPE,
   isApprovalRequestNotFound,
@@ -56,6 +59,11 @@ export function ApprovalRequestCard({ requestId }: { requestId: string }) {
   const openConversationId = useAttachmentContentContext()?.selectedConversationId;
   // Absent while the open conversation cannot take a message, a running run included.
   const sendMessage = useToolDisplayActions()?.sendMessage;
+  const queryClient = useQueryClient();
+  const composerDraftText = useWorkspaceDraftController().draftFor({
+    authScope: APPROVAL_AUTH_SCOPE,
+    conversationId: openConversationId
+  });
   const actions = useApprovalRequestActions({
     ...api,
     requestId,
@@ -65,7 +73,14 @@ export function ApprovalRequestCard({ requestId }: { requestId: string }) {
         decision: decision.decision,
         originConversationId,
         openConversationId,
-        canSendMessage: Boolean(sendMessage)
+        canSendMessage: Boolean(sendMessage),
+        composerDraftText,
+        // The composer's own list, in every state. A file still uploading is
+        // not in it yet, but blocks sending and so leaves `sendMessage` absent.
+        draftAttachmentCount:
+          queryClient.getQueryData<DraftAttachment[]>(
+            workspaceQueryKeys.draftAttachments(apiBaseUrl, APPROVAL_AUTH_SCOPE, openConversationId)
+          )?.length ?? 0
       });
       if (followUp) {
         // The comment is in the decision the agent reads; this only starts the run.
@@ -210,7 +225,8 @@ export function ApprovalRequestCardView({
                   {t(check.status === "blocked" ? "approvalCheckBlocked" : "approvalCheckWarned")}
                   {": "}
                 </span>
-                {check.message}
+                {/* The runner stores no message for a check it could not evaluate. */}
+                {check.message || (check.status === "warned" ? t("approvalCheckUnevaluated") : "")}
               </span>
             </li>
           ))}

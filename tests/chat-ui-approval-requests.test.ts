@@ -173,6 +173,22 @@ describe("approval request card", () => {
     expect(renderReady()).not.toContain("<ul");
   });
 
+  it("words a check that could not be evaluated itself", () => {
+    const markup = renderReady({
+      checks: [
+        { id: "format", status: "passed", message: "" },
+        { id: "no_customer_data", status: "warned", message: "" }
+      ]
+    });
+
+    expect(markup).toContain("Die automatische Prüfung konnte nicht ausgeführt werden.");
+    expect(markup.match(/<li/gu)).toHaveLength(1);
+  });
+
+  it("names a superseded request like its status line in the thread", () => {
+    expect(renderReady({ status: "superseded" })).toContain("Nicht mehr anwendbar</span>");
+  });
+
   it("falls back to the summary for an unknown kind or an unreadable preview", () => {
     const unknownKind = renderReady({ kind: "future_kind" });
     const brokenPreview = renderReady({ preview: { changes: "nope" } });
