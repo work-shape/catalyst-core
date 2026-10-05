@@ -38,9 +38,11 @@ export function findAgentModelReferenceIssues(input: {
   agents: readonly AgentConfig[];
   modelProviderIds: readonly string[];
   modelBindingIds: readonly string[];
+  fastModeModelBindingIds: readonly string[];
 }): string[] {
   const providerIds = new Set(input.modelProviderIds);
   const bindingIds = new Set(input.modelBindingIds);
+  const fastModeBindingIds = new Set(input.fastModeModelBindingIds);
   const issues: string[] = [];
   for (const agent of input.agents) {
     if (agent.modelProviderId && agent.modelBindingId) {
@@ -56,6 +58,13 @@ export function findAgentModelReferenceIssues(input: {
     if (agent.modelBindingId && !bindingIds.has(agent.modelBindingId)) {
       issues.push(
         `Agent '${agent.name}' references missing model binding '${agent.modelBindingId}'`
+      );
+    }
+    if (agent.fastMode && !(agent.modelBindingId && fastModeBindingIds.has(agent.modelBindingId))) {
+      issues.push(
+        agent.modelBindingId
+          ? `Agent '${agent.name}' enables fastMode, but model binding '${agent.modelBindingId}' does not support fast mode`
+          : `Agent '${agent.name}' enables fastMode without a model binding that supports fast mode`
       );
     }
   }

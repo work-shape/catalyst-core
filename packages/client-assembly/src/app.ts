@@ -259,6 +259,7 @@ export async function createClientInstanceExecutionAssembly(
             binding.model ??
             config.modelProviders.find((provider) => provider.id === binding.providerId)!.model
         })),
+      fastModeModelBindingIds: fastModeModelBindingIds(config),
       reasoningEfforts: [...REASONING_EFFORTS],
       enabledToolNames: [...getEnabledToolNames(config)]
     },
@@ -389,6 +390,7 @@ export async function createClientInstanceExecutionAssembly(
       modelBindingIds: config.modelBindings
         .filter((binding) => binding.agentSelectable !== false)
         .map((binding) => binding.id),
+      fastModeModelBindingIds: fastModeModelBindingIds(config),
       enabledToolNames: [...getEnabledToolNames(config)]
     }
   });
@@ -640,6 +642,12 @@ async function tryManagedObjectReaders<T>(
     }
   }
   throw new AppError("NOT_FOUND", `Managed object '${subject}' was not found`);
+}
+
+function fastModeModelBindingIds(config: ClientInstanceConfig): string[] {
+  return config.modelBindings
+    .filter((binding) => binding.supportsFastMode)
+    .map((binding) => binding.id);
 }
 
 function uniqueById<T extends { id: string }>(records: T[]): T[] {

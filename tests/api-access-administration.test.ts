@@ -297,6 +297,7 @@ async function createFixture() {
         modelProviderIds: ["local"],
         modelBindingIds: [],
         modelBindings: [],
+        fastModeModelBindingIds: [],
         reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
         enabledToolNames: []
       }

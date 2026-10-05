@@ -217,6 +217,7 @@ export const configAssetsOverviewSchema = z.object({
         model: z.string()
       })
     ),
+    fastModeModelBindingIds: z.array(z.string()),
     reasoningEfforts: z.array(reasoningEffortSchema),
     enabledToolNames: z.array(z.string())
   })

@@ -59,6 +59,7 @@ export interface ChatServerOptions {
       modelProviderIds: string[];
       modelBindingIds: string[];
       modelBindings: Array<{ id: string; model: string }>;
+      fastModeModelBindingIds: string[];
       reasoningEfforts: string[];
       enabledToolNames: string[];
     };

@@ -106,6 +106,7 @@ async function fixture() {
         modelProviderIds: config.modelProviders.map((provider) => provider.id),
         modelBindingIds: [],
         modelBindings: [],
+        fastModeModelBindingIds: [],
         reasoningEfforts: [],
         enabledToolNames: ["read_skill", "propose_skill_change"]
       }

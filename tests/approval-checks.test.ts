@@ -417,6 +417,7 @@ async function skillFixture() {
         modelProviderIds: ["local"],
         modelBindingIds: ["guardrailCheck"],
         modelBindings: [{ id: "guardrailCheck", model: "cheap-check" }],
+        fastModeModelBindingIds: [],
         reasoningEfforts: ["low"],
         enabledToolNames: ["propose_skill_change"]
       }
