@@ -101,7 +101,28 @@ export const toolResultMessageMetadataSchema = z.object({
   projectionNotice: z.record(z.string(), z.unknown()).optional()
 });
 
+export const approvalDecisionMessageMetadataSchema = z.object({
+  version: messageMetadataVersionSchema,
+  kind: z.literal("approval_decision"),
+  requestId: z.string(),
+  requestKind: z.string(),
+  status: z.enum([
+    "approved",
+    "rejected",
+    "changes_requested",
+    "superseded",
+    "withdrawn",
+    "reverted"
+  ]),
+  decidedBy: z.string(),
+  decidedByLabel: z.string(),
+  decidedAt: z.string(),
+  summary: z.string(),
+  comment: z.string().optional()
+});
+
 export const agentRuntimeMessageMetadataSchema = z.discriminatedUnion("kind", [
+  approvalDecisionMessageMetadataSchema,
   userMessageMetadataSchema,
   assistantToolCallsMessageMetadataSchema,
   assistantFinalMessageMetadataSchema,

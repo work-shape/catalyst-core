@@ -1350,6 +1350,17 @@ export type GetConversationThreadResponses = {
             metadata?: {
                 agentRuntime?: {
                     version: 1;
+                    kind: 'approval_decision';
+                    requestId: string;
+                    requestKind: string;
+                    status: 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn' | 'reverted';
+                    decidedBy: string;
+                    decidedByLabel: string;
+                    decidedAt: string;
+                    summary: string;
+                    comment?: string;
+                } | {
+                    version: 1;
                     kind: 'user_message';
                     attachmentManifest: unknown;
                 } | {
@@ -1567,6 +1578,17 @@ export type ListConversationMessagesResponses = {
         createdAt: string;
         metadata?: {
             agentRuntime?: {
+                version: 1;
+                kind: 'approval_decision';
+                requestId: string;
+                requestKind: string;
+                status: 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn' | 'reverted';
+                decidedBy: string;
+                decidedByLabel: string;
+                decidedAt: string;
+                summary: string;
+                comment?: string;
+            } | {
                 version: 1;
                 kind: 'user_message';
                 attachmentManifest: unknown;
@@ -1881,6 +1903,17 @@ export type StartConversationRunResponses = {
             metadata?: {
                 agentRuntime?: {
                     version: 1;
+                    kind: 'approval_decision';
+                    requestId: string;
+                    requestKind: string;
+                    status: 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn' | 'reverted';
+                    decidedBy: string;
+                    decidedByLabel: string;
+                    decidedAt: string;
+                    summary: string;
+                    comment?: string;
+                } | {
+                    version: 1;
                     kind: 'user_message';
                     attachmentManifest: unknown;
                 } | {
@@ -2003,6 +2036,17 @@ export type StartConversationRunResponses = {
                 createdAt: string;
                 metadata?: {
                     agentRuntime?: {
+                        version: 1;
+                        kind: 'approval_decision';
+                        requestId: string;
+                        requestKind: string;
+                        status: 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn' | 'reverted';
+                        decidedBy: string;
+                        decidedByLabel: string;
+                        decidedAt: string;
+                        summary: string;
+                        comment?: string;
+                    } | {
                         version: 1;
                         kind: 'user_message';
                         attachmentManifest: unknown;
@@ -2249,6 +2293,17 @@ export type CreateConversationRunResponses = {
             metadata?: {
                 agentRuntime?: {
                     version: 1;
+                    kind: 'approval_decision';
+                    requestId: string;
+                    requestKind: string;
+                    status: 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn' | 'reverted';
+                    decidedBy: string;
+                    decidedByLabel: string;
+                    decidedAt: string;
+                    summary: string;
+                    comment?: string;
+                } | {
+                    version: 1;
                     kind: 'user_message';
                     attachmentManifest: unknown;
                 } | {
@@ -2371,6 +2426,17 @@ export type CreateConversationRunResponses = {
                 createdAt: string;
                 metadata?: {
                     agentRuntime?: {
+                        version: 1;
+                        kind: 'approval_decision';
+                        requestId: string;
+                        requestKind: string;
+                        status: 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn' | 'reverted';
+                        decidedBy: string;
+                        decidedByLabel: string;
+                        decidedAt: string;
+                        summary: string;
+                        comment?: string;
+                    } | {
                         version: 1;
                         kind: 'user_message';
                         attachmentManifest: unknown;
@@ -3721,6 +3787,10 @@ export type ExportConfigAssetsResponses = {
             [key: string]: unknown;
         }>;
         version: number;
+        perAssetConcurrency?: true;
+        revisions?: {
+            [key: string]: number;
+        };
     };
 };
 
@@ -3737,6 +3807,14 @@ export type ReplaceConfigAssetsData = {
         }>;
         baseVersion: number | null;
         mode?: 'mirror' | 'merge';
+        baseRevisions?: {
+            [key: string]: number | null;
+        };
+        baseDefaultAgentName?: string | null;
+        deleteAssets?: Array<{
+            kind: 'agent' | 'skill';
+            name: string;
+        }>;
     };
     path?: never;
     query?: never;

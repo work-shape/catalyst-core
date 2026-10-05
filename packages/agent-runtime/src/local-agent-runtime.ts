@@ -55,6 +55,7 @@ import {
   createToolResultMetadata,
   dropCurrentSubmittedMessage,
   projectAgentVisibleHistory,
+  orderApprovalDecisionsForModel,
   readAssistantProviderContinuation,
   selectRecentCompleteHistory,
   stableStringify,
@@ -648,7 +649,9 @@ export class LocalAgentRuntime implements AgentRuntime {
       clientInstanceId: context.clientInstanceId,
       conversationId: input.conversationId
     });
-    const history = dropCurrentSubmittedMessage(persistedMessages, input.message.text);
+    const history = orderApprovalDecisionsForModel(
+      dropCurrentSubmittedMessage(persistedMessages, input.message.text, input.inputMessageId)
+    );
     const compactionEnabled = getProviderCompactionThreshold(provider) !== undefined;
     const storedCheckpoint = compactionEnabled
       ? await this.options.modelProviderContinuationStore?.getModelProviderContinuation({
@@ -669,10 +672,12 @@ export class LocalAgentRuntime implements AgentRuntime {
         ? readAssistantProviderContinuation(history[legacyCheckpointIndex]?.metadata)
         : undefined;
     const checkpoint =
-      storedCheckpointIndex >= legacyCheckpointIndex && storedCheckpointIndex >= 0
+      storedCheckpoint &&
+      storedCheckpointIndex >= legacyCheckpointIndex &&
+      storedCheckpointIndex >= 0
         ? {
-            providerId: storedCheckpoint!.providerId,
-            state: storedCheckpoint!.state
+            providerId: storedCheckpoint.providerId,
+            state: storedCheckpoint.state
           }
         : legacyCheckpoint;
     const activeHistory = compactionEnabled

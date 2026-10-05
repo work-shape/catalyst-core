@@ -9,6 +9,8 @@ export class InMemoryApprovalRequestStore implements ApprovalRequestStore {
   private readonly requests = new Map<string, ApprovalRequest>();
   private readonly locks = new Set<string>();
 
+  constructor(private readonly onDecided?: (request: ApprovalRequest) => Promise<void>) {}
+
   async createApprovalRequest(
     input: Parameters<ApprovalRequestStore["createApprovalRequest"]>[0]
   ): Promise<ApprovalRequest> {
@@ -94,6 +96,7 @@ export class InMemoryApprovalRequestStore implements ApprovalRequestStore {
         ...structuredClone(outcome),
         updatedAt: new Date().toISOString()
       };
+      await this.onDecided?.(updated);
       this.requests.set(request.id, updated);
       return structuredClone(updated);
     } finally {

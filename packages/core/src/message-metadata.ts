@@ -1,5 +1,8 @@
+import type { ApprovalRequest, ApprovalRequestStatus } from "./approval-requests";
+import type { CreateMessageInput } from "./conversation";
+import { asMessageId } from "./ids";
 import type { AttachmentManifest } from "./files";
-import type { AgentRunId, ToolCallId } from "./ids";
+import type { AgentRunId, MessageId, ToolCallId } from "./ids";
 import { isJsonObject, unknownToJsonValue, type JsonObject, type JsonValue } from "./json";
 import type { ToolExecutionResult } from "./tool-execution";
 import type { MessageCitation, WebSource, WebSourceProvider } from "./web-source";
@@ -69,7 +72,75 @@ export interface AgentRuntimeToolResultMetadata {
   projectionNotice?: JsonObject;
 }
 
+export interface ApprovalDecisionMessageMetadata {
+  version: typeof MESSAGE_METADATA_VERSION;
+  kind: "approval_decision";
+  requestId: string;
+  requestKind: string;
+  status: Exclude<ApprovalRequestStatus, "pending">;
+  decidedBy: string;
+  decidedByLabel: string;
+  decidedAt: string;
+  summary: string;
+  comment?: string;
+}
+
+/** No payload, apply result, or skill text crosses this boundary. */
+export function createApprovalDecisionMessage(
+  request: ApprovalRequest
+): (CreateMessageInput & { id: MessageId }) | undefined {
+  if (!request.origin || request.status === "pending") {
+    return undefined;
+  }
+  const reversion = request.status === "reverted" ? request.reversion : undefined;
+  const event: ApprovalDecisionMessageMetadata = {
+    version: MESSAGE_METADATA_VERSION,
+    kind: "approval_decision",
+    requestId: request.id,
+    requestKind: request.kind,
+    status: request.status,
+    decidedBy: reversion?.revertedBy ?? request.decision?.decidedBy ?? request.requestedBy.id,
+    decidedByLabel:
+      reversion?.revertedByLabel ??
+      request.decision?.decidedByLabel ??
+      request.requestedBy.displayLabel,
+    decidedAt: reversion?.revertedAt ?? request.decision?.decidedAt ?? request.updatedAt,
+    summary: request.summary,
+    ...(request.status !== "reverted" && request.decision?.comment
+      ? { comment: request.decision.comment }
+      : {})
+  };
+  return {
+    id: asMessageId(`msg_${request.id}_${request.status}`),
+    clientInstanceId: request.clientInstanceId,
+    conversationId: request.origin.conversationId,
+    role: "system",
+    text: approvalDecisionNote(event),
+    metadata: wrapAgentRuntimeMetadata(event)
+  };
+}
+
+export function approvalDecisionNote(event: ApprovalDecisionMessageMetadata): string {
+  const outcome =
+    event.status === "approved"
+      ? " The change is now active."
+      : event.status === "changes_requested"
+        ? " When the user continues, submit a revised proposal addressing the requested changes."
+        : event.status === "reverted"
+          ? " The approved change has been reverted."
+          : "";
+  return `Approval request ${event.requestId} (${event.requestKind}: ${JSON.stringify(event.summary)}) was ${event.status} by ${JSON.stringify(event.decidedByLabel)} at ${event.decidedAt}.${outcome}${event.comment ? ` Comment: ${JSON.stringify(event.comment)}` : ""}`;
+}
+
+export function readApprovalDecisionMetadata(
+  metadata: JsonObject | Record<string, unknown> | undefined
+): ApprovalDecisionMessageMetadata | undefined {
+  const runtime = readAgentRuntimeMessageMetadata(metadata);
+  return runtime?.kind === "approval_decision" ? runtime : undefined;
+}
+
 export type AgentRuntimeMessageMetadata =
+  | ApprovalDecisionMessageMetadata
   | AgentRuntimeUserMessageMetadata
   | AgentRuntimeAssistantToolCallsMetadata
   | AgentRuntimeAssistantFinalMetadata
@@ -159,6 +230,34 @@ export function readAgentRuntimeMessageMetadata(
   const runtime = metadata?.agentRuntime;
   if (!isUnknownRecord(runtime) || runtime.version !== MESSAGE_METADATA_VERSION) {
     return undefined;
+  }
+  if (
+    runtime.kind === "approval_decision" &&
+    typeof runtime.requestId === "string" &&
+    typeof runtime.requestKind === "string" &&
+    typeof runtime.decidedBy === "string" &&
+    typeof runtime.decidedByLabel === "string" &&
+    typeof runtime.decidedAt === "string" &&
+    typeof runtime.summary === "string" &&
+    (runtime.status === "approved" ||
+      runtime.status === "rejected" ||
+      runtime.status === "changes_requested" ||
+      runtime.status === "superseded" ||
+      runtime.status === "withdrawn" ||
+      runtime.status === "reverted")
+  ) {
+    return {
+      version: MESSAGE_METADATA_VERSION,
+      kind: "approval_decision",
+      requestId: runtime.requestId,
+      requestKind: runtime.requestKind,
+      status: runtime.status,
+      decidedBy: runtime.decidedBy,
+      decidedByLabel: runtime.decidedByLabel,
+      decidedAt: runtime.decidedAt,
+      summary: runtime.summary,
+      ...(typeof runtime.comment === "string" ? { comment: runtime.comment } : {})
+    };
   }
   if (runtime.kind === "user_message") {
     return {

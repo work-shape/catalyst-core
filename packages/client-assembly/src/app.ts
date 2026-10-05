@@ -133,7 +133,11 @@ export async function createClientInstanceApp(
     apiAccessStore: store,
     usageGovernance,
     auditRecorder,
-    approvalRequests: { store, handlers: execution.approvalRequestHandlers },
+    approvalRequests: {
+      store,
+      handlers: execution.approvalRequestHandlers,
+      onDecided: (request) => store.appendApprovalDecision(request)
+    },
     configAssets: execution.configAssets,
     agentRuntime,
     attachments,
@@ -272,6 +276,7 @@ export async function createClientInstanceExecutionAssembly(
     clientInstanceId,
     store,
     handlers: approvalRequestHandlers,
+    onDecided: (request) => store.appendApprovalDecision(request),
     auditRecorder
   });
   const workspaceTools = config.executionWorkspaces.enabled

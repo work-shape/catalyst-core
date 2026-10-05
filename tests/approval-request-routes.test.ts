@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { createApiClient } from "@vivd-catalyst/api-client";
 import { approvalRequestSchema } from "@vivd-catalyst/api-contract";
-import { asClientInstanceId, type ApprovalRequestHandler } from "@vivd-catalyst/core";
+import {
+  asClientInstanceId,
+  asConversationId,
+  asAgentRunId,
+  asToolCallId,
+  readApprovalDecisionMetadata,
+  type ApprovalRequest,
+  type ApprovalRequestHandler
+} from "@vivd-catalyst/core";
 import { createClientInstanceApp, createTestConfig } from "./chat-server-harness";
 
 const fakeHandler: ApprovalRequestHandler = {
@@ -72,11 +80,12 @@ async function fixture(empty = false) {
   const reviewer = client("reviewer");
   const stranger = client("stranger");
   const requesterUser = await requester.account.get();
-  const create = () =>
+  const create = (origin?: ApprovalRequest["origin"]) =>
     app.store.createApprovalRequest({
       clientInstanceId: asClientInstanceId(app.config.clientInstance.id),
       kind: "fake",
       summary: "Proposed",
+      origin,
       payload: { value: "new" },
       requestedBy: { id: requesterUser.id, displayLabel: requesterUser.displayLabel }
     });
@@ -84,6 +93,50 @@ async function fixture(empty = false) {
 }
 
 describe("approval routes and generated instance client", () => {
+  it("projects a decision in the owner's thread when the reviewer cannot access it", async () => {
+    const f = await fixture();
+    try {
+      const conversation = await f.requester.conversations.create({ title: "Private origin" });
+      const request = await f.create({
+        conversationId: asConversationId(conversation.id),
+        agentRunId: asAgentRunId("origin-run"),
+        toolCallId: asToolCallId("origin-call"),
+        agentName: "agent"
+      });
+      await expect(f.reviewer.conversations.getThread(conversation.id)).rejects.toMatchObject({
+        status: 404
+      });
+      const rejected = await f.reviewer.approvalRequests.decide(request.id, {
+        decision: "reject",
+        comment: "Please be more precise"
+      });
+      const thread = await f.requester.conversations.getThread(conversation.id);
+      expect(thread.messages).toHaveLength(1);
+      expect(readApprovalDecisionMetadata(thread.messages[0]?.metadata)).toMatchObject({
+        kind: "approval_decision",
+        requestId: request.id,
+        requestKind: "fake",
+        status: "rejected",
+        decidedByLabel: "Reviewer",
+        decidedAt: rejected.decision?.decidedAt,
+        summary: "Proposed",
+        comment: "Please be more precise"
+      });
+      expect(thread.activeRun).toBeUndefined();
+      expect(
+        await f.app.store.getLatestConversationAgentRun({
+          clientInstanceId: asClientInstanceId(f.app.config.clientInstance.id),
+          conversationId: asConversationId(conversation.id)
+        })
+      ).toBeUndefined();
+      await expect(f.reviewer.conversations.getThread(conversation.id)).rejects.toMatchObject({
+        status: 404
+      });
+    } finally {
+      await f.app.close();
+    }
+  });
+
   it("reads the queue and badge, validates decisions and applies as the reviewer", async () => {
     const f = await fixture();
     try {

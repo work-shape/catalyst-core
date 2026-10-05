@@ -77,6 +77,13 @@ export interface ApprovalRequestOutcome {
   reversion?: ApprovalRequest["reversion"];
 }
 
+export interface ApprovalDecisionStore {
+  /** Idempotently records a decided request in its active origin conversation.
+   * Internal operation: approval authorization does not grant conversation access.
+   */
+  appendApprovalDecision(request: ApprovalRequest): Promise<void>;
+}
+
 export interface ApprovalRequestStore {
   createApprovalRequest(
     input: Pick<
@@ -102,6 +109,8 @@ export interface ApprovalRequestStore {
   /** Exclusively lock a pending request before resolve; otherwise throw CONFLICT.
    * A failed resolve leaves it pending. External handler effects must be idempotent
    * by requestId: they cannot be rolled back with this store's transaction.
+   * Persist the decision message in the same transaction as the transition when
+   * its origin conversation is still active. Do not recreate deleted history.
    */
   transitionPendingApprovalRequest(input: {
     clientInstanceId: ClientInstanceId;

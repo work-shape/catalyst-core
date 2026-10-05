@@ -1,6 +1,8 @@
 import { and, asc, desc, eq, lt, lte, ne } from "drizzle-orm";
 import {
   AppError,
+  createApprovalDecisionMessage,
+  type ApprovalRequest,
   type AppendAssistantMessageInput,
   type ChatMessage,
   type ClientInstanceId,
@@ -156,6 +158,45 @@ export async function updateConversationTitle(
     throw new AppError("NOT_FOUND", "Conversation is not available");
   }
   return mapConversation(row);
+}
+
+/** Called inside the approval transaction; the public hook reuses this idempotently. */
+export async function appendApprovalDecision(
+  db: PostgresDatabase | PostgresTransaction,
+  request: ApprovalRequest
+): Promise<void> {
+  const input = createApprovalDecisionMessage(request);
+  if (!input) {
+    return;
+  }
+  const identity = and(
+    eq(conversations.clientInstanceId, input.clientInstanceId),
+    eq(conversations.id, input.conversationId),
+    eq(conversations.status, "active")
+  );
+  // Serialize with deletion/retention; a decision must never resurrect erased history.
+  const [conversation] = await db
+    .select({ id: conversations.id })
+    .from(conversations)
+    .where(identity)
+    .for("update")
+    .limit(1);
+  if (!conversation) {
+    return;
+  }
+  const createdAt = new Date();
+  const [inserted] = await db
+    .insert(messages)
+    .values({
+      ...input,
+      createdAt,
+      metadata: input.metadata ?? {}
+    })
+    .onConflictDoNothing({ target: messages.id })
+    .returning({ id: messages.id });
+  if (inserted) {
+    await db.update(conversations).set({ updatedAt: createdAt }).where(identity);
+  }
 }
 
 export async function appendMessage(
@@ -342,6 +383,17 @@ async function markConversationDeleted(
 ): Promise<Conversation> {
   const deletedAt = new Date(input.deletedAt);
   return db.transaction(async (tx) => {
+    // Use the same lock as asynchronous decision insertion before deleting messages.
+    await tx
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.clientInstanceId, input.clientInstanceId),
+          eq(conversations.id, input.conversationId)
+        )
+      )
+      .for("update");
     await tx
       .update(conversationAttachments)
       .set({

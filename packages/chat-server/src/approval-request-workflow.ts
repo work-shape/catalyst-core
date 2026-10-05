@@ -155,7 +155,15 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     const updated = await this.options.store.transitionPendingApprovalRequest({
       clientInstanceId: this.options.clientInstanceId,
       requestId,
-      resolve: async () => ({ status: "withdrawn" })
+      resolve: async () => ({
+        status: "withdrawn",
+        decision: {
+          approved: false,
+          decidedBy: user.id,
+          decidedByLabel: user.displayLabel,
+          decidedAt: new Date().toISOString()
+        }
+      })
     });
     await this.record(user, context, "approval_request.withdrawn", updated);
     await this.options.onDecided?.(updated);

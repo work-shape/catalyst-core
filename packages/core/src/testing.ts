@@ -1,5 +1,7 @@
 import {
   AppError,
+  createApprovalDecisionMessage,
+  type ApprovalRequest,
   type AgentRun,
   type AgentRunId,
   type AgentRunStore,
@@ -157,7 +159,9 @@ export class InMemoryPlatformStore
       return user?.clientInstanceId === clientInstanceId;
     }
   });
-  private readonly approvalRequestStore = new InMemoryApprovalRequestStore();
+  private readonly approvalRequestStore = new InMemoryApprovalRequestStore((request) =>
+    this.appendApprovalDecision(request)
+  );
   private readonly configAssetStore = new InMemoryConfigAssetStore();
 
   async getStructuredDataResource(
@@ -205,6 +209,30 @@ export class InMemoryPlatformStore
     };
     this.structuredDataResources.set(resource.id, resource);
     return resource;
+  }
+
+  async appendApprovalDecision(request: ApprovalRequest): Promise<void> {
+    const input = createApprovalDecisionMessage(request);
+    if (!input) {
+      return;
+    }
+    const conversation = this.conversations.get(input.conversationId);
+    if (
+      !conversation ||
+      conversation.clientInstanceId !== input.clientInstanceId ||
+      conversation.status !== "active"
+    ) {
+      return;
+    }
+    const messages = this.messages.get(input.conversationId) ?? [];
+    if (messages.some((message) => message.id === input.id)) {
+      return;
+    }
+    // Keep the uniqueness check and insertion synchronous, like the SQL primary key.
+    const createdAt = new Date().toISOString();
+    messages.push({ ...input, createdAt });
+    this.messages.set(input.conversationId, messages);
+    this.conversations.set(input.conversationId, { ...conversation, updatedAt: createdAt });
   }
 
   createApprovalRequest(input: Parameters<ApprovalRequestStore["createApprovalRequest"]>[0]) {

@@ -8,6 +8,7 @@ import {
 import type { PostgresDatabase } from "./postgres-database";
 import { mapApprovalRequest } from "./rows";
 import { approvalRequests } from "./schema";
+import { appendApprovalDecision } from "./postgres-conversation-operations";
 
 export async function createApprovalRequest(
   db: PostgresDatabase,
@@ -127,6 +128,8 @@ async function transition(
       .where(and(identity, eq(approvalRequests.status, expectedStatus)))
       .returning();
     if (!updated) throw new AppError("CONFLICT", `Approval request is no longer ${expectedStatus}`);
-    return mapApprovalRequest(updated);
+    const request = mapApprovalRequest(updated);
+    await appendApprovalDecision(tx, request);
+    return request;
   });
 }

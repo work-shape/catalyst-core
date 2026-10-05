@@ -1,4 +1,6 @@
 import {
+  approvalDecisionNote,
+  readApprovalDecisionMetadata,
   createAssistantFinalMetadata,
   createAssistantToolCallsMetadata,
   createToolResultMetadata,
@@ -75,17 +77,41 @@ export async function projectAgentVisibleHistory(
   options: ModelContextProjectionOptions
 ): Promise<ModelMessage[]> {
   const projected = await Promise.all(
-    messages.map((message) => toModelHistoryMessage(message, options))
+    orderApprovalDecisionsForModel(messages).map((message) =>
+      toModelHistoryMessage(message, options)
+    )
   );
   return removeIncompleteToolContext(
     projected.filter((message): message is ModelMessage => message !== undefined)
   );
 }
 
+/** Decisions are asynchronous observations, first consumed by the following user turn.
+ * Move only this projection, before checkpoint/window selection: a decision during a
+ * run must remain after every checkpoint that run could write without seeing it.
+ */
+export function orderApprovalDecisionsForModel(messages: ChatMessage[]): ChatMessage[] {
+  const ordered: ChatMessage[] = [];
+  let decisions: ChatMessage[] = [];
+  for (const message of messages) {
+    if (readApprovalDecisionMetadata(message.metadata)) {
+      decisions.push(message);
+      continue;
+    }
+    if (message.role === "user") {
+      ordered.push(...decisions);
+      decisions = [];
+    }
+    ordered.push(message);
+  }
+  return [...ordered, ...decisions];
+}
+
 export function selectRecentCompleteHistory(
   messages: ChatMessage[],
   limit: number | undefined
 ): ChatMessage[] {
+  messages = orderApprovalDecisionsForModel(messages);
   if (limit === undefined || messages.length <= limit) {
     return messages;
   }
@@ -145,7 +171,18 @@ export async function createModelVisibleToolOutput(
   };
 }
 
-export function dropCurrentSubmittedMessage(messages: ChatMessage[], text: string): ChatMessage[] {
+export function dropCurrentSubmittedMessage(
+  messages: ChatMessage[],
+  text: string,
+  inputMessageId?: string
+): ChatMessage[] {
+  const inputIndex = inputMessageId
+    ? messages.findIndex((message) => message.id === inputMessageId)
+    : -1;
+  if (inputIndex >= 0) {
+    // Exclude events arriving after the submitted message, even before history loads.
+    return messages.slice(0, inputIndex);
+  }
   const last = messages.at(-1);
   if (last?.role === "user" && last.text === text) {
     return messages.slice(0, -1);
@@ -169,6 +206,10 @@ async function toModelHistoryMessage(
   message: ChatMessage,
   options: ModelContextProjectionOptions
 ): Promise<ModelMessage | undefined> {
+  const decision = readApprovalDecisionMetadata(message.metadata);
+  if (decision) {
+    return { role: "system", content: approvalDecisionNote(decision) };
+  }
   if (message.role === "user" || message.role === "system") {
     return {
       role: message.role,
@@ -226,6 +267,19 @@ function chunkHistoryMessages(messages: ChatMessage[]): ChatMessage[][] {
     const message = messages[index];
     if (!message) {
       break;
+    }
+    if (readApprovalDecisionMetadata(message.metadata)) {
+      const decisions = [message];
+      index += 1;
+      while (index < messages.length && readApprovalDecisionMetadata(messages[index]?.metadata)) {
+        const decision = messages[index];
+        if (decision) {
+          decisions.push(decision);
+        }
+        index += 1;
+      }
+      chunks.push(decisions);
+      continue;
     }
     const toolCalls =
       message.role === "assistant" ? readAssistantToolCalls(message.metadata) : undefined;

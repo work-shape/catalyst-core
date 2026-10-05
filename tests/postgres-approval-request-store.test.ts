@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import postgres from "postgres";
 import {
   asClientInstanceId,
-  asConversationId,
   asAgentRunId,
-  asToolCallId
+  asToolCallId,
+  readApprovalDecisionMetadata
 } from "@vivd-catalyst/core";
 import { PostgresPlatformStore } from "@vivd-catalyst/postgres-store";
 
@@ -19,6 +19,16 @@ describePostgres("Postgres approval request store", () => {
     });
     const sql = postgres(databaseUrl!, { max: 1 });
     const clientInstanceId = asClientInstanceId(`approval_${globalThis.crypto.randomUUID()}`);
+    const owner = await store.createUser({ clientInstanceId, displayLabel: "Owner" });
+    const workspace = await store.ensurePersonalWorkspace({ clientInstanceId, userId: owner.id });
+    const conversation = await store.createConversation({
+      clientInstanceId,
+      collaborationWorkspaceId: workspace.id,
+      createdByUserId: owner.id,
+      createdByExternalUserId: "owner",
+      title: "Approval origin",
+      retainedUntil: "2030-01-01T00:00:00.000Z"
+    });
     try {
       const request = await store.createApprovalRequest({
         clientInstanceId,
@@ -27,7 +37,7 @@ describePostgres("Postgres approval request store", () => {
         payload: { value: "new" },
         requestedBy: { id: "requester", displayLabel: "Requester" },
         origin: {
-          conversationId: asConversationId("conversation"),
+          conversationId: conversation.id,
           agentRunId: asAgentRunId("run"),
           toolCallId: asToolCallId("call"),
           agentName: "agent"
@@ -44,7 +54,7 @@ describePostgres("Postgres approval request store", () => {
         await store.listApprovalRequests({
           clientInstanceId,
           kinds: ["fake"],
-          conversationId: asConversationId("conversation")
+          conversationId: conversation.id
         })
       ).toEqual([request]);
       expect(await store.listApprovalRequests({ clientInstanceId, kinds: [] })).toEqual([]);
@@ -76,10 +86,49 @@ describePostgres("Postgres approval request store", () => {
         reason: { code: "CONFLICT" }
       });
       expect(applied).toBe(1);
+      const approved = await store.getApprovalRequest({ clientInstanceId, requestId: request.id });
+      if (!approved) {
+        throw new Error("Expected approved request");
+      }
+      await Promise.all([
+        store.appendApprovalDecision(approved),
+        store.appendApprovalDecision(approved)
+      ]);
+      const history = await store.listMessages({
+        clientInstanceId,
+        conversationId: conversation.id
+      });
+      expect(history).toHaveLength(1);
+      expect(readApprovalDecisionMetadata(history[0]?.metadata)).toMatchObject({
+        requestId: request.id,
+        status: "approved",
+        decidedByLabel: "Reviewer"
+      });
+      const reverted = await store.transitionApprovedApprovalRequest({
+        clientInstanceId,
+        requestId: request.id,
+        resolve: async (current) => ({
+          status: "reverted",
+          decision: current.decision,
+          applyResult: current.applyResult,
+          reversion: {
+            revertedBy: "other-reviewer",
+            revertedByLabel: "Other reviewer",
+            revertedAt: new Date().toISOString()
+          }
+        })
+      });
+      await store.appendApprovalDecision(reverted);
+      expect(
+        (await store.listMessages({ clientInstanceId, conversationId: conversation.id })).map(
+          (message) => readApprovalDecisionMetadata(message.metadata)?.status
+        )
+      ).toEqual(["approved", "reverted"]);
+
       expect(
         await store.getApprovalRequest({ clientInstanceId, requestId: request.id })
       ).toMatchObject({
-        status: "approved",
+        status: "reverted",
         applyResult: { value: "applied" },
         decision: { decidedByLabel: "Reviewer" }
       });
@@ -121,6 +170,9 @@ describePostgres("Postgres approval request store", () => {
       );
     } finally {
       await sql`delete from approval_requests where client_instance_id = ${clientInstanceId}`;
+      await sql`delete from conversations where client_instance_id = ${clientInstanceId}`;
+      await sql`delete from collaboration_workspaces where client_instance_id = ${clientInstanceId}`;
+      await sql`delete from users where client_instance_id = ${clientInstanceId}`;
       await sql.end();
       await store.close();
     }

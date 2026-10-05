@@ -4614,6 +4614,63 @@
                                           },
                                           "kind": {
                                             "type": "string",
+                                            "const": "approval_decision"
+                                          },
+                                          "requestId": {
+                                            "type": "string"
+                                          },
+                                          "requestKind": {
+                                            "type": "string"
+                                          },
+                                          "status": {
+                                            "type": "string",
+                                            "enum": [
+                                              "approved",
+                                              "rejected",
+                                              "changes_requested",
+                                              "superseded",
+                                              "withdrawn",
+                                              "reverted"
+                                            ]
+                                          },
+                                          "decidedBy": {
+                                            "type": "string"
+                                          },
+                                          "decidedByLabel": {
+                                            "type": "string"
+                                          },
+                                          "decidedAt": {
+                                            "type": "string"
+                                          },
+                                          "summary": {
+                                            "type": "string"
+                                          },
+                                          "comment": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "version",
+                                          "kind",
+                                          "requestId",
+                                          "requestKind",
+                                          "status",
+                                          "decidedBy",
+                                          "decidedByLabel",
+                                          "decidedAt",
+                                          "summary"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "version": {
+                                            "type": "number",
+                                            "const": 1
+                                          },
+                                          "kind": {
+                                            "type": "string",
                                             "const": "user_message"
                                           },
                                           "attachmentManifest": {}
@@ -5569,6 +5626,63 @@
                             "anyOf": [
                               {
                                 "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "version": {
+                                        "type": "number",
+                                        "const": 1
+                                      },
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "approval_decision"
+                                      },
+                                      "requestId": {
+                                        "type": "string"
+                                      },
+                                      "requestKind": {
+                                        "type": "string"
+                                      },
+                                      "status": {
+                                        "type": "string",
+                                        "enum": [
+                                          "approved",
+                                          "rejected",
+                                          "changes_requested",
+                                          "superseded",
+                                          "withdrawn",
+                                          "reverted"
+                                        ]
+                                      },
+                                      "decidedBy": {
+                                        "type": "string"
+                                      },
+                                      "decidedByLabel": {
+                                        "type": "string"
+                                      },
+                                      "decidedAt": {
+                                        "type": "string"
+                                      },
+                                      "summary": {
+                                        "type": "string"
+                                      },
+                                      "comment": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "version",
+                                      "kind",
+                                      "requestId",
+                                      "requestKind",
+                                      "status",
+                                      "decidedBy",
+                                      "decidedByLabel",
+                                      "decidedAt",
+                                      "summary"
+                                    ],
+                                    "additionalProperties": false
+                                  },
                                   {
                                     "type": "object",
                                     "properties": {
@@ -6801,6 +6915,63 @@
                                         },
                                         "kind": {
                                           "type": "string",
+                                          "const": "approval_decision"
+                                        },
+                                        "requestId": {
+                                          "type": "string"
+                                        },
+                                        "requestKind": {
+                                          "type": "string"
+                                        },
+                                        "status": {
+                                          "type": "string",
+                                          "enum": [
+                                            "approved",
+                                            "rejected",
+                                            "changes_requested",
+                                            "superseded",
+                                            "withdrawn",
+                                            "reverted"
+                                          ]
+                                        },
+                                        "decidedBy": {
+                                          "type": "string"
+                                        },
+                                        "decidedByLabel": {
+                                          "type": "string"
+                                        },
+                                        "decidedAt": {
+                                          "type": "string"
+                                        },
+                                        "summary": {
+                                          "type": "string"
+                                        },
+                                        "comment": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "version",
+                                        "kind",
+                                        "requestId",
+                                        "requestKind",
+                                        "status",
+                                        "decidedBy",
+                                        "decidedByLabel",
+                                        "decidedAt",
+                                        "summary"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "version": {
+                                          "type": "number",
+                                          "const": 1
+                                        },
+                                        "kind": {
+                                          "type": "string",
                                           "const": "user_message"
                                         },
                                         "attachmentManifest": {}
@@ -7325,6 +7496,63 @@
                                     "anyOf": [
                                       {
                                         "oneOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "version": {
+                                                "type": "number",
+                                                "const": 1
+                                              },
+                                              "kind": {
+                                                "type": "string",
+                                                "const": "approval_decision"
+                                              },
+                                              "requestId": {
+                                                "type": "string"
+                                              },
+                                              "requestKind": {
+                                                "type": "string"
+                                              },
+                                              "status": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "approved",
+                                                  "rejected",
+                                                  "changes_requested",
+                                                  "superseded",
+                                                  "withdrawn",
+                                                  "reverted"
+                                                ]
+                                              },
+                                              "decidedBy": {
+                                                "type": "string"
+                                              },
+                                              "decidedByLabel": {
+                                                "type": "string"
+                                              },
+                                              "decidedAt": {
+                                                "type": "string"
+                                              },
+                                              "summary": {
+                                                "type": "string"
+                                              },
+                                              "comment": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "version",
+                                              "kind",
+                                              "requestId",
+                                              "requestKind",
+                                              "status",
+                                              "decidedBy",
+                                              "decidedByLabel",
+                                              "decidedAt",
+                                              "summary"
+                                            ],
+                                            "additionalProperties": false
+                                          },
                                           {
                                             "type": "object",
                                             "properties": {
@@ -8424,6 +8652,63 @@
                                         },
                                         "kind": {
                                           "type": "string",
+                                          "const": "approval_decision"
+                                        },
+                                        "requestId": {
+                                          "type": "string"
+                                        },
+                                        "requestKind": {
+                                          "type": "string"
+                                        },
+                                        "status": {
+                                          "type": "string",
+                                          "enum": [
+                                            "approved",
+                                            "rejected",
+                                            "changes_requested",
+                                            "superseded",
+                                            "withdrawn",
+                                            "reverted"
+                                          ]
+                                        },
+                                        "decidedBy": {
+                                          "type": "string"
+                                        },
+                                        "decidedByLabel": {
+                                          "type": "string"
+                                        },
+                                        "decidedAt": {
+                                          "type": "string"
+                                        },
+                                        "summary": {
+                                          "type": "string"
+                                        },
+                                        "comment": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "version",
+                                        "kind",
+                                        "requestId",
+                                        "requestKind",
+                                        "status",
+                                        "decidedBy",
+                                        "decidedByLabel",
+                                        "decidedAt",
+                                        "summary"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "version": {
+                                          "type": "number",
+                                          "const": 1
+                                        },
+                                        "kind": {
+                                          "type": "string",
                                           "const": "user_message"
                                         },
                                         "attachmentManifest": {}
@@ -8948,6 +9233,63 @@
                                     "anyOf": [
                                       {
                                         "oneOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "version": {
+                                                "type": "number",
+                                                "const": 1
+                                              },
+                                              "kind": {
+                                                "type": "string",
+                                                "const": "approval_decision"
+                                              },
+                                              "requestId": {
+                                                "type": "string"
+                                              },
+                                              "requestKind": {
+                                                "type": "string"
+                                              },
+                                              "status": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "approved",
+                                                  "rejected",
+                                                  "changes_requested",
+                                                  "superseded",
+                                                  "withdrawn",
+                                                  "reverted"
+                                                ]
+                                              },
+                                              "decidedBy": {
+                                                "type": "string"
+                                              },
+                                              "decidedByLabel": {
+                                                "type": "string"
+                                              },
+                                              "decidedAt": {
+                                                "type": "string"
+                                              },
+                                              "summary": {
+                                                "type": "string"
+                                              },
+                                              "comment": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "version",
+                                              "kind",
+                                              "requestId",
+                                              "requestKind",
+                                              "status",
+                                              "decidedBy",
+                                              "decidedByLabel",
+                                              "decidedAt",
+                                              "summary"
+                                            ],
+                                            "additionalProperties": false
+                                          },
                                           {
                                             "type": "object",
                                             "properties": {
@@ -13978,6 +14320,21 @@
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
+                    },
+                    "perAssetConcurrency": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "revisions": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      }
                     }
                   },
                   "required": [
@@ -14046,6 +14403,57 @@
                       "mirror",
                       "merge"
                     ]
+                  },
+                  "baseRevisions": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "baseDefaultAgentName": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "deleteAssets": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "agent",
+                            "skill"
+                          ]
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "name"
+                      ],
+                      "additionalProperties": false
+                    }
                   }
                 },
                 "required": [

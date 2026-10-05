@@ -1,3 +1,4 @@
+import { appendApprovalDecision } from "./postgres-conversation-operations";
 import * as approvalRequestOperations from "./postgres-approval-request-operations";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
@@ -20,6 +21,7 @@ import {
   type ConfigAssetState,
   type ConfigAssetStore,
   type ApprovalRequestStore,
+  type ApprovalRequest,
   type Conversation,
   type ConversationId,
   type ConversationRetentionStore,
@@ -281,6 +283,10 @@ export class PostgresPlatformStore
 
   async migrate(): Promise<void> {
     await runPostgresMigrations(this.postgresClient, this.db);
+  }
+
+  async appendApprovalDecision(request: ApprovalRequest): Promise<void> {
+    await this.db.transaction((tx) => appendApprovalDecision(tx, request));
   }
 
   createApprovalRequest(input: Parameters<ApprovalRequestStore["createApprovalRequest"]>[0]) {
