@@ -208,6 +208,10 @@ export function WorkspaceUiStateProvider({
         showSuperadmin("users");
         return;
       }
+      if (nextView === "approvals") {
+        onRouteChange({ kind: "approvals" });
+        return;
+      }
       onRouteChange(lastChatRouteRef.current);
     },
     [onRouteChange, showSettings, showSuperadmin]

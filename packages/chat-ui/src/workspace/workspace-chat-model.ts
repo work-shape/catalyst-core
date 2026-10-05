@@ -9,6 +9,7 @@ import type {
   SafeConfig,
   StartConversationRunResponse
 } from "@vivd-catalyst/api-client";
+import { useApprovalPendingCountQuery } from "../approvals/approval-request-api";
 import { resolveContextUsage } from "../assistant/context-usage";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import {
@@ -147,6 +148,8 @@ export interface ConversationRailModel {
   conversations: ConversationListItem[];
   selectedConversationId: string | undefined;
   canViewAdministration: boolean;
+  /** Present only for users who may review Approval Requests. */
+  approvals: { pendingCount: number } | undefined;
   view: WorkspaceView;
   creatingConversation: boolean;
   deletingConversation: boolean;
@@ -441,6 +444,30 @@ export function useWorkspaceChatModel({
     showSuperadmin: routeState.showSuperadmin
   });
   const canViewAdministration = controlPlane.canViewAdministration;
+  const approvalPendingCountQuery = useApprovalPendingCountQuery({
+    apiBaseUrl,
+    authScope: WORKSPACE_AUTH_SCOPE,
+    client,
+    enabled: isAuthenticated
+  });
+  const approvals = approvalPendingCountQuery.data?.canReview
+    ? { pendingCount: approvalPendingCountQuery.data.count }
+    : undefined;
+  const approvalReviewUnavailable =
+    approvalPendingCountQuery.isError || approvalPendingCountQuery.data?.canReview === false;
+
+  // Mirrors the administration route guard: a deep link to the review queue
+  // falls back to chat once it is known that this user may not review.
+  useEffect(() => {
+    if (isAuthenticated && route.kind === "approvals" && approvalReviewUnavailable) {
+      goToActiveCollaborationWorkspaceChat({ replace: true });
+    }
+  }, [
+    approvalReviewUnavailable,
+    goToActiveCollaborationWorkspaceChat,
+    isAuthenticated,
+    route.kind
+  ]);
   const configuredCompactThresholdTokens =
     config?.selectableModels.find((model) => model.bindingId === selectedModelBindingId)
       ?.compactThresholdTokens ??
@@ -654,6 +681,7 @@ export function useWorkspaceChatModel({
       conversations,
       selectedConversationId,
       canViewAdministration,
+      approvals,
       view,
       creatingConversation: false,
       deletingConversation: deleteConversationMutation.isPending,

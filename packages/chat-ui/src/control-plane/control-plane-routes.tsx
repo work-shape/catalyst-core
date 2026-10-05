@@ -6,13 +6,24 @@ import type { ControlPlaneModel } from "./control-plane-model";
 export function ControlPlaneRoutes({
   adminPanel,
   controlPlane,
+  approvalsView,
   children
 }: {
   adminPanel: ChatShellAdminPanel | undefined;
   controlPlane: ControlPlaneModel;
+  /**
+   * The review queue, present while its route is active for a user who may
+   * review. It is switched here like the other workspace views, but it is not
+   * part of the administration panel and needs no administration access.
+   */
+  approvalsView?: ReactNode;
   children: ReactNode;
 }) {
   const { settings, superadmin } = controlPlane;
+
+  if (approvalsView) {
+    return <>{approvalsView}</>;
+  }
 
   if (superadmin.shouldRender) {
     const AdminPanel = adminPanel?.Panel;

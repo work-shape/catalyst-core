@@ -87,6 +87,10 @@ function createStandaloneChatRouter(options: StandaloneChatRouterOptions) {
     getParentRoute: () => rootRoute,
     path: "settings"
   });
+  const approvalsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "approvals"
+  });
   const adminIndexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "admin",
@@ -120,6 +124,7 @@ function createStandaloneChatRouter(options: StandaloneChatRouterOptions) {
     collaborationWorkspaceConversationRoute,
     conversationRoute,
     settingsRoute,
+    approvalsRoute,
     adminIndexRoute,
     adminUsageRoute,
     adminUsersRoute,
@@ -187,6 +192,9 @@ export function workspaceRouteNavigation(route: WorkspaceRoute) {
   if (route.kind === "settings") {
     return { to: "/settings" };
   }
+  if (route.kind === "approvals") {
+    return { to: "/approvals" };
+  }
   if (route.kind === "superadmin") {
     return { to: `/admin/${route.tab}` };
   }
@@ -226,6 +234,9 @@ export function workspaceRouteFromPath(pathname: string): WorkspaceRoute {
   }
   if (normalizedPathname === "/settings") {
     return { kind: "settings" };
+  }
+  if (normalizedPathname === "/approvals") {
+    return { kind: "approvals" };
   }
   if (normalizedPathname.startsWith("/admin/")) {
     const tab = normalizedPathname.slice("/admin/".length);

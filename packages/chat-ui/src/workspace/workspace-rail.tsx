@@ -1,4 +1,4 @@
-import { ChevronLeft, PanelLeft, Plus, Search, Shield } from "lucide-react";
+import { ChevronLeft, ClipboardCheck, PanelLeft, Plus, Search, Shield } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import type { ConversationListItem, SafeConfig } from "@vivd-catalyst/api-client";
 import { ConversationButton } from "../conversation/conversation-button";
@@ -7,7 +7,7 @@ import { Button } from "../ui/button";
 import { cn } from "../ui/cn";
 import { ClientBrandingLogo, clientBrandingFrom } from "./client-branding";
 
-export type WorkspaceView = "chat" | "settings" | "superadmin";
+export type WorkspaceView = "chat" | "settings" | "superadmin" | "approvals";
 
 export function WorkspaceRail({
   config,
@@ -15,6 +15,7 @@ export function WorkspaceRail({
   conversations,
   selectedConversationId,
   canViewAdministration,
+  approvals,
   view,
   creatingConversation,
   deletingConversation,
@@ -34,6 +35,8 @@ export function WorkspaceRail({
   conversations: ConversationListItem[];
   selectedConversationId: string | undefined;
   canViewAdministration: boolean;
+  /** Present only for users who may review Approval Requests. */
+  approvals?: { pendingCount: number };
   view: WorkspaceView;
   creatingConversation: boolean;
   deletingConversation: boolean;
@@ -70,6 +73,36 @@ export function WorkspaceRail({
       onClick={() => onViewChange(view === "superadmin" ? "chat" : "superadmin")}
     >
       <Shield size={16} aria-hidden="true" />
+    </Button>
+  ) : null;
+  const approvalsLabel =
+    view === "approvals"
+      ? t("returnToChat")
+      : approvals && approvals.pendingCount > 0
+        ? t("openApprovalsPending", { count: approvals.pendingCount })
+        : t("openApprovals");
+  const approvalsButton = approvals ? (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className={cn(
+        "relative",
+        view === "approvals" ? "bg-sidebar-accent text-primary" : "text-muted-foreground"
+      )}
+      aria-label={approvalsLabel}
+      title={approvalsLabel}
+      onClick={() => onViewChange(view === "approvals" ? "chat" : "approvals")}
+    >
+      <ClipboardCheck size={16} aria-hidden="true" />
+      {approvals.pendingCount > 0 ? (
+        <span
+          className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[0.625rem] font-semibold leading-none text-primary-foreground"
+          aria-hidden="true"
+        >
+          {approvals.pendingCount > 99 ? "99+" : approvals.pendingCount}
+        </span>
+      ) : null}
     </Button>
   ) : null;
   const closeSidebarButton = (className: string) => (
@@ -213,7 +246,12 @@ export function WorkspaceRail({
 
       <footer className="-mx-5 flex min-w-0 items-center justify-between gap-2 border-t border-sidebar-border px-5 pt-4">
         {userMenu}
-        {administrationButton}
+        {approvalsButton || administrationButton ? (
+          <div className="flex shrink-0 items-center gap-1">
+            {approvalsButton}
+            {administrationButton}
+          </div>
+        ) : null}
       </footer>
     </aside>
   );

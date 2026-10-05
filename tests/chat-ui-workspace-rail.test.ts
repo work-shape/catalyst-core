@@ -90,7 +90,10 @@ const railConfig = {
   ui: { clientName: "Musterfinanz", title: "Musterfinanz Chat" }
 } as SafeConfig;
 
-function renderRail(collaborationWorkspaceSelector?: ReactNode): string {
+function renderRail(
+  collaborationWorkspaceSelector?: ReactNode,
+  approvals?: { pendingCount: number }
+): string {
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
@@ -101,6 +104,7 @@ function renderRail(collaborationWorkspaceSelector?: ReactNode): string {
         conversations: [],
         selectedConversationId: undefined,
         canViewAdministration: false,
+        approvals,
         view: "chat",
         creatingConversation: false,
         deletingConversation: false,
@@ -217,5 +221,26 @@ describe("collaboration workspace chrome feature flag", () => {
         config: undefined
       })
     ).toBe(false);
+  });
+});
+
+describe("workspace rail approvals entry", () => {
+  it("stays hidden from users who may not review", () => {
+    expect(renderRail()).not.toContain("approvals");
+  });
+
+  it("is offered to reviewers without administration access, with the pending count", () => {
+    const markup = renderRail(undefined, { pendingCount: 3 });
+
+    expect(markup).toContain('aria-label="Open approvals, 3 waiting"');
+    expect(markup).toContain(">3</span>");
+    expect(markup).not.toContain("lucide-shield");
+  });
+
+  it("drops the badge when nothing is pending", () => {
+    const markup = renderRail(undefined, { pendingCount: 0 });
+
+    expect(markup).toContain('aria-label="Open approvals"');
+    expect(markup).not.toContain("rounded-full bg-primary");
   });
 });

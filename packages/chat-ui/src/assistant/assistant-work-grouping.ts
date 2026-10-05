@@ -1,4 +1,6 @@
 import { groupPartByType, type GroupByContext, type PartState } from "@assistant-ui/react";
+import { readApprovalRequestDisplay } from "../approvals/approval-request-model";
+import { readToolDisplayPayloadFromToolResult } from "../domain-ui-widgets";
 import {
   isWorkspacePromotedArtifactsData,
   WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE
@@ -109,31 +111,65 @@ export function createRenderableAssistantToolGroupIndices(
   return entries.map((entry) => entry.index);
 }
 
+interface AssistantPartOutline {
+  type: string;
+  data?: unknown;
+  name?: string;
+  result?: unknown;
+}
+
 export function createCompletedAssistantWorkIndices(
-  parts: readonly { type: string; data?: unknown; name?: string }[],
+  parts: readonly AssistantPartOutline[],
   finalTextIndex: number
 ): number[] {
   if (finalTextIndex < 0) {
     return [];
   }
   return parts.flatMap((part, index) =>
-    index === finalTextIndex || (index > finalTextIndex && isVisibleFinalAssistantPart(part))
-      ? []
-      : [index]
+    staysVisibleAfterRun(part, index, finalTextIndex) ? [] : [index]
   );
 }
 
+/**
+ * The final text comes first, then everything that stays visible in message
+ * order. An Approval Request card is usually produced before the final text,
+ * so it lands below the sentence that announces it.
+ */
 export function createVisibleFinalAssistantPartIndices(
-  parts: readonly { type: string; data?: unknown; name?: string }[],
+  parts: readonly AssistantPartOutline[],
   finalTextIndex: number
 ): number[] {
   if (finalTextIndex < 0) {
     return [];
   }
-  return parts.flatMap((part, index) =>
-    index === finalTextIndex || (index > finalTextIndex && isVisibleFinalAssistantPart(part))
-      ? [index]
-      : []
+  return [
+    finalTextIndex,
+    ...parts.flatMap((part, index) =>
+      index !== finalTextIndex && staysVisibleAfterRun(part, index, finalTextIndex) ? [index] : []
+    )
+  ];
+}
+
+function staysVisibleAfterRun(
+  part: AssistantPartOutline,
+  index: number,
+  finalTextIndex: number
+): boolean {
+  return (
+    index === finalTextIndex ||
+    isApprovalRequestToolCall(part) ||
+    (index > finalTextIndex && isVisibleFinalAssistantPart(part))
+  );
+}
+
+/**
+ * An Approval Request card carries a pending decision, so it must not fold
+ * into the collapsed work summary with the other tool calls of the run.
+ */
+function isApprovalRequestToolCall(part: AssistantPartOutline): boolean {
+  return (
+    part.type === "tool-call" &&
+    readApprovalRequestDisplay(readToolDisplayPayloadFromToolResult(part.result)) !== undefined
   );
 }
 

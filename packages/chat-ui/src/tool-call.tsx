@@ -2,6 +2,8 @@ import { CheckCircle2, ChevronRight, CircleAlert, Wrench } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
 import type { LocaleCode } from "@vivd-catalyst/api-client";
+import { ApprovalRequestCard } from "./approvals/approval-request-card";
+import { readApprovalRequestDisplay } from "./approvals/approval-request-model";
 import {
   isToolDisplayPayload,
   readToolDisplayPayloadFromToolResult,
@@ -57,8 +59,11 @@ export function ToolCallPart({
   const displayWidget = useToolDisplayWidget();
   const state = toolUiState({ isError, result, status, toolName });
   const display = readToolDisplayPayloadFromToolResult(result);
+  // Platform-owned and resolved before the client widget registry: the card
+  // decides a change to the instance, so a client assembly must not replace it.
+  const approvalRequest = readApprovalRequestDisplay(display);
   const renderedDisplay =
-    display && displayWidget
+    display && displayWidget && !approvalRequest
       ? displayWidget({
           display,
           locale,
@@ -101,6 +106,15 @@ export function ToolCallPart({
   const summary = workspaceProjection?.summary ?? getToolSummary(result, t);
   const statusLabel = toolStatusLabel(state, t);
   const actionLabel = workspaceProjection?.actionLabel ?? toolDisplay.actionLabel;
+
+  if (approvalRequest) {
+    return (
+      <div className="chat-tool-part my-3 max-w-3xl" data-testid="tool-call-card">
+        <ApprovalRequestCard requestId={approvalRequest.requestId} />
+        <span className="sr-only">{toolCallId}</span>
+      </div>
+    );
+  }
 
   if (hasDisplay && displayPresentation === "full") {
     if (displayMode === "side_panel" && displayPanel.available) {

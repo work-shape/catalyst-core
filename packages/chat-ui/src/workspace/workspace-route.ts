@@ -1,5 +1,5 @@
 export type SuperadminRouteTab = "usage" | "users" | "api-access" | "audit" | "config";
-export type WorkspaceRouteView = "chat" | "settings" | "superadmin";
+export type WorkspaceRouteView = "chat" | "settings" | "superadmin" | "approvals";
 
 /**
  * `collaboration-workspace-root` and `legacy-conversation` are unresolved chat
@@ -12,6 +12,7 @@ export type WorkspaceRoute =
   | { kind: "new-conversation"; collaborationWorkspaceId: string }
   | { kind: "conversation"; collaborationWorkspaceId: string; conversationId: string }
   | { kind: "settings" }
+  | { kind: "approvals" }
   | { kind: "superadmin"; tab: SuperadminRouteTab };
 
 export interface WorkspaceRouteChangeOptions {
@@ -48,6 +49,9 @@ export function workspaceRouteView(route: WorkspaceRoute): WorkspaceRouteView {
   }
   if (route.kind === "superadmin") {
     return "superadmin";
+  }
+  if (route.kind === "approvals") {
+    return "approvals";
   }
   return "chat";
 }

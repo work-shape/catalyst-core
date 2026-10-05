@@ -21,6 +21,7 @@ import {
   type UserFormState
 } from "./user-administration-model";
 import { Field, FormNotice, StatusBadge, UserAvatar } from "./user-administration-primitives";
+import { UserPermissionsCard } from "./user-permissions-card";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -89,6 +90,13 @@ export function UserDetail({
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]">
         <div className="grid content-start gap-4">
           <ProfileCard
+            user={user}
+            canManageSuperadminAccess={canManageSuperadminAccess}
+            disabledReason={managementDisabledReason}
+            mutating={mutating}
+            onUpdateUser={onUpdateUser}
+          />
+          <UserPermissionsCard
             user={user}
             canManageSuperadminAccess={canManageSuperadminAccess}
             disabledReason={managementDisabledReason}

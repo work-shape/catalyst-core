@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ApprovalsView } from "./approvals/approvals-view";
 import { AssistantRuntimePanel } from "./assistant/assistant-runtime-panel";
 import { AttachmentContentProvider } from "./attachment-content";
 import { ChatDropOverlay } from "./chat-file-dropzone";
@@ -155,6 +156,7 @@ function ChatWorkspaceContent({
   const chat = model.selectedChat;
   const isStaging = model.config.config.clientInstance.environment === "staging";
   const collaborationWorkspace = model.collaborationWorkspace;
+  const approvals = model.conversationRail.approvals;
   const userLabel = model.auth.user.displayLabel || (model.auth.user.email ?? "");
   const collaborationWorkspaceSelector = model.collaborationWorkspaceChromeVisible ? (
     <CollaborationWorkspaceSelector
@@ -207,6 +209,7 @@ function ChatWorkspaceContent({
               conversations={model.conversationRail.conversations}
               selectedConversationId={model.conversationRail.selectedConversationId}
               canViewAdministration={model.conversationRail.canViewAdministration}
+              approvals={approvals}
               view={model.conversationRail.view}
               creatingConversation={model.conversationRail.creatingConversation}
               deletingConversation={model.conversationRail.deletingConversation}
@@ -257,7 +260,15 @@ function ChatWorkspaceContent({
           />
         ) : null}
 
-        <ControlPlaneRoutes adminPanel={adminPanel} controlPlane={model.controlPlane}>
+        <ControlPlaneRoutes
+          adminPanel={adminPanel}
+          controlPlane={model.controlPlane}
+          approvalsView={
+            approvals && model.route.view === "approvals" ? (
+              <ApprovalsView pendingCount={approvals.pendingCount} />
+            ) : undefined
+          }
+        >
           <section className="relative h-full min-h-0 min-w-0">
             <AttachmentContentProvider
               client={chat.client}

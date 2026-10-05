@@ -32,6 +32,9 @@ import {
 import { UserDetail } from "./user-administration-detail";
 import { CreateUserFields, MaskedPasswordInput } from "./user-administration-fields";
 import { Field, FormNotice, StatusBadge, UserAvatar } from "./user-administration-primitives";
+import { UserPermissionOverview } from "./user-permission-overview";
+import { useTranslation } from "../i18n";
+import { cn } from "../ui/cn";
 import { ControlPlanePage } from "./control-plane-page";
 
 interface UserAdministrationPanelProps {
@@ -75,6 +78,8 @@ export function UserAdministrationPanel({
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_ROWS_PER_PAGE);
   const [createOpen, setCreateOpen] = useState(false);
+  const [listView, setListView] = useState<"users" | "permissions">("users");
+  const { t } = useTranslation();
   const selectedUser = users.find((user) => user.id === selectedUserId);
 
   useEffect(() => {
@@ -194,12 +199,28 @@ export function UserAdministrationPanel({
             </option>
           ))}
         </Select>
+        <div className="flex shrink-0 items-center gap-0.5 rounded-md border bg-card p-0.5">
+          {(["users", "permissions"] as const).map((view) => (
+            <button
+              key={view}
+              type="button"
+              aria-pressed={listView === view}
+              className={cn(
+                "h-8 rounded-sm px-3 text-sm font-medium text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                listView === view && "bg-secondary text-secondary-foreground"
+              )}
+              onClick={() => setListView(view)}
+            >
+              {t(view === "users" ? "userListView" : "userRightsOverview")}
+            </button>
+          ))}
+        </div>
       </div>
 
       {error ? <FormNotice notice={{ kind: "error", text: error }} /> : null}
 
       <Card className="overflow-hidden">
-        {selectedRowIds.size > 0 ? (
+        {selectedRowIds.size > 0 && listView === "users" ? (
           <div className="flex flex-wrap items-center gap-3 border-b bg-primary/10 px-4 py-2.5">
             <span className="text-sm font-semibold text-primary">
               {selectedRowIds.size.toLocaleString()} selected
@@ -232,6 +253,8 @@ export function UserAdministrationPanel({
               </Button>
             ) : null}
           </CardContent>
+        ) : listView === "permissions" ? (
+          <UserPermissionOverview users={visibleUsers} onSelectUser={setSelectedUserId} />
         ) : (
           <Table>
             <TableHeader>
@@ -322,7 +345,7 @@ export function UserAdministrationPanel({
           </Table>
         )}
 
-        {!loading && visibleUsers.length > 0 ? (
+        {!loading && visibleUsers.length > 0 && listView === "users" ? (
           <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3">
             <div className="text-sm text-muted-foreground">
               {pageStart + 1}-{Math.min(pageStart + rowsPerPage, visibleUsers.length)} of{" "}
