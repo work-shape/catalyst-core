@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import postgres from "postgres";
-import { asClientInstanceId, asMessageId, type MessageId } from "@vivd-catalyst/core";
+import {
+  asAgentRunId,
+  asClientInstanceId,
+  asConversationId,
+  asMessageId,
+  type MessageId
+} from "@vivd-catalyst/core";
 import { PostgresPlatformStore } from "@vivd-catalyst/postgres-store";
 
 const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
@@ -120,6 +126,56 @@ describePostgres("Postgres conversation store", () => {
       await sql`delete from collaboration_workspace_memberships where client_instance_id = ${clientInstanceId}`;
       await sql`delete from collaboration_workspaces where client_instance_id = ${clientInstanceId}`;
       await sql`delete from product_users where client_instance_id = ${clientInstanceId}`;
+      await sql.end();
+      await store.close();
+    }
+  });
+
+  it("persists fast mode and the reported service tier with a usage event", async () => {
+    const store = await PostgresPlatformStore.connect({
+      databaseUrl: databaseUrl!,
+      runMigrations: true
+    });
+    const sql = postgres(databaseUrl!, { max: 1 });
+    const clientInstanceId = asClientInstanceId(`usage_fast_${globalThis.crypto.randomUUID()}`);
+    const event = {
+      clientInstanceId,
+      conversationId: asConversationId("conv_usage_fast"),
+      agentRunId: asAgentRunId("run_usage_fast"),
+      agentName: "agent",
+      providerId: "azure-eu",
+      model: "gpt",
+      inputTokens: 10,
+      outputTokens: 5,
+      totalTokens: 15,
+      webSearchCallCount: 0,
+      source: "provider_reported" as const,
+      customerBillableCost: {
+        status: "unpriced" as const,
+        source: "rate_card" as const,
+        calculationVersion: 1 as const,
+        missingMeters: ["model_rate" as const]
+      },
+      correlationId: "corr_usage_fast"
+    };
+
+    try {
+      await store.appendModelUsageEvent({ ...event, fastMode: false });
+      await store.appendModelUsageEvent({
+        ...event,
+        fastMode: true,
+        providerServiceTier: "priority"
+      });
+
+      const stored = await store.listModelUsageEvents({ clientInstanceId });
+      expect(stored.filter((candidate) => !candidate.fastMode)).toEqual([
+        expect.not.objectContaining({ providerServiceTier: expect.anything() })
+      ]);
+      expect(stored.filter((candidate) => candidate.fastMode)).toEqual([
+        expect.objectContaining({ fastMode: true, providerServiceTier: "priority" })
+      ]);
+    } finally {
+      await sql`delete from model_usage_events where client_instance_id = ${clientInstanceId}`;
       await sql.end();
       await store.close();
     }

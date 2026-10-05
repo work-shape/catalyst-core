@@ -21,6 +21,7 @@ import {
   readOpenAiResponsesWebSearchCallCount,
   readOpenAiResponsesText,
   readOpenAiResponsesContinuationItems,
+  readProviderServiceTier,
   toModelUsage,
   toOpenAiChatMessages,
   toOpenAiResponsesInput,
@@ -116,7 +117,7 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
         })) ?? [],
       sources: [],
       citations: [],
-      usage: toModelUsage(payload.usage)
+      usage: { ...toModelUsage(payload.usage), ...readProviderServiceTier(payload) }
     };
   }
 
@@ -178,7 +179,10 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
       },
       sources: webMetadata.sources,
       citations: webMetadata.citations,
-      usage: toResponsesModelUsage(payload.usage, readOpenAiResponsesWebSearchCallCount(payload))
+      usage: {
+        ...toResponsesModelUsage(payload.usage, readOpenAiResponsesWebSearchCallCount(payload)),
+        ...readProviderServiceTier(payload)
+      }
     };
   }
 
@@ -272,6 +276,7 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
       model: request.model || this.options.model,
       messages: toOpenAiChatMessages(request.messages),
       reasoning_effort: this.resolveReasoningEffort(request),
+      ...(request.fastMode ? { service_tier: "priority" as const } : {}),
       tools: providerTools.map(({ tool, providerName }) => ({
         type: "function",
         function: {
@@ -317,6 +322,7 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
         ...(providerNativeTools.length > 0 ? ["web_search_call.action.sources"] : [])
       ],
       tool_choice: request.tools.length > 0 ? "auto" : undefined,
+      ...(request.fastMode ? { service_tier: "priority" as const } : {}),
       ...(this.options.contextManagement?.compaction
         ? {
             context_management: [

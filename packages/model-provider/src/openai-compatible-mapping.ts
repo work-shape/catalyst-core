@@ -79,6 +79,15 @@ export function createProviderToolMetadata(tools: ModelTool[]): {
   };
 }
 
+/** Present only when the provider reports the tier that processed the call. */
+export function readProviderServiceTier(payload: { service_tier?: string | null }): {
+  providerServiceTier?: string;
+} {
+  return typeof payload.service_tier === "string" && payload.service_tier
+    ? { providerServiceTier: payload.service_tier }
+    : {};
+}
+
 export function toModelUsage(usage: OpenAiCompatibleResponse["usage"]): ModelTokenUsage & {
   webSearchCallCount: number;
 } {

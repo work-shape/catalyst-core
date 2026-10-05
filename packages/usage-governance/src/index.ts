@@ -13,7 +13,7 @@ import {
   type UsageCostMissingMeter,
   type UsageCostRecord,
   type UsageRateCardConfig,
-  type UsageRateCardModelConfig,
+  type UsageRateCardTokenRatesConfig,
   type UsageSafeguardsConfig,
   createModelUsageWindowBounds
 } from "@vivd-catalyst/core";
@@ -71,6 +71,7 @@ export type SafeModelUsageEvent = Pick<
   | "totalTokens"
   | "source"
   | "webSearchCallCount"
+  | "fastMode"
   | "correlationId"
   | "createdAt"
 >;
@@ -151,6 +152,7 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
     return this.store.appendModelUsageEvent({
       ...normalizedInput,
       webSearchCallCount: normalizedInput.webSearchCallCount ?? 0,
+      fastMode: normalizedInput.fastMode === true,
       customerBillableCost: calculateUsageCost(normalizedInput, this.costs.customer)
     });
   }
@@ -384,12 +386,17 @@ export function calculateUsageCost(
   if (!modelRate) {
     return incompleteCost("unpriced", source, ["model_rate"], rateCard);
   }
+  // A fast call is never settled with the normal rates.
+  const tokenRates = event.fastMode ? modelRate.fast : modelRate;
+  if (!tokenRates) {
+    return incompleteCost("unpriced", source, ["fast_model_rate"], rateCard);
+  }
 
   const webSearchRate = findWebSearchRate(rateCard, event);
   const missingMeters: UsageCostMissingMeter[] = [];
   const cachedInputTokens = event.cachedInputTokens;
   const cachePriceDiffers =
-    modelRate.cachedInputPricePerMillionTokens !== modelRate.uncachedInputPricePerMillionTokens;
+    tokenRates.cachedInputPricePerMillionTokens !== tokenRates.uncachedInputPricePerMillionTokens;
   if (cachedInputTokens === undefined && cachePriceDiffers) {
     missingMeters.push("cached_input_tokens");
   }
@@ -397,7 +404,7 @@ export function calculateUsageCost(
     missingMeters.push("web_search_rate");
   }
 
-  const components = calculateKnownComponents(event, modelRate, webSearchRate);
+  const components = calculateKnownComponents(event, tokenRates, webSearchRate);
   const provenance = {
     source,
     calculationVersion: 1 as const,
@@ -405,9 +412,9 @@ export function calculateUsageCost(
     rateCardVersion: rateCard.version,
     currency: rateCard.currency,
     appliedRates: {
-      uncachedInputPricePerMillionTokens: modelRate.uncachedInputPricePerMillionTokens,
-      cachedInputPricePerMillionTokens: modelRate.cachedInputPricePerMillionTokens,
-      outputPricePerMillionTokens: modelRate.outputPricePerMillionTokens,
+      uncachedInputPricePerMillionTokens: tokenRates.uncachedInputPricePerMillionTokens,
+      cachedInputPricePerMillionTokens: tokenRates.cachedInputPricePerMillionTokens,
+      outputPricePerMillionTokens: tokenRates.outputPricePerMillionTokens,
       ...(webSearchRate ? { webSearchPricePerCall: webSearchRate.pricePerCall } : {})
     }
   };
@@ -432,12 +439,12 @@ export function calculateUsageCost(
 
 function calculateKnownComponents(
   event: ModelUsageEventInput,
-  modelRate: UsageRateCardModelConfig,
+  tokenRates: UsageRateCardTokenRatesConfig,
   webSearchRate: { pricePerCall: number } | undefined
 ): UsageCostComponents {
   const cachedInputTokens =
     event.cachedInputTokens ??
-    (modelRate.cachedInputPricePerMillionTokens === modelRate.uncachedInputPricePerMillionTokens
+    (tokenRates.cachedInputPricePerMillionTokens === tokenRates.uncachedInputPricePerMillionTokens
       ? 0
       : undefined);
   const inputKnown = cachedInputTokens !== undefined;
@@ -446,14 +453,14 @@ function calculateKnownComponents(
     : 0;
   return {
     uncachedInputCostMicros: inputKnown
-      ? priceTokens(uncachedInputTokens, modelRate.uncachedInputPricePerMillionTokens)
+      ? priceTokens(uncachedInputTokens, tokenRates.uncachedInputPricePerMillionTokens)
       : 0,
     cachedInputCostMicros: inputKnown
-      ? priceTokens(cachedInputTokens, modelRate.cachedInputPricePerMillionTokens)
+      ? priceTokens(cachedInputTokens, tokenRates.cachedInputPricePerMillionTokens)
       : 0,
     outputCostMicros: priceTokens(
       normalizeCount(event.outputTokens),
-      modelRate.outputPricePerMillionTokens
+      tokenRates.outputPricePerMillionTokens
     ),
     webSearchCostMicros: webSearchRate
       ? Math.round((event.webSearchCallCount ?? 0) * webSearchRate.pricePerCall * 1_000_000)
@@ -614,6 +621,7 @@ function toSafeEvent(
     totalTokens: event.totalTokens,
     source: event.source,
     webSearchCallCount: event.webSearchCallCount,
+    fastMode: event.fastMode,
     correlationId: event.correlationId,
     createdAt: event.createdAt,
     cost: {

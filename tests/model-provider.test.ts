@@ -270,6 +270,146 @@ describe("OpenAI-compatible model provider", () => {
     });
   });
 
+  it("sends the priority service tier only for fast-mode requests and reports the tier used", async () => {
+    const requestBodies: Array<{ service_tier?: string }> = [];
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { service_tier?: string };
+      requestBodies.push(body);
+      const tier = body.service_tier === "priority" ? { service_tier: "priority" } : {};
+      return new Response(
+        JSON.stringify(
+          String(url).endsWith("/responses")
+            ? {
+                ...tier,
+                output_text: "done",
+                output: [],
+                usage: { input_tokens: 5, output_tokens: 1, total_tokens: 6 }
+              }
+            : {
+                ...tier,
+                choices: [{ message: { content: "done" } }],
+                usage: { prompt_tokens: 5, completion_tokens: 1, total_tokens: 6 }
+              }
+        ),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const clientInstanceId = asClientInstanceId("client-test");
+    const context = {
+      clientInstanceId,
+      correlationId: "corr-test",
+      user: {
+        id: "user-test",
+        externalUserId: "user-test",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const tiers: Array<string | undefined> = [];
+    for (const api of ["chat_completions", "responses"] as const) {
+      const provider = new OpenAiCompatibleChatProvider({
+        id: "openai",
+        api,
+        model: "gpt-5.5",
+        baseUrl: "https://example.test/v1",
+        apiKey: "test"
+      });
+      for (const fastMode of [true, false]) {
+        const completion = await provider.complete(
+          {
+            providerId: "openai",
+            model: "gpt-5.5",
+            fastMode,
+            messages: [{ role: "user", content: "hello" }],
+            tools: []
+          },
+          context
+        );
+        tiers.push(completion.usage.providerServiceTier);
+      }
+    }
+
+    expect(requestBodies.map((body) => body.service_tier)).toEqual([
+      "priority",
+      undefined,
+      "priority",
+      undefined
+    ]);
+    expect(requestBodies[1]).not.toHaveProperty("service_tier");
+    expect(requestBodies[3]).not.toHaveProperty("service_tier");
+    expect(tiers).toEqual(["priority", undefined, "priority", undefined]);
+  });
+
+  it("sends the priority service tier on a fast-mode Responses stream and reports a downgrade", async () => {
+    let requestBody: { stream?: boolean; service_tier?: string } | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+        requestBody = JSON.parse(String(init?.body));
+        return new Response(
+          createSseStream([
+            {
+              type: "response.completed",
+              response: {
+                output: [],
+                output_text: "done",
+                service_tier: "default",
+                usage: { input_tokens: 5, output_tokens: 1, total_tokens: 6 }
+              }
+            }
+          ]),
+          { status: 200, headers: { "content-type": "text/event-stream" } }
+        );
+      })
+    );
+
+    const clientInstanceId = asClientInstanceId("client-test");
+    const provider = new OpenAiCompatibleChatProvider({
+      id: "openai",
+      api: "responses",
+      model: "gpt-5.5",
+      baseUrl: "https://example.test/v1",
+      apiKey: "test"
+    });
+    const events: ModelCompletionStreamEvent[] = [];
+    for await (const event of provider.stream(
+      {
+        providerId: "openai",
+        model: "gpt-5.5",
+        fastMode: true,
+        messages: [{ role: "user", content: "hello" }],
+        tools: []
+      },
+      {
+        clientInstanceId,
+        correlationId: "corr-test",
+        user: {
+          id: "user-test",
+          externalUserId: "user-test",
+          displayLabel: "User",
+          roles: ["user"],
+          permissionRefs: [],
+          clientInstanceId,
+          authSource: "test"
+        }
+      }
+    )) {
+      events.push(event);
+    }
+
+    expect(requestBody).toMatchObject({ stream: true, service_tier: "priority" });
+    const completed = events.find((event) => event.type === "completed");
+    expect(completed?.completion.usage).toMatchObject({
+      totalTokens: 6,
+      providerServiceTier: "default"
+    });
+  });
+
   it("preserves explicit none reasoning effort for both OpenAI-compatible APIs", async () => {
     const requestBodies: Array<Record<string, unknown>> = [];
     const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {

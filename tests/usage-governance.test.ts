@@ -18,7 +18,19 @@ const customerRateCard: UsageRateCardConfig = {
       model: "gpt-5.6-sol",
       uncachedInputPricePerMillionTokens: 5,
       cachedInputPricePerMillionTokens: 0.5,
-      outputPricePerMillionTokens: 30
+      outputPricePerMillionTokens: 30,
+      fast: {
+        uncachedInputPricePerMillionTokens: 10,
+        cachedInputPricePerMillionTokens: 1,
+        outputPricePerMillionTokens: 60
+      }
+    },
+    {
+      providerId: "azure-eu",
+      model: "gpt-5.6-luna",
+      uncachedInputPricePerMillionTokens: 1,
+      cachedInputPricePerMillionTokens: 0.1,
+      outputPricePerMillionTokens: 6
     }
   ],
   webSearch: [{ providerId: "azure-eu", pricePerCall: 1 }]
@@ -71,6 +83,66 @@ describe("model usage governance", () => {
         outputBillableCostMicros: 3_000_000,
         billableCostMicros: 4_400_000
       }
+    });
+  });
+
+  it("settles a fast call with the fast rates and a normal call with the normal rates", async () => {
+    const { governance, clientInstanceId } = createGovernance();
+    const tokens = {
+      inputTokens: 1_000_000,
+      cachedInputTokens: 800_000,
+      outputTokens: 100_000,
+      totalTokens: 1_100_000
+    };
+
+    const normal = await governance.recordModelUsage(usageInput(clientInstanceId, tokens));
+    const fast = await governance.recordModelUsage(
+      usageInput(clientInstanceId, { ...tokens, fastMode: true, providerServiceTier: "priority" })
+    );
+
+    expect(normal).toMatchObject({ fastMode: false });
+    expect(normal).not.toHaveProperty("providerServiceTier");
+    expect(normal.customerBillableCost).toMatchObject({
+      status: "settled",
+      totalCostMicros: 4_400_000
+    });
+    expect(fast).toMatchObject({ fastMode: true, providerServiceTier: "priority" });
+    expect(fast.customerBillableCost).toMatchObject({
+      status: "settled",
+      appliedRates: {
+        uncachedInputPricePerMillionTokens: 10,
+        cachedInputPricePerMillionTokens: 1,
+        outputPricePerMillionTokens: 60
+      },
+      components: {
+        uncachedInputCostMicros: 2_000_000,
+        cachedInputCostMicros: 800_000,
+        outputCostMicros: 6_000_000,
+        webSearchCostMicros: 0
+      },
+      totalCostMicros: 8_800_000
+    });
+
+    const summary = await governance.createSafeSummary({ clientInstanceId });
+    expect(summary.recentEvents.map((event) => event.fastMode).sort()).toEqual([false, true]);
+  });
+
+  it("never settles a fast call with the normal rates when fast rates are missing", async () => {
+    const { governance, clientInstanceId } = createGovernance();
+
+    const event = await governance.recordModelUsage({
+      ...usageInput(clientInstanceId, { fastMode: true }),
+      model: "gpt-5.6-luna"
+    });
+
+    expect(event.customerBillableCost).toEqual({
+      status: "unpriced",
+      source: "rate_card",
+      calculationVersion: 1,
+      rateCardId: "customer",
+      rateCardVersion: "2026-07",
+      currency: "EUR",
+      missingMeters: ["fast_model_rate"]
     });
   });
 
@@ -294,6 +366,8 @@ function usageInput(
     outputTokens: number;
     totalTokens: number;
     webSearchCallCount: number;
+    fastMode: boolean;
+    providerServiceTier: string;
   }> = {}
 ) {
   return {

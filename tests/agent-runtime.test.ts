@@ -886,6 +886,111 @@ describe("local agent runtime", () => {
     });
   });
 
+  it("requests fast mode only when the agent enables it and the used binding supports it", async () => {
+    const clientInstanceId = asClientInstanceId("fast-mode-client");
+    const context: RuntimeCallContext = {
+      clientInstanceId,
+      correlationId: "corr-fast-mode",
+      user: {
+        id: "user-1",
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const store = new InMemoryPlatformStore();
+    const conversationId = await createConversationWithMessages(store, {
+      clientInstanceId,
+      messages: []
+    });
+    const providerConfig: ModelProviderConfig = {
+      id: "test-provider",
+      type: "deterministic",
+      model: "provider-default"
+    };
+    const providerRequests: Array<Parameters<ModelProvider["complete"]>[0]> = [];
+    const modelProvider: ModelProvider = {
+      id: "test-provider",
+      async complete(request) {
+        providerRequests.push(request);
+        return {
+          text: "Done.",
+          toolCalls: [],
+          usage: {
+            ...noReportedUsage(),
+            ...(request.fastMode ? { providerServiceTier: "priority" } : {})
+          }
+        };
+      }
+    };
+    const runtime = new LocalAgentRuntime({
+      assetSource: createStaticConfigAssetSource({
+        agents: [
+          {
+            name: "fast_agent",
+            displayName: "Fast Agent",
+            instructions: "Answer quickly.",
+            modelBindingId: "fastBinding",
+            fastMode: true,
+            toolNames: [],
+            skillNames: [],
+            initialPrompts: []
+          }
+        ]
+      }),
+      modelProviders: [providerConfig],
+      modelBindings: [
+        {
+          id: "fastBinding",
+          providerId: "test-provider",
+          model: "fast-model",
+          supportsFastMode: true
+        },
+        {
+          id: "plainBinding",
+          providerId: "test-provider",
+          model: "plain-model",
+          userSelectable: true
+        }
+      ],
+      defaultModelProvider: providerConfig,
+      conversationHistory: store,
+      modelProvider,
+      toolRegistry: new ToolRegistry({ tools: [] }),
+      toolExecution: createUnusedToolExecution(),
+      usageGovernance: new ModelUsageGovernance({ store, budget: {}, safeguards: {} })
+    });
+
+    for (const modelBindingId of [undefined, "plainBinding"]) {
+      const run = await runtime.start(
+        { agentName: "fast_agent", modelBindingId, conversationId, message: { text: "Go." } },
+        context
+      );
+      for await (const event of runtime.observe(run.runId, context)) {
+        if (event.type === "message_completed") {
+          break;
+        }
+      }
+    }
+
+    expect(providerRequests.map((request) => [request.model, request.fastMode])).toEqual([
+      ["fast-model", true],
+      ["plain-model", false]
+    ]);
+    const events = await store.listModelUsageEvents({ clientInstanceId });
+    expect(
+      events
+        .map((event) => [event.model, event.fastMode, event.providerServiceTier])
+        .sort((left, right) => String(left[0]).localeCompare(String(right[0])))
+    ).toEqual([
+      ["fast-model", true, "priority"],
+      ["plain-model", false, undefined]
+    ]);
+  });
+
   it("loads complete tool-call history by default before a follow-up turn", async () => {
     const clientInstanceId = asClientInstanceId("tool-history-client");
     const context: RuntimeCallContext = {

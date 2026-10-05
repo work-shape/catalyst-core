@@ -14,6 +14,7 @@ export async function recordModelUsage(input: {
   context: RuntimeCallContext;
   provider: ModelProviderConfig;
   model: string;
+  fastMode: boolean;
   completion: ModelCompletion;
 }): Promise<void> {
   await input.usageStore.recordModelUsage({
@@ -23,6 +24,7 @@ export async function recordModelUsage(input: {
     agentName: input.startInput.agentName,
     providerId: input.provider.id,
     model: input.model,
+    fastMode: input.fastMode,
     correlationId: input.context.correlationId,
     ...input.completion.usage
   });

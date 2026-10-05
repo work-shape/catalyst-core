@@ -14,7 +14,7 @@ export interface ModelTokenUsage {
 export type UsageCostRecordSource = "rate_card" | "backfilled" | "provider_reconciled";
 export type UsageCostRecordStatus = "settled" | "incomplete" | "unpriced";
 export type UsageCostMissingMeter =
-  "token_usage" | "cached_input_tokens" | "model_rate" | "web_search_rate";
+  "token_usage" | "cached_input_tokens" | "model_rate" | "fast_model_rate" | "web_search_rate";
 
 export interface UsageCostAppliedRates {
   uncachedInputPricePerMillionTokens: number;
@@ -65,6 +65,10 @@ export interface ModelUsageEvent extends ModelTokenUsage {
   providerId: string;
   model: string;
   webSearchCallCount: number;
+  /** The call was requested in fast mode and is settled with the fast rates. */
+  fastMode: boolean;
+  /** Service tier the provider reported for the call, where it reports one. */
+  providerServiceTier?: string;
   customerBillableCost: UsageCostRecord;
   correlationId: string;
   createdAt: ISODateString;
@@ -78,11 +82,14 @@ export interface ModelUsageEventInput extends ModelTokenUsage {
   providerId: string;
   model: string;
   webSearchCallCount?: number;
+  fastMode?: boolean;
+  providerServiceTier?: string;
   correlationId: string;
 }
 
 export interface ModelUsageEventRecordInput extends ModelUsageEventInput {
   webSearchCallCount: number;
+  fastMode: boolean;
   customerBillableCost: UsageCostRecord;
 }
 

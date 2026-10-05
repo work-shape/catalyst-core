@@ -510,6 +510,8 @@ export function mapModelUsageEvent(row: ModelUsageEventRow | undefined): ModelUs
     outputTokens: row.outputTokens,
     totalTokens: row.totalTokens,
     webSearchCallCount: row.webSearchCallCount,
+    fastMode: row.fastMode,
+    ...(row.providerServiceTier === null ? {} : { providerServiceTier: row.providerServiceTier }),
     source: row.source,
     customerBillableCost:
       row.customerBillableCost ??
