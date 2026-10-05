@@ -1,20 +1,28 @@
 import { Bot, BookOpen, Plus, Star } from "lucide-react";
 import { useState } from "react";
 import type {
+  AdministeredCollaborationWorkspace,
   ConfigAssetKind,
   ConfigAssetRevision,
   ConfigAssetsOverview
 } from "@vivd-catalyst/api-client";
 import {
+  agentAvailabilitySummary,
   agentConfigToForm,
   agentFormToConfig,
   configAssetMutationErrorMessage,
   emptyAgentForm,
   emptySkillForm,
   skillConfigToForm,
-  skillFormToConfig
+  skillFormToConfig,
+  type AgentAvailabilityForm
 } from "./config-assets-model";
-import { AgentEditor, RevisionHistory, SkillEditor } from "./config-asset-editors";
+import {
+  AgentAvailabilityEditor,
+  AgentEditor,
+  RevisionHistory,
+  SkillEditor
+} from "./config-asset-editors";
 import { ControlPlanePage } from "./control-plane-page";
 import { useTranslation } from "../i18n";
 import { Button } from "../ui/button";
@@ -37,6 +45,9 @@ export interface ConfigAssetsPanelInput {
   overview: ConfigAssetsOverview | undefined;
   agents: ConfigAssetBundleEntry[];
   skills: ConfigAssetBundleEntry[];
+  /** Shared Workspaces an agent can be made available in. */
+  administeredWorkspaces: AdministeredCollaborationWorkspace[];
+  administeredWorkspacesError?: string;
   loading: boolean;
   error?: string;
   mutating: boolean;
@@ -52,6 +63,7 @@ export interface ConfigAssetsPanelInput {
     baseVersion?: number;
   }): Promise<unknown>;
   onSetDefaultAgent(input: { agentName?: string; baseVersion?: number }): Promise<unknown>;
+  onSetAgentAvailability(input: { name: string } & AgentAvailabilityForm): Promise<unknown>;
   onRevertAsset(input: {
     kind: ConfigAssetKind;
     name: string;
@@ -80,6 +92,26 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
   const version = input.overview?.version;
   const defaultAgentName = input.overview?.defaultAgentName;
   const agentNames = input.agents.map((agent) => agent.name);
+  const agentAvailability = new Map(
+    (input.overview?.assets ?? [])
+      .filter((asset) => asset.kind === "agent")
+      .map((asset) => [asset.name, asset.availability])
+  );
+  const availabilityLabel = (name: string) => {
+    const summary = agentAvailabilitySummary(agentAvailability.get(name));
+    if (summary.kind === "all") return t("configAvailabilityAll");
+    if (summary.kind === "hidden") return t("configAvailabilityHidden");
+    if (summary.kind === "personal") return t("configAvailabilityPersonal");
+    const count = summary.count.toLocaleString(locale);
+    return summary.personalWorkspaces
+      ? t("configAvailabilityPersonalPlus", { count })
+      : t(
+          summary.count === 1
+            ? "configAvailabilityWorkspaceCount"
+            : "configAvailabilityWorkspaceCountPlural",
+          { count }
+        );
+  };
   const skillNames = input.skills.map((skill) => skill.name);
   const pageDescription = (
     <>
@@ -169,6 +201,7 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
             emptyLabel={t("configNoneYet")}
             icon={<Bot size={14} aria-hidden="true" />}
             names={agentNames}
+            describe={availabilityLabel}
             decorate={(name) =>
               name === defaultAgentName ? (
                 <span
@@ -278,6 +311,22 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
                         input.onSetDefaultAgent({ agentName: selection.name, baseVersion: version })
                       )
                   : undefined
+              }
+              availability={
+                selection.mode === "existing" && selectedEntry ? (
+                  <AgentAvailabilityEditor
+                    availability={agentAvailability.get(selection.name)}
+                    isDefault={selection.name === defaultAgentName}
+                    workspaces={input.administeredWorkspaces}
+                    workspacesError={input.administeredWorkspacesError}
+                    mutating={input.mutating}
+                    onSave={(availability) =>
+                      runMutation(() =>
+                        input.onSetAgentAvailability({ name: selection.name, ...availability })
+                      )
+                    }
+                  />
+                ) : null
               }
               revisions={
                 selection.mode === "existing" ? (
@@ -405,6 +454,7 @@ function AssetList({
   emptyLabel,
   icon,
   names,
+  describe,
   decorate,
   selectedName,
   creating,
@@ -415,6 +465,8 @@ function AssetList({
   emptyLabel: string;
   icon: React.ReactNode;
   names: string[];
+  /** A second, muted line under the name. */
+  describe?: (name: string) => string;
   decorate(name: string): React.ReactNode;
   selectedName: string | undefined;
   creating: boolean;
@@ -435,15 +487,22 @@ function AssetList({
             <button
               type="button"
               className={cn(
-                "flex h-9 w-full min-w-0 items-center justify-between gap-2 overflow-hidden rounded-md px-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground",
+                "flex min-h-9 w-full min-w-0 items-center justify-between gap-2 overflow-hidden rounded-md px-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground",
                 selectedName === name &&
                   "bg-primary/10 font-medium text-foreground hover:bg-primary/15"
               )}
               title={name}
               onClick={() => onSelect(name)}
             >
-              <span className="block min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs">
-                {name}
+              <span className="grid min-w-0 flex-1 gap-0.5 py-1.5">
+                <span className="block overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs">
+                  {name}
+                </span>
+                {describe ? (
+                  <span className="truncate text-[11px] font-normal text-muted-foreground">
+                    {describe(name)}
+                  </span>
+                ) : null}
               </span>
               {decorate(name)}
             </button>

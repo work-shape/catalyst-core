@@ -2,6 +2,7 @@ import { createElement } from "../packages/chat-ui/node_modules/react";
 import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
+  AgentAvailabilityEditor,
   AgentEditor,
   configRevisionAction,
   SkillEditor
@@ -115,6 +116,68 @@ describe("config asset editors", () => {
     expect(markup).toContain("grid-rows-[auto_minmax(24rem,1fr)_auto]");
     expect(markup).not.toContain("Add reference");
     expect(markup).not.toContain("Save changes");
+  });
+
+  const workspaces = [
+    { id: "ws_sales", name: "Sales" },
+    { id: "ws_legal", name: "Legal" }
+  ];
+
+  it("offers personal and shared workspaces for a selectively available agent", () => {
+    const markup = renderToStaticMarkup(
+      createElement(AgentAvailabilityEditor, {
+        availability: {
+          mode: "selected",
+          personalWorkspaces: true,
+          collaborationWorkspaceIds: ["ws_legal"]
+        },
+        isDefault: false,
+        workspaces,
+        mutating: false,
+        onSave: async () => ({ ok: true })
+      })
+    );
+
+    expect(markup).toContain("Available in");
+    expect(markup).toContain("Personal workspaces");
+    expect(markup).toContain("Sales");
+    expect(markup).toContain("Legal");
+    expect(markup).not.toContain("ws_legal");
+    expect(markup.match(/type="checkbox"[^>]*checked=""/g)).toHaveLength(2);
+    expect(markup).toContain("Save availability");
+    expect(markup).not.toContain("not available in any workspace");
+  });
+
+  it("locks the default agent to all workspaces and explains why", () => {
+    const markup = renderToStaticMarkup(
+      createElement(AgentAvailabilityEditor, {
+        availability: { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] },
+        isDefault: true,
+        workspaces,
+        mutating: false,
+        onSave: async () => ({ ok: true })
+      })
+    );
+
+    expect(markup).toContain("<fieldset");
+    expect(markup).toContain('disabled=""');
+    expect(markup).toContain("The default agent is always available in all workspaces.");
+    expect(markup).not.toContain("Save availability");
+  });
+
+  it("warns that an agent without any selection is hidden", () => {
+    const markup = renderToStaticMarkup(
+      createElement(AgentAvailabilityEditor, {
+        availability: undefined,
+        isDefault: false,
+        workspaces: [],
+        mutating: false,
+        onSave: async () => ({ ok: true })
+      })
+    );
+
+    expect(markup).toContain("There are no shared workspaces yet.");
+    expect(markup).toContain("this agent is not available in any workspace");
   });
 
   it("labels only the latest revision as current when restoration is unavailable", () => {

@@ -145,6 +145,23 @@ const translations = {
     configAgentNameHint: "Stable identifier, letters/digits/underscores. Cannot be renamed later.",
     configAgents: "Agents",
     configAppliesImmediately: "Applies to new conversations immediately.",
+    configAvailability: "Available in",
+    configAvailabilityAll: "All workspaces",
+    configAvailabilityAllHint: "Every personal and shared workspace, including future ones.",
+    configAvailabilityDefaultLocked:
+      "The default agent is always available in all workspaces. Make another agent the default to restrict this one.",
+    configAvailabilityDescription: "The workspaces in which this agent can be chosen.",
+    configAvailabilityHidden: "Hidden",
+    configAvailabilityHiddenHint:
+      "With nothing selected, this agent is not available in any workspace.",
+    configAvailabilityNoSharedWorkspaces: "There are no shared workspaces yet.",
+    configAvailabilityPersonal: "Personal workspaces",
+    configAvailabilityPersonalHint: "Every user's own personal workspace.",
+    configAvailabilityPersonalPlus: "Personal + {count}",
+    configAvailabilitySave: "Save availability",
+    configAvailabilitySelected: "Selected workspaces",
+    configAvailabilityWorkspaceCount: "{count} workspace",
+    configAvailabilityWorkspaceCountPlural: "{count} workspaces",
     configBehavior: "Behavior",
     configBehaviorDescription: "Core instructions for this agent.",
     configBehaviorDescriptionWithControls:
@@ -606,7 +623,9 @@ const translations = {
     viewFullscreen: "View fullscreen",
     workspace: "Workspace",
     workspaceLoadFailedDescription: "Please refresh the page and try again.",
-    workspaceLoadingDescription: "Your workspace is being prepared."
+    workspaceLoadingDescription: "Your workspace is being prepared.",
+    workspaceNoAgents:
+      "No agent is available in this workspace yet. An administrator can make one available here."
   },
   de: {
     account: "Konto",
@@ -759,6 +778,24 @@ const translations = {
       "Stabile Kennung aus Buchstaben, Ziffern und Unterstrichen. Kann später nicht umbenannt werden.",
     configAgents: "Agenten",
     configAppliesImmediately: "Gilt sofort für neue Unterhaltungen.",
+    configAvailability: "Verfügbar in",
+    configAvailabilityAll: "Alle Arbeitsbereiche",
+    configAvailabilityAllHint: "Jeder persönliche und geteilte Arbeitsbereich, auch künftige.",
+    configAvailabilityDefaultLocked:
+      "Der Standardagent ist immer in allen Arbeitsbereichen verfügbar. Lege einen anderen Agenten als Standard fest, um diesen einzuschränken.",
+    configAvailabilityDescription:
+      "Die Arbeitsbereiche, in denen dieser Agent ausgewählt werden kann.",
+    configAvailabilityHidden: "Ausgeblendet",
+    configAvailabilityHiddenHint:
+      "Ohne Auswahl ist dieser Agent in keinem Arbeitsbereich verfügbar.",
+    configAvailabilityNoSharedWorkspaces: "Es gibt noch keine geteilten Arbeitsbereiche.",
+    configAvailabilityPersonal: "Persönliche Arbeitsbereiche",
+    configAvailabilityPersonalHint: "Der eigene persönliche Arbeitsbereich jedes Benutzers.",
+    configAvailabilityPersonalPlus: "Persönlich + {count}",
+    configAvailabilitySave: "Verfügbarkeit speichern",
+    configAvailabilitySelected: "Ausgewählte Arbeitsbereiche",
+    configAvailabilityWorkspaceCount: "{count} Arbeitsbereich",
+    configAvailabilityWorkspaceCountPlural: "{count} Arbeitsbereiche",
     configBehavior: "Verhalten",
     configBehaviorDescription: "Grundlegende Anweisungen für diesen Agenten.",
     configBehaviorDescriptionWithControls:
@@ -1245,7 +1282,9 @@ const translations = {
     viewFullscreen: "Im Vollbild anzeigen",
     workspace: "Arbeitsbereich",
     workspaceLoadFailedDescription: "Bitte lade die Seite neu und versuche es noch einmal.",
-    workspaceLoadingDescription: "Dein Arbeitsbereich wird vorbereitet."
+    workspaceLoadingDescription: "Dein Arbeitsbereich wird vorbereitet.",
+    workspaceNoAgents:
+      "In diesem Arbeitsbereich ist noch kein Agent verfügbar. Ein Administrator kann hier einen freigeben."
   }
 } satisfies Record<LocaleCode, Record<string, string>>;
 

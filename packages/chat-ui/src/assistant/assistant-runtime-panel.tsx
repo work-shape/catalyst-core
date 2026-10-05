@@ -64,6 +64,8 @@ function AssistantRuntimePane({
   const {
     client,
     config,
+    agentsLoading,
+    agentsWorkspaceScoped,
     collaborationWorkspaceId,
     newConversationPrivate,
     selectedConversationId,
@@ -100,9 +102,15 @@ function AssistantRuntimePane({
   const [optimisticPending, setOptimisticPending] = useState(false);
   const [rootSubmitPending, setRootSubmitPending] = useState(false);
   const [rootSubmitError, setRootSubmitError] = useState<string | undefined>(undefined);
+  const noAgentsMessage =
+    config && config.agents.length === 0 && !agentsLoading
+      ? t(agentsWorkspaceScoped ? "workspaceNoAgents" : "instanceNotConfigured")
+      : undefined;
   const baseSendDisabledReason = conversationRunning
     ? t("conversationStillRunning")
-    : (sendBlockedReason ?? (!messagesLoaded ? t("loadingConversation") : undefined));
+    : (sendBlockedReason ??
+      (!messagesLoaded ? t("loadingConversation") : undefined) ??
+      noAgentsMessage);
   const sendDisabledReason = rootSubmitPending ? t("loadingConversation") : baseSendDisabledReason;
   const visibleNotice = rootSubmitError ?? notice;
   useAutoOpenCompletedRunSurface(activeRun, locale);
@@ -296,6 +304,7 @@ function AssistantRuntimePane({
         <AssistantThread
           config={config}
           agents={config?.agents ?? []}
+          noAgentsMessage={noAgentsMessage}
           selectedAgentName={selectedAgentName}
           selectedModelBindingId={selectedModelBindingId}
           showContextIndicator={showContextIndicator}

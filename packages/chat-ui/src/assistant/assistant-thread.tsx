@@ -21,6 +21,7 @@ const COMPOSER_SETTLE_MS = 220;
 export function AssistantThread({
   config,
   agents,
+  noAgentsMessage,
   selectedAgentName,
   selectedModelBindingId,
   showContextIndicator,
@@ -51,6 +52,8 @@ export function AssistantThread({
   config: SafeConfig | undefined;
   /** Agents offered on the start page. */
   agents: SafeConfig["agents"];
+  /** Set when no agent can take a new conversation here; replaces the start page. */
+  noAgentsMessage?: string;
   selectedAgentName: string | undefined;
   selectedModelBindingId: string | undefined;
   showContextIndicator: boolean;
@@ -96,7 +99,8 @@ export function AssistantThread({
     useAuiState((state) => state.thread.isEmpty) && messagesLoaded && !conversationRunning;
   const composerRef = useComposerSettleTransition(startPage, startComposerTopRef);
 
-  if (config && config.agents.length === 0) {
+  // An existing conversation stays readable; only the composer is blocked.
+  if (noAgentsMessage && !messagesEnabled) {
     return (
       <section
         className="grid h-full min-h-0 place-items-center bg-background px-5"
@@ -104,7 +108,7 @@ export function AssistantThread({
       >
         <div className="inline-flex max-w-md items-center gap-2 rounded-md border px-4 py-3 text-sm text-muted-foreground">
           <CircleAlert size={17} aria-hidden="true" />
-          <span>{t("instanceNotConfigured")}</span>
+          <span>{noAgentsMessage}</span>
         </div>
       </section>
     );

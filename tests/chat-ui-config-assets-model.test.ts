@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  agentAvailabilityFormsEqual,
+  agentAvailabilitySummary,
+  agentAvailabilityToForm,
   agentConfigToForm,
   agentFormToConfig,
   configAssetMutationErrorMessage,
@@ -111,5 +114,62 @@ describe("config assets form model", () => {
     expect(configAssetMutationErrorMessage(error)).toBe(
       "Agent 'research_assistant' references skills but does not allow 'read_skill'"
     );
+  });
+
+  it("surfaces the server's refusal to hide the default agent", () => {
+    expect(
+      configAssetMutationErrorMessage(
+        new Error("Default agent 'assistant' must be available in all workspaces")
+      )
+    ).toBe("Default agent 'assistant' must be available in all workspaces");
+  });
+});
+
+describe("agent availability model", () => {
+  const selected = (personalWorkspaces: boolean, collaborationWorkspaceIds: string[]) => ({
+    mode: "selected" as const,
+    personalWorkspaces,
+    collaborationWorkspaceIds
+  });
+
+  it("summarises availability for the agent list", () => {
+    expect(
+      agentAvailabilitySummary({
+        mode: "all",
+        personalWorkspaces: false,
+        collaborationWorkspaceIds: []
+      })
+    ).toEqual({ kind: "all" });
+    expect(agentAvailabilitySummary(selected(false, ["a", "b", "c"]))).toEqual({
+      kind: "workspaces",
+      count: 3,
+      personalWorkspaces: false
+    });
+    expect(agentAvailabilitySummary(selected(true, ["a"]))).toEqual({
+      kind: "workspaces",
+      count: 1,
+      personalWorkspaces: true
+    });
+    expect(agentAvailabilitySummary(selected(true, []))).toEqual({ kind: "personal" });
+    expect(agentAvailabilitySummary(selected(false, []))).toEqual({ kind: "hidden" });
+  });
+
+  it("treats an agent without stored availability as hidden", () => {
+    expect(agentAvailabilitySummary(undefined)).toEqual({ kind: "hidden" });
+    expect(agentAvailabilityToForm(undefined)).toEqual(selected(false, []));
+  });
+
+  it("compares selections regardless of order and ignores them for all workspaces", () => {
+    expect(
+      agentAvailabilityFormsEqual(selected(true, ["a", "b"]), selected(true, ["b", "a"]))
+    ).toBe(true);
+    expect(agentAvailabilityFormsEqual(selected(true, ["a"]), selected(false, ["a"]))).toBe(false);
+    expect(agentAvailabilityFormsEqual(selected(true, ["a"]), selected(true, ["b"]))).toBe(false);
+    expect(
+      agentAvailabilityFormsEqual(
+        { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] },
+        { mode: "all", personalWorkspaces: true, collaborationWorkspaceIds: ["a"] }
+      )
+    ).toBe(true);
   });
 });

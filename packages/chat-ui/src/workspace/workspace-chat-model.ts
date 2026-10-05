@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type {
   ApiClient,
   ApiUser,
+  CollaborationWorkspaceAgents,
   ConversationListItem,
   DraftAttachment,
   LocaleCode,
@@ -19,6 +20,7 @@ import {
   useWorkspaceSignOutMutation
 } from "../api/workspace-mutations";
 import {
+  useCollaborationWorkspaceAgentsQuery,
   useWorkspaceCacheActions,
   useWorkspaceConfigQuery,
   useWorkspaceConversationsQuery,
@@ -78,6 +80,63 @@ export function collaborationWorkspaceChromeVisibleFor(input: {
     input.collaborationWorkspacesAvailable &&
     (input.config?.features.collaborationWorkspaces.enabled ?? false)
   );
+}
+
+/**
+ * Narrows the instance config to the agents the active Collaboration Workspace
+ * offers. `getConfig` only knows the caller's Personal Workspace view, so it
+ * stands in solely where that view is the right one: fixed-context sessions,
+ * the Personal Workspace itself, and a failed workspace lookup. Anything else
+ * waits for the workspace's own list instead of showing the wrong agents.
+ */
+export function workspaceScopedConfigFor(input: {
+  config: SafeConfig | undefined;
+  collaborationWorkspacesAvailable: boolean;
+  workspaceAgents: CollaborationWorkspaceAgents | undefined;
+  instanceViewApplies: boolean;
+}): { config: SafeConfig | undefined; agentsLoading: boolean; workspaceScoped: boolean } {
+  const { config } = input;
+  if (!config || !input.collaborationWorkspacesAvailable) {
+    return { config, agentsLoading: false, workspaceScoped: false };
+  }
+  if (input.workspaceAgents) {
+    return {
+      config: {
+        ...config,
+        agents: input.workspaceAgents.agents,
+        defaultAgentName: input.workspaceAgents.defaultAgentName
+      },
+      agentsLoading: false,
+      workspaceScoped: true
+    };
+  }
+  if (input.instanceViewApplies) {
+    return { config, agentsLoading: false, workspaceScoped: false };
+  }
+  return {
+    config: { ...config, agents: [], defaultAgentName: undefined },
+    agentsLoading: true,
+    workspaceScoped: true
+  };
+}
+
+/**
+ * The agent a new run would use: the user's pick while this workspace offers
+ * it, otherwise the workspace default. Derived rather than stored, so switching
+ * to a workspace without the picked agent never renders an unavailable one.
+ */
+export function activeAgentNameFor(
+  config: Pick<SafeConfig, "agents" | "defaultAgentName"> | undefined,
+  selectedAgentName: string | undefined
+): string | undefined {
+  const agents = config?.agents ?? [];
+  const offered = (name: string | undefined) =>
+    name !== undefined && agents.some((agent) => agent.name === name);
+  return offered(selectedAgentName)
+    ? selectedAgentName
+    : offered(config?.defaultAgentName)
+      ? config?.defaultAgentName
+      : agents[0]?.name;
 }
 
 export interface WorkspaceChatModelInput {
@@ -165,6 +224,10 @@ export interface ConversationRailModel {
 export interface SelectedChatModel {
   client: ApiClient;
   config: SafeConfig | undefined;
+  /** The active workspace's agent list has not arrived yet. */
+  agentsLoading: boolean;
+  /** `config.agents` is the active workspace's list rather than the instance view. */
+  agentsWorkspaceScoped: boolean;
   collaborationWorkspaceId: string | undefined;
   /** No conversation yet, and the Shared Workspace would start one as private. */
   newConversationPrivate: boolean;
@@ -349,7 +412,40 @@ export function useWorkspaceChatModel({
     ? controller.error?.message
     : undefined;
   const visibleNotice = notice ?? controllerTerminalNotice;
-  const config = configQuery.data;
+  const workspaceAgentsQuery = useCollaborationWorkspaceAgentsQuery({
+    apiBaseUrl,
+    authScope: WORKSPACE_AUTH_SCOPE,
+    client,
+    collaborationWorkspaceId: activeCollaborationWorkspaceId,
+    localePreference: preferences.localePreference,
+    enabled: isAuthenticated && collaborationWorkspacesAvailable
+  });
+  const {
+    config,
+    agentsLoading,
+    workspaceScoped: agentsWorkspaceScoped
+  } = useMemo(
+    () =>
+      workspaceScopedConfigFor({
+        config: configQuery.data,
+        collaborationWorkspacesAvailable,
+        workspaceAgents: workspaceAgentsQuery.data,
+        instanceViewApplies:
+          view !== "chat" ||
+          workspaceAgentsQuery.isError ||
+          collaborationWorkspace.loadFailed ||
+          collaborationWorkspace.activeCollaborationWorkspace?.kind === "personal"
+      }),
+    [
+      collaborationWorkspace.activeCollaborationWorkspace?.kind,
+      collaborationWorkspace.loadFailed,
+      collaborationWorkspacesAvailable,
+      configQuery.data,
+      view,
+      workspaceAgentsQuery.data,
+      workspaceAgentsQuery.isError
+    ]
+  );
   const attachmentsEnabled = config?.features.attachments.enabled ?? false;
   const attachmentAccept = config?.features.attachments.accept ?? "";
   const collaborationWorkspaceChromeVisible = collaborationWorkspaceChromeVisibleFor({
@@ -415,7 +511,7 @@ export function useWorkspaceChatModel({
   const supportedLocales =
     config?.localization.supportedLocales ?? preferences.supportedFallbackLocales;
   const { resolvedThemeMode, workspaceStyle, toggleTheme } = useWorkspaceTheme(config?.ui);
-  const activeAgentName = selectedAgentName ?? config?.defaultAgentName ?? config?.agents[0]?.name;
+  const activeAgentName = activeAgentNameFor(config, selectedAgentName);
   const displayPanelOpen = Boolean(displayPanel.entry && displayPanel.open);
 
   function resetAuthenticatedWorkspaceState() {
@@ -479,22 +575,6 @@ export function useWorkspaceChatModel({
   useEffect(() => {
     displayPanel.close();
   }, [displayPanel.close, selectedConversationId]);
-
-  useEffect(() => {
-    if (!config?.agents.length) {
-      return;
-    }
-
-    setSelectedAgentName((currentAgentName) => {
-      if (currentAgentName && config.agents.some((agent) => agent.name === currentAgentName)) {
-        return currentAgentName;
-      }
-      return (
-        config.agents.find((agent) => agent.name === config.defaultAgentName)?.name ??
-        config.agents[0]?.name
-      );
-    });
-  }, [config]);
 
   useEffect(() => {
     const selectableModels = config?.selectableModels ?? [];
@@ -707,6 +787,8 @@ export function useWorkspaceChatModel({
     selectedChat: {
       client,
       config,
+      agentsLoading,
+      agentsWorkspaceScoped,
       collaborationWorkspaceId: activeCollaborationWorkspaceId,
       newConversationPrivate:
         !selectedConversationId &&

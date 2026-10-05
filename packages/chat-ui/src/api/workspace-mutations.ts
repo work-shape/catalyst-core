@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   AdministeredUser,
+  AgentAvailability,
   ConfigAssetKind,
   AdministeredUserIdentity,
   ApiClient,
@@ -601,6 +602,29 @@ export function useConfigAssetMutations(input: WorkspaceMutationInput) {
       input.client.configAssets.setDefaultAgent(mutationInput),
     onSuccess: () => invalidateConfigAssets()
   });
+  const setAgentAvailability = useMutation({
+    mutationFn: (mutationInput: {
+      name: string;
+      mode: AgentAvailability["mode"];
+      personalWorkspaces: boolean;
+      collaborationWorkspaceIds: string[];
+    }) => {
+      const { name, ...availability } = mutationInput;
+      return input.client.configAssets.setAgentAvailability(name, availability);
+    },
+    // The admin's own picker reads the same lists, so it follows the change at once.
+    onSuccess: () =>
+      Promise.all([
+        invalidateConfigAssets(),
+        queryClient.invalidateQueries({
+          queryKey: workspaceQueryKeys.collaborationWorkspaceAgentsScope(
+            input.apiBaseUrl,
+            input.authScope
+          )
+        }),
+        queryClient.invalidateQueries({ queryKey: ["config", input.apiBaseUrl, input.authScope] })
+      ])
+  });
   const revertAsset = useMutation({
     mutationFn: (mutationInput: {
       kind: ConfigAssetKind;
@@ -619,11 +643,13 @@ export function useConfigAssetMutations(input: WorkspaceMutationInput) {
     putAsset,
     deleteAsset,
     setDefaultAgent,
+    setAgentAvailability,
     revertAsset,
     isPending:
       putAsset.isPending ||
       deleteAsset.isPending ||
       setDefaultAgent.isPending ||
+      setAgentAvailability.isPending ||
       revertAsset.isPending
   };
 }

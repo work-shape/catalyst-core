@@ -1,6 +1,7 @@
 import { ChevronDown, FileText, History, Plus, Star, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import type {
+  AdministeredCollaborationWorkspace,
   ConfigAssetKind,
   ConfigAssetRevision,
   ConfigAssetsOverview
@@ -13,7 +14,13 @@ import {
   InitialPromptsEditor,
   LocalizedField
 } from "./config-asset-form-fields";
-import type { AgentFormState, SkillFormState } from "./config-assets-model";
+import {
+  agentAvailabilityFormsEqual,
+  agentAvailabilityToForm,
+  type AgentAvailabilityForm,
+  type AgentFormState,
+  type SkillFormState
+} from "./config-assets-model";
 import { useTranslation } from "../i18n";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -39,6 +46,7 @@ export function AgentEditor({
   onSave,
   onDelete,
   onMakeDefault,
+  availability,
   revisions
 }: {
   initialForm: AgentFormState;
@@ -51,6 +59,8 @@ export function AgentEditor({
   onSave(form: AgentFormState): Promise<MutationOutcome>;
   onDelete?: () => Promise<MutationOutcome>;
   onMakeDefault?: () => Promise<MutationOutcome>;
+  /** Saved on its own, so it sits outside the agent form's save. */
+  availability?: React.ReactNode;
   revisions: React.ReactNode;
 }) {
   const { t } = useTranslation();
@@ -288,6 +298,8 @@ export function AgentEditor({
 
       {error ? <p className="px-5 py-3 text-sm text-destructive">{error}</p> : null}
 
+      {availability}
+
       {revisions}
 
       {editableAgentFields.length > 0 ? (
@@ -310,6 +322,127 @@ export function AgentEditor({
         />
       ) : null}
     </form>
+  );
+}
+
+/**
+ * Where an agent can be chosen. It is stored apart from the agent's config and
+ * has its own save, so it does not depend on which agent fields are editable.
+ */
+export function AgentAvailabilityEditor({
+  availability,
+  isDefault,
+  workspaces,
+  workspacesError,
+  mutating,
+  onSave
+}: {
+  availability: AgentAvailabilityForm | undefined;
+  isDefault: boolean;
+  workspaces: AdministeredCollaborationWorkspace[];
+  workspacesError?: string;
+  mutating: boolean;
+  onSave(availability: AgentAvailabilityForm): Promise<MutationOutcome>;
+}) {
+  const { t } = useTranslation();
+  const saved = useMemo(() => agentAvailabilityToForm(availability), [availability]);
+  const [form, setForm] = useState(saved);
+  const [error, setError] = useState<string | undefined>(undefined);
+  const locked = isDefault && saved.mode === "all";
+  const disabled = locked || mutating;
+  const workspaceNames = new Map(workspaces.map((workspace) => [workspace.id, workspace.name]));
+  // Ids the list no longer returns stay visible, so saving never drops them unseen.
+  const workspaceIds = [
+    ...workspaces.map((workspace) => workspace.id),
+    ...form.collaborationWorkspaceIds.filter((id) => !workspaceNames.has(id))
+  ];
+  const nothingSelected =
+    form.mode === "selected" &&
+    !form.personalWorkspaces &&
+    form.collaborationWorkspaceIds.length === 0;
+
+  const update = (patch: Partial<AgentAvailabilityForm>) =>
+    setForm((value) => ({ ...value, ...patch }));
+
+  return (
+    <EditorSection title={t("configAvailability")} description={t("configAvailabilityDescription")}>
+      <fieldset className="grid gap-2" disabled={disabled}>
+        <legend className="sr-only">{t("configAvailability")}</legend>
+        {(["all", "selected"] as const).map((mode) => (
+          <label key={mode} className="flex items-start gap-2 text-sm">
+            <input
+              type="radio"
+              name="agent-availability-mode"
+              className="mt-0.5 size-4 shrink-0 accent-primary"
+              checked={form.mode === mode}
+              onChange={() => update({ mode })}
+            />
+            <span className="grid gap-0.5">
+              <span className="font-medium">
+                {t(mode === "all" ? "configAvailabilityAll" : "configAvailabilitySelected")}
+              </span>
+              {mode === "all" ? (
+                <span className="text-xs text-muted-foreground">
+                  {t("configAvailabilityAllHint")}
+                </span>
+              ) : null}
+            </span>
+          </label>
+        ))}
+      </fieldset>
+
+      {locked ? (
+        <p className="text-xs leading-5 text-muted-foreground">
+          {t("configAvailabilityDefaultLocked")}
+        </p>
+      ) : null}
+
+      {form.mode === "selected" ? (
+        <>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 shrink-0 accent-primary"
+              checked={form.personalWorkspaces}
+              disabled={disabled}
+              onChange={(event) => update({ personalWorkspaces: event.target.checked })}
+            />
+            <span className="grid gap-0.5">
+              <span className="font-medium">{t("configAvailabilityPersonal")}</span>
+              <span className="text-xs text-muted-foreground">
+                {t("configAvailabilityPersonalHint")}
+              </span>
+            </span>
+          </label>
+          <CheckboxGroup
+            label={t("collaborationWorkspaceSharedHeading")}
+            options={workspaceIds}
+            optionLabel={(id) => workspaceNames.get(id) ?? id}
+            selected={form.collaborationWorkspaceIds}
+            disabled={disabled}
+            emptyHint={workspacesError ?? t("configAvailabilityNoSharedWorkspaces")}
+            hint={nothingSelected ? t("configAvailabilityHiddenHint") : undefined}
+            onChange={(collaborationWorkspaceIds) => update({ collaborationWorkspaceIds })}
+          />
+        </>
+      ) : null}
+
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+
+      {locked ? null : (
+        <div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={mutating || agentAvailabilityFormsEqual(form, saved)}
+            onClick={async () => setError((await onSave(form)).error)}
+          >
+            {t("configAvailabilitySave")}
+          </Button>
+        </div>
+      )}
+    </EditorSection>
   );
 }
 
