@@ -1,8 +1,20 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { hashPassword } from "../packages/auth/node_modules/better-auth/dist/crypto/index.mjs";
 import { createStandaloneAuthRuntime, type StandaloneAuthRuntime } from "@vivd-catalyst/auth";
 import { asClientInstanceId } from "@vivd-catalyst/core";
 import { PostgresPlatformStore } from "@vivd-catalyst/postgres-store";
 import postgres from "postgres";
+
+vi.mock(
+  "../packages/auth/node_modules/better-auth/dist/crypto/index.mjs",
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import("../packages/auth/node_modules/better-auth/dist/crypto/index.mjs")
+      >();
+    return { ...actual, hashPassword: vi.fn(actual.hashPassword) };
+  }
+);
 
 const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
 const describePostgres = databaseUrl ? describe : describe.skip;
@@ -109,6 +121,22 @@ describePostgres("standalone auth password setup tokens", () => {
     await expect(
       auth.completePasswordSetup({ token, password: "retried-password" })
     ).resolves.toEqual({ externalUserId });
+  });
+
+  it("rejects an invalid or expired token without hashing the password", async () => {
+    const expired = await auth.createPasswordSetupToken({ externalUserId, ttlMs: -1 });
+    vi.mocked(hashPassword).mockClear();
+    await expect(
+      auth.completePasswordSetup({ token: "not-a-token", password: "any-password" })
+    ).rejects.toThrow(/invalid or has expired/u);
+    await expect(
+      auth.completePasswordSetup({ token: expired, password: "any-password" })
+    ).rejects.toThrow(/invalid or has expired/u);
+    expect(hashPassword).not.toHaveBeenCalled();
+
+    const valid = await auth.createPasswordSetupToken({ externalUserId, ttlMs: 60_000 });
+    await auth.completePasswordSetup({ token: valid, password: "hashed-password" });
+    expect(hashPassword).toHaveBeenCalledTimes(1);
   });
 
   it("invalidates older and expired tokens", async () => {

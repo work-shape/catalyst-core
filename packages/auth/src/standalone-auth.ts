@@ -383,6 +383,16 @@ class StandaloneAuthProfileStore {
   async completePasswordSetup(
     input: CompleteStandalonePasswordSetupInput
   ): Promise<CompletedStandalonePasswordSetup> {
+    // Cheap rejection first: an invalid token on this anonymous route must not cost a hash.
+    // The delete inside the transaction remains the single-use guard.
+    const [candidate] = await this.db
+      .select({ expiresAt: authVerifications.expiresAt })
+      .from(authVerifications)
+      .where(eq(authVerifications.identifier, passwordSetupIdentifier(input.token)))
+      .limit(1);
+    if (!candidate || candidate.expiresAt.getTime() <= Date.now()) {
+      throw new AppError("VALIDATION_FAILED", "This link is invalid or has expired");
+    }
     // Hashing is slow, so it happens before the transaction opens.
     const passwordHash = await hashPassword(input.password);
     // One transaction: a failed write must not burn the link. Deleting first still makes the
