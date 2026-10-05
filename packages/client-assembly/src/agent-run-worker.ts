@@ -1,4 +1,8 @@
-import { AgentRunWorker, createWorkerLocalAgentRunExecutor } from "@vivd-catalyst/agent-runtime";
+import {
+  AgentRunWorker,
+  createWorkerLocalAgentRunExecutor,
+  type AgentRunWorkerStopInput
+} from "@vivd-catalyst/agent-runtime";
 import {
   AppError,
   type AgentRun,
@@ -27,7 +31,7 @@ export interface ClientInstanceAgentRunWorker {
   readonly config: ClientInstanceConfig;
   readonly worker: AgentRunWorker;
   runUntilStopped(): Promise<void>;
-  stop(input?: { interruptActive?: boolean; reason?: string }): Promise<void>;
+  stop(input?: AgentRunWorkerStopInput): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -63,19 +67,25 @@ export async function runClientInstanceAgentRunWorker(
   input: CreateClientInstanceAgentRunWorkerInput
 ): Promise<void> {
   const service = await createClientInstanceAgentRunWorker(input);
-  let stopping = false;
+  const drainTimeoutMs = readAgentRunWorkerDrainTimeoutMs(input.env ?? process.env);
+  let signals = 0;
+  // First signal drains active runs up to the timeout; a second one interrupts them now.
   const stop = (signal: NodeJS.Signals) => {
-    if (stopping) return;
-    stopping = true;
+    signals += 1;
+    if (signals > 2) return;
     service
-      .stop({ interruptActive: true, reason: `Received ${signal}` })
+      .stop(
+        signals === 1
+          ? { drainTimeoutMs, reason: `Received ${signal}; drain timeout elapsed` }
+          : { interruptActive: true, reason: `Received ${signal} again` }
+      )
       .catch((error: unknown) => {
         console.error(error);
         process.exitCode = 1;
       });
   };
-  process.once("SIGTERM", stop);
-  process.once("SIGINT", stop);
+  process.on("SIGTERM", stop);
+  process.on("SIGINT", stop);
   try {
     await service.runUntilStopped();
   } finally {
@@ -83,6 +93,21 @@ export async function runClientInstanceAgentRunWorker(
     process.off("SIGINT", stop);
     await service.close();
   }
+}
+
+export const DEFAULT_AGENT_RUN_WORKER_DRAIN_TIMEOUT_MS = 15 * 60 * 1000;
+
+export function readAgentRunWorkerDrainTimeoutMs(env: ClientInstanceEnv): number {
+  const raw = env.AGENT_RUN_WORKER_DRAIN_TIMEOUT_MS;
+  if (!raw) return DEFAULT_AGENT_RUN_WORKER_DRAIN_TIMEOUT_MS;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "AGENT_RUN_WORKER_DRAIN_TIMEOUT_MS must be a non-negative integer"
+    );
+  }
+  return value;
 }
 
 export function readAgentRunWorkerConcurrency(env: ClientInstanceEnv): number | undefined {
