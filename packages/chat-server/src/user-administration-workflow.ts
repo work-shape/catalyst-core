@@ -497,6 +497,17 @@ export class UserAdministrationWorkflow {
         "Only superadmins can assign API Access administration permission"
       );
     }
+    if (
+      changedEntries.some(
+        (permission) => permission.replace(/^!/u, "") === "agent_models.manage"
+      ) &&
+      !this.isSuperadmin(actor)
+    ) {
+      throw new AppError(
+        "FORBIDDEN",
+        "Only superadmins can assign agent model settings permission"
+      );
+    }
   }
 
   private requireManageableUser(actor: AuthenticatedUser, user: UserRecord): void {

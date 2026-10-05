@@ -36,7 +36,21 @@ describe("permissions", () => {
     expect(effective.has("usage.view")).toBe(false);
     expect(effective.has("config_assets.release")).toBe(false);
     expect(effective.has("api_access.manage")).toBe(false);
-    expect(effective.size).toBe(PERMISSIONS.length - 4);
+    expect(effective.has("agent_models.manage")).toBe(false);
+    expect(effective.size).toBe(PERMISSIONS.length - 5);
+  });
+
+  it("gives agent model settings to superadmins by default and to others only by grant", () => {
+    expect(hasPermission({ roles: ["superadmin"], permissions: [] }, "agent_models.manage")).toBe(
+      true
+    );
+    expect(hasPermission({ roles: ["admin"], permissions: [] }, "agent_models.manage")).toBe(false);
+    expect(
+      hasPermission(
+        { roles: ["admin"], permissions: ["agent_models.manage"] },
+        "agent_models.manage"
+      )
+    ).toBe(true);
   });
 
   it("allows per-user grants for roles without defaults", () => {

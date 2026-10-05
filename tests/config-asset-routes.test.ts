@@ -142,6 +142,7 @@ describe("config asset admin routes", () => {
         modelProviderIds: ["local"],
         modelBindingIds: [],
         modelBindings: [],
+        fastModeModelBindingIds: [],
         reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
         enabledToolNames: ["known.tool", "read_skill"]
       }
@@ -614,6 +615,169 @@ describe("config asset admin routes", () => {
     });
   });
 
+  it("requires agent_models.manage for model, reasoning effort and fast mode on interactive writes", async () => {
+    // No model setting is listed as editable: the permission alone decides.
+    const fixture = await createFixture({
+      modelBindings: true,
+      agentConfiguration: { enabled: true, editableAgentFields: ["displayName"] }
+    });
+    const initial = { ...boundAgentConfig("fast"), reasoningEffort: "low" };
+    const releaseToken = await mintToken(fixture.server);
+    const imported = await request(fixture.server, releaseToken, {
+      method: "POST",
+      url: "/api/admin/config/import",
+      payload: { baseVersion: null, defaultAgentName: "assistant", agents: [initial], skills: [] }
+    });
+    expect(imported.statusCode).toBe(200);
+
+    const interactive = { scopes: ["config_assets:read", "config_assets:write"] };
+    const adminToken = await mintToken(fixture.server, {
+      ...interactive,
+      roles: ["admin"],
+      permissions: []
+    });
+    const grantedToken = await mintToken(fixture.server, {
+      ...interactive,
+      roles: ["user"],
+      permissions: ["config_assets.read", "config_assets.write", "agent_models.manage"]
+    });
+    const superadminToken = await mintToken(fixture.server, {
+      ...interactive,
+      roles: ["superadmin"],
+      permissions: []
+    });
+    const changes = {
+      modelBindingId: { modelBindingId: "other" },
+      reasoningEffort: { reasoningEffort: "high" },
+      fastMode: { fastMode: true }
+    };
+    const put = (token: string, config: Record<string, unknown>) =>
+      request(fixture.server, token, {
+        method: "PUT",
+        url: "/api/admin/config/assets/agent/assistant",
+        payload: { config }
+      });
+
+    for (const [field, change] of Object.entries(changes)) {
+      const denied = await put(adminToken, { ...initial, ...change });
+      expect(denied.statusCode).toBe(403);
+      expect(denied.json()).toMatchObject({
+        error: {
+          code: "FORBIDDEN",
+          message: `Changing agent model settings (${field}) requires 'agent_models.manage' permission`
+        }
+      });
+    }
+    // The admin keeps the fields that the edit policy allows.
+    expect((await put(adminToken, { ...initial, displayName: "Renamed" })).statusCode).toBe(200);
+
+    for (const token of [grantedToken, superadminToken]) {
+      for (const change of Object.values(changes)) {
+        expect(
+          (await put(token, { ...initial, displayName: "Renamed", ...change })).statusCode
+        ).toBe(200);
+      }
+      expect((await put(token, { ...initial, displayName: "Renamed" })).statusCode).toBe(200);
+    }
+
+    // Restoring a revision with other model settings is the same change.
+    const fastNow = await put(superadminToken, {
+      ...initial,
+      displayName: "Renamed",
+      fastMode: true
+    });
+    expect(fastNow.statusCode).toBe(200);
+    const revert = (token: string) =>
+      request(fixture.server, token, {
+        method: "POST",
+        url: "/api/admin/config/assets/agent/assistant/revert",
+        payload: { revision: 1 }
+      });
+    expect((await revert(adminToken)).statusCode).toBe(403);
+    expect((await revert(superadminToken)).statusCode).toBe(200);
+
+    // Release sync is unchanged: the service principal has no agent_models.manage.
+    const exported = await request(fixture.server, releaseToken, {
+      method: "GET",
+      url: "/api/admin/config/export"
+    });
+    const pushed = await request(fixture.server, releaseToken, {
+      method: "POST",
+      url: "/api/admin/config/import",
+      payload: {
+        baseVersion: exported.json().version,
+        defaultAgentName: "assistant",
+        agents: [{ ...initial, modelBindingId: "fast", reasoningEffort: "xhigh", fastMode: true }],
+        skills: []
+      }
+    });
+    expect(pushed.statusCode).toBe(200);
+  });
+
+  it("accepts fast mode only on a supporting binding and clears it on a binding switch", async () => {
+    const fixture = await createFixture({ modelBindings: true });
+    const token = await mintToken(fixture.server, {
+      roles: ["superadmin"],
+      permissions: ["config_assets.release"]
+    });
+    const put = (config: Record<string, unknown>) =>
+      request(fixture.server, token, {
+        method: "PUT",
+        url: "/api/admin/config/assets/agent/assistant",
+        payload: { config }
+      });
+    const stored = async () =>
+      (
+        await request(fixture.server, token, {
+          method: "GET",
+          url: "/api/admin/config/assets/agent/assistant"
+        })
+      ).json().config as Record<string, unknown>;
+
+    const overview = await request(fixture.server, token, {
+      method: "GET",
+      url: "/api/admin/config/assets"
+    });
+    expect(overview.json().references.fastModeModelBindingIds).toEqual(["fast"]);
+
+    expect((await put({ ...boundAgentConfig("fast"), fastMode: true })).statusCode).toBe(200);
+    expect(await stored()).toMatchObject({ modelBindingId: "fast", fastMode: true });
+
+    // Switching to a binding without support clears the flag instead of failing.
+    expect((await put({ ...boundAgentConfig("plain"), fastMode: true })).statusCode).toBe(200);
+    expect(await stored()).toMatchObject({ modelBindingId: "plain" });
+    expect(await stored()).not.toHaveProperty("fastMode");
+
+    // Turning it on for the unsupported binding is a validation error.
+    const unsupported = await put({ ...boundAgentConfig("plain"), fastMode: true });
+    expect(unsupported.statusCode).toBe(422);
+    expect(JSON.stringify(unsupported.json())).toContain(
+      "Agent 'assistant' enables fastMode, but model binding 'plain' does not support fast mode"
+    );
+
+    const exported = await request(fixture.server, token, {
+      method: "GET",
+      url: "/api/admin/config/export"
+    });
+    for (const agent of [
+      { ...boundAgentConfig("plain"), fastMode: true },
+      { ...agentConfig("No binding"), fastMode: true }
+    ]) {
+      const pushed = await request(fixture.server, token, {
+        method: "POST",
+        url: "/api/admin/config/import",
+        payload: {
+          baseVersion: exported.json().version,
+          defaultAgentName: "assistant",
+          agents: [agent],
+          skills: []
+        }
+      });
+      expect(pushed.statusCode).toBe(422);
+      expect(JSON.stringify(pushed.json())).toContain("enables fastMode");
+    }
+  });
+
   it("lets config admins set agent availability and keeps the default agent open", async () => {
     const fixture = await createFixture();
     const token = await mintToken(fixture.server);
@@ -1040,6 +1204,7 @@ async function createFixture(
     webSearch?: "disabled" | "enabled";
     webSearchPricing?: boolean;
     serviceAccess?: boolean;
+    modelBindings?: boolean;
   } = {}
 ) {
   const clientInstanceId = asClientInstanceId("config-routes-test");
@@ -1095,6 +1260,38 @@ async function createFixture(
       }
     },
     modelProviders,
+    ...(input.modelBindings
+      ? {
+          modelBindings: [
+            { id: "plain", providerId: "local" },
+            { id: "other", providerId: "local" },
+            { id: "fast", providerId: "local", supportsFastMode: true }
+          ],
+          usage: {
+            costs: {
+              customer: {
+                id: "test-customer",
+                version: "1",
+                currency: "EUR",
+                models: [
+                  {
+                    providerId: "local",
+                    model: "local",
+                    uncachedInputPricePerMillionTokens: 1,
+                    cachedInputPricePerMillionTokens: 1,
+                    outputPricePerMillionTokens: 2,
+                    fast: {
+                      uncachedInputPricePerMillionTokens: 2,
+                      cachedInputPricePerMillionTokens: 2,
+                      outputPricePerMillionTokens: 4
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      : {}),
     ...(input.pricingCoverage
       ? {
           usage: {
@@ -1206,8 +1403,11 @@ async function createFixture(
       store,
       validationRefs: {
         modelProviderIds: modelProviders.map((provider) => provider.id),
-        modelBindingIds: [],
-        modelBindings: [],
+        modelBindingIds: config.modelBindings.map((binding) => binding.id),
+        modelBindings: config.modelBindings.map((binding) => ({ id: binding.id, model: "local" })),
+        fastModeModelBindingIds: config.modelBindings
+          .filter((binding) => binding.supportsFastMode)
+          .map((binding) => binding.id),
         reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
         enabledToolNames: ["known.tool", "read_skill", ...(input.webSearch ? ["web_search"] : [])]
       },
@@ -1246,6 +1446,7 @@ async function mintToken(
   server: FastifyInstance,
   overrides: {
     endpoint?: string;
+    roles?: string[];
     scopes?: string[];
     permissions?: string[];
     delegatedActor?:
@@ -1260,7 +1461,7 @@ async function mintToken(
   const payload = {
     externalUserId: "config-cli",
     displayLabel: "Config CLI",
-    roles: ["user"],
+    roles: overrides.roles ?? ["user"],
     permissions: overrides.permissions ?? [
       "config_assets.read",
       "config_assets.write",
@@ -1324,6 +1525,11 @@ function agentConfig(
     skillNames: overrides.skillNames ?? [],
     initialPrompts: []
   };
+}
+
+function boundAgentConfig(modelBindingId: string) {
+  const { modelProviderId: _modelProviderId, ...config } = agentConfig("Bound instructions");
+  return { ...config, modelBindingId };
 }
 
 function createUnusedAgentRuntime(): AgentRuntime {
