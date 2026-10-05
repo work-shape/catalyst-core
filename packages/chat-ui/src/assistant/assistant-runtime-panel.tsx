@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { AssistantRuntimeProvider, useComposer, useComposerRuntime } from "@assistant-ui/react";
 import { useChatRuntime, type UseChatRuntimeOptions } from "@assistant-ui/react-ai-sdk";
 import type { UIMessage } from "ai";
@@ -36,6 +36,8 @@ export function AssistantRuntimePanel({ chat }: { chat: SelectedChatModel }) {
     [activeRun, completedRunProjections, messages]
   );
   const runtimeKey = selectedConversationId ?? "new";
+  // Outlives the keyed pane so the composer can settle from its start page position.
+  const startComposerTopRef = useRef<number | undefined>(undefined);
 
   return (
     <AssistantRuntimePane
@@ -43,6 +45,7 @@ export function AssistantRuntimePanel({ chat }: { chat: SelectedChatModel }) {
       chat={chat}
       initialMessages={initialMessages}
       messagesSyncKey={messageSnapshotKey}
+      startComposerTopRef={startComposerTopRef}
     />
   );
 }
@@ -50,11 +53,13 @@ export function AssistantRuntimePanel({ chat }: { chat: SelectedChatModel }) {
 function AssistantRuntimePane({
   chat,
   initialMessages,
-  messagesSyncKey
+  messagesSyncKey,
+  startComposerTopRef
 }: {
   chat: SelectedChatModel;
   initialMessages: UIMessage[];
   messagesSyncKey: string;
+  startComposerTopRef: RefObject<number | undefined>;
 }) {
   const {
     client,
@@ -70,6 +75,7 @@ function AssistantRuntimePane({
     selectedModelBindingId,
     showContextIndicator,
     contextSnapshot,
+    selectAgentName: onSelectAgent,
     selectModelBindingId,
     draftAttachments,
     localUploadingAttachments,
@@ -288,6 +294,7 @@ function AssistantRuntimePane({
         />
         <AssistantThread
           config={config}
+          agents={config?.agents ?? []}
           selectedAgentName={selectedAgentName}
           selectedModelBindingId={selectedModelBindingId}
           showContextIndicator={showContextIndicator}
@@ -303,8 +310,11 @@ function AssistantRuntimePane({
           preparingToolName={activeRun?.projection.preparingTool?.toolName}
           optimisticPending={optimisticPending}
           messagesEnabled={Boolean(selectedConversationId)}
+          messagesLoaded={messagesLoaded}
           composerFocusRequestId={composerFocusRequestId}
+          startComposerTopRef={startComposerTopRef}
           onCancelRun={onCancelRun}
+          onSelectAgent={onSelectAgent}
           onSelectModelBinding={selectModelBindingId}
           onFilesSelected={onFilesSelected}
           onRemoveDraftAttachment={onRemoveDraftAttachment}
