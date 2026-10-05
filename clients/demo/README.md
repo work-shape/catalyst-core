@@ -24,6 +24,15 @@ pnpm config:push
 
 The script builds the config CLI and loads the gitignored `.env` file. Create the service principal with `config_assets.read` and `config_assets.release`, restrict the key to `config_assets:read` and `config_assets:release`, and set its one-time value as `CATALYST_API_KEY`. The key is exchanged for a short-lived access token; it is not written to `catalyst.yaml` or `.catalyst-state.json`.
 
+The workflow assistant can propose changes to its shared instructions with
+`propose_skill_change`, including new instructions. Ask it to remember a general
+rule, then review the proposal in **Freigaben**. Approval requires
+`agent_skills.approve` (admins by default, grantable per user in user
+administration). The `no_personal_data` approval check uses `guardrailCheck`
+(OpenAI `gpt-5-nano`), the same provider and model as conversation titles; a
+failed check warns the approver. Approved changes live in the database; pull
+before editing the working copy to preserve them.
+
 For one compatibility release, the CLI falls back to `CATALYST_SERVER_CREDENTIAL` and then `CHAT_SERVER_CREDENTIAL` when no API key is set, and prints a deprecation warning. The config script no longer supplies a placeholder credential. `CHAT_SERVER_CREDENTIAL` remains a separate API-side setting for embedded chat session issuance.
 
 For the production-style Compose stack, copy `.env.prod.example` to `.env.prod`, replace every placeholder secret, then run:

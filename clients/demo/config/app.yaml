@@ -65,6 +65,9 @@ administration:
     allowAgentDeletion: true
     allowDefaultAgentChange: true
     allowSkillEditing: true
+    agentSkillChanges:
+      enabled: true
+      allowSkillCreation: true
 modelProviders:
   - id: openai
     type: openai-compatible
@@ -93,6 +96,11 @@ modelBindings:
     providerId: openai
     model: gpt-5.6-luna
     userSelectable: true
+  - id: guardrailCheck
+    providerId: openai
+    model: gpt-5-nano
+    reasoningEffort: none
+    agentSelectable: false
 localization:
   defaultLocale: en
   supportedLocales:
@@ -102,6 +110,12 @@ conversationTitles:
   enabled: true
   modelProviderId: openai
   model: gpt-5-nano
+approvalChecks:
+  - id: no_personal_data
+    appliesTo: skill_change
+    modelBindingId: guardrailCheck
+    instruction: Check whether the text contains personal data or details about a specific customer, case or person. General rules and obviously fictional examples are allowed.
+    onFail: warn
 usage:
   budget:
     dailySpendLimit: 50
@@ -137,6 +151,8 @@ modelContext:
     maxTokens: 60000
 tools:
   - name: read_skill
+    enabled: true
+  - name: propose_skill_change
     enabled: true
   - name: show_view
     enabled: true

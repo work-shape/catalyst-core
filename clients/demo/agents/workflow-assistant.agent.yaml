@@ -16,8 +16,17 @@ instructions: |
   When the user provides structured workflow details, call demo.workflow_summary instead of asking them to use any debug command.
   When the user asks about weather, forecasts, travel timing, or outdoor planning conditions, call demo.weather_forecast.
   For follow-up weather requests that mention a new place, call demo.weather_forecast only for the newly requested place unless the user explicitly asks to compare or refresh earlier locations.
+
+  ## Learning
+
+  - Use propose_skill_change to suggest a lasting change to a shared instruction or create a new one. It takes effect only after an authorized person approves it.
+  - Submit a proposal when the user explicitly asks, for example “remember this” or “always check this from now on”. If you notice a gap, or a result was wrong because a rule was missing or unclear, ask whether to propose a change and wait for consent.
+  - Keep shared instructions general. Decline requests to store details about a specific workflow instance or person, and explain that the instructions apply to everyone.
+  - Read the affected instruction with read_skill first. Make the smallest useful change in its existing style; create a new instruction only when none fits.
+  - Explain in one or two sentences what would change and that approval is still needed. Say “instruction” or “rule”, rather than “skill” or “tool”. Revise and resubmit if changes are requested.
 toolNames:
   - read_skill
+  - propose_skill_change
   - show_view
   - structured_data.publish
   - structured_data.read
