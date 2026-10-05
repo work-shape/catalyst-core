@@ -414,6 +414,35 @@ describe("approval request workflow", () => {
     });
   });
 
+  it("offers no action the caller's token scopes would be refused", async () => {
+    const f = fixture();
+    f.handler.revert = async () => ({});
+    const pending = await f.create();
+    const chatScoped = (user: AuthenticatedUser, scopes: string[]) => ({ ...user, scopes });
+    await expect(
+      f.workflow.getRequest(chatScoped(reviewer, ["conversation:read"]), context, pending.id)
+    ).resolves.toMatchObject({ canDecide: false });
+    await expect(
+      f.workflow.getRequest(chatScoped(requester, ["conversation:read"]), context, pending.id)
+    ).resolves.toMatchObject({ canWithdraw: false });
+    await expect(
+      f.workflow.getRequest(chatScoped(requester, ["conversation:write"]), context, pending.id)
+    ).resolves.toMatchObject({ canWithdraw: true });
+    await expect(
+      f.workflow.getRequest(chatScoped(reviewer, ["governance:write"]), context, pending.id)
+    ).resolves.toMatchObject({ canDecide: true });
+    await f.workflow.decideRequest(reviewer, context, {
+      requestId: pending.id,
+      decision: "approve"
+    });
+    await expect(
+      f.workflow.getRequest(chatScoped(reviewer, ["conversation:read"]), context, pending.id)
+    ).resolves.toMatchObject({ canRevert: false });
+    await expect(f.workflow.getRequest(reviewer, context, pending.id)).resolves.toMatchObject({
+      canRevert: true
+    });
+  });
+
   it("handles an empty registry without granting queue access", async () => {
     const f = fixture();
     f.handlers.clear();

@@ -287,7 +287,9 @@ describe("approval routes and generated instance client", () => {
       const call = (method: "GET" | "POST", url: string, payload?: object) =>
         app.server.inject({ method, url, headers, ...(payload ? { payload } : {}) });
 
-      expect((await call("GET", `/api/approval-requests/${pending.id}`)).statusCode).toBe(200);
+      const card = await call("GET", `/api/approval-requests/${pending.id}`);
+      expect(card.statusCode).toBe(200);
+      expect(card.json()).toMatchObject({ canDecide: false, canRevert: false, canWithdraw: true });
       expect((await call("GET", "/api/approval-requests/pending-count")).statusCode).toBe(200);
       const listed = await call("GET", "/api/approval-requests");
       expect(listed.statusCode).toBe(403);

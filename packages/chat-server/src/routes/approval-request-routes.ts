@@ -1,7 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { apiOperations, listApprovalRequestsQuerySchema } from "@vivd-catalyst/api-contract";
 import { AppError, requireAuthScope } from "@vivd-catalyst/core";
-import { ApprovalRequestWorkflow } from "../approval-request-workflow";
+import {
+  APPROVAL_DECIDE_AUTH_SCOPE,
+  APPROVAL_WITHDRAW_AUTH_SCOPE,
+  ApprovalRequestWorkflow
+} from "../approval-request-workflow";
 import { authenticateRequest, parseBody } from "../request-context";
 import type { ChatServerOptions } from "../types";
 
@@ -39,18 +43,18 @@ export function registerApprovalRequestRoutes(
   });
   app.post(apiOperations.decideApprovalRequest.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "governance:write");
+    requireAuthScope(user, APPROVAL_DECIDE_AUTH_SCOPE);
     const body = parseBody(apiOperations.decideApprovalRequest.requestSchema, request.body);
     return workflow.decideRequest(user, context, { ...body, requestId: requestId(request.params) });
   });
   app.post(apiOperations.withdrawApprovalRequest.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "conversation:write");
+    requireAuthScope(user, APPROVAL_WITHDRAW_AUTH_SCOPE);
     return workflow.withdrawRequest(user, context, requestId(request.params));
   });
   app.post(apiOperations.revertApprovalRequest.path, async (request) => {
     const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "governance:write");
+    requireAuthScope(user, APPROVAL_DECIDE_AUTH_SCOPE);
     return workflow.revertRequest(user, context, requestId(request.params));
   });
 }
