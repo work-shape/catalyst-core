@@ -1,5 +1,6 @@
 import { Ban, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
+import type { ConversationListItem } from "@vivd-catalyst/api-client";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { Input } from "../ui/input";
 import { cn } from "../ui/cn";
@@ -15,6 +16,7 @@ import {
 } from "./collaboration-workspace-emoji";
 
 export type CollaborationWorkspaceVisibility = "discoverable" | "private";
+export type ConversationVisibility = ConversationListItem["visibility"];
 
 const accentLabelKeys: Record<CollaborationWorkspaceAccentColor, TranslationKey> = {
   garnet: "collaborationWorkspaceAccentGarnet",
@@ -47,28 +49,87 @@ export function CollaborationWorkspaceVisibilityField({
   onChange(value: CollaborationWorkspaceVisibility): void;
 }) {
   const { t } = useTranslation();
-  const options: Array<{
-    value: CollaborationWorkspaceVisibility;
-    label: TranslationKey;
-    hint: TranslationKey;
-  }> = [
-    {
-      value: "discoverable",
-      label: "collaborationWorkspaceVisibilityDiscoverable",
-      hint: "collaborationWorkspaceVisibilityDiscoverableHint"
-    },
-    {
-      value: "private",
-      label: "collaborationWorkspaceVisibilityPrivate",
-      hint: "collaborationWorkspaceVisibilityPrivateHint"
-    }
-  ];
 
   return (
+    <ChoiceField
+      name="collaboration-workspace-visibility"
+      legend={t("collaborationWorkspaceVisibilityLabel")}
+      value={value}
+      disabled={disabled}
+      options={[
+        {
+          value: "discoverable",
+          label: t("collaborationWorkspaceVisibilityDiscoverable"),
+          hint: t("collaborationWorkspaceVisibilityDiscoverableHint")
+        },
+        {
+          value: "private",
+          label: t("collaborationWorkspaceVisibilityPrivate"),
+          hint: t("collaborationWorkspaceVisibilityPrivateHint")
+        }
+      ]}
+      onChange={onChange}
+    />
+  );
+}
+
+/** What a Shared Workspace stamps onto the conversations started in it. */
+export function CollaborationWorkspaceConversationVisibilityField({
+  value,
+  disabled,
+  onChange
+}: {
+  value: ConversationVisibility;
+  disabled?: boolean;
+  onChange(value: ConversationVisibility): void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <ChoiceField
+      name="collaboration-workspace-conversation-visibility"
+      legend={t("collaborationWorkspaceConversationVisibilityLabel")}
+      help={t("collaborationWorkspaceConversationVisibilityHelp")}
+      value={value}
+      disabled={disabled}
+      options={[
+        {
+          value: "workspace",
+          label: t("collaborationWorkspaceConversationVisibilityWorkspace"),
+          hint: t("collaborationWorkspaceConversationVisibilityWorkspaceHint")
+        },
+        {
+          value: "private",
+          label: t("collaborationWorkspaceConversationVisibilityPrivate"),
+          hint: t("collaborationWorkspaceConversationVisibilityPrivateHint")
+        }
+      ]}
+      onChange={onChange}
+    />
+  );
+}
+
+/** A radio group drawn as bordered cards, each with a label and one hint line. */
+export function ChoiceField<Value extends string>({
+  name,
+  legend,
+  help,
+  value,
+  options,
+  disabled,
+  onChange
+}: {
+  name: string;
+  legend: string;
+  help?: string;
+  value: Value;
+  options: Array<{ value: Value; label: string; hint: string }>;
+  disabled?: boolean;
+  onChange(value: Value): void;
+}) {
+  return (
     <fieldset className="grid gap-2" disabled={disabled}>
-      <legend className="pb-2 text-sm font-medium">
-        {t("collaborationWorkspaceVisibilityLabel")}
-      </legend>
+      <legend className="pb-2 text-sm font-medium">{legend}</legend>
       {options.map((option) => (
         <label
           key={option.value}
@@ -79,18 +140,19 @@ export function CollaborationWorkspaceVisibilityField({
         >
           <input
             type="radio"
-            name="collaboration-workspace-visibility"
+            name={name}
             className="mt-1 size-4 accent-[var(--primary)]"
             checked={value === option.value}
             value={option.value}
             onChange={() => onChange(option.value)}
           />
           <span className="grid gap-1">
-            <span className="text-sm font-medium">{t(option.label)}</span>
-            <span className="text-xs leading-5 text-muted-foreground">{t(option.hint)}</span>
+            <span className="text-sm font-medium">{option.label}</span>
+            <span className="text-xs leading-5 text-muted-foreground">{option.hint}</span>
           </span>
         </label>
       ))}
+      {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}
     </fieldset>
   );
 }

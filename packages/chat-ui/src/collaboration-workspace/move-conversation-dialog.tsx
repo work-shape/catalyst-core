@@ -9,11 +9,14 @@ import {
   CollaborationWorkspaceAvatar,
   PersonalCollaborationWorkspaceAvatar
 } from "./collaboration-workspace-avatar";
+import { ChoiceField, type ConversationVisibility } from "./collaboration-workspace-fields";
 import { collaborationWorkspaceDisplayName } from "./collaboration-workspace-selector";
 
 export function MoveConversationDialog({
   open,
   conversationTitle,
+  conversationVisibility,
+  movedByCreator,
   collaborationWorkspaces,
   activeCollaborationWorkspaceId,
   userLabel,
@@ -24,26 +27,47 @@ export function MoveConversationDialog({
 }: {
   open: boolean;
   conversationTitle: string;
+  conversationVisibility: ConversationVisibility;
+  /** Only the creator of a conversation may keep or make it private. */
+  movedByCreator: boolean;
   collaborationWorkspaces: CollaborationWorkspaceWithRole[];
   activeCollaborationWorkspaceId: string | undefined;
   userLabel: string;
   pending: boolean;
   errorMessage: string | undefined;
   onClose(): void;
-  onMove(collaborationWorkspaceId: string): void;
+  /** `visibility` is absent for a Personal Workspace, which has no such choice. */
+  onMove(collaborationWorkspaceId: string, visibility?: ConversationVisibility): void;
 }) {
   const { t } = useTranslation();
   const [selectedCollaborationWorkspaceId, setSelectedCollaborationWorkspaceId] = useState<
     string | undefined
   >();
+  // Undefined until the creator picks one, so each destination starts from the
+  // visibility the server would apply on its own.
+  const [chosenVisibility, setChosenVisibility] = useState<ConversationVisibility | undefined>();
   const destinations = moveConversationDestinations(
     collaborationWorkspaces,
     activeCollaborationWorkspaceId
   );
 
+  const destination = destinations.find(
+    (collaborationWorkspace) => collaborationWorkspace.id === selectedCollaborationWorkspaceId
+  );
+  const sharedDestination = destination?.kind === "shared" ? destination : undefined;
+  const visibility = sharedDestination
+    ? (chosenVisibility ??
+      movedConversationVisibility({
+        conversationVisibility,
+        movedByCreator,
+        destinationDefaultConversationVisibility: sharedDestination.defaultConversationVisibility
+      }))
+    : undefined;
+
   useEffect(() => {
     if (!open) {
       setSelectedCollaborationWorkspaceId(undefined);
+      setChosenVisibility(undefined);
     }
   }, [open]);
 
@@ -64,7 +88,7 @@ export function MoveConversationDialog({
           if (!selectedCollaborationWorkspaceId || pending) {
             return;
           }
-          onMove(selectedCollaborationWorkspaceId);
+          onMove(selectedCollaborationWorkspaceId, visibility);
         }}
       >
         <p className="text-sm leading-6 text-muted-foreground">
@@ -97,7 +121,10 @@ export function MoveConversationDialog({
                     className="size-4 accent-[var(--primary)]"
                     checked={selected}
                     value={collaborationWorkspace.id}
-                    onChange={() => setSelectedCollaborationWorkspaceId(collaborationWorkspace.id)}
+                    onChange={() => {
+                      setSelectedCollaborationWorkspaceId(collaborationWorkspace.id);
+                      setChosenVisibility(undefined);
+                    }}
                   />
                   {collaborationWorkspace.kind === "personal" ? (
                     <PersonalCollaborationWorkspaceAvatar label={userLabel} />
@@ -117,6 +144,19 @@ export function MoveConversationDialog({
           </fieldset>
         )}
 
+        {sharedDestination && visibility ? (
+          <MoveConversationVisibility
+            destinationName={sharedDestination.name}
+            destinationDefaultConversationVisibility={
+              sharedDestination.defaultConversationVisibility
+            }
+            visibility={visibility}
+            movedByCreator={movedByCreator}
+            disabled={pending}
+            onChange={setChosenVisibility}
+          />
+        ) : null}
+
         {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
 
         <div className="flex justify-end gap-2">
@@ -131,6 +171,82 @@ export function MoveConversationDialog({
       </form>
     </Dialog>
   );
+}
+
+/**
+ * Who can open the conversation once it sits in a Shared Workspace. Its creator
+ * chooses; anyone else can only move it as visible to the workspace, which is
+ * spelled out where the destination would otherwise have made it private.
+ */
+export function MoveConversationVisibility({
+  destinationName,
+  destinationDefaultConversationVisibility,
+  visibility,
+  movedByCreator,
+  disabled,
+  onChange
+}: {
+  destinationName: string;
+  destinationDefaultConversationVisibility: ConversationVisibility;
+  visibility: ConversationVisibility;
+  movedByCreator: boolean;
+  disabled?: boolean;
+  onChange(visibility: ConversationVisibility): void;
+}) {
+  const { t } = useTranslation();
+
+  if (!movedByCreator) {
+    return (
+      <p className="text-sm leading-6 text-muted-foreground" data-testid="move-conversation-note">
+        {t("moveConversationVisibilityWorkspaceHint", { name: destinationName })}
+        {destinationDefaultConversationVisibility === "private"
+          ? ` ${t("moveConversationVisibilityCreatorOnly")}`
+          : null}
+      </p>
+    );
+  }
+
+  return (
+    <ChoiceField
+      name="move-conversation-visibility"
+      legend={t("moveConversationVisibilityLabel")}
+      value={visibility}
+      disabled={disabled}
+      options={[
+        {
+          value: "workspace",
+          label: t("collaborationWorkspaceConversationVisibilityWorkspace"),
+          hint: t("moveConversationVisibilityWorkspaceHint", { name: destinationName })
+        },
+        {
+          value: "private",
+          label: t("moveConversationVisibilityPrivate"),
+          hint: t("moveConversationVisibilityPrivateHint")
+        }
+      ]}
+      onChange={onChange}
+    />
+  );
+}
+
+/**
+ * The visibility a move into a Shared Workspace starts from. It mirrors the
+ * server rule (a private conversation stays private, anything else takes the
+ * destination default) with one difference: someone who is not the creator
+ * always moves it as visible to the workspace, because the server rejects a
+ * private result for them.
+ */
+export function movedConversationVisibility(input: {
+  conversationVisibility: ConversationVisibility;
+  movedByCreator: boolean;
+  destinationDefaultConversationVisibility: ConversationVisibility;
+}): ConversationVisibility {
+  if (!input.movedByCreator) {
+    return "workspace";
+  }
+  return input.conversationVisibility === "private"
+    ? "private"
+    : input.destinationDefaultConversationVisibility;
 }
 
 /**

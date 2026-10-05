@@ -273,6 +273,15 @@ const translations = {
       "Discoverable workspaces in this instance. Request access to join one.",
     collaborationWorkspaceBrowseShort: "Browse",
     collaborationWorkspaceBrowseTitle: "Browse workspaces",
+    collaborationWorkspaceConversationVisibilityHelp:
+      "A change applies to new conversations only. Existing ones keep their visibility.",
+    collaborationWorkspaceConversationVisibilityLabel: "New conversations are",
+    collaborationWorkspaceConversationVisibilityPrivate: "Private to their author",
+    collaborationWorkspaceConversationVisibilityPrivateHint:
+      "Only the person who starts a conversation can open it.",
+    collaborationWorkspaceConversationVisibilityWorkspace: "Visible to the workspace",
+    collaborationWorkspaceConversationVisibilityWorkspaceHint:
+      "Every member of the workspace can open them.",
     collaborationWorkspaceCreate: "Create workspace",
     collaborationWorkspaceCreateShort: "Create",
     collaborationWorkspaceCreateSubmit: "Create workspace",
@@ -319,6 +328,8 @@ const translations = {
     collaborationWorkspaceErrorLastOwner: "A shared workspace has to keep at least one owner.",
     collaborationWorkspaceErrorMoveUnavailable:
       "This conversation or the chosen workspace is no longer available.",
+    collaborationWorkspaceErrorMovePrivateCreatorOnly:
+      "Only the person who started this conversation can make it private.",
     collaborationWorkspaceErrorNameMismatch: "This name does not match the workspace name.",
     collaborationWorkspaceErrorNotFound: "This workspace is no longer available.",
     collaborationWorkspaceErrorNotPermitted: "You are not allowed to do this in this workspace.",
@@ -396,6 +407,7 @@ const translations = {
     confirmDeleteConversation: "Delete",
     conversationFailed: "Failed",
     conversationOptions: "Conversation options for {title}",
+    conversationPrivate: "Private, only you can open it",
     conversationRunning: "Running",
     conversationStillRunning: "Wait for the current response to finish",
     conversationUnread: "New response",
@@ -434,14 +446,20 @@ const translations = {
     loadingUser: "Loading",
     messagePlaceholder: "Message",
     moveConversationDescription:
-      'Choose the workspace "{title}" moves to. Everyone in that workspace can then read it, and everyone in the current workspace who is not a member there loses access to it.',
+      'Choose the workspace "{title}" moves to. Everyone in the current workspace who is not a member there loses access to it.',
     moveConversationDestinationLabel: "Move to",
     moveConversationMenuItem: "Move to workspace…",
     moveConversationNoDestinations: "There is no other workspace to move this conversation to.",
     moveConversationPending: "Moving",
     moveConversationSubmit: "Move",
     moveConversationTitle: "Move conversation",
+    moveConversationVisibilityCreatorOnly: "Only the person who started it can make it private.",
+    moveConversationVisibilityLabel: "After the move",
+    moveConversationVisibilityPrivate: "Private to you",
+    moveConversationVisibilityPrivateHint: "Only you can open it.",
+    moveConversationVisibilityWorkspaceHint: "Every member of {name} can open it.",
     newConversation: "New",
+    newConversationPrivateHint: "New conversations in this workspace are private to you.",
     newPassword: "New password",
     newPasswordsDoNotMatch: "New passwords do not match",
     newPasswordTooShort: "New password must be at least 8 characters",
@@ -878,6 +896,16 @@ const translations = {
       "Auffindbare Arbeitsbereiche in dieser Instanz. Fordere Zugriff an, um beizutreten.",
     collaborationWorkspaceBrowseShort: "Durchsuchen",
     collaborationWorkspaceBrowseTitle: "Arbeitsbereiche durchsuchen",
+    collaborationWorkspaceConversationVisibilityHelp:
+      "Eine Änderung gilt nur für neue Unterhaltungen. Bestehende behalten ihre Sichtbarkeit.",
+    collaborationWorkspaceConversationVisibilityLabel: "Neue Unterhaltungen sind",
+    collaborationWorkspaceConversationVisibilityPrivate:
+      "Nur für die Person sichtbar, die sie beginnt",
+    collaborationWorkspaceConversationVisibilityPrivateHint:
+      "Nur wer eine Unterhaltung beginnt, kann sie öffnen.",
+    collaborationWorkspaceConversationVisibilityWorkspace: "Für den Arbeitsbereich sichtbar",
+    collaborationWorkspaceConversationVisibilityWorkspaceHint:
+      "Alle Mitglieder des Arbeitsbereichs können sie öffnen.",
     collaborationWorkspaceCreate: "Arbeitsbereich erstellen",
     collaborationWorkspaceCreateShort: "Erstellen",
     collaborationWorkspaceCreateSubmit: "Arbeitsbereich erstellen",
@@ -929,6 +957,8 @@ const translations = {
       "Ein geteilter Arbeitsbereich muss mindestens einen Besitzer behalten.",
     collaborationWorkspaceErrorMoveUnavailable:
       "Diese Unterhaltung oder der gewählte Arbeitsbereich ist nicht mehr verfügbar.",
+    collaborationWorkspaceErrorMovePrivateCreatorOnly:
+      "Nur wer diese Unterhaltung begonnen hat, kann sie privat machen.",
     collaborationWorkspaceErrorNameMismatch:
       "Dieser Name stimmt nicht mit dem Namen des Arbeitsbereichs überein.",
     collaborationWorkspaceErrorNotFound: "Dieser Arbeitsbereich ist nicht mehr verfügbar.",
@@ -1010,6 +1040,7 @@ const translations = {
     confirmDeleteConversation: "Löschen",
     conversationFailed: "Fehlgeschlagen",
     conversationOptions: "Optionen für Unterhaltung {title}",
+    conversationPrivate: "Privat, nur du kannst sie öffnen",
     conversationRunning: "Läuft",
     conversationStillRunning: "Warte, bis die aktuelle Antwort fertig ist",
     conversationUnread: "Neue Antwort",
@@ -1049,7 +1080,7 @@ const translations = {
     loadingUser: "Lädt",
     messagePlaceholder: "Nachricht",
     moveConversationDescription:
-      "Wähle den Arbeitsbereich, in den „{title}“ verschoben wird. Alle darin können die Unterhaltung danach lesen; alle im aktuellen Arbeitsbereich, die dort kein Mitglied sind, verlieren den Zugriff darauf.",
+      "Wähle den Arbeitsbereich, in den „{title}“ verschoben wird. Alle im aktuellen Arbeitsbereich, die dort kein Mitglied sind, verlieren den Zugriff darauf.",
     moveConversationDestinationLabel: "Verschieben nach",
     moveConversationMenuItem: "In Arbeitsbereich verschieben…",
     moveConversationNoDestinations:
@@ -1057,7 +1088,14 @@ const translations = {
     moveConversationPending: "Wird verschoben",
     moveConversationSubmit: "Verschieben",
     moveConversationTitle: "Unterhaltung verschieben",
+    moveConversationVisibilityCreatorOnly: "Nur wer sie begonnen hat, kann sie privat machen.",
+    moveConversationVisibilityLabel: "Nach dem Verschieben",
+    moveConversationVisibilityPrivate: "Nur für dich sichtbar",
+    moveConversationVisibilityPrivateHint: "Nur du kannst sie öffnen.",
+    moveConversationVisibilityWorkspaceHint: "Alle Mitglieder von {name} können sie öffnen.",
     newConversation: "Neu",
+    newConversationPrivateHint:
+      "Neue Unterhaltungen in diesem Arbeitsbereich sind nur für dich sichtbar.",
     newPassword: "Neues Passwort",
     newPasswordsDoNotMatch: "Neue Passwörter stimmen nicht überein",
     newPasswordTooShort: "Neues Passwort muss mindestens 8 Zeichen lang sein",

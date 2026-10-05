@@ -166,6 +166,8 @@ export interface SelectedChatModel {
   client: ApiClient;
   config: SafeConfig | undefined;
   collaborationWorkspaceId: string | undefined;
+  /** No conversation yet, and the Shared Workspace would start one as private. */
+  newConversationPrivate: boolean;
   selectedConversationId: string | undefined;
   messages: Message[] | undefined;
   completedRunProjections: ConversationControllerState["completedRunProjections"];
@@ -693,7 +695,12 @@ export function useWorkspaceChatModel({
       renameConversation: async (conversationId, title) => {
         await renameConversationMutation.mutateAsync({ conversationId, title });
       },
-      moveConversation: collaborationWorkspace.openMoveConversationDialog,
+      moveConversation: (conversationId) => {
+        const conversation = conversations.find((candidate) => candidate.id === conversationId);
+        if (conversation) {
+          collaborationWorkspace.openMoveConversationDialog(conversation);
+        }
+      },
       deleteConversation: (conversationId) => deleteConversationMutation.mutate(conversationId),
       selectWorkspaceView: routeState.selectWorkspaceView
     },
@@ -701,6 +708,12 @@ export function useWorkspaceChatModel({
       client,
       config,
       collaborationWorkspaceId: activeCollaborationWorkspaceId,
+      newConversationPrivate:
+        !selectedConversationId &&
+        collaborationWorkspaceChromeVisible &&
+        collaborationWorkspace.activeCollaborationWorkspace?.kind === "shared" &&
+        collaborationWorkspace.activeCollaborationWorkspace.defaultConversationVisibility ===
+          "private",
       selectedConversationId,
       messages,
       completedRunProjections: controller.completedRunProjections,

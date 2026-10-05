@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type {
   ApiClient,
   CollaborationWorkspaceWithRole,
+  ConversationListItem,
   WorkspaceMemberCandidate,
   WorkspaceMembershipRole
 } from "@vivd-catalyst/api-client";
@@ -84,6 +85,8 @@ export function CollaborationWorkspacePanel({
           userLabel={userLabel}
           conversationId={dialog.conversationId}
           conversationTitle={dialog.conversationTitle}
+          conversationVisibility={dialog.conversationVisibility}
+          movedByCreator={dialog.movedByCreator}
           onClose={onClose}
           onMoved={onConversationMoved}
         />
@@ -161,6 +164,8 @@ function MoveConversationSurface({
   userLabel,
   conversationId,
   conversationTitle,
+  conversationVisibility,
+  movedByCreator,
   onClose,
   onMoved
 }: CollaborationWorkspaceSurfaceInput & {
@@ -169,6 +174,8 @@ function MoveConversationSurface({
   userLabel: string;
   conversationId: string;
   conversationTitle: string;
+  conversationVisibility: ConversationListItem["visibility"];
+  movedByCreator: boolean;
   onClose(): void;
   onMoved(conversationId: string, destinationCollaborationWorkspaceId: string): void;
 }) {
@@ -184,16 +191,22 @@ function MoveConversationSurface({
     <MoveConversationDialog
       open
       conversationTitle={conversationTitle}
+      conversationVisibility={conversationVisibility}
+      movedByCreator={movedByCreator}
       collaborationWorkspaces={collaborationWorkspaces}
       activeCollaborationWorkspaceId={activeCollaborationWorkspaceId}
       userLabel={userLabel}
       pending={moveConversation.isPending}
       errorMessage={errorMessage}
       onClose={onClose}
-      onMove={(destinationCollaborationWorkspaceId) => {
+      onMove={(destinationCollaborationWorkspaceId, visibility) => {
         clearError();
         moveConversation.mutate(
-          { conversationId, collaborationWorkspaceId: destinationCollaborationWorkspaceId },
+          {
+            conversationId,
+            collaborationWorkspaceId: destinationCollaborationWorkspaceId,
+            visibility
+          },
           {
             onSuccess: () => onMoved(conversationId, destinationCollaborationWorkspaceId),
             onError: (error) => reportError("moveConversation", error)
@@ -228,6 +241,7 @@ function CreateCollaborationWorkspaceSurface({
         name: values.name,
         description: values.description,
         visibility: values.visibility,
+        defaultConversationVisibility: values.defaultConversationVisibility,
         emoji: values.emoji,
         accentColor: values.accentColor
       },
@@ -394,6 +408,7 @@ function CollaborationWorkspaceSettingsSurface({
           name: values.name,
           description: values.description,
           visibility: values.visibility,
+          defaultConversationVisibility: values.defaultConversationVisibility,
           emoji: values.emoji,
           accentColor: values.accentColor
         }

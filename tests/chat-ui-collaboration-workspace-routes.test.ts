@@ -241,6 +241,15 @@ describe("collaboration workspace error copy", () => {
     );
   });
 
+  it("explains a move rejected for making someone else's conversation private", () => {
+    expect(collaborationWorkspaceErrorKey("moveConversation", apiError(422))).toBe(
+      "collaborationWorkspaceErrorMovePrivateCreatorOnly"
+    );
+    expect(collaborationWorkspaceErrorKey("moveConversation", apiError(400))).toBe(
+      "collaborationWorkspaceErrorInvalid"
+    );
+  });
+
   it("maps the last-owner conflict for every membership removal path", () => {
     expect(collaborationWorkspaceErrorKey("leave", apiError(409))).toBe(
       "collaborationWorkspaceErrorLastOwner"

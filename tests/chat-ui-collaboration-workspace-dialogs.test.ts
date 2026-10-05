@@ -37,7 +37,9 @@ import {
 } from "../packages/chat-ui/src/collaboration-workspace/delete-collaboration-workspace-dialog";
 import {
   moveConversationDestinations,
-  MoveConversationDialog
+  movedConversationVisibility,
+  MoveConversationDialog,
+  MoveConversationVisibility
 } from "../packages/chat-ui/src/collaboration-workspace/move-conversation-dialog";
 
 const noop = () => undefined;
@@ -53,6 +55,7 @@ const sharedCollaborationWorkspace: CollaborationWorkspaceWithRole = {
   name: "Produktteam",
   description: "Alles rund um das Produkt",
   visibility: "discoverable",
+  defaultConversationVisibility: "workspace",
   emoji: "🚀",
   accentColor: "violet",
   personalUserId: null,
@@ -113,6 +116,26 @@ describe("create collaboration workspace dialog", () => {
     expect(markup).toContain('data-testid="collaboration-workspace-accent-ruby"');
     expect(markup).toContain('data-testid="collaboration-workspace-accent-slate"');
     expect(markup).toContain('aria-label="Vorschläge"');
+  });
+
+  it("starts new conversations as visible to the workspace and says a change is not retroactive", () => {
+    const markup = render(
+      "en",
+      createElement(CreateCollaborationWorkspaceDialog, {
+        open: true,
+        pending: false,
+        errorMessage: undefined,
+        onClose: noop,
+        onCreate: noop
+      })
+    );
+
+    expect(markup).toContain("New conversations are");
+    expect(markup).toContain('checked="" value="workspace"');
+    expect(markup).toContain("Private to their author");
+    expect(markup).toContain(
+      "A change applies to new conversations only. Existing ones keep their visibility."
+    );
   });
 
   it("starts from the injected accent instead of deriving one from the name", () => {
@@ -191,6 +214,51 @@ describe("collaboration workspace settings tabs", () => {
     expect(markup).toContain("Alles rund um das Produkt");
     expect(markup).toContain("Änderungen speichern");
     expect(markup).toContain("Arbeitsbereich verlassen");
+  });
+
+  it("shows the stored default conversation visibility of a shared workspace", () => {
+    const markup = render(
+      "de",
+      createElement(CollaborationWorkspaceGeneralTab, {
+        collaborationWorkspace: {
+          ...sharedCollaborationWorkspace,
+          defaultConversationVisibility: "private"
+        },
+        currentUserId: "user_1",
+        members,
+        savePending: false,
+        membershipPending: false,
+        onSave: noop,
+        onLeave: noop,
+        onRequestDelete: noop
+      })
+    );
+
+    expect(markup).toContain("Neue Unterhaltungen sind");
+    expect(markup).toMatch(
+      /name="collaboration-workspace-conversation-visibility"[^>]*checked="" value="private"/u
+    );
+    expect(markup).toContain(
+      "Eine Änderung gilt nur für neue Unterhaltungen. Bestehende behalten ihre Sichtbarkeit."
+    );
+  });
+
+  it("keeps the default conversation visibility out of a personal workspace", () => {
+    const markup = render(
+      "de",
+      createElement(CollaborationWorkspaceGeneralTab, {
+        collaborationWorkspace: personalCollaborationWorkspace,
+        currentUserId: "user_1",
+        members,
+        savePending: false,
+        membershipPending: false,
+        onSave: noop,
+        onLeave: noop,
+        onRequestDelete: noop
+      })
+    );
+
+    expect(markup).not.toContain("Neue Unterhaltungen sind");
   });
 
   it("blocks a sole owner from leaving and explains why", () => {
@@ -482,6 +550,8 @@ describe("move conversation dialog", () => {
   const moveDialogProps = {
     open: true,
     conversationTitle: "Angebot Q3",
+    conversationVisibility: "workspace" as const,
+    movedByCreator: true,
     collaborationWorkspaces: [
       secondSharedCollaborationWorkspace,
       personalCollaborationWorkspace,
@@ -538,6 +608,77 @@ describe("move conversation dialog", () => {
     );
 
     expect(markup).toContain("In dieser Unterhaltung läuft noch Arbeit.");
+  });
+
+  it("asks for no visibility before a destination is picked", () => {
+    const markup = render("en", createElement(MoveConversationDialog, moveDialogProps));
+
+    expect(markup).not.toContain("After the move");
+    expect(markup).not.toContain("can then read it");
+  });
+
+  it("starts from the server rule for the conversation's creator", () => {
+    const fromDefault = (
+      conversationVisibility: "workspace" | "private",
+      destinationDefaultConversationVisibility: "workspace" | "private"
+    ) =>
+      movedConversationVisibility({
+        conversationVisibility,
+        movedByCreator: true,
+        destinationDefaultConversationVisibility
+      });
+
+    expect(fromDefault("workspace", "workspace")).toBe("workspace");
+    expect(fromDefault("workspace", "private")).toBe("private");
+    expect(fromDefault("private", "workspace")).toBe("private");
+    expect(fromDefault("private", "private")).toBe("private");
+  });
+
+  it("never proposes a private result to someone who did not create the conversation", () => {
+    expect(
+      movedConversationVisibility({
+        conversationVisibility: "workspace",
+        movedByCreator: false,
+        destinationDefaultConversationVisibility: "private"
+      })
+    ).toBe("workspace");
+  });
+
+  it("lets the creator choose who can open the moved conversation", () => {
+    const markup = render(
+      "en",
+      createElement(MoveConversationVisibility, {
+        destinationName: "Analytik",
+        destinationDefaultConversationVisibility: "private",
+        visibility: "private",
+        movedByCreator: true,
+        onChange: noop
+      })
+    );
+
+    expect(markup).toContain("After the move");
+    expect(markup).toContain("Every member of Analytik can open it.");
+    expect(markup).toContain("Private to you");
+    expect(markup).toContain("Only you can open it.");
+    expect(markup).toMatch(/name="move-conversation-visibility"[^>]*checked="" value="private"/u);
+  });
+
+  it("tells a non-creator the conversation stays visible in a private-by-default workspace", () => {
+    const markup = render(
+      "en",
+      createElement(MoveConversationVisibility, {
+        destinationName: "Analytik",
+        destinationDefaultConversationVisibility: "private",
+        visibility: "workspace",
+        movedByCreator: false,
+        onChange: noop
+      })
+    );
+
+    expect(markup).not.toContain('type="radio"');
+    expect(markup).toContain(
+      "Every member of Analytik can open it. Only the person who started it can make it private."
+    );
   });
 
   it("orders destinations with the Personal Workspace first", () => {
