@@ -94,6 +94,26 @@ Daily and monthly spend limits use `usage.costs.customer.currency`. Set it to th
 
 The customer rate card uses exact `providerId` and `model` rows and prices uncached and cached input separately. Its `version` must change when any rate changes. Usage Governance persists the applied rates and billable amount with every new usage event, so changing the active card affects only future usage.
 
+A model row may carry a `fast` block with the same three prices for fast-mode calls:
+
+```yaml
+usage:
+  costs:
+    customer:
+      models:
+        - providerId: openai
+          model: gpt-5.5
+          uncachedInputPricePerMillionTokens: 5
+          cachedInputPricePerMillionTokens: 0.5
+          outputPricePerMillionTokens: 30
+          fast:
+            uncachedInputPricePerMillionTokens: 10
+            cachedInputPricePerMillionTokens: 1
+            outputPricePerMillionTokens: 60
+```
+
+Every model binding with `supportsFastMode: true` needs these rates; startup validation fails without them. A model call requested in fast mode is recorded as fast and settled with the `fast` rates, never with the normal ones. The usage event also stores the service tier the provider reported for the call. Adding or changing fast rates is a rate change and needs a new card `version`; earlier usage is not re-rated.
+
 ## Approval checks
 
 `approvalChecks` defines model-evaluated rules for proposed approval requests. It defaults to an empty list. Each check needs a unique id, a registered request kind, and an existing model binding. Instructions may be written in any language.
@@ -243,6 +263,7 @@ modelBindings:
     model: gpt-5.5
     agentSelectable: true
     userSelectable: true
+    supportsFastMode: false
 ```
 
 `contextManagement.compaction` enables provider-native server-side compaction
@@ -252,7 +273,11 @@ later model requests, and keeps the durable conversation transcript unchanged.
 Do not configure this block for `api: chat_completions`; startup validation
 rejects that unsupported combination.
 
-Agent configuration may override a binding's default with one of Catalyst's product-owned reasoning efforts: `none`, `low`, `medium`, `high`, or `xhigh`. Only bindings with `agentSelectable: true` are valid agent choices; set it to `false` for internal bindings such as conversation-title generation. Interactive selection is available only when `modelBindingId` and/or `reasoningEffort` appear in `editableAgentFields`. The server validates model-binding references and reasoning values; the UI does not accept arbitrary model identifiers.
+Agent configuration may override a binding's default with one of Catalyst's product-owned reasoning efforts: `none`, `low`, `medium`, `high`, or `xhigh`. Only bindings with `agentSelectable: true` are valid agent choices; set it to `false` for internal bindings such as conversation-title generation. The server validates model-binding references and reasoning values; the UI does not accept arbitrary model identifiers.
+
+An agent's `modelBindingId`, `reasoningEffort`, and `fastMode` are editable in the admin panel exactly when the caller holds the `agent_models.manage` permission, and the server rejects an interactive change to any of them without it. Superadmins hold the permission by default; a superadmin can grant it to individual users. `modelBindingId` and `reasoningEffort` remain valid `editableAgentFields` values for compatibility but no longer have an effect. `catalyst config push` is unchanged and may set all three.
+
+Set `supportsFastMode: true` on a binding whose provider deployment offers a priority processing tier. It defaults to `false`. An agent may set `fastMode: true` only while its binding supports it; saving it for another binding is a validation error, and switching an agent to a binding without support in the admin panel clears it. For fast-mode runs the OpenAI-compatible adapter sends `service_tier: "priority"` on both API shapes. When a chat user picks another `userSelectable` binding, fast mode applies only if that binding supports it. Fast runs are billed with the rate card's `fast` rates, see above.
 
 Set `userSelectable: true` only for bindings normal chat users may choose in
 the composer. It defaults to `false`. The run API accepts the approved binding

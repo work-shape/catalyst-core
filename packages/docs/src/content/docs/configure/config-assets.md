@@ -97,6 +97,10 @@ administration:
 
 Fields outside `editableAgentFields` are owned by the CLI workflow: the UI shows them read-only and the server rejects interactive writes that change them. `catalyst config push` requires the separate `config_assets.release` permission and may change everything.
 
+Three agent fields are not governed by `editableAgentFields`: `modelBindingId`, `reasoningEffort`, and `fastMode`. They are editable exactly when the caller holds `agent_models.manage`, and read-only otherwise. Listing `modelBindingId` or `reasoningEffort` in `editableAgentFields` is still accepted but has no effect.
+
+`fastMode` (boolean, default `false`) runs the agent on the provider's priority tier, billed at the rate card's fast rates. It is valid only when the agent's model binding declares `supportsFastMode` in release config. The CLI writes `fastMode: true` to the agent YAML and omits the key when it is off.
+
 Set `enabled: true`, leave `editableAgentFields` empty, and set all interactive mutation flags (including `allowSkillEditing`) to `false` for a readable, release-controlled Config tab. Agents, complete skill packages, and revision history remain inspectable while create, save, delete, default-change, and restore controls are hidden. Enabling skill editing later exposes the same atomic package through a root/reference editor; no storage migration is required.
 
 Optimistic concurrency protects both surfaces: UI saves carry the loaded config version, and a save after a concurrent CLI push surfaces a conflict dialog instead of silently overwriting.
@@ -145,5 +149,6 @@ removed first. Reverting retains the original approval and proposal history.
 | `config_assets.read`    | View assets, revisions, and the export bundle                                | admin, superadmin          |
 | `config_assets.write`   | Interactive edits within `editableAgentFields`, skill editing, default agent | admin, superadmin          |
 | `config_assets.release` | Release synchronization via `catalyst config push`                           | none (service tokens only) |
+| `agent_models.manage`   | Interactive changes to an agent's model binding, reasoning effort, fast mode | superadmin                 |
 
 Effective permissions resolve from role defaults plus per-user grants (`"config_assets.write"`) and revocations (`"!config_assets.write"`) stored on the product user.
