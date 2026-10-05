@@ -320,6 +320,10 @@ const USER_PERMISSION_COPY: Record<string, { label: TranslationKey; description:
       label: "userRightApiAccessManage",
       description: "userRightApiAccessManageDescription"
     },
+    "agent_models.manage": {
+      label: "userRightAgentModelsManage",
+      description: "userRightAgentModelsManageDescription"
+    },
     "audit.view": { label: "userRightAuditView", description: "userRightAuditViewDescription" }
   };
 

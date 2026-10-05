@@ -216,6 +216,9 @@ const translations = {
     configPrompt: "Prompt",
     configPromptNumber: "Prompt {number}",
     configPrompts: "Prompts",
+    configFastMode: "Fast mode",
+    configFastModeHint:
+      "Runs use the provider's priority tier. Fast runs are billed at a higher rate.",
     configReasoningEffort: "Reasoning effort",
     configReasoningEffortHint: "Overrides the selected binding's default effort.",
     configReloadLatest: "Reload latest",
@@ -599,6 +602,9 @@ const translations = {
     userRightAgentSkillsApprove: "Approve skill changes",
     userRightAgentSkillsApproveDescription:
       "Accept, reject and undo proposed changes to skills, and see their history.",
+    userRightAgentModelsManage: "Manage agent model settings",
+    userRightAgentModelsManageDescription:
+      "Choose the model, reasoning effort and fast mode of each agent.",
     userRightApiAccessManage: "Manage API access",
     userRightApiAccessManageDescription: "Create and revoke access for the CLI and automation.",
     userRightAuditView: "View audit log",
@@ -854,6 +860,9 @@ const translations = {
     configPrompt: "Vorschlag",
     configPromptNumber: "Vorschlag {number}",
     configPrompts: "Vorschläge",
+    configFastMode: "Schnellmodus",
+    configFastModeHint:
+      "Läufe nutzen die Prioritätsstufe des Anbieters. Schnelle Läufe werden zu einem höheren Preis abgerechnet.",
     configReasoningEffort: "Denkaufwand",
     configReasoningEffortHint:
       "Überschreibt den Standard-Denkaufwand der ausgewählten Modellbindung.",
@@ -1257,6 +1266,9 @@ const translations = {
     userRightAgentSkillsApprove: "Änderungen an Fähigkeiten freigeben",
     userRightAgentSkillsApproveDescription:
       "Vorgeschlagene Änderungen an Fähigkeiten übernehmen, ablehnen und rückgängig machen sowie den Verlauf sehen.",
+    userRightAgentModelsManage: "Modelleinstellungen der Agenten verwalten",
+    userRightAgentModelsManageDescription:
+      "Modell, Denkaufwand und Schnellmodus je Agent festlegen.",
     userRightApiAccessManage: "API-Zugriff verwalten",
     userRightApiAccessManageDescription:
       "Zugänge für die CLI und Automatisierungen anlegen und sperren.",

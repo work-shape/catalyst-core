@@ -38,6 +38,7 @@ export interface ConfigAssetBundleEntry {
 
 export interface ConfigAssetsPanelInput {
   editableAgentFields: string[];
+  canManageAgentModels: boolean;
   allowAgentCreation: boolean;
   allowAgentDeletion: boolean;
   allowDefaultAgentChange: boolean;
@@ -270,6 +271,7 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
               isDefault={selection.mode === "existing" && selection.name === defaultAgentName}
               references={input.overview?.references}
               editableAgentFields={input.editableAgentFields}
+              canManageAgentModels={input.canManageAgentModels}
               skillNames={skillNames}
               mutating={input.mutating}
               onSave={(form) =>
@@ -336,7 +338,7 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
                     mutating={input.mutating}
                     onLoadRevisions={input.onLoadRevisions}
                     onRevert={
-                      input.editableAgentFields.length > 0
+                      input.editableAgentFields.length > 0 || input.canManageAgentModels
                         ? (revision) =>
                             runMutation(() =>
                               input

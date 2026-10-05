@@ -18,6 +18,7 @@ export interface AgentFormState {
   modelProviderId: string;
   modelBindingId: string;
   reasoningEffort: string;
+  fastMode: boolean;
   maxSteps: string;
   toolNames: string[];
   skillNames: string[];
@@ -141,6 +142,7 @@ export function agentConfigToForm(config: Record<string, unknown>): AgentFormSta
     modelProviderId,
     modelBindingId,
     reasoningEffort: typeof config.reasoningEffort === "string" ? config.reasoningEffort : "",
+    fastMode: config.fastMode === true,
     maxSteps: typeof config.maxSteps === "number" ? String(config.maxSteps) : "",
     toolNames: stringArray(config.toolNames),
     skillNames: stringArray(config.skillNames),
@@ -175,6 +177,7 @@ export function agentFormToConfig(form: AgentFormState): Record<string, unknown>
         ? { modelProviderId: form.modelProviderId }
         : {}),
     ...(form.reasoningEffort ? { reasoningEffort: form.reasoningEffort } : {}),
+    ...(form.fastMode ? { fastMode: true } : {}),
     ...(maxSteps === undefined ? {} : { maxSteps }),
     toolNames: form.toolNames,
     skillNames: form.skillNames,
@@ -184,6 +187,20 @@ export function agentFormToConfig(form: AgentFormState): Record<string, unknown>
         title: pairToLocalized(prompt.title) ?? "",
         prompt: pairToLocalized(prompt.prompt) ?? ""
       }))
+  };
+}
+
+/** Selecting a binding without fast-mode support clears the flag, as the server does. */
+export function selectAgentModelBinding(
+  form: AgentFormState,
+  modelBindingId: string,
+  fastModeModelBindingIds: readonly string[]
+): AgentFormState {
+  return {
+    ...form,
+    modelBindingId,
+    modelProviderId: "",
+    fastMode: form.fastMode && fastModeModelBindingIds.includes(modelBindingId)
   };
 }
 
@@ -198,6 +215,7 @@ export function emptyAgentForm(): AgentFormState {
     modelProviderId: "",
     modelBindingId: "",
     reasoningEffort: "",
+    fastMode: false,
     maxSteps: "",
     toolNames: [],
     skillNames: [],
