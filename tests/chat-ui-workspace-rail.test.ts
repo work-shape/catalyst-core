@@ -170,6 +170,28 @@ const selector = createElement(CollaborationWorkspaceSelector, {
   onCreateCollaborationWorkspace: noop
 });
 
+describe("workspace rail collapse handle", () => {
+  it("stays hidden until the rail's right border is hovered or the handle is focused", () => {
+    const markup = renderRail();
+    const zone = markup.match(/<div class="([^"]*group\/rail-edge[^"]*)">(<button[^>]*>)/u);
+
+    // A narrow zone over the full height of the border, from the md breakpoint up.
+    expect(zone?.[1]).toContain("absolute inset-y-0 -right-1.5");
+    expect(zone?.[1]).toContain("hidden w-3 md:block");
+    const handle = zone?.[2] ?? "";
+    expect(handle).toContain('aria-label="Collapse sidebar"');
+    expect(handle).toContain('title="Collapse sidebar"');
+    expect(handle).toContain("pointer-events-none");
+    expect(handle).toContain(" opacity-0 ");
+    expect(handle).toContain("group-hover/rail-edge:opacity-100");
+    expect(handle).toContain("group-hover/rail-edge:pointer-events-auto");
+    expect(handle).toContain("focus-visible:opacity-100");
+    // The list's scrollbar ends left of the zone, which reaches 6px into the rail.
+    expect(markup).toContain("-mr-3 ");
+    expect(markup).not.toContain("-mr-4 ");
+  });
+});
+
 describe("workspace rail collaboration workspace slot", () => {
   it("falls back to the pre-feature layout when no selector is supplied", () => {
     const markup = renderRail();

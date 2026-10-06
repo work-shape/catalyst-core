@@ -57,6 +57,11 @@ export interface ChatAttachmentService {
     conversationId: ConversationId;
     deletedAt: string;
   }): Promise<ManagedObjectDeletionResult>;
+  /**
+   * Deletes the stored bytes of managed files that no Conversation refers to any more. Returns
+   * the object keys that were removed; a key nobody stores is left out.
+   */
+  deleteOrphanedFileObjects?(input: { objectKeys: readonly string[] }): Promise<string[]>;
   readConversationFile(input: ReadConversationFileInput): Promise<ReadConversationFileResult>;
   blockingDraftAttachmentMessage(attachments: readonly DraftAttachment[]): string | undefined;
   createAttachmentManifest(attachments: readonly ConversationAttachment[]): AttachmentManifest;

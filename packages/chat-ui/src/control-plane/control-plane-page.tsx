@@ -12,7 +12,7 @@ export function ControlPlanePage({
   children: ReactNode;
 }) {
   return (
-    <div className="grid min-h-0 min-w-0 content-start gap-4">
+    <div className="grid min-w-0 content-start gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="grid min-w-0 gap-1">
           <h2 className="text-[22px] font-semibold tracking-normal text-foreground">{title}</h2>

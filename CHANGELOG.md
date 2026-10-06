@@ -3,6 +3,28 @@
 All platform packages are released in lockstep under one version. Before 1.0 a minor version may
 contain breaking changes; a patch version does not.
 
+## Unreleased
+
+### Added
+
+- **Retention:** the hourly retention job removes orphaned managed files. A `managed_files` row
+  older than 24 hours that no active conversation refers to, through an attachment of any
+  status or as the source of an artifact, is marked deleted and its stored object is removed.
+  This reaches what user deletions before 2026-08-31 and interrupted uploads left behind. The
+  job records one `storage.orphaned_files_deleted` audit event with counts per run that removed
+  something. An attachment handler takes part by implementing the optional
+  `deleteOrphanedFileObjects`; without it nothing is removed.
+
+### Fixed
+
+- **Conversation rail:** the collapse handle on the rail's edge no longer covers the list's
+  scrollbar. It appears while the pointer is on the rail's right border or the handle has
+  keyboard focus.
+- **Uploads into a deleted conversation:** a draft attachment whose conversation is deleted
+  while the file is still arriving is rejected before any bytes are stored. The conversation
+  was checked only when the request started, so a slow upload could leave a stored object and
+  a `managed_files` row that no deletion would reach.
+
 ## 0.5.0 — 2026-10-06
 
 ### Added
@@ -69,7 +91,8 @@ contain breaking changes; a patch version does not.
 
 ## 0.2.0 — 2026-10-06
 
-First versioned release. Compared with the production release of 2026-09-07:
+First versioned release. Compared with production, which runs `staging-2026.09.14-1` (platform
+`a2a13a8`, deployed 2026-09-14):
 
 ### Added
 

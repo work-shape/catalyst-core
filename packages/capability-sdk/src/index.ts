@@ -143,6 +143,11 @@ export interface ClientInstanceAttachmentHandler {
     conversationId: ConversationId;
     deletedAt: string;
   }): Promise<ManagedObjectDeletionResult>;
+  /**
+   * Deletes the stored bytes of managed files that no Conversation refers to any more. A
+   * handler removes only the object keys it stores itself and returns those.
+   */
+  deleteOrphanedFileObjects?(input: { objectKeys: readonly string[] }): Promise<string[]>;
   readConversationFile(input: ReadConversationFileInput): Promise<ReadConversationFileResult>;
   blockingDraftAttachmentMessage(attachments: readonly DraftAttachment[]): string | undefined;
   createAttachmentManifest(attachments: readonly ConversationAttachment[]): AttachmentManifest;

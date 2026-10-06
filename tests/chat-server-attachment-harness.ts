@@ -128,6 +128,14 @@ export function createManagedObjectTestAttachmentCapability(): {
               deleteConversationAttachments(input) {
                 return managedObjects.deleteConversationObjects(input);
               },
+              async deleteOrphanedFileObjects(input) {
+                const objectKeys = input.objectKeys.filter((key) => key.startsWith("test-files/"));
+                for (const key of objectKeys) {
+                  deletedObjectKeys.push(key);
+                  objects.delete(key);
+                }
+                return objectKeys;
+              },
               async readConversationFile(input) {
                 const file = await managedObjects.readFile({
                   fileId: input.fileId as ManagedFileId

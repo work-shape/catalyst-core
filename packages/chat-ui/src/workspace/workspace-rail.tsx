@@ -127,17 +127,24 @@ export function WorkspaceRail({
     >
       {collaborationWorkspaceSelector ? null : closeSidebarButton("absolute right-4 top-4 z-20")}
 
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="absolute -right-3 top-1/2 z-20 hidden h-11 w-6 -translate-y-1/2 rounded-xl border border-sidebar-border/60 bg-sidebar/95 text-muted-foreground/70 shadow-none hover:bg-sidebar-accent hover:text-sidebar-foreground md:inline-flex"
-        aria-label={t("collapseSidebar")}
-        title={t("collapseSidebar")}
-        onClick={onToggleSidebar}
-      >
-        <ChevronLeft size={12} strokeWidth={1.75} aria-hidden="true" />
-      </Button>
+      {/*
+        The collapse handle sits on the rail's right border, where it would cover the
+        list's scrollbar. It shows only while the pointer is on the border: this narrow
+        zone straddles it, and the list's scrollbar ends to the left of the zone.
+      */}
+      <div className="group/rail-edge absolute inset-y-0 -right-1.5 z-20 hidden w-3 md:block">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="pointer-events-none absolute left-1/2 top-1/2 h-11 w-6 -translate-x-1/2 -translate-y-1/2 rounded-xl border border-sidebar-border/60 bg-sidebar/95 text-muted-foreground/70 opacity-0 shadow-none transition-opacity hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/rail-edge:pointer-events-auto group-hover/rail-edge:opacity-100"
+          aria-label={t("collapseSidebar")}
+          title={t("collapseSidebar")}
+          onClick={onToggleSidebar}
+        >
+          <ChevronLeft size={12} strokeWidth={1.75} aria-hidden="true" />
+        </Button>
+      </div>
 
       {/*
         With workspace chrome visible the selector is the rail's top element and
@@ -215,7 +222,7 @@ export function WorkspaceRail({
         </label>
       </div>
 
-      <nav className="chat-scrollbar -ml-1 -mr-4 grid min-h-0 auto-rows-max content-start gap-1 overflow-y-auto overflow-x-hidden pl-1 pr-4 pb-3">
+      <nav className="chat-scrollbar -ml-1 -mr-3 grid min-h-0 auto-rows-max content-start gap-1 overflow-y-auto overflow-x-hidden pl-1 pr-3 pb-3">
         {conversations.length === 0 ? (
           <div className="rounded-md border border-dashed border-sidebar-border px-3 py-4 text-sm text-muted-foreground">
             {t("noConversations")}

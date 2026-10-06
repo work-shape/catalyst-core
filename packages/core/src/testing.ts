@@ -1802,6 +1802,18 @@ export class InMemoryPlatformStore
     return this.fileStore.getManagedFile(input);
   }
 
+  async listOrphanedManagedFiles(
+    input: Parameters<PlatformFileStore["listOrphanedManagedFiles"]>[0]
+  ) {
+    return this.fileStore.listOrphanedManagedFiles(input);
+  }
+
+  async markOrphanedManagedFilesDeleted(
+    input: Parameters<PlatformFileStore["markOrphanedManagedFilesDeleted"]>[0]
+  ) {
+    return this.fileStore.markOrphanedManagedFilesDeleted(input);
+  }
+
   async createManagedArtifact(input: Parameters<PlatformFileStore["createManagedArtifact"]>[0]) {
     return this.fileStore.createManagedArtifact(input);
   }

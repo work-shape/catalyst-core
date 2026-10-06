@@ -1,4 +1,18 @@
-import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, sql as drizzleSql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  ne,
+  notExists,
+  notInArray,
+  sql as drizzleSql
+} from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import {
   AppError,
@@ -26,6 +40,7 @@ import {
   type ManagedFileRecord,
   type ManagedObjectDeletionResult,
   type MessageId,
+  type OrphanedManagedFile,
   type RecoverStaleArtifactPreviewJobsInput,
   type RenewClaimedArtifactPreviewJobLeaseInput,
   type UpdateConversationAttachmentInput,
@@ -117,6 +132,118 @@ class PostgresPlatformFileStore implements PlatformFileStore {
       )
       .limit(1);
     return row ? mapManagedFile(row) : undefined;
+  }
+
+  async listOrphanedManagedFiles(input: {
+    clientInstanceId: ClientInstanceId;
+    createdBefore: string;
+    afterFileId?: ManagedFileId;
+    limit: number;
+  }): Promise<OrphanedManagedFile[]> {
+    const rows = await this.db
+      .select({ id: managedFiles.id, objectKey: managedFiles.objectKey })
+      .from(managedFiles)
+      .where(
+        and(
+          this.orphanedManagedFileCondition(input),
+          input.afterFileId ? gt(managedFiles.id, input.afterFileId) : undefined
+        )
+      )
+      .orderBy(asc(managedFiles.id))
+      .limit(input.limit);
+    if (rows.length === 0) {
+      return [];
+    }
+    const fileIds = rows.map((row) => row.id);
+    const objectKeys = [...new Set(rows.map((row) => row.objectKey))];
+    const [otherFiles, artifacts] = await Promise.all([
+      this.db
+        .selectDistinct({ objectKey: managedFiles.objectKey })
+        .from(managedFiles)
+        .where(
+          and(
+            eq(managedFiles.clientInstanceId, input.clientInstanceId),
+            inArray(managedFiles.objectKey, objectKeys),
+            ne(managedFiles.status, "deleted"),
+            notInArray(managedFiles.id, fileIds)
+          )
+        ),
+      this.db
+        .selectDistinct({ objectKey: managedArtifacts.objectKey })
+        .from(managedArtifacts)
+        .where(
+          and(
+            eq(managedArtifacts.clientInstanceId, input.clientInstanceId),
+            inArray(managedArtifacts.objectKey, objectKeys),
+            ne(managedArtifacts.status, "deleted")
+          )
+        )
+    ]);
+    const objectKeysInUse = new Set([...otherFiles, ...artifacts].map((row) => row.objectKey));
+    return rows.map((row) => ({
+      id: row.id as ManagedFileId,
+      objectKey: row.objectKey,
+      objectKeyInUse: objectKeysInUse.has(row.objectKey)
+    }));
+  }
+
+  async markOrphanedManagedFilesDeleted(input: {
+    clientInstanceId: ClientInstanceId;
+    fileIds: readonly ManagedFileId[];
+    createdBefore: string;
+    deletedAt: string;
+  }): Promise<number> {
+    if (input.fileIds.length === 0) {
+      return 0;
+    }
+    const rows = await this.db
+      .update(managedFiles)
+      .set({ status: "deleted", deletedAt: new Date(input.deletedAt) })
+      .where(
+        and(this.orphanedManagedFileCondition(input), inArray(managedFiles.id, [...input.fileIds]))
+      )
+      .returning({ id: managedFiles.id });
+    return rows.length;
+  }
+
+  /**
+   * A file is orphaned when no active Conversation refers to it, neither through an attachment
+   * of any status (a removed draft attachment can be restored) nor as an artifact source.
+   */
+  private orphanedManagedFileCondition(input: {
+    clientInstanceId: ClientInstanceId;
+    createdBefore: string;
+  }) {
+    return and(
+      eq(managedFiles.clientInstanceId, input.clientInstanceId),
+      ne(managedFiles.status, "deleted"),
+      lt(managedFiles.createdAt, new Date(input.createdBefore)),
+      notExists(
+        this.db
+          .select({ id: conversationAttachments.id })
+          .from(conversationAttachments)
+          .innerJoin(conversations, eq(conversations.id, conversationAttachments.conversationId))
+          .where(
+            and(
+              eq(conversationAttachments.fileId, managedFiles.id),
+              eq(conversations.status, "active")
+            )
+          )
+      ),
+      notExists(
+        this.db
+          .select({ id: managedArtifacts.id })
+          .from(managedArtifacts)
+          .innerJoin(conversations, eq(conversations.id, managedArtifacts.conversationId))
+          .where(
+            and(
+              eq(managedArtifacts.sourceFileId, managedFiles.id),
+              ne(managedArtifacts.status, "deleted"),
+              eq(conversations.status, "active")
+            )
+          )
+      )
+    );
   }
 
   async createManagedArtifact(input: CreateManagedArtifactInput): Promise<ManagedArtifactRecord> {

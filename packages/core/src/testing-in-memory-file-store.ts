@@ -24,6 +24,7 @@ import {
   type ManagedFileRecord,
   type ManagedObjectDeletionResult,
   type MessageId,
+  type OrphanedManagedFile,
   type RecoverStaleArtifactPreviewJobsInput,
   type RenewClaimedArtifactPreviewJobLeaseInput,
   type UpdateConversationAttachmentInput,
@@ -94,6 +95,97 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
       return undefined;
     }
     return file;
+  }
+
+  async listOrphanedManagedFiles(input: {
+    clientInstanceId: ClientInstanceId;
+    createdBefore: string;
+    afterFileId?: ManagedFileId;
+    limit: number;
+  }): Promise<OrphanedManagedFile[]> {
+    const orphans = (await this.orphanedManagedFiles(input))
+      .filter((file) => input.afterFileId === undefined || file.id > input.afterFileId)
+      .sort((left, right) => (left.id < right.id ? -1 : 1))
+      .slice(0, input.limit);
+    const listedIds = new Set<string>(orphans.map((file) => file.id));
+    return orphans.map((file) => ({
+      id: file.id,
+      objectKey: file.objectKey,
+      objectKeyInUse:
+        [...this.managedFiles.values()].some(
+          (other) =>
+            other.clientInstanceId === file.clientInstanceId &&
+            other.objectKey === file.objectKey &&
+            other.status !== "deleted" &&
+            !listedIds.has(other.id)
+        ) ||
+        [...this.managedArtifacts.values()].some(
+          (artifact) =>
+            artifact.clientInstanceId === file.clientInstanceId &&
+            artifact.objectKey === file.objectKey &&
+            artifact.status !== "deleted"
+        )
+    }));
+  }
+
+  async markOrphanedManagedFilesDeleted(input: {
+    clientInstanceId: ClientInstanceId;
+    fileIds: readonly ManagedFileId[];
+    createdBefore: string;
+    deletedAt: string;
+  }): Promise<number> {
+    const fileIds = new Set<string>(input.fileIds);
+    const orphans = (await this.orphanedManagedFiles(input)).filter((file) => fileIds.has(file.id));
+    for (const file of orphans) {
+      this.managedFiles.set(file.id, { ...file, status: "deleted", deletedAt: input.deletedAt });
+    }
+    return orphans.length;
+  }
+
+  private async orphanedManagedFiles(input: {
+    clientInstanceId: ClientInstanceId;
+    createdBefore: string;
+  }): Promise<ManagedFileRecord[]> {
+    const activeConversations = new Map<string, boolean>();
+    const isActive = async (conversationId: ConversationId): Promise<boolean> => {
+      let active = activeConversations.get(conversationId);
+      if (active === undefined) {
+        active = await this.callbacks
+          .requireActiveConversation(input.clientInstanceId, conversationId)
+          .then(
+            () => true,
+            () => false
+          );
+        activeConversations.set(conversationId, active);
+      }
+      return active;
+    };
+    const ownedFileIds = new Set<string>();
+    for (const attachment of this.conversationAttachments.values()) {
+      if (
+        attachment.clientInstanceId === input.clientInstanceId &&
+        (await isActive(attachment.conversationId))
+      ) {
+        ownedFileIds.add(attachment.fileId);
+      }
+    }
+    for (const artifact of this.managedArtifacts.values()) {
+      if (
+        artifact.clientInstanceId === input.clientInstanceId &&
+        artifact.sourceFileId !== undefined &&
+        artifact.status !== "deleted" &&
+        (await isActive(artifact.conversationId))
+      ) {
+        ownedFileIds.add(artifact.sourceFileId);
+      }
+    }
+    return [...this.managedFiles.values()].filter(
+      (file) =>
+        file.clientInstanceId === input.clientInstanceId &&
+        file.status !== "deleted" &&
+        file.createdAt < input.createdBefore &&
+        !ownedFileIds.has(file.id)
+    );
   }
 
   async createManagedArtifact(input: CreateManagedArtifactInput): Promise<ManagedArtifactRecord> {
