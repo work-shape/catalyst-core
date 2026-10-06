@@ -198,7 +198,6 @@ const translations = {
       "Someone else — or a CLI push — modified the configuration since you loaded it. Reload to continue from the latest version. Unsaved edits in this editor will be lost.",
     configChangedTitle: "Configuration changed on the server",
     configCliHint: "Also editable with the catalyst CLI.",
-    configConfiguredBindings: "Configured bindings",
     configContent: "Content",
     configCreateAgent: "Create agent",
     configCreateSkill: "Create skill",
@@ -227,9 +226,12 @@ const translations = {
     configMarkdown: "Markdown",
     configMaxSteps: "Max steps",
     configMaxStepsHint: "Maximum model and tool turns for one response. Empty uses release config.",
-    configModel: "Model",
     configModelDefault: "Model default",
-    configModelHint: "Selects one of the model bindings approved in instance config.",
+    configModelIsDefault: "Default",
+    configModelUserSelectable: "Selectable by users",
+    configModels: "Models",
+    configModelsHint:
+      "The default model runs the agent and is always available to users. Users only see a model selector in the chat when at least one additional model is ticked.",
     configName: "Name",
     configNewAgent: "New agent",
     configNewSkill: "New skill",
@@ -244,9 +246,6 @@ const translations = {
     configFastMode: "Fast mode",
     configFastModeHint:
       "Runs use the provider's priority tier. Fast runs are billed at a higher rate.",
-    configUserSelectableModels: "Models users may choose",
-    configNoUserSelectableModels:
-      "Users get this agent's own model. Release config offers no other user-selectable model.",
     configReasoningEffort: "Reasoning effort",
     configReasoningEffortHint: "Overrides the selected binding's default effort.",
     configReloadLatest: "Reload latest",
@@ -868,7 +867,6 @@ const translations = {
       "Eine andere Person oder ein CLI-Push hat die Konfiguration geändert, seit sie geladen wurde. Lade die neueste Version, um fortzufahren. Nicht gespeicherte Änderungen in diesem Editor gehen dabei verloren.",
     configChangedTitle: "Konfiguration auf dem Server geändert",
     configCliHint: "Auch mit der catalyst CLI bearbeitbar.",
-    configConfiguredBindings: "Konfigurierte Modellbindungen",
     configContent: "Inhalt",
     configCreateAgent: "Agenten erstellen",
     configCreateSkill: "Fähigkeit erstellen",
@@ -899,10 +897,12 @@ const translations = {
     configMaxSteps: "Maximale Schritte",
     configMaxStepsHint:
       "Maximale Anzahl an Modell- und Werkzeugdurchläufen pro Antwort. Leer verwendet die Bereitstellungskonfiguration.",
-    configModel: "Modell",
     configModelDefault: "Modellstandard",
-    configModelHint:
-      "Wählt eine der in der Instanzkonfiguration freigegebenen Modellbindungen aus.",
+    configModelIsDefault: "Standard",
+    configModelUserSelectable: "Für Nutzer wählbar",
+    configModels: "Modelle",
+    configModelsHint:
+      "Das Standardmodell führt den Agenten aus und steht Nutzern immer zur Verfügung. Nutzer sehen im Chat nur dann eine Modellauswahl, wenn mindestens ein weiteres Modell angehakt ist.",
     configName: "Name",
     configNewAgent: "Neuer Agent",
     configNewSkill: "Neue Fähigkeit",
@@ -917,9 +917,6 @@ const translations = {
     configFastMode: "Schnellmodus",
     configFastModeHint:
       "Läufe nutzen die Prioritätsstufe des Anbieters. Schnelle Läufe werden zu einem höheren Preis abgerechnet.",
-    configUserSelectableModels: "Von Nutzern wählbare Modelle",
-    configNoUserSelectableModels:
-      "Nutzer erhalten das Modell des Agenten. Die Release-Konfiguration bietet kein weiteres von Nutzern wählbares Modell an.",
     configReasoningEffort: "Denkaufwand",
     configReasoningEffortHint:
       "Überschreibt den Standard-Denkaufwand der ausgewählten Modellbindung.",

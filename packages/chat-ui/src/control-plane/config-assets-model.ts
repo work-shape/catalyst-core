@@ -190,6 +190,10 @@ export function agentFormToConfig(form: AgentFormState): Record<string, unknown>
     ? pairToLocalized(form.welcomeSubtitle)
     : undefined;
   const maxSteps = form.maxSteps.trim() ? Number(form.maxSteps) : undefined;
+  // The default model is always offered to users, so it is never stored in the list.
+  const userSelectableModelBindingIds = form.userSelectableModelBindingIds.filter(
+    (bindingId) => bindingId !== form.modelBindingId
+  );
   return {
     name: form.name.trim(),
     displayName: displayName ?? "",
@@ -204,9 +208,7 @@ export function agentFormToConfig(form: AgentFormState): Record<string, unknown>
         : {}),
     ...(form.reasoningEffort ? { reasoningEffort: form.reasoningEffort } : {}),
     ...(form.fastMode ? { fastMode: true } : {}),
-    ...(form.userSelectableModelBindingIds.length
-      ? { userSelectableModelBindingIds: form.userSelectableModelBindingIds }
-      : {}),
+    ...(userSelectableModelBindingIds.length ? { userSelectableModelBindingIds } : {}),
     ...(maxSteps === undefined ? {} : { maxSteps }),
     toolNames: form.toolNames,
     skillNames: form.skillNames,
@@ -219,18 +221,77 @@ export function agentFormToConfig(form: AgentFormState): Record<string, unknown>
   };
 }
 
-/** Selecting a binding without fast-mode support clears the flag, as the server does. */
+export interface AgentModelRow {
+  bindingId: string;
+  model: string;
+  /** The agent's own model. */
+  isDefault: boolean;
+  /** Offered in the chat: the default always is, the others when listed. */
+  userSelectable: boolean;
+}
+
+/**
+ * One row per model binding the agent may use. A default that is no longer among them still
+ * gets a row, so the configured model stays visible.
+ */
+export function agentModelRows(
+  form: Pick<AgentFormState, "modelBindingId" | "userSelectableModelBindingIds">,
+  modelBindings: ReadonlyArray<{ id: string; model: string }>
+): AgentModelRow[] {
+  const bindings =
+    form.modelBindingId && !modelBindings.some((binding) => binding.id === form.modelBindingId)
+      ? [...modelBindings, { id: form.modelBindingId, model: form.modelBindingId }]
+      : modelBindings;
+  return bindings.map((binding) => {
+    const isDefault = binding.id === form.modelBindingId;
+    return {
+      bindingId: binding.id,
+      model: binding.model,
+      isDefault,
+      userSelectable: isDefault || form.userSelectableModelBindingIds.includes(binding.id)
+    };
+  });
+}
+
+/**
+ * Makes a binding the agent's default ("" for the instance default). The other models keep
+ * their user-selectable state: the list is left alone, and the previous default is offered
+ * again only if it was listed. Selecting a binding without fast-mode support clears the flag,
+ * as the server does.
+ */
 export function selectAgentModelBinding(
   form: AgentFormState,
   modelBindingId: string,
-  fastModeModelBindingIds: readonly string[]
+  references: { fastModeModelBindingIds: readonly string[]; modelBindingIds: readonly string[] }
 ): AgentFormState {
   return {
     ...form,
     modelBindingId,
     modelProviderId: "",
-    fastMode: form.fastMode && fastModeModelBindingIds.includes(modelBindingId)
+    fastMode: form.fastMode && references.fastModeModelBindingIds.includes(modelBindingId),
+    userSelectableModelBindingIds: knownModelBindingIds(form, references.modelBindingIds)
   };
+}
+
+export function setAgentModelUserSelectable(
+  form: AgentFormState,
+  modelBindingId: string,
+  userSelectable: boolean,
+  modelBindingIds: readonly string[]
+): AgentFormState {
+  const others = knownModelBindingIds(form, modelBindingIds).filter((id) => id !== modelBindingId);
+  return {
+    ...form,
+    userSelectableModelBindingIds: userSelectable ? [...others, modelBindingId] : others
+  };
+}
+
+/** An edited list drops ids whose binding no longer exists; the server would reject them. */
+function knownModelBindingIds(
+  form: Pick<AgentFormState, "userSelectableModelBindingIds">,
+  modelBindingIds: readonly string[]
+): string[] {
+  return form.userSelectableModelBindingIds.filter((id) => modelBindingIds.includes(id));
 }
 
 export function emptyAgentForm(): AgentFormState {

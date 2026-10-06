@@ -5,11 +5,13 @@ import {
   agentAvailabilityToForm,
   agentConfigToForm,
   agentFormToConfig,
+  agentModelRows,
   configAssetMutationErrorMessage,
   editedAgentConfig,
   localizedToPair,
   pairToLocalized,
   selectAgentModelBinding,
+  setAgentModelUserSelectable,
   skillConfigToForm,
   skillFormToConfig
 } from "../packages/chat-ui/src/control-plane/config-assets-model";
@@ -70,13 +72,92 @@ describe("config assets form model", () => {
 
     expect(agentFormToConfig(form)).toEqual(config);
     expect(agentFormToConfig({ ...form, fastMode: false })).not.toHaveProperty("fastMode");
-    expect(selectAgentModelBinding(form, "alsoFast", ["fast", "alsoFast"])).toMatchObject({
-      modelBindingId: "alsoFast",
-      fastMode: true
+    const modelBindingIds = ["fast", "alsoFast", "plain"];
+    expect(
+      selectAgentModelBinding(form, "alsoFast", {
+        fastModeModelBindingIds: ["fast", "alsoFast"],
+        modelBindingIds
+      })
+    ).toMatchObject({ modelBindingId: "alsoFast", fastMode: true });
+    expect(
+      selectAgentModelBinding(form, "plain", { fastModeModelBindingIds: ["fast"], modelBindingIds })
+    ).toMatchObject({ modelBindingId: "plain", fastMode: false });
+  });
+
+  describe("agent model list", () => {
+    const modelBindings = [
+      { id: "sol", model: "gpt-5.6-sol" },
+      { id: "terra", model: "gpt-5.6-terra" },
+      { id: "luna", model: "gpt-5.6-luna" }
+    ];
+    const references = {
+      fastModeModelBindingIds: [],
+      modelBindingIds: modelBindings.map((binding) => binding.id)
+    };
+    const formFor = (modelBindingId: string, userSelectableModelBindingIds: string[]) =>
+      agentConfigToForm({
+        name: "assistant",
+        displayName: "Assistant",
+        instructions: "Help the user.",
+        ...(modelBindingId ? { modelBindingId } : {}),
+        userSelectableModelBindingIds
+      });
+    const state = (form: ReturnType<typeof formFor>) =>
+      agentModelRows(form, modelBindings).map((row) => [
+        row.bindingId,
+        row.isDefault ? "default" : "",
+        row.userSelectable ? "offered" : ""
+      ]);
+
+    it("lists every binding with the default always offered", () => {
+      expect(state(formFor("sol", ["terra"]))).toEqual([
+        ["sol", "default", "offered"],
+        ["terra", "", "offered"],
+        ["luna", "", ""]
+      ]);
+      // On the instance default no binding is the default.
+      expect(state(formFor("", ["luna"]))).toEqual([
+        ["sol", "", ""],
+        ["terra", "", ""],
+        ["luna", "", "offered"]
+      ]);
+      // A default that is no longer a usable binding keeps a row.
+      expect(state(formFor("retired", []))).toContainEqual(["retired", "default", "offered"]);
     });
-    expect(selectAgentModelBinding(form, "plain", ["fast"])).toMatchObject({
-      modelBindingId: "plain",
-      fastMode: false
+
+    it("keeps the other models' state when the default changes", () => {
+      const moved = selectAgentModelBinding(formFor("sol", ["terra"]), "luna", references);
+      // The previous default was only offered implicitly, so it is no longer offered.
+      expect(state(moved)).toEqual([
+        ["sol", "", ""],
+        ["terra", "", "offered"],
+        ["luna", "default", "offered"]
+      ]);
+      expect(agentFormToConfig(moved)).toMatchObject({
+        modelBindingId: "luna",
+        userSelectableModelBindingIds: ["terra"]
+      });
+
+      // A listed model that becomes the default is not stored in the list, and is offered
+      // again when the default moves on.
+      const promoted = selectAgentModelBinding(formFor("sol", ["terra"]), "terra", references);
+      expect(agentFormToConfig(promoted)).not.toHaveProperty("userSelectableModelBindingIds");
+      expect(state(selectAgentModelBinding(promoted, "sol", references))).toEqual(
+        state(formFor("sol", ["terra"]))
+      );
+    });
+
+    it("ticks and unticks a model and drops ids of bindings that no longer exist", () => {
+      const form = formFor("sol", ["terra", "retired"]);
+      const ticked = setAgentModelUserSelectable(form, "luna", true, references.modelBindingIds);
+      expect(ticked.userSelectableModelBindingIds).toEqual(["terra", "luna"]);
+      expect(
+        setAgentModelUserSelectable(ticked, "terra", false, references.modelBindingIds)
+          .userSelectableModelBindingIds
+      ).toEqual(["luna"]);
+      expect(
+        selectAgentModelBinding(form, "luna", references).userSelectableModelBindingIds
+      ).toEqual(["terra"]);
     });
   });
 

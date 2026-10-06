@@ -32,7 +32,6 @@ describe("config asset editors", () => {
           modelBindingIds: [],
           modelBindings: [],
           fastModeModelBindingIds: [],
-          userSelectableModelBindings: [],
           reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
           enabledToolNames: []
         },
@@ -71,7 +70,6 @@ describe("config asset editors", () => {
           modelBindingIds: ["reasoning"],
           modelBindings: [{ id: "reasoning", model: "gpt-5" }],
           fastModeModelBindingIds: [],
-          userSelectableModelBindings: [],
           reasoningEfforts: [],
           enabledToolNames: []
         },
@@ -84,7 +82,7 @@ describe("config asset editors", () => {
       })
     );
 
-    expect(markup).toContain('value="azure-eu"');
+    expect(markup).toContain("Instance default (azure-eu)");
     expect(markup).toContain("disabled");
     expect(markup).not.toContain("reasoning");
   });
@@ -114,7 +112,6 @@ describe("config asset editors", () => {
               { id: "plain", model: "gpt-plain" }
             ],
             fastModeModelBindingIds: ["fast"],
-            userSelectableModelBindings: [],
             reasoningEfforts: ["low", "high"],
             enabledToolNames: []
           },
@@ -131,8 +128,12 @@ describe("config asset editors", () => {
     const effortSelect = (markup: string) =>
       /<select[^>]*>(?=<option value="">Model default)/u.exec(markup)?.[0];
 
+    const defaultRadio = (markup: string) =>
+      /<input type="radio"[^>]*aria-label="GPT-fast: Default"[^>]*>/u.exec(markup)?.[0];
+
     const editable = render(true);
-    expect(editable).toContain('<option value="fast" selected="">');
+    expect(defaultRadio(editable)).toContain('checked=""');
+    expect(defaultRadio(editable)).not.toContain('disabled=""');
     expect(effortSelect(editable)).not.toContain('disabled=""');
     expect(fastSwitch(editable)).toContain('aria-checked="true"');
     expect(fastSwitch(editable)).not.toContain('disabled=""');
@@ -140,8 +141,9 @@ describe("config asset editors", () => {
     expect(editable).toContain("Save changes");
 
     const readOnly = render(false);
-    expect(readOnly).not.toContain('<option value="fast"');
-    expect(readOnly).toContain('value="GPT-fast"');
+    expect(defaultRadio(readOnly)).toContain('checked=""');
+    expect(defaultRadio(readOnly)).toContain('disabled=""');
+    expect(readOnly).not.toContain("GPT-plain");
     expect(effortSelect(readOnly)).toContain('disabled=""');
     expect(fastSwitch(readOnly)).toContain('disabled=""');
 
@@ -149,15 +151,19 @@ describe("config asset editors", () => {
     expect(fastSwitch(render(true, "plain"))).toBeUndefined();
   });
 
-  it("lists eligible bindings as the models users may choose, editable by permission", () => {
-    const render = (canManageAgentModels: boolean, userSelectableModelBindingIds: string[]) =>
+  it("shows the agent's models as one list of default and user-selectable models", () => {
+    const render = (
+      canManageAgentModels: boolean,
+      modelBindingId: string,
+      userSelectableModelBindingIds: string[]
+    ) =>
       renderToStaticMarkup(
         createElement(AgentEditor, {
           initialForm: agentConfigToForm({
             name: "assistant",
             displayName: "Assistant",
             instructions: "Help the user.",
-            modelBindingId: "sol",
+            ...(modelBindingId ? { modelBindingId } : {}),
             userSelectableModelBindingIds,
             toolNames: [],
             skillNames: [],
@@ -174,10 +180,6 @@ describe("config asset editors", () => {
               { id: "luna", model: "gpt-5.6-luna" }
             ],
             fastModeModelBindingIds: [],
-            userSelectableModelBindings: [
-              { id: "sol", model: "gpt-5.6-sol" },
-              { id: "terra", model: "gpt-5.6-terra" }
-            ],
             reasoningEfforts: [],
             enabledToolNames: []
           },
@@ -189,29 +191,51 @@ describe("config asset editors", () => {
           revisions: null
         })
       );
-    const group = (markup: string) =>
-      /<fieldset[^>]*><legend[^>]*>Models users may choose<\/legend>.*?<\/fieldset>/u.exec(
-        markup
-      )?.[0];
+    const list = (markup: string) =>
+      /<fieldset[^>]*><legend[^>]*>Models<\/legend>.*?<\/fieldset>/u.exec(markup)?.[0] ?? "";
+    // Per row: the model, then "default" and "offered" for checked inputs, "locked" for disabled.
+    const rows = (markup: string) =>
+      [...list(markup).matchAll(/<input[^>]*aria-label="([^"]*): ([^"]*)"[^>]*>/gu)].map(
+        ([input, model, option]) =>
+          [
+            model,
+            option,
+            input.includes('checked=""') ? "checked" : "",
+            input.includes('disabled=""') ? "disabled" : ""
+          ].join("|")
+      );
 
-    // The agent's own model is always available, so only the other eligible binding is listed.
-    // "luna" is not userSelectable in release config and "retired" no longer exists.
-    const editable = group(render(true, ["terra", "retired"]));
-    expect(editable).toContain("1 selected");
-    expect(editable).toContain("GPT-5.6 Terra");
-    expect(editable).not.toContain("Sol");
-    expect(editable).not.toContain("Luna");
-    expect(editable).not.toContain("retired");
-    expect(editable).toMatch(/<input type="checkbox"[^>]*checked=""/u);
-    expect(editable).not.toContain('disabled=""');
+    const editable = render(true, "sol", ["terra", "retired"]);
+    expect(rows(editable)).toEqual([
+      "Instance default|Default||",
+      "GPT-5.6 Sol|Default|checked|",
+      // The default model is always available to users.
+      "GPT-5.6 Sol|Selectable by users|checked|disabled",
+      "GPT-5.6 Terra|Default||",
+      "GPT-5.6 Terra|Selectable by users|checked|",
+      "GPT-5.6 Luna|Default||",
+      "GPT-5.6 Luna|Selectable by users||"
+    ]);
+    expect(list(editable)).not.toContain("retired");
+    expect(list(editable)).toContain(
+      "Users only see a model selector in the chat when at least one additional model is ticked."
+    );
 
-    // The model select shows the chat selector's labels instead of raw model ids.
-    expect(render(true, [])).toContain('<option value="sol" selected="">GPT-5.6 Sol</option>');
-    expect(group(render(true, []))).toContain("0 selected");
+    // On the instance default every binding can still be offered.
+    expect(rows(render(true, "", ["luna"])).slice(0, 3)).toEqual([
+      "Instance default|Default|checked|",
+      "GPT-5.6 Sol|Default||",
+      "GPT-5.6 Sol|Selectable by users||"
+    ]);
 
-    // Without the permission the list is read-only, and hidden when nothing is offered.
-    expect(group(render(false, ["terra"]))).toContain('disabled=""');
-    expect(group(render(false, []))).toBeUndefined();
+    // Without the permission: only the default and the offered models, all read-only.
+    expect(rows(render(false, "sol", ["terra"]))).toEqual([
+      "GPT-5.6 Sol|Default|checked|disabled",
+      "GPT-5.6 Sol|Selectable by users|checked|disabled",
+      "GPT-5.6 Terra|Default||disabled",
+      "GPT-5.6 Terra|Selectable by users|checked|disabled"
+    ]);
+    expect(render(false, "", [])).not.toContain('<legend class="sr-only">Models</legend>');
   });
 
   it("keeps a read-only skill package navigable without mutation controls", () => {

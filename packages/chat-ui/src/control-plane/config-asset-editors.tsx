@@ -1,5 +1,5 @@
 import { ChevronDown, FileText, History, Plus, Star, Trash2, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import type {
   AdministeredCollaborationWorkspace,
   ConfigAssetKind,
@@ -17,7 +17,9 @@ import {
 import {
   agentAvailabilityFormsEqual,
   agentAvailabilityToForm,
+  agentModelRows,
   selectAgentModelBinding,
+  setAgentModelUserSelectable,
   type AgentAvailabilityForm,
   type AgentFormState,
   type SkillFormState
@@ -79,28 +81,15 @@ export function AgentEditor({
   const canEditMaxSteps = canEdit("maxSteps");
   const modelBindings =
     references?.modelBindings ?? references?.modelBindingIds.map((id) => ({ id, model: id })) ?? [];
-  const showModel = canEditModel || Boolean(form.modelBindingId || form.modelProviderId);
+  const modelBindingIds = modelBindings.map((binding) => binding.id);
+  const showModels =
+    canEditModel ||
+    Boolean(form.modelBindingId || form.modelProviderId) ||
+    form.userSelectableModelBindingIds.some((id) => modelBindingIds.includes(id));
   const showReasoningEffort = canEditReasoningEffort || Boolean(form.reasoningEffort);
   const showMaxSteps = canEditMaxSteps || Boolean(form.maxSteps);
   const fastModeModelBindingIds = references?.fastModeModelBindingIds ?? [];
   const showFastMode = form.fastMode || fastModeModelBindingIds.includes(form.modelBindingId);
-  // The agent's own model is always offered to users, so it is not a choice here.
-  const userSelectableModelBindings = (references?.userSelectableModelBindings ?? []).filter(
-    (binding) => binding.id !== form.modelBindingId
-  );
-  const userSelectableModelBindingIds = userSelectableModelBindings.map((binding) => binding.id);
-  const showUserSelectableModels =
-    canManageAgentModels ||
-    form.userSelectableModelBindingIds.some((id) => userSelectableModelBindingIds.includes(id));
-  const configuredModelLabel = form.modelBindingId
-    ? modelBindingLabel(
-        modelBindings.find((binding) => binding.id === form.modelBindingId) ?? {
-          id: form.modelBindingId,
-          model: form.modelBindingId
-        },
-        modelBindings
-      )
-    : form.modelProviderId;
 
   const update = (patch: Partial<AgentFormState>) => setForm((value) => ({ ...value, ...patch }));
 
@@ -210,41 +199,34 @@ export function AgentEditor({
             onChange={(event) => update({ instructions: event.target.value })}
           />
         </Field>
-        {showModel || showReasoningEffort || showFastMode || showMaxSteps ? (
+        {showModels ? (
+          <AgentModelList
+            form={form}
+            modelBindings={modelBindings}
+            editable={canEditModel}
+            onSelectDefault={(modelBindingId) =>
+              setForm((value) =>
+                selectAgentModelBinding(value, modelBindingId, {
+                  fastModeModelBindingIds,
+                  modelBindingIds
+                })
+              )
+            }
+            onSetUserSelectable={(modelBindingId, userSelectable) =>
+              setForm((value) =>
+                setAgentModelUserSelectable(value, modelBindingId, userSelectable, modelBindingIds)
+              )
+            }
+          />
+        ) : null}
+        {showReasoningEffort || showFastMode || showMaxSteps ? (
           <div
             className={cn(
               "grid gap-5",
-              [showModel, showReasoningEffort, showFastMode, showMaxSteps].filter(Boolean).length >
-                1 && "sm:grid-cols-2"
+              [showReasoningEffort, showFastMode, showMaxSteps].filter(Boolean).length > 1 &&
+                "sm:grid-cols-2"
             )}
           >
-            {showModel ? (
-              <Field label={t("configModel")} hint={t("configModelHint")}>
-                {canEditModel ? (
-                  <Select
-                    value={form.modelBindingId}
-                    onChange={(event) =>
-                      setForm((value) =>
-                        selectAgentModelBinding(value, event.target.value, fastModeModelBindingIds)
-                      )
-                    }
-                  >
-                    <option value="">{t("configInstanceDefault")}</option>
-                    {modelBindings.length ? (
-                      <optgroup label={t("configConfiguredBindings")}>
-                        {modelBindings.map((binding) => (
-                          <option key={binding.id} value={binding.id}>
-                            {modelBindingLabel(binding, modelBindings)}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ) : null}
-                  </Select>
-                ) : (
-                  <Input value={configuredModelLabel || t("configInstanceDefault")} disabled />
-                )}
-              </Field>
-            ) : null}
             {showReasoningEffort ? (
               <Field label={t("configReasoningEffort")} hint={t("configReasoningEffortHint")}>
                 <Select
@@ -283,27 +265,6 @@ export function AgentEditor({
               </Field>
             ) : null}
           </div>
-        ) : null}
-        {showUserSelectableModels ? (
-          <CheckboxGroup
-            label={t("configUserSelectableModels")}
-            options={userSelectableModelBindingIds}
-            optionLabel={(id) =>
-              modelBindingLabel(
-                userSelectableModelBindings.find((binding) => binding.id === id) ?? {
-                  id,
-                  model: id
-                },
-                userSelectableModelBindings
-              )
-            }
-            selected={form.userSelectableModelBindingIds.filter((id) =>
-              userSelectableModelBindingIds.includes(id)
-            )}
-            disabled={!canManageAgentModels}
-            emptyHint={t("configNoUserSelectableModels")}
-            onChange={(ids) => update({ userSelectableModelBindingIds: ids })}
-          />
         ) : null}
       </EditorSection>
 
@@ -496,6 +457,93 @@ export function AgentAvailabilityEditor({
         </div>
       )}
     </EditorSection>
+  );
+}
+
+/**
+ * The agent's models as one list: which one runs the agent, and which ones its users may pick
+ * instead. Read-only, it shows only the default and the offered models.
+ */
+function AgentModelList({
+  form,
+  modelBindings,
+  editable,
+  onSelectDefault,
+  onSetUserSelectable
+}: {
+  form: AgentFormState;
+  modelBindings: Array<{ id: string; model: string }>;
+  editable: boolean;
+  onSelectDefault(modelBindingId: string): void;
+  onSetUserSelectable(modelBindingId: string, userSelectable: boolean): void;
+}) {
+  const { t } = useTranslation();
+  const defaultGroupName = useId();
+  const rows = agentModelRows(form, modelBindings)
+    .filter((row) => editable || row.userSelectable)
+    .map((row) => ({
+      ...row,
+      label: modelBindingLabel({ id: row.bindingId, model: row.model }, modelBindings)
+    }));
+  const instanceDefaultLabel = form.modelProviderId
+    ? `${t("configInstanceDefault")} (${form.modelProviderId})`
+    : t("configInstanceDefault");
+  const rowClassName =
+    "grid min-h-10 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-5 gap-y-1 bg-background px-3 py-2 text-sm sm:grid-cols-[minmax(0,1fr)_auto_auto]";
+  const optionClassName = "flex items-center gap-2 text-xs text-muted-foreground";
+  const defaultOption = (bindingId: string, label: string, checked: boolean) => (
+    <label className={optionClassName}>
+      <input
+        type="radio"
+        name={defaultGroupName}
+        className="size-4 shrink-0 accent-primary"
+        aria-label={`${label}: ${t("configModelIsDefault")}`}
+        checked={checked}
+        disabled={!editable}
+        onChange={() => onSelectDefault(bindingId)}
+      />
+      {t("configModelIsDefault")}
+    </label>
+  );
+
+  return (
+    <fieldset className="grid min-w-0 gap-2">
+      <legend className="sr-only">{t("configModels")}</legend>
+      <div className="overflow-hidden rounded-lg border bg-background">
+        <div className="border-b bg-muted/20 px-3 py-2 text-sm font-medium">
+          {t("configModels")}
+        </div>
+        <div className="grid gap-px bg-border">
+          {editable || !form.modelBindingId ? (
+            <div className={cn(rowClassName, !form.modelBindingId && "bg-muted/30")}>
+              <span className="col-span-2 min-w-0 break-words sm:col-span-1">
+                {instanceDefaultLabel}
+              </span>
+              {defaultOption("", instanceDefaultLabel, !form.modelBindingId)}
+              <span aria-hidden="true" />
+            </div>
+          ) : null}
+          {rows.map((row) => (
+            <div key={row.bindingId} className={cn(rowClassName, row.isDefault && "bg-muted/30")}>
+              <span className="col-span-2 min-w-0 break-words sm:col-span-1">{row.label}</span>
+              {defaultOption(row.bindingId, row.label, row.isDefault)}
+              <label className={optionClassName}>
+                <input
+                  type="checkbox"
+                  className="size-4 shrink-0 accent-primary"
+                  aria-label={`${row.label}: ${t("configModelUserSelectable")}`}
+                  checked={row.userSelectable}
+                  disabled={!editable || row.isDefault}
+                  onChange={(event) => onSetUserSelectable(row.bindingId, event.target.checked)}
+                />
+                {t("configModelUserSelectable")}
+              </label>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">{t("configModelsHint")}</p>
+    </fieldset>
   );
 }
 
