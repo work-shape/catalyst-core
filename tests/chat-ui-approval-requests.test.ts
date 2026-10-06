@@ -13,7 +13,10 @@ import {
   decidedApprovalRequests,
   readApprovalRequestDisplay
 } from "../packages/chat-ui/src/approvals/approval-request-model";
-import { buildApprovalRevisionMessage } from "../packages/chat-ui/src/approvals/approval-revision-message";
+import {
+  buildApprovalRevisionMessage,
+  changedLines
+} from "../packages/chat-ui/src/approvals/approval-revision-message";
 import { ApprovalRequestList } from "../packages/chat-ui/src/approvals/approvals-view";
 import { parseSkillChangePreview } from "../packages/chat-ui/src/approvals/skill-change-preview";
 import {
@@ -479,98 +482,132 @@ describe("approval request details panel", () => {
 describe("first message of a reviewer's revision conversation", () => {
   const t = createTranslationContext("en").t;
   const comment = "Leave out the customer name.";
+  const read = "Read the current skill text yourself with read_skill before you propose anything.";
 
-  it("carries the skill, each affected place, the proposed text and the instruction", () => {
-    const message = buildApprovalRevisionMessage({
-      request: request(),
+  function preview(changes: unknown[]): Partial<ApprovalRequestView> {
+    return { preview: { skillName: "payroll", skillTitle: "Payroll", changes } };
+  }
+
+  function build(overrides: Partial<ApprovalRequestView> = {}, locale: "de" | "en" = "en") {
+    return buildApprovalRevisionMessage({
+      request: request(overrides),
       comment: `  ${comment}\n`,
-      t
+      t: locale === "en" ? t : createTranslationContext("de").t
     });
+  }
 
-    expect(message.split("\n\n")).toEqual([
-      "Please revise this proposed change to the skill “Gehaltsabrechnungen prüfen” (`payroll`) and submit the revised version as a new proposal.",
-      `What should be changed:\n${comment}`,
+  it("is short: the ask, the instruction, the summary, each place and only its changed lines", () => {
+    expect(build().split("\n\n")).toEqual([
+      `Please revise the proposal for the skill “Gehaltsabrechnungen prüfen” (payroll) and submit the revised version as a new proposal. ${read}`,
+      `Requested change: ${comment}`,
       "Original proposal: Bei Gehaltsabrechnungen auch die Steuerklasse prüfen.",
-      "Affected file: the skill's instructions\nBefore:\n```\nPrüfe den Bruttolohn.\n```\nNew:\n```\nPrüfe den Bruttolohn und die Steuerklasse.\n```",
-      "Affected file: the skill's instructions\nSection: Sonderfälle\nNewly added:\n```\nBei Minijobs gilt die Pauschale.\n```",
-      "New reference: `references/checkliste.md`\nNew:\n```\n# Checkliste\n```"
+      "Affected: the skill's instructions",
+      "> − Prüfe den Bruttolohn.  \n> \\+ Prüfe den Bruttolohn und die Steuerklasse.",
+      "Affected: the skill's instructions, in the section “Sonderfälle”",
+      "> \\+ Bei Minijobs gilt die Pauschale.",
+      "New reference: references/checkliste.md",
+      "> \\+ # Checkliste"
     ]);
   });
 
-  it("names the reference a change sits in and writes in the reviewer's language", () => {
-    const message = buildApprovalRevisionMessage({
-      request: request({
-        preview: {
-          skillName: "payroll",
-          skillTitle: "Gehaltsabrechnungen prüfen",
-          changes: [
-            { type: "replace", target: "references/regeln.md", before: "Alt.", after: "Neu." }
-          ]
-        }
-      }),
-      comment: "Kürzer.",
-      t: createTranslationContext("de").t
-    });
-
-    expect(message).toContain("Fähigkeit „Gehaltsabrechnungen prüfen“ (`payroll`)");
-    expect(message).toContain("Was geändert werden soll:\nKürzer.");
-    expect(message).toContain(
-      "Betroffene Datei: Referenz `references/regeln.md`\nBisher:\n```\nAlt.\n```\nNeu:\n```\nNeu.\n```"
-    );
+  it("uses neither code fences nor inline code", () => {
+    expect(build()).not.toContain("`");
   });
 
-  it("describes a proposed new skill with its description and content", () => {
-    const message = buildApprovalRevisionMessage({
-      request: request({
-        preview: {
-          isNewSkill: true,
-          newSkill: {
-            name: "mahnwesen",
-            title: "Mahnwesen",
-            description: "Offene Posten anmahnen.",
-            content: "# Mahnen"
-          }
+  it("leaves out the lines a replacement keeps", () => {
+    const message = build(
+      preview([
+        {
+          type: "replace",
+          target: "references/regeln.md",
+          before: "# Regeln\n\nErste Regel.\nZweite Regel.\nDritte Regel.",
+          after: "# Regeln\n\nErste Regel.\nZweite Regel, genauer.\nDritte Regel.\nVierte Regel."
         }
-      }),
-      comment,
-      t
-    });
-
-    expect(message).toContain("proposal for the new skill “Mahnwesen” (`mahnwesen`)");
-    expect(message).toContain(
-      "Description: Offene Posten anmahnen.\nProposed content:\n```\n# Mahnen\n```"
+      ]),
+      "de"
     );
+
+    expect(message).toContain("Fähigkeit „Payroll“ (payroll)");
+    expect(message).toContain("mit read_skill");
+    expect(message).toContain(`Gewünschte Änderung: ${comment}`);
+    expect(message).toContain(
+      "Betrifft: Referenz references/regeln.md\n\n> − Zweite Regel.  \n> \\+ Zweite Regel, genauer.  \n> \\+ Vierte Regel."
+    );
+    expect(message).not.toContain("Erste Regel.");
+    expect(message).not.toContain("Dritte Regel.");
   });
 
-  it("fences proposed text beyond any code fence inside it", () => {
-    const after = "Beispiel:\n````\ncode\n````";
-    const message = buildApprovalRevisionMessage({
-      request: request({
-        preview: {
-          skillName: "payroll",
-          skillTitle: "Payroll",
-          changes: [{ type: "add", target: "root", after }]
+  it("names the place without a diff when before and new are the same", () => {
+    const message = build(
+      preview([{ type: "replace", target: "root", before: "Gleich.\n", after: "Gleich." }])
+    );
+
+    expect(message.endsWith("Affected: the skill's instructions")).toBe(true);
+    expect(message).not.toContain(">");
+  });
+
+  it("stops after forty changed lines and counts the rest", () => {
+    const lines = (prefix: string, count: number) =>
+      Array.from({ length: count }, (_, index) => `${prefix} ${index + 1}`).join("\n");
+    const message = build(
+      preview([
+        { type: "add", target: "root", after: lines("Erste", 30) },
+        { type: "add", target: "references/a.md", after: lines("Zweite", 25) },
+        { type: "add", target: "references/b.md", after: lines("Dritte", 5) }
+      ])
+    );
+
+    expect(message.match(/^> /gmu)).toHaveLength(40);
+    expect(message).toContain("> \\+ Zweite 10");
+    expect(message).not.toContain("Zweite 11");
+    expect(message).toContain("Affected: reference references/b.md");
+    expect(message).not.toContain("Dritte 1");
+    expect(message.endsWith("… (20 more changed lines)")).toBe(true);
+  });
+
+  it("describes a proposed new skill without asking to read what does not exist yet", () => {
+    const message = build({
+      preview: {
+        isNewSkill: true,
+        newSkill: {
+          name: "mahnwesen",
+          title: "Mahnwesen",
+          description: "Offene Posten anmahnen.",
+          content: "# Mahnen\n\nErst erinnern."
         }
-      }),
-      comment,
-      t
+      }
     });
 
-    expect(message).toContain(`Newly added:\n\`\`\`\`\`\n${after}\n\`\`\`\`\``);
+    expect(message).toContain("proposal for the new skill “Mahnwesen” (mahnwesen)");
+    expect(message).not.toContain("read_skill");
+    expect(message).toContain(
+      "Description: Offene Posten anmahnen.\n\n> \\+ # Mahnen  \n> \\+ Erst erinnern."
+    );
   });
 
   it("still asks for the revision when the preview cannot be read", () => {
-    const message = buildApprovalRevisionMessage({
-      request: request({ kind: "future_kind", preview: {} }),
-      comment,
-      t
-    });
-
-    expect(message.split("\n\n")).toEqual([
+    expect(build({ kind: "future_kind", preview: {} }).split("\n\n")).toEqual([
       "Please revise this proposed change and submit the revised version as a new proposal.",
-      `What should be changed:\n${comment}`,
+      `Requested change: ${comment}`,
       "Original proposal: Bei Gehaltsabrechnungen auch die Steuerklasse prüfen."
     ]);
+  });
+});
+
+describe("changed lines of a proposal", () => {
+  it("lists removed before added lines at each changed place, in reading order", () => {
+    expect(changedLines("a\nb\nc\nd", "a\nB\nc\nD\ne")).toEqual([
+      "− b",
+      "\\+ B",
+      "− d",
+      "\\+ D",
+      "\\+ e"
+    ]);
+  });
+
+  it("ignores blank lines, line endings and trailing whitespace", () => {
+    expect(changedLines("a  \r\nb\r\n", "a\n\n\nb")).toEqual([]);
+    expect(changedLines(undefined, "\n  neu  \n")).toEqual(["\\+ neu"]);
   });
 });
 

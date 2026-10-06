@@ -100,20 +100,21 @@ const translations = {
     approvalRevisionHintOpenConversation: "The agent revises it in this conversation.",
     approvalRevisionHintOriginConversation:
       "Opens the conversation the proposal came from, where the agent revises it.",
-    approvalRevisionMessageContent: "Proposed content",
     approvalRevisionMessageDescription: "Description: {description}",
-    approvalRevisionMessageInstruction: "What should be changed:",
+    approvalRevisionMessageInstruction: "Requested change: {comment}",
     approvalRevisionMessageIntro:
       "Please revise this proposed change and submit the revised version as a new proposal.",
     approvalRevisionMessageIntroNewSkill:
-      "Please revise this proposal for the new skill “{skill}” (`{skillName}`) and submit the revised version as a new proposal.",
+      "Please revise the proposal for the new skill “{skill}” ({skillName}) and submit the revised version as a new proposal.",
     approvalRevisionMessageIntroSkill:
-      "Please revise this proposed change to the skill “{skill}” (`{skillName}`) and submit the revised version as a new proposal.",
+      "Please revise the proposal for the skill “{skill}” ({skillName}) and submit the revised version as a new proposal.",
+    approvalRevisionMessageMoreLines: "… ({count} more changed lines)",
     approvalRevisionMessageProposal: "Original proposal: {summary}",
-    approvalRevisionMessageSection: "Section: {heading}",
-    approvalRevisionMessageTargetNewResource: "New reference: `{name}`",
-    approvalRevisionMessageTargetResource: "Affected file: reference `{name}`",
-    approvalRevisionMessageTargetRoot: "Affected file: the skill's instructions",
+    approvalRevisionMessageReadFirst:
+      "Read the current skill text yourself with read_skill before you propose anything.",
+    approvalRevisionMessageTargetNewResource: "New reference: {name}",
+    approvalRevisionMessageTargetResource: "Affected: reference {name}",
+    approvalRevisionMessageTargetRoot: "Affected: the skill's instructions",
     approvalRevisionStartFailed:
       "The revision could not be started. Your message is in the input field; send it to start.",
     approvalStatusApproved: "Accepted",
@@ -761,20 +762,21 @@ const translations = {
     approvalRevisionHintOpenConversation: "Der Agent überarbeitet ihn in dieser Unterhaltung.",
     approvalRevisionHintOriginConversation:
       "Öffnet die Unterhaltung, aus der der Vorschlag stammt. Dort überarbeitet ihn der Agent.",
-    approvalRevisionMessageContent: "Vorgeschlagener Inhalt",
     approvalRevisionMessageDescription: "Beschreibung: {description}",
-    approvalRevisionMessageInstruction: "Was geändert werden soll:",
+    approvalRevisionMessageInstruction: "Gewünschte Änderung: {comment}",
     approvalRevisionMessageIntro:
       "Bitte überarbeite diesen Änderungsvorschlag und reiche die überarbeitete Fassung als neuen Vorschlag ein.",
     approvalRevisionMessageIntroNewSkill:
-      "Bitte überarbeite diesen Vorschlag für die neue Fähigkeit „{skill}“ (`{skillName}`) und reiche die überarbeitete Fassung als neuen Vorschlag ein.",
+      "Bitte überarbeite den Vorschlag für die neue Fähigkeit „{skill}“ ({skillName}) und reiche die überarbeitete Fassung als neuen Vorschlag ein.",
     approvalRevisionMessageIntroSkill:
-      "Bitte überarbeite diesen Änderungsvorschlag für die Fähigkeit „{skill}“ (`{skillName}`) und reiche die überarbeitete Fassung als neuen Vorschlag ein.",
+      "Bitte überarbeite den Vorschlag für die Fähigkeit „{skill}“ ({skillName}) und reiche die überarbeitete Fassung als neuen Vorschlag ein.",
+    approvalRevisionMessageMoreLines: "… ({count} weitere geänderte Zeilen)",
     approvalRevisionMessageProposal: "Ursprünglicher Vorschlag: {summary}",
-    approvalRevisionMessageSection: "Abschnitt: {heading}",
-    approvalRevisionMessageTargetNewResource: "Neue Referenz: `{name}`",
-    approvalRevisionMessageTargetResource: "Betroffene Datei: Referenz `{name}`",
-    approvalRevisionMessageTargetRoot: "Betroffene Datei: Anweisungen der Fähigkeit",
+    approvalRevisionMessageReadFirst:
+      "Lies vorher selbst den aktuellen Text der Fähigkeit mit read_skill, bevor du etwas vorschlägst.",
+    approvalRevisionMessageTargetNewResource: "Neue Referenz: {name}",
+    approvalRevisionMessageTargetResource: "Betrifft: Referenz {name}",
+    approvalRevisionMessageTargetRoot: "Betrifft: Anweisungen der Fähigkeit",
     approvalRevisionStartFailed:
       "Die Überarbeitung konnte nicht gestartet werden. Deine Nachricht steht im Eingabefeld; sende sie, um zu starten.",
     approvalStatusApproved: "Übernommen",
