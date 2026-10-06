@@ -111,10 +111,11 @@ userSelectableModelBindingIds:
   - fast
 ```
 
-- Every id must be a binding with `userSelectable: true` in release config; anything else is a validation error when the list is saved or pushed. The agent's own `modelBindingId` is always available and need not be listed.
+- Every id must be a binding agents may use (`agentSelectable` not `false` in release config); anything else is a validation error when the list is saved or pushed. The binding-level `userSelectable` key has no effect. The agent's own `modelBindingId` is always available and need not be listed.
+- The admin panel shows one model list per agent: a "Default" radio picks `modelBindingId`, a "Selectable by users" checkbox per model fills this list. The default's row is ticked and locked. Changing the default leaves the other ticks as they are, so tick the previous default to keep offering it.
 - The composer shows a model selector with the agent's own model first, followed by the list. With an empty list there is no selector. Switching the agent updates the options and falls back to the new agent's own model when it does not offer the current pick.
 - The server rejects a run that requests a model the resolved agent does not offer.
-- An id whose binding is later removed or loses `userSelectable` is ignored instead of failing the agent. It stays in the stored config until the list is next changed.
+- An id whose binding is later removed or set to `agentSelectable: false` is ignored instead of failing the agent. It stays in the stored config until the list is next changed.
 - The CLI omits the key from the agent YAML when the list is empty.
 
 Set `enabled: true`, leave `editableAgentFields` empty, and set all interactive mutation flags (including `allowSkillEditing`) to `false` for a readable, release-controlled Config tab. Agents, complete skill packages, and revision history remain inspectable while create, save, delete, default-change, and restore controls are hidden. Enabling skill editing later exposes the same atomic package through a root/reference editor; no storage migration is required.

@@ -3,6 +3,18 @@
 All platform packages are released in lockstep under one version. Before 1.0 a minor version may
 contain breaking changes; a patch version does not.
 
+## Unreleased
+
+### Changed
+
+- **Agent model settings:** an agent may offer its users any model binding agents may use. The
+  binding-level `userSelectable` key in release config is still accepted but no longer has an
+  effect; `agent_models.manage` governs the choice. The agent editor shows one model list with
+  a default and a "Selectable by users" tick per model.
+- **API:** the safe config view no longer carries the top-level `selectableModels`; use
+  `agents[].selectableModels`. The config assets overview no longer carries
+  `references.userSelectableModelBindings`.
+
 ## 0.3.0 — 2026-10-06
 
 ### Changed

@@ -262,7 +262,6 @@ modelBindings:
     providerId: openai
     model: gpt-5.5
     agentSelectable: true
-    userSelectable: true
     supportsFastMode: false
 ```
 
@@ -279,14 +278,15 @@ An agent's `modelBindingId`, `reasoningEffort`, `fastMode`, and `userSelectableM
 
 Set `supportsFastMode: true` on a binding whose provider deployment offers a priority processing tier. It defaults to `false`. An agent may set `fastMode: true` only while its binding supports it; saving it for another binding is a validation error, and switching an agent to a binding without support in the admin panel clears it. For fast-mode runs the OpenAI-compatible adapter sends `service_tier: "priority"` on both API shapes. When a chat user picks another model, fast mode applies only if that binding supports it. Fast runs are billed with the rate card's `fast` rates, see above.
 
-Set `userSelectable: true` only for bindings that may be offered to chat users
-at all. It defaults to `false`. The flag alone offers nothing: each agent lists
-the subset its users may pick in `userSelectableModelBindingIds`, see
-[agent model choice](/configure/config-assets/#models-users-may-choose). The run
-API accepts a binding id the resolved agent offers rather than an arbitrary
-provider or model name, and an omitted choice keeps the agent's configured
-binding. Put shared reasoning defaults on the provider or agent; add one to a
-binding only when that model needs a different fallback.
+Which models chat users may pick is decided per agent, not per binding: each
+agent lists them in `userSelectableModelBindingIds`, and any `agentSelectable`
+binding may be listed, see
+[agent model choice](/configure/config-assets/#models-users-may-choose). The
+binding-level `userSelectable` key is still accepted for compatibility but no
+longer has an effect. The run API accepts a binding id the resolved agent offers
+rather than an arbitrary provider or model name, and an omitted choice keeps the
+agent's configured binding. Put shared reasoning defaults on the provider or
+agent; add one to a binding only when that model needs a different fallback.
 
 ## Mail
 
