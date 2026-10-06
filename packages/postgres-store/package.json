@@ -1,6 +1,6 @@
 {
   "name": "@vivd-catalyst/postgres-store",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "license": "UNLICENSED",
   "repository": {
     "type": "git",
