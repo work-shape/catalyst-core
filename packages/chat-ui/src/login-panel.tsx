@@ -175,7 +175,11 @@ export function LoginPanel({
 
   return (
     <main
-      className="relative grid h-dvh w-full place-items-center overflow-hidden bg-sidebar p-5 text-foreground"
+      className={cn(
+        "relative grid h-dvh w-full place-items-center overflow-hidden bg-sidebar p-5 text-foreground",
+        // `scheme-dark` makes the browser paint autofilled inputs in its dark palette.
+        resolvedThemeMode === "dark" && "dark scheme-dark"
+      )}
       aria-label={t("signIn")}
       style={themeStyle}
     >

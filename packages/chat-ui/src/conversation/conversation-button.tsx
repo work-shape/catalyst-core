@@ -125,7 +125,7 @@ export function ConversationButton({
         {editing ? (
           <form
             ref={editorFormRef}
-            className="grid min-w-0 gap-0.5 px-3 py-2.5"
+            className="grid min-w-0 gap-0.5 px-1 py-2.5"
             onBlur={(event) => {
               if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
                 exitEditing();
@@ -160,7 +160,7 @@ export function ConversationButton({
           </form>
         ) : (
           <Button
-            className="h-auto min-w-0 justify-start px-3 py-3 text-left text-foreground hover:bg-transparent"
+            className="h-auto min-w-0 justify-start px-2 py-3 text-left text-foreground hover:bg-transparent"
             type="button"
             variant="ghost"
             onClick={onSelect}

@@ -215,7 +215,7 @@ export function WorkspaceRail({
         </label>
       </div>
 
-      <nav className="chat-scrollbar -mx-1 grid min-h-0 auto-rows-max content-start gap-1 overflow-y-auto overflow-x-hidden px-1 pb-3">
+      <nav className="chat-scrollbar -ml-1 -mr-4 grid min-h-0 auto-rows-max content-start gap-1 overflow-y-auto overflow-x-hidden pl-1 pr-4 pb-3">
         {conversations.length === 0 ? (
           <div className="rounded-md border border-dashed border-sidebar-border px-3 py-4 text-sm text-muted-foreground">
             {t("noConversations")}
