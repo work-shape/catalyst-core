@@ -1407,6 +1407,7 @@ export type GetConversationThreadResponses = {
                     decidedAt: string;
                     summary: string;
                     comment?: string;
+                    requestedBy?: string;
                 } | {
                     version: 1;
                     kind: 'user_message';
@@ -1636,6 +1637,7 @@ export type ListConversationMessagesResponses = {
                 decidedAt: string;
                 summary: string;
                 comment?: string;
+                requestedBy?: string;
             } | {
                 version: 1;
                 kind: 'user_message';
@@ -1961,6 +1963,7 @@ export type StartConversationRunResponses = {
                     decidedAt: string;
                     summary: string;
                     comment?: string;
+                    requestedBy?: string;
                 } | {
                     version: 1;
                     kind: 'user_message';
@@ -2096,6 +2099,7 @@ export type StartConversationRunResponses = {
                         decidedAt: string;
                         summary: string;
                         comment?: string;
+                        requestedBy?: string;
                     } | {
                         version: 1;
                         kind: 'user_message';
@@ -2353,6 +2357,7 @@ export type CreateConversationRunResponses = {
                     decidedAt: string;
                     summary: string;
                     comment?: string;
+                    requestedBy?: string;
                 } | {
                     version: 1;
                     kind: 'user_message';
@@ -2488,6 +2493,7 @@ export type CreateConversationRunResponses = {
                         decidedAt: string;
                         summary: string;
                         comment?: string;
+                        requestedBy?: string;
                     } | {
                         version: 1;
                         kind: 'user_message';

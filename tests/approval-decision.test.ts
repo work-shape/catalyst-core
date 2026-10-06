@@ -4,6 +4,8 @@ import {
   asAgentRunId,
   asClientInstanceId,
   asToolCallId,
+  approvalDecisionNote,
+  approvalRevisionOwner,
   createApprovalDecisionMessage,
   readApprovalDecisionMetadata,
   readAgentRuntimeMessageMetadata,
@@ -146,12 +148,68 @@ describe("approval decision history", () => {
     expect(messages.at(-1)?.text).toContain(
       status === "approved" ? "change is now active" : status
     );
+    expect(event?.requestedBy).toBe(owner.id);
     if (status === "changes_requested") {
-      expect(messages.at(-1)?.text).toContain("When the user continues, submit a revised proposal");
+      expect(messages.at(-1)?.text).toContain("The reviewer has taken over the revision");
+      expect(messages.at(-1)?.text).not.toContain("When the user continues");
     }
     if (status === "reverted") {
       expect(event?.comment).toBeUndefined();
     }
+  });
+
+  it("lets the origin agent revise only a proposal its own requester sent back", async () => {
+    const f = await fixture();
+    const ownerWhoApproves = { ...owner, permissions: ["agent_skills.approve" as const] };
+    const own = await f.workflow.decideRequest(ownerWhoApproves, context, {
+      requestId: (await f.create()).id,
+      decision: "request_changes",
+      comment: "Shorter"
+    });
+    const taken = await f.workflow.decideRequest(reviewer, context, {
+      requestId: (await f.create()).id,
+      decision: "request_changes",
+      comment: "Without names"
+    });
+    const notes = (await f.messages()).map((message) => message.text);
+
+    expect(notes).toHaveLength(2);
+    expect(notes[0]).toContain(own.id);
+    expect(notes[0]).toContain(
+      "When the user continues, submit a revised proposal addressing the requested changes."
+    );
+    expect(notes[0]).not.toContain("taken over");
+    expect(notes[1]).toContain(taken.id);
+    expect(notes[1]).toContain("The reviewer has taken over the revision");
+    expect(notes[1]).toContain(
+      "Do NOT submit a revised proposal in this conversation unless the user explicitly asks for one."
+    );
+    expect(notes[1]).toContain('Comment: "Without names"');
+  });
+
+  it("reads a decision stored without its requester as the requester's own revision", () => {
+    const stored = {
+      version: 1,
+      kind: "approval_decision",
+      requestId: "apr_old",
+      requestKind: "skill_change",
+      status: "changes_requested",
+      decidedBy: "reviewer",
+      decidedByLabel: "Reviewer",
+      decidedAt: "2026-10-05T09:00:00.000Z",
+      summary: "Check all pages"
+    } as const;
+
+    expect(approvalRevisionOwner(stored)).toBe("requester");
+    expect(approvalDecisionNote(stored)).toContain("When the user continues");
+    expect(approvalRevisionOwner({ ...stored, requestedBy: "owner" })).toBe("reviewer");
+    expect(approvalRevisionOwner({ ...stored, requestedBy: "reviewer" })).toBe("requester");
+    expect(
+      approvalRevisionOwner({ ...stored, status: "rejected", requestedBy: "owner" })
+    ).toBeUndefined();
+    expect(
+      approvalDecisionNote({ ...stored, status: "rejected", requestedBy: "owner" })
+    ).not.toMatch(/revised proposal/u);
   });
 
   it("keeps the event when the post-commit hook fails and rejects a second decision", async () => {
@@ -386,7 +444,7 @@ describe("approval decision history", () => {
           message.content.includes(`Approval request ${request.id}`)
       );
       expect(notes).toHaveLength(1);
-      expect(notes?.[0]?.content).toContain("When the user continues, submit a revised proposal");
+      expect(notes?.[0]?.content).toContain("The reviewer has taken over the revision");
       expect(notes?.[0]?.content).toContain("Include the appendix");
       expect(JSON.stringify(following)).not.toContain("PRIVATE_");
       expect(following?.messages.at(-1)).toMatchObject({ role: "user", content: "Revise it" });

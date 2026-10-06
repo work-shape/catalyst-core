@@ -122,7 +122,8 @@ export const approvalDecisionMessageMetadataSchema = z.object({
   decidedByLabel: z.string(),
   decidedAt: z.string(),
   summary: z.string(),
-  comment: z.string().optional()
+  comment: z.string().optional(),
+  requestedBy: z.string().optional()
 });
 
 export const agentRuntimeMessageMetadataSchema = z.discriminatedUnion("kind", [

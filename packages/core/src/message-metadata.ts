@@ -83,6 +83,8 @@ export interface ApprovalDecisionMessageMetadata {
   decidedAt: string;
   summary: string;
   comment?: string;
+  /** User id of the requester. Absent on decisions stored before it was recorded. */
+  requestedBy?: string;
 }
 
 /** No payload, apply result, or skill text crosses this boundary. */
@@ -108,7 +110,8 @@ export function createApprovalDecisionMessage(
     summary: request.summary,
     ...(request.status !== "reverted" && request.decision?.comment
       ? { comment: request.decision.comment }
-      : {})
+      : {}),
+    requestedBy: request.requestedBy.id
   };
   return {
     id: asMessageId(`msg_${request.id}_${request.status}`),
@@ -120,15 +123,35 @@ export function createApprovalDecisionMessage(
   };
 }
 
+/**
+ * Whoever requests changes on someone else's proposal also revises it, in a
+ * conversation of their own: a revision never goes back to a requester who may
+ * not approve. Only a requester deciding on their own proposal revises it where
+ * it came from. A decision stored without its requester keeps that reading.
+ */
+export function approvalRevisionOwner(
+  event: Pick<ApprovalDecisionMessageMetadata, "status" | "decidedBy" | "requestedBy">
+): "requester" | "reviewer" | undefined {
+  if (event.status !== "changes_requested") {
+    return undefined;
+  }
+  return event.requestedBy !== undefined && event.requestedBy !== event.decidedBy
+    ? "reviewer"
+    : "requester";
+}
+
 export function approvalDecisionNote(event: ApprovalDecisionMessageMetadata): string {
+  const revisionOwner = approvalRevisionOwner(event);
   const outcome =
     event.status === "approved"
       ? " The change is now active."
-      : event.status === "changes_requested"
-        ? " When the user continues, submit a revised proposal addressing the requested changes."
-        : event.status === "reverted"
-          ? " The approved change has been reverted."
-          : "";
+      : revisionOwner === "reviewer"
+        ? " The reviewer has taken over the revision and submits the revised proposal themselves. Do NOT submit a revised proposal in this conversation unless the user explicitly asks for one."
+        : revisionOwner === "requester"
+          ? " When the user continues, submit a revised proposal addressing the requested changes."
+          : event.status === "reverted"
+            ? " The approved change has been reverted."
+            : "";
   return `Approval request ${event.requestId} (${event.requestKind}: ${JSON.stringify(event.summary)}) was ${event.status} by ${JSON.stringify(event.decidedByLabel)} at ${event.decidedAt}.${outcome}${event.comment ? ` Comment: ${JSON.stringify(event.comment)}` : ""}`;
 }
 
@@ -256,7 +279,8 @@ export function readAgentRuntimeMessageMetadata(
       decidedByLabel: runtime.decidedByLabel,
       decidedAt: runtime.decidedAt,
       summary: runtime.summary,
-      ...(typeof runtime.comment === "string" ? { comment: runtime.comment } : {})
+      ...(typeof runtime.comment === "string" ? { comment: runtime.comment } : {}),
+      ...(typeof runtime.requestedBy === "string" ? { requestedBy: runtime.requestedBy } : {})
     };
   }
   if (runtime.kind === "user_message") {

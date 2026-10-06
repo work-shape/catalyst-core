@@ -4846,6 +4846,9 @@
                                           },
                                           "comment": {
                                             "type": "string"
+                                          },
+                                          "requestedBy": {
+                                            "type": "string"
                                           }
                                         },
                                         "required": [
@@ -5866,6 +5869,9 @@
                                         "type": "string"
                                       },
                                       "comment": {
+                                        "type": "string"
+                                      },
+                                      "requestedBy": {
                                         "type": "string"
                                       }
                                     },
@@ -7155,6 +7161,9 @@
                                         },
                                         "comment": {
                                           "type": "string"
+                                        },
+                                        "requestedBy": {
+                                          "type": "string"
                                         }
                                       },
                                       "required": [
@@ -7752,6 +7761,9 @@
                                                 "type": "string"
                                               },
                                               "comment": {
+                                                "type": "string"
+                                              },
+                                              "requestedBy": {
                                                 "type": "string"
                                               }
                                             },
@@ -8908,6 +8920,9 @@
                                         },
                                         "comment": {
                                           "type": "string"
+                                        },
+                                        "requestedBy": {
+                                          "type": "string"
                                         }
                                       },
                                       "required": [
@@ -9505,6 +9520,9 @@
                                                 "type": "string"
                                               },
                                               "comment": {
+                                                "type": "string"
+                                              },
+                                              "requestedBy": {
                                                 "type": "string"
                                               }
                                             },
