@@ -520,7 +520,8 @@ describe("chat UI conversation controller", () => {
     });
     expect(recovered.error).toMatchObject({
       class: "run_failed",
-      message: "Agent run was interrupted after the local runtime state was lost"
+      message: "Agent run was interrupted after the local runtime state was lost",
+      category: "runtime_interrupted"
     });
   });
 

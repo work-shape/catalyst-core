@@ -231,6 +231,28 @@ describe("agent run worker", () => {
     expect(events.map((event) => [event.type, event.sequence])).toEqual([["run_completed", 2]]);
   });
 
+  it("lets another authorized viewer observe a run without ending it", async () => {
+    const fixture = await createQueuedRun("observation-viewer");
+    const claimed = await claim(fixture, "viewer-token");
+    await fixture.store.appendClaimedRunObservation({
+      clientInstanceId: fixture.clientInstanceId,
+      runId: claimed.id,
+      leaseToken: "viewer-token",
+      event: completedEvent(claimed.id, 1, "2026-09-02T12:01:00.000Z")
+    });
+    const runtime = new StoreBackedAgentRuntime({ store: fixture.store, pollIntervalMs: 1 });
+    const viewerContext: RuntimeCallContext = {
+      ...fixture.context,
+      user: { ...fixture.context.user, id: "user-viewer", externalUserId: "external-viewer" },
+      subjectUserId: undefined
+    };
+    const events: AgentRuntimeEvent[] = [];
+    for await (const event of runtime.observe(claimed.id, viewerContext)) {
+      events.push(event);
+    }
+    expect(events.map((event) => event.type)).toEqual(["run_completed"]);
+  });
+
   it("dispatches the stored model binding and locale", async () => {
     const fixture = await createQueuedRun("dispatch-data", {
       modelBindingId: "binding-fast",

@@ -72,6 +72,7 @@ import {
   useWorkspaceRouteState,
   useWorkspaceTheme
 } from "./workspace-ui-state";
+import { createTranslationContext } from "../i18n";
 
 export const WORKSPACE_AUTH_SCOPE = "standalone";
 
@@ -421,10 +422,6 @@ export function useWorkspaceChatModel({
   const selectedConversationRunning = Boolean(
     controller.activeRun && isLiveRunStatus(controller.activeRun.run.status)
   );
-  const controllerTerminalNotice = isVisibleTerminalControllerError(controller.error?.class)
-    ? controller.error?.message
-    : undefined;
-  const visibleNotice = notice ?? controllerTerminalNotice;
   const workspaceAgentsQuery = useCollaborationWorkspaceAgentsQuery({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
@@ -466,6 +463,12 @@ export function useWorkspaceChatModel({
     config
   });
   const activeLocale = useWorkspaceLocale(config?.localization.locale);
+  const controllerTerminalNotice = isVisibleTerminalControllerError(controller.error?.class)
+    ? controller.error?.category === "runtime_interrupted"
+      ? createTranslationContext(activeLocale).t("runInterrupted")
+      : controller.error?.message
+    : undefined;
+  const visibleNotice = notice ?? controllerTerminalNotice;
 
   function showConversationInActiveCollaborationWorkspace(
     conversationId: string,
