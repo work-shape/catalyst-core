@@ -1,18 +1,20 @@
 import { CircleAlert, TriangleAlert } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useId, useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent, type ReactNode } from "react";
 import type { ApprovalRequestView, DraftAttachment } from "@vivd-catalyst/api-client";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { useAttachmentContentContext } from "../attachment-content";
 import { useToolDisplayActions } from "../domain-ui-widgets";
-import { useTranslation } from "../i18n";
+import { useTranslation, type TranslationKey } from "../i18n";
+import { useToolDisplayPanel } from "../tool-display-panel";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { cn } from "../ui/cn";
 import { Textarea } from "../ui/input";
 import { Spinner } from "../ui/spinner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { useWorkspaceDraftController } from "../workspace/workspace-drafts";
 import {
   APPROVAL_AUTH_SCOPE,
@@ -22,8 +24,10 @@ import {
   type ApprovalActionFailure,
   type ApprovalDecisionInput
 } from "./approval-request-api";
-import { ApprovalRequestBody } from "./approval-request-bodies";
+import { ApprovalRequestBody, approvalRequestSubject } from "./approval-request-bodies";
 import {
+  approvalRevisionHintKey,
+  approvalRevisionPlan,
   approvalStatusPresentation,
   canRevertApprovalRequest,
   formatApprovalDate,
@@ -32,6 +36,8 @@ import {
   visibleApprovalChecks,
   type ApprovalStatusTone
 } from "./approval-request-model";
+import { useApprovalRevisionHost } from "./approval-revision-host";
+import { buildApprovalRevisionMessage } from "./approval-revision-message";
 
 export type ApprovalRequestCardState =
   | { status: "loading" }
@@ -47,28 +53,149 @@ export interface ApprovalRequestCardActions {
   onWithdraw(): void;
   /** Absent while the API client has no rollback operation. */
   onRevert?(): void;
+  /** What requesting changes sets off, for the form. Absent when nothing follows. */
+  revisionHintKey?: TranslationKey;
 }
 
-/** Card for the thread: fetches the request's live state by id. */
+/**
+ * Card for the thread: fetches the request's live state by id and stays
+ * compact. The proposal itself opens in the display panel.
+ */
 export function ApprovalRequestCard({ requestId }: { requestId: string }) {
   const { t } = useTranslation();
   const { apiBaseUrl, client } = useWorkspaceApiClient();
-  const api = { apiBaseUrl, authScope: APPROVAL_AUTH_SCOPE, client };
-  const query = useApprovalRequestQuery({ ...api, requestId });
-  const originConversationId = query.data?.origin?.conversationId;
+  const query = useApprovalRequestQuery({
+    apiBaseUrl,
+    authScope: APPROVAL_AUTH_SCOPE,
+    client,
+    requestId
+  });
+  const actions = useApprovalRequestCardActions(requestId, query.data);
+  const displayPanel = useToolDisplayPanel();
+  const request = query.data;
+
+  return (
+    <ApprovalRequestCardView
+      variant="compact"
+      state={approvalRequestCardState(query)}
+      actions={actions}
+      onShowDetails={
+        request && displayPanel.available
+          ? () =>
+              displayPanel.show({
+                key: `approval-request:${request.id}`,
+                title: request.summary.trim() || t("approvalFallbackTitle"),
+                subtitle: approvalRequestSubject(request, t),
+                node: <ApprovalRequestDetailsPanel requestId={request.id} />
+              })
+          : undefined
+      }
+    />
+  );
+}
+
+/** Card for the review queue: the list already carries the request's current state. */
+export function ListedApprovalRequestCard({ request }: { request: ApprovalRequestView }) {
+  const actions = useApprovalRequestCardActions(request.id, request);
+
+  return <ApprovalRequestCardView state={{ status: "ready", request }} actions={actions} />;
+}
+
+/**
+ * Display panel content for a card in the thread. It follows the request's live
+ * state like the card does; deciding stays on the card.
+ */
+export function ApprovalRequestDetailsPanel({ requestId }: { requestId: string }) {
+  const { t } = useTranslation();
+  const { apiBaseUrl, client } = useWorkspaceApiClient();
+  const state = approvalRequestCardState(
+    useApprovalRequestQuery({ apiBaseUrl, authScope: APPROVAL_AUTH_SCOPE, client, requestId })
+  );
+
+  if (state.status !== "ready") {
+    return <ApprovalRequestUnavailable state={state} />;
+  }
+  const status = approvalStatusPresentation(state.request.status);
+  return (
+    <div className="grid min-w-0 gap-3 text-sm" data-testid="approval-request-details">
+      <ApprovalStatusBadge tone={status.tone}>{t(status.labelKey)}</ApprovalStatusBadge>
+      <ApprovalRequestDetails request={state.request} />
+    </div>
+  );
+}
+
+function approvalRequestCardState(
+  query: Pick<ReturnType<typeof useApprovalRequestQuery>, "data" | "error" | "isError" | "refetch">
+): ApprovalRequestCardState {
+  return query.data
+    ? { status: "ready", request: query.data }
+    : isApprovalRequestNotFound(query.error)
+      ? { status: "not-found" }
+      : query.isError
+        ? { status: "error", onRetry: () => void query.refetch() }
+        : { status: "loading" };
+}
+
+/**
+ * The request's actions plus what follows "request changes". The reviewer who
+ * asks for a revision is also the one who gets it: in the conversation on
+ * screen, in their own origin conversation, or in a new one.
+ */
+function useApprovalRequestCardActions(
+  requestId: string,
+  request: ApprovalRequestView | undefined
+): ApprovalRequestCardActions {
+  const { t } = useTranslation();
+  const { apiBaseUrl, client } = useWorkspaceApiClient();
+  const originConversationId = request?.origin?.conversationId;
   const openConversationId = useAttachmentContentContext()?.selectedConversationId;
   // Absent while the open conversation cannot take a message, a running run included.
   const sendMessage = useToolDisplayActions()?.sendMessage;
+  const revisionHost = useApprovalRevisionHost();
   const queryClient = useQueryClient();
   const composerDraftText = useWorkspaceDraftController().draftFor({
     authScope: APPROVAL_AUTH_SCOPE,
     conversationId: openConversationId
   });
+  const revisionPlan = request
+    ? approvalRevisionPlan({
+        originConversationId,
+        openConversationId,
+        requestedById: request.requestedBy.id,
+        currentUserId: revisionHost?.currentUserId
+      })
+    : undefined;
   const actions = useApprovalRequestActions({
-    ...api,
+    apiBaseUrl,
+    authScope: APPROVAL_AUTH_SCOPE,
+    client,
     requestId,
     originConversationId,
     onDecided(decision) {
+      if (decision.decision !== "request_changes" || !request || !revisionPlan) {
+        return false;
+      }
+      if (revisionPlan.kind !== "open_conversation") {
+        const proposingAgentName = request.origin?.agentName;
+        revisionHost?.startRevision({
+          ...(revisionPlan.kind === "origin_conversation"
+            ? {
+                origin: {
+                  conversationId: revisionPlan.conversationId,
+                  agentName: proposingAgentName,
+                  // The comment is in the decision the agent reads there.
+                  text: t("approvalFollowUpMessage")
+                }
+              }
+            : {}),
+          newConversation: {
+            agentName: revisionHost.personalWorkspaceAgentName(proposingAgentName),
+            text: buildApprovalRevisionMessage({ request, comment: decision.comment, t })
+          },
+          failureNotice: t("approvalRevisionStartFailed")
+        });
+        return false;
+      }
       const followUp = shouldSendApprovalFollowUp({
         decision: decision.decision,
         originConversationId,
@@ -90,88 +217,93 @@ export function ApprovalRequestCard({ requestId }: { requestId: string }) {
     }
   });
 
-  const state: ApprovalRequestCardState = query.data
-    ? { status: "ready", request: query.data }
-    : isApprovalRequestNotFound(query.error)
-      ? { status: "not-found" }
-      : query.isError
-        ? { status: "error", onRetry: () => void query.refetch() }
-        : { status: "loading" };
-
-  return <ApprovalRequestCardView state={state} actions={cardActions(actions)} />;
-}
-
-/** Card for the review queue: the list already carries the request's current state. */
-export function ListedApprovalRequestCard({ request }: { request: ApprovalRequestView }) {
-  const { apiBaseUrl, client } = useWorkspaceApiClient();
-  const actions = useApprovalRequestActions({
-    apiBaseUrl,
-    authScope: APPROVAL_AUTH_SCOPE,
-    client,
-    requestId: request.id,
-    originConversationId: request.origin?.conversationId
-  });
-
-  return (
-    <ApprovalRequestCardView state={{ status: "ready", request }} actions={cardActions(actions)} />
-  );
-}
-
-function cardActions(
-  actions: ReturnType<typeof useApprovalRequestActions>
-): ApprovalRequestCardActions {
   return {
     pending: actions.pending,
     failure: actions.failure,
     onDecide: actions.decide,
     onWithdraw: actions.withdraw,
-    onRevert: actions.revert
+    onRevert: actions.revert,
+    revisionHintKey:
+      revisionPlan && (revisionPlan.kind === "open_conversation" || revisionHost)
+        ? approvalRevisionHintKey(revisionPlan)
+        : undefined
   };
 }
 
 export function ApprovalRequestCardView({
   state,
-  actions
+  actions,
+  variant = "full",
+  onShowDetails
 }: {
   state: ApprovalRequestCardState;
   actions: ApprovalRequestCardActions;
+  /** `compact` is the card in the thread; the review queue shows the full one. */
+  variant?: "full" | "compact";
+  /** Compact only: opens the proposal next to the thread. */
+  onShowDetails?(): void;
 }) {
-  const { locale, t } = useTranslation();
+  const { t } = useTranslation();
 
   if (state.status !== "ready") {
     return (
       <Card
-        className="flex min-w-0 flex-wrap items-center gap-2 p-4 text-sm text-muted-foreground"
+        className={cn(
+          "flex min-w-0 flex-wrap items-center gap-2 text-sm text-muted-foreground",
+          variant === "compact" ? "px-4 py-3" : "p-4"
+        )}
         data-testid="approval-request-card"
         role="status"
       >
-        {state.status === "loading" ? (
-          <>
-            <Spinner size="sm" />
-            <span>{t("approvalLoading")}</span>
-          </>
-        ) : state.status === "not-found" ? (
-          <span>{t("approvalNotFound")}</span>
-        ) : (
-          <>
-            <CircleAlert size={15} className="shrink-0 text-destructive" aria-hidden="true" />
-            <span>{t("approvalLoadFailed")}</span>
-            <Button type="button" size="sm" variant="outline" onClick={state.onRetry}>
-              {t("tryAgain")}
-            </Button>
-          </>
-        )}
+        <ApprovalRequestUnavailable state={state} />
       </Card>
     );
   }
 
   const { request } = state;
   const status = approvalStatusPresentation(request.status);
-  const checks = visibleApprovalChecks(request.checks);
-  const decision = request.decision;
-  const reversion = readApprovalReversion(request);
   const canRevert = Boolean(actions.onRevert) && canRevertApprovalRequest(request);
   const hasActions = request.canDecide || request.canWithdraw || canRevert;
+  const summary = request.summary.trim() || t("approvalFallbackTitle");
+  const badge = <ApprovalStatusBadge tone={status.tone}>{t(status.labelKey)}</ApprovalStatusBadge>;
+
+  if (variant === "compact") {
+    const subject = approvalRequestSubject(request, t);
+    const detailsButton = onShowDetails ? (
+      <Button type="button" size="sm" variant="ghost" onClick={onShowDetails}>
+        {t("approvalDetails")}
+      </Button>
+    ) : null;
+    return (
+      <Card
+        className="grid min-w-0 gap-2 px-4 py-3 text-sm"
+        data-testid="approval-request-card"
+        data-variant="compact"
+        aria-label={t("approvalFallbackTitle")}
+        role="group"
+      >
+        <div className="flex min-w-0 items-start gap-2">
+          <div className="grid min-w-0 flex-1 gap-0.5">
+            <p className="line-clamp-2 min-w-0 font-medium text-foreground">{summary}</p>
+            {subject ? <p className="truncate text-xs text-muted-foreground">{subject}</p> : null}
+          </div>
+          <ApprovalCheckIndicator checks={visibleApprovalChecks(request.checks)} />
+          {badge}
+        </div>
+        {hasActions || detailsButton ? (
+          <ApprovalRequestActions
+            // A refetched request in another status starts with a clean form.
+            key={request.status}
+            request={request}
+            actions={actions}
+            canRevert={canRevert}
+            compact
+            trailing={detailsButton}
+          />
+        ) : null}
+      </Card>
+    );
+  }
 
   return (
     <Card
@@ -180,25 +312,70 @@ export function ApprovalRequestCardView({
       aria-label={t("approvalFallbackTitle")}
       role="group"
     >
-      <div className="grid min-w-0 gap-1">
-        <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
-          <p className="min-w-0 flex-1 basis-56 font-medium text-foreground">
-            {request.summary.trim() || t("approvalFallbackTitle")}
-          </p>
-          <Badge
-            variant={STATUS_BADGE_VARIANT[status.tone]}
-            className={STATUS_BADGE_CLASS[status.tone]}
-          >
-            {t(status.labelKey)}
-          </Badge>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {t("approvalRequestedBy", {
-            name: request.requestedBy.displayLabel,
-            date: formatApprovalDate(request.createdAt, locale)
-          })}
-        </p>
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
+        <p className="min-w-0 flex-1 basis-56 font-medium text-foreground">{summary}</p>
+        {badge}
       </div>
+
+      <ApprovalRequestDetails request={request} />
+
+      {hasActions ? (
+        <ApprovalRequestActions
+          // A refetched request in another status starts with a clean form.
+          key={request.status}
+          request={request}
+          actions={actions}
+          canRevert={canRevert}
+        />
+      ) : null}
+    </Card>
+  );
+}
+
+function ApprovalRequestUnavailable({
+  state
+}: {
+  state: Exclude<ApprovalRequestCardState, { status: "ready" }>;
+}) {
+  const { t } = useTranslation();
+
+  if (state.status === "loading") {
+    return (
+      <span className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Spinner size="sm" />
+        <span>{t("approvalLoading")}</span>
+      </span>
+    );
+  }
+  if (state.status === "not-found") {
+    return <span className="text-sm text-muted-foreground">{t("approvalNotFound")}</span>;
+  }
+  return (
+    <span className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+      <CircleAlert size={15} className="shrink-0 text-destructive" aria-hidden="true" />
+      <span>{t("approvalLoadFailed")}</span>
+      <Button type="button" size="sm" variant="outline" onClick={state.onRetry}>
+        {t("tryAgain")}
+      </Button>
+    </span>
+  );
+}
+
+/** Everything about a request except its title, status and actions. */
+function ApprovalRequestDetails({ request }: { request: ApprovalRequestView }) {
+  const { locale, t } = useTranslation();
+  const checks = visibleApprovalChecks(request.checks);
+  const decision = request.decision;
+  const reversion = readApprovalReversion(request);
+
+  return (
+    <>
+      <p className="text-xs text-muted-foreground">
+        {t("approvalRequestedBy", {
+          name: request.requestedBy.displayLabel,
+          date: formatApprovalDate(request.createdAt, locale)
+        })}
+      </p>
 
       {checks.length > 0 ? (
         <ul className="grid min-w-0 gap-1.5">
@@ -225,8 +402,7 @@ export function ApprovalRequestCardView({
                   {t(check.status === "blocked" ? "approvalCheckBlocked" : "approvalCheckWarned")}
                   {": "}
                 </span>
-                {/* The runner stores no message for a check it could not evaluate. */}
-                {check.message || (check.status === "warned" ? t("approvalCheckUnevaluated") : "")}
+                {approvalCheckText(check, t)}
               </span>
             </li>
           ))}
@@ -260,17 +436,62 @@ export function ApprovalRequestCardView({
           ) : null}
         </div>
       ) : null}
+    </>
+  );
+}
 
-      {hasActions ? (
-        <ApprovalRequestActions
-          // A refetched request in another status starts with a clean form.
-          key={request.status}
-          request={request}
-          actions={actions}
-          canRevert={canRevert}
-        />
-      ) : null}
-    </Card>
+type ApprovalCheck = ApprovalRequestView["checks"][number];
+
+/** The runner stores no message for a check it could not evaluate. */
+function approvalCheckText(check: ApprovalCheck, t: ReturnType<typeof useTranslation>["t"]) {
+  return check.message || (check.status === "warned" ? t("approvalCheckUnevaluated") : "");
+}
+
+/** The compact card's stand-in for the check list: one icon that names what the checks found. */
+function ApprovalCheckIndicator({ checks }: { checks: ApprovalCheck[] }) {
+  const { t } = useTranslation();
+  if (checks.length === 0) {
+    return null;
+  }
+  const blocked = checks.some((check) => check.status === "blocked");
+  const lines = checks.map(
+    (check) =>
+      `${t(check.status === "blocked" ? "approvalCheckBlocked" : "approvalCheckWarned")}: ${approvalCheckText(check, t)}`
+  );
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          role="img"
+          tabIndex={0}
+          aria-label={lines.join(" ")}
+          className="mt-0.5 inline-flex shrink-0 rounded-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          data-testid="approval-check-indicator"
+        >
+          <TriangleAlert
+            size={15}
+            className={blocked ? "text-destructive" : "text-warning"}
+            aria-hidden="true"
+          />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent className="whitespace-pre-wrap">{lines.join("\n")}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function ApprovalStatusBadge({
+  tone,
+  children
+}: {
+  tone: ApprovalStatusTone;
+  children: ReactNode;
+}) {
+  return (
+    <Badge variant={STATUS_BADGE_VARIANT[tone]} className={STATUS_BADGE_CLASS[tone]}>
+      {children}
+    </Badge>
   );
 }
 
@@ -279,11 +500,17 @@ type ActionStep = "idle" | "request_changes" | "reject" | "revert";
 function ApprovalRequestActions({
   request,
   actions,
-  canRevert
+  canRevert,
+  compact = false,
+  trailing
 }: {
   request: ApprovalRequestView;
   actions: ApprovalRequestCardActions;
   canRevert: boolean;
+  /** The compact card has nothing above the actions to rule off. */
+  compact?: boolean;
+  /** Sits at the end of the idle row, after the request's own actions. */
+  trailing?: ReactNode;
 }) {
   const { t } = useTranslation();
   const commentId = useId();
@@ -315,10 +542,12 @@ function ApprovalRequestActions({
     </p>
   ) : null;
 
+  const frameClassName = cn("grid min-w-0 gap-2", !compact && "border-t pt-3");
+
   if (step === "request_changes" || step === "reject") {
     const requiresComment = step === "request_changes";
     return (
-      <form className="grid min-w-0 gap-2 border-t pt-3" onSubmit={submitComment}>
+      <form className={frameClassName} onSubmit={submitComment}>
         <label htmlFor={commentId} className="text-xs font-medium text-muted-foreground">
           {t(requiresComment ? "approvalRequestChangesLabel" : "approvalRejectLabel")}
         </label>
@@ -331,6 +560,11 @@ function ApprovalRequestActions({
           disabled={actions.pending}
           onChange={(event) => setComment(event.target.value)}
         />
+        {requiresComment && actions.revisionHintKey ? (
+          <p className="text-xs text-muted-foreground" data-testid="approval-revision-hint">
+            {t(actions.revisionHintKey)}
+          </p>
+        ) : null}
         <div className="flex flex-wrap items-center gap-2">
           <Button
             type="submit"
@@ -357,7 +591,7 @@ function ApprovalRequestActions({
 
   if (step === "revert") {
     return (
-      <div className="grid min-w-0 gap-2 border-t pt-3">
+      <div className={frameClassName}>
         <p className="text-foreground">{t("approvalRevertConfirm")}</p>
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -386,7 +620,7 @@ function ApprovalRequestActions({
   }
 
   return (
-    <div className="grid min-w-0 gap-2 border-t pt-3">
+    <div className={frameClassName}>
       <div className="flex flex-wrap items-center gap-2">
         {request.canDecide ? (
           <>
@@ -440,6 +674,11 @@ function ApprovalRequestActions({
           >
             {t("approvalRevert")}
           </Button>
+        ) : null}
+        {trailing ? (
+          <span className={cn(!(request.canDecide && request.canWithdraw) && "ml-auto")}>
+            {trailing}
+          </span>
         ) : null}
       </div>
       {failure}

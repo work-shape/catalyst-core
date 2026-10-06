@@ -11,6 +11,15 @@ import type {
   StartConversationRunResponse
 } from "@vivd-catalyst/api-client";
 import { useApprovalPendingCountQuery } from "../approvals/approval-request-api";
+import {
+  startApprovalRevision,
+  type ApprovalRevisionHost,
+  type ApprovalRevisionRunInput
+} from "../approvals/approval-revision-host";
+import {
+  createRunIdempotencyKey,
+  startProductConversationRun
+} from "../assistant/product-run-transport";
 import { resolveContextUsage } from "../assistant/context-usage";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import {
@@ -158,6 +167,7 @@ export interface WorkspaceChatModel {
   selectedChat: SelectedChatModel;
   controlPlane: ControlPlaneModel;
   toolDisplay: ToolDisplayModel;
+  approvalRevision: ApprovalRevisionHost;
 }
 
 export interface WorkspaceAuthModel {
@@ -718,6 +728,49 @@ export function useWorkspaceChatModel({
     setNotice(undefined);
   }
 
+  const personalCollaborationWorkspaceId = collaborationWorkspace.personalCollaborationWorkspaceId;
+
+  async function startRevisionRun(input: ApprovalRevisionRunInput) {
+    const response = await startProductConversationRun({
+      agentName: input.agentName,
+      client,
+      collaborationWorkspaceId: input.conversationId ? undefined : personalCollaborationWorkspaceId,
+      conversationId: input.conversationId,
+      idempotencyKey: createRunIdempotencyKey(),
+      locale: activeLocale,
+      text: input.text
+    });
+    workspaceCache.cacheRunStarted(response);
+    routeState.showConversation(
+      response.conversation.collaborationWorkspaceId,
+      response.conversation.id
+    );
+    setNotice(undefined);
+    runRequestAccepted(response.conversation.id);
+  }
+
+  /** The run did not start: open the composer with the message ready to send. */
+  function leaveRevisionInComposer(
+    conversationId: string | undefined,
+    text: string,
+    failureNotice: string
+  ) {
+    const target = { authScope: WORKSPACE_AUTH_SCOPE, conversationId };
+    if (!draftController.draftFor(target)) {
+      draftController.setDraft(target, text);
+    }
+    const collaborationWorkspaceId = conversationId
+      ? (activeCollaborationWorkspaceId ?? personalCollaborationWorkspaceId)
+      : (personalCollaborationWorkspaceId ?? activeCollaborationWorkspaceId);
+    if (conversationId && collaborationWorkspaceId) {
+      // A conversation in another workspace is redirected to its canonical URL.
+      routeState.showConversation(collaborationWorkspaceId, conversationId);
+    } else {
+      routeState.goToDefaultChat(collaborationWorkspaceId);
+    }
+    setNotice(failureNotice);
+  }
+
   return {
     auth: {
       apiBaseUrl,
@@ -835,6 +888,19 @@ export function useWorkspaceChatModel({
     controlPlane,
     toolDisplay: {
       open: displayPanelOpen
+    },
+    approvalRevision: {
+      currentUserId: meQuery.data?.id,
+      // `getConfig` is the caller's Personal Workspace view of the agents.
+      personalWorkspaceAgentName: (proposingAgentName) =>
+        activeAgentNameFor(configQuery.data, proposingAgentName),
+      startRevision: (input) =>
+        void startApprovalRevision(input, {
+          startRun: startRevisionRun,
+          isConversationGone: (error) => apiErrorStatus(error) === 404,
+          leaveInComposer: (conversationId, text) =>
+            leaveRevisionInComposer(conversationId, text, input.failureNotice)
+        })
     }
   };
 }

@@ -11,9 +11,15 @@ import { describe, expect, it } from "vitest";
 import { ApprovalDecisionLine } from "../packages/chat-ui/src/approvals/approval-decision-line";
 import {
   APPROVAL_REQUEST_DISPLAY_KIND,
+  approvalRevisionHintKey,
+  approvalRevisionPlan,
   shouldSendApprovalFollowUp,
   type ApprovalDecisionStatus
 } from "../packages/chat-ui/src/approvals/approval-request-model";
+import {
+  startApprovalRevision,
+  type ApprovalRevisionRunInput
+} from "../packages/chat-ui/src/approvals/approval-revision-host";
 import {
   toUiMessages,
   type AssistantUiApprovalDecision,
@@ -35,7 +41,7 @@ function message(overrides: Partial<Message> & Pick<Message, "id" | "role">): Me
 
 function decisionMessage(
   status: ApprovalDecisionStatus,
-  overrides: { requestId?: string; comment?: string; summary?: string } = {}
+  overrides: { requestId?: string; comment?: string; summary?: string; requestedBy?: string } = {}
 ): Message {
   const requestId = overrides.requestId ?? "apr_1";
   return message({
@@ -53,7 +59,8 @@ function decisionMessage(
         decidedByLabel: "Bert Prüfer",
         decidedAt: "2026-10-05T09:30:00.000Z",
         summary: overrides.summary ?? "Auch die Steuerklasse prüfen.",
-        ...(overrides.comment ? { comment: overrides.comment } : {})
+        ...(overrides.comment ? { comment: overrides.comment } : {}),
+        ...(overrides.requestedBy ? { requestedBy: overrides.requestedBy } : {})
       }
     }
   });
@@ -251,6 +258,159 @@ describe("approval decision in the thread", () => {
       "msg_apr_1_rejected",
       "msg_user"
     ]);
+  });
+});
+
+describe("requested changes in the requester's thread", () => {
+  function line(requestedBy: string | undefined, locale: "de" | "en" = "de"): string {
+    return renderLine(
+      readDecision(toUiMessages([decisionMessage("changes_requested", { requestedBy })])[0]),
+      locale
+    );
+  }
+
+  it("says that the reviewer is revising a proposal they sent back to someone else", () => {
+    expect(line("user-anna")).toContain(
+      "Bert Prüfer hat eine Änderung gewünscht und überarbeitet den Vorschlag"
+    );
+    expect(line("user-anna", "en")).toContain(
+      "Bert Prüfer requested changes and is revising the proposal"
+    );
+    expect(line("user-anna")).not.toContain("<button");
+  });
+
+  it("keeps the plain line for the requester's own decision and for older decisions", () => {
+    expect(line("user-bert")).toContain("Änderung gewünscht von Bert Prüfer");
+    expect(line(undefined)).toContain("Änderung gewünscht von Bert Prüfer");
+    expect(line("user-bert")).not.toContain("überarbeitet");
+  });
+});
+
+describe("who revises where after requesting changes", () => {
+  const request = { originConversationId: "conv_origin", requestedById: "user-anna" };
+
+  it("stays in the open conversation when the reviewer decides where the request came from", () => {
+    for (const currentUserId of ["user-anna", "user-bert", undefined]) {
+      expect(
+        approvalRevisionPlan({ ...request, openConversationId: "conv_origin", currentUserId })
+      ).toEqual({ kind: "open_conversation" });
+    }
+  });
+
+  it("opens a new conversation for someone else's request decided from the review queue", () => {
+    expect(
+      approvalRevisionPlan({
+        ...request,
+        openConversationId: undefined,
+        currentUserId: "user-bert"
+      })
+    ).toEqual({ kind: "new_conversation" });
+  });
+
+  it("goes back to the origin conversation for the reviewer's own request", () => {
+    expect(
+      approvalRevisionPlan({
+        ...request,
+        openConversationId: undefined,
+        currentUserId: "user-anna"
+      })
+    ).toEqual({ kind: "origin_conversation", conversationId: "conv_origin" });
+  });
+
+  it("never sends a reviewer into a conversation that is not known to be theirs", () => {
+    expect(
+      approvalRevisionPlan({ ...request, openConversationId: undefined, currentUserId: undefined })
+    ).toEqual({ kind: "new_conversation" });
+    expect(
+      approvalRevisionPlan({
+        ...request,
+        openConversationId: "conv_other",
+        currentUserId: "user-bert"
+      })
+    ).toEqual({ kind: "new_conversation" });
+  });
+
+  it("opens a new conversation for an own request that has no origin conversation", () => {
+    expect(
+      approvalRevisionPlan({
+        originConversationId: undefined,
+        openConversationId: undefined,
+        requestedById: "user-anna",
+        currentUserId: "user-anna"
+      })
+    ).toEqual({ kind: "new_conversation" });
+  });
+
+  it("has a hint for each place", () => {
+    expect(approvalRevisionHintKey({ kind: "open_conversation" })).toBe(
+      "approvalRevisionHintOpenConversation"
+    );
+    expect(approvalRevisionHintKey({ kind: "new_conversation" })).toBe(
+      "approvalRevisionHintNewConversation"
+    );
+    expect(approvalRevisionHintKey({ kind: "origin_conversation", conversationId: "c" })).toBe(
+      "approvalRevisionHintOriginConversation"
+    );
+  });
+});
+
+describe("starting a revision away from the open conversation", () => {
+  const origin = { conversationId: "conv_origin", agentName: "writer", text: "Please revise." };
+  const newConversation = { agentName: "default", text: "Please revise this proposed change…" };
+
+  async function start(
+    input: { origin?: typeof origin },
+    failures: Record<string, unknown> = {}
+  ): Promise<{ runs: ApprovalRevisionRunInput[]; composer: Array<[string | undefined, string]> }> {
+    const runs: ApprovalRevisionRunInput[] = [];
+    const composer: Array<[string | undefined, string]> = [];
+    await startApprovalRevision(
+      { ...input, newConversation },
+      {
+        async startRun(run) {
+          runs.push(run);
+          const failure = failures[run.conversationId ?? "new"];
+          if (failure) {
+            throw failure;
+          }
+        },
+        isConversationGone: (error) => error === "gone",
+        leaveInComposer: (conversationId, text) => composer.push([conversationId, text])
+      }
+    );
+    return { runs, composer };
+  }
+
+  it("starts a new conversation with the whole proposal for someone else's request", async () => {
+    expect(await start({})).toEqual({
+      runs: [{ ...newConversation, conversationId: undefined }],
+      composer: []
+    });
+  });
+
+  it("sends only the follow-up into the reviewer's own origin conversation", async () => {
+    expect(await start({ origin })).toEqual({ runs: [origin], composer: [] });
+  });
+
+  it("falls back to a new conversation when the origin conversation is gone", async () => {
+    expect(await start({ origin }, { conv_origin: "gone" })).toEqual({
+      runs: [origin, { ...newConversation, conversationId: undefined }],
+      composer: []
+    });
+  });
+
+  it("leaves the follow-up in the origin composer while that conversation is busy", async () => {
+    expect(await start({ origin }, { conv_origin: "busy" })).toEqual({
+      runs: [origin],
+      composer: [["conv_origin", origin.text]]
+    });
+  });
+
+  it("leaves the message in a new conversation's composer when no run can start", async () => {
+    expect(await start({}, { new: "offline" })).toEqual({
+      runs: [{ ...newConversation, conversationId: undefined }],
+      composer: [[undefined, newConversation.text]]
+    });
   });
 });
 

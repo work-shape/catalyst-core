@@ -74,10 +74,13 @@ const translations = {
     approvalDecidedBy: "Decision by {name}, {date}",
     approvalDecisionApproved: "Accepted by {name}",
     approvalDecisionChangesRequested: "Changes requested by {name}",
+    approvalDecisionChangesRequestedByReviewer:
+      "{name} requested changes and is revising the proposal",
     approvalDecisionRejected: "Rejected by {name}",
     approvalDecisionReverted: "Undone by {name}",
     approvalDecisionSuperseded: "No longer applicable",
     approvalDecisionWithdrawn: "Withdrawn",
+    approvalDetails: "Details",
     approvalFallbackTitle: "Proposed change",
     approvalFollowUpMessage: "Please revise the proposal.",
     approvalLoadFailed: "The proposal could not be loaded.",
@@ -92,6 +95,27 @@ const translations = {
     approvalRevertConfirm: "The accepted change will be undone.",
     approvalRevertConflict: "This can no longer be undone because there are newer changes.",
     approvalRevertedBy: "Undone by {name}, {date}",
+    approvalRevisionHintNewConversation:
+      "Opens a new conversation where you revise it with the agent.",
+    approvalRevisionHintOpenConversation: "The agent revises it in this conversation.",
+    approvalRevisionHintOriginConversation:
+      "Opens the conversation the proposal came from, where the agent revises it.",
+    approvalRevisionMessageContent: "Proposed content",
+    approvalRevisionMessageDescription: "Description: {description}",
+    approvalRevisionMessageInstruction: "What should be changed:",
+    approvalRevisionMessageIntro:
+      "Please revise this proposed change and submit the revised version as a new proposal.",
+    approvalRevisionMessageIntroNewSkill:
+      "Please revise this proposal for the new skill “{skill}” (`{skillName}`) and submit the revised version as a new proposal.",
+    approvalRevisionMessageIntroSkill:
+      "Please revise this proposed change to the skill “{skill}” (`{skillName}`) and submit the revised version as a new proposal.",
+    approvalRevisionMessageProposal: "Original proposal: {summary}",
+    approvalRevisionMessageSection: "Section: {heading}",
+    approvalRevisionMessageTargetNewResource: "New reference: `{name}`",
+    approvalRevisionMessageTargetResource: "Affected file: reference `{name}`",
+    approvalRevisionMessageTargetRoot: "Affected file: the skill's instructions",
+    approvalRevisionStartFailed:
+      "The revision could not be started. Your message is in the input field; send it to start.",
     approvalStatusApproved: "Accepted",
     approvalStatusChangesRequested: "Changes requested",
     approvalStatusPending: "Awaiting approval",
@@ -710,10 +734,13 @@ const translations = {
     approvalDecidedBy: "Entscheidung von {name}, {date}",
     approvalDecisionApproved: "Übernommen von {name}",
     approvalDecisionChangesRequested: "Änderung gewünscht von {name}",
+    approvalDecisionChangesRequestedByReviewer:
+      "{name} hat eine Änderung gewünscht und überarbeitet den Vorschlag",
     approvalDecisionRejected: "Abgelehnt von {name}",
     approvalDecisionReverted: "Rückgängig gemacht von {name}",
     approvalDecisionSuperseded: "Nicht mehr anwendbar",
     approvalDecisionWithdrawn: "Zurückgezogen",
+    approvalDetails: "Details",
     approvalFallbackTitle: "Vorschlag für eine Änderung",
     approvalFollowUpMessage: "Bitte überarbeite den Vorschlag.",
     approvalLoadFailed: "Der Vorschlag konnte nicht geladen werden.",
@@ -729,6 +756,27 @@ const translations = {
     approvalRevertConflict:
       "Das lässt sich nicht mehr rückgängig machen, weil es inzwischen neuere Änderungen gibt.",
     approvalRevertedBy: "Rückgängig gemacht von {name}, {date}",
+    approvalRevisionHintNewConversation:
+      "Öffnet eine neue Unterhaltung, in der du ihn mit dem Agenten überarbeitest.",
+    approvalRevisionHintOpenConversation: "Der Agent überarbeitet ihn in dieser Unterhaltung.",
+    approvalRevisionHintOriginConversation:
+      "Öffnet die Unterhaltung, aus der der Vorschlag stammt. Dort überarbeitet ihn der Agent.",
+    approvalRevisionMessageContent: "Vorgeschlagener Inhalt",
+    approvalRevisionMessageDescription: "Beschreibung: {description}",
+    approvalRevisionMessageInstruction: "Was geändert werden soll:",
+    approvalRevisionMessageIntro:
+      "Bitte überarbeite diesen Änderungsvorschlag und reiche die überarbeitete Fassung als neuen Vorschlag ein.",
+    approvalRevisionMessageIntroNewSkill:
+      "Bitte überarbeite diesen Vorschlag für die neue Fähigkeit „{skill}“ (`{skillName}`) und reiche die überarbeitete Fassung als neuen Vorschlag ein.",
+    approvalRevisionMessageIntroSkill:
+      "Bitte überarbeite diesen Änderungsvorschlag für die Fähigkeit „{skill}“ (`{skillName}`) und reiche die überarbeitete Fassung als neuen Vorschlag ein.",
+    approvalRevisionMessageProposal: "Ursprünglicher Vorschlag: {summary}",
+    approvalRevisionMessageSection: "Abschnitt: {heading}",
+    approvalRevisionMessageTargetNewResource: "Neue Referenz: `{name}`",
+    approvalRevisionMessageTargetResource: "Betroffene Datei: Referenz `{name}`",
+    approvalRevisionMessageTargetRoot: "Betroffene Datei: Anweisungen der Fähigkeit",
+    approvalRevisionStartFailed:
+      "Die Überarbeitung konnte nicht gestartet werden. Deine Nachricht steht im Eingabefeld; sende sie, um zu starten.",
     approvalStatusApproved: "Übernommen",
     approvalStatusChangesRequested: "Änderung angefragt",
     approvalStatusPending: "Wartet auf Freigabe",
@@ -1341,7 +1389,7 @@ export function readBrowserLocale(): LocaleCode | undefined {
   return undefined;
 }
 
-function createTranslationContext(locale: LocaleCode): TranslationContextValue {
+export function createTranslationContext(locale: LocaleCode): TranslationContextValue {
   return {
     locale,
     t(key, values) {

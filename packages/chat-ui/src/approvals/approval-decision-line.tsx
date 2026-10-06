@@ -56,7 +56,7 @@ export function ApprovalDecisionLine({
       />
       <p className="min-w-0">
         <span className="font-medium text-foreground">
-          {t(approvalDecisionLineLabelKey(decision.status), { name: decision.decidedByLabel })}
+          {t(approvalDecisionLineLabelKey(decision), { name: decision.decidedByLabel })}
         </span>
         <span aria-hidden="true"> · </span>
         <time dateTime={decision.decidedAt}>{formatApprovalDate(decision.decidedAt, locale)}</time>

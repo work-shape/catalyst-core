@@ -12,13 +12,14 @@ import {
   decidedApprovalRequests,
   readApprovalRequestDisplay
 } from "../packages/chat-ui/src/approvals/approval-request-model";
+import { buildApprovalRevisionMessage } from "../packages/chat-ui/src/approvals/approval-revision-message";
 import { ApprovalRequestList } from "../packages/chat-ui/src/approvals/approvals-view";
 import { parseSkillChangePreview } from "../packages/chat-ui/src/approvals/skill-change-preview";
 import {
   createCompletedAssistantWorkIndices,
   createVisibleFinalAssistantPartIndices
 } from "../packages/chat-ui/src/assistant/assistant-work-grouping";
-import { TranslationProvider } from "../packages/chat-ui/src/i18n";
+import { TranslationProvider, createTranslationContext } from "../packages/chat-ui/src/i18n";
 import {
   workspaceRouteFromPath,
   workspaceRouteNavigation
@@ -230,6 +231,230 @@ describe("approval request card", () => {
     expect(markup).toContain("Awaiting approval");
     expect(markup).toContain(">Accept</button>");
     expect(markup).toContain(">Request changes</button>");
+  });
+});
+
+describe("compact approval request card in the thread", () => {
+  const decided = {
+    status: "changes_requested",
+    decision: {
+      approved: false,
+      decidedBy: "user-felix",
+      decidedByLabel: "Felix Pahlke",
+      decidedAt: "2026-10-05T09:00:00Z",
+      comment: "Bitte ohne Kundennamen."
+    }
+  } as const;
+
+  function renderCompact(
+    overrides: Partial<ApprovalRequestView> = {},
+    options: { details?: boolean; locale?: "de" | "en" } = {}
+  ): string {
+    return renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { locale: options.locale ?? "de" },
+        createElement(ApprovalRequestCardView, {
+          state: { status: "ready", request: request(overrides) },
+          actions: idleActions,
+          variant: "compact",
+          ...(options.details === false ? {} : { onShowDetails: () => undefined })
+        })
+      )
+    );
+  }
+
+  it("keeps to summary, skill, status and details, and leaves the proposal to the panel", () => {
+    const markup = renderCompact();
+
+    expect(markup).toContain('data-variant="compact"');
+    expect(markup).toContain("Bei Gehaltsabrechnungen auch die Steuerklasse prüfen.");
+    expect(markup).toContain("Fähigkeit: Gehaltsabrechnungen prüfen");
+    expect(markup).toContain("Wartet auf Freigabe");
+    expect(markup).toContain(">Details</button>");
+    expect(markup).not.toContain("Bisher");
+    expect(markup).not.toContain("Prüfe den Bruttolohn");
+    expect(markup).not.toContain("Angefragt von");
+  });
+
+  it("offers a requester without the permission only withdraw and details", () => {
+    const markup = renderCompact({ canWithdraw: true });
+
+    expect(markup.match(/<button/gu)).toHaveLength(2);
+    expect(markup).toContain(">Zurückziehen</button>");
+    expect(markup).not.toContain(">Übernehmen</button>");
+    expect(markup).not.toContain(">Änderung anfragen</button>");
+  });
+
+  it("offers an approver the three decisions next to details", () => {
+    const markup = renderCompact({ canDecide: true });
+
+    expect(markup).toContain(">Übernehmen</button>");
+    expect(markup).toContain(">Änderung anfragen</button>");
+    expect(markup).toContain(">Ablehnen</button>");
+    expect(markup.match(/<button/gu)).toHaveLength(4);
+  });
+
+  it("leaves the decision to the status line below and prompts nobody to revise", () => {
+    const markup = renderCompact(decided);
+
+    expect(markup).toContain("Änderung angefragt");
+    expect(markup).not.toContain("Entscheidung von");
+    expect(markup).not.toContain("Felix Pahlke");
+    expect(markup).not.toContain("Bitte ohne Kundennamen.");
+    expect(markup.match(/<button/gu)).toHaveLength(1);
+    expect(markup).toContain(">Details</button>");
+  });
+
+  it("offers rollback on an accepted request and drops who undid it", () => {
+    expect(renderCompact({ status: "approved", canRevert: true })).toContain(
+      ">Rückgängig machen</button>"
+    );
+    const reverted = renderCompact({
+      status: "reverted",
+      reversion: {
+        revertedBy: "user-felix",
+        revertedByLabel: "Felix Pahlke",
+        revertedAt: "2026-10-05T10:00:00Z"
+      }
+    } as Partial<ApprovalRequestView>);
+    expect(reverted).toContain("Rückgängig gemacht</span>");
+    expect(reverted).not.toContain("Felix Pahlke");
+  });
+
+  it("marks a warned check with a labelled icon instead of the full warning row", () => {
+    const markup = renderCompact({
+      checks: [
+        { id: "format", status: "passed", message: "Format in Ordnung." },
+        { id: "no_customer_data", status: "warned", message: "Enthält möglicherweise einen Namen." }
+      ]
+    });
+
+    expect(markup).toContain('data-testid="approval-check-indicator"');
+    expect(markup).toContain('aria-label="Hinweis: Enthält möglicherweise einen Namen."');
+    expect(markup).not.toContain("<ul");
+    expect(markup).not.toContain("Format in Ordnung.");
+    expect(renderCompact()).not.toContain("approval-check-indicator");
+  });
+
+  it("names a new skill and shows no details button without a display panel", () => {
+    const markup = renderCompact(
+      {
+        preview: {
+          isNewSkill: true,
+          newSkill: { name: "mahnwesen", title: "Mahnwesen", description: "", content: "# Mahnen" }
+        }
+      },
+      { details: false, locale: "en" }
+    );
+
+    expect(markup).toContain("New skill: Mahnwesen");
+    expect(markup).not.toContain("<button");
+  });
+
+  it("still names an unknown kind by its summary", () => {
+    const markup = renderCompact({ kind: "future_kind" });
+
+    expect(markup).toContain("Bei Gehaltsabrechnungen auch die Steuerklasse prüfen.");
+    expect(markup).not.toContain("Fähigkeit:");
+  });
+});
+
+describe("first message of a reviewer's revision conversation", () => {
+  const t = createTranslationContext("en").t;
+  const comment = "Leave out the customer name.";
+
+  it("carries the skill, each affected place, the proposed text and the instruction", () => {
+    const message = buildApprovalRevisionMessage({
+      request: request(),
+      comment: `  ${comment}\n`,
+      t
+    });
+
+    expect(message.split("\n\n")).toEqual([
+      "Please revise this proposed change to the skill “Gehaltsabrechnungen prüfen” (`payroll`) and submit the revised version as a new proposal.",
+      `What should be changed:\n${comment}`,
+      "Original proposal: Bei Gehaltsabrechnungen auch die Steuerklasse prüfen.",
+      "Affected file: the skill's instructions\nBefore:\n```\nPrüfe den Bruttolohn.\n```\nNew:\n```\nPrüfe den Bruttolohn und die Steuerklasse.\n```",
+      "Affected file: the skill's instructions\nSection: Sonderfälle\nNewly added:\n```\nBei Minijobs gilt die Pauschale.\n```",
+      "New reference: `references/checkliste.md`\nNew:\n```\n# Checkliste\n```"
+    ]);
+  });
+
+  it("names the reference a change sits in and writes in the reviewer's language", () => {
+    const message = buildApprovalRevisionMessage({
+      request: request({
+        preview: {
+          skillName: "payroll",
+          skillTitle: "Gehaltsabrechnungen prüfen",
+          changes: [
+            { type: "replace", target: "references/regeln.md", before: "Alt.", after: "Neu." }
+          ]
+        }
+      }),
+      comment: "Kürzer.",
+      t: createTranslationContext("de").t
+    });
+
+    expect(message).toContain("Fähigkeit „Gehaltsabrechnungen prüfen“ (`payroll`)");
+    expect(message).toContain("Was geändert werden soll:\nKürzer.");
+    expect(message).toContain(
+      "Betroffene Datei: Referenz `references/regeln.md`\nBisher:\n```\nAlt.\n```\nNeu:\n```\nNeu.\n```"
+    );
+  });
+
+  it("describes a proposed new skill with its description and content", () => {
+    const message = buildApprovalRevisionMessage({
+      request: request({
+        preview: {
+          isNewSkill: true,
+          newSkill: {
+            name: "mahnwesen",
+            title: "Mahnwesen",
+            description: "Offene Posten anmahnen.",
+            content: "# Mahnen"
+          }
+        }
+      }),
+      comment,
+      t
+    });
+
+    expect(message).toContain("proposal for the new skill “Mahnwesen” (`mahnwesen`)");
+    expect(message).toContain(
+      "Description: Offene Posten anmahnen.\nProposed content:\n```\n# Mahnen\n```"
+    );
+  });
+
+  it("fences proposed text beyond any code fence inside it", () => {
+    const after = "Beispiel:\n````\ncode\n````";
+    const message = buildApprovalRevisionMessage({
+      request: request({
+        preview: {
+          skillName: "payroll",
+          skillTitle: "Payroll",
+          changes: [{ type: "add", target: "root", after }]
+        }
+      }),
+      comment,
+      t
+    });
+
+    expect(message).toContain(`Newly added:\n\`\`\`\`\`\n${after}\n\`\`\`\`\``);
+  });
+
+  it("still asks for the revision when the preview cannot be read", () => {
+    const message = buildApprovalRevisionMessage({
+      request: request({ kind: "future_kind", preview: {} }),
+      comment,
+      t
+    });
+
+    expect(message.split("\n\n")).toEqual([
+      "Please revise this proposed change and submit the revised version as a new proposal.",
+      `What should be changed:\n${comment}`,
+      "Original proposal: Bei Gehaltsabrechnungen auch die Steuerklasse prüfen."
+    ]);
   });
 });
 

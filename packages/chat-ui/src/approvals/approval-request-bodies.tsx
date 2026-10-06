@@ -1,6 +1,8 @@
 import type { ComponentType } from "react";
 import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
+import type { TranslationContextValue } from "../i18n";
 import { SkillChangeBody } from "./skill-change-body";
+import { parseSkillChangePreview } from "./skill-change-preview";
 
 /**
  * Platform-owned request kinds only. This is deliberately not the client
@@ -15,4 +17,19 @@ const APPROVAL_REQUEST_BODIES = new Map<string, ComponentType<{ preview: unknown
 export function ApprovalRequestBody({ request }: { request: ApprovalRequestView }) {
   const Body = APPROVAL_REQUEST_BODIES.get(request.kind);
   return Body ? <Body preview={request.preview} /> : null;
+}
+
+/** What the request is about, in one line, for places that do not show the body. */
+export function approvalRequestSubject(
+  request: Pick<ApprovalRequestView, "kind" | "preview">,
+  t: TranslationContextValue["t"]
+): string | undefined {
+  const change =
+    request.kind === "skill_change" ? parseSkillChangePreview(request.preview) : undefined;
+  if (!change) {
+    return undefined;
+  }
+  return change.isNewSkill
+    ? `${t("skillChangeNewSkill")}: ${change.skillTitle}`
+    : t("skillChangeConcerns", { skill: change.skillTitle });
 }

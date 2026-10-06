@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ApprovalRevisionHostProvider } from "./approvals/approval-revision-host";
 import { ApprovalsView } from "./approvals/approvals-view";
 import { AssistantRuntimePanel } from "./assistant/assistant-runtime-panel";
 import { AttachmentContentProvider } from "./attachment-content";
@@ -260,61 +261,65 @@ function ChatWorkspaceContent({
           />
         ) : null}
 
-        <ControlPlaneRoutes
-          adminPanel={adminPanel}
-          controlPlane={model.controlPlane}
-          approvalsView={
-            approvals && model.route.view === "approvals" ? (
-              <ApprovalsView pendingCount={approvals.pendingCount} />
-            ) : undefined
-          }
-        >
-          <section className="relative h-full min-h-0 min-w-0">
-            <AttachmentContentProvider
-              client={chat.client}
-              selectedConversationId={chat.selectedConversationId}
-            >
-              <div className="flex h-full min-h-0 min-w-0">
-                <div
-                  className={cn(
-                    "relative h-full min-h-0 min-w-0 flex-1 transition-[width] duration-300 ease-out",
-                    // 23.5rem = panel width (22rem) + its right-6 offset, so the
-                    // thread centers with equal gaps to sidebar and panel edge
-                    resourcesVisible && "lg:[--resources-inset:23.5rem]"
-                  )}
-                  onDragEnter={chat.fileDropzone.onChatDragEnter}
-                  onDragOver={chat.fileDropzone.onChatDragOver}
-                  onDragLeave={chat.fileDropzone.onChatDragLeave}
-                  onDrop={chat.fileDropzone.onChatDrop}
-                >
-                  <AssistantRuntimePanel chat={chat} />
-                  {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
-                  {resourcesAvailable && resourcesConversationId && resourcesPanel.hasResources ? (
-                    resourcesVisible ? (
-                      <ResourcesPanel
-                        client={resourcesPanel.client}
-                        conversationId={resourcesConversationId}
-                        error={resourcesPanel.error}
-                        loading={resourcesPanel.loading}
-                        onClose={resourcesPanel.close}
-                        open
-                        resources={resourcesPanel.resources}
-                      />
-                    ) : (
-                      <ResourcesPanelToggle
-                        onOpen={() => {
-                          displayPanel.close();
-                          resourcesPanel.openExplicitly();
-                        }}
-                      />
-                    )
-                  ) : null}
+        <ApprovalRevisionHostProvider value={model.approvalRevision}>
+          <ControlPlaneRoutes
+            adminPanel={adminPanel}
+            controlPlane={model.controlPlane}
+            approvalsView={
+              approvals && model.route.view === "approvals" ? (
+                <ApprovalsView pendingCount={approvals.pendingCount} />
+              ) : undefined
+            }
+          >
+            <section className="relative h-full min-h-0 min-w-0">
+              <AttachmentContentProvider
+                client={chat.client}
+                selectedConversationId={chat.selectedConversationId}
+              >
+                <div className="flex h-full min-h-0 min-w-0">
+                  <div
+                    className={cn(
+                      "relative h-full min-h-0 min-w-0 flex-1 transition-[width] duration-300 ease-out",
+                      // 23.5rem = panel width (22rem) + its right-6 offset, so the
+                      // thread centers with equal gaps to sidebar and panel edge
+                      resourcesVisible && "lg:[--resources-inset:23.5rem]"
+                    )}
+                    onDragEnter={chat.fileDropzone.onChatDragEnter}
+                    onDragOver={chat.fileDropzone.onChatDragOver}
+                    onDragLeave={chat.fileDropzone.onChatDragLeave}
+                    onDrop={chat.fileDropzone.onChatDrop}
+                  >
+                    <AssistantRuntimePanel chat={chat} />
+                    {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
+                    {resourcesAvailable &&
+                    resourcesConversationId &&
+                    resourcesPanel.hasResources ? (
+                      resourcesVisible ? (
+                        <ResourcesPanel
+                          client={resourcesPanel.client}
+                          conversationId={resourcesConversationId}
+                          error={resourcesPanel.error}
+                          loading={resourcesPanel.loading}
+                          onClose={resourcesPanel.close}
+                          open
+                          resources={resourcesPanel.resources}
+                        />
+                      ) : (
+                        <ResourcesPanelToggle
+                          onOpen={() => {
+                            displayPanel.close();
+                            resourcesPanel.openExplicitly();
+                          }}
+                        />
+                      )
+                    ) : null}
+                  </div>
+                  <ToolDisplayPanel onWidthChange={setDisplayPanelWidth} />
                 </div>
-                <ToolDisplayPanel onWidthChange={setDisplayPanelWidth} />
-              </div>
-            </AttachmentContentProvider>
-          </section>
-        </ControlPlaneRoutes>
+              </AttachmentContentProvider>
+            </section>
+          </ControlPlaneRoutes>
+        </ApprovalRevisionHostProvider>
       </main>
     </TranslationProvider>
   );

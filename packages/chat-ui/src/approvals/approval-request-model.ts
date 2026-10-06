@@ -1,5 +1,5 @@
 import type { ApprovalRequestView, LocaleCode, Message } from "@vivd-catalyst/api-client";
-import { readApprovalDecisionMetadata } from "@vivd-catalyst/core";
+import { approvalRevisionOwner, readApprovalDecisionMetadata } from "@vivd-catalyst/core";
 import type { TranslationKey } from "../i18n";
 
 /** Display kind a tool result carries to render its Approval Request inline in the thread. */
@@ -97,6 +97,8 @@ export interface ApprovalDecisionEvent {
   decidedAt: string;
   summary: string;
   comment?: string;
+  /** Changes were requested by someone other than the requester, who now revises it. */
+  revisedByReviewer?: true;
 }
 
 export type ApprovalDecisionStatus = Exclude<ApprovalRequestView["status"], "pending">;
@@ -116,7 +118,8 @@ export function readApprovalDecisionEvent(
     decidedByLabel: decision.decidedByLabel,
     decidedAt: decision.decidedAt,
     summary: decision.summary,
-    ...(comment ? { comment } : {})
+    ...(comment ? { comment } : {}),
+    ...(approvalRevisionOwner(decision) === "reviewer" ? { revisedByReviewer: true as const } : {})
   };
 }
 
@@ -133,8 +136,59 @@ const DECISION_LINE_LABEL_KEY: Record<ApprovalDecisionStatus, TranslationKey> = 
   reverted: "approvalDecisionReverted"
 };
 
-export function approvalDecisionLineLabelKey(status: ApprovalDecisionStatus): TranslationKey {
-  return DECISION_LINE_LABEL_KEY[status];
+export function approvalDecisionLineLabelKey(
+  decision: Pick<ApprovalDecisionEvent, "status" | "revisedByReviewer">
+): TranslationKey {
+  return decision.revisedByReviewer
+    ? "approvalDecisionChangesRequestedByReviewer"
+    : DECISION_LINE_LABEL_KEY[decision.status];
+}
+
+/**
+ * Where a proposal is revised once changes are requested. The reviser always
+ * holds the approval permission, because only they can request changes:
+ *
+ * - `open_conversation`: the reviewer sits in the conversation the request came
+ *   from, so the agent there revises it.
+ * - `origin_conversation`: the reviewer decides on their own request from
+ *   somewhere else and is taken back to where it came from.
+ * - `new_conversation`: someone else's request. The reviewer has no access to
+ *   that conversation and revises in one of their own.
+ */
+export type ApprovalRevisionPlan =
+  | { kind: "open_conversation" }
+  | { kind: "origin_conversation"; conversationId: string }
+  | { kind: "new_conversation" };
+
+export function approvalRevisionPlan(input: {
+  originConversationId: string | undefined;
+  /** The conversation on screen; the review queue has none. */
+  openConversationId: string | undefined;
+  requestedById: string;
+  currentUserId: string | undefined;
+}): ApprovalRevisionPlan {
+  const { originConversationId } = input;
+  if (originConversationId !== undefined && originConversationId === input.openConversationId) {
+    return { kind: "open_conversation" };
+  }
+  if (
+    originConversationId !== undefined &&
+    input.currentUserId !== undefined &&
+    input.currentUserId === input.requestedById
+  ) {
+    return { kind: "origin_conversation", conversationId: originConversationId };
+  }
+  return { kind: "new_conversation" };
+}
+
+const REVISION_HINT_KEY: Record<ApprovalRevisionPlan["kind"], TranslationKey> = {
+  open_conversation: "approvalRevisionHintOpenConversation",
+  origin_conversation: "approvalRevisionHintOriginConversation",
+  new_conversation: "approvalRevisionHintNewConversation"
+};
+
+export function approvalRevisionHintKey(plan: ApprovalRevisionPlan): TranslationKey {
+  return REVISION_HINT_KEY[plan.kind];
 }
 
 /**
