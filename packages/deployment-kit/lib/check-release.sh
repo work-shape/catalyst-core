@@ -75,7 +75,6 @@ require_file() {
 for directory in "$platform_root" "$capabilities_root" "$deployment_root"; do
   require_dir "$directory"
 done
-require_dir "$deployment_root/deploy/scripts"
 for file in \
   "$workspace_root/package.json" \
   "$workspace_root/pnpm-workspace.yaml" \
@@ -105,7 +104,7 @@ actual_capabilities_ref="$(git -C "$capabilities_root" rev-parse HEAD)"
   || fail "capabilities checkout does not match CAPABILITIES_REF"
 
 log_step "Verify committed build lockfile"
-"$script_dir/update-release.sh" \
+bash "$script_dir/update-release.sh" \
   --workspace-root "$workspace_root" \
   --deployment-root "$deployment_root" \
   --check
@@ -152,10 +151,13 @@ capture_git_status platform "$platform_root"
 capture_git_status capabilities "$capabilities_root"
 capture_git_status deployment "$deployment_root"
 
-log_step "Verify deployment shell syntax"
-while IFS= read -r -d '' script; do
-  bash -n "$script"
-done < <(find "$deployment_root/deploy/scripts" -maxdepth 1 -type f -name '*.sh' -print0)
+# A deployment that takes every script from the kit has no deploy/scripts.
+if [[ -d "$deployment_root/deploy/scripts" ]]; then
+  log_step "Verify deployment shell syntax"
+  while IFS= read -r -d '' script; do
+    bash -n "$script"
+  done < <(find "$deployment_root/deploy/scripts" -maxdepth 1 -type f -name '*.sh' -print0)
+fi
 
 log_step "Validate environment examples"
 env_examples=()

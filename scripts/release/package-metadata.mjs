@@ -30,7 +30,16 @@ const OVERRIDES = {
   // The entry runs the CLI when executed as `catalyst`.
   "config-cli": { sideEffects: undefined },
   // Migrations are read at runtime from ../migrations relative to dist/.
-  "postgres-store": { files: ["dist", "migrations"] }
+  "postgres-store": { files: ["dist", "migrations"] },
+  // Shell scripts, host files and Node checks, shipped as they are: nothing is built.
+  // Deployments use it from the platform checkout until it can be published; deleting
+  // `heldBack` is the whole switch.
+  "deployment-kit": {
+    files: ["bin", "lib", "host", "verify", "dev"],
+    sideEffects: undefined,
+    assetsOnly: true,
+    heldBack: true
+  }
 };
 
 const KEY_ORDER = [
@@ -60,7 +69,9 @@ export function listPackages() {
         root: dirname(manifestPath),
         manifestPath,
         manifest: JSON.parse(readFileSync(manifestPath, "utf8")),
-        publishable: !(entry.name in UNPUBLISHED)
+        publishable: !(entry.name in UNPUBLISHED),
+        assetsOnly: OVERRIDES[entry.name]?.assetsOnly === true,
+        heldBack: OVERRIDES[entry.name]?.heldBack === true
       };
     })
     .sort((left, right) => left.dir.localeCompare(right.dir));
@@ -94,7 +105,11 @@ export function withPublishMetadata(dir, manifest) {
       exports: publishedExports(manifest.exports)
     }
   };
-  delete next.private;
+  if (override.heldBack) {
+    next.private = true;
+  } else {
+    delete next.private;
+  }
 
   const ordered = {};
   for (const key of [...KEY_ORDER, ...Object.keys(next)]) {

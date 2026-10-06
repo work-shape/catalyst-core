@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Copies the sources to CAPTURE_DIR/host/<remote path> and lists what arrived in
+# CAPTURE_DIR/rsync.log as "<flags> <target> <remote path> <x|-> <content hash>".
+set -euo pipefail
+flags=()
+paths=()
+for argument in "$@"; do
+  if [[ "$argument" == -* ]]; then flags+=("$argument"); else paths+=("$argument"); fi
+done
+destination="${paths[${#paths[@]} - 1]}"
+unset "paths[${#paths[@]}-1]"
+target="${destination%%:*}"
+remote_dir="${destination#*:}"
+mkdir -p "$CAPTURE_DIR/host$remote_dir"
+for source in "${paths[@]}"; do
+  if [[ "$source" == */ ]]; then
+    files=("$source"*)
+  else
+    files=("$source")
+  fi
+  for file in "${files[@]}"; do
+    remote_path="$remote_dir$(basename "$file")"
+    cp "$file" "$CAPTURE_DIR/host$remote_path"
+    mode="-"
+    [[ -x "$file" ]] && mode="x"
+    printf '%s %s %s %s %s\n' "${flags[*]}" "$target" "$remote_path" "$mode" \
+      "$(git hash-object "$file")" >> "$CAPTURE_DIR/rsync.log"
+  done
+done

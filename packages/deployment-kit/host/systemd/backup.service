@@ -1,0 +1,10 @@
+[Unit]
+Description=Back up @INSTANCE_TITLE@ Postgres to object storage
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+Environment=APP_DIR=/opt/vivd-catalyst/@INSTANCE@
+Environment=ENV_FILE=/etc/vivd-catalyst/@INSTANCE@/app.env
+ExecStart=/opt/vivd-catalyst/@INSTANCE@/backup-postgres.sh

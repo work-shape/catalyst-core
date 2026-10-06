@@ -10,6 +10,8 @@ import { findMetadataDrift, listPackages, repoRoot, UNPUBLISHED } from "./packag
 
 // Installed together in the scratch consumer. Their workspace dependencies come along.
 const CONSUMER_SET = ["core", "config-schema", "api-contract", "api-client", "config-cli"];
+// Installed next to them for its bin only; it has no module entry to import.
+const DEPLOYMENT_KIT = "deployment-kit";
 const MAX_TARBALL_BYTES = 300_000;
 // chat-ui ships src/ next to dist/ for Tailwind scanning.
 const MAX_TARBALL_BYTES_BY_DIR = { "chat-ui": 1_000_000 };
@@ -67,8 +69,8 @@ function inspectTarball(pkg, tarball, lockstepVersion, publishedNames) {
   if (manifestText.includes("workspace:")) {
     report("packed manifest still contains a workspace: specifier");
   }
-  if (manifest.private) {
-    report("packed manifest is private");
+  if (Boolean(manifest.private) !== pkg.heldBack) {
+    report(pkg.heldBack ? "held back but not marked private" : "packed manifest is private");
   }
   if (manifest.version !== lockstepVersion) {
     report(`version ${manifest.version} is not the lockstep version ${lockstepVersion}`);
@@ -110,10 +112,10 @@ function inspectTarball(pkg, tarball, lockstepVersion, publishedNames) {
       report(`export ${subpath} has no types`);
     }
   }
-  if (!files.some((file) => /^dist\/.+\.js$/u.test(file))) {
+  if (!pkg.assetsOnly && !files.some((file) => /^dist\/.+\.js$/u.test(file))) {
     report("dist has no JavaScript");
   }
-  if (!files.some((file) => /^dist\/.+\.d\.ts$/u.test(file))) {
+  if (!pkg.assetsOnly && !files.some((file) => /^dist\/.+\.d\.ts$/u.test(file))) {
     report("dist has no type declarations");
   }
   for (const declared of manifest.files ?? []) {
@@ -140,6 +142,7 @@ function checkConsumer(tarballs, workDir) {
   const consumerDir = join(workDir, "consumer");
   mkdirSync(consumerDir);
   const names = CONSUMER_SET.map((dir) => tarballs.get(dir).name);
+  const kitName = tarballs.get(DEPLOYMENT_KIT).name;
   const fileSpecifiers = Object.fromEntries(
     [...tarballs.values()].map(({ name, tarball }) => [name, `file:${tarball}`])
   );
@@ -151,7 +154,9 @@ function checkConsumer(tarballs, workDir) {
         name: "release-check-consumer",
         private: true,
         type: "module",
-        dependencies: Object.fromEntries(names.map((name) => [name, fileSpecifiers[name]])),
+        dependencies: Object.fromEntries(
+          [...names, kitName].map((name) => [name, fileSpecifiers[name]])
+        ),
         // Workspace dependencies of the consumer set resolve to the packed tarballs too,
         // so nothing has to exist on a registry yet.
         pnpm: { overrides: fileSpecifiers }
@@ -219,6 +224,11 @@ function checkConsumer(tarballs, workDir) {
     throw new Error("the catalyst bin printed no usage when run from node_modules/.bin");
   }
   console.log("catalyst bin runs from node_modules/.bin");
+  const deployHelp = run("pnpm", ["exec", "catalyst-deploy", "--help"], inConsumer);
+  if (!deployHelp.includes("Usage: catalyst-deploy")) {
+    throw new Error("the catalyst-deploy bin printed no usage when run from node_modules/.bin");
+  }
+  console.log("catalyst-deploy bin runs from node_modules/.bin");
 }
 
 const packages = listPackages();

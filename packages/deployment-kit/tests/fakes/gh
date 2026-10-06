@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Logs every call to GH_LOG. Answers from GH_FIXTURES: release-manifest.json is the
+# asset of every release, deployments.json and statuses.json are the API responses.
+set -euo pipefail
+printf '%s\n' "$*" >> "$GH_LOG"
+
+jq_filter=""
+arguments=("$@")
+for index in "${!arguments[@]}"; do
+  if [[ "${arguments[$index]}" == "--jq" ]]; then
+    jq_filter="${arguments[$((index + 1))]}"
+  fi
+done
+answer() {
+  if [[ -n "$jq_filter" ]]; then jq -r "$jq_filter" "$1"; else cat "$1"; fi
+}
+
+case "$1 ${2:-}" in
+  "auth status") ;;
+  "release download")
+    output=""
+    for index in "${!arguments[@]}"; do
+      [[ "${arguments[$index]}" == "--output" ]] && output="${arguments[$((index + 1))]}"
+    done
+    [[ -f "$GH_FIXTURES/release-manifest.json" ]] || exit 1
+    cp "$GH_FIXTURES/release-manifest.json" "$output"
+    ;;
+  "release create" | "release upload" | "workflow run" | "run watch") ;;
+  "api "*)
+    case "$2" in
+      *"/statuses") answer "$GH_FIXTURES/statuses.json" ;;
+      *"/deployments?"*) answer "$GH_FIXTURES/deployments.json" ;;
+      *) exit 2 ;;
+    esac
+    ;;
+  "run list") printf '4711\n' ;;
+  "run view") printf 'https://github.example/runs/4711\n' ;;
+  *) exit 2 ;;
+esac

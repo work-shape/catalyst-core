@@ -9,6 +9,16 @@ export async function readPlatformDockerfile() {
   return readFile(new URL("docker/vivd-client.Dockerfile", platformRoot), "utf8");
 }
 
+// The deployment repo under check: DEPLOYMENT_ROOT, or the directory the check runs in.
+export function readDeploymentFile(path) {
+  return readFile(resolve(process.env.DEPLOYMENT_ROOT ?? process.cwd(), path), "utf8");
+}
+
+// The script the kit runs on the host during a deploy.
+export function readRemoteDeployScript() {
+  return readFile(new URL("../lib/deploy-remote.sh", import.meta.url), "utf8");
+}
+
 export function extractDockerStage(dockerfile, stageName) {
   const lines = dockerfile.split(/\r?\n/u);
   const start = lines.findIndex((line) => new RegExp(`^FROM .* AS ${stageName}$`, "u").test(line));

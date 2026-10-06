@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Stands in for docker on the host while the remote deploy script runs. Logs every
+# call to HOST_LOG. Containers are named <service>-old and <service>-new; a service
+# has an old container until the script starts one from the release.
+set -euo pipefail
+printf 'docker %s\n' "$*" >> "$HOST_LOG"
+state="$HOST_STATE"
+
+service_image() {
+  local service="$1" suffix digest
+  case "$service" in
+    api | agent-run-worker) suffix=api digest="$API_IMAGE_DIGEST" ;;
+    ui) suffix=ui digest="$UI_IMAGE_DIGEST" ;;
+    doc-worker) suffix=doc-worker digest="$DOC_WORKER_IMAGE_DIGEST" ;;
+    artifact-preview-worker)
+      suffix=artifact-preview-worker digest="$ARTIFACT_PREVIEW_WORKER_IMAGE_DIGEST" ;;
+    workspace-command-worker)
+      suffix=workspace-command-worker digest="$WORKSPACE_COMMAND_WORKER_IMAGE_DIGEST" ;;
+    *) return 1 ;;
+  esac
+  if [[ "${HOST_STALE_SERVICE:-}" == "$service" ]]; then
+    digest="sha256:stale"
+  fi
+  printf '%s-%s:%s@%s\n' "$IMAGE_REPOSITORY" "$suffix" "$IMAGE_TAG" "$digest"
+}
+
+if [[ "$1" == "compose" ]]; then
+  shift
+  while [[ "$1" == --profile || "$1" == --env-file || "$1" == -f ]]; do shift 2; done
+  case "$1" in
+    ps)
+      service="$3"
+      if [[ "$service" == "agent-run-worker" ]]; then
+        [[ -f "$state/agent-run-worker.stopped" ]] || echo agent-run-worker-old
+        [[ -f "$state/agent-run-worker.started" ]] && echo agent-run-worker-new
+      else
+        echo "$service-new"
+      fi
+      ;;
+    up)
+      [[ " $* " == *" --scale agent-run-worker=2 "* ]] && touch "$state/agent-run-worker.started"
+      ;;
+  esac
+  exit 0
+fi
+
+case "$1" in
+  inspect)
+    container="$4"
+    if [[ "$3" == "{{.State.Running}}" ]]; then
+      echo true
+    elif [[ "$container" == *-old ]]; then
+      echo "previous-release-image true"
+    else
+      echo "$(service_image "${container%-new}") true"
+    fi
+    ;;
+  stop) touch "$state/agent-run-worker.stopped" ;;
+esac

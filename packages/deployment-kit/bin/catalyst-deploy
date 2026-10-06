@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: catalyst-deploy COMMAND [ARGS]
+
+Run from an operated deployment repo (deployment.<instance>). The repo's
+deploy/deployment.env names the instance; everything else is derived from it.
+
+Commands:
+  check              Run the release gate for the stitched workspace.
+  update-refs        Pin platform and capabilities commits and refresh the
+                     committed build lockfile. Takes --platform-ref REF,
+                     --capabilities-ref REF, --latest or --check.
+  prepare-workspace  Prepare the parent directory as the build workspace.
+  publish            publish staging|production: tag a release.
+  manifest           manifest write|check|fetch|staging-deployed: release manifests.
+  deploy             deploy --host HOST --manifest FILE: deploy a release by digest.
+
+COMMAND --help prints the details of publish, manifest and deploy.
+USAGE
+}
+
+# Only this file is executable in a published package, so the commands under lib/
+# are run with bash. The loop resolves the node_modules/.bin link.
+source_path="${BASH_SOURCE[0]}"
+while [[ -L "$source_path" ]]; do
+  link_dir="$(cd "$(dirname "$source_path")" && pwd)"
+  source_path="$(readlink "$source_path")"
+  [[ "$source_path" == /* ]] || source_path="$link_dir/$source_path"
+done
+kit_dir="$(cd "$(dirname "$source_path")/.." && pwd)"
+
+command="${1:-}"
+[[ $# -gt 0 ]] && shift
+
+case "$command" in
+  check | update-refs | prepare-workspace)
+    # shellcheck source=../lib/deployment-env.sh
+    source "$kit_dir/lib/deployment-env.sh"
+    load_deployment_env
+    require_workspace_layout
+    roots=(--workspace-root "$WORKSPACE_ROOT" --deployment-root "$DEPLOYMENT_ROOT")
+    case "$command" in
+      check)
+        # The policy checks read source files only, so they run first and fail fast.
+        DEPLOYMENT_ROOT="$DEPLOYMENT_ROOT" bash "$kit_dir/lib/check-deployment-policy.sh"
+        post_check=()
+        if [[ -x "$DEPLOYMENT_ROOT/deploy/scripts/check-release-policy.sh" ]]; then
+          post_check=(--post-check "$DEPLOYMENT_ROOT/deploy/scripts/check-release-policy.sh")
+        fi
+        exec bash "$kit_dir/lib/check-release.sh" "${roots[@]}" ${post_check[@]+"${post_check[@]}"} "$@"
+        ;;
+      update-refs) exec bash "$kit_dir/lib/update-release.sh" "${roots[@]}" "$@" ;;
+      prepare-workspace) exec bash "$kit_dir/lib/prepare-build-workspace.sh" "${roots[@]}" "$@" ;;
+    esac
+    ;;
+  publish) exec bash "$kit_dir/lib/publish.sh" "$@" ;;
+  manifest) exec bash "$kit_dir/lib/release-manifest.sh" "$@" ;;
+  deploy) exec bash "$kit_dir/lib/deploy.sh" "$@" ;;
+  -h | --help | help)
+    usage
+    ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac

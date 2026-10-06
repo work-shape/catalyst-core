@@ -3,6 +3,27 @@
 All platform packages are released in lockstep under one version. Before 1.0 a minor version may
 contain breaking changes; a patch version does not.
 
+## Unreleased
+
+### Added
+
+- **Deployment kit:** the release and deploy tooling of operated instances is the package
+  `@vivd-catalyst/deployment-kit` with the command `catalyst-deploy` (`check`, `update-refs`,
+  `prepare-workspace`, `publish`, `manifest`, `deploy`). It carries what each deployment repo
+  kept as its own copy: the deploy by image digest, release manifests, staging and production
+  publishing, Postgres backup and restore with their systemd units, the zram setup, and the
+  checks of the worker wiring in Compose. A deployment names its instance in
+  `deploy/deployment.env` (`INSTANCE`, `IMAGE_REPOSITORY`, `APP_PACKAGE`,
+  `EXECUTION_WORKSPACES`); host paths, dump names and unit names follow from it. The package is
+  not published yet and is used from the platform checkout at the pinned ref.
+
+### Changed
+
+- **Deployment kit:** the scripts under `scripts/deployment-kit/` moved into the package. The
+  old paths remain as forwarding stubs, so deployments pinned to them keep working.
+- **Release check:** `check-release.sh` no longer requires a `deploy/scripts` directory in the
+  deployment.
+
 ## 0.5.1 — 2026-10-06
 
 ### Added

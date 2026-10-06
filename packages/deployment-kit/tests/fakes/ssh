@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Records each call as CAPTURE_DIR/ssh-N.{target,command}. For the call that runs
+# the remote script it also records what it could read from stdin.
+set -euo pipefail
+count_file="$CAPTURE_DIR/ssh.count"
+count=$(( $(cat "$count_file" 2>/dev/null || echo 0) + 1 ))
+echo "$count" > "$count_file"
+printf '%s\n' "$1" > "$CAPTURE_DIR/ssh-$count.target"
+printf '%s' "$2" > "$CAPTURE_DIR/ssh-$count.command"
+if [[ "$2" == *"bash -c"* ]]; then
+  cat > "$CAPTURE_DIR/ssh-$count.stdin"
+fi

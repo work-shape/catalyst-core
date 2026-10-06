@@ -1,0 +1,29 @@
+{
+  "name": "@vivd-catalyst/deployment-kit",
+  "version": "0.5.1",
+  "private": true,
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
+    "directory": "packages/deployment-kit"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "host",
+    "verify",
+    "dev"
+  ],
+  "bin": {
+    "catalyst-deploy": "./bin/catalyst-deploy"
+  },
+  "publishConfig": {
+    "access": "restricted",
+    "registry": "https://registry.npmjs.org/"
+  }
+}
