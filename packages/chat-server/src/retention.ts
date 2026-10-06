@@ -30,6 +30,12 @@ interface RetentionLogger {
 
 const DEFAULT_RETENTION_BATCH_SIZE = 100;
 const DEFAULT_RETENTION_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+/**
+ * A Conversation without messages or draft attachments is an abandoned draft: it was created to
+ * hold uploads that were removed again. The grace period keeps a conversation that is still
+ * being set up, with uploads in flight or a first message about to be sent.
+ */
+const ABANDONED_CONVERSATION_GRACE_MS = 24 * 60 * 60 * 1000;
 
 export class ConversationRetentionWorkflow {
   private readonly options: ChatServerOptions;
@@ -43,10 +49,14 @@ export class ConversationRetentionWorkflow {
   }
 
   async expireDueConversations(): Promise<ConversationRetentionRunSummary> {
-    const now = this.now().toISOString();
+    const currentTime = this.now();
+    const now = currentTime.toISOString();
     const expired = await this.options.conversationStore.listExpiredConversations({
       clientInstanceId: this.options.clientInstanceId,
       now,
+      abandonedBefore: new Date(
+        currentTime.getTime() - ABANDONED_CONVERSATION_GRACE_MS
+      ).toISOString(),
       limit: this.batchSize
     });
     let expiredCount = 0;
@@ -211,6 +221,7 @@ function createRetentionAuditMetadata(
   return {
     retainedUntil: conversation.retainedUntil,
     expiredAt,
+    ...(conversation.retainedUntil > expiredAt ? { reason: "abandoned_draft" } : {}),
     attachmentCount: deletion?.attachmentCount ?? 0,
     fileCount: deletion?.fileObjectKeys.length ?? 0,
     artifactCount: deletion?.artifactObjectKeys.length ?? 0,

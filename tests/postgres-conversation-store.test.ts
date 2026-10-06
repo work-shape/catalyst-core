@@ -131,6 +131,101 @@ describePostgres("Postgres conversation store", () => {
     }
   });
 
+  it("lists and expires message-less conversations by their draft attachments", async () => {
+    const store = await PostgresPlatformStore.connect({
+      databaseUrl: databaseUrl!,
+      runMigrations: true
+    });
+    const sql = postgres(databaseUrl!, { max: 1 });
+    const clientInstanceId = asClientInstanceId(`unsent_drafts_${globalThis.crypto.randomUUID()}`);
+    const user = await store.createUser({ clientInstanceId, displayLabel: "Author" });
+    const workspace = await store.ensurePersonalWorkspace({ clientInstanceId, userId: user.id });
+    const conversation = await store.createConversation({
+      visibility: "workspace",
+      clientInstanceId,
+      collaborationWorkspaceId: workspace.id,
+      createdByUserId: user.id,
+      createdByExternalUserId: "user_test",
+      title: "2 attached files",
+      retainedUntil: "2999-01-01T00:00:00.000Z"
+    });
+    const listedFor = async (userId: string) =>
+      (
+        await store.listConversationsForWorkspace({
+          clientInstanceId,
+          collaborationWorkspaceId: workspace.id,
+          scope: { kind: "viewer", userId }
+        })
+      ).map(({ id }) => id);
+    const now = new Date().toISOString();
+    const expiredWith = async (abandonedBefore?: string) =>
+      (
+        await store.listExpiredConversations({ clientInstanceId, now, abandonedBefore, limit: 10 })
+      ).map(({ id }) => id);
+    const later = "2998-01-01T00:00:00.000Z";
+
+    try {
+      await expect(listedFor(user.id)).resolves.toEqual([]);
+      await expect(
+        store.listConversationsForWorkspace({
+          clientInstanceId,
+          collaborationWorkspaceId: workspace.id,
+          scope: { kind: "lifecycle" }
+        })
+      ).resolves.toEqual([expect.objectContaining({ id: conversation.id })]);
+
+      const file = await store.createManagedFile({
+        clientInstanceId,
+        ownerUserId: user.id,
+        filename: "draft.txt",
+        byteSize: 5,
+        checksum: "draft",
+        objectKey: `files/${conversation.id}/draft`
+      });
+      const attachment = await store.createConversationAttachment({
+        clientInstanceId,
+        conversationId: conversation.id,
+        fileId: file.id,
+        filename: file.filename,
+        byteSize: file.byteSize,
+        checksum: file.checksum,
+        status: "ready"
+      });
+      await expect(listedFor(user.id)).resolves.toEqual([conversation.id]);
+      await expect(listedFor("usr_colleague")).resolves.toEqual([]);
+      await expect(expiredWith(later)).resolves.toEqual([]);
+
+      await store.deleteDraftAttachment({
+        clientInstanceId,
+        conversationId: conversation.id,
+        attachmentId: attachment.id,
+        deletedAt: new Date().toISOString()
+      });
+      await expect(listedFor(user.id)).resolves.toEqual([]);
+      await expect(expiredWith()).resolves.toEqual([]);
+      await expect(expiredWith("2000-01-01T00:00:00.000Z")).resolves.toEqual([]);
+      await expect(expiredWith(later)).resolves.toEqual([conversation.id]);
+
+      await store.appendMessage({
+        clientInstanceId,
+        conversationId: conversation.id,
+        role: "user",
+        text: "First message"
+      });
+      await expect(listedFor(user.id)).resolves.toEqual([conversation.id]);
+      await expect(listedFor("usr_colleague")).resolves.toEqual([conversation.id]);
+      await expect(expiredWith(later)).resolves.toEqual([]);
+    } finally {
+      await sql`delete from conversations where id = ${conversation.id}`;
+      await sql`delete from managed_files where client_instance_id = ${clientInstanceId}`;
+      await sql`delete from collaboration_workspace_memberships where client_instance_id = ${clientInstanceId}`;
+      await sql`delete from collaboration_workspaces where client_instance_id = ${clientInstanceId}`;
+      await sql`delete from product_users where client_instance_id = ${clientInstanceId}`;
+      await sql.end();
+      await store.close();
+    }
+  });
+
   it("persists fast mode and the reported service tier with a usage event", async () => {
     const store = await PostgresPlatformStore.connect({
       databaseUrl: databaseUrl!,

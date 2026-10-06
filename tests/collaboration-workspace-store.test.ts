@@ -216,6 +216,14 @@ describe("InMemoryPlatformStore Collaboration Workspaces", () => {
     const open = await create("workspace", author.id);
     const authorsPrivate = await create("private", author.id);
     const colleaguesPrivate = await create("private", colleague.id);
+    for (const conversation of [open, authorsPrivate, colleaguesPrivate]) {
+      await store.appendMessage({
+        clientInstanceId,
+        conversationId: conversation.id,
+        role: "user",
+        text: "First message"
+      });
+    }
     const list = async (
       scope: Parameters<typeof store.listConversationsForWorkspace>[0]["scope"]
     ) =>
@@ -241,6 +249,11 @@ describe("InMemoryPlatformStore Collaboration Workspaces", () => {
     await expect(
       store.listPrivateConversationsCreatedByUser({ clientInstanceId, userId: author.id })
     ).resolves.toEqual([expect.objectContaining({ id: authorsPrivate.id })]);
+
+    const unsent = await create("workspace", author.id);
+    await expect(list({ kind: "viewer", userId: author.id })).resolves.not.toContain(unsent.id);
+    await expect(list({ kind: "viewer", userId: colleague.id })).resolves.not.toContain(unsent.id);
+    await expect(list({ kind: "lifecycle" })).resolves.toContain(unsent.id);
 
     const personal = await store.ensurePersonalWorkspace({ clientInstanceId, userId: author.id });
     expect(personal.defaultConversationVisibility).toBe("workspace");

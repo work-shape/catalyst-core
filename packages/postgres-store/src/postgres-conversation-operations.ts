@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, lt, lte, ne, or } from "drizzle-orm";
+import { and, asc, desc, eq, exists, isNull, lt, lte, ne, notExists, or } from "drizzle-orm";
 import {
   AppError,
   createApprovalDecisionMessage,
@@ -84,16 +84,53 @@ export async function listConversationsForWorkspace(
         eq(conversations.clientInstanceId, input.clientInstanceId),
         eq(conversations.collaborationWorkspaceId, input.collaborationWorkspaceId),
         eq(conversations.status, "active"),
-        scope.kind === "lifecycle"
-          ? undefined
-          : or(
-              eq(conversations.visibility, "workspace"),
-              eq(conversations.createdByUserId, scope.userId)
-            )
+        ...(scope.kind === "lifecycle"
+          ? []
+          : [
+              or(
+                eq(conversations.visibility, "workspace"),
+                eq(conversations.createdByUserId, scope.userId)
+              ),
+              // A Conversation without messages is an unsent draft: only its creator sees it,
+              // and only while it still holds draft attachments.
+              or(
+                exists(conversationMessages(db)),
+                and(
+                  eq(conversations.createdByUserId, scope.userId),
+                  exists(conversationDraftAttachments(db))
+                )
+              )
+            ])
       )
     )
     .orderBy(desc(conversations.updatedAt));
   return rows.map(mapConversation);
+}
+
+function conversationMessages(db: PostgresDatabase) {
+  return db
+    .select({ id: messages.id })
+    .from(messages)
+    .where(
+      and(
+        eq(messages.clientInstanceId, conversations.clientInstanceId),
+        eq(messages.conversationId, conversations.id)
+      )
+    );
+}
+
+function conversationDraftAttachments(db: PostgresDatabase) {
+  return db
+    .select({ id: conversationAttachments.id })
+    .from(conversationAttachments)
+    .where(
+      and(
+        eq(conversationAttachments.clientInstanceId, conversations.clientInstanceId),
+        eq(conversationAttachments.conversationId, conversations.id),
+        isNull(conversationAttachments.messageId),
+        ne(conversationAttachments.status, "deleted")
+      )
+    );
 }
 
 export async function listPrivateConversationsCreatedByUser(
@@ -144,9 +181,11 @@ export async function listExpiredConversations(
   input: {
     clientInstanceId: ClientInstanceId;
     now: string;
+    abandonedBefore?: string;
     limit: number;
   }
 ): Promise<Conversation[]> {
+  const retentionDue = lte(conversations.retainedUntil, new Date(input.now));
   const rows = await db
     .select()
     .from(conversations)
@@ -154,7 +193,16 @@ export async function listExpiredConversations(
       and(
         eq(conversations.clientInstanceId, input.clientInstanceId),
         eq(conversations.status, "active"),
-        lte(conversations.retainedUntil, new Date(input.now))
+        input.abandonedBefore
+          ? or(
+              retentionDue,
+              and(
+                lte(conversations.updatedAt, new Date(input.abandonedBefore)),
+                notExists(conversationMessages(db)),
+                notExists(conversationDraftAttachments(db))
+              )
+            )
+          : retentionDue
       )
     )
     .orderBy(asc(conversations.retainedUntil), asc(conversations.id))

@@ -16,7 +16,9 @@ export type ConversationVisibility = "workspace" | "private";
 
 /**
  * Who a workspace Conversation listing is for. `viewer` hides other users' private
- * Conversations; `lifecycle` is for retention and deletion workflows that must see every row.
+ * Conversations and Conversations without messages, except the viewer's own while they still
+ * hold draft attachments; `lifecycle` is for retention and deletion workflows that must see
+ * every row.
  */
 export type ConversationListScope = { kind: "viewer"; userId: string } | { kind: "lifecycle" };
 
@@ -149,9 +151,14 @@ export interface ConversationStore extends ConversationHistoryStore {
 }
 
 export interface ConversationRetentionStore {
+  /**
+   * Active Conversations whose retention is due. With `abandonedBefore`, also the ones that
+   * hold no messages and no draft attachments and were last touched at or before that time.
+   */
   listExpiredConversations(input: {
     clientInstanceId: ClientInstanceId;
     now: ISODateString;
+    abandonedBefore?: ISODateString;
     limit: number;
   }): Promise<Conversation[]>;
   expireConversation(input: {

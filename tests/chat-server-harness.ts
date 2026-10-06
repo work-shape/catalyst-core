@@ -1,9 +1,11 @@
 import { createClientInstanceApp as createUnseededClientInstanceApp } from "@vivd-catalyst/client-assembly";
 import {
   asClientInstanceId,
+  asConversationId,
   isJsonObject,
   unknownToJsonValue,
   type AuthenticatedUser,
+  type ConversationStore,
   type JsonObject
 } from "@vivd-catalyst/core";
 import {
@@ -188,6 +190,22 @@ function toJsonObject(input: object): JsonObject {
     throw new Error("Expected JSON object fixture");
   }
   return value;
+}
+
+/**
+ * Appends a first message, because viewer listings leave out a Conversation without messages.
+ */
+export async function seedConversationMessage(
+  store: Pick<ConversationStore, "appendMessage">,
+  conversationId: string,
+  clientInstanceId = "demo-local"
+): Promise<void> {
+  await store.appendMessage({
+    clientInstanceId: asClientInstanceId(clientInstanceId),
+    conversationId: asConversationId(conversationId),
+    role: "user",
+    text: "First message"
+  });
 }
 
 export type TestServer = Awaited<ReturnType<typeof createClientInstanceApp>>["server"];

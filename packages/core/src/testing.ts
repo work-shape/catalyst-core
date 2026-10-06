@@ -860,17 +860,39 @@ export class InMemoryPlatformStore
     scope: ConversationListScope;
   }): Promise<Conversation[]> {
     const { scope } = input;
-    return [...this.conversations.values()]
-      .filter(
-        (conversation) =>
-          conversation.clientInstanceId === input.clientInstanceId &&
-          conversation.collaborationWorkspaceId === input.collaborationWorkspaceId &&
-          conversation.status === "active" &&
-          (scope.kind === "lifecycle" ||
-            conversation.visibility === "workspace" ||
-            conversation.createdByUserId === scope.userId)
-      )
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    const candidates = [...this.conversations.values()].filter(
+      (conversation) =>
+        conversation.clientInstanceId === input.clientInstanceId &&
+        conversation.collaborationWorkspaceId === input.collaborationWorkspaceId &&
+        conversation.status === "active" &&
+        (scope.kind === "lifecycle" ||
+          conversation.visibility === "workspace" ||
+          conversation.createdByUserId === scope.userId)
+    );
+    const listed: Conversation[] = [];
+    for (const conversation of candidates) {
+      if (
+        scope.kind === "lifecycle" ||
+        this.hasMessages(conversation) ||
+        (conversation.createdByUserId === scope.userId &&
+          (await this.hasDraftAttachments(conversation)))
+      ) {
+        listed.push(conversation);
+      }
+    }
+    return listed.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  }
+
+  private hasMessages(conversation: Conversation): boolean {
+    return (this.messages.get(conversation.id)?.length ?? 0) > 0;
+  }
+
+  private async hasDraftAttachments(conversation: Conversation): Promise<boolean> {
+    const drafts = await this.fileStore.listDraftAttachments({
+      clientInstanceId: conversation.clientInstanceId,
+      conversationId: conversation.id
+    });
+    return drafts.length > 0;
   }
 
   async listPrivateConversationsCreatedByUser(input: {
@@ -908,15 +930,29 @@ export class InMemoryPlatformStore
   async listExpiredConversations(input: {
     clientInstanceId: ClientInstanceId;
     now: string;
+    abandonedBefore?: string;
     limit: number;
   }): Promise<Conversation[]> {
-    return [...this.conversations.values()]
-      .filter(
-        (conversation) =>
-          conversation.clientInstanceId === input.clientInstanceId &&
-          conversation.status === "active" &&
-          conversation.retainedUntil <= input.now
-      )
+    const { abandonedBefore } = input;
+    const due: Conversation[] = [];
+    for (const conversation of this.conversations.values()) {
+      if (
+        conversation.clientInstanceId !== input.clientInstanceId ||
+        conversation.status !== "active"
+      ) {
+        continue;
+      }
+      if (
+        conversation.retainedUntil <= input.now ||
+        (abandonedBefore !== undefined &&
+          conversation.updatedAt <= abandonedBefore &&
+          !this.hasMessages(conversation) &&
+          !(await this.hasDraftAttachments(conversation)))
+      ) {
+        due.push(conversation);
+      }
+    }
+    return due
       .sort((left, right) =>
         `${left.retainedUntil}:${left.id}`.localeCompare(`${right.retainedUntil}:${right.id}`)
       )

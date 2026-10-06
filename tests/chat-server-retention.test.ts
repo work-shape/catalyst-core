@@ -161,6 +161,93 @@ describe("conversation retention expiration", () => {
     }
   });
 
+  it("expires abandoned draft conversations after the grace period", async () => {
+    const clientInstanceId = asClientInstanceId("retention-abandoned-test");
+    const store = new InMemoryPlatformStore();
+    const managedObjects = createManagedObjectAccess({
+      clientInstanceId,
+      files: store,
+      byteStore: new RecordingByteStore(),
+      keyFactory: {
+        createFileObjectKey(input) {
+          return `files/${input.conversationId ?? "unscoped"}/${input.checksum}`;
+        },
+        createArtifactObjectKey(input) {
+          return `artifacts/${input.conversationId}/${input.kind}/${input.checksum}`;
+        }
+      }
+    });
+    const options = createRetentionOptions({
+      clientInstanceId,
+      store,
+      attachments: createManagedObjectAttachmentService({ managedObjects })
+    });
+    const create = (title: string) =>
+      store.createConversationForTesting({
+        clientInstanceId,
+        createdByUserId: "user-1",
+        createdByExternalUserId: "external-user-1",
+        title,
+        retainedUntil: "2999-01-01T00:00:00.000Z"
+      });
+    const abandoned = await create("5 attached files");
+    const started = await create("started");
+    await store.appendMessage({
+      clientInstanceId,
+      conversationId: started.id,
+      role: "user",
+      text: "first message"
+    });
+    const drafting = await create("drafting");
+    await createAttachedObjects({
+      store,
+      managedObjects,
+      clientInstanceId,
+      conversation: drafting
+    });
+    const emptied = await create("emptied");
+    const removed = await createAttachedObjects({
+      store,
+      managedObjects,
+      clientInstanceId,
+      conversation: emptied
+    });
+    await store.deleteDraftAttachment({
+      clientInstanceId,
+      conversationId: emptied.id,
+      attachmentId: removed.attachment.id,
+      deletedAt: new Date().toISOString()
+    });
+    const hoursFromNow = (hours: number) => () => new Date(Date.now() + hours * 60 * 60 * 1000);
+
+    await expect(
+      new ConversationRetentionWorkflow(options, {
+        now: hoursFromNow(23)
+      }).expireDueConversations()
+    ).resolves.toEqual({ expiredCount: 0, failedCount: 0 });
+    await expectConversationStatus(store, clientInstanceId, abandoned.id, "active");
+
+    await expect(
+      new ConversationRetentionWorkflow(options, {
+        now: hoursFromNow(25)
+      }).expireDueConversations()
+    ).resolves.toEqual({ expiredCount: 2, failedCount: 0 });
+    await expectConversationStatus(store, clientInstanceId, abandoned.id, "retention_expired");
+    await expectConversationStatus(store, clientInstanceId, emptied.id, "retention_expired");
+    await expectConversationStatus(store, clientInstanceId, started.id, "active");
+    await expectConversationStatus(store, clientInstanceId, drafting.id, "active");
+
+    const events = await store.listAuditEvents({ clientInstanceId, limit: 10 });
+    expect(
+      events.find(
+        (event) => event.subject === abandoned.id && event.type === "conversation.retention_expired"
+      )
+    ).toMatchObject({
+      status: "success",
+      metadata: expect.objectContaining({ reason: "abandoned_draft", attachmentCount: 0 })
+    });
+  });
+
   it("keeps deletion metadata retryable when object byte deletion fails", async () => {
     const clientInstanceId = asClientInstanceId("retention-retry-test");
     const store = new InMemoryPlatformStore();

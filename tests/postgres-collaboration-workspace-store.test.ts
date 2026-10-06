@@ -371,6 +371,14 @@ describePostgres("Postgres Collaboration Workspace store", () => {
       const authorsPrivate = await create("private", author.id);
       const colleaguesPrivate = await create("private", colleague.id);
       expect(authorsPrivate.visibility).toBe("private");
+      for (const conversation of [open, authorsPrivate, colleaguesPrivate]) {
+        await store.appendMessage({
+          clientInstanceId,
+          conversationId: conversation.id,
+          role: "user",
+          text: "First message"
+        });
+      }
       const list = async (
         scope: Parameters<typeof store.listConversationsForWorkspace>[0]["scope"]
       ) =>

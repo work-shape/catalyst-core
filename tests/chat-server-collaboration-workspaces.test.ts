@@ -7,7 +7,12 @@ import {
   asConversationId,
   createPlatformId
 } from "@vivd-catalyst/core";
-import { createClientInstanceApp, createTestConfig, type TestServer } from "./chat-server-harness";
+import {
+  createClientInstanceApp,
+  createTestConfig,
+  seedConversationMessage,
+  type TestServer
+} from "./chat-server-harness";
 import { createMultipartFilePayload } from "./chat-server-attachment-harness";
 
 const clientInstanceId = asClientInstanceId("demo-local");
@@ -37,6 +42,7 @@ describe("Collaboration Workspace API", () => {
       collaborationWorkspaceId: personalWorkspace!.id
     });
     const conversationId = (conversation.json() as { id: string }).id;
+    await seedConversationMessage(app.store, conversationId);
     const listedConversations = await inject(app.server, "owner", {
       method: "GET",
       url: "/api/conversations"
@@ -679,6 +685,7 @@ describe("Collaboration Workspace API", () => {
     expect(explicit.statusCode).toBe(200);
     expect(explicit.json()).toMatchObject({ collaborationWorkspaceId, createdByUserId: owner.id });
     const conversationId = (explicit.json() as { id: string }).id;
+    await seedConversationMessage(app.store, conversationId);
 
     const defaulted = await inject(app.server, "owner", {
       method: "POST",
@@ -1279,6 +1286,78 @@ describe("Collaboration Workspace API", () => {
 });
 
 describe("Conversation visibility", () => {
+  it("lists a conversation without messages only to its creator while it holds draft attachments", async () => {
+    const app = await createWorkspaceApp();
+    await currentUser(app.server, "owner");
+    await currentUser(app.server, "member");
+    const workspaceId = await createSharedWorkspace(app.server, "owner", "Unsent drafts");
+    await addWorkspaceMember(app.server, "owner", workspaceId, "member@example.test");
+    const listedIds = async (actor: string) => {
+      const listed = await inject(app.server, actor, {
+        method: "GET",
+        url: `/api/conversations?collaborationWorkspaceId=${workspaceId}`
+      });
+      expect(listed.statusCode).toBe(200);
+      return (listed.json() as Array<{ id: string }>).map((row) => row.id);
+    };
+
+    // The composer creates the conversation before the first upload lands.
+    const conversationId = await createConversation(
+      app.server,
+      "owner",
+      workspaceId,
+      "2 attached files"
+    );
+    await expect(
+      app.store.getConversation(clientInstanceId, asConversationId(conversationId))
+    ).resolves.toMatchObject({ visibility: "workspace" });
+    await expect(listedIds("owner")).resolves.toEqual([]);
+    await expect(listedIds("member")).resolves.toEqual([]);
+
+    const attachmentIds: string[] = [];
+    for (const filename of ["first.csv", "second.csv"]) {
+      const upload = createMultipartFilePayload({
+        fieldName: "file",
+        filename,
+        contentType: "text/csv",
+        content: `value\n${filename}\n`
+      });
+      const uploaded = await app.server.inject({
+        method: "POST",
+        url: `/api/conversations/${conversationId}/draft-attachments`,
+        headers: { ...upload.headers, "x-dev-user-id": "owner" },
+        payload: upload.payload
+      });
+      expect(uploaded.statusCode).toBe(200);
+      attachmentIds.push((uploaded.json() as { attachment: { id: string } }).attachment.id);
+    }
+    await expect(listedIds("owner")).resolves.toEqual([conversationId]);
+    await expect(listedIds("member")).resolves.toEqual([]);
+    // Listing is narrower than access: the workspace-visible conversation stays reachable.
+    const memberThread = await inject(app.server, "member", {
+      method: "GET",
+      url: `/api/conversations/${conversationId}/thread`
+    });
+    expect(memberThread.statusCode).toBe(200);
+
+    const [firstAttachmentId, secondAttachmentId] = attachmentIds;
+    const removeDraft = (attachmentId: string | undefined) =>
+      inject(app.server, "owner", {
+        method: "DELETE",
+        url: `/api/conversations/${conversationId}/draft-attachments/${attachmentId}`
+      });
+    expect((await removeDraft(firstAttachmentId)).statusCode).toBe(200);
+    await expect(listedIds("owner")).resolves.toEqual([conversationId]);
+    expect((await removeDraft(secondAttachmentId)).statusCode).toBe(200);
+    await expect(listedIds("owner")).resolves.toEqual([]);
+    await expect(listedIds("member")).resolves.toEqual([]);
+
+    await seedConversationMessage(app.store, conversationId);
+    await expect(listedIds("owner")).resolves.toEqual([conversationId]);
+    await expect(listedIds("member")).resolves.toEqual([conversationId]);
+    await app.close();
+  });
+
   it("hides a private conversation from every non-author role on every conversation route", async () => {
     const fixture = await createPrivateConversationFixture();
     const { app, workspaceId, conversationId, sharedConversationId } = fixture;
@@ -1670,6 +1749,7 @@ async function createPrivateConversationFixture() {
     workspaceId,
     "Shared thread"
   );
+  await seedConversationMessage(app.store, sharedConversationId);
   return {
     app,
     author,

@@ -13,7 +13,8 @@ import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import {
   createTestConfig,
   createClientInstanceApp,
-  personalConversationListUrl
+  personalConversationListUrl,
+  seedConversationMessage
 } from "./chat-server-harness";
 import { createMissingRuntime, createUnusedModelProvider } from "./chat-server-run-harness";
 
@@ -959,6 +960,7 @@ describe("client instance app vertical slice", () => {
     expect(createdConversation.statusCode).toBe(200);
     const conversation = createdConversation.json() as { id: string; createdByUserId: string };
     expect(conversation.createdByUserId).toBe(administeredUser.id);
+    await seedConversationMessage(app.store, conversation.id);
 
     const standaloneConversations = await app.server.inject({
       method: "GET",
@@ -1077,6 +1079,7 @@ describe("client instance app vertical slice", () => {
     expect(createdConversation.statusCode).toBe(200);
     const conversation = createdConversation.json() as { id: string; createdByUserId: string };
     expect(conversation.createdByUserId).toBe(administeredUser.id);
+    await seedConversationMessage(app.store, conversation.id);
 
     const standaloneConversations = await app.server.inject({
       method: "GET",

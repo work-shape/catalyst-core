@@ -14,7 +14,8 @@ import {
   createTestConfig,
   createClientInstanceApp,
   createTestUser,
-  personalConversationListUrl
+  personalConversationListUrl,
+  seedConversationMessage
 } from "./chat-server-harness";
 import { createMissingRuntime, createUnusedModelProvider } from "./chat-server-run-harness";
 
@@ -103,6 +104,7 @@ describe("client instance app vertical slice", () => {
       collaborationWorkspaceId: string;
       createdByUserId: string;
     };
+    await seedConversationMessage(app.store, personalConversation.id);
 
     const firstPartyListing = await app.server.inject({
       method: "GET",
@@ -132,6 +134,7 @@ describe("client instance app vertical slice", () => {
     });
     expect(sharedConversation.statusCode).toBe(200);
     const sharedConversationId = (sharedConversation.json() as { id: string }).id;
+    await seedConversationMessage(app.store, sharedConversationId);
 
     const personalConversations = await app.server.inject({
       method: "GET",
