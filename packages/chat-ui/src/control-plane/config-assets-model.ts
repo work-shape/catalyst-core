@@ -19,6 +19,7 @@ export interface AgentFormState {
   modelBindingId: string;
   reasoningEffort: string;
   fastMode: boolean;
+  userSelectableModelBindingIds: string[];
   maxSteps: string;
   toolNames: string[];
   skillNames: string[];
@@ -143,6 +144,7 @@ export function agentConfigToForm(config: Record<string, unknown>): AgentFormSta
     modelBindingId,
     reasoningEffort: typeof config.reasoningEffort === "string" ? config.reasoningEffort : "",
     fastMode: config.fastMode === true,
+    userSelectableModelBindingIds: stringArray(config.userSelectableModelBindingIds),
     maxSteps: typeof config.maxSteps === "number" ? String(config.maxSteps) : "",
     toolNames: stringArray(config.toolNames),
     skillNames: stringArray(config.skillNames),
@@ -178,6 +180,9 @@ export function agentFormToConfig(form: AgentFormState): Record<string, unknown>
         : {}),
     ...(form.reasoningEffort ? { reasoningEffort: form.reasoningEffort } : {}),
     ...(form.fastMode ? { fastMode: true } : {}),
+    ...(form.userSelectableModelBindingIds.length
+      ? { userSelectableModelBindingIds: form.userSelectableModelBindingIds }
+      : {}),
     ...(maxSteps === undefined ? {} : { maxSteps }),
     toolNames: form.toolNames,
     skillNames: form.skillNames,
@@ -216,6 +221,7 @@ export function emptyAgentForm(): AgentFormState {
     modelBindingId: "",
     reasoningEffort: "",
     fastMode: false,
+    userSelectableModelBindingIds: [],
     maxSteps: "",
     toolNames: [],
     skillNames: [],

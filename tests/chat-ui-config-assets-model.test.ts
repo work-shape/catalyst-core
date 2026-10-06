@@ -79,6 +79,26 @@ describe("config assets form model", () => {
     });
   });
 
+  it("round-trips the models users may choose and omits an empty list", () => {
+    const config = {
+      name: "assistant",
+      displayName: "Assistant",
+      instructions: "Help the user.",
+      modelBindingId: "sol",
+      userSelectableModelBindingIds: ["terra", "luna"],
+      toolNames: [],
+      skillNames: [],
+      initialPrompts: []
+    };
+    const form = agentConfigToForm(config);
+
+    expect(form.userSelectableModelBindingIds).toEqual(["terra", "luna"]);
+    expect(agentFormToConfig(form)).toEqual(config);
+    expect(agentFormToConfig({ ...form, userSelectableModelBindingIds: [] })).not.toHaveProperty(
+      "userSelectableModelBindingIds"
+    );
+  });
+
   it("collapses identical locales to a plain string and drops empty localized fields", () => {
     expect(pairToLocalized({ en: "Same", de: "Same" })).toBe("Same");
     expect(pairToLocalized({ en: "Only English", de: "" })).toEqual({ en: "Only English" });

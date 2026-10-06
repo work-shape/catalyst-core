@@ -75,6 +75,7 @@ function AssistantRuntimePane({
     composerFocusRequestId,
     locale,
     selectedAgentName,
+    selectableModels,
     selectedModelBindingId,
     showContextIndicator,
     contextSnapshot,
@@ -306,6 +307,7 @@ function AssistantRuntimePane({
           agents={config?.agents ?? []}
           noAgentsMessage={noAgentsMessage}
           selectedAgentName={selectedAgentName}
+          selectableModels={selectableModels}
           selectedModelBindingId={selectedModelBindingId}
           showContextIndicator={showContextIndicator}
           contextSnapshot={contextSnapshot}

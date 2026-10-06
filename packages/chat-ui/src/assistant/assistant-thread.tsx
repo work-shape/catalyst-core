@@ -8,6 +8,7 @@ import {
 import { ArrowDown, Bot, CircleAlert, Lock, Sparkles } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, type RefObject } from "react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
+import type { AgentSelectableModel } from "../workspace/agent-model-selection";
 import { AssistantActivityStatus } from "./assistant-activity-status";
 import { AssistantComposer, type LocalUploadingAttachment } from "./assistant-composer";
 import { ThreadMessage } from "./assistant-message";
@@ -23,6 +24,7 @@ export function AssistantThread({
   agents,
   noAgentsMessage,
   selectedAgentName,
+  selectableModels,
   selectedModelBindingId,
   showContextIndicator,
   contextSnapshot,
@@ -55,6 +57,7 @@ export function AssistantThread({
   /** Set when no agent can take a new conversation here; replaces the start page. */
   noAgentsMessage?: string;
   selectedAgentName: string | undefined;
+  selectableModels: AgentSelectableModel[];
   selectedModelBindingId: string | undefined;
   showContextIndicator: boolean;
   contextSnapshot:
@@ -202,7 +205,7 @@ export function AssistantThread({
                     optimisticPending={optimisticPending}
                     attachmentsEnabled={attachmentsEnabled}
                     attachmentAccept={attachmentAccept}
-                    selectableModels={config?.selectableModels ?? []}
+                    selectableModels={selectableModels}
                     selectedModelBindingId={selectedModelBindingId}
                     showContextIndicator={showContextIndicator}
                     contextSnapshot={contextSnapshot}

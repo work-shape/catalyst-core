@@ -23,6 +23,7 @@ import {
   type SkillFormState
 } from "./config-assets-model";
 import { useTranslation } from "../i18n";
+import { formatModelLabel } from "../model-label";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { cn } from "../ui/cn";
@@ -57,7 +58,7 @@ export function AgentEditor({
   isDefault: boolean;
   references: ConfigAssetsOverview["references"] | undefined;
   editableAgentFields: string[];
-  /** Model, reasoning effort and fast mode follow this permission, not `editableAgentFields`. */
+  /** The model settings follow this permission, not `editableAgentFields`. */
   canManageAgentModels: boolean;
   skillNames: string[];
   mutating: boolean;
@@ -83,6 +84,14 @@ export function AgentEditor({
   const showMaxSteps = canEditMaxSteps || Boolean(form.maxSteps);
   const fastModeModelBindingIds = references?.fastModeModelBindingIds ?? [];
   const showFastMode = form.fastMode || fastModeModelBindingIds.includes(form.modelBindingId);
+  // The agent's own model is always offered to users, so it is not a choice here.
+  const userSelectableModelBindings = (references?.userSelectableModelBindings ?? []).filter(
+    (binding) => binding.id !== form.modelBindingId
+  );
+  const userSelectableModelBindingIds = userSelectableModelBindings.map((binding) => binding.id);
+  const showUserSelectableModels =
+    canManageAgentModels ||
+    form.userSelectableModelBindingIds.some((id) => userSelectableModelBindingIds.includes(id));
   const configuredModelLabel = form.modelBindingId
     ? modelBindingLabel(
         modelBindings.find((binding) => binding.id === form.modelBindingId) ?? {
@@ -274,6 +283,27 @@ export function AgentEditor({
               </Field>
             ) : null}
           </div>
+        ) : null}
+        {showUserSelectableModels ? (
+          <CheckboxGroup
+            label={t("configUserSelectableModels")}
+            options={userSelectableModelBindingIds}
+            optionLabel={(id) =>
+              modelBindingLabel(
+                userSelectableModelBindings.find((binding) => binding.id === id) ?? {
+                  id,
+                  model: id
+                },
+                userSelectableModelBindings
+              )
+            }
+            selected={form.userSelectableModelBindingIds.filter((id) =>
+              userSelectableModelBindingIds.includes(id)
+            )}
+            disabled={!canManageAgentModels}
+            emptyHint={t("configNoUserSelectableModels")}
+            onChange={(ids) => update({ userSelectableModelBindingIds: ids })}
+          />
         ) : null}
       </EditorSection>
 
@@ -472,7 +502,8 @@ function modelBindingLabel(
   const duplicateModel = bindings.some(
     (candidate) => candidate.id !== binding.id && candidate.model === binding.model
   );
-  return duplicateModel ? `${binding.model} (${binding.id})` : binding.model;
+  const label = formatModelLabel(binding.model);
+  return duplicateModel ? `${label} (${binding.id})` : label;
 }
 
 export function SkillEditor({

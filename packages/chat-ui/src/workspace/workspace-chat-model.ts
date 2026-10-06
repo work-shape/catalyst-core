@@ -62,6 +62,7 @@ import {
   applyFavicon,
   createEnvironmentDocumentTitle
 } from "../workspace-utils";
+import { agentModelSelection, type AgentSelectableModel } from "./agent-model-selection";
 import { useWorkspaceDraft, useWorkspaceDraftController } from "./workspace-drafts";
 import {
   useWorkspaceChromeState,
@@ -250,6 +251,8 @@ export interface SelectedChatModel {
   composerFocusRequestId: number;
   locale: LocaleCode;
   selectedAgentName: string | undefined;
+  /** The active agent's own model first, then the models users may pick instead. */
+  selectableModels: AgentSelectableModel[];
   selectedModelBindingId: string | undefined;
   showContextIndicator: boolean;
   contextSnapshot:
@@ -290,7 +293,7 @@ export function useWorkspaceChatModel({
 }: WorkspaceChatModelInput): WorkspaceChatModel {
   const [notice, setNotice] = useState<string | undefined>();
   const [selectedAgentName, setSelectedAgentName] = useState<string | undefined>();
-  const [selectedModelBindingId, setSelectedModelBindingId] = useState<string | undefined>();
+  const [pickedModelBindingId, setPickedModelBindingId] = useState<string | undefined>();
   const { apiBaseUrl, client } = useWorkspaceApiClient();
   const routeState = useWorkspaceRouteState();
   const chrome = useWorkspaceChromeState();
@@ -577,28 +580,25 @@ export function useWorkspaceChatModel({
     isAuthenticated,
     route.kind
   ]);
+  const activeAgent = config?.agents.find((agent) => agent.name === activeAgentName);
+  const { selectableModels, selectedModel } = agentModelSelection(
+    activeAgent,
+    pickedModelBindingId
+  );
+  const selectedModelBindingId = selectedModel?.bindingId;
   const configuredCompactThresholdTokens =
-    config?.selectableModels.find((model) => model.bindingId === selectedModelBindingId)
-      ?.compactThresholdTokens ??
-    config?.agents.find((agent) => agent.name === activeAgentName)?.compactThresholdTokens;
+    selectedModel?.compactThresholdTokens ?? activeAgent?.compactThresholdTokens;
 
   useEffect(() => {
     displayPanel.close();
   }, [displayPanel.close, selectedConversationId]);
 
+  // A pick the active agent does not offer is dropped, so it does not return with a later agent.
   useEffect(() => {
-    const selectableModels = config?.selectableModels ?? [];
-    setSelectedModelBindingId((currentBindingId) => {
-      if (
-        currentBindingId &&
-        selectableModels.some((model) => model.bindingId === currentBindingId)
-      ) {
-        return currentBindingId;
-      }
-      const agent = config?.agents.find((candidate) => candidate.name === activeAgentName);
-      return agent?.defaultModelBindingId ?? selectableModels[0]?.bindingId;
-    });
-  }, [activeAgentName, config]);
+    if (activeAgent && pickedModelBindingId && selectedModelBindingId !== pickedModelBindingId) {
+      setPickedModelBindingId(undefined);
+    }
+  }, [activeAgent, pickedModelBindingId, selectedModelBindingId]);
 
   const documentTitle = config?.ui.title
     ? createEnvironmentDocumentTitle(config.ui.title, config.clientInstance.environment)
@@ -858,6 +858,7 @@ export function useWorkspaceChatModel({
       composerFocusRequestId: chrome.composerFocusRequestId,
       locale: activeLocale,
       selectedAgentName: activeAgentName,
+      selectableModels,
       selectedModelBindingId,
       showContextIndicator: preferences.showContextIndicator,
       contextSnapshot: resolveContextUsage(
@@ -866,7 +867,13 @@ export function useWorkspaceChatModel({
         controller.activeRun?.projection
       ),
       selectAgentName: setSelectedAgentName,
-      selectModelBindingId: setSelectedModelBindingId,
+      // Picking the agent's own model is not a pick: the next agent then uses its own model too.
+      selectModelBindingId: (modelBindingId) =>
+        setPickedModelBindingId(
+          modelBindingId && modelBindingId !== selectableModels[0]?.bindingId
+            ? modelBindingId
+            : undefined
+        ),
       draftAttachments: draftAttachmentController.draftAttachments,
       localUploadingAttachments: draftAttachmentController.visibleUploadingAttachments,
       conversationRunning: selectedConversationRunning,

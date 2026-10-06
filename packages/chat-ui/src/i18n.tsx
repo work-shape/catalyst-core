@@ -244,6 +244,9 @@ const translations = {
     configFastMode: "Fast mode",
     configFastModeHint:
       "Runs use the provider's priority tier. Fast runs are billed at a higher rate.",
+    configUserSelectableModels: "Models users may choose",
+    configNoUserSelectableModels:
+      "Users get this agent's own model. Release config offers no other user-selectable model.",
     configReasoningEffort: "Reasoning effort",
     configReasoningEffortHint: "Overrides the selected binding's default effort.",
     configReloadLatest: "Reload latest",
@@ -913,6 +916,9 @@ const translations = {
     configFastMode: "Schnellmodus",
     configFastModeHint:
       "Läufe nutzen die Prioritätsstufe des Anbieters. Schnelle Läufe werden zu einem höheren Preis abgerechnet.",
+    configUserSelectableModels: "Von Nutzern wählbare Modelle",
+    configNoUserSelectableModels:
+      "Nutzer erhalten das Modell des Agenten. Die Release-Konfiguration bietet kein weiteres von Nutzern wählbares Modell an.",
     configReasoningEffort: "Denkaufwand",
     configReasoningEffortHint:
       "Überschreibt den Standard-Denkaufwand der ausgewählten Modellbindung.",

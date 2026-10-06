@@ -2,7 +2,9 @@ import { ComposerPrimitive, useAuiState, useComposer } from "@assistant-ui/react
 import { AlertCircle, CheckCircle2, Paperclip, RotateCcw, Send, Square, X } from "lucide-react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
+import type { DraftAttachment } from "@vivd-catalyst/api-client";
+import { formatModelLabel } from "../model-label";
+import type { AgentSelectableModel } from "../workspace/agent-model-selection";
 import { AttachmentPreview } from "../attachment-preview";
 import { ContextIndicator } from "./context-indicator";
 import { useTranslation, type TranslationContextValue } from "../i18n";
@@ -46,7 +48,8 @@ export function AssistantComposer({
   optimisticPending?: boolean;
   attachmentsEnabled: boolean;
   attachmentAccept: string;
-  selectableModels: SafeConfig["selectableModels"];
+  /** The active agent's own model first, then the models users may pick instead. */
+  selectableModels: AgentSelectableModel[];
   selectedModelBindingId: string | undefined;
   showContextIndicator: boolean;
   contextSnapshot:
@@ -307,7 +310,7 @@ export function AssistantComposer({
                   onChange={(event) => onSelectModelBinding(event.target.value)}
                 >
                   {selectableModels.map((model) => (
-                    <option key={model.bindingId} value={model.bindingId}>
+                    <option key={model.bindingId ?? ""} value={model.bindingId ?? ""}>
                       {formatModelLabel(model.model)}
                     </option>
                   ))}
@@ -671,12 +674,6 @@ function formatFileSize(byteSize: number): string {
     return `${Math.round(byteSize / 102.4) / 10} KB`;
   }
   return `${Math.round(byteSize / 1024 / 102.4) / 10} MB`;
-}
-
-export function formatModelLabel(model: string): string {
-  return model.replace(/^gpt-/iu, "GPT-").replace(/-(sol|terra|luna)$/iu, (_, tier: string) => {
-    return ` ${tier.charAt(0).toUpperCase()}${tier.slice(1).toLowerCase()}`;
-  });
 }
 
 export function shouldExpandComposer(text: string, wrapsAtCompactWidth = false): boolean {

@@ -32,6 +32,7 @@ describe("config asset editors", () => {
           modelBindingIds: [],
           modelBindings: [],
           fastModeModelBindingIds: [],
+          userSelectableModelBindings: [],
           reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
           enabledToolNames: []
         },
@@ -70,6 +71,7 @@ describe("config asset editors", () => {
           modelBindingIds: ["reasoning"],
           modelBindings: [{ id: "reasoning", model: "gpt-5" }],
           fastModeModelBindingIds: [],
+          userSelectableModelBindings: [],
           reasoningEfforts: [],
           enabledToolNames: []
         },
@@ -112,6 +114,7 @@ describe("config asset editors", () => {
               { id: "plain", model: "gpt-plain" }
             ],
             fastModeModelBindingIds: ["fast"],
+            userSelectableModelBindings: [],
             reasoningEfforts: ["low", "high"],
             enabledToolNames: []
           },
@@ -138,12 +141,77 @@ describe("config asset editors", () => {
 
     const readOnly = render(false);
     expect(readOnly).not.toContain('<option value="fast"');
-    expect(readOnly).toContain('value="gpt-fast"');
+    expect(readOnly).toContain('value="GPT-fast"');
     expect(effortSelect(readOnly)).toContain('disabled=""');
     expect(fastSwitch(readOnly)).toContain('disabled=""');
 
     // No fast-mode control for a binding that does not support it.
     expect(fastSwitch(render(true, "plain"))).toBeUndefined();
+  });
+
+  it("lists eligible bindings as the models users may choose, editable by permission", () => {
+    const render = (canManageAgentModels: boolean, userSelectableModelBindingIds: string[]) =>
+      renderToStaticMarkup(
+        createElement(AgentEditor, {
+          initialForm: agentConfigToForm({
+            name: "assistant",
+            displayName: "Assistant",
+            instructions: "Help the user.",
+            modelBindingId: "sol",
+            userSelectableModelBindingIds,
+            toolNames: [],
+            skillNames: [],
+            initialPrompts: []
+          }),
+          isNew: false,
+          isDefault: true,
+          references: {
+            modelProviderIds: ["openai"],
+            modelBindingIds: ["sol", "terra", "luna"],
+            modelBindings: [
+              { id: "sol", model: "gpt-5.6-sol" },
+              { id: "terra", model: "gpt-5.6-terra" },
+              { id: "luna", model: "gpt-5.6-luna" }
+            ],
+            fastModeModelBindingIds: [],
+            userSelectableModelBindings: [
+              { id: "sol", model: "gpt-5.6-sol" },
+              { id: "terra", model: "gpt-5.6-terra" }
+            ],
+            reasoningEfforts: [],
+            enabledToolNames: []
+          },
+          editableAgentFields: [],
+          canManageAgentModels,
+          skillNames: [],
+          mutating: false,
+          onSave: async () => ({ ok: true }),
+          revisions: null
+        })
+      );
+    const group = (markup: string) =>
+      /<fieldset[^>]*><legend[^>]*>Models users may choose<\/legend>.*?<\/fieldset>/u.exec(
+        markup
+      )?.[0];
+
+    // The agent's own model is always available, so only the other eligible binding is listed.
+    // "luna" is not userSelectable in release config and "retired" no longer exists.
+    const editable = group(render(true, ["terra", "retired"]));
+    expect(editable).toContain("1 selected");
+    expect(editable).toContain("GPT-5.6 Terra");
+    expect(editable).not.toContain("Sol");
+    expect(editable).not.toContain("Luna");
+    expect(editable).not.toContain("retired");
+    expect(editable).toMatch(/<input type="checkbox"[^>]*checked=""/u);
+    expect(editable).not.toContain('disabled=""');
+
+    // The model select shows the chat selector's labels instead of raw model ids.
+    expect(render(true, [])).toContain('<option value="sol" selected="">GPT-5.6 Sol</option>');
+    expect(group(render(true, []))).toContain("0 selected");
+
+    // Without the permission the list is read-only, and hidden when nothing is offered.
+    expect(group(render(false, ["terra"]))).toContain('disabled=""');
+    expect(group(render(false, []))).toBeUndefined();
   });
 
   it("keeps a read-only skill package navigable without mutation controls", () => {
