@@ -41,6 +41,9 @@ export function registerDraftAttachmentRoutes(
       if (file.file.truncated) {
         throw new AppError("VALIDATION_FAILED", "File exceeds the configured upload size limit");
       }
+      // Receiving the body can take minutes. Check again before any bytes are stored, so that
+      // a Conversation deleted in the meantime does not receive objects nothing cleans up.
+      await conversations.requireConversationAccess(conversationId, user);
       const service = attachments(options);
       const { attachment, outcome } = await service.uploadDraftAttachment({
         conversationId,

@@ -3,6 +3,15 @@
 All platform packages are released in lockstep under one version. Before 1.0 a minor version may
 contain breaking changes; a patch version does not.
 
+## Unreleased
+
+### Fixed
+
+- **Uploads into a deleted conversation:** a draft attachment whose conversation is deleted
+  while the file is still arriving is rejected before any bytes are stored. The conversation
+  was checked only when the request started, so a slow upload could leave a stored object and
+  a `managed_files` row that no deletion would reach.
+
 ## 0.5.0 — 2026-10-06
 
 ### Added

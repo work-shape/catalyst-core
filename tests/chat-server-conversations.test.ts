@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { createChatServer } from "@vivd-catalyst/chat-server";
@@ -491,6 +492,65 @@ describe("client instance app vertical slice", () => {
         })
       })
     );
+    await app.close();
+  });
+
+  it("stores no bytes when the conversation is deleted while an upload is still arriving", async () => {
+    const fixture = createManagedObjectTestAttachmentCapability();
+    const app = await createClientInstanceApp({
+      config: createTestConfig(),
+      env: {},
+      storeMode: "memory",
+      capabilities: [fixture.capability],
+      tools: []
+    });
+    const created = await app.server.inject({
+      method: "POST",
+      url: "/api/conversations",
+      payload: { title: "Deleted during upload" }
+    });
+    const conversation = created.json() as { id: string };
+    const upload = createMultipartFilePayload({
+      fieldName: "file",
+      filename: "late.txt",
+      contentType: "text/plain",
+      content: "bytes that arrive after the conversation is gone"
+    });
+    const splitAt = upload.payload.byteLength - 20;
+    let bodyIsBeingRead!: () => void;
+    const bodyRead = new Promise<void>((resolve) => {
+      bodyIsBeingRead = resolve;
+    });
+    let sendRest!: () => void;
+    const restReleased = new Promise<void>((resolve) => {
+      sendRest = resolve;
+    });
+    const slowBody = Readable.from(
+      (async function* () {
+        yield upload.payload.subarray(0, splitAt);
+        // The route asks for more only after it has accepted the request.
+        bodyIsBeingRead();
+        await restReleased;
+        yield upload.payload.subarray(splitAt);
+      })()
+    );
+
+    const uploading = app.server.inject({
+      method: "POST",
+      url: `/api/conversations/${conversation.id}/draft-attachments`,
+      headers: { "content-type": upload.headers["content-type"]! },
+      payload: slowBody
+    });
+    await bodyRead;
+    const deleted = await app.server.inject({
+      method: "DELETE",
+      url: `/api/conversations/${conversation.id}`
+    });
+    expect(deleted.statusCode).toBe(200);
+    sendRest();
+
+    expect((await uploading).statusCode).toBe(404);
+    expect(fixture.objects.size).toBe(0);
     await app.close();
   });
 
