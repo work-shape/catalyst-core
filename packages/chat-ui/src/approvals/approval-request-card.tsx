@@ -31,6 +31,7 @@ import {
   approvalStatusPresentation,
   canRevertApprovalRequest,
   formatApprovalDate,
+  offersApprovalWithdraw,
   readApprovalReversion,
   shouldSendApprovalFollowUp,
   visibleApprovalChecks,
@@ -103,25 +104,65 @@ export function ListedApprovalRequestCard({ request }: { request: ApprovalReques
 
 /**
  * Display panel content for a card in the thread. It follows the request's live
- * state like the card does; deciding stays on the card.
+ * state and decides through the same actions as the card, so a decision made
+ * here sets off exactly what it would there.
  */
 export function ApprovalRequestDetailsPanel({ requestId }: { requestId: string }) {
-  const { t } = useTranslation();
   const { apiBaseUrl, client } = useWorkspaceApiClient();
-  const state = approvalRequestCardState(
-    useApprovalRequestQuery({ apiBaseUrl, authScope: APPROVAL_AUTH_SCOPE, client, requestId })
-  );
+  const query = useApprovalRequestQuery({
+    apiBaseUrl,
+    authScope: APPROVAL_AUTH_SCOPE,
+    client,
+    requestId
+  });
+  const actions = useApprovalRequestCardActions(requestId, query.data);
+
+  return <ApprovalRequestDetailsView state={approvalRequestCardState(query)} actions={actions} />;
+}
+
+export function ApprovalRequestDetailsView({
+  state,
+  actions
+}: {
+  state: ApprovalRequestCardState;
+  actions: ApprovalRequestCardActions;
+}) {
+  const { t } = useTranslation();
 
   if (state.status !== "ready") {
     return <ApprovalRequestUnavailable state={state} />;
   }
-  const status = approvalStatusPresentation(state.request.status);
+  const { request } = state;
+  const status = approvalStatusPresentation(request.status);
+  const canRevert = Boolean(actions.onRevert) && canRevertApprovalRequest(request);
+
   return (
     <div className="grid min-w-0 gap-3 text-sm" data-testid="approval-request-details">
       <ApprovalStatusBadge tone={status.tone}>{t(status.labelKey)}</ApprovalStatusBadge>
-      <ApprovalRequestDetails request={state.request} />
+      <ApprovalRequestDetails request={request} />
+      {hasApprovalActions(request, canRevert) ? (
+        // Stays at the panel's lower edge while a long proposal scrolls
+        // behind it; the negative margins span the panel's own padding.
+        <div
+          className="sticky bottom-0 -mx-4 -mb-4 border-t bg-background px-4 py-3 lg:-mx-5 lg:-mb-5 lg:px-5"
+          data-testid="approval-request-details-actions"
+        >
+          <ApprovalRequestActions
+            // A refetched request in another status starts with a clean form.
+            key={request.status}
+            request={request}
+            actions={actions}
+            canRevert={canRevert}
+            compact
+          />
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function hasApprovalActions(request: ApprovalRequestView, canRevert: boolean): boolean {
+  return request.canDecide || offersApprovalWithdraw(request) || canRevert;
 }
 
 function approvalRequestCardState(
@@ -263,7 +304,7 @@ export function ApprovalRequestCardView({
   const { request } = state;
   const status = approvalStatusPresentation(request.status);
   const canRevert = Boolean(actions.onRevert) && canRevertApprovalRequest(request);
-  const hasActions = request.canDecide || request.canWithdraw || canRevert;
+  const hasActions = hasApprovalActions(request, canRevert);
   const summary = request.summary.trim() || t("approvalFallbackTitle");
   const badge = <ApprovalStatusBadge tone={status.tone}>{t(status.labelKey)}</ApprovalStatusBadge>;
 
@@ -652,12 +693,12 @@ function ApprovalRequestActions({
             </Button>
           </>
         ) : null}
-        {request.canWithdraw ? (
+        {offersApprovalWithdraw(request) ? (
           <Button
             type="button"
             size="sm"
             variant="ghost"
-            className={cn("text-muted-foreground", request.canDecide && "ml-auto")}
+            className="text-muted-foreground"
             disabled={actions.pending}
             onClick={actions.onWithdraw}
           >
@@ -675,11 +716,7 @@ function ApprovalRequestActions({
             {t("approvalRevert")}
           </Button>
         ) : null}
-        {trailing ? (
-          <span className={cn(!(request.canDecide && request.canWithdraw) && "ml-auto")}>
-            {trailing}
-          </span>
-        ) : null}
+        {trailing ? <span className="ml-auto">{trailing}</span> : null}
       </div>
       {failure}
     </div>

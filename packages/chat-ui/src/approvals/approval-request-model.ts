@@ -67,6 +67,18 @@ export function decidedApprovalRequests(requests: ApprovalRequestView[]): Approv
 }
 
 /**
+ * Withdrawing is the requester's way out while they wait for someone else. A
+ * requester who may decide rejects instead: next to "reject" a second button
+ * with the same effect only raises the question of how the two differ. The
+ * server still accepts either from them.
+ */
+export function offersApprovalWithdraw(
+  request: Pick<ApprovalRequestView, "canDecide" | "canWithdraw">
+): boolean {
+  return request.canWithdraw && !request.canDecide;
+}
+
+/**
  * `canRevert` lands on the view together with the rollback endpoint. Until the
  * contract carries it, the field is simply absent and rollback stays hidden.
  */

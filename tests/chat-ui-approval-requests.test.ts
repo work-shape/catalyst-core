@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { approvalRequestReverter } from "../packages/chat-ui/src/approvals/approval-request-api";
 import {
   ApprovalRequestCardView,
+  ApprovalRequestDetailsView,
   type ApprovalRequestCardActions,
   type ApprovalRequestCardState
 } from "../packages/chat-ui/src/approvals/approval-request-card";
@@ -357,6 +358,121 @@ describe("compact approval request card in the thread", () => {
 
     expect(markup).toContain("Bei Gehaltsabrechnungen auch die Steuerklasse prüfen.");
     expect(markup).not.toContain("Fähigkeit:");
+  });
+});
+
+describe("withdraw next to the decisions", () => {
+  const both = { canDecide: true, canWithdraw: true };
+
+  function renderVariant(variant: "full" | "compact", overrides: Partial<ApprovalRequestView>) {
+    return renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { locale: "de" },
+        createElement(ApprovalRequestCardView, {
+          state: { status: "ready", request: request(overrides) },
+          actions: idleActions,
+          variant
+        })
+      )
+    );
+  }
+
+  it("is not offered to a requester who may decide, on either card", () => {
+    for (const variant of ["full", "compact"] as const) {
+      const markup = renderVariant(variant, both);
+      expect(markup).toContain(">Ablehnen</button>");
+      expect(markup).not.toContain("Zurückziehen");
+      expect(markup.match(/<button/gu)).toHaveLength(3);
+    }
+  });
+
+  it("stays the only action of a requester who cannot decide", () => {
+    for (const variant of ["full", "compact"] as const) {
+      const markup = renderVariant(variant, { canWithdraw: true });
+      expect(markup).toContain(">Zurückziehen</button>");
+      expect(markup.match(/<button/gu)).toHaveLength(1);
+    }
+  });
+});
+
+describe("approval request details panel", () => {
+  function renderDetails(
+    overrides: Partial<ApprovalRequestView> = {},
+    actions: ApprovalRequestCardActions = idleActions,
+    locale: "de" | "en" = "de"
+  ): string {
+    return renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { locale },
+        createElement(ApprovalRequestDetailsView, {
+          state: { status: "ready", request: request(overrides) },
+          actions
+        })
+      )
+    );
+  }
+
+  it("shows the whole proposal and offers an approver the card's decisions below it", () => {
+    const markup = renderDetails({ canDecide: true, canWithdraw: true });
+
+    expect(markup).toContain("Angefragt von Anna Beispiel");
+    expect(markup).toContain("Prüfe den Bruttolohn und die Steuerklasse.");
+    expect(markup).toContain('data-testid="approval-request-details-actions"');
+    expect(markup).toContain("sticky bottom-0");
+    expect(markup).toContain(">Übernehmen</button>");
+    expect(markup).toContain(">Änderung anfragen</button>");
+    expect(markup).toContain(">Ablehnen</button>");
+    expect(markup).not.toContain("Zurückziehen");
+    expect(markup.indexOf("Prüfe den Bruttolohn")).toBeLessThan(markup.indexOf("Übernehmen"));
+    expect(renderDetails({ canDecide: true }, idleActions, "en")).toContain(">Accept</button>");
+  });
+
+  it("offers a requester who cannot decide only withdraw", () => {
+    const markup = renderDetails({ canWithdraw: true });
+
+    expect(markup).toContain(">Zurückziehen</button>");
+    expect(markup.match(/<button/gu)).toHaveLength(1);
+  });
+
+  it("has no action bar for a reader who can do nothing", () => {
+    expect(renderDetails()).not.toContain("approval-request-details-actions");
+  });
+
+  it("reflects a decided request: new status, decision and comment, rollback when allowed", () => {
+    const markup = renderDetails({
+      status: "changes_requested",
+      decision: {
+        approved: false,
+        decidedBy: "user-felix",
+        decidedByLabel: "Felix Pahlke",
+        decidedAt: "2026-10-05T09:00:00Z",
+        comment: "Bitte ohne Kundennamen."
+      }
+    });
+
+    expect(markup).toContain("Änderung angefragt");
+    expect(markup).toContain("Entscheidung von Felix Pahlke");
+    expect(markup).toContain("Bitte ohne Kundennamen.");
+    expect(markup).not.toContain("<button");
+    expect(
+      renderDetails({ status: "approved", canRevert: true } as Partial<ApprovalRequestView>)
+    ).toContain(">Rückgängig machen</button>");
+  });
+
+  it("renders loading and not-found as states of their own", () => {
+    const render = (state: ApprovalRequestCardState) =>
+      renderToStaticMarkup(
+        createElement(
+          TranslationProvider,
+          { locale: "de" },
+          createElement(ApprovalRequestDetailsView, { state, actions: idleActions })
+        )
+      );
+
+    expect(render({ status: "loading" })).toContain("Vorschlag wird geladen…");
+    expect(render({ status: "not-found" })).toContain("du darfst ihn nicht sehen");
   });
 });
 
