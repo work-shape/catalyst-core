@@ -2,6 +2,7 @@ import {
   type Conversation,
   type ConversationId,
   type JsonObject,
+  type ManagedFileId,
   type ManagedObjectDeletionResult,
   createPlatformId,
   isAppError
@@ -15,6 +16,15 @@ import {
 export interface ConversationRetentionRunSummary {
   expiredCount: number;
   failedCount: number;
+}
+
+export interface OrphanedFileCleanupSummary {
+  /** Managed files marked deleted. */
+  fileCount: number;
+  /** Stored objects removed. */
+  objectCount: number;
+  /** Orphaned files left alone because no attachment handler stores their object. */
+  unclaimedCount: number;
 }
 
 export interface ConversationRetentionJobOptions {
@@ -36,6 +46,11 @@ const DEFAULT_RETENTION_CHECK_INTERVAL_MS = 60 * 60 * 1000;
  * being set up, with uploads in flight or a first message about to be sent.
  */
 const ABANDONED_CONVERSATION_GRACE_MS = 24 * 60 * 60 * 1000;
+/**
+ * An upload stores its managed file a moment before the attachment that refers to it. The
+ * grace period keeps a file that is still on its way into a Conversation.
+ */
+const ORPHANED_FILE_GRACE_MS = 24 * 60 * 60 * 1000;
 
 export class ConversationRetentionWorkflow {
   private readonly options: ChatServerOptions;
@@ -80,6 +95,80 @@ export class ConversationRetentionWorkflow {
       expiredCount,
       failedCount
     };
+  }
+
+  /**
+   * Removes managed files that no active Conversation refers to, with their stored objects.
+   * Deleting a Conversation or a user removes its files, so this only finds what an earlier
+   * deletion or an interrupted upload left behind. Safe to repeat.
+   */
+  async deleteOrphanedManagedFiles(): Promise<OrphanedFileCleanupSummary> {
+    const summary: OrphanedFileCleanupSummary = { fileCount: 0, objectCount: 0, unclaimedCount: 0 };
+    const attachments = this.options.attachments;
+    if (!attachments?.deleteOrphanedFileObjects) {
+      return summary;
+    }
+    const currentTime = this.now();
+    const deletedAt = currentTime.toISOString();
+    const createdBefore = new Date(currentTime.getTime() - ORPHANED_FILE_GRACE_MS).toISOString();
+    const store = this.options.conversationStore;
+    try {
+      let afterFileId: ManagedFileId | undefined;
+      for (;;) {
+        const orphans = await store.listOrphanedManagedFiles({
+          clientInstanceId: this.options.clientInstanceId,
+          createdBefore,
+          afterFileId,
+          limit: this.batchSize
+        });
+        const removableKeys = [
+          ...new Set(orphans.filter((file) => !file.objectKeyInUse).map((file) => file.objectKey))
+        ];
+        const removedKeys = new Set(
+          removableKeys.length > 0
+            ? await attachments.deleteOrphanedFileObjects({ objectKeys: removableKeys })
+            : []
+        );
+        // A file whose object nobody stores keeps its row, so that the object stays findable.
+        const settled = orphans.filter(
+          (file) => file.objectKeyInUse || removedKeys.has(file.objectKey)
+        );
+        summary.fileCount += await store.markOrphanedManagedFilesDeleted({
+          clientInstanceId: this.options.clientInstanceId,
+          fileIds: settled.map((file) => file.id),
+          createdBefore,
+          deletedAt
+        });
+        summary.objectCount += removedKeys.size;
+        summary.unclaimedCount += orphans.length - settled.length;
+        afterFileId = orphans.at(-1)?.id;
+        if (orphans.length < this.batchSize) {
+          break;
+        }
+      }
+    } catch (error) {
+      await this.options.auditRecorder.record({
+        type: "storage.orphaned_file_cleanup_failed",
+        status: "failed",
+        correlationId: createPlatformId("corr"),
+        metadata: {
+          ...summary,
+          errorCode: isAppError(error) ? error.code : "INTERNAL",
+          errorCategory: "orphaned_file_cleanup",
+          errorMessage: "Orphaned file cleanup failed"
+        }
+      });
+      throw error;
+    }
+    if (summary.fileCount > 0) {
+      await this.options.auditRecorder.record({
+        type: "storage.orphaned_files_deleted",
+        status: "success",
+        correlationId: createPlatformId("corr"),
+        metadata: { ...summary }
+      });
+    }
+    return summary;
   }
 
   private async expireConversation(
@@ -191,9 +280,13 @@ export class ConversationRetentionJob {
     }
     const currentRun = this.workflow
       .expireDueConversations()
-      .then(() => undefined)
       .catch((error: unknown) => {
         this.logger.error({ error }, "Conversation retention expiration failed");
+      })
+      .then(() => this.workflow.deleteOrphanedManagedFiles())
+      .then(() => undefined)
+      .catch((error: unknown) => {
+        this.logger.error({ error }, "Orphaned file cleanup failed");
       })
       .finally(() => {
         if (this.running === currentRun) {

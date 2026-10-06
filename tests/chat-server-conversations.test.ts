@@ -5,7 +5,8 @@ import { createChatServer } from "@vivd-catalyst/chat-server";
 import {
   StoreBackedAuditRecorder,
   asConversationId,
-  asClientInstanceId
+  asClientInstanceId,
+  asManagedFileId
 } from "@vivd-catalyst/core";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
@@ -460,7 +461,8 @@ describe("client instance app vertical slice", () => {
       payload: upload.payload
     });
     expect(uploaded.statusCode).toBe(200);
-    const attachment = (uploaded.json() as { attachment: { id: string } }).attachment;
+    const attachment = (uploaded.json() as { attachment: { id: string; fileId: string } })
+      .attachment;
     const [objectKey] = [...fixture.objects.keys()];
     expect(objectKey).toBeDefined();
 
@@ -478,6 +480,12 @@ describe("client instance app vertical slice", () => {
     expect(deleted.statusCode).toBe(200);
     expect(fixture.objects.has(objectKey!)).toBe(false);
     expect(fixture.deletedObjectKeys).toContain(objectKey);
+    await expect(
+      app.store.getManagedFile({
+        clientInstanceId: asClientInstanceId("demo-local"),
+        fileId: asManagedFileId(attachment.fileId)
+      })
+    ).resolves.toBeUndefined();
 
     const audit = await app.server.inject({
       method: "GET",

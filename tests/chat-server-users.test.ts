@@ -6,6 +6,7 @@ import {
   PERMISSIONS,
   StoreBackedAuditRecorder,
   asClientInstanceId,
+  asManagedFileId,
   asUserId
 } from "@vivd-catalyst/core";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
@@ -16,6 +17,10 @@ import {
   personalConversationListUrl,
   seedConversationMessage
 } from "./chat-server-harness";
+import {
+  createManagedObjectTestAttachmentCapability,
+  createMultipartFilePayload
+} from "./chat-server-attachment-harness";
 import { createMissingRuntime, createUnusedModelProvider } from "./chat-server-run-harness";
 
 describe("client instance app vertical slice", () => {
@@ -558,6 +563,92 @@ describe("client instance app vertical slice", () => {
     ).resolves.toBeUndefined();
     await expect(app.store.getWorkspace(clientInstanceId, shared.id)).resolves.toBeDefined();
     await expect(app.store.getWorkspace(clientInstanceId, personal!.id)).resolves.toBeUndefined();
+
+    await app.close();
+  });
+
+  it("removes a deleted user's stored files along with their conversations", async () => {
+    const clientInstanceId = asClientInstanceId("demo-local");
+    const fixture = createManagedObjectTestAttachmentCapability();
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        developmentAuth: {
+          enabled: true,
+          defaultUserId: "superadmin-1",
+          users: [
+            {
+              id: "superadmin-1",
+              externalUserId: "superadmin-1",
+              displayLabel: "Superadmin",
+              roles: ["user", "admin", "superadmin"],
+              permissionRefs: ["demo-tools"]
+            },
+            {
+              id: "user-1",
+              externalUserId: "user-1",
+              displayLabel: "Normal User",
+              roles: ["user"],
+              permissionRefs: ["demo-tools"]
+            }
+          ]
+        }
+      }),
+      env: {},
+      storeMode: "memory",
+      capabilities: [fixture.capability],
+      tools: []
+    });
+    const asUser = { "x-dev-user-id": "user-1" };
+    const me = await app.server.inject({ method: "GET", url: "/api/me", headers: asUser });
+    const userId = asUserId((me.json() as { id: string }).id);
+
+    const fileIds: string[] = [];
+    for (const title of ["Personal", "Second personal"]) {
+      const created = await app.server.inject({
+        method: "POST",
+        url: "/api/conversations",
+        headers: asUser,
+        payload: { title }
+      });
+      expect(created.statusCode).toBe(200);
+      const upload = createMultipartFilePayload({
+        fieldName: "file",
+        filename: `${title}.txt`,
+        contentType: "text/plain",
+        content: `bytes of ${title}`
+      });
+      const uploaded = await app.server.inject({
+        method: "POST",
+        url: `/api/conversations/${(created.json() as { id: string }).id}/draft-attachments`,
+        headers: { ...asUser, ...upload.headers },
+        payload: upload.payload
+      });
+      expect(uploaded.statusCode).toBe(200);
+      fileIds.push((uploaded.json() as { attachment: { fileId: string } }).attachment.fileId);
+    }
+    const objectKeys = [...fixture.objects.keys()];
+    expect(objectKeys).toHaveLength(2);
+
+    const response = await app.server.inject({
+      method: "DELETE",
+      url: `/api/superadmin/users/${userId}`
+    });
+    expect(response.statusCode).toBe(200);
+
+    expect(fixture.objects.size).toBe(0);
+    expect(fixture.deletedObjectKeys).toEqual(expect.arrayContaining(objectKeys));
+    for (const fileId of fileIds) {
+      await expect(
+        app.store.getManagedFile({ clientInstanceId, fileId: asManagedFileId(fileId) })
+      ).resolves.toBeUndefined();
+    }
+    const audit = await app.store.listAuditEvents({ clientInstanceId });
+    expect(audit).toContainEqual(
+      expect.objectContaining({
+        type: "user.deleted",
+        metadata: expect.objectContaining({ conversationCount: 2, fileCount: 2 })
+      })
+    );
 
     await app.close();
   });

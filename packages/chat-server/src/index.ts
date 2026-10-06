@@ -29,7 +29,11 @@ export type {
   UploadDraftAttachmentInput,
   UploadDraftAttachmentResult
 } from "./attachments";
-export type { ConversationRetentionJobOptions, ConversationRetentionRunSummary } from "./retention";
+export type {
+  ConversationRetentionJobOptions,
+  ConversationRetentionRunSummary,
+  OrphanedFileCleanupSummary
+} from "./retention";
 export {
   ConversationRetentionJob,
   ConversationRetentionWorkflow,

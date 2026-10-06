@@ -552,6 +552,13 @@ function createCompositeAttachmentService(
         )
       };
     },
+    async deleteOrphanedFileObjects(input) {
+      const removed: string[] = [];
+      for (const handler of handlers) {
+        removed.push(...((await handler.deleteOrphanedFileObjects?.(input)) ?? []));
+      }
+      return uniqueStrings(removed);
+    },
     async readConversationFile(input) {
       return tryAttachmentHandlers(
         handlers,

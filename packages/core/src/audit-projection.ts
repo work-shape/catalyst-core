@@ -73,6 +73,8 @@ const ACTIVITY_LABELS: Record<string, string> = {
   "conversation.retention_expiration_failed": "Conversation retention failed",
   "conversation.title_generated": "Generated a conversation title",
   "conversation.title_generation_failed": "Conversation title generation failed",
+  "storage.orphaned_files_deleted": "Removed orphaned files",
+  "storage.orphaned_file_cleanup_failed": "Orphaned file cleanup failed",
   "collaboration_workspace.created": "Created a workspace",
   "collaboration_workspace.updated": "Updated a workspace",
   "collaboration_workspace.member_added": "Added a workspace member",

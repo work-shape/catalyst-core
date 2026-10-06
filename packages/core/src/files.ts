@@ -497,12 +497,43 @@ export interface RecoverStaleArtifactPreviewJobsInput {
   retryAt?: ISODateString;
 }
 
+/**
+ * A managed file that no active Conversation refers to: neither through an attachment, whatever
+ * its status, nor as the source of an artifact that is not deleted.
+ */
+export interface OrphanedManagedFile {
+  id: ManagedFileId;
+  objectKey: string;
+  /**
+   * True when a managed file outside the listed batch, or a managed artifact, that is not
+   * deleted stores its bytes under the same object key. The bytes must then be kept.
+   */
+  objectKeyInUse: boolean;
+}
+
 export interface ManagedFileStore {
   createManagedFile(input: CreateManagedFileInput): Promise<ManagedFileRecord>;
   getManagedFile(input: {
     clientInstanceId: ClientInstanceId;
     fileId: ManagedFileId;
   }): Promise<ManagedFileRecord | undefined>;
+  /** Lists orphaned managed files created before `createdBefore`, ordered by id. */
+  listOrphanedManagedFiles(input: {
+    clientInstanceId: ClientInstanceId;
+    createdBefore: ISODateString;
+    afterFileId?: ManagedFileId;
+    limit: number;
+  }): Promise<OrphanedManagedFile[]>;
+  /**
+   * Marks the given files deleted and returns how many were marked. A file that is no longer
+   * orphaned is left alone.
+   */
+  markOrphanedManagedFilesDeleted(input: {
+    clientInstanceId: ClientInstanceId;
+    fileIds: readonly ManagedFileId[];
+    createdBefore: ISODateString;
+    deletedAt: ISODateString;
+  }): Promise<number>;
 }
 
 export interface ManagedArtifactStore {

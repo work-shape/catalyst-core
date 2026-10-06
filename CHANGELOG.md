@@ -5,6 +5,16 @@ contain breaking changes; a patch version does not.
 
 ## Unreleased
 
+### Added
+
+- **Retention:** the hourly retention job removes orphaned managed files. A `managed_files` row
+  older than 24 hours that no active conversation refers to, through an attachment of any
+  status or as the source of an artifact, is marked deleted and its stored object is removed.
+  This reaches what user deletions before 2026-08-31 and interrupted uploads left behind. The
+  job records one `storage.orphaned_files_deleted` audit event with counts per run that removed
+  something. An attachment handler takes part by implementing the optional
+  `deleteOrphanedFileObjects`; without it nothing is removed.
+
 ### Fixed
 
 - **Uploads into a deleted conversation:** a draft attachment whose conversation is deleted

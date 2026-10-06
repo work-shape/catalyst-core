@@ -147,6 +147,11 @@ export function createExecutionWorkspaceSourceAttachmentHandler(
     deleteConversationAttachments(file) {
       return service.deleteConversationAttachments(file);
     },
+    async deleteOrphanedFileObjects(file) {
+      const objectKeys = file.objectKeys.filter(isSourceObjectKey);
+      await Promise.all(objectKeys.map((objectKey) => objectStore.deleteObject(objectKey)));
+      return objectKeys;
+    },
     readConversationFile(file) {
       return service.readConversationFile(file);
     },

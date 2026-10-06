@@ -548,6 +548,229 @@ describe("conversation retention expiration", () => {
   });
 });
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function createOrphanFixture(name: string, keyPrefix = "files") {
+  const clientInstanceId = asClientInstanceId(name);
+  const store = new InMemoryPlatformStore();
+  const byteStore = new RecordingByteStore();
+  const managedObjects = createManagedObjectAccess({
+    clientInstanceId,
+    files: store,
+    byteStore,
+    keyFactory: {
+      createFileObjectKey(input) {
+        const prefix = input.filename.startsWith("foreign") ? "foreign" : keyPrefix;
+        return `${prefix}/${input.conversationId ?? "unscoped"}/${input.checksum}`;
+      },
+      createArtifactObjectKey(input) {
+        return `artifacts/${input.conversationId}/${input.kind}/${input.checksum}`;
+      }
+    }
+  });
+  const options = createRetentionOptions({
+    clientInstanceId,
+    store,
+    attachments: createManagedObjectAttachmentService({ managedObjects, byteStore })
+  });
+  const createFile = (conversation: Conversation, filename: string, content = filename) =>
+    managedObjects.createFile({
+      ownerUserId: conversation.createdByUserId,
+      conversationId: conversation.id,
+      filename,
+      mimeType: "text/plain",
+      bytes: new TextEncoder().encode(content)
+    });
+  const attach = (conversation: Conversation, file: ManagedFileRecord) =>
+    store.createConversationAttachment({
+      clientInstanceId,
+      conversationId: conversation.id,
+      fileId: file.id,
+      filename: file.filename,
+      mimeType: file.mimeType,
+      byteSize: file.byteSize,
+      checksum: file.checksum,
+      status: "ready",
+      format: "txt"
+    });
+  const createConversation = (title: string) =>
+    store.createConversationForTesting({
+      clientInstanceId,
+      createdByUserId: "user-1",
+      createdByExternalUserId: "external-user-1",
+      title,
+      retainedUntil: "2999-01-01T00:00:00.000Z"
+    });
+  const isAvailable = async (file: ManagedFileRecord) =>
+    (await store.getManagedFile({ clientInstanceId, fileId: file.id })) !== undefined;
+  return {
+    clientInstanceId,
+    store,
+    byteStore,
+    options,
+    createFile,
+    attach,
+    createConversation,
+    isAvailable,
+    /** A workflow that runs after the grace period of everything created so far. */
+    laterWorkflow: (batchSize?: number) =>
+      new ConversationRetentionWorkflow(options, {
+        batchSize,
+        now: () => new Date(Date.now() + 2 * DAY_MS)
+      })
+  };
+}
+
+describe("orphaned managed file cleanup", () => {
+  it("removes files without an active conversation and keeps every file that has one", async () => {
+    const fixture = createOrphanFixture("orphan-test");
+    const { store, byteStore, clientInstanceId } = fixture;
+    const active = await fixture.createConversation("active");
+    const deleted = await fixture.createConversation("deleted without cleanup");
+
+    const neverAttached = await fixture.createFile(active, "never-attached.txt");
+    const leftBehind = await fixture.createFile(deleted, "left-behind.txt");
+    await fixture.attach(deleted, leftBehind);
+    await store.deleteConversation({
+      clientInstanceId,
+      conversationId: deleted.id,
+      deletedAt: new Date().toISOString()
+    });
+    const attached = await fixture.createFile(active, "attached.txt");
+    await fixture.attach(active, attached);
+    const removedDraft = await fixture.createFile(active, "removed-draft.txt");
+    const removedDraftAttachment = await fixture.attach(active, removedDraft);
+    await store.deleteDraftAttachment({
+      clientInstanceId,
+      conversationId: active.id,
+      attachmentId: removedDraftAttachment.id,
+      deletedAt: new Date().toISOString()
+    });
+
+    // A file younger than the grace period may still be on its way into a conversation.
+    await expect(
+      new ConversationRetentionWorkflow(fixture.options).deleteOrphanedManagedFiles()
+    ).resolves.toEqual({ fileCount: 0, objectCount: 0, unclaimedCount: 0 });
+    expect(byteStore.deletedKeys).toEqual([]);
+
+    const workflow = fixture.laterWorkflow();
+    await expect(workflow.deleteOrphanedManagedFiles()).resolves.toEqual({
+      fileCount: 2,
+      objectCount: 2,
+      unclaimedCount: 0
+    });
+    for (const file of [neverAttached, leftBehind]) {
+      expect(byteStore.has(file.objectKey)).toBe(false);
+      await expect(fixture.isAvailable(file)).resolves.toBe(false);
+    }
+    for (const file of [attached, removedDraft]) {
+      expect(byteStore.has(file.objectKey)).toBe(true);
+      await expect(fixture.isAvailable(file)).resolves.toBe(true);
+    }
+
+    await expect(workflow.deleteOrphanedManagedFiles()).resolves.toEqual({
+      fileCount: 0,
+      objectCount: 0,
+      unclaimedCount: 0
+    });
+    const audits = (await store.listAuditEvents({ clientInstanceId, limit: 20 })).filter((event) =>
+      event.type.startsWith("storage.")
+    );
+    expect(audits).toHaveLength(1);
+    expect(audits[0]).toMatchObject({
+      type: "storage.orphaned_files_deleted",
+      status: "success",
+      metadata: { fileCount: 2, objectCount: 2, unclaimedCount: 0 }
+    });
+    expect(audits[0]!.subject).toBeUndefined();
+    expect(JSON.stringify(audits[0])).not.toContain(neverAttached.objectKey);
+  });
+
+  it("keeps bytes that a file with an owner stores under the same object key", async () => {
+    const fixture = createOrphanFixture("orphan-shared-key-test");
+    const active = await fixture.createConversation("active");
+    const attached = await fixture.createFile(active, "same.txt", "same bytes");
+    await fixture.attach(active, attached);
+    const duplicate = await fixture.createFile(active, "same.txt", "same bytes");
+    expect(duplicate.objectKey).toBe(attached.objectKey);
+
+    await expect(fixture.laterWorkflow().deleteOrphanedManagedFiles()).resolves.toEqual({
+      fileCount: 1,
+      objectCount: 0,
+      unclaimedCount: 0
+    });
+    expect(fixture.byteStore.has(attached.objectKey)).toBe(true);
+    await expect(fixture.isAvailable(attached)).resolves.toBe(true);
+    await expect(fixture.isAvailable(duplicate)).resolves.toBe(false);
+  });
+
+  it("leaves a file whose object no handler stores and continues past it", async () => {
+    const fixture = createOrphanFixture("orphan-unclaimed-test");
+    const conversation = await fixture.createConversation("active");
+    const foreign = await fixture.createFile(conversation, "foreign.txt");
+    const own = [
+      await fixture.createFile(conversation, "own-1.txt"),
+      await fixture.createFile(conversation, "own-2.txt")
+    ];
+
+    await expect(fixture.laterWorkflow(1).deleteOrphanedManagedFiles()).resolves.toEqual({
+      fileCount: 2,
+      objectCount: 2,
+      unclaimedCount: 1
+    });
+    expect(fixture.byteStore.has(foreign.objectKey)).toBe(true);
+    await expect(fixture.isAvailable(foreign)).resolves.toBe(true);
+    for (const file of own) {
+      expect(fixture.byteStore.has(file.objectKey)).toBe(false);
+      await expect(fixture.isAvailable(file)).resolves.toBe(false);
+    }
+  });
+
+  it("keeps the file retryable and audits counts only when byte deletion fails", async () => {
+    const fixture = createOrphanFixture("orphan-failure-test");
+    const { store, byteStore, clientInstanceId } = fixture;
+    const conversation = await fixture.createConversation("active");
+    const orphan = await fixture.createFile(conversation, "orphan.txt");
+    const workflow = fixture.laterWorkflow();
+
+    byteStore.failNextDeleteFor(orphan.objectKey);
+    await expect(workflow.deleteOrphanedManagedFiles()).rejects.toThrow();
+    await expect(fixture.isAvailable(orphan)).resolves.toBe(true);
+    const failure = (await store.listAuditEvents({ clientInstanceId, limit: 10 })).find(
+      (event) => event.type === "storage.orphaned_file_cleanup_failed"
+    );
+    expect(failure).toMatchObject({
+      status: "failed",
+      metadata: { fileCount: 0, objectCount: 0, errorCategory: "orphaned_file_cleanup" }
+    });
+    expect(JSON.stringify(failure)).not.toContain(orphan.objectKey);
+
+    await expect(workflow.deleteOrphanedManagedFiles()).resolves.toMatchObject({ fileCount: 1 });
+    expect(byteStore.has(orphan.objectKey)).toBe(false);
+  });
+
+  it("runs after conversation expiry in the retention job", async () => {
+    const fixture = createOrphanFixture("orphan-job-test");
+    const conversation = await fixture.createConversation("active");
+    const orphan = await fixture.createFile(conversation, "orphan.txt");
+    const job = new ConversationRetentionJob({
+      workflow: fixture.laterWorkflow(),
+      options: { checkIntervalMs: 0, runOnStartup: true },
+      logger: {
+        error(error) {
+          throw error instanceof Error ? error : new Error("Retention job failed");
+        }
+      }
+    });
+
+    job.start();
+    await job.stop();
+
+    expect(fixture.byteStore.has(orphan.objectKey)).toBe(false);
+    await expect(fixture.isAvailable(orphan)).resolves.toBe(false);
+  });
+});
+
 function createRetentionOptions(input: {
   clientInstanceId: ClientInstanceId;
   store: InMemoryPlatformStore;
@@ -786,8 +1009,22 @@ async function createWorkspaceObjects(input: {
 
 function createManagedObjectAttachmentService(input: {
   managedObjects: ReturnType<typeof createManagedObjectAccess>;
+  /** Stores the objects under `files/`; set to let the service remove orphaned ones. */
+  byteStore?: RecordingByteStore;
 }): ChatAttachmentService {
+  const { byteStore } = input;
   return {
+    ...(byteStore
+      ? {
+          async deleteOrphanedFileObjects({ objectKeys }) {
+            const ownKeys = objectKeys.filter((key) => key.startsWith("files/"));
+            for (const key of ownKeys) {
+              await byteStore.deleteObject(key);
+            }
+            return ownKeys;
+          }
+        }
+      : {}),
     maxFileBytes: 1024 * 1024,
     acceptedFileTypes: ["text/plain"],
     async listDraftAttachments() {
