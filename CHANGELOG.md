@@ -17,6 +17,9 @@ contain breaking changes; a patch version does not.
 
 ### Fixed
 
+- **Conversation rail:** the collapse handle on the rail's edge no longer covers the list's
+  scrollbar. It appears while the pointer is on the rail's right border or the handle has
+  keyboard focus.
 - **Uploads into a deleted conversation:** a draft attachment whose conversation is deleted
   while the file is still arriving is rejected before any bytes are stored. The conversation
   was checked only when the request started, so a slow upload could leave a stored object and
