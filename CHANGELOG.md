@@ -3,6 +3,16 @@
 All platform packages are released in lockstep under one version. Before 1.0 a minor version may
 contain breaking changes; a patch version does not.
 
+## Unreleased
+
+### Changed
+
+- **Agent model settings:** each agent lists the models chat users may pick in
+  `userSelectableModelBindingIds`, editable with `agent_models.manage`. The composer offers the
+  agent's own model plus that list instead of every `userSelectable` binding, so a deployment
+  that offered a model choice must add the list to its agents to keep it. The safe config view
+  carries `agents[].selectableModels`.
+
 ## 0.2.0 — 2026-10-06
 
 First versioned release. Compared with the production release of 2026-09-07:

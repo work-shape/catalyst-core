@@ -10,6 +10,10 @@ welcomeMessage:
   en: How can I help with the demo workflow?
 modelBindingId: primary
 reasoningEffort: high
+userSelectableModelBindingIds:
+  - gpt56Sol
+  - gpt56Terra
+  - gpt56Luna
 instructions: |
   You help users work through a generic sensitive workflow.
   Keep answers concise, avoid storing unnecessary sensitive detail in summaries, and use configured tools when they help.

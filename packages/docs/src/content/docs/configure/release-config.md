@@ -275,15 +275,18 @@ rejects that unsupported combination.
 
 Agent configuration may override a binding's default with one of Catalyst's product-owned reasoning efforts: `none`, `low`, `medium`, `high`, or `xhigh`. Only bindings with `agentSelectable: true` are valid agent choices; set it to `false` for internal bindings such as conversation-title generation. The server validates model-binding references and reasoning values; the UI does not accept arbitrary model identifiers.
 
-An agent's `modelBindingId`, `reasoningEffort`, and `fastMode` are editable in the admin panel exactly when the caller holds the `agent_models.manage` permission, and the server rejects an interactive change to any of them without it. Superadmins hold the permission by default; a superadmin can grant it to individual users. `modelBindingId` and `reasoningEffort` remain valid `editableAgentFields` values for compatibility but no longer have an effect. `catalyst config push` is unchanged and may set all three.
+An agent's `modelBindingId`, `reasoningEffort`, `fastMode`, and `userSelectableModelBindingIds` are editable in the admin panel exactly when the caller holds the `agent_models.manage` permission, and the server rejects an interactive change to any of them without it. Superadmins hold the permission by default; a superadmin can grant it to individual users. `modelBindingId` and `reasoningEffort` remain valid `editableAgentFields` values for compatibility but no longer have an effect. `catalyst config push` is unchanged and may set all four.
 
-Set `supportsFastMode: true` on a binding whose provider deployment offers a priority processing tier. It defaults to `false`. An agent may set `fastMode: true` only while its binding supports it; saving it for another binding is a validation error, and switching an agent to a binding without support in the admin panel clears it. For fast-mode runs the OpenAI-compatible adapter sends `service_tier: "priority"` on both API shapes. When a chat user picks another `userSelectable` binding, fast mode applies only if that binding supports it. Fast runs are billed with the rate card's `fast` rates, see above.
+Set `supportsFastMode: true` on a binding whose provider deployment offers a priority processing tier. It defaults to `false`. An agent may set `fastMode: true` only while its binding supports it; saving it for another binding is a validation error, and switching an agent to a binding without support in the admin panel clears it. For fast-mode runs the OpenAI-compatible adapter sends `service_tier: "priority"` on both API shapes. When a chat user picks another model, fast mode applies only if that binding supports it. Fast runs are billed with the rate card's `fast` rates, see above.
 
-Set `userSelectable: true` only for bindings normal chat users may choose in
-the composer. It defaults to `false`. The run API accepts the approved binding
-id rather than an arbitrary provider or model name, and an omitted choice keeps
-the agent's configured binding. Put shared reasoning defaults on the provider
-or agent; add one to a binding only when that model needs a different fallback.
+Set `userSelectable: true` only for bindings that may be offered to chat users
+at all. It defaults to `false`. The flag alone offers nothing: each agent lists
+the subset its users may pick in `userSelectableModelBindingIds`, see
+[agent model choice](/configure/config-assets/#models-users-may-choose). The run
+API accepts a binding id the resolved agent offers rather than an arbitrary
+provider or model name, and an omitted choice keeps the agent's configured
+binding. Put shared reasoning defaults on the provider or agent; add one to a
+binding only when that model needs a different fallback.
 
 ## Mail
 
