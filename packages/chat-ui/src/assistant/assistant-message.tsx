@@ -518,7 +518,7 @@ function UserMessage() {
 
   return (
     <MessagePrimitive.Root
-      className="group/message relative mx-auto grid w-full max-w-3xl justify-items-end gap-1 animate-in fade-in slide-in-from-bottom-1 duration-150"
+      className="group/message relative mx-auto grid w-full max-w-3xl grid-cols-[minmax(0,1fr)] justify-items-end gap-1 animate-in fade-in slide-in-from-bottom-1 duration-150"
       data-role="user"
     >
       <div
