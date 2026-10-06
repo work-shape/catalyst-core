@@ -65,6 +65,7 @@ export function ApprovalsView({ pendingCount }: { pendingCount: number }) {
             loading={query.isPending}
             failed={query.isError}
             emptyKey={tab === "pending" ? "approvalsEmptyPending" : "approvalsEmptyHistory"}
+            collapsed={tab === "history"}
             onRetry={() => void query.refetch()}
           />
         </div>
@@ -78,12 +79,15 @@ export function ApprovalRequestList({
   loading,
   failed,
   emptyKey,
+  collapsed = false,
   onRetry
 }: {
   requests: ApprovalRequestView[];
   loading: boolean;
   failed: boolean;
   emptyKey: TranslationKey;
+  /** The history lists rows that open on demand; the open tab shows every proposal in full. */
+  collapsed?: boolean;
   onRetry(): void;
 }) {
   const { t } = useTranslation();
@@ -92,7 +96,7 @@ export function ApprovalRequestList({
     return (
       <>
         {requests.map((request) => (
-          <ListedApprovalRequestCard key={request.id} request={request} />
+          <ListedApprovalRequestCard key={request.id} request={request} collapsed={collapsed} />
         ))}
       </>
     );

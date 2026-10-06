@@ -4,6 +4,7 @@ import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
 import { approvalRequestReverter } from "../packages/chat-ui/src/approvals/approval-request-api";
 import {
+  ApprovalHistoryRow,
   ApprovalRequestCardView,
   ApprovalRequestDetailsView,
   type ApprovalRequestCardActions,
@@ -732,6 +733,67 @@ describe("approval request model", () => {
     await revert?.("apr_1");
     expect(calls).toEqual(["apr_1"]);
     expect(approvalRequestReverter({ approvalRequests: {} })).toBeUndefined();
+  });
+});
+
+describe("history row of the review queue", () => {
+  const decided = request({
+    status: "approved",
+    canRevert: true,
+    decision: {
+      approved: true,
+      decidedBy: "user-felix",
+      decidedByLabel: "Felix Pahlke",
+      decidedAt: "2026-10-05T09:00:00Z",
+      comment: "Passt so."
+    }
+  } as Partial<ApprovalRequestView>);
+
+  function renderRow(defaultOpen = false, locale: "de" | "en" = "de"): string {
+    return renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { locale },
+        createElement(ApprovalHistoryRow, { request: decided, actions: idleActions, defaultOpen })
+      )
+    );
+  }
+
+  it("is collapsed by default: summary, status, one meta line and a disclosure", () => {
+    const markup = renderRow();
+
+    expect(markup).toContain('data-variant="history"');
+    expect(markup).toContain("line-clamp-2");
+    expect(markup).toContain("Bei Gehaltsabrechnungen auch die Steuerklasse prüfen.");
+    expect(markup).toContain("Übernommen</span>");
+    expect(markup).toMatch(
+      /Angefragt von Anna Beispiel, [^<]+ · Fähigkeit: Gehaltsabrechnungen prüfen · Entscheidung von Felix Pahlke, /
+    );
+    expect(markup).toContain('aria-expanded="false"');
+    expect(markup).not.toContain("Prüfe den Bruttolohn.");
+    expect(markup).not.toContain("Passt so.");
+    expect(markup).not.toContain("Rückgängig machen");
+  });
+
+  it("opens to the proposal, the comment and rollback without repeating the requester", () => {
+    const markup = renderRow(true);
+    const controls = /aria-controls="([^"]+)"/.exec(markup)?.[1];
+
+    expect(markup).toContain('aria-expanded="true"');
+    expect(controls).toBeTruthy();
+    expect(markup).toContain(`id="${controls}"`);
+    expect(markup).toContain("Prüfe den Bruttolohn und die Steuerklasse.");
+    expect(markup).toContain("Passt so.");
+    expect(markup).toContain(">Rückgängig machen</button>");
+    expect(markup.split("Angefragt von Anna Beispiel")).toHaveLength(2);
+  });
+
+  it("renders matching English copy", () => {
+    const markup = renderRow(false, "en");
+
+    expect(markup).toContain("Accepted</span>");
+    expect(markup).toContain("Requested by Anna Beispiel");
+    expect(markup).toContain("Decision by Felix Pahlke");
   });
 });
 

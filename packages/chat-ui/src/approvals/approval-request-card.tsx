@@ -1,4 +1,4 @@
-import { CircleAlert, TriangleAlert } from "lucide-react";
+import { ChevronDown, CircleAlert, TriangleAlert } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useId, useState, type FormEvent, type ReactNode } from "react";
 import type { ApprovalRequestView, DraftAttachment } from "@vivd-catalyst/api-client";
@@ -96,10 +96,105 @@ export function ApprovalRequestCard({ requestId }: { requestId: string }) {
 }
 
 /** Card for the review queue: the list already carries the request's current state. */
-export function ListedApprovalRequestCard({ request }: { request: ApprovalRequestView }) {
+export function ListedApprovalRequestCard({
+  request,
+  collapsed = false
+}: {
+  request: ApprovalRequestView;
+  /** The history: one row per request, its detail behind a disclosure. */
+  collapsed?: boolean;
+}) {
   const actions = useApprovalRequestCardActions(request.id, request);
 
-  return <ApprovalRequestCardView state={{ status: "ready", request }} actions={actions} />;
+  return collapsed ? (
+    <ApprovalHistoryRow request={request} actions={actions} />
+  ) : (
+    <ApprovalRequestCardView state={{ status: "ready", request }} actions={actions} />
+  );
+}
+
+/**
+ * A decided request as one scannable row. What it changed, the decision's
+ * comment and rollback open per row, so a long proposal no longer pushes the
+ * rest of the history off the screen.
+ */
+export function ApprovalHistoryRow({
+  request,
+  actions,
+  defaultOpen = false
+}: {
+  request: ApprovalRequestView;
+  actions: ApprovalRequestCardActions;
+  defaultOpen?: boolean;
+}) {
+  const { locale, t } = useTranslation();
+  const detailsId = useId();
+  const [open, setOpen] = useState(defaultOpen);
+  const status = approvalStatusPresentation(request.status);
+  const canRevert = Boolean(actions.onRevert) && canRevertApprovalRequest(request);
+  const decision = request.decision;
+  const meta = [
+    t("approvalRequestedBy", {
+      name: request.requestedBy.displayLabel,
+      date: formatApprovalDate(request.createdAt, locale)
+    }),
+    approvalRequestSubject(request, t),
+    decision
+      ? t("approvalDecidedBy", {
+          name: decision.decidedByLabel,
+          date: formatApprovalDate(decision.decidedAt, locale)
+        })
+      : undefined
+  ].filter(Boolean);
+
+  return (
+    <Card
+      className="grid min-w-0 gap-3 px-4 py-3 text-sm"
+      data-testid="approval-request-card"
+      data-variant="history"
+      aria-label={t("approvalFallbackTitle")}
+      role="group"
+    >
+      <div className="flex min-w-0 items-start gap-2">
+        <div className="grid min-w-0 flex-1 gap-0.5">
+          <p className="line-clamp-2 min-w-0 font-medium text-foreground">
+            {request.summary.trim() || t("approvalFallbackTitle")}
+          </p>
+          <p className="min-w-0 text-xs text-muted-foreground">{meta.join(" · ")}</p>
+        </div>
+        <ApprovalStatusBadge tone={status.tone}>{t(status.labelKey)}</ApprovalStatusBadge>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          aria-expanded={open}
+          aria-controls={detailsId}
+          onClick={() => setOpen((current) => !current)}
+        >
+          {t("approvalDetails")}
+          <ChevronDown
+            size={15}
+            className={cn("transition-transform", open && "rotate-180")}
+            aria-hidden="true"
+          />
+        </Button>
+      </div>
+      {open ? (
+        <div id={detailsId} className="grid min-w-0 gap-3 border-t pt-3">
+          <ApprovalRequestDetails request={request} showRequester={false} />
+          {hasApprovalActions(request, canRevert) ? (
+            <ApprovalRequestActions
+              // A refetched request in another status starts with a clean form.
+              key={request.status}
+              request={request}
+              actions={actions}
+              canRevert={canRevert}
+            />
+          ) : null}
+        </div>
+      ) : null}
+    </Card>
+  );
 }
 
 /**
@@ -404,7 +499,14 @@ function ApprovalRequestUnavailable({
 }
 
 /** Everything about a request except its title, status and actions. */
-function ApprovalRequestDetails({ request }: { request: ApprovalRequestView }) {
+function ApprovalRequestDetails({
+  request,
+  showRequester = true
+}: {
+  request: ApprovalRequestView;
+  /** Off where the caller already names requester and date itself. */
+  showRequester?: boolean;
+}) {
   const { locale, t } = useTranslation();
   const checks = visibleApprovalChecks(request.checks);
   const decision = request.decision;
@@ -412,12 +514,14 @@ function ApprovalRequestDetails({ request }: { request: ApprovalRequestView }) {
 
   return (
     <>
-      <p className="text-xs text-muted-foreground">
-        {t("approvalRequestedBy", {
-          name: request.requestedBy.displayLabel,
-          date: formatApprovalDate(request.createdAt, locale)
-        })}
-      </p>
+      {showRequester ? (
+        <p className="text-xs text-muted-foreground">
+          {t("approvalRequestedBy", {
+            name: request.requestedBy.displayLabel,
+            date: formatApprovalDate(request.createdAt, locale)
+          })}
+        </p>
+      ) : null}
 
       {checks.length > 0 ? (
         <ul className="grid min-w-0 gap-1.5">
