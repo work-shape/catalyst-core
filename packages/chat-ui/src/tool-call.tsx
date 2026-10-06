@@ -206,12 +206,10 @@ export function DataPart({
   }
   const promotedSurfaces = readWorkspacePromotedSurfacesData(data);
   if (promotedSurfaces) {
-    // An empty wrapper would still add its margin below the message.
-    if (promotedSurfaces.surfaces.length === 0) {
-      return null;
-    }
     return (
-      <div className="chat-tool-part my-3 max-w-5xl">
+      // Surfaces shown elsewhere render nothing here; an empty wrapper would
+      // still add its margin below the message.
+      <div className="chat-tool-part my-3 max-w-5xl has-[>div:empty]:hidden">
         <ToolSurfaceList autoPreview={autoPreviewSurfaces} surfaces={promotedSurfaces.surfaces} />
       </div>
     );
