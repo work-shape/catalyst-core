@@ -3,7 +3,7 @@
 All platform packages are released in lockstep under one version. Before 1.0 a minor version may
 contain breaking changes; a patch version does not.
 
-## Unreleased
+## 0.3.0 — 2026-10-06
 
 ### Changed
 
@@ -12,6 +12,12 @@ contain breaking changes; a patch version does not.
   agent's own model plus that list instead of every `userSelectable` binding, so a deployment
   that offered a model choice must add the list to its agents to keep it. The safe config view
   carries `agents[].selectableModels`.
+
+### Fixed
+
+- Saving an agent's model settings no longer fails with 403 when its other fields are locked:
+  unchanged fields were reported as changed because stored JSON key order differs.
+- A rejected save shows the server's message next to the save button.
 
 ## 0.2.0 — 2026-10-06
 
