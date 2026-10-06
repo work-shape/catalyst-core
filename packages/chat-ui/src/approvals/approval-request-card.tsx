@@ -330,8 +330,9 @@ export function ApprovalRequestCardView({
           </div>
           <ApprovalCheckIndicator checks={visibleApprovalChecks(request.checks)} />
           {badge}
+          {hasActions ? null : detailsButton}
         </div>
-        {hasActions || detailsButton ? (
+        {hasActions ? (
           <ApprovalRequestActions
             // A refetched request in another status starts with a clean form.
             key={request.status}

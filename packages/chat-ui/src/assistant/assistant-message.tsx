@@ -93,7 +93,7 @@ function ApprovalDecisionMessage() {
   }
 
   return (
-    <MessagePrimitive.Root className="mx-auto -mt-3 w-full max-w-5xl px-1" data-role="system">
+    <MessagePrimitive.Root className="mx-auto -mt-6 w-full max-w-5xl px-1" data-role="system">
       <ApprovalDecisionLine decision={decision} showSummary={decision.ambiguous} />
     </MessagePrimitive.Root>
   );
