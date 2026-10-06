@@ -104,7 +104,7 @@ describe("api operation catalog and client", () => {
         if (url.pathname.endsWith("/agents")) {
           return Response.json({
             defaultAgentName: "kai",
-            agents: [{ name: "kai", displayName: "KAI", initialPrompts: [] }]
+            agents: [{ name: "kai", displayName: "KAI", selectableModels: [], initialPrompts: [] }]
           });
         }
         return Response.json([{ id: "cws_1", name: "KAI", visibility: "private" }]);

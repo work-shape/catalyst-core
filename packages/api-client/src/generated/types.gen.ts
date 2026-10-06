@@ -642,6 +642,11 @@ export type GetConfigResponses = {
             displayName: string;
             description?: string;
             defaultModelBindingId?: string;
+            selectableModels: Array<{
+                bindingId?: string;
+                model: string;
+                compactThresholdTokens?: number;
+            }>;
             compactThresholdTokens?: number;
             welcomeMessage?: string;
             welcomeSubtitle?: string;
@@ -902,6 +907,11 @@ export type ListCollaborationWorkspaceAgentsResponses = {
             displayName: string;
             description?: string;
             defaultModelBindingId?: string;
+            selectableModels: Array<{
+                bindingId?: string;
+                model: string;
+                compactThresholdTokens?: number;
+            }>;
             compactThresholdTokens?: number;
             welcomeMessage?: string;
             welcomeSubtitle?: string;
@@ -3653,6 +3663,10 @@ export type GetConfigAssetsOverviewResponses = {
                 model: string;
             }>;
             fastModeModelBindingIds: Array<string>;
+            userSelectableModelBindings: Array<{
+                id: string;
+                model: string;
+            }>;
             reasoningEfforts: Array<'none' | 'low' | 'medium' | 'high' | 'xhigh'>;
             enabledToolNames: Array<string>;
         };

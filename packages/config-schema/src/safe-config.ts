@@ -1,5 +1,9 @@
-import type { ModelProviderConfig, RuntimeAssetSnapshot } from "@vivd-catalyst/core";
-import type { ClientInstanceConfig } from "./schemas";
+import {
+  userSelectableModelBindingsForAgent,
+  type ModelProviderConfig,
+  type RuntimeAssetSnapshot
+} from "@vivd-catalyst/core";
+import type { AgentConfig, ClientInstanceConfig } from "./schemas";
 import { createClientBranding, isPasswordMailEnabled } from "./branding";
 import { getModelSelectionForAgent } from "./selectors";
 import {
@@ -21,18 +25,10 @@ export function createSafeConfigView(
   } = createClientBranding(config, {
     requestedLocale: locale
   });
+  // Every binding that may be offered to users at all; each agent offers a subset.
   const selectableModels = config.modelBindings
     .filter((binding) => binding.userSelectable)
-    .map((binding) => ({
-      bindingId: binding.id,
-      model:
-        binding.model ??
-        config.modelProviders.find((provider) => provider.id === binding.providerId)!.model,
-      ...compactionThresholdView(
-        config.modelProviders.find((provider) => provider.id === binding.providerId)!
-      )
-    }));
-  const selectableModelBindingIds = new Set(selectableModels.map((model) => model.bindingId));
+    .map((binding) => bindingModelView(config, binding));
 
   return {
     clientInstance: {
@@ -82,9 +78,8 @@ export function createSafeConfigView(
         config.localization.defaultLocale
       ),
       ...compactionThresholdView(getModelSelectionForAgent(config, agent).provider),
-      ...(agent.modelBindingId && selectableModelBindingIds.has(agent.modelBindingId)
-        ? { defaultModelBindingId: agent.modelBindingId }
-        : {}),
+      ...(agent.modelBindingId ? { defaultModelBindingId: agent.modelBindingId } : {}),
+      selectableModels: agentSelectableModels(config, agent),
       welcomeMessage: resolveLocalizedString(
         agent.welcomeMessage,
         locale,
@@ -109,6 +104,33 @@ export function createSafeConfigView(
       }))
     })),
     ui
+  };
+}
+
+/** The agent's own model first, then the bindings users may pick instead. */
+function agentSelectableModels(config: ClientInstanceConfig, agent: AgentConfig) {
+  const own = getModelSelectionForAgent(config, agent);
+  return [
+    {
+      ...(agent.modelBindingId ? { bindingId: agent.modelBindingId } : {}),
+      model: own.model,
+      ...compactionThresholdView(own.provider)
+    },
+    ...userSelectableModelBindingsForAgent(agent, config.modelBindings).map((binding) =>
+      bindingModelView(config, binding)
+    )
+  ];
+}
+
+function bindingModelView(
+  config: ClientInstanceConfig,
+  binding: ClientInstanceConfig["modelBindings"][number]
+) {
+  const provider = config.modelProviders.find((candidate) => candidate.id === binding.providerId)!;
+  return {
+    bindingId: binding.id,
+    model: binding.model ?? provider.model,
+    ...compactionThresholdView(provider)
   };
 }
 

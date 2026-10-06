@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createSafeConfigView, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 
 describe("user-selectable model config", () => {
-  it("exposes only explicitly selectable bindings and the agent default", () => {
+  it("offers each agent its own model plus its listed user-selectable bindings", () => {
     const config = parseClientInstanceConfig({
       version: 1,
       clientInstance: {
@@ -59,6 +59,27 @@ describe("user-selectable model config", () => {
           toolNames: [],
           skillNames: [],
           initialPrompts: []
+        },
+        {
+          name: "chooser",
+          displayName: "Chooser",
+          instructions: "Help the user.",
+          // The title binding is not userSelectable and "retired" no longer exists: both are
+          // ignored. Listing the agent's own binding does not duplicate it.
+          modelBindingId: "conversationTitle",
+          userSelectableModelBindingIds: ["terra", "conversationTitle", "retired"],
+          toolNames: [],
+          skillNames: [],
+          initialPrompts: []
+        },
+        {
+          name: "provider_default",
+          displayName: "Provider default",
+          instructions: "Help the user.",
+          userSelectableModelBindingIds: ["sol"],
+          toolNames: [],
+          skillNames: [],
+          initialPrompts: []
         }
       ],
       skills: []
@@ -68,11 +89,24 @@ describe("user-selectable model config", () => {
       { bindingId: "sol", model: "gpt-5.6-sol", compactThresholdTokens: 270_000 },
       { bindingId: "terra", model: "gpt-5.6-terra", compactThresholdTokens: 270_000 }
     ]);
+    // An empty list leaves only the agent's own model, so the chat shows no selector.
     expect(safeConfig.agents[0]).toMatchObject({
       name: "assistant",
       defaultModelBindingId: "sol",
-      compactThresholdTokens: 270_000
+      compactThresholdTokens: 270_000,
+      selectableModels: [
+        { bindingId: "sol", model: "gpt-5.6-sol", compactThresholdTokens: 270_000 }
+      ]
     });
+    expect(safeConfig.agents[1]?.selectableModels).toEqual([
+      { bindingId: "conversationTitle", model: "gpt-5.6-luna", compactThresholdTokens: 270_000 },
+      { bindingId: "terra", model: "gpt-5.6-terra", compactThresholdTokens: 270_000 }
+    ]);
+    // An agent on the provider default has no binding id for its own model.
+    expect(safeConfig.agents[2]?.selectableModels).toEqual([
+      { model: "gpt-5.6-sol", compactThresholdTokens: 270_000 },
+      { bindingId: "sol", model: "gpt-5.6-sol", compactThresholdTokens: 270_000 }
+    ]);
     expect(config.modelBindings[2]?.userSelectable).toBe(false);
   });
 

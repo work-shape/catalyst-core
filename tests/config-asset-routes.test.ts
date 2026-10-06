@@ -143,6 +143,7 @@ describe("config asset admin routes", () => {
         modelBindingIds: [],
         modelBindings: [],
         fastModeModelBindingIds: [],
+        userSelectableModelBindings: [],
         reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
         enabledToolNames: ["known.tool", "read_skill"]
       }
@@ -615,7 +616,7 @@ describe("config asset admin routes", () => {
     });
   });
 
-  it("requires agent_models.manage for model, reasoning effort and fast mode on interactive writes", async () => {
+  it("requires agent_models.manage for the agent model settings on interactive writes", async () => {
     // No model setting is listed as editable: the permission alone decides.
     const fixture = await createFixture({
       modelBindings: true,
@@ -649,7 +650,8 @@ describe("config asset admin routes", () => {
     const changes = {
       modelBindingId: { modelBindingId: "other" },
       reasoningEffort: { reasoningEffort: "high" },
-      fastMode: { fastMode: true }
+      fastMode: { fastMode: true },
+      userSelectableModelBindingIds: { userSelectableModelBindingIds: ["other"] }
     };
     const put = (token: string, config: Record<string, unknown>) =>
       request(fixture.server, token, {
@@ -776,6 +778,92 @@ describe("config asset admin routes", () => {
       expect(pushed.statusCode).toBe(422);
       expect(JSON.stringify(pushed.json())).toContain("enables fastMode");
     }
+  });
+
+  it("accepts only userSelectable bindings as an agent's user-selectable models", async () => {
+    const fixture = await createFixture({ modelBindings: true });
+    const token = await mintToken(fixture.server, {
+      roles: ["superadmin"],
+      permissions: ["config_assets.release"]
+    });
+    const put = (config: Record<string, unknown>) =>
+      request(fixture.server, token, {
+        method: "PUT",
+        url: "/api/admin/config/assets/agent/assistant",
+        payload: { config }
+      });
+    const push = async (agent: Record<string, unknown>) =>
+      request(fixture.server, token, {
+        method: "POST",
+        url: "/api/admin/config/import",
+        payload: {
+          baseVersion: (
+            await request(fixture.server, token, { method: "GET", url: "/api/admin/config/export" })
+          ).json().version,
+          defaultAgentName: "assistant",
+          agents: [agent],
+          skills: []
+        }
+      });
+    const stored = async () =>
+      (
+        await request(fixture.server, token, {
+          method: "GET",
+          url: "/api/admin/config/assets/agent/assistant"
+        })
+      ).json().config as Record<string, unknown>;
+
+    const overview = await request(fixture.server, token, {
+      method: "GET",
+      url: "/api/admin/config/assets"
+    });
+    expect(overview.json().references.userSelectableModelBindings).toEqual([
+      { id: "other", model: "local" }
+    ]);
+
+    const agent = boundAgentConfig("plain");
+    expect((await put({ ...agent, userSelectableModelBindingIds: ["other"] })).statusCode).toBe(
+      200
+    );
+    expect(await stored()).toMatchObject({ userSelectableModelBindingIds: ["other"] });
+
+    // A binding without `userSelectable` and an unknown binding are both rejected on save.
+    for (const bindingId of ["fast", "missing"]) {
+      for (const send of [put, push]) {
+        const rejected = await send({ ...agent, userSelectableModelBindingIds: [bindingId] });
+        expect(rejected.statusCode).toBe(422);
+        expect(JSON.stringify(rejected.json())).toContain(
+          `Agent 'assistant' lists model binding '${bindingId}' in userSelectableModelBindingIds, but it is not a userSelectable model binding`
+        );
+      }
+    }
+    expect((await push({ ...agent, userSelectableModelBindingIds: ["other"] })).statusCode).toBe(
+      200
+    );
+
+    // A stored id that is no longer eligible does not block later edits of the agent.
+    await fixture.store.applyConfigAssetMutations({
+      clientInstanceId: fixture.clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: "assistant",
+          config: { ...agent, userSelectableModelBindingIds: ["retired"] }
+        }
+      ]
+    });
+    const renamed = {
+      ...agent,
+      displayName: "Renamed",
+      userSelectableModelBindingIds: ["retired"]
+    };
+    expect((await put(renamed)).statusCode).toBe(200);
+    expect((await push({ ...renamed, displayName: "Pushed" })).statusCode).toBe(200);
+    expect(await stored()).toMatchObject({
+      displayName: "Pushed",
+      userSelectableModelBindingIds: ["retired"]
+    });
   });
 
   it("lets config admins set agent availability and keeps the default agent open", async () => {
@@ -1264,7 +1352,7 @@ async function createFixture(
       ? {
           modelBindings: [
             { id: "plain", providerId: "local" },
-            { id: "other", providerId: "local" },
+            { id: "other", providerId: "local", userSelectable: true },
             { id: "fast", providerId: "local", supportsFastMode: true }
           ],
           usage: {
@@ -1408,6 +1496,9 @@ async function createFixture(
         fastModeModelBindingIds: config.modelBindings
           .filter((binding) => binding.supportsFastMode)
           .map((binding) => binding.id),
+        userSelectableModelBindings: config.modelBindings
+          .filter((binding) => binding.userSelectable)
+          .map((binding) => ({ id: binding.id, model: "local" })),
         reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
         enabledToolNames: ["known.tool", "read_skill", ...(input.webSearch ? ["web_search"] : [])]
       },

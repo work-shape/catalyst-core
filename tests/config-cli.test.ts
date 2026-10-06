@@ -101,6 +101,23 @@ describe("config CLI serialization", () => {
     );
   });
 
+  it("round-trips userSelectableModelBindingIds and leaves an empty list out of the YAML", () => {
+    const agent = { ...agentConfig("Chooser"), modelBindingId: "primary" };
+    const serialized = serializeAgentYaml({
+      ...agent,
+      userSelectableModelBindingIds: ["fast", "cheap"]
+    });
+
+    expect(serialized).toContain("userSelectableModelBindingIds:\n  - fast\n  - cheap\n");
+    expect(parseAgentYaml(serialized)).toMatchObject({
+      userSelectableModelBindingIds: ["fast", "cheap"]
+    });
+    expect(serializeAgentYaml(parseAgentYaml(serialized))).toBe(serialized);
+    expect(serializeAgentYaml({ ...agent, userSelectableModelBindingIds: [] })).toBe(
+      serializeAgentYaml(agent)
+    );
+  });
+
   it("round-trips SKILL.md with provenance comments inside frontmatter", () => {
     const skill = {
       name: "review",
@@ -1481,6 +1498,7 @@ async function createFixture() {
         modelBindingIds: [],
         modelBindings: [],
         fastModeModelBindingIds: [],
+        userSelectableModelBindings: [],
         reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
         enabledToolNames: ["known.tool"]
       }

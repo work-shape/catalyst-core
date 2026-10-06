@@ -65,7 +65,8 @@ export type AgentEditableField = (typeof AGENT_EDITABLE_FIELDS)[number];
 export const AGENT_MODEL_SETTING_FIELDS = [
   "modelBindingId",
   "reasoningEffort",
-  "fastMode"
+  "fastMode",
+  "userSelectableModelBindingIds"
 ] as const;
 export type AgentModelSettingField = (typeof AGENT_MODEL_SETTING_FIELDS)[number];
 
@@ -90,10 +91,43 @@ export interface AgentConfig {
   modelBindingId?: string;
   reasoningEffort?: ReasoningEffortConfig;
   fastMode?: boolean;
+  /** Bindings users may pick for this agent in the chat, besides its own `modelBindingId`. */
+  userSelectableModelBindingIds?: string[];
   maxSteps?: number;
   toolNames: string[];
   skillNames: string[];
   initialPrompts: AgentInitialPromptConfig[];
+}
+
+/**
+ * The bindings a user may pick for this agent besides its own: the listed ids whose binding
+ * still exists and is `userSelectable`. Stale ids are ignored rather than failing the agent.
+ */
+export function userSelectableModelBindingsForAgent<Binding extends ModelBindingConfig>(
+  agent: Pick<AgentConfig, "modelBindingId" | "userSelectableModelBindingIds">,
+  modelBindings: readonly Binding[]
+): Binding[] {
+  const listed = new Set(agent.userSelectableModelBindingIds ?? []);
+  return modelBindings.filter(
+    (binding) =>
+      binding.userSelectable === true &&
+      binding.id !== agent.modelBindingId &&
+      listed.has(binding.id)
+  );
+}
+
+/** A user may request the agent's own binding or one of its user-selectable bindings. */
+export function isModelBindingUserSelectableForAgent(
+  agent: Pick<AgentConfig, "modelBindingId" | "userSelectableModelBindingIds">,
+  modelBindings: readonly ModelBindingConfig[],
+  modelBindingId: string
+): boolean {
+  return (
+    modelBindingId === agent.modelBindingId ||
+    userSelectableModelBindingsForAgent(agent, modelBindings).some(
+      (binding) => binding.id === modelBindingId
+    )
+  );
 }
 
 export interface ApprovalCheckConfig {

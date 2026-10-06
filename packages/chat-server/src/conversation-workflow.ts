@@ -32,6 +32,7 @@ import {
   getSubjectUserId,
   withoutAssistantProviderContinuation,
   isAppError,
+  isModelBindingUserSelectableForAgent,
   readAssistantFinalMetadata,
   readUserMessageMetadata
 } from "@vivd-catalyst/core";
@@ -98,26 +99,43 @@ export class ConversationWorkflow {
 
   /**
    * An agent that is unknown and one that is not available in this workspace are
-   * indistinguishable to the caller.
+   * indistinguishable to the caller. A requested model must be one this agent offers to
+   * users: its own binding or one of its user-selectable bindings.
    */
   private async resolveRunAgentName(
     workspace: CollaborationWorkspace,
-    requestedAgentName: string | undefined
+    requestedAgentName: string | undefined,
+    requestedModelBindingId: string | undefined
   ): Promise<string> {
     const assets = await getWorkspaceAssetSnapshot(this.options, workspace);
-    if (requestedAgentName !== undefined) {
-      if (!assets.agents.some((agent) => agent.name === requestedAgentName)) {
-        throw new AppError("NOT_FOUND", `Agent '${requestedAgentName}' is not defined`);
-      }
-      return requestedAgentName;
-    }
-    if (!assets.defaultAgentName) {
+    const agentName = requestedAgentName ?? assets.defaultAgentName;
+    if (!agentName) {
       throw new AppError(
         "VALIDATION_FAILED",
         "No default agent is configured for this client instance yet"
       );
     }
-    return assets.defaultAgentName;
+    const agent = assets.agents.find((candidate) => candidate.name === agentName);
+    if (requestedAgentName !== undefined && !agent) {
+      throw new AppError("NOT_FOUND", `Agent '${requestedAgentName}' is not defined`);
+    }
+    if (
+      requestedModelBindingId &&
+      !(
+        agent &&
+        isModelBindingUserSelectableForAgent(
+          agent,
+          this.options.config.modelBindings,
+          requestedModelBindingId
+        )
+      )
+    ) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `Model binding '${requestedModelBindingId}' is not available for user selection`
+      );
+    }
+    return agentName;
   }
 
   async listConversations(
@@ -377,7 +395,6 @@ export class ConversationWorkflow {
     command: SendConversationMessageCommand
   ): Promise<StartedConversationMessageRun> {
     const conversation = await this.requireConversationAccess(conversationId, user);
-    this.assertUserSelectableModelBinding(command.modelBindingId);
     let runStartCommand: RunStartCommand | undefined;
     if (command.idempotencyKey) {
       const claim = await this.claimOrResolveRunStartCommand({
@@ -395,7 +412,8 @@ export class ConversationWorkflow {
     try {
       const agentName = await this.resolveRunAgentName(
         await this.requireMemberWorkspace(user, conversation.collaborationWorkspaceId),
-        command.agentName
+        command.agentName,
+        command.modelBindingId
       );
       const attachments = this.options.attachments;
       const draftAttachments = attachments
@@ -504,21 +522,6 @@ export class ConversationWorkflow {
     }
   }
 
-  private assertUserSelectableModelBinding(modelBindingId: string | undefined): void {
-    if (!modelBindingId) {
-      return;
-    }
-    const binding = this.options.config.modelBindings.find(
-      (candidate) => candidate.id === modelBindingId
-    );
-    if (!binding?.userSelectable) {
-      throw new AppError(
-        "VALIDATION_FAILED",
-        `Model binding '${modelBindingId}' is not available for user selection`
-      );
-    }
-  }
-
   async createConversationAndStartMessageRun(
     user: AuthenticatedUser,
     context: RuntimeCallContext,
@@ -529,7 +532,6 @@ export class ConversationWorkflow {
     run: AgentRun;
     runId: AgentRunId;
   }> {
-    this.assertUserSelectableModelBinding(command.modelBindingId);
     let runStartCommand: RunStartCommand | undefined;
     if (command.idempotencyKey) {
       const claim = await this.claimOrResolveRunStartCommand({
@@ -551,10 +553,11 @@ export class ConversationWorkflow {
     }
 
     try {
-      // Checked before the Conversation exists so a rejected agent leaves nothing behind.
+      // Checked before the Conversation exists so a rejected agent or model leaves nothing behind.
       await this.resolveRunAgentName(
         await this.resolveTargetWorkspace(user, command.collaborationWorkspaceId),
-        command.agentName
+        command.agentName,
+        command.modelBindingId
       );
       const conversation = await this.createConversation(user, context, {
         title: command.title ?? createConversationTitle(command.text),

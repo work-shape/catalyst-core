@@ -260,6 +260,14 @@ export async function createClientInstanceExecutionAssembly(
             config.modelProviders.find((provider) => provider.id === binding.providerId)!.model
         })),
       fastModeModelBindingIds: fastModeModelBindingIds(config),
+      userSelectableModelBindings: config.modelBindings
+        .filter((binding) => binding.userSelectable)
+        .map((binding) => ({
+          id: binding.id,
+          model:
+            binding.model ??
+            config.modelProviders.find((provider) => provider.id === binding.providerId)!.model
+        })),
       reasoningEfforts: [...REASONING_EFFORTS],
       enabledToolNames: [...getEnabledToolNames(config)]
     },

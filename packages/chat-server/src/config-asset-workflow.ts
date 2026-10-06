@@ -23,6 +23,7 @@ import {
   type RuntimeCallContext,
   type SkillConfig
 } from "@vivd-catalyst/core";
+import { findAgentUserSelectableModelIssues } from "@vivd-catalyst/config-schema";
 import {
   validateConfigAssetCandidate,
   applyValidatedConfigAssetMutations
@@ -120,6 +121,7 @@ export class ConfigAssetWorkflow {
       ? { ...replaced, defaultAgentName: command.name }
       : replaced;
     const validated = this.validateBundle(candidate);
+    this.assertChangedUserSelectableModelsEligible(current, validated.agents);
     const config = findValidatedConfig(validated, command.kind, command.name);
     this.assertInteractiveAssetUpsertAllowed({
       user,
@@ -326,6 +328,7 @@ export class ConfigAssetWorkflow {
       ? { ...replaced, defaultAgentName: command.name }
       : replaced;
     const validated = this.validateBundle(candidate);
+    this.assertChangedUserSelectableModelsEligible(current, validated.agents);
     const config = findValidatedConfig(validated, command.kind, command.name);
     this.assertInteractiveAssetUpsertAllowed({
       user,
@@ -481,6 +484,10 @@ export class ConfigAssetWorkflow {
       );
     }
     const validated = this.validateBundle(candidate);
+    this.assertChangedUserSelectableModelsEligible(
+      assetBundle(currentAssets, currentState.defaultAgentName),
+      validated.agents
+    );
     const providedAgentNames = new Set(command.agents.map(readConfigName));
     const providedSkillNames = new Set(command.skills.map(readConfigName));
     const desiredKeys = new Set([
@@ -551,7 +558,11 @@ export class ConfigAssetWorkflow {
     command: ConfigAssetBundleInput
   ): Promise<{ valid: true }> {
     await this.authorizeReleaseWrite(user, context);
-    this.validateBundle(command);
+    const validated = this.validateBundle(command);
+    this.assertChangedUserSelectableModelsEligible(
+      await this.loadCurrentBundle(),
+      validated.agents
+    );
     return { valid: true };
   }
 
@@ -635,6 +646,37 @@ export class ConfigAssetWorkflow {
     }
     const { fastMode: _fastMode, ...withoutFastMode } = nextConfig;
     return withoutFastMode;
+  }
+
+  /**
+   * An agent's list of user-selectable models must name eligible bindings whenever it is written.
+   * Unchanged lists are not re-checked, so a binding that later disappears or loses
+   * `userSelectable` never blocks other edits; such ids are ignored at read time.
+   */
+  private assertChangedUserSelectableModelsEligible(
+    current: ConfigAssetBundleInput,
+    nextAgents: AgentConfig[]
+  ): void {
+    const eligibleIds = this.options.configAssets.validationRefs.userSelectableModelBindings.map(
+      (binding) => binding.id
+    );
+    const issues = nextAgents
+      .filter(
+        (agent) =>
+          !configValuesEqual(
+            modelSettingValue(
+              findBundleConfig(current, "agent", agent.name) as AgentConfig | undefined,
+              "userSelectableModelBindingIds"
+            ),
+            modelSettingValue(agent, "userSelectableModelBindingIds")
+          )
+      )
+      .flatMap((agent) => findAgentUserSelectableModelIssues(agent, eligibleIds));
+    if (issues.length > 0) {
+      throw new AppError("VALIDATION_FAILED", "Config asset bundle is invalid", {
+        issues: issues.map((message) => ({ message }))
+      });
+    }
   }
 
   private assertInteractiveAssetUpsertAllowed(input: {
@@ -744,7 +786,13 @@ function isAgentModelSettingField(field: string): field is AgentModelSettingFiel
 }
 
 function modelSettingValue(agent: AgentConfig | undefined, field: AgentModelSettingField) {
-  return field === "fastMode" ? (agent?.fastMode ?? false) : agent?.[field];
+  if (field === "fastMode") {
+    return agent?.fastMode ?? false;
+  }
+  if (field === "userSelectableModelBindingIds") {
+    return agent?.userSelectableModelBindingIds ?? [];
+  }
+  return agent?.[field];
 }
 
 function isHiddenEverywhere(availability: AgentAvailability | undefined): boolean {

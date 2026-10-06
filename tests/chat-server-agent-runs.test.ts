@@ -1053,7 +1053,8 @@ describe("agent availability per Collaboration Workspace", () => {
       expect(Object.keys((shared.json() as { agents: object[] }).agents[0]!).sort()).toEqual([
         "displayName",
         "initialPrompts",
-        "name"
+        "name",
+        "selectableModels"
       ]);
 
       const personal = await app.server.inject({

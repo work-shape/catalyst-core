@@ -768,6 +768,7 @@ async function createFixture() {
         modelBindingIds: [],
         modelBindings: [],
         fastModeModelBindingIds: [],
+        userSelectableModelBindings: [],
         reasoningEfforts: [],
         enabledToolNames: []
       }

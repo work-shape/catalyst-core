@@ -1,5 +1,6 @@
 import {
   AppError,
+  isModelBindingUserSelectableForAgent,
   type AgentConfig,
   type ConfigAssetSource,
   type AgentRunHandle,
@@ -603,10 +604,17 @@ export class LocalAgentRuntime implements AgentRuntime {
       if (!binding) {
         throw new AppError("NOT_FOUND", `Model binding '${bindingId}' is not defined`);
       }
-      if (userSelectedBindingId && !binding.userSelectable) {
+      if (
+        userSelectedBindingId &&
+        !isModelBindingUserSelectableForAgent(
+          agent,
+          this.options.modelBindings ?? [],
+          userSelectedBindingId
+        )
+      ) {
         throw new AppError(
           "VALIDATION_FAILED",
-          `Model binding '${bindingId}' is not available for user selection`
+          `Model binding '${bindingId}' is not available for user selection with agent '${agent.name}'`
         );
       }
       const provider = this.getModelProvider(binding.providerId);

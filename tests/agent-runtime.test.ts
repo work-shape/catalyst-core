@@ -829,6 +829,7 @@ describe("local agent runtime", () => {
             instructions: "Use the configured model binding.",
             modelBindingId: "primaryReasoning",
             reasoningEffort: "xhigh",
+            userSelectableModelBindingIds: ["alternate"],
             toolNames: [],
             initialPrompts: []
           }
@@ -841,6 +842,12 @@ describe("local agent runtime", () => {
           providerId: "test-provider",
           model: "bound-model",
           reasoningEffort: "high"
+        },
+        {
+          id: "unlisted",
+          providerId: "test-provider",
+          model: "unlisted-model",
+          userSelectable: true
         },
         {
           id: "alternate",
@@ -884,6 +891,30 @@ describe("local agent runtime", () => {
       model: "user-selected-model",
       reasoningEffort: "xhigh"
     });
+
+    // A userSelectable binding the agent does not list is rejected by the runtime itself.
+    providerRequest = undefined;
+    const rejectedRun = await runtime.start(
+      {
+        agentName: "binding_agent",
+        modelBindingId: "unlisted",
+        conversationId,
+        message: { text: "Use the unlisted model." }
+      },
+      context
+    );
+    let lastRejectedEvent: unknown;
+    for await (const event of runtime.observe(rejectedRun.runId, context)) {
+      lastRejectedEvent = event;
+    }
+    expect(lastRejectedEvent).toMatchObject({
+      type: "run_failed",
+      error: {
+        message:
+          "Model binding 'unlisted' is not available for user selection with agent 'binding_agent'"
+      }
+    });
+    expect(providerRequest).toBeUndefined();
   });
 
   it("requests fast mode only when the agent enables it and the used binding supports it", async () => {
@@ -935,6 +966,7 @@ describe("local agent runtime", () => {
             instructions: "Answer quickly.",
             modelBindingId: "fastBinding",
             fastMode: true,
+            userSelectableModelBindingIds: ["plainBinding"],
             toolNames: [],
             skillNames: [],
             initialPrompts: []

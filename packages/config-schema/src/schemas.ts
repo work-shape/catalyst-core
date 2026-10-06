@@ -292,6 +292,7 @@ export const agentConfigSchema = z.object({
   modelBindingId: z.string().min(1).optional(),
   reasoningEffort: z.enum(REASONING_EFFORTS).optional(),
   fastMode: z.boolean().optional(),
+  userSelectableModelBindingIds: z.array(z.string().min(1)).optional(),
   maxSteps: z.number().int().positive().optional(),
   toolNames: z.array(z.string().min(1)).default([]),
   skillNames: z.array(skillNameSchema).default([]),

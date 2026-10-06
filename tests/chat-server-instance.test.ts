@@ -22,6 +22,63 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
+  it("offers and accepts only the agent's own model and its user-selectable models", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        agentModelBindingId: "own",
+        // "retired" no longer exists and "internal" lost the flag: both are ignored.
+        agentUserSelectableModelBindingIds: ["offered", "retired", "internal"],
+        modelBindings: [
+          { id: "own", providerId: "local", model: "own-model" },
+          { id: "offered", providerId: "local", model: "offered-model", userSelectable: true },
+          { id: "eligible", providerId: "local", model: "eligible-model", userSelectable: true },
+          { id: "internal", providerId: "local", model: "internal-model" }
+        ]
+      }),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+    const config = await app.server.inject({ method: "GET", url: "/api/config" });
+    expect(config.json().agents[0].selectableModels).toEqual([
+      { bindingId: "own", model: "own-model" },
+      { bindingId: "offered", model: "offered-model" }
+    ]);
+
+    const start = (modelBindingId: string) =>
+      app.server.inject({
+        method: "POST",
+        url: "/api/conversations/runs",
+        payload: {
+          idempotencyKey: `start-${modelBindingId}`,
+          modelBindingId,
+          message: { text: "Hello" }
+        }
+      });
+    // Not listed for this agent, although release config allows offering it to users.
+    for (const modelBindingId of ["eligible", "internal", "retired"]) {
+      const rejected = await start(modelBindingId);
+      expect(rejected.statusCode).toBe(422);
+      expect(rejected.json().error.message).toBe(
+        `Model binding '${modelBindingId}' is not available for user selection`
+      );
+    }
+    // A rejected model leaves no conversation behind.
+    const conversations = await app.server.inject({ method: "GET", url: "/api/conversations" });
+    expect(conversations.json()).toEqual([]);
+
+    for (const modelBindingId of ["own", "offered"]) {
+      const started = await start(modelBindingId);
+      expect(started.statusCode).toBe(200);
+      const { conversation, run } = started.json() as {
+        conversation: { id: string };
+        run: { id: string };
+      };
+      await drainRunEvents(app.server, conversation.id, run.id);
+    }
+    await app.close();
+  });
+
   it("rejects model bindings that are not available for user selection", async () => {
     const app = await createClientInstanceApp({
       config: createTestConfig({

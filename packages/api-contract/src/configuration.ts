@@ -130,6 +130,14 @@ export const safeConfigSchema = z.object({
       displayName: z.string(),
       description: z.string().optional(),
       defaultModelBindingId: z.string().optional(),
+      /** The agent's own model first (no `bindingId` when it uses a provider default), then the models users may pick instead. */
+      selectableModels: z.array(
+        z.object({
+          bindingId: z.string().optional(),
+          model: z.string(),
+          compactThresholdTokens: z.number().optional()
+        })
+      ),
       compactThresholdTokens: z.number().optional(),
       welcomeMessage: z.string().optional(),
       welcomeSubtitle: z.string().optional(),
@@ -218,6 +226,12 @@ export const configAssetsOverviewSchema = z.object({
       })
     ),
     fastModeModelBindingIds: z.array(z.string()),
+    userSelectableModelBindings: z.array(
+      z.object({
+        id: z.string(),
+        model: z.string()
+      })
+    ),
     reasoningEfforts: z.array(reasoningEffortSchema),
     enabledToolNames: z.array(z.string())
   })

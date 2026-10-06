@@ -60,6 +60,7 @@ export function createTestConfig(
       userSelectable?: boolean;
     }>;
     agentModelBindingId?: string;
+    agentUserSelectableModelBindingIds?: string[];
     usageBudget?: {
       monthlySpendLimit?: number;
     };
@@ -147,6 +148,9 @@ export function createTestConfig(
       ...(input.agentModelBindingId
         ? { modelBindingId: input.agentModelBindingId }
         : { modelProviderId: input.modelProviders?.[0]?.id ?? "local" }),
+      ...(input.agentUserSelectableModelBindingIds
+        ? { userSelectableModelBindingIds: input.agentUserSelectableModelBindingIds }
+        : {}),
       toolNames: input.toolNames ?? [],
       initialPrompts: input.initialPrompts ?? []
     })

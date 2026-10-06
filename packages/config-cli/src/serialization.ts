@@ -36,6 +36,9 @@ export function canonicalizeAgentConfig(input: unknown): AgentConfig {
     ...(agent.modelBindingId === undefined ? {} : { modelBindingId: agent.modelBindingId }),
     ...(agent.reasoningEffort === undefined ? {} : { reasoningEffort: agent.reasoningEffort }),
     ...(agent.fastMode ? { fastMode: true } : {}),
+    ...(agent.userSelectableModelBindingIds?.length
+      ? { userSelectableModelBindingIds: agent.userSelectableModelBindingIds }
+      : {}),
     ...(agent.maxSteps === undefined ? {} : { maxSteps: agent.maxSteps }),
     toolNames: agent.toolNames,
     skillNames: agent.skillNames,
