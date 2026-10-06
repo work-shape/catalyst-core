@@ -69,7 +69,8 @@ contain breaking changes; a patch version does not.
 
 ## 0.2.0 — 2026-10-06
 
-First versioned release. Compared with the production release of 2026-09-07:
+First versioned release. Compared with production, which runs `staging-2026.09.14-1` (platform
+`a2a13a8`, deployed 2026-09-14):
 
 ### Added
 
