@@ -180,12 +180,14 @@ export async function listExpiredConversations(
   db: PostgresDatabase,
   input: {
     clientInstanceId: ClientInstanceId;
-    now: string;
+    now?: string;
     abandonedBefore?: string;
     limit: number;
   }
 ): Promise<Conversation[]> {
-  const retentionDue = lte(conversations.retainedUntil, new Date(input.now));
+  if (!input.now && !input.abandonedBefore) {
+    return [];
+  }
   const rows = await db
     .select()
     .from(conversations)
@@ -193,16 +195,16 @@ export async function listExpiredConversations(
       and(
         eq(conversations.clientInstanceId, input.clientInstanceId),
         eq(conversations.status, "active"),
-        input.abandonedBefore
-          ? or(
-              retentionDue,
-              and(
+        or(
+          input.now ? lte(conversations.retainedUntil, new Date(input.now)) : undefined,
+          input.abandonedBefore
+            ? and(
                 lte(conversations.updatedAt, new Date(input.abandonedBefore)),
                 notExists(conversationMessages(db)),
                 notExists(conversationDraftAttachments(db))
               )
-            )
-          : retentionDue
+            : undefined
+        )
       )
     )
     .orderBy(asc(conversations.retainedUntil), asc(conversations.id))

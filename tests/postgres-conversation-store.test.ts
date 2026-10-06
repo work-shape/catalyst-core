@@ -205,6 +205,13 @@ describePostgres("Postgres conversation store", () => {
       await expect(expiredWith()).resolves.toEqual([]);
       await expect(expiredWith("2000-01-01T00:00:00.000Z")).resolves.toEqual([]);
       await expect(expiredWith(later)).resolves.toEqual([conversation.id]);
+      // Without `now` only the abandoned criterion applies, whatever the stamped date.
+      await expect(
+        store.listExpiredConversations({ clientInstanceId, abandonedBefore: later, limit: 10 })
+      ).resolves.toEqual([expect.objectContaining({ id: conversation.id })]);
+      await expect(
+        store.listExpiredConversations({ clientInstanceId, limit: 10 })
+      ).resolves.toEqual([]);
 
       await store.appendMessage({
         clientInstanceId,
@@ -215,6 +222,17 @@ describePostgres("Postgres conversation store", () => {
       await expect(listedFor(user.id)).resolves.toEqual([conversation.id]);
       await expect(listedFor("usr_colleague")).resolves.toEqual([conversation.id]);
       await expect(expiredWith(later)).resolves.toEqual([]);
+      // A started conversation past its date is not returned without `now`.
+      await expect(
+        store.listExpiredConversations({
+          clientInstanceId,
+          now: "3000-01-01T00:00:00.000Z",
+          limit: 10
+        })
+      ).resolves.toEqual([expect.objectContaining({ id: conversation.id })]);
+      await expect(
+        store.listExpiredConversations({ clientInstanceId, abandonedBefore: later, limit: 10 })
+      ).resolves.toEqual([]);
     } finally {
       await sql`delete from conversations where id = ${conversation.id}`;
       await sql`delete from managed_files where client_instance_id = ${clientInstanceId}`;

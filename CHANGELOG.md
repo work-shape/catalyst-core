@@ -12,7 +12,9 @@ contain breaking changes; a patch version does not.
   conversation without messages only to its creator, and only while it holds draft attachments;
   access by id is unchanged. Removing the last draft attachment returns the composer to the
   start page, and the retention job expires conversations that have had neither messages nor
-  draft attachments for 24 hours.
+  draft attachments for 24 hours. This cleanup also runs with
+  `retention.expireConversations: false`, which keeps every conversation that has a message or
+  a draft attachment.
 
 ## 0.4.0 — 2026-10-06
 

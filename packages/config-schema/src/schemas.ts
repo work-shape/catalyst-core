@@ -840,7 +840,8 @@ export const clientInstanceConfigSchema = z.object({
     .object({
       conversationDays: z.number().int().positive().max(3650).default(30),
       /**
-       * False keeps every conversation: the retention job never runs. New
+       * False keeps every conversation a user started: the retention job only
+       * removes abandoned drafts without messages or draft attachments. New
        * conversations are still stamped from `conversationDays`, so turning
        * expiry back on expires everything already past its date.
        */

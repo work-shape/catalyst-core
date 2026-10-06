@@ -152,12 +152,13 @@ export interface ConversationStore extends ConversationHistoryStore {
 
 export interface ConversationRetentionStore {
   /**
-   * Active Conversations whose retention is due. With `abandonedBefore`, also the ones that
-   * hold no messages and no draft attachments and were last touched at or before that time.
+   * Active Conversations to expire. With `now`, the ones whose retention is due. With
+   * `abandonedBefore`, the ones that hold no messages and no draft attachments and were last
+   * touched at or before that time. Each criterion applies only when given.
    */
   listExpiredConversations(input: {
     clientInstanceId: ClientInstanceId;
-    now: ISODateString;
+    now?: ISODateString;
     abandonedBefore?: ISODateString;
     limit: number;
   }): Promise<Conversation[]>;

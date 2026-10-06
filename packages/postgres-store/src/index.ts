@@ -591,7 +591,7 @@ export class PostgresPlatformStore
 
   async listExpiredConversations(input: {
     clientInstanceId: ClientInstanceId;
-    now: string;
+    now?: string;
     abandonedBefore?: string;
     limit: number;
   }): Promise<Conversation[]> {

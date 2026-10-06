@@ -41,9 +41,12 @@ export class ConversationRetentionWorkflow {
   private readonly options: ChatServerOptions;
   private readonly batchSize: number;
   private readonly now: () => Date;
+  /** False when the client instance keeps conversations indefinitely. */
+  private readonly expireConversations: boolean;
 
   constructor(options: ChatServerOptions, jobOptions: ConversationRetentionJobOptions = {}) {
     this.options = options;
+    this.expireConversations = options.config.retention.expireConversations;
     this.batchSize = jobOptions.batchSize ?? DEFAULT_RETENTION_BATCH_SIZE;
     this.now = jobOptions.now ?? (() => new Date());
   }
@@ -51,9 +54,11 @@ export class ConversationRetentionWorkflow {
   async expireDueConversations(): Promise<ConversationRetentionRunSummary> {
     const currentTime = this.now();
     const now = currentTime.toISOString();
+    // Keeping conversations indefinitely covers the ones a user started. An abandoned draft
+    // is an empty shell and is removed either way.
     const expired = await this.options.conversationStore.listExpiredConversations({
       clientInstanceId: this.options.clientInstanceId,
-      now,
+      ...(this.expireConversations ? { now } : {}),
       abandonedBefore: new Date(
         currentTime.getTime() - ABANDONED_CONVERSATION_GRACE_MS
       ).toISOString(),
@@ -100,6 +105,7 @@ export class ConversationRetentionWorkflow {
         metadata: createRetentionAuditMetadata(
           conversation,
           expiredAt,
+          this.expireConversations,
           objectDeletion,
           workspaceDeletion
         )
@@ -143,7 +149,6 @@ export class ConversationRetentionWorkflow {
 
 export class ConversationRetentionJob {
   private readonly workflow: ConversationRetentionWorkflow;
-  private readonly enabled: boolean;
   private readonly checkIntervalMs: number;
   private readonly runOnStartup: boolean;
   private readonly logger: RetentionLogger;
@@ -152,22 +157,16 @@ export class ConversationRetentionJob {
 
   constructor(input: {
     workflow: ConversationRetentionWorkflow;
-    /** False when the client instance keeps conversations indefinitely. */
-    enabled?: boolean;
     options?: ConversationRetentionJobOptions;
     logger: RetentionLogger;
   }) {
     this.workflow = input.workflow;
-    this.enabled = input.enabled ?? true;
     this.checkIntervalMs = input.options?.checkIntervalMs ?? DEFAULT_RETENTION_CHECK_INTERVAL_MS;
     this.runOnStartup = input.options?.runOnStartup ?? true;
     this.logger = input.logger;
   }
 
   start(): void {
-    if (!this.enabled) {
-      return;
-    }
     if (this.runOnStartup) {
       this.run();
     }
@@ -214,7 +213,6 @@ export function createConversationRetentionJob(
 ): ConversationRetentionJob {
   return new ConversationRetentionJob({
     workflow: new ConversationRetentionWorkflow(options, input.jobOptions),
-    enabled: options.config.retention.expireConversations,
     options: input.jobOptions,
     logger: input.logger
   });
@@ -223,13 +221,16 @@ export function createConversationRetentionJob(
 function createRetentionAuditMetadata(
   conversation: Conversation,
   expiredAt: string,
+  expireConversations: boolean,
   deletion: ManagedObjectDeletionResult | undefined,
   workspaceDeletion: Awaited<ReturnType<typeof cleanupExecutionWorkspaceForConversation>>
 ): JsonObject {
   return {
     retainedUntil: conversation.retainedUntil,
     expiredAt,
-    ...(conversation.retainedUntil > expiredAt ? { reason: "abandoned_draft" } : {}),
+    ...(!expireConversations || conversation.retainedUntil > expiredAt
+      ? { reason: "abandoned_draft" }
+      : {}),
     attachmentCount: deletion?.attachmentCount ?? 0,
     fileCount: deletion?.fileObjectKeys.length ?? 0,
     artifactCount: deletion?.artifactObjectKeys.length ?? 0,

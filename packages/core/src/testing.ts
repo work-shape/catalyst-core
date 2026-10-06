@@ -929,11 +929,11 @@ export class InMemoryPlatformStore
 
   async listExpiredConversations(input: {
     clientInstanceId: ClientInstanceId;
-    now: string;
+    now?: string;
     abandonedBefore?: string;
     limit: number;
   }): Promise<Conversation[]> {
-    const { abandonedBefore } = input;
+    const { abandonedBefore, now } = input;
     const due: Conversation[] = [];
     for (const conversation of this.conversations.values()) {
       if (
@@ -943,7 +943,7 @@ export class InMemoryPlatformStore
         continue;
       }
       if (
-        conversation.retainedUntil <= input.now ||
+        (now !== undefined && conversation.retainedUntil <= now) ||
         (abandonedBefore !== undefined &&
           conversation.updatedAt <= abandonedBefore &&
           !this.hasMessages(conversation) &&
