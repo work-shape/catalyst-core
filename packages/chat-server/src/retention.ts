@@ -133,6 +133,7 @@ export class ConversationRetentionWorkflow {
 
 export class ConversationRetentionJob {
   private readonly workflow: ConversationRetentionWorkflow;
+  private readonly enabled: boolean;
   private readonly checkIntervalMs: number;
   private readonly runOnStartup: boolean;
   private readonly logger: RetentionLogger;
@@ -141,16 +142,22 @@ export class ConversationRetentionJob {
 
   constructor(input: {
     workflow: ConversationRetentionWorkflow;
+    /** False when the client instance keeps conversations indefinitely. */
+    enabled?: boolean;
     options?: ConversationRetentionJobOptions;
     logger: RetentionLogger;
   }) {
     this.workflow = input.workflow;
+    this.enabled = input.enabled ?? true;
     this.checkIntervalMs = input.options?.checkIntervalMs ?? DEFAULT_RETENTION_CHECK_INTERVAL_MS;
     this.runOnStartup = input.options?.runOnStartup ?? true;
     this.logger = input.logger;
   }
 
   start(): void {
+    if (!this.enabled) {
+      return;
+    }
     if (this.runOnStartup) {
       this.run();
     }
@@ -197,6 +204,7 @@ export function createConversationRetentionJob(
 ): ConversationRetentionJob {
   return new ConversationRetentionJob({
     workflow: new ConversationRetentionWorkflow(options, input.jobOptions),
+    enabled: options.config.retention.expireConversations,
     options: input.jobOptions,
     logger: input.logger
   });

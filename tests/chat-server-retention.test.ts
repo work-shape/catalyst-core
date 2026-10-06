@@ -3,6 +3,7 @@ import {
   ConversationRetentionJob,
   ConversationRetentionWorkflow,
   ExecutionWorkspaceCleanupWorkflow,
+  createConversationRetentionJob,
   type ChatAttachmentService,
   type ChatServerOptions
 } from "@vivd-catalyst/chat-server";
@@ -158,6 +159,55 @@ describe("conversation retention expiration", () => {
       });
     } finally {
       await job.stop();
+    }
+  });
+
+  it("keeps overdue conversations while expiry is turned off", async () => {
+    const clientInstanceId = asClientInstanceId("retention-off-test");
+    const store = new InMemoryPlatformStore();
+    const jobInput = {
+      logger: {
+        error(error: unknown) {
+          throw error instanceof Error ? error : new Error("Retention job failed");
+        }
+      },
+      jobOptions: { checkIntervalMs: 10, runOnStartup: true }
+    };
+    const conversation = await createExpiredConversation(store, clientInstanceId, "kept");
+
+    const disabledJob = createConversationRetentionJob(
+      createRetentionOptions({ clientInstanceId, store, expireConversations: false }),
+      jobInput
+    );
+    try {
+      disabledJob.start();
+      // Long enough for a startup run and several interval ticks.
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      await expectConversationStatus(store, clientInstanceId, conversation.id, "active");
+      await expect(
+        store.listMessages({ clientInstanceId, conversationId: conversation.id })
+      ).resolves.toHaveLength(1);
+    } finally {
+      await disabledJob.stop();
+    }
+
+    // The stamped date still stands: turning expiry back on expires it.
+    const enabledJob = createConversationRetentionJob(
+      createRetentionOptions({ clientInstanceId, store }),
+      jobInput
+    );
+    try {
+      enabledJob.start();
+      await waitFor(async () => {
+        await expectConversationStatus(
+          store,
+          clientInstanceId,
+          conversation.id,
+          "retention_expired"
+        );
+      });
+    } finally {
+      await enabledJob.stop();
     }
   });
 
@@ -348,6 +398,7 @@ function createRetentionOptions(input: {
   store: InMemoryPlatformStore;
   attachments?: ChatAttachmentService;
   workspaceObjects?: { deleteObject(key: string): Promise<void> };
+  expireConversations?: boolean;
 }): ChatServerOptions {
   const auditRecorder = new StoreBackedAuditRecorder({
     clientInstanceId: input.clientInstanceId,
@@ -368,6 +419,7 @@ function createRetentionOptions(input: {
       },
       retention: {
         conversationDays: 30,
+        expireConversations: input.expireConversations,
         auditDays: 365,
         allowUserDelete: true
       },

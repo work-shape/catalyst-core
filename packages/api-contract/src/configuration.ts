@@ -82,6 +82,7 @@ export const safeConfigSchema = z.object({
   localization: localizationSchema,
   retention: z.object({
     conversationDays: z.number(),
+    expireConversations: z.boolean(),
     auditDays: z.number(),
     allowUserDelete: z.boolean()
   }),
