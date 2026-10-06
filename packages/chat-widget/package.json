@@ -1,8 +1,20 @@
 {
   "name": "@vivd-catalyst/chat-widget",
   "version": "0.4.0",
-  "private": true,
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
+    "directory": "packages/chat-widget"
+  },
   "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "dist"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -10,6 +22,16 @@
       "types": "./dist/index.d.ts",
       "development": "./src/index.tsx",
       "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "restricted",
+    "registry": "https://registry.npmjs.org/",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
     }
   },
   "scripts": {

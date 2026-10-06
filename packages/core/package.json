@@ -1,8 +1,20 @@
 {
   "name": "@vivd-catalyst/core",
   "version": "0.4.0",
-  "private": true,
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
+    "directory": "packages/core"
+  },
   "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "dist"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -15,6 +27,20 @@
       "types": "./dist/testing.d.ts",
       "development": "./src/testing.ts",
       "import": "./dist/testing.js"
+    }
+  },
+  "publishConfig": {
+    "access": "restricted",
+    "registry": "https://registry.npmjs.org/",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./testing": {
+        "types": "./dist/testing.d.ts",
+        "import": "./dist/testing.js"
+      }
     }
   },
   "scripts": {
