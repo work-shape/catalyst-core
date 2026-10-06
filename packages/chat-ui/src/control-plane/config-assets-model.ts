@@ -20,6 +20,12 @@ export interface AgentFormState {
   reasoningEffort: string;
   fastMode: boolean;
   userSelectableModelBindingIds: string[];
+  /**
+   * Efforts of the rows that are not the default, by binding id ("" for the instance default).
+   * It also remembers rows that are not offered, so re-ticking one restores its effort; only
+   * the offered ones are saved.
+   */
+  modelReasoningEfforts: Record<string, string>;
   maxSteps: string;
   toolNames: string[];
   skillNames: string[];
@@ -145,6 +151,7 @@ export function agentConfigToForm(config: Record<string, unknown>): AgentFormSta
     reasoningEffort: typeof config.reasoningEffort === "string" ? config.reasoningEffort : "",
     fastMode: config.fastMode === true,
     userSelectableModelBindingIds: stringArray(config.userSelectableModelBindingIds),
+    modelReasoningEfforts: stringRecord(config.modelReasoningEfforts),
     maxSteps: typeof config.maxSteps === "number" ? String(config.maxSteps) : "",
     toolNames: stringArray(config.toolNames),
     skillNames: stringArray(config.skillNames),
@@ -194,6 +201,12 @@ export function agentFormToConfig(form: AgentFormState): Record<string, unknown>
   const userSelectableModelBindingIds = form.userSelectableModelBindingIds.filter(
     (bindingId) => bindingId !== form.modelBindingId
   );
+  const modelReasoningEfforts = Object.fromEntries(
+    userSelectableModelBindingIds.flatMap((bindingId) => {
+      const effort = form.modelReasoningEfforts[bindingId];
+      return effort ? [[bindingId, effort]] : [];
+    })
+  );
   return {
     name: form.name.trim(),
     displayName: displayName ?? "",
@@ -209,6 +222,7 @@ export function agentFormToConfig(form: AgentFormState): Record<string, unknown>
     ...(form.reasoningEffort ? { reasoningEffort: form.reasoningEffort } : {}),
     ...(form.fastMode ? { fastMode: true } : {}),
     ...(userSelectableModelBindingIds.length ? { userSelectableModelBindingIds } : {}),
+    ...(Object.keys(modelReasoningEfforts).length ? { modelReasoningEfforts } : {}),
     ...(maxSteps === undefined ? {} : { maxSteps }),
     toolNames: form.toolNames,
     skillNames: form.skillNames,
@@ -228,6 +242,8 @@ export interface AgentModelRow {
   isDefault: boolean;
   /** Offered in the chat: the default always is, the others when listed. */
   userSelectable: boolean;
+  /** "" uses the binding's default. Applies only while the row is the default or offered. */
+  reasoningEffort: string;
 }
 
 /**
@@ -235,7 +251,10 @@ export interface AgentModelRow {
  * gets a row, so the configured model stays visible.
  */
 export function agentModelRows(
-  form: Pick<AgentFormState, "modelBindingId" | "userSelectableModelBindingIds">,
+  form: Pick<
+    AgentFormState,
+    "modelBindingId" | "userSelectableModelBindingIds" | "reasoningEffort" | "modelReasoningEfforts"
+  >,
   modelBindings: ReadonlyArray<{ id: string; model: string }>
 ): AgentModelRow[] {
   const bindings =
@@ -248,7 +267,8 @@ export function agentModelRows(
       bindingId: binding.id,
       model: binding.model,
       isDefault,
-      userSelectable: isDefault || form.userSelectableModelBindingIds.includes(binding.id)
+      userSelectable: isDefault || form.userSelectableModelBindingIds.includes(binding.id),
+      reasoningEffort: agentModelReasoningEffort(form, binding.id)
     };
   });
 }
@@ -256,21 +276,51 @@ export function agentModelRows(
 /**
  * Makes a binding the agent's default ("" for the instance default). The other models keep
  * their user-selectable state: the list is left alone, and the previous default is offered
- * again only if it was listed. Selecting a binding without fast-mode support clears the flag,
- * as the server does.
+ * again only if it was listed. Efforts stay with their model: the new default's effort becomes
+ * the agent's `reasoningEffort` and the previous default's is kept for its row. Selecting a
+ * binding without fast-mode support clears the flag, as the server does.
  */
 export function selectAgentModelBinding(
   form: AgentFormState,
   modelBindingId: string,
   references: { fastModeModelBindingIds: readonly string[]; modelBindingIds: readonly string[] }
 ): AgentFormState {
+  if (modelBindingId === form.modelBindingId) {
+    return form;
+  }
+  const { [modelBindingId]: reasoningEffort = "", ...otherEfforts } = form.modelReasoningEfforts;
   return {
     ...form,
     modelBindingId,
     modelProviderId: "",
+    reasoningEffort,
+    modelReasoningEfforts: { ...otherEfforts, [form.modelBindingId]: form.reasoningEffort },
     fastMode: form.fastMode && references.fastModeModelBindingIds.includes(modelBindingId),
     userSelectableModelBindingIds: knownModelBindingIds(form, references.modelBindingIds)
   };
+}
+
+/** The effort of one row: the agent's own for the default, otherwise the one kept per model. */
+export function agentModelReasoningEffort(
+  form: Pick<AgentFormState, "modelBindingId" | "reasoningEffort" | "modelReasoningEfforts">,
+  modelBindingId: string
+): string {
+  return modelBindingId === form.modelBindingId
+    ? form.reasoningEffort
+    : (form.modelReasoningEfforts[modelBindingId] ?? "");
+}
+
+export function setAgentModelReasoningEffort(
+  form: AgentFormState,
+  modelBindingId: string,
+  reasoningEffort: string
+): AgentFormState {
+  return modelBindingId === form.modelBindingId
+    ? { ...form, reasoningEffort }
+    : {
+        ...form,
+        modelReasoningEfforts: { ...form.modelReasoningEfforts, [modelBindingId]: reasoningEffort }
+      };
 }
 
 export function setAgentModelUserSelectable(
@@ -307,6 +357,7 @@ export function emptyAgentForm(): AgentFormState {
     reasoningEffort: "",
     fastMode: false,
     userSelectableModelBindingIds: [],
+    modelReasoningEfforts: {},
     maxSteps: "",
     toolNames: [],
     skillNames: [],
@@ -365,6 +416,16 @@ export function configAssetMutationErrorMessage(
 
 function hasLocalizedContent(pair: LocalizedPair): boolean {
   return Boolean(pair.en.trim() || pair.de.trim());
+}
+
+function stringRecord(value: unknown): Record<string, string> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? Object.fromEntries(
+        Object.entries(value).filter(
+          (entry): entry is [string, string] => typeof entry[1] === "string"
+        )
+      )
+    : {};
 }
 
 function stringArray(value: unknown): string[] {

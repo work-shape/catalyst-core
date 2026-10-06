@@ -165,6 +165,8 @@ describe("config asset editors", () => {
             instructions: "Help the user.",
             ...(modelBindingId ? { modelBindingId } : {}),
             userSelectableModelBindingIds,
+            reasoningEffort: "high",
+            modelReasoningEfforts: { terra: "low" },
             toolNames: [],
             skillNames: [],
             initialPrompts: []
@@ -180,7 +182,7 @@ describe("config asset editors", () => {
               { id: "luna", model: "gpt-5.6-luna" }
             ],
             fastModeModelBindingIds: [],
-            reasoningEfforts: [],
+            reasoningEfforts: ["low", "high"],
             enabledToolNames: []
           },
           editableAgentFields: [],
@@ -193,16 +195,23 @@ describe("config asset editors", () => {
       );
     const list = (markup: string) =>
       /<fieldset[^>]*><legend[^>]*>Models<\/legend>.*?<\/fieldset>/u.exec(markup)?.[0] ?? "";
-    // Per row: the model, then "default" and "offered" for checked inputs, "locked" for disabled.
+    // Per control: the model, the option, its value or checked state, and whether it is disabled.
     const rows = (markup: string) =>
-      [...list(markup).matchAll(/<input[^>]*aria-label="([^"]*): ([^"]*)"[^>]*>/gu)].map(
-        ([input, model, option]) =>
-          [
-            model,
-            option,
-            input.includes('checked=""') ? "checked" : "",
-            input.includes('disabled=""') ? "disabled" : ""
-          ].join("|")
+      [
+        ...list(markup).matchAll(
+          /<input[^>]*aria-label="([^"]*): ([^"]*)"[^>]*>|<select[^>]*aria-label="([^"]*): ([^"]*)"[^>]*>(.*?)<\/select>/gu
+        )
+      ].map(([control, model, option, effortModel, effortOption, options]) =>
+        [
+          model ?? effortModel,
+          option ?? effortOption,
+          options === undefined
+            ? control.includes('checked=""')
+              ? "checked"
+              : ""
+            : (/<option value="([^"]*)" selected="">/u.exec(options)?.[1] ?? ""),
+          /^<[^>]*disabled=""/u.test(control) ? "disabled" : ""
+        ].join("|")
       );
 
     const editable = render(true, "sol", ["terra", "retired"]);
@@ -211,19 +220,25 @@ describe("config asset editors", () => {
       "GPT-5.6 Sol|Default|checked|",
       // The default model is always available to users.
       "GPT-5.6 Sol|Selectable by users|checked|disabled",
+      "GPT-5.6 Sol|Reasoning effort|high|",
       "GPT-5.6 Terra|Default||",
       "GPT-5.6 Terra|Selectable by users|checked|",
+      "GPT-5.6 Terra|Reasoning effort|low|",
+      // A model that is not in use has no effort control.
       "GPT-5.6 Luna|Default||",
       "GPT-5.6 Luna|Selectable by users||"
     ]);
+    // The effort lives in the list only.
+    expect(editable.match(/<select/gu)).toHaveLength(2);
     expect(list(editable)).not.toContain("retired");
     expect(list(editable)).toContain(
       "Users only see a model selector in the chat when at least one additional model is ticked."
     );
 
     // On the instance default every binding can still be offered.
-    expect(rows(render(true, "", ["luna"])).slice(0, 3)).toEqual([
+    expect(rows(render(true, "", ["luna"])).slice(0, 4)).toEqual([
       "Instance default|Default|checked|",
+      "Instance default|Reasoning effort|high|",
       "GPT-5.6 Sol|Default||",
       "GPT-5.6 Sol|Selectable by users||"
     ]);
@@ -232,10 +247,15 @@ describe("config asset editors", () => {
     expect(rows(render(false, "sol", ["terra"]))).toEqual([
       "GPT-5.6 Sol|Default|checked|disabled",
       "GPT-5.6 Sol|Selectable by users|checked|disabled",
+      "GPT-5.6 Sol|Reasoning effort|high|disabled",
       "GPT-5.6 Terra|Default||disabled",
-      "GPT-5.6 Terra|Selectable by users|checked|disabled"
+      "GPT-5.6 Terra|Selectable by users|checked|disabled",
+      "GPT-5.6 Terra|Reasoning effort|low|disabled"
     ]);
-    expect(render(false, "", [])).not.toContain('<legend class="sr-only">Models</legend>');
+    expect(rows(render(false, "", []))).toEqual([
+      "Instance default|Default|checked|disabled",
+      "Instance default|Reasoning effort|high|disabled"
+    ]);
   });
 
   it("keeps a read-only skill package navigable without mutation controls", () => {

@@ -11,6 +11,7 @@ import {
   localizedToPair,
   pairToLocalized,
   selectAgentModelBinding,
+  setAgentModelReasoningEffort,
   setAgentModelUserSelectable,
   skillConfigToForm,
   skillFormToConfig
@@ -145,6 +146,88 @@ describe("config assets form model", () => {
       expect(state(selectAgentModelBinding(promoted, "sol", references))).toEqual(
         state(formFor("sol", ["terra"]))
       );
+    });
+
+    it("keeps each model's reasoning effort with its row when the default changes", () => {
+      const form = agentConfigToForm({
+        name: "assistant",
+        displayName: "Assistant",
+        instructions: "Help the user.",
+        modelBindingId: "sol",
+        reasoningEffort: "high",
+        userSelectableModelBindingIds: ["terra"],
+        modelReasoningEfforts: { terra: "low" }
+      });
+      const efforts = (state: typeof form) =>
+        Object.fromEntries(
+          agentModelRows(state, modelBindings).map((row) => [row.bindingId, row.reasoningEffort])
+        );
+      expect(efforts(form)).toEqual({ sol: "high", terra: "low", luna: "" });
+
+      // Terra becomes the default: its effort is the agent's, Sol's leaves with Sol.
+      const toTerra = selectAgentModelBinding(form, "terra", references);
+      expect(efforts(toTerra)).toEqual(efforts(form));
+      expect(agentFormToConfig(toTerra)).toMatchObject({
+        modelBindingId: "terra",
+        reasoningEffort: "low"
+      });
+      // Sol was only offered implicitly, so nothing of it is saved until it is ticked.
+      expect(agentFormToConfig(toTerra)).not.toHaveProperty("modelReasoningEfforts");
+      expect(
+        agentFormToConfig(
+          setAgentModelUserSelectable(toTerra, "sol", true, references.modelBindingIds)
+        )
+      ).toMatchObject({
+        userSelectableModelBindingIds: ["sol"],
+        modelReasoningEfforts: { sol: "high" }
+      });
+      // Moving back restores the loaded config exactly.
+      expect(agentFormToConfig(selectAgentModelBinding(toTerra, "sol", references))).toEqual(
+        agentFormToConfig(form)
+      );
+      // A default without an effort of its own leaves `reasoningEffort` unset.
+      expect(
+        agentFormToConfig(selectAgentModelBinding(form, "luna", references))
+      ).not.toHaveProperty("reasoningEffort");
+      // The instance default has an effort like any other default.
+      const toInstance = selectAgentModelBinding(form, "", references);
+      expect(
+        agentFormToConfig(setAgentModelReasoningEffort(toInstance, "", "medium"))
+      ).toMatchObject({ reasoningEffort: "medium", modelReasoningEfforts: { terra: "low" } });
+    });
+
+    it("sets an effort per row and saves it only for offered models", () => {
+      const form = formFor("sol", ["terra"]);
+      const edited = setAgentModelReasoningEffort(
+        setAgentModelReasoningEffort(
+          setAgentModelReasoningEffort(form, "sol", "high"),
+          "terra",
+          "low"
+        ),
+        "luna",
+        "xhigh"
+      );
+      expect(agentFormToConfig(edited)).toMatchObject({
+        reasoningEffort: "high",
+        modelReasoningEfforts: { terra: "low" }
+      });
+      // Unticking drops the effort on save; re-ticking within the edit restores it.
+      const unticked = setAgentModelUserSelectable(
+        edited,
+        "terra",
+        false,
+        references.modelBindingIds
+      );
+      expect(agentFormToConfig(unticked)).not.toHaveProperty("modelReasoningEfforts");
+      expect(
+        agentFormToConfig(
+          setAgentModelUserSelectable(unticked, "terra", true, references.modelBindingIds)
+        )
+      ).toMatchObject({ modelReasoningEfforts: { terra: "low" } });
+      // "Model default" removes the entry.
+      expect(
+        agentFormToConfig(setAgentModelReasoningEffort(edited, "terra", ""))
+      ).not.toHaveProperty("modelReasoningEfforts");
     });
 
     it("ticks and unticks a model and drops ids of bindings that no longer exist", () => {

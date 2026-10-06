@@ -231,7 +231,7 @@ const translations = {
     configModelUserSelectable: "Selectable by users",
     configModels: "Models",
     configModelsHint:
-      "The default model runs the agent and is always available to users. Users only see a model selector in the chat when at least one additional model is ticked.",
+      'The default model runs the agent and is always available to users. Users only see a model selector in the chat when at least one additional model is ticked. Reasoning effort is set per model; "Model default" keeps the binding\'s own effort.',
     configName: "Name",
     configNewAgent: "New agent",
     configNewSkill: "New skill",
@@ -247,7 +247,6 @@ const translations = {
     configFastModeHint:
       "Runs use the provider's priority tier. Fast runs are billed at a higher rate.",
     configReasoningEffort: "Reasoning effort",
-    configReasoningEffortHint: "Overrides the selected binding's default effort.",
     configReloadLatest: "Reload latest",
     configRemove: "Remove",
     configRestore: "Restore",
@@ -902,7 +901,7 @@ const translations = {
     configModelUserSelectable: "Für Nutzer wählbar",
     configModels: "Modelle",
     configModelsHint:
-      "Das Standardmodell führt den Agenten aus und steht Nutzern immer zur Verfügung. Nutzer sehen im Chat nur dann eine Modellauswahl, wenn mindestens ein weiteres Modell angehakt ist.",
+      "Das Standardmodell führt den Agenten aus und steht Nutzern immer zur Verfügung. Nutzer sehen im Chat nur dann eine Modellauswahl, wenn mindestens ein weiteres Modell angehakt ist. Der Denkaufwand gilt je Modell; „Modellstandard“ übernimmt den Denkaufwand der Modellbindung.",
     configName: "Name",
     configNewAgent: "Neuer Agent",
     configNewSkill: "Neue Fähigkeit",
@@ -918,8 +917,6 @@ const translations = {
     configFastModeHint:
       "Läufe nutzen die Prioritätsstufe des Anbieters. Schnelle Läufe werden zu einem höheren Preis abgerechnet.",
     configReasoningEffort: "Denkaufwand",
-    configReasoningEffortHint:
-      "Überschreibt den Standard-Denkaufwand der ausgewählten Modellbindung.",
     configReloadLatest: "Neueste Version laden",
     configRemove: "Entfernen",
     configRestore: "Wiederherstellen",

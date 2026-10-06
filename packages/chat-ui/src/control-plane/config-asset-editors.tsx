@@ -18,7 +18,9 @@ import {
   agentAvailabilityFormsEqual,
   agentAvailabilityToForm,
   agentModelRows,
+  agentModelReasoningEffort,
   selectAgentModelBinding,
+  setAgentModelReasoningEffort,
   setAgentModelUserSelectable,
   type AgentAvailabilityForm,
   type AgentFormState,
@@ -77,16 +79,14 @@ export function AgentEditor({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const canEdit = (field: string) => editableAgentFields.includes(field);
   const canEditModel = canManageAgentModels;
-  const canEditReasoningEffort = canManageAgentModels;
   const canEditMaxSteps = canEdit("maxSteps");
   const modelBindings =
     references?.modelBindings ?? references?.modelBindingIds.map((id) => ({ id, model: id })) ?? [];
   const modelBindingIds = modelBindings.map((binding) => binding.id);
   const showModels =
     canEditModel ||
-    Boolean(form.modelBindingId || form.modelProviderId) ||
+    Boolean(form.modelBindingId || form.modelProviderId || form.reasoningEffort) ||
     form.userSelectableModelBindingIds.some((id) => modelBindingIds.includes(id));
-  const showReasoningEffort = canEditReasoningEffort || Boolean(form.reasoningEffort);
   const showMaxSteps = canEditMaxSteps || Boolean(form.maxSteps);
   const fastModeModelBindingIds = references?.fastModeModelBindingIds ?? [];
   const showFastMode = form.fastMode || fastModeModelBindingIds.includes(form.modelBindingId);
@@ -184,7 +184,7 @@ export function AgentEditor({
       <EditorSection
         title={t("configBehavior")}
         description={
-          canEditModel || canEditReasoningEffort || canEditMaxSteps
+          canEditModel || canEditMaxSteps
             ? t("configBehaviorDescriptionWithControls")
             : t("configBehaviorDescription")
         }
@@ -203,6 +203,7 @@ export function AgentEditor({
           <AgentModelList
             form={form}
             modelBindings={modelBindings}
+            reasoningEfforts={references?.reasoningEfforts ?? []}
             editable={canEditModel}
             onSelectDefault={(modelBindingId) =>
               setForm((value) =>
@@ -217,32 +218,15 @@ export function AgentEditor({
                 setAgentModelUserSelectable(value, modelBindingId, userSelectable, modelBindingIds)
               )
             }
+            onSetReasoningEffort={(modelBindingId, reasoningEffort) =>
+              setForm((value) =>
+                setAgentModelReasoningEffort(value, modelBindingId, reasoningEffort)
+              )
+            }
           />
         ) : null}
-        {showReasoningEffort || showFastMode || showMaxSteps ? (
-          <div
-            className={cn(
-              "grid gap-5",
-              [showReasoningEffort, showFastMode, showMaxSteps].filter(Boolean).length > 1 &&
-                "sm:grid-cols-2"
-            )}
-          >
-            {showReasoningEffort ? (
-              <Field label={t("configReasoningEffort")} hint={t("configReasoningEffortHint")}>
-                <Select
-                  value={form.reasoningEffort}
-                  disabled={!canEditReasoningEffort}
-                  onChange={(event) => update({ reasoningEffort: event.target.value })}
-                >
-                  <option value="">{t("configModelDefault")}</option>
-                  {(references?.reasoningEfforts ?? []).map((effort) => (
-                    <option key={effort} value={effort}>
-                      {effort}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            ) : null}
+        {showFastMode || showMaxSteps ? (
+          <div className={cn("grid gap-5", showFastMode && showMaxSteps && "sm:grid-cols-2")}>
             {showFastMode ? (
               <Field label={t("configFastMode")} hint={t("configFastModeHint")}>
                 <Switch
@@ -467,15 +451,19 @@ export function AgentAvailabilityEditor({
 function AgentModelList({
   form,
   modelBindings,
+  reasoningEfforts,
   editable,
   onSelectDefault,
-  onSetUserSelectable
+  onSetUserSelectable,
+  onSetReasoningEffort
 }: {
   form: AgentFormState;
   modelBindings: Array<{ id: string; model: string }>;
+  reasoningEfforts: string[];
   editable: boolean;
   onSelectDefault(modelBindingId: string): void;
   onSetUserSelectable(modelBindingId: string, userSelectable: boolean): void;
+  onSetReasoningEffort(modelBindingId: string, reasoningEffort: string): void;
 }) {
   const { t } = useTranslation();
   const defaultGroupName = useId();
@@ -489,7 +477,7 @@ function AgentModelList({
     ? `${t("configInstanceDefault")} (${form.modelProviderId})`
     : t("configInstanceDefault");
   const rowClassName =
-    "grid min-h-10 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-5 gap-y-1 bg-background px-3 py-2 text-sm sm:grid-cols-[minmax(0,1fr)_auto_auto]";
+    "grid min-h-10 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-5 gap-y-2 bg-background px-3 py-2 text-sm md:grid-cols-[minmax(0,1fr)_auto_auto_13rem]";
   const optionClassName = "flex items-center gap-2 text-xs text-muted-foreground";
   const defaultOption = (bindingId: string, label: string, checked: boolean) => (
     <label className={optionClassName}>
@@ -506,6 +494,30 @@ function AgentModelList({
     </label>
   );
 
+  // Only a model that is in use has an effort: the default and the ones offered to users.
+  const effortOption = (bindingId: string, label: string, inUse: boolean) =>
+    inUse ? (
+      <label className={cn(optionClassName, "col-span-2 md:col-span-1")}>
+        <span className="shrink-0">{t("configReasoningEffort")}</span>
+        <Select
+          className="h-8 px-2 text-xs"
+          aria-label={`${label}: ${t("configReasoningEffort")}`}
+          value={agentModelReasoningEffort(form, bindingId)}
+          disabled={!editable}
+          onChange={(event) => onSetReasoningEffort(bindingId, event.target.value)}
+        >
+          <option value="">{t("configModelDefault")}</option>
+          {reasoningEfforts.map((effort) => (
+            <option key={effort} value={effort}>
+              {effort}
+            </option>
+          ))}
+        </Select>
+      </label>
+    ) : (
+      <span aria-hidden="true" className="hidden md:block" />
+    );
+
   return (
     <fieldset className="grid min-w-0 gap-2">
       <legend className="sr-only">{t("configModels")}</legend>
@@ -516,16 +528,17 @@ function AgentModelList({
         <div className="grid gap-px bg-border">
           {editable || !form.modelBindingId ? (
             <div className={cn(rowClassName, !form.modelBindingId && "bg-muted/30")}>
-              <span className="col-span-2 min-w-0 break-words sm:col-span-1">
+              <span className="col-span-2 min-w-0 break-words md:col-span-1">
                 {instanceDefaultLabel}
               </span>
               {defaultOption("", instanceDefaultLabel, !form.modelBindingId)}
               <span aria-hidden="true" />
+              {effortOption("", instanceDefaultLabel, !form.modelBindingId)}
             </div>
           ) : null}
           {rows.map((row) => (
             <div key={row.bindingId} className={cn(rowClassName, row.isDefault && "bg-muted/30")}>
-              <span className="col-span-2 min-w-0 break-words sm:col-span-1">{row.label}</span>
+              <span className="col-span-2 min-w-0 break-words md:col-span-1">{row.label}</span>
               {defaultOption(row.bindingId, row.label, row.isDefault)}
               <label className={optionClassName}>
                 <input
@@ -538,6 +551,7 @@ function AgentModelList({
                 />
                 {t("configModelUserSelectable")}
               </label>
+              {effortOption(row.bindingId, row.label, row.userSelectable)}
             </div>
           ))}
         </div>
