@@ -839,11 +839,18 @@ export const clientInstanceConfigSchema = z.object({
   retention: z
     .object({
       conversationDays: z.number().int().positive().max(3650).default(30),
+      /**
+       * False keeps every conversation: the retention job never runs. New
+       * conversations are still stamped from `conversationDays`, so turning
+       * expiry back on expires everything already past its date.
+       */
+      expireConversations: z.boolean().default(true),
       auditDays: z.number().int().positive().max(3650).default(365),
       allowUserDelete: z.boolean().default(true)
     })
     .default({
       conversationDays: 30,
+      expireConversations: true,
       auditDays: 365,
       allowUserDelete: true
     }),

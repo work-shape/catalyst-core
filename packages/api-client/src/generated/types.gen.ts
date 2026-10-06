@@ -594,6 +594,7 @@ export type GetConfigResponses = {
         };
         retention: {
             conversationDays: number;
+            expireConversations: boolean;
             auditDays: number;
             allowUserDelete: boolean;
         };
