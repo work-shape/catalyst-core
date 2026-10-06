@@ -327,6 +327,29 @@
   outline-offset: 2px;
 }
 
+/* Code and quotes in a user bubble. Inline code and quotes take the bubble's
+   own text color (code on a tint of it), so they are readable on any primary
+   color in either theme. A code block is a surface of its own and must not
+   inherit the bubble's text color. */
+.chat-user-message-bubble .chat-markdown [data-streamdown="inline-code"] {
+  background: color-mix(in srgb, currentColor 16%, transparent);
+  color: inherit;
+}
+
+.chat-user-message-bubble .chat-markdown [data-streamdown="blockquote"] {
+  border-color: color-mix(in srgb, currentColor 40%, transparent);
+  color: inherit;
+}
+
+.chat-user-message-bubble .chat-markdown [data-streamdown="code-block"] {
+  color: var(--foreground);
+}
+
+.chat-user-message-bubble .chat-markdown [data-streamdown="code-block-body"] {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted-foreground) 45%, transparent) transparent;
+}
+
 .chat-markdown [data-streamdown="code-block-body"] pre code > span {
   display: block;
   min-height: 1.5em;
