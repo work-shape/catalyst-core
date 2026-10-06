@@ -97,7 +97,7 @@ administration:
 
 Fields outside `editableAgentFields` are owned by the CLI workflow: the UI shows them read-only and the server rejects interactive writes that change them. `catalyst config push` requires the separate `config_assets.release` permission and may change everything.
 
-Four agent fields are not governed by `editableAgentFields`: `modelBindingId`, `reasoningEffort`, `fastMode`, and `userSelectableModelBindingIds`. They are editable exactly when the caller holds `agent_models.manage`, and read-only otherwise. Listing `modelBindingId` or `reasoningEffort` in `editableAgentFields` is still accepted but has no effect.
+Five agent fields are not governed by `editableAgentFields`: `modelBindingId`, `reasoningEffort`, `fastMode`, `userSelectableModelBindingIds`, and `modelReasoningEfforts`. They are editable exactly when the caller holds `agent_models.manage`, and read-only otherwise. Listing `modelBindingId` or `reasoningEffort` in `editableAgentFields` is still accepted but has no effect.
 
 `fastMode` (boolean, default `false`) runs the agent on the provider's priority tier, billed at the rate card's fast rates. It is valid only when the agent's model binding declares `supportsFastMode` in release config. The CLI writes `fastMode: true` to the agent YAML and omits the key when it is off.
 
@@ -107,8 +107,11 @@ Four agent fields are not governed by `editableAgentFields`: `modelBindingId`, `
 
 ```yaml
 modelBindingId: primary
+reasoningEffort: high
 userSelectableModelBindingIds:
   - fast
+modelReasoningEfforts:
+  fast: low
 ```
 
 - Every id must be a binding agents may use (`agentSelectable` not `false` in release config); anything else is a validation error when the list is saved or pushed. The binding-level `userSelectable` key has no effect. The agent's own `modelBindingId` is always available and need not be listed.
@@ -116,7 +119,9 @@ userSelectableModelBindingIds:
 - The composer shows a model selector with the agent's own model first, followed by the list. With an empty list there is no selector. Switching the agent updates the options and falls back to the new agent's own model when it does not offer the current pick.
 - The server rejects a run that requests a model the resolved agent does not offer.
 - An id whose binding is later removed or set to `agentSelectable: false` is ignored instead of failing the agent. It stays in the stored config until the list is next changed.
-- The CLI omits the key from the agent YAML when the list is empty.
+- Reasoning effort is set per model. `reasoningEffort` is the effort of the agent's own model. `modelReasoningEfforts` maps a listed binding id to the effort for runs where a user picked that model; without an entry the binding's own default applies. The agent's `reasoningEffort` is never applied to a model the user picked instead. Every key must be in `userSelectableModelBindingIds`; anything else is a validation error.
+- In the admin panel each model in use (the default and the ticked ones) has its own reasoning-effort select in the list. When the default changes, each effort stays with its model.
+- The CLI omits both keys from the agent YAML when they are empty.
 
 Set `enabled: true`, leave `editableAgentFields` empty, and set all interactive mutation flags (including `allowSkillEditing`) to `false` for a readable, release-controlled Config tab. Agents, complete skill packages, and revision history remain inspectable while create, save, delete, default-change, and restore controls are hidden. Enabling skill editing later exposes the same atomic package through a root/reference editor; no storage migration is required.
 

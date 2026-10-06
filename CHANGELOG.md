@@ -11,6 +11,10 @@ contain breaking changes; a patch version does not.
   binding-level `userSelectable` key in release config is still accepted but no longer has an
   effect; `agent_models.manage` governs the choice. The agent editor shows one model list with
   a default and a "Selectable by users" tick per model.
+- **Reasoning effort per model:** `modelReasoningEfforts` sets the effort for each model an
+  agent offers to users, edited per row in the model list. `reasoningEffort` stays the effort
+  of the agent's own model and is no longer applied to a model a user picked instead, which
+  now runs with its own entry or the binding's default.
 - **API:** the safe config view no longer carries the top-level `selectableModels`; use
   `agents[].selectableModels`. The config assets overview no longer carries
   `references.userSelectableModelBindings`.
