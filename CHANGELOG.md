@@ -3,7 +3,7 @@
 All platform packages are released in lockstep under one version. Before 1.0 a minor version may
 contain breaking changes; a patch version does not.
 
-## Unreleased
+## 0.5.1 — 2026-10-06
 
 ### Added
 
@@ -17,6 +17,9 @@ contain breaking changes; a patch version does not.
 
 ### Fixed
 
+- **Admin pages:** a table taller than the window, such as the user list, scrolls again instead
+  of being cut off.
+- **show_view:** the layout guidance for views closes two padding loopholes.
 - **Conversation rail:** the collapse handle on the rail's edge no longer covers the list's
   scrollbar. It appears while the pointer is on the rail's right border or the handle has
   keyboard focus.
