@@ -78,6 +78,9 @@ FROM base AS deps
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
+# The cache mount only speeds up downloads. "pnpm fetch" also writes every package into
+# node_modules/.pnpm, which is part of this layer, and the offline install below links from
+# there. A restored layer on a builder with an empty mount therefore still installs.
 RUN --mount=type=cache,id=vivd-pnpm-store,target=/root/.local/share/pnpm/store \
   pnpm fetch --frozen-lockfile
 
