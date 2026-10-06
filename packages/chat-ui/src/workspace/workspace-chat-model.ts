@@ -132,6 +132,25 @@ export function workspaceScopedConfigFor(input: {
 }
 
 /**
+ * Whether the conversation on screen holds nothing the user would lose: it is the selected one,
+ * its thread is loaded and empty, and no run is underway.
+ */
+export function isAbandonedDraftConversation(input: {
+  conversationId: string;
+  selectedConversationId: string | undefined;
+  messagesLoaded: boolean;
+  messageCount: number;
+  running: boolean;
+}): boolean {
+  return (
+    input.conversationId === input.selectedConversationId &&
+    input.messagesLoaded &&
+    input.messageCount === 0 &&
+    !input.running
+  );
+}
+
+/**
  * The agent a new run would use: the user's pick while this workspace offers
  * it, otherwise the workspace default. Derived rather than stored, so switching
  * to a workspace without the picked agent never renders an unavailable one.
@@ -510,6 +529,29 @@ export function useWorkspaceChatModel({
     return conversation.id;
   }
 
+  // A conversation that only existed to hold draft attachments is an unsent draft. Once the
+  // last one is removed the composer is back on the start page; the server stops listing the
+  // empty conversation and its retention job removes it.
+  function returnToStartPageAfterDraftEmptied(conversationId: string) {
+    if (
+      !isAbandonedDraftConversation({
+        conversationId,
+        selectedConversationId,
+        messagesLoaded,
+        messageCount: messages.length,
+        running: selectedConversationRunning
+      })
+    ) {
+      return;
+    }
+    draftController.moveDraft({
+      authScope: WORKSPACE_AUTH_SCOPE,
+      fromConversationId: conversationId,
+      toConversationId: undefined
+    });
+    goToActiveCollaborationWorkspaceChat({ replace: true });
+  }
+
   const draftAttachmentController = useDraftAttachmentController({
     enabled: attachmentsEnabled,
     apiBaseUrl,
@@ -518,6 +560,7 @@ export function useWorkspaceChatModel({
     selectedConversationId,
     isAuthenticated,
     ensureConversationForFiles,
+    onDraftAttachmentsEmptied: returnToStartPageAfterDraftEmptied,
     onError: setNotice
   });
   const fileDropzone = useChatFileDropzone({

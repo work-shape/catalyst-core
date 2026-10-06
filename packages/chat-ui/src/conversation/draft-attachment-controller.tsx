@@ -12,6 +12,8 @@ export interface DraftAttachmentControllerInput {
   selectedConversationId: string | undefined;
   isAuthenticated: boolean;
   ensureConversationForFiles(files: File[]): Promise<string>;
+  /** The last draft attachment of the conversation was removed and no upload is in flight. */
+  onDraftAttachmentsEmptied?(conversationId: string): void;
   onError(message: string): void;
 }
 
@@ -36,6 +38,9 @@ export function useDraftAttachmentController(
   const [localUploadingAttachments, setLocalUploadingAttachments] = useState<
     LocalUploadingConversationAttachment[]
   >([]);
+  // Removal settles after later renders, so it reads the uploads and callback of that moment.
+  const latest = useRef({ input, localUploadingAttachments });
+  latest.current = { input, localUploadingAttachments };
   const draftAttachmentsQuery = useQuery({
     queryKey: workspaceQueryKeys.draftAttachments(
       input.apiBaseUrl,
@@ -122,19 +127,34 @@ export function useDraftAttachmentController(
   }
 
   function onRemoveDraftAttachment(attachmentId: string) {
-    if (!input.selectedConversationId) {
+    const conversationId = input.selectedConversationId;
+    if (!conversationId) {
       return;
     }
+    const queryKey = workspaceQueryKeys.draftAttachments(
+      input.apiBaseUrl,
+      input.authScope,
+      conversationId
+    );
     void input.client.conversations.draftAttachments
-      .delete(input.selectedConversationId, attachmentId)
+      .delete(conversationId, attachmentId)
       .then(() => {
+        const remaining = withoutDraftAttachment(
+          queryClient.getQueryData<DraftAttachment[]>(queryKey) ?? [],
+          attachmentId
+        );
+        queryClient.setQueryData(queryKey, remaining);
+        void queryClient.invalidateQueries({ queryKey });
+        // The conversation leaves the rail with its last draft attachment.
         void queryClient.invalidateQueries({
-          queryKey: workspaceQueryKeys.draftAttachments(
-            input.apiBaseUrl,
-            input.authScope,
-            input.selectedConversationId
-          )
+          queryKey: workspaceQueryKeys.conversationsScope(input.apiBaseUrl, input.authScope)
         });
+        const uploading = latest.current.localUploadingAttachments.some(
+          (attachment) => attachment.conversationId === conversationId
+        );
+        if (remaining.length === 0 && !uploading) {
+          latest.current.input.onDraftAttachmentsEmptied?.(conversationId);
+        }
       })
       .catch((error) => input.onError(error instanceof ApiError ? error.message : "Remove failed"));
   }
@@ -173,6 +193,13 @@ export function useDraftAttachmentController(
     onRetryDraftAttachment,
     clearConversationUploads
   };
+}
+
+export function withoutDraftAttachment<Attachment extends { id: string }>(
+  attachments: readonly Attachment[],
+  attachmentId: string
+): Attachment[] {
+  return attachments.filter((attachment) => attachment.id !== attachmentId);
 }
 
 function createConcurrencyLimiter(maxConcurrency: number) {

@@ -3,6 +3,17 @@
 All platform packages are released in lockstep under one version. Before 1.0 a minor version may
 contain breaking changes; a patch version does not.
 
+## Unreleased
+
+### Fixed
+
+- **Abandoned draft conversations:** attaching files on the start page and removing them again
+  no longer leaves an empty conversation in the rail. `GET /api/conversations` lists a
+  conversation without messages only to its creator, and only while it holds draft attachments;
+  access by id is unchanged. Removing the last draft attachment returns the composer to the
+  start page, and the retention job expires conversations that have had neither messages nor
+  draft attachments for 24 hours.
+
 ## 0.4.0 — 2026-10-06
 
 ### Changed

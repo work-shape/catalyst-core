@@ -5,13 +5,44 @@ import { describe, expect, it } from "vitest";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 import { CollaborationWorkspaceSelector } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-selector";
 import { WorkspaceRail } from "../packages/chat-ui/src/workspace/workspace-rail";
+import { withoutDraftAttachment } from "../packages/chat-ui/src/conversation/draft-attachment-controller";
 import {
   activeAgentNameFor,
   collaborationWorkspaceChromeVisibleFor,
+  isAbandonedDraftConversation,
   workspaceScopedConfigFor
 } from "../packages/chat-ui/src/workspace/workspace-chat-model";
 
 const noop = () => undefined;
+
+describe("abandoned draft conversation", () => {
+  const emptied = {
+    conversationId: "conv_draft",
+    selectedConversationId: "conv_draft",
+    messagesLoaded: true,
+    messageCount: 0,
+    running: false
+  };
+
+  it("returns to the start page only when the open conversation holds nothing", () => {
+    expect(isAbandonedDraftConversation(emptied)).toBe(true);
+    expect(isAbandonedDraftConversation({ ...emptied, messageCount: 2 })).toBe(false);
+    expect(isAbandonedDraftConversation({ ...emptied, messagesLoaded: false })).toBe(false);
+    expect(isAbandonedDraftConversation({ ...emptied, running: true })).toBe(false);
+    expect(isAbandonedDraftConversation({ ...emptied, selectedConversationId: "conv_other" })).toBe(
+      false
+    );
+    expect(isAbandonedDraftConversation({ ...emptied, selectedConversationId: undefined })).toBe(
+      false
+    );
+  });
+
+  it("counts the draft attachments that remain after a removal", () => {
+    const drafts = [{ id: "att_1" }, { id: "att_2" }];
+    expect(withoutDraftAttachment(drafts, "att_1").map(({ id }) => id)).toEqual(["att_2"]);
+    expect(withoutDraftAttachment(withoutDraftAttachment(drafts, "att_1"), "att_2")).toEqual([]);
+  });
+});
 
 describe("workspace rail branding", () => {
   it("uses in-app navigation for the client logo", () => {

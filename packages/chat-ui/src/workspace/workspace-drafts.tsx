@@ -9,7 +9,7 @@ interface WorkspaceDraftTarget {
 interface MoveWorkspaceDraftInput {
   authScope: string;
   fromConversationId: string | undefined;
-  toConversationId: string;
+  toConversationId: string | undefined;
 }
 
 interface WorkspaceDraftsContextValue {
