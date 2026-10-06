@@ -517,6 +517,7 @@ const translations = {
     openSuperadminPanel: "Open administration panel",
     openDisplayPanel: "Open in side panel",
     expandDisplay: "Expand display",
+    runInterrupted: "The reply was interrupted. Please send your message again.",
     shownInSidePanel: "Shown in side panel",
     password: "Password",
     passwordResetDescription:
@@ -1204,6 +1205,7 @@ const translations = {
     openSuperadminPanel: "Administrationsbereich öffnen",
     openDisplayPanel: "In Seitenansicht öffnen",
     expandDisplay: "Ansicht ausklappen",
+    runInterrupted: "Die Antwort wurde unterbrochen. Bitte sende deine Nachricht erneut.",
     shownInSidePanel: "In Seitenansicht geöffnet",
     password: "Passwort",
     passwordResetDescription:

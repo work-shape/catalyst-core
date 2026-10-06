@@ -211,6 +211,44 @@ describe("client instance app vertical slice", () => {
     await server.close();
   });
 
+  it("leaves a run alone while a worker holds a live lease, even without local runtime state", async () => {
+    const fixture = await createStaleRunRecoveryFixture({
+      staleActiveRunMs: 60 * 60 * 1000
+    });
+    const { server, store, conversation, run } = fixture;
+    const now = Date.now();
+    await store.updateAgentRunStatus({
+      clientInstanceId: fixture.clientInstanceId,
+      runId: run.id,
+      status: "queued",
+      updatedAt: new Date(now).toISOString(),
+      lastSequence: 1
+    });
+    await store.claimNextAgentRun({
+      clientInstanceId: fixture.clientInstanceId,
+      workerId: "worker-a",
+      leaseToken: "lease-a",
+      now: new Date(now).toISOString(),
+      leaseExpiresAt: new Date(now + 10 * 60 * 1000).toISOString()
+    });
+
+    const events = await server.inject({
+      method: "GET",
+      url: `/api/conversations/${conversation.id}/runs/${run.id}/events?after=1`
+    });
+    expect(parseSseChunks(events.payload).map((chunk) => chunk.type)).not.toContain("run_failed");
+
+    const cancelled = await server.inject({
+      method: "POST",
+      url: `/api/conversations/${conversation.id}/runs/${run.id}/cancel`,
+      payload: { reason: "Stop" }
+    });
+    expect(cancelled.statusCode).toBe(404);
+
+    await expectRunStatus(store, fixture.clientInstanceId, run.id, "running");
+    await server.close();
+  });
+
   it("does not disclose or mutate another user's stale durable run during recovery-visible reads", async () => {
     const fixture = await createStaleRunRecoveryFixture();
     const { server, store, conversation, run } = fixture;

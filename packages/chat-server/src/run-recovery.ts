@@ -146,7 +146,7 @@ export async function recoverInterruptedRun(
   input: { now?: Date } = {}
 ): Promise<RunRecoveryResult | undefined> {
   const now = input.now ?? new Date();
-  if (!isActiveRun(run)) {
+  if (!isActiveRun(run) || hasLiveLease(run, now)) {
     return undefined;
   }
   return recoverActiveRun(options, run, {
@@ -185,6 +185,11 @@ async function recoverActiveRun(
 
 export function isActiveRun(run: AgentRun): boolean {
   return ACTIVE_RUN_STATUSES.has(run.status);
+}
+
+// A worker holding an unexpired lease still owns the run, whatever this process can see locally.
+function hasLiveLease(run: AgentRun, now: Date): boolean {
+  return run.leaseExpiresAt !== undefined && new Date(run.leaseExpiresAt) > now;
 }
 
 export function isMissingLocalRuntimeState(error: unknown): boolean {
