@@ -476,82 +476,93 @@ function AgentModelList({
   const instanceDefaultLabel = form.modelProviderId
     ? `${t("configInstanceDefault")} (${form.modelProviderId})`
     : t("configInstanceDefault");
+  // The form column is often narrow whatever the viewport, so the row wraps by itself: its two
+  // halves share a line when both fit their basis (about 37rem of list width) and stack below.
+  // The halves carry the vertical spacing so that an empty second half adds no height.
   const rowClassName =
-    "grid min-h-10 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-5 gap-y-2 bg-background px-3 py-2 text-sm md:grid-cols-[minmax(0,1fr)_auto_auto_13rem]";
-  const optionClassName = "flex items-center gap-2 text-xs text-muted-foreground";
-  const defaultOption = (bindingId: string, label: string, checked: boolean) => (
-    <label className={optionClassName}>
-      <input
-        type="radio"
-        name={defaultGroupName}
-        className="size-4 shrink-0 accent-primary"
-        aria-label={`${label}: ${t("configModelIsDefault")}`}
-        checked={checked}
-        disabled={!editable}
-        onChange={() => onSelectDefault(bindingId)}
-      />
-      {t("configModelIsDefault")}
-    </label>
-  );
-
-  // Only a model that is in use has an effort: the default and the ones offered to users.
-  const effortOption = (bindingId: string, label: string, inUse: boolean) =>
-    inUse ? (
-      <label className={cn(optionClassName, "col-span-2 md:col-span-1")}>
-        <span className="shrink-0">{t("configReasoningEffort")}</span>
-        <Select
-          className="h-8 px-2 text-xs"
-          aria-label={`${label}: ${t("configReasoningEffort")}`}
-          value={agentModelReasoningEffort(form, bindingId)}
+    "flex min-h-10 flex-wrap items-center gap-x-4 bg-background px-3 py-1 text-sm";
+  const nameHalfClassName = "my-1 flex min-w-0 flex-[1_1_14rem] items-center justify-between gap-3";
+  const optionsHalfClassName =
+    "my-1 flex min-w-0 flex-[1_1_20rem] items-center justify-between gap-3";
+  const optionClassName =
+    "flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-muted-foreground";
+  const nameHalf = (bindingId: string, label: string, isDefault: boolean) => (
+    <div className={nameHalfClassName}>
+      <span className="min-w-0 truncate" title={label}>
+        {label}
+      </span>
+      <label className={optionClassName}>
+        <input
+          type="radio"
+          name={defaultGroupName}
+          className="size-4 shrink-0 accent-primary"
+          aria-label={`${label}: ${t("configModelIsDefault")}`}
+          checked={isDefault}
           disabled={!editable}
-          onChange={(event) => onSetReasoningEffort(bindingId, event.target.value)}
-        >
-          <option value="">{t("configModelDefault")}</option>
-          {reasoningEfforts.map((effort) => (
-            <option key={effort} value={effort}>
-              {effort}
-            </option>
-          ))}
-        </Select>
+          onChange={() => onSelectDefault(bindingId)}
+        />
+        {t("configModelIsDefault")}
       </label>
-    ) : (
-      <span aria-hidden="true" className="hidden md:block" />
-    );
+    </div>
+  );
+  // Only a model that is in use has an effort: the default and the ones offered to users.
+  const effortSelect = (bindingId: string, label: string) => (
+    <Select
+      className="ml-auto h-8 w-40 shrink-0 px-2 text-xs"
+      aria-label={`${label}: ${t("configReasoningEffort")}`}
+      title={t("configReasoningEffort")}
+      value={agentModelReasoningEffort(form, bindingId)}
+      disabled={!editable}
+      onChange={(event) => onSetReasoningEffort(bindingId, event.target.value)}
+    >
+      <option value="">{t("configModelDefault")}</option>
+      {reasoningEfforts.map((effort) => (
+        <option key={effort} value={effort}>
+          {effort}
+        </option>
+      ))}
+    </Select>
+  );
 
   return (
     <fieldset className="grid min-w-0 gap-2">
       <legend className="sr-only">{t("configModels")}</legend>
       <div className="overflow-hidden rounded-lg border bg-background">
-        <div className="border-b bg-muted/20 px-3 py-2 text-sm font-medium">
-          {t("configModels")}
+        <div className="flex items-center justify-between gap-3 border-b bg-muted/20 px-3 py-2">
+          <span className="text-sm font-medium">{t("configModels")}</span>
+          <span aria-hidden="true" className="text-xs text-muted-foreground">
+            {t("configReasoningEffort")}
+          </span>
         </div>
-        <div className="grid gap-px bg-border">
+        <div className="grid grid-cols-1 gap-px bg-border">
           {editable || !form.modelBindingId ? (
             <div className={cn(rowClassName, !form.modelBindingId && "bg-muted/30")}>
-              <span className="col-span-2 min-w-0 break-words md:col-span-1">
-                {instanceDefaultLabel}
-              </span>
-              {defaultOption("", instanceDefaultLabel, !form.modelBindingId)}
-              <span aria-hidden="true" />
-              {effortOption("", instanceDefaultLabel, !form.modelBindingId)}
+              {nameHalf("", instanceDefaultLabel, !form.modelBindingId)}
+              {form.modelBindingId ? (
+                // Keeps the radio in line with the other rows when the halves share a line.
+                <div aria-hidden="true" className="flex-[1_1_20rem]" />
+              ) : (
+                <div className={optionsHalfClassName}>{effortSelect("", instanceDefaultLabel)}</div>
+              )}
             </div>
           ) : null}
           {rows.map((row) => (
             <div key={row.bindingId} className={cn(rowClassName, row.isDefault && "bg-muted/30")}>
-              <span className="col-span-2 min-w-0 break-words md:col-span-1">{row.label}</span>
-              {defaultOption(row.bindingId, row.label, row.isDefault)}
-              <label className={optionClassName}>
-                <input
-                  type="checkbox"
-                  className="size-4 shrink-0 accent-primary"
-                  aria-label={`${row.label}: ${t("configModelUserSelectable")}`}
-                  checked={row.userSelectable}
-                  disabled={!editable || row.isDefault}
-                  onChange={(event) => onSetUserSelectable(row.bindingId, event.target.checked)}
-                />
-                {t("configModelUserSelectable")}
-              </label>
-              {effortOption(row.bindingId, row.label, row.userSelectable)}
+              {nameHalf(row.bindingId, row.label, row.isDefault)}
+              <div className={optionsHalfClassName}>
+                <label className={optionClassName}>
+                  <input
+                    type="checkbox"
+                    className="size-4 shrink-0 accent-primary"
+                    aria-label={`${row.label}: ${t("configModelUserSelectable")}`}
+                    checked={row.userSelectable}
+                    disabled={!editable || row.isDefault}
+                    onChange={(event) => onSetUserSelectable(row.bindingId, event.target.checked)}
+                  />
+                  {t("configModelUserSelectable")}
+                </label>
+                {row.userSelectable ? effortSelect(row.bindingId, row.label) : null}
+              </div>
             </div>
           ))}
         </div>
