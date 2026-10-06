@@ -3,7 +3,23 @@
 All platform packages are released in lockstep under one version. Before 1.0 a minor version may
 contain breaking changes; a patch version does not.
 
-## Unreleased
+## 0.5.0 — 2026-10-06
+
+### Added
+
+- **Retention:** `retention.expireConversations: false` lets a client instance keep
+  conversations indefinitely.
+
+### Changed
+
+- **Packaging:** the library packages carry publish metadata for npm (`files`, typed `exports`
+  without the `development` condition, restricted access, licence, `engines`) and are no longer
+  marked `private`. `pnpm release:check` builds, packs and inspects every tarball and installs a
+  consumer set outside the workspace; `pnpm release:metadata` reapplies the shared fields.
+  Nothing is published yet.
+- **chat-ui:** `tailwindcss` and `tw-animate-css` are peer dependencies. The stylesheet no longer
+  scans `chat-standalone`, which has its own stylesheet now, and finds Streamdown's classes when
+  installed from a tarball as well as in the workspace.
 
 ### Fixed
 
@@ -15,6 +31,8 @@ contain breaking changes; a patch version does not.
   draft attachments for 24 hours. This cleanup also runs with
   `retention.expireConversations: false`, which keeps every conversation that has a message or
   a draft attachment.
+- The `catalyst` CLI did nothing when started through the `node_modules/.bin` link of an
+  installed package.
 
 ## 0.4.0 — 2026-10-06
 

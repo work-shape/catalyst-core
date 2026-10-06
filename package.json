@@ -16,6 +16,8 @@
     "docs:preview": "pnpm --filter @vivd-catalyst/docs preview",
     "format": "prettier --write \"packages/**/*.{js,jsx,mjs,cjs,ts,tsx,json,css,scss,html}\" \"clients/**/*.{js,jsx,mjs,cjs,ts,tsx,json,css,scss,html}\" \"e2e/**/*.{js,jsx,mjs,cjs,ts,tsx,json,css,scss,html}\" \"tests/**/*.{js,jsx,mjs,cjs,ts,tsx,json,css,scss,html}\" \"scripts/**/*.{js,jsx,mjs,cjs,ts,tsx,json,css,scss,html}\" \"*.{js,jsx,mjs,cjs,ts,tsx,json}\"",
     "format:check": "prettier --check \"packages/**/*.{js,jsx,mjs,cjs,ts,tsx,json,css,scss,html}\" \"clients/**/*.{js,jsx,mjs,cjs,ts,tsx,json,css,scss,html}\" \"e2e/**/*.{js,jsx,mjs,cjs,ts,tsx,json,css,scss,html}\" \"tests/**/*.{js,jsx,mjs,cjs,ts,tsx,json,css,scss,html}\" \"scripts/**/*.{js,jsx,mjs,cjs,ts,tsx,json,css,scss,html}\" \"*.{js,jsx,mjs,cjs,ts,tsx,json}\"",
+    "release:check": "node scripts/release/check-packages.mjs",
+    "release:metadata": "node scripts/release/package-metadata.mjs --write",
     "test": "vitest run && pnpm test:deployment-kit",
     "test:deployment-kit": "bash scripts/deployment-kit/tests/test-deployment-kit.sh",
     "test:e2e": "node scripts/run-chat-e2e.mjs --all",

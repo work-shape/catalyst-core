@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import { runConfigCommand, type ConfigCommandName, type ConfigCommandOptions } from "./commands";
@@ -147,6 +148,7 @@ function isConfigCommand(value: string): value is ConfigCommandName {
 }
 
 const entryPath = process.argv[1];
-if (entryPath && import.meta.url === pathToFileURL(entryPath).href) {
+// The bin is reached through a node_modules symlink, so compare resolved paths.
+if (entryPath && import.meta.url === pathToFileURL(realpathSync(entryPath)).href) {
   process.exitCode = await runCli(process.argv.slice(2));
 }
