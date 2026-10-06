@@ -18,6 +18,7 @@ contain breaking changes; a patch version does not.
 - Saving an agent's model settings no longer fails with 403 when its other fields are locked:
   unchanged fields were reported as changed because stored JSON key order differs.
 - A rejected save shows the server's message next to the save button.
+- Viewers of a shared conversation can no longer interrupt another user's active run.
 
 ## 0.2.0 — 2026-10-06
 
