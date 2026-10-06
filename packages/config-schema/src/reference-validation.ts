@@ -73,18 +73,18 @@ export function findAgentModelReferenceIssues(input: {
 
 /**
  * Checked when an agent's list is written, not for the stored bundle: a binding that later
- * disappears or loses `userSelectable` is ignored at read time instead of failing the agent.
+ * disappears or stops being agent-selectable is ignored at read time instead of failing the agent.
  */
 export function findAgentUserSelectableModelIssues(
   agent: Pick<AgentConfig, "name" | "userSelectableModelBindingIds">,
-  userSelectableModelBindingIds: readonly string[]
+  modelBindingIds: readonly string[]
 ): string[] {
-  const eligible = new Set(userSelectableModelBindingIds);
+  const eligible = new Set(modelBindingIds);
   return (agent.userSelectableModelBindingIds ?? [])
     .filter((bindingId) => !eligible.has(bindingId))
     .map(
       (bindingId) =>
-        `Agent '${agent.name}' lists model binding '${bindingId}' in userSelectableModelBindingIds, but it is not a userSelectable model binding`
+        `Agent '${agent.name}' lists missing model binding '${bindingId}' in userSelectableModelBindingIds`
     );
 }
 

@@ -2153,28 +2153,6 @@
                     "defaultAgentName": {
                       "type": "string"
                     },
-                    "selectableModels": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "bindingId": {
-                            "type": "string"
-                          },
-                          "model": {
-                            "type": "string"
-                          },
-                          "compactThresholdTokens": {
-                            "type": "number"
-                          }
-                        },
-                        "required": [
-                          "bindingId",
-                          "model"
-                        ],
-                        "additionalProperties": false
-                      }
-                    },
                     "agents": {
                       "type": "array",
                       "items": {
@@ -2418,7 +2396,6 @@
                     "retention",
                     "usage",
                     "features",
-                    "selectableModels",
                     "agents",
                     "ui"
                   ],
@@ -14052,25 +14029,6 @@
                             "type": "string"
                           }
                         },
-                        "userSelectableModelBindings": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "model": {
-                                "type": "string"
-                              }
-                            },
-                            "required": [
-                              "id",
-                              "model"
-                            ],
-                            "additionalProperties": false
-                          }
-                        },
                         "reasoningEfforts": {
                           "type": "array",
                           "items": {
@@ -14096,7 +14054,6 @@
                         "modelBindingIds",
                         "modelBindings",
                         "fastModeModelBindingIds",
-                        "userSelectableModelBindings",
                         "reasoningEfforts",
                         "enabledToolNames"
                       ],

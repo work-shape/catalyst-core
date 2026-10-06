@@ -60,8 +60,6 @@ export interface ChatServerOptions {
       modelBindingIds: string[];
       modelBindings: Array<{ id: string; model: string }>;
       fastModeModelBindingIds: string[];
-      /** Bindings with `userSelectable: true`: the ones an agent may offer to users. */
-      userSelectableModelBindings: Array<{ id: string; model: string }>;
       reasoningEfforts: string[];
       enabledToolNames: string[];
     };

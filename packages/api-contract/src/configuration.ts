@@ -117,13 +117,6 @@ export const safeConfigSchema = z.object({
     userInvitations: z.object({ enabled: z.boolean() }).default({ enabled: false })
   }),
   defaultAgentName: z.string().optional(),
-  selectableModels: z.array(
-    z.object({
-      bindingId: z.string(),
-      model: z.string(),
-      compactThresholdTokens: z.number().optional()
-    })
-  ),
   agents: z.array(
     z.object({
       name: z.string(),
@@ -226,12 +219,6 @@ export const configAssetsOverviewSchema = z.object({
       })
     ),
     fastModeModelBindingIds: z.array(z.string()),
-    userSelectableModelBindings: z.array(
-      z.object({
-        id: z.string(),
-        model: z.string()
-      })
-    ),
     reasoningEfforts: z.array(reasoningEffortSchema),
     enabledToolNames: z.array(z.string())
   })

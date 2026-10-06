@@ -30,13 +30,19 @@ describe("user-selectable model config", () => {
           id: "sol",
           providerId: "openai",
           model: "gpt-5.6-sol",
+          // Still accepted, without effect: agents offer bindings with or without it.
           userSelectable: true
         },
         {
           id: "terra",
           providerId: "openai",
-          model: "gpt-5.6-terra",
-          userSelectable: true
+          model: "gpt-5.6-terra"
+        },
+        {
+          id: "guard",
+          providerId: "openai",
+          model: "gpt-5-nano",
+          agentSelectable: false
         },
         {
           id: "conversationTitle",
@@ -64,10 +70,10 @@ describe("user-selectable model config", () => {
           name: "chooser",
           displayName: "Chooser",
           instructions: "Help the user.",
-          // The title binding is not userSelectable and "retired" no longer exists: both are
-          // ignored. Listing the agent's own binding does not duplicate it.
+          // "retired" no longer exists and agents may not use "guard": both are ignored.
+          // Listing the agent's own binding does not duplicate it.
           modelBindingId: "conversationTitle",
-          userSelectableModelBindingIds: ["terra", "conversationTitle", "retired"],
+          userSelectableModelBindingIds: ["terra", "conversationTitle", "retired", "guard"],
           toolNames: [],
           skillNames: [],
           initialPrompts: []
@@ -85,10 +91,7 @@ describe("user-selectable model config", () => {
       skills: []
     });
 
-    expect(safeConfig.selectableModels).toEqual([
-      { bindingId: "sol", model: "gpt-5.6-sol", compactThresholdTokens: 270_000 },
-      { bindingId: "terra", model: "gpt-5.6-terra", compactThresholdTokens: 270_000 }
-    ]);
+    expect(safeConfig).not.toHaveProperty("selectableModels");
     // An empty list leaves only the agent's own model, so the chat shows no selector.
     expect(safeConfig.agents[0]).toMatchObject({
       name: "assistant",
@@ -107,7 +110,6 @@ describe("user-selectable model config", () => {
       { model: "gpt-5.6-sol", compactThresholdTokens: 270_000 },
       { bindingId: "sol", model: "gpt-5.6-sol", compactThresholdTokens: 270_000 }
     ]);
-    expect(config.modelBindings[2]?.userSelectable).toBe(false);
   });
 
   it("rejects provider compaction for chat completions", () => {

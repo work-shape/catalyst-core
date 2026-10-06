@@ -632,11 +632,6 @@ export type GetConfigResponses = {
             };
         };
         defaultAgentName?: string;
-        selectableModels: Array<{
-            bindingId: string;
-            model: string;
-            compactThresholdTokens?: number;
-        }>;
         agents: Array<{
             name: string;
             displayName: string;
@@ -3663,10 +3658,6 @@ export type GetConfigAssetsOverviewResponses = {
                 model: string;
             }>;
             fastModeModelBindingIds: Array<string>;
-            userSelectableModelBindings: Array<{
-                id: string;
-                model: string;
-            }>;
             reasoningEfforts: Array<'none' | 'low' | 'medium' | 'high' | 'xhigh'>;
             enabledToolNames: Array<string>;
         };

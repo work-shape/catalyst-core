@@ -26,13 +26,14 @@ describe("client instance app vertical slice", () => {
     const app = await createClientInstanceApp({
       config: createTestConfig({
         agentModelBindingId: "own",
-        // "retired" no longer exists and "internal" lost the flag: both are ignored.
+        // "retired" no longer exists and agents may no longer use "internal": both are ignored.
         agentUserSelectableModelBindingIds: ["offered", "retired", "internal"],
         modelBindings: [
           { id: "own", providerId: "local", model: "own-model" },
-          { id: "offered", providerId: "local", model: "offered-model", userSelectable: true },
+          // Offering a binding needs no `userSelectable` flag in release config.
+          { id: "offered", providerId: "local", model: "offered-model" },
           { id: "eligible", providerId: "local", model: "eligible-model", userSelectable: true },
-          { id: "internal", providerId: "local", model: "internal-model" }
+          { id: "internal", providerId: "local", model: "internal-model", agentSelectable: false }
         ]
       }),
       env: {},
@@ -55,7 +56,7 @@ describe("client instance app vertical slice", () => {
           message: { text: "Hello" }
         }
       });
-    // Not listed for this agent, although release config allows offering it to users.
+    // Not offered by this agent; the binding-level `userSelectable` flag has no effect.
     for (const modelBindingId of ["eligible", "internal", "retired"]) {
       const rejected = await start(modelBindingId);
       expect(rejected.statusCode).toBe(422);

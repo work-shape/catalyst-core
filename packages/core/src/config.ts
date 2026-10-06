@@ -76,6 +76,7 @@ export interface ModelBindingConfig {
   model?: string;
   reasoningEffort?: ReasoningEffortConfig;
   agentSelectable?: boolean;
+  /** Accepted for compatibility; no effect. Each agent lists the models its users may pick. */
   userSelectable?: boolean;
   supportsFastMode?: boolean;
 }
@@ -101,7 +102,7 @@ export interface AgentConfig {
 
 /**
  * The bindings a user may pick for this agent besides its own: the listed ids whose binding
- * still exists and is `userSelectable`. Stale ids are ignored rather than failing the agent.
+ * still exists and is one agents may use. Stale ids are ignored rather than failing the agent.
  */
 export function userSelectableModelBindingsForAgent<Binding extends ModelBindingConfig>(
   agent: Pick<AgentConfig, "modelBindingId" | "userSelectableModelBindingIds">,
@@ -110,7 +111,7 @@ export function userSelectableModelBindingsForAgent<Binding extends ModelBinding
   const listed = new Set(agent.userSelectableModelBindingIds ?? []);
   return modelBindings.filter(
     (binding) =>
-      binding.userSelectable === true &&
+      binding.agentSelectable !== false &&
       binding.id !== agent.modelBindingId &&
       listed.has(binding.id)
   );

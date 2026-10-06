@@ -143,7 +143,6 @@ describe("config asset admin routes", () => {
         modelBindingIds: [],
         modelBindings: [],
         fastModeModelBindingIds: [],
-        userSelectableModelBindings: [],
         reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
         enabledToolNames: ["known.tool", "read_skill"]
       }
@@ -841,7 +840,7 @@ describe("config asset admin routes", () => {
     );
   });
 
-  it("accepts only userSelectable bindings as an agent's user-selectable models", async () => {
+  it("accepts any agent-selectable binding as one of an agent's user-selectable models", async () => {
     const fixture = await createFixture({ modelBindings: true });
     const token = await mintToken(fixture.server, {
       roles: ["superadmin"],
@@ -878,9 +877,8 @@ describe("config asset admin routes", () => {
       method: "GET",
       url: "/api/admin/config/assets"
     });
-    expect(overview.json().references.userSelectableModelBindings).toEqual([
-      { id: "other", model: "local" }
-    ]);
+    // The eligible bindings are the ones an agent may use; `userSelectable` is not consulted.
+    expect(overview.json().references.modelBindingIds).toEqual(["plain", "other", "fast"]);
 
     const agent = boundAgentConfig("plain");
     expect((await put({ ...agent, userSelectableModelBindingIds: ["other"] })).statusCode).toBe(
@@ -888,13 +886,17 @@ describe("config asset admin routes", () => {
     );
     expect(await stored()).toMatchObject({ userSelectableModelBindingIds: ["other"] });
 
-    // A binding without `userSelectable` and an unknown binding are both rejected on save.
-    for (const bindingId of ["fast", "missing"]) {
+    expect(
+      (await put({ ...agent, userSelectableModelBindingIds: ["other", "fast"] })).statusCode
+    ).toBe(200);
+
+    // A binding agents may not use and an unknown binding are both rejected on save.
+    for (const bindingId of ["internal", "missing"]) {
       for (const send of [put, push]) {
         const rejected = await send({ ...agent, userSelectableModelBindingIds: [bindingId] });
         expect(rejected.statusCode).toBe(422);
         expect(JSON.stringify(rejected.json())).toContain(
-          `Agent 'assistant' lists model binding '${bindingId}' in userSelectableModelBindingIds, but it is not a userSelectable model binding`
+          `Agent 'assistant' lists missing model binding '${bindingId}' in userSelectableModelBindingIds`
         );
       }
     }
@@ -1413,7 +1415,8 @@ async function createFixture(
       ? {
           modelBindings: [
             { id: "plain", providerId: "local" },
-            { id: "other", providerId: "local", userSelectable: true },
+            { id: "other", providerId: "local" },
+            { id: "internal", providerId: "local", agentSelectable: false },
             { id: "fast", providerId: "local", supportsFastMode: true }
           ],
           usage: {
@@ -1526,6 +1529,9 @@ async function createFixture(
     clientInstanceId,
     store
   });
+  const agentSelectableBindings = config.modelBindings.filter(
+    (binding) => binding.agentSelectable !== false
+  );
   const server = await createChatServer({
     config,
     clientInstanceId,
@@ -1552,14 +1558,14 @@ async function createFixture(
       store,
       validationRefs: {
         modelProviderIds: modelProviders.map((provider) => provider.id),
-        modelBindingIds: config.modelBindings.map((binding) => binding.id),
-        modelBindings: config.modelBindings.map((binding) => ({ id: binding.id, model: "local" })),
+        modelBindingIds: agentSelectableBindings.map((binding) => binding.id),
+        modelBindings: agentSelectableBindings.map((binding) => ({
+          id: binding.id,
+          model: "local"
+        })),
         fastModeModelBindingIds: config.modelBindings
           .filter((binding) => binding.supportsFastMode)
           .map((binding) => binding.id),
-        userSelectableModelBindings: config.modelBindings
-          .filter((binding) => binding.userSelectable)
-          .map((binding) => ({ id: binding.id, model: "local" })),
         reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
         enabledToolNames: ["known.tool", "read_skill", ...(input.webSearch ? ["web_search"] : [])]
       },

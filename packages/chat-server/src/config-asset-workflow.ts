@@ -650,16 +650,14 @@ export class ConfigAssetWorkflow {
 
   /**
    * An agent's list of user-selectable models must name eligible bindings whenever it is written.
-   * Unchanged lists are not re-checked, so a binding that later disappears or loses
-   * `userSelectable` never blocks other edits; such ids are ignored at read time.
+   * Unchanged lists are not re-checked, so a binding that later disappears or stops being
+   * agent-selectable never blocks other edits; such ids are ignored at read time.
    */
   private assertChangedUserSelectableModelsEligible(
     current: ConfigAssetBundleInput,
     nextAgents: AgentConfig[]
   ): void {
-    const eligibleIds = this.options.configAssets.validationRefs.userSelectableModelBindings.map(
-      (binding) => binding.id
-    );
+    const eligibleIds = this.options.configAssets.validationRefs.modelBindingIds;
     const issues = nextAgents
       .filter(
         (agent) =>

@@ -25,10 +25,6 @@ export function createSafeConfigView(
   } = createClientBranding(config, {
     requestedLocale: locale
   });
-  // Every binding that may be offered to users at all; each agent offers a subset.
-  const selectableModels = config.modelBindings
-    .filter((binding) => binding.userSelectable)
-    .map((binding) => bindingModelView(config, binding));
 
   return {
     clientInstance: {
@@ -64,7 +60,6 @@ export function createSafeConfigView(
       }
     },
     defaultAgentName: assets.defaultAgentName,
-    selectableModels,
     agents: assets.agents.map((agent) => ({
       name: agent.name,
       displayName: resolveLocalizedString(

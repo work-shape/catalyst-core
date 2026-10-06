@@ -107,7 +107,6 @@ async function fixture() {
         modelBindingIds: [],
         modelBindings: [],
         fastModeModelBindingIds: [],
-        userSelectableModelBindings: [],
         reasoningEfforts: [],
         enabledToolNames: ["read_skill", "propose_skill_change"]
       }

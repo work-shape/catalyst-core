@@ -264,6 +264,7 @@ export const modelBindingConfigSchema = z.object({
   model: z.string().min(1).optional(),
   reasoningEffort: z.enum(REASONING_EFFORTS).optional(),
   agentSelectable: z.boolean().default(true),
+  // Accepted for compatibility; no effect. Each agent lists the models its users may pick.
   userSelectable: z.boolean().default(false),
   supportsFastMode: z.boolean().default(false)
 });
