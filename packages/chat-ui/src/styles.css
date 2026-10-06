@@ -3,10 +3,15 @@
 @import "@univerjs/preset-sheets-core/lib/index.css";
 
 @source "./**/*.{ts,tsx}";
-@source "../../chat-standalone/src/**/*.{ts,tsx}";
+/* Streamdown ships its classes in dist/. The first three paths match the workspace layout
+   (packages/chat-ui/node_modules), the last three the installed layout, where the dependencies
+   are siblings of this package in node_modules. Tailwind ignores paths that do not exist. */
 @source "../node_modules/streamdown/dist/*.js";
 @source "../node_modules/@streamdown/code/dist/*.js";
 @source "../node_modules/@streamdown/mermaid/dist/*.js";
+@source "../../../streamdown/dist/*.js";
+@source "../../../@streamdown/code/dist/*.js";
+@source "../../../@streamdown/mermaid/dist/*.js";
 
 @custom-variant dark (&:is(.dark *));
 
