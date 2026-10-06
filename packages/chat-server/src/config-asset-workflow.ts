@@ -790,6 +790,9 @@ function modelSettingValue(agent: AgentConfig | undefined, field: AgentModelSett
   if (field === "userSelectableModelBindingIds") {
     return agent?.userSelectableModelBindingIds ?? [];
   }
+  if (field === "modelReasoningEfforts") {
+    return agent?.modelReasoningEfforts ?? {};
+  }
   return agent?.[field];
 }
 

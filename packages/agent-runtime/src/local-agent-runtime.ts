@@ -621,8 +621,12 @@ export class LocalAgentRuntime implements AgentRuntime {
       return {
         provider,
         model: binding.model ?? provider.model,
+        // The agent's own effort belongs to its own model; a model the user picked instead
+        // uses the effort configured for that binding on this agent.
         reasoningEffort:
-          agent.reasoningEffort ??
+          (bindingId === agent.modelBindingId
+            ? agent.reasoningEffort
+            : agent.modelReasoningEfforts?.[bindingId]) ??
           binding.reasoningEffort ??
           (provider.type === "openai-compatible" ? provider.reasoningEffort : undefined),
         // A user-selected binding gets fast mode only when that binding supports it.

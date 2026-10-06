@@ -904,6 +904,38 @@ describe("config asset admin routes", () => {
       200
     );
 
+    // An effort is set per offered model: its key must be in the list and its value an effort.
+    const offered = { ...agent, userSelectableModelBindingIds: ["other"] };
+    expect((await put({ ...offered, modelReasoningEfforts: { other: "low" } })).statusCode).toBe(
+      200
+    );
+    expect(await stored()).toMatchObject({ modelReasoningEfforts: { other: "low" } });
+    for (const send of [put, push]) {
+      const unlisted = await send({ ...offered, modelReasoningEfforts: { fast: "low" } });
+      expect(unlisted.statusCode).toBe(422);
+      expect(JSON.stringify(unlisted.json())).toContain(
+        "Agent 'assistant' sets modelReasoningEfforts for 'fast', which is not in its userSelectableModelBindingIds"
+      );
+      expect(
+        (await send({ ...offered, modelReasoningEfforts: { other: "extreme" } })).statusCode
+      ).toBe(422);
+    }
+    // It is a model setting: an admin without agent_models.manage may not change it.
+    const adminToken = await mintToken(fixture.server, {
+      scopes: ["config_assets:read", "config_assets:write"],
+      roles: ["admin"],
+      permissions: []
+    });
+    const denied = await request(fixture.server, adminToken, {
+      method: "PUT",
+      url: "/api/admin/config/assets/agent/assistant",
+      payload: { config: { ...offered, modelReasoningEfforts: { other: "high" } } }
+    });
+    expect(denied.statusCode).toBe(403);
+    expect(denied.json().error.message).toBe(
+      "Changing agent model settings (modelReasoningEfforts) requires 'agent_models.manage' permission"
+    );
+
     // A stored id that is no longer eligible does not block later edits of the agent.
     await fixture.store.applyConfigAssetMutations({
       clientInstanceId: fixture.clientInstanceId,

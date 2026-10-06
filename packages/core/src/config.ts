@@ -66,7 +66,8 @@ export const AGENT_MODEL_SETTING_FIELDS = [
   "modelBindingId",
   "reasoningEffort",
   "fastMode",
-  "userSelectableModelBindingIds"
+  "userSelectableModelBindingIds",
+  "modelReasoningEfforts"
 ] as const;
 export type AgentModelSettingField = (typeof AGENT_MODEL_SETTING_FIELDS)[number];
 
@@ -94,6 +95,11 @@ export interface AgentConfig {
   fastMode?: boolean;
   /** Bindings users may pick for this agent in the chat, besides its own `modelBindingId`. */
   userSelectableModelBindingIds?: string[];
+  /**
+   * Reasoning effort per user-selectable binding. `reasoningEffort` stays the effort of the
+   * agent's own model and is not applied to a model a user picked instead.
+   */
+  modelReasoningEfforts?: Record<string, ReasoningEffortConfig>;
   maxSteps?: number;
   toolNames: string[];
   skillNames: string[];

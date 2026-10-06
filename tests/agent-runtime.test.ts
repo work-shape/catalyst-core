@@ -783,7 +783,7 @@ describe("local agent runtime", () => {
     });
   });
 
-  it("uses a user-selected model binding while preserving the agent reasoning effort", async () => {
+  it("runs a user-selected model binding with the effort configured for that model", async () => {
     const clientInstanceId = asClientInstanceId("binding-client");
     const context: RuntimeCallContext = {
       clientInstanceId,
@@ -829,7 +829,8 @@ describe("local agent runtime", () => {
             instructions: "Use the configured model binding.",
             modelBindingId: "primaryReasoning",
             reasoningEffort: "xhigh",
-            userSelectableModelBindingIds: ["alternate"],
+            userSelectableModelBindingIds: ["alternate", "bindingEffort"],
+            modelReasoningEfforts: { alternate: "low" },
             toolNames: [],
             initialPrompts: []
           }
@@ -850,6 +851,12 @@ describe("local agent runtime", () => {
           userSelectable: true
         },
         {
+          id: "bindingEffort",
+          providerId: "test-provider",
+          model: "binding-effort-model",
+          reasoningEffort: "medium"
+        },
+        {
           id: "alternate",
           providerId: "test-provider",
           model: "user-selected-model",
@@ -868,29 +875,43 @@ describe("local agent runtime", () => {
       })
     });
 
-    const run = await runtime.start(
-      {
-        agentName: "binding_agent",
-        modelBindingId: "alternate",
-        conversationId,
-        message: {
-          text: "Use the bound model."
+    const requestFor = async (modelBindingId: string | undefined) => {
+      providerRequest = undefined;
+      const run = await runtime.start(
+        {
+          agentName: "binding_agent",
+          modelBindingId,
+          conversationId,
+          message: { text: "Use the bound model." }
+        },
+        context
+      );
+      for await (const event of runtime.observe(run.runId, context)) {
+        if (event.type === "message_completed") {
+          break;
         }
-      },
-      context
-    );
-
-    for await (const event of runtime.observe(run.runId, context)) {
-      if (event.type === "message_completed") {
-        break;
       }
-    }
+      return providerRequest;
+    };
 
-    expect(providerRequest).toMatchObject({
+    expect(await requestFor("alternate")).toMatchObject({
       providerId: "test-provider",
       model: "user-selected-model",
-      reasoningEffort: "xhigh"
+      reasoningEffort: "low"
     });
+    // Without an effort for the picked model its binding's default applies, never the effort
+    // of the agent's own model.
+    expect(await requestFor("bindingEffort")).toMatchObject({
+      model: "binding-effort-model",
+      reasoningEffort: "medium"
+    });
+    // The agent's own effort stays with its own model, picked explicitly or not.
+    for (const modelBindingId of ["primaryReasoning", undefined]) {
+      expect(await requestFor(modelBindingId)).toMatchObject({
+        model: "bound-model",
+        reasoningEffort: "xhigh"
+      });
+    }
 
     // A userSelectable binding the agent does not list is rejected by the runtime itself.
     providerRequest = undefined;

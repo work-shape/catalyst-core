@@ -67,6 +67,14 @@ export function findAgentModelReferenceIssues(input: {
           : `Agent '${agent.name}' enables fastMode without a model binding that supports fast mode`
       );
     }
+    const userSelectable = new Set(agent.userSelectableModelBindingIds ?? []);
+    for (const bindingId of Object.keys(agent.modelReasoningEfforts ?? {})) {
+      if (!userSelectable.has(bindingId)) {
+        issues.push(
+          `Agent '${agent.name}' sets modelReasoningEfforts for '${bindingId}', which is not in its userSelectableModelBindingIds`
+        );
+      }
+    }
   }
   return issues;
 }

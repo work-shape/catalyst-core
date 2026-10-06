@@ -116,6 +116,17 @@ describe("config CLI serialization", () => {
     expect(serializeAgentYaml({ ...agent, userSelectableModelBindingIds: [] })).toBe(
       serializeAgentYaml(agent)
     );
+
+    const withEfforts = serializeAgentYaml({
+      ...agent,
+      userSelectableModelBindingIds: ["fast", "cheap"],
+      modelReasoningEfforts: { fast: "low" }
+    });
+    expect(withEfforts).toContain("modelReasoningEfforts:\n  fast: low\n");
+    expect(serializeAgentYaml(parseAgentYaml(withEfforts))).toBe(withEfforts);
+    expect(serializeAgentYaml({ ...agent, modelReasoningEfforts: {} })).toBe(
+      serializeAgentYaml(agent)
+    );
   });
 
   it("round-trips SKILL.md with provenance comments inside frontmatter", () => {

@@ -39,6 +39,9 @@ export function canonicalizeAgentConfig(input: unknown): AgentConfig {
     ...(agent.userSelectableModelBindingIds?.length
       ? { userSelectableModelBindingIds: agent.userSelectableModelBindingIds }
       : {}),
+    ...(Object.keys(agent.modelReasoningEfforts ?? {}).length
+      ? { modelReasoningEfforts: agent.modelReasoningEfforts }
+      : {}),
     ...(agent.maxSteps === undefined ? {} : { maxSteps: agent.maxSteps }),
     toolNames: agent.toolNames,
     skillNames: agent.skillNames,
