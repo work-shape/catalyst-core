@@ -939,8 +939,23 @@ function findBundleConfig(
   ) as AgentConfig | SkillConfig | undefined;
 }
 
+/** Object key order carries no meaning: a JSON store may return keys in another order. */
 function configValuesEqual(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  return JSON.stringify(withSortedKeys(left)) === JSON.stringify(withSortedKeys(right));
+}
+
+function withSortedKeys(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(withSortedKeys);
+  }
+  if (typeof value !== "object" || value === null) {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+      .map(([key, entry]) => [key, withSortedKeys(entry)])
+  );
 }
 
 function toJsonObject(value: unknown): JsonObject {

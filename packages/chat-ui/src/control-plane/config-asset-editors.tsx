@@ -345,11 +345,15 @@ export function AgentEditor({
         />
       </EditorSection>
 
-      {error ? <p className="px-5 py-3 text-sm text-destructive">{error}</p> : null}
-
       {availability}
 
       {revisions}
+
+      {error ? (
+        <p role="alert" className="px-5 py-3 text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
 
       {editableAgentFields.length > 0 || canManageAgentModels ? (
         <SaveBar
@@ -693,9 +697,13 @@ export function SkillEditor({
         )}
       </EditorSection>
 
-      {error ? <p className="px-5 py-3 text-sm text-destructive">{error}</p> : null}
-
       {revisions}
+
+      {error ? (
+        <p role="alert" className="px-5 py-3 text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
 
       {editable ? (
         <SaveBar

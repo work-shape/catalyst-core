@@ -158,6 +158,30 @@ export function agentConfigToForm(config: Record<string, unknown>): AgentFormSta
   };
 }
 
+/**
+ * The config to save for an edited agent. A field the form left as loaded keeps its stored
+ * value, so the form's normalisation (trimming, collapsing equal locales) never reaches the
+ * server as a change to a field nobody touched.
+ */
+export function editedAgentConfig(
+  form: AgentFormState,
+  storedConfig: Record<string, unknown> | undefined
+): Record<string, unknown> {
+  const edited = agentFormToConfig(form);
+  if (!storedConfig) {
+    return edited;
+  }
+  const loaded = agentFormToConfig(agentConfigToForm(storedConfig));
+  return Object.fromEntries(
+    Object.entries(edited).map(([field, value]) => [
+      field,
+      field in storedConfig && JSON.stringify(value) === JSON.stringify(loaded[field])
+        ? storedConfig[field]
+        : value
+    ])
+  );
+}
+
 export function agentFormToConfig(form: AgentFormState): Record<string, unknown> {
   const displayName = pairToLocalized(form.displayName);
   const description = pairToLocalized(form.description);

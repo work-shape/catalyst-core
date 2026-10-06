@@ -780,6 +780,67 @@ describe("config asset admin routes", () => {
     }
   });
 
+  it("saves a model setting on a release-controlled agent whose stored keys are ordered differently", async () => {
+    // Nothing is editable through the edit policy; the permission alone allows model settings.
+    const fixture = await createFixture({
+      modelBindings: true,
+      agentConfiguration: { enabled: true, editableAgentFields: [] }
+    });
+    // A JSON store may return object keys in another order than the client sends them.
+    await fixture.store.applyConfigAssetMutations({
+      clientInstanceId: fixture.clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: "assistant",
+          config: {
+            ...boundAgentConfig("plain"),
+            description: { de: "Assistentin für Unterlagen.", en: "Assistant for documents." },
+            welcomeMessage: { de: "Wie kann ich helfen?", en: "How can I help?" },
+            initialPrompts: [
+              { prompt: { de: "Prüfe.", en: "Check." }, title: { de: "Prüfung", en: "Check" } }
+            ]
+          }
+        },
+        { type: "setDefaultAgent", agentName: "assistant" }
+      ]
+    });
+    const sent = {
+      ...boundAgentConfig("plain"),
+      description: { en: "Assistant for documents.", de: "Assistentin für Unterlagen." },
+      welcomeMessage: { en: "How can I help?", de: "Wie kann ich helfen?" },
+      initialPrompts: [
+        { title: { en: "Check", de: "Prüfung" }, prompt: { en: "Check.", de: "Prüfe." } }
+      ]
+    };
+    const token = await mintToken(fixture.server, {
+      scopes: ["config_assets:read", "config_assets:write"],
+      roles: ["superadmin"],
+      permissions: []
+    });
+    const put = (config: Record<string, unknown>) =>
+      request(fixture.server, token, {
+        method: "PUT",
+        url: "/api/admin/config/assets/agent/assistant",
+        payload: { config }
+      });
+
+    for (const change of [
+      { userSelectableModelBindingIds: ["other"] },
+      { modelBindingId: "fast", fastMode: true },
+      { reasoningEffort: "high" }
+    ]) {
+      expect((await put({ ...sent, ...change })).statusCode).toBe(200);
+    }
+    // A real change to a protected field is still rejected.
+    const denied = await put({ ...sent, welcomeMessage: { en: "Hi", de: "Hallo" } });
+    expect(denied.statusCode).toBe(403);
+    expect(denied.json().error.message).toBe(
+      "Interactive changes are not allowed for agent field: welcomeMessage"
+    );
+  });
+
   it("accepts only userSelectable bindings as an agent's user-selectable models", async () => {
     const fixture = await createFixture({ modelBindings: true });
     const token = await mintToken(fixture.server, {

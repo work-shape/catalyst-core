@@ -6,6 +6,7 @@ import {
   agentConfigToForm,
   agentFormToConfig,
   configAssetMutationErrorMessage,
+  editedAgentConfig,
   localizedToPair,
   pairToLocalized,
   selectAgentModelBinding,
@@ -97,6 +98,35 @@ describe("config assets form model", () => {
     expect(agentFormToConfig({ ...form, userSelectableModelBindingIds: [] })).not.toHaveProperty(
       "userSelectableModelBindingIds"
     );
+  });
+
+  it("keeps the stored value of every field the form left untouched", () => {
+    // Shapes the form would normalise: equal locales, surrounding whitespace, an empty prompt.
+    const stored = {
+      name: "assistant",
+      displayName: { de: "FIONA", en: "FIONA" },
+      description: { de: "Assistentin. ", en: "Assistant." },
+      welcomeMessage: { de: "Wie kann ich helfen?", en: "How can I help?" },
+      instructions: "Help the user.",
+      modelBindingId: "sol",
+      toolNames: [],
+      skillNames: [],
+      initialPrompts: [
+        { prompt: { de: "Prüfe.", en: "Check." }, title: "Check" },
+        { title: "", prompt: "" }
+      ]
+    };
+    const form = agentConfigToForm(stored);
+
+    expect(
+      editedAgentConfig({ ...form, userSelectableModelBindingIds: ["terra"] }, stored)
+    ).toEqual({ ...stored, userSelectableModelBindingIds: ["terra"] });
+    // An edited field is saved in the form's shape; a new agent has nothing to keep.
+    expect(editedAgentConfig({ ...form, description: { en: "New", de: "New" } }, stored)).toEqual({
+      ...stored,
+      description: "New"
+    });
+    expect(editedAgentConfig(form, undefined)).toEqual(agentFormToConfig(form));
   });
 
   it("collapses identical locales to a plain string and drops empty localized fields", () => {

@@ -9,7 +9,7 @@ import type {
 import {
   agentAvailabilitySummary,
   agentConfigToForm,
-  agentFormToConfig,
+  editedAgentConfig,
   configAssetMutationErrorMessage,
   emptyAgentForm,
   emptySkillForm,
@@ -280,7 +280,10 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
                     .onSaveAsset({
                       kind: "agent",
                       name: form.name.trim(),
-                      config: agentFormToConfig(form),
+                      config: editedAgentConfig(
+                        form,
+                        selection.mode === "existing" ? selectedEntry?.config : undefined
+                      ),
                       baseVersion: version
                     })
                     .then(() => {
