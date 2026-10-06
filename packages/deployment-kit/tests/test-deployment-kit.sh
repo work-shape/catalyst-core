@@ -2,6 +2,7 @@
 set -euo pipefail
 
 kit_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+platform_dir="$(cd "$kit_dir/../.." && pwd)"
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
 
@@ -31,7 +32,7 @@ test_prepare_build_workspace() {
   printf "lockfileVersion: '9.0'\n" \
     > "$root/deployment.fixture/deploy/workspace/pnpm-lock.yaml"
 
-  "$kit_dir/prepare-build-workspace.sh" \
+  "$kit_dir/lib/prepare-build-workspace.sh" \
     --workspace-root "$root" \
     --deployment-root deployment.fixture
 
@@ -41,13 +42,13 @@ test_prepare_build_workspace() {
     || fail "prepare-build-workspace did not copy the committed lockfile"
 
   printf "lockfileVersion: 'different'\n" > "$root/pnpm-lock.yaml"
-  expect_failure "$kit_dir/prepare-build-workspace.sh" \
+  expect_failure "$kit_dir/lib/prepare-build-workspace.sh" \
     --workspace-root "$root" \
     --deployment-root "$root/deployment.fixture"
   assert_contains "$scratch/failure-output" "refusing to overwrite"
 
   mkdir -p "$scratch/outside-deployment"
-  expect_failure "$kit_dir/prepare-build-workspace.sh" \
+  expect_failure "$kit_dir/lib/prepare-build-workspace.sh" \
     --workspace-root "$root" \
     --deployment-root "$scratch/outside-deployment"
   assert_contains "$scratch/failure-output" "must be inside workspace root"
@@ -89,7 +90,7 @@ printf "lockfileVersion: '9.0'\nfixtureChecksum: '%s'\n" "$checksum" > pnpm-lock
 SH
   chmod +x "$fake_bin/corepack"
 
-  PATH="$fake_bin:$PATH" "$kit_dir/update-release.sh" \
+  PATH="$fake_bin:$PATH" "$kit_dir/lib/update-release.sh" \
     --workspace-root "$root" \
     --deployment-root "$deployment"
   [[ -s "$deployment/deploy/workspace/pnpm-lock.yaml" ]] \
@@ -97,21 +98,21 @@ SH
   assert_contains "$deployment/deploy/release.refs" \
     "PLATFORM_REF=$(git -C "$root/platform" rev-parse HEAD)"
 
-  PATH="$fake_bin:$PATH" "$kit_dir/update-release.sh" \
+  PATH="$fake_bin:$PATH" "$kit_dir/lib/update-release.sh" \
     --workspace-root "$root" \
     --deployment-root "$deployment" \
     --check
 
   printf '{"name":"platform-dirty-tree-must-be-ignored"}\n' \
     > "$root/platform/package.json"
-  PATH="$fake_bin:$PATH" "$kit_dir/update-release.sh" \
+  PATH="$fake_bin:$PATH" "$kit_dir/lib/update-release.sh" \
     --workspace-root "$root" \
     --deployment-root "$deployment" \
     --check
 
   printf '{"name":"deployment-fixture","version":"2.0.0"}\n' \
     > "$deployment/package.json"
-  expect_failure env PATH="$fake_bin:$PATH" "$kit_dir/update-release.sh" \
+  expect_failure env PATH="$fake_bin:$PATH" "$kit_dir/lib/update-release.sh" \
     --workspace-root "$root" \
     --deployment-root "$deployment" \
     --check
@@ -122,7 +123,7 @@ SH
   printf '{}\n' > "$root/package.json"
   printf 'packages: []\n' > "$root/pnpm-workspace.yaml"
   cp "$deployment/deploy/workspace/pnpm-lock.yaml" "$root/pnpm-lock.yaml"
-  expect_failure "$kit_dir/check-release.sh" \
+  expect_failure "$kit_dir/lib/check-release.sh" \
     --workspace-root "$root" \
     --deployment-root "$deployment"
   assert_contains "$scratch/failure-output" "release refs must be full commit SHAs"
@@ -147,7 +148,7 @@ SH
 exit 0
 SH
   chmod +x "$fake_bin/docker" "$fake_bin/ps"
-  PATH="$fake_bin:$PATH" node "$kit_dir/compose-watch-preflight.mjs" \
+  PATH="$fake_bin:$PATH" node "$kit_dir/dev/compose-watch-preflight.mjs" \
     --root "$root" --services api
 }
 
@@ -175,7 +176,7 @@ SH
   chmod +x "$fake_bin/docker"
 
   local command=(
-    node "$kit_dir/ensure-compose-dev-images.mjs"
+    node "$kit_dir/dev/ensure-compose-dev-images.mjs"
     --root "$root"
     --services api
     --inputs package.json Dockerfile
@@ -202,7 +203,7 @@ SH
 test_compose_helpers() {
   KIT_DIR="$kit_dir" node --input-type=module <<'NODE'
 import { pathToFileURL } from "node:url";
-const helpers = await import(pathToFileURL(`${process.env.KIT_DIR}/verify-compose-helpers.mjs`));
+const helpers = await import(pathToFileURL(`${process.env.KIT_DIR}/verify/compose-helpers.mjs`));
 helpers.assert((await helpers.readPlatformDockerfile()).includes("FROM "), "platform Dockerfile");
 const dockerfile = "FROM base AS api\nRUN api\nFROM base AS ui\nRUN ui\n";
 helpers.assert(helpers.extractDockerStage(dockerfile, "api").includes("RUN api"), "stage");
@@ -215,9 +216,37 @@ helpers.assert(
 NODE
 }
 
+# Callers that pin the layout before the kit became a package use these paths.
+test_legacy_paths() {
+  local legacy="$platform_dir/scripts/deployment-kit" script
+  for script in check-release.sh update-release.sh prepare-build-workspace.sh; do
+    "$legacy/$script" --help > "$scratch/legacy-help"
+    assert_contains "$scratch/legacy-help" "$script"
+  done
+  node "$legacy/compose-watch-preflight.mjs" --help > "$scratch/legacy-help"
+  assert_contains "$scratch/legacy-help" "compose-watch-preflight.mjs"
+  expect_failure node "$legacy/ensure-compose-dev-images.mjs" --unknown-option
+  LEGACY="$legacy" node --input-type=module <<'NODE'
+import { pathToFileURL } from "node:url";
+const helpers = await import(
+  pathToFileURL(`${process.env.LEGACY}/verify-compose-helpers.mjs`)
+);
+for (const name of [
+  "assert",
+  "extractDockerStage",
+  "extractServiceBlock",
+  "readPlatformDockerfile",
+  "workflowTagsImageSuffix"
+]) {
+  if (typeof helpers[name] !== "function") throw new Error(`${name} is not exported`);
+}
+NODE
+}
+
 test_prepare_build_workspace
 test_update_release
 test_compose_watch_preflight
 test_ensure_compose_dev_images
 test_compose_helpers
+test_legacy_paths
 echo "deployment-kit tests passed"

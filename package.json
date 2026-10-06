@@ -19,7 +19,7 @@
     "release:check": "node scripts/release/check-packages.mjs",
     "release:metadata": "node scripts/release/package-metadata.mjs --write",
     "test": "vitest run && pnpm test:deployment-kit",
-    "test:deployment-kit": "bash scripts/deployment-kit/tests/test-deployment-kit.sh",
+    "test:deployment-kit": "bash packages/deployment-kit/tests/test-deployment-kit.sh",
     "test:e2e": "node scripts/run-chat-e2e.mjs --all",
     "test:e2e:chat": "node scripts/run-chat-e2e.mjs --all",
     "test:e2e:chat-state": "node scripts/run-chat-e2e.mjs --state",
