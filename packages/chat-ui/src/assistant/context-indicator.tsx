@@ -30,11 +30,11 @@ export function ContextIndicator({
       <HoverCardTrigger asChild>
         <button
           type="button"
-          className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40"
+          className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40"
           aria-label={accessibleLabel}
           data-testid="context-indicator"
         >
-          <svg viewBox="0 0 20 20" className="size-5 -rotate-90" aria-hidden="true">
+          <svg viewBox="0 0 20 20" className="size-4 -rotate-90" aria-hidden="true">
             <circle
               cx="10"
               cy="10"
@@ -59,12 +59,17 @@ export function ContextIndicator({
           </svg>
         </button>
       </HoverCardTrigger>
-      <HoverCardContent side="top" align="end" sideOffset={8} className="w-60 text-center">
-        <div className="text-sm text-muted-foreground">{t("contextWindow")}</div>
-        <div className="mt-1 text-xl font-medium">
+      <HoverCardContent
+        side="top"
+        align="center"
+        sideOffset={8}
+        className="w-auto px-3 py-2 text-center text-xs whitespace-nowrap"
+      >
+        <div className="text-muted-foreground">{t("contextWindow")}</div>
+        <div className="mt-0.5 text-sm font-medium">
           {t("contextPercentFull", { percent: percentage })}
         </div>
-        <div className="mt-1 text-base">{detail}</div>
+        <div className="mt-0.5 text-muted-foreground">{detail}</div>
       </HoverCardContent>
     </HoverCard>
   );
