@@ -150,6 +150,9 @@ const translations = {
     attachmentStatusReady: "Ready",
     attachmentStatusUnsupported: "Unsupported file type",
     attachmentStatusUploading: "Uploading",
+    attachmentUploadFailed: "“{filename}” could not be uploaded. Please add the file again.",
+    attachmentUploadUnreadable:
+      "“{filename}” could not be read on your device. If it is in a cloud folder, download it first and add it again.",
     attachmentsCount: "{count} files",
     attachmentsFailedCount: "{count} failed",
     attachmentsRemoveAll: "Remove all",
@@ -817,6 +820,10 @@ const translations = {
     attachmentStatusReady: "Fertig",
     attachmentStatusUnsupported: "Dateityp nicht unterstützt",
     attachmentStatusUploading: "Wird hochgeladen",
+    attachmentUploadFailed:
+      "„{filename}“ konnte nicht hochgeladen werden. Bitte füge die Datei erneut hinzu.",
+    attachmentUploadUnreadable:
+      "„{filename}“ konnte auf deinem Gerät nicht gelesen werden. Liegt die Datei in einem Cloud-Ordner, lade sie zuerst herunter und füge sie erneut hinzu.",
     attachmentsCount: "{count} Dateien",
     attachmentsFailedCount: "{count} fehlgeschlagen",
     attachmentsRemoveAll: "Alle entfernen",

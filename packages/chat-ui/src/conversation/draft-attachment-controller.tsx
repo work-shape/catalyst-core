@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, type ApiClient, type DraftAttachment } from "@vivd-catalyst/api-client";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
+import { useTranslation, type TranslationContextValue } from "../i18n";
 import type { LocalUploadingAttachment } from "../assistant/assistant-composer";
 
 export interface DraftAttachmentControllerInput {
@@ -29,11 +30,14 @@ export interface DraftAttachmentController {
 
 type LocalUploadingConversationAttachment = LocalUploadingAttachment & { conversationId: string };
 const MAX_CONCURRENT_UPLOADS = 2;
+const UPLOAD_ATTEMPTS = 3;
+const GATEWAY_FAILURE_STATUSES = [0, 502, 503, 504];
 
 export function useDraftAttachmentController(
   input: DraftAttachmentControllerInput
 ): DraftAttachmentController {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
   const uploadLimiter = useRef(createConcurrencyLimiter(MAX_CONCURRENT_UPLOADS));
   const [localUploadingAttachments, setLocalUploadingAttachments] = useState<
     LocalUploadingConversationAttachment[]
@@ -99,7 +103,11 @@ export function useDraftAttachmentController(
     };
     setLocalUploadingAttachments((currentAttachments) => [...currentAttachments, localAttachment]);
     await uploadLimiter
-      .current(() => input.client.conversations.draftAttachments.upload(conversationId, file))
+      .current(() =>
+        uploadFileWithRetry(file, (readFile) =>
+          input.client.conversations.draftAttachments.upload(conversationId, readFile)
+        )
+      )
       .then((response) => {
         queryClient.setQueryData(
           workspaceQueryKeys.draftAttachments(input.apiBaseUrl, input.authScope, conversationId),
@@ -117,7 +125,7 @@ export function useDraftAttachmentController(
         });
       })
       .catch((error) => {
-        input.onError(error instanceof ApiError ? error.message : "File upload failed");
+        input.onError(uploadErrorMessage(error, file.name, t));
       })
       .finally(() => {
         setLocalUploadingAttachments((currentAttachments) =>
@@ -200,6 +208,59 @@ export function withoutDraftAttachment<Attachment extends { id: string }>(
   attachmentId: string
 ): Attachment[] {
   return attachments.filter((attachment) => attachment.id !== attachmentId);
+}
+
+class UnreadableFileError extends Error {}
+
+/**
+ * Reads the file into memory before the request opens, then retries failures that are not an
+ * answer from the API. A browser that cannot read a file promptly (a cloud-synced folder that
+ * still has to download it) otherwise opens the request and stalls its body until the reverse
+ * proxy gives up. Retrying is safe: the API deduplicates uploads by checksum.
+ */
+export async function uploadFileWithRetry<T>(
+  file: File,
+  upload: (readFile: File) => Promise<T>,
+  retryDelayMs = 1000
+): Promise<T> {
+  let bytes: ArrayBuffer;
+  try {
+    bytes = await file.arrayBuffer();
+  } catch {
+    throw new UnreadableFileError(file.name);
+  }
+  const readFile = new File([bytes], file.name, {
+    type: file.type,
+    lastModified: file.lastModified
+  });
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await upload(readFile);
+    } catch (error) {
+      if (attempt >= UPLOAD_ATTEMPTS || !isTransientUploadError(error)) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, attempt * retryDelayMs));
+    }
+  }
+}
+
+function isTransientUploadError(error: unknown): boolean {
+  return !(error instanceof ApiError) || GATEWAY_FAILURE_STATUSES.includes(error.status);
+}
+
+export function uploadErrorMessage(
+  error: unknown,
+  filename: string,
+  t: TranslationContextValue["t"]
+): string {
+  if (error instanceof UnreadableFileError) {
+    return t("attachmentUploadUnreadable", { filename });
+  }
+  if (isTransientUploadError(error)) {
+    return t("attachmentUploadFailed", { filename });
+  }
+  return `${filename}: ${(error as ApiError).message}`;
 }
 
 function createConcurrencyLimiter(maxConcurrency: number) {
