@@ -1,4 +1,4 @@
-import { ChevronDown, FileText, History, Plus, Star, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, FileText, History, Plus, Star, Trash2, X } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import type {
   AdministeredCollaborationWorkspace,
@@ -77,6 +77,8 @@ export function AgentEditor({
   const [form, setForm] = useState(initialForm);
   const [error, setError] = useState<string | undefined>(undefined);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  // The form as last saved; any edit replaces `form` and so ends the confirmation.
+  const [savedForm, setSavedForm] = useState<typeof form | undefined>(undefined);
   const canEdit = (field: string) => editableAgentFields.includes(field);
   const canEditModel = canManageAgentModels;
   const canEditMaxSteps = canEdit("maxSteps");
@@ -95,7 +97,9 @@ export function AgentEditor({
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    setError((await onSave(form)).error);
+    const outcome = await onSave(form);
+    setError(outcome.error);
+    setSavedForm(outcome.ok ? form : undefined);
   };
 
   return (
@@ -304,6 +308,7 @@ export function AgentEditor({
         <SaveBar
           label={isNew ? t("configCreateAgent") : t("configSaveChanges")}
           mutating={mutating}
+          saved={savedForm === form}
         />
       ) : null}
 
@@ -604,13 +609,17 @@ export function SkillEditor({
   const [form, setForm] = useState(initialForm);
   const [error, setError] = useState<string | undefined>(undefined);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  // The form as last saved; any edit replaces `form` and so ends the confirmation.
+  const [savedForm, setSavedForm] = useState<typeof form | undefined>(undefined);
   const [selectedResource, setSelectedResource] = useState<"root" | number>("root");
 
   const update = (patch: Partial<SkillFormState>) => setForm((value) => ({ ...value, ...patch }));
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    setError((await onSave(form)).error);
+    const outcome = await onSave(form);
+    setError(outcome.error);
+    setSavedForm(outcome.ok ? form : undefined);
   };
 
   return (
@@ -782,6 +791,7 @@ export function SkillEditor({
         <SaveBar
           label={isNew ? t("configCreateSkill") : t("configSaveChanges")}
           mutating={mutating}
+          saved={savedForm === form}
         />
       ) : null}
 
@@ -1092,10 +1102,13 @@ function EditorTextarea({
 function SaveBar({
   label,
   mutating,
+  saved,
   disabled = false
 }: {
   label: string;
   mutating: boolean;
+  /** True after a successful save, until the form changes again. */
+  saved: boolean;
   disabled?: boolean;
 }) {
   const { t } = useTranslation();
@@ -1106,7 +1119,18 @@ function SaveBar({
         {mutating ? <Spinner className="size-4" /> : null}
         {label}
       </Button>
-      <span className="text-xs text-muted-foreground">{t("configAppliesImmediately")}</span>
+      {saved && !mutating ? (
+        <span
+          role="status"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-success"
+          data-testid="config-saved-notice"
+        >
+          <Check size={15} aria-hidden="true" />
+          {t("configChangesSaved")}
+        </span>
+      ) : (
+        <span className="text-xs text-muted-foreground">{t("configAppliesImmediately")}</span>
+      )}
     </div>
   );
 }
