@@ -17,6 +17,10 @@ contain breaking changes; a patch version does not.
   `userSelectableReasoningEfforts`. The agent's configured effort stays the default. The run
   API accepts `reasoningEffort` and rejects an effort the model that runs does not offer. A
   migration adds `agent_runs.reasoning_effort`.
+- **Chat:** a model or reasoning effort the user picks becomes their default for new
+  conversations, on every device. A conversation that already ran stays on what its latest run
+  used, and a user who never picked anything follows the configured defaults. The pick is
+  stored per user (`/api/me/model-preference`); a migration adds `product_users.model_preference`.
 
 ## 0.6.3 — 2026-10-08
 

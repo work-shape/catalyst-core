@@ -218,6 +218,13 @@
       "when": 1791458216311,
       "tag": "0030_agent_run_reasoning_effort",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1791469526170,
+      "tag": "0031_user_model_preference",
+      "breakpoints": true
     }
   ]
 }

@@ -71,6 +71,8 @@ import {
   type UpdateAgentRunStatusInput,
   type UpsertUserIdentityInput,
   type UserIdentity,
+  type UserModelPreference,
+  type UserModelPreferenceInput,
   type UserRecord,
   type UserStore,
   type UpdateWorkspaceInput,
@@ -154,6 +156,7 @@ export class InMemoryPlatformStore
     });
   private readonly modelUsageEvents: ModelUsageEvent[] = [];
   private readonly users = new Map<string, UserRecord>();
+  private readonly userModelPreferences = new Map<string, UserModelPreference>();
   private readonly identities = new Map<string, UserIdentity>();
   private readonly apiAccessStore = new InMemoryApiAccessStore({
     isUserInClient: ({ clientInstanceId, userId }) => {
@@ -2333,6 +2336,22 @@ export class InMemoryPlatformStore
     };
     this.users.set(updated.id, updated);
     return updated;
+  }
+
+  async getUserModelPreference(
+    input: UserModelPreferenceInput
+  ): Promise<UserModelPreference | undefined> {
+    return this.userModelPreferences.get(input.userId);
+  }
+
+  async setUserModelPreference(
+    input: UserModelPreferenceInput & { preference: UserModelPreference }
+  ): Promise<void> {
+    const user = this.users.get(input.userId);
+    if (!user || user.clientInstanceId !== input.clientInstanceId) {
+      throw new AppError("NOT_FOUND", "User is not available");
+    }
+    this.userModelPreferences.set(input.userId, input.preference);
   }
 
   private touchConversation(conversationId: ConversationId, updatedAt: string): void {

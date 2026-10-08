@@ -1,0 +1,1 @@
+ALTER TABLE "product_users" ADD COLUMN "model_preference" jsonb;

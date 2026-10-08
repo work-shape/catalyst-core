@@ -10,6 +10,8 @@ import {
   type ResolveUserIdentityInput,
   type UpdateUserInput,
   type UpsertUserIdentityInput,
+  type UserModelPreference,
+  type UserModelPreferenceInput,
   type UserIdentity,
   type UserRecord,
   authenticatedUserFromRecord,
@@ -297,6 +299,41 @@ export async function createUser(
     });
     return mapUserRecord(row, []);
   });
+}
+
+export async function getUserModelPreference(
+  db: PostgresDatabase,
+  input: UserModelPreferenceInput
+): Promise<UserModelPreference | undefined> {
+  const [row] = await db
+    .select({ modelPreference: productUsers.modelPreference })
+    .from(productUsers)
+    .where(
+      and(
+        eq(productUsers.clientInstanceId, input.clientInstanceId),
+        eq(productUsers.id, input.userId)
+      )
+    );
+  return row?.modelPreference ?? undefined;
+}
+
+export async function setUserModelPreference(
+  db: PostgresDatabase,
+  input: UserModelPreferenceInput & { preference: UserModelPreference }
+): Promise<void> {
+  const rows = await db
+    .update(productUsers)
+    .set({ modelPreference: input.preference })
+    .where(
+      and(
+        eq(productUsers.clientInstanceId, input.clientInstanceId),
+        eq(productUsers.id, input.userId)
+      )
+    )
+    .returning({ id: productUsers.id });
+  if (rows.length === 0) {
+    throw new AppError("NOT_FOUND", "User is not available");
+  }
 }
 
 export async function updateUser(

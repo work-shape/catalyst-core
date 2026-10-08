@@ -269,6 +269,7 @@ export class ConversationWorkflow {
     const latestVisibleTerminalRun =
       latestRun?.status === "failed" || latestRun?.status === "cancelled" ? latestRun : undefined;
     const runForSnapshot = recovered?.run ?? activeRun ?? latestVisibleTerminalRun;
+    const latestRunOfAnyStatus = activeRun ?? latestRun;
     const serverTime = new Date().toISOString();
     const completedRunProjections = await this.createCompletedRunProjections(
       conversationId,
@@ -285,6 +286,18 @@ export class ConversationWorkflow {
             activeRun: {
               run: toActiveRunSummary(runForSnapshot),
               projection: await this.createRunProjection(runForSnapshot)
+            }
+          }
+        : {}),
+      ...(latestRunOfAnyStatus
+        ? {
+            modelSelection: {
+              ...(latestRunOfAnyStatus.modelBindingId
+                ? { modelBindingId: latestRunOfAnyStatus.modelBindingId }
+                : {}),
+              ...(latestRunOfAnyStatus.reasoningEffort
+                ? { reasoningEffort: latestRunOfAnyStatus.reasoningEffort }
+                : {})
             }
           }
         : {}),

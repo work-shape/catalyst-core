@@ -2,6 +2,7 @@ import type { LocaleCode } from "@vivd-catalyst/api-client";
 
 export const workspaceQueryKeys = {
   me: (apiBaseUrl: string) => ["me", apiBaseUrl] as const,
+  modelPreference: (apiBaseUrl: string) => ["me", apiBaseUrl, "model-preference"] as const,
   branding: (apiBaseUrl: string, localePreference: LocaleCode | undefined) =>
     ["branding", apiBaseUrl, localePreference ?? "auto"] as const,
   config: (apiBaseUrl: string, authScope: string, localePreference: LocaleCode | undefined) =>

@@ -44,7 +44,22 @@ export function createInstanceClients(transport: ApiClientTransport) {
         transport.unwrapJson(
           generatedSdk.deleteCurrentUser({ client: transport.generatedClient }),
           apiOperations.deleteCurrentUser.responseSchema
-        )
+        ),
+      modelPreference: {
+        get: () =>
+          transport.unwrapJson(
+            generatedSdk.getCurrentUserModelPreference({ client: transport.generatedClient }),
+            apiOperations.getCurrentUserModelPreference.responseSchema
+          ),
+        set: (input: OperationRequestInput<typeof apiOperations.setCurrentUserModelPreference>) =>
+          transport.unwrapJson(
+            generatedSdk.setCurrentUserModelPreference({
+              client: transport.generatedClient,
+              body: apiOperations.setCurrentUserModelPreference.requestSchema.parse(input)
+            }),
+            apiOperations.setCurrentUserModelPreference.responseSchema
+          )
+      }
     },
     passwordSetup: {
       requestReset: (

@@ -324,6 +324,11 @@ modelBindings:
 
 The EU mark is shown for models whose provider declares `compliance.residency: eu`.
 
+A model or effort a user picks becomes their own default for new conversations and is stored
+with their account, so it follows them across devices. A conversation that already ran stays on
+what its latest run used. A user who never picked anything follows the agent's configured model
+and effort, so a change to those defaults still reaches them.
+
 ## Mail
 
 Mail is off by default. Enabling it adds a forgot-password link to the login panel and lets user

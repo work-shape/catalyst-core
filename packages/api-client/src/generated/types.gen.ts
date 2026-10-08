@@ -450,6 +450,53 @@ export type UpdateCurrentUserResponses = {
 
 export type UpdateCurrentUserResponse = UpdateCurrentUserResponses[keyof UpdateCurrentUserResponses];
 
+export type GetCurrentUserModelPreferenceData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/me/model-preference';
+};
+
+export type GetCurrentUserModelPreferenceResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        modelBindingId?: string;
+        reasoningEfforts: {
+            [key: string]: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+        };
+    };
+};
+
+export type GetCurrentUserModelPreferenceResponse = GetCurrentUserModelPreferenceResponses[keyof GetCurrentUserModelPreferenceResponses];
+
+export type SetCurrentUserModelPreferenceData = {
+    body: {
+        modelBindingId?: string;
+        reasoningEfforts: {
+            [key: string]: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+        };
+    };
+    path?: never;
+    query?: never;
+    url: '/api/me/model-preference';
+};
+
+export type SetCurrentUserModelPreferenceResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        modelBindingId?: string;
+        reasoningEfforts: {
+            [key: string]: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+        };
+    };
+};
+
+export type SetCurrentUserModelPreferenceResponse = SetCurrentUserModelPreferenceResponses[keyof SetCurrentUserModelPreferenceResponses];
+
 export type ChangeCurrentUserPasswordData = {
     body: {
         currentPassword: string;
@@ -1607,6 +1654,10 @@ export type GetConversationThreadResponses = {
                 };
             };
         };
+        modelSelection?: {
+            modelBindingId?: string;
+            reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+        };
         userState: {
             clientInstanceId: string;
             conversationId: string;
@@ -2300,6 +2351,10 @@ export type StartConversationRunResponses = {
                     };
                 };
             };
+            modelSelection?: {
+                modelBindingId?: string;
+                reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+            };
             userState: {
                 clientInstanceId: string;
                 conversationId: string;
@@ -2694,6 +2749,10 @@ export type CreateConversationRunResponses = {
                         category: 'app_error' | 'internal_error' | 'runtime_interrupted' | 'abort_error' | 'unknown_error';
                     };
                 };
+            };
+            modelSelection?: {
+                modelBindingId?: string;
+                reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
             };
             userState: {
                 clientInstanceId: string;

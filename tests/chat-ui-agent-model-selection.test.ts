@@ -5,6 +5,7 @@ import { ModelPicker } from "../packages/chat-ui/src/assistant/model-picker";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 import {
   agentModelSelection,
+  conversationModelPicks,
   modelReasoningEffortSelection,
   type AgentSelectableModel
 } from "../packages/chat-ui/src/workspace/agent-model-selection";
@@ -109,6 +110,57 @@ function renderPicker(models: AgentSelectableModel[]) {
     )
   );
 }
+
+describe("conversation model picks", () => {
+  const userDefault = { modelBindingId: "terra", reasoningEfforts: { sol: "high" as const } };
+
+  it("starts a conversation without a run from the user's default", () => {
+    expect(
+      conversationModelPicks({
+        agent: chooser,
+        changed: undefined,
+        latestRun: undefined,
+        userDefault
+      })
+    ).toEqual(userDefault);
+  });
+
+  it("keeps a conversation on what its latest run used, not on the user's default", () => {
+    // The run followed the configured defaults: the agent's own model at its own effort.
+    expect(
+      conversationModelPicks({ agent: chooser, changed: undefined, latestRun: {}, userDefault })
+    ).toEqual({ reasoningEfforts: {} });
+    expect(
+      conversationModelPicks({
+        agent: chooser,
+        changed: undefined,
+        latestRun: { reasoningEffort: "low" },
+        userDefault
+      })
+    ).toEqual({ reasoningEfforts: { sol: "low" } });
+    // Efforts picked for other models stay available when the user switches within it.
+    expect(
+      conversationModelPicks({
+        agent: chooser,
+        changed: undefined,
+        latestRun: { modelBindingId: "terra" },
+        userDefault
+      })
+    ).toEqual({ modelBindingId: "terra", reasoningEfforts: { sol: "high" } });
+  });
+
+  it("lets a change made in the open conversation win over its latest run", () => {
+    const changed = { reasoningEfforts: { sol: "low" as const } };
+    expect(
+      conversationModelPicks({
+        agent: chooser,
+        changed,
+        latestRun: { modelBindingId: "terra" },
+        userDefault
+      })
+    ).toBe(changed);
+  });
+});
 
 describe("composer model picker", () => {
   it("names the selected model and its effort on the trigger", () => {

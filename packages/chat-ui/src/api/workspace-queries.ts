@@ -30,6 +30,17 @@ export function useWorkspaceMeQuery(input: Pick<WorkspaceQueryInput, "apiBaseUrl
   });
 }
 
+export function useWorkspaceModelPreferenceQuery(
+  input: Pick<WorkspaceQueryInput, "apiBaseUrl" | "client"> & { enabled: boolean }
+) {
+  return useQuery({
+    queryKey: workspaceQueryKeys.modelPreference(input.apiBaseUrl),
+    queryFn: () => input.client.account.modelPreference.get(),
+    enabled: input.enabled,
+    staleTime: Infinity
+  });
+}
+
 export async function getCurrentUserWithinDeadline(
   client: { account: Pick<ApiClient["account"], "get"> },
   querySignal: AbortSignal,

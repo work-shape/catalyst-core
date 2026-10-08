@@ -10,6 +10,15 @@ export const localizationSchema = z.object({
 });
 
 export const reasoningEffortSchema = z.enum(["none", "low", "medium", "high", "xhigh"]);
+
+/**
+ * The model and reasoning efforts a user last picked, which a new conversation starts from.
+ * `reasoningEfforts` is keyed by the binding id of the model each effort was picked for.
+ */
+export const userModelPreferenceSchema = z.object({
+  modelBindingId: z.string().min(1).optional(),
+  reasoningEfforts: z.record(z.string().min(1), reasoningEffortSchema)
+});
 export const modelUsageTierSchema = z.enum(["low", "moderate", "high", "very_high"]);
 export const modelResidencySchema = z.enum(["global", "eu", "unknown"]);
 
@@ -307,3 +316,5 @@ export type AdministeredCollaborationWorkspace = z.infer<
   typeof administeredCollaborationWorkspaceSchema
 >;
 export type ConfigAssetBundle = z.infer<typeof configAssetBundleSchema>;
+
+export type UserModelPreference = z.infer<typeof userModelPreferenceSchema>;

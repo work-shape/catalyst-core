@@ -80,6 +80,77 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
+  it("remembers a user's model preference and what each conversation last ran on", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        agentModelBindingId: "own",
+        agentUserSelectableModelBindingIds: ["offered"],
+        modelBindings: [
+          {
+            id: "own",
+            providerId: "local",
+            model: "own-model",
+            reasoningEffort: "medium",
+            userSelectableReasoningEfforts: ["high"]
+          },
+          { id: "offered", providerId: "local", model: "offered-model" }
+        ]
+      }),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+    const preferenceUrl = "/api/me/model-preference";
+
+    const initial = await app.server.inject({ method: "GET", url: preferenceUrl });
+    expect(initial.json()).toEqual({ reasoningEfforts: {} });
+    const preference = { modelBindingId: "offered", reasoningEfforts: { own: "high" } };
+    const stored = await app.server.inject({
+      method: "PUT",
+      url: preferenceUrl,
+      payload: preference
+    });
+    expect(stored.statusCode).toBe(200);
+    expect((await app.server.inject({ method: "GET", url: preferenceUrl })).json()).toEqual(
+      preference
+    );
+    const invalid = await app.server.inject({
+      method: "PUT",
+      url: preferenceUrl,
+      payload: { reasoningEfforts: { own: "maximal" } }
+    });
+    expect(invalid.statusCode).toBe(422);
+
+    const threadAfterRun = async (payload: Record<string, unknown>) => {
+      const started = await app.server.inject({
+        method: "POST",
+        url: "/api/conversations/runs",
+        payload: { ...payload, message: { text: "Hello" } }
+      });
+      expect(started.statusCode).toBe(200);
+      const { conversation, run } = started.json() as {
+        conversation: { id: string };
+        run: { id: string };
+      };
+      await drainRunEvents(app.server, conversation.id, run.id);
+      const thread = await app.server.inject({
+        method: "GET",
+        url: `/api/conversations/${conversation.id}/thread`
+      });
+      return thread.json() as { modelSelection?: unknown };
+    };
+    // Each conversation reports its own run, whatever the user's preference says.
+    expect((await threadAfterRun({ idempotencyKey: "defaults" })).modelSelection).toEqual({});
+    expect(
+      (await threadAfterRun({ idempotencyKey: "offered", modelBindingId: "offered" }))
+        .modelSelection
+    ).toEqual({ modelBindingId: "offered" });
+    expect(
+      (await threadAfterRun({ idempotencyKey: "high", reasoningEffort: "high" })).modelSelection
+    ).toEqual({ reasoningEffort: "high" });
+    await app.close();
+  });
+
   it("accepts only the reasoning efforts the model that runs offers to users", async () => {
     const app = await createClientInstanceApp({
       config: createTestConfig({

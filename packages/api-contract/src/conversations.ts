@@ -676,6 +676,16 @@ export const conversationThreadSnapshotSchema = z.object({
       projection: agentRunProjectionSchema
     })
     .optional(),
+  /**
+   * What the conversation's latest run was asked to use. Absent before the first run; a run that
+   * followed the configured defaults leaves both fields out.
+   */
+  modelSelection: z
+    .object({
+      modelBindingId: z.string().min(1).optional(),
+      reasoningEffort: reasoningEffortSchema.optional()
+    })
+    .optional(),
   userState: conversationUserStateSchema,
   serverTime: z.string()
 });

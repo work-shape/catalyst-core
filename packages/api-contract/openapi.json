@@ -1532,6 +1532,131 @@
         }
       }
     },
+    "/api/me/model-preference": {
+      "get": {
+        "operationId": "getCurrentUserModelPreference",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "modelBindingId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "reasoningEfforts": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "additionalProperties": {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "low",
+                          "medium",
+                          "high",
+                          "xhigh"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "reasoningEfforts"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "setCurrentUserModelPreference",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "modelBindingId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "reasoningEfforts": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "enum": [
+                        "none",
+                        "low",
+                        "medium",
+                        "high",
+                        "xhigh"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "reasoningEfforts"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "modelBindingId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "reasoningEfforts": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "additionalProperties": {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "low",
+                          "medium",
+                          "high",
+                          "xhigh"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "reasoningEfforts"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/me/password": {
       "post": {
         "operationId": "changeCurrentUserPassword",
@@ -5837,6 +5962,26 @@
                       ],
                       "additionalProperties": false
                     },
+                    "modelSelection": {
+                      "type": "object",
+                      "properties": {
+                        "modelBindingId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "reasoningEffort": {
+                          "type": "string",
+                          "enum": [
+                            "none",
+                            "low",
+                            "medium",
+                            "high",
+                            "xhigh"
+                          ]
+                        }
+                      },
+                      "additionalProperties": false
+                    },
                     "userState": {
                       "type": "object",
                       "properties": {
@@ -8763,6 +8908,26 @@
                           ],
                           "additionalProperties": false
                         },
+                        "modelSelection": {
+                          "type": "object",
+                          "properties": {
+                            "modelBindingId": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "reasoningEffort": {
+                              "type": "string",
+                              "enum": [
+                                "none",
+                                "low",
+                                "medium",
+                                "high",
+                                "xhigh"
+                              ]
+                            }
+                          },
+                          "additionalProperties": false
+                        },
                         "userState": {
                           "type": "object",
                           "properties": {
@@ -10530,6 +10695,26 @@
                             "run",
                             "projection"
                           ],
+                          "additionalProperties": false
+                        },
+                        "modelSelection": {
+                          "type": "object",
+                          "properties": {
+                            "modelBindingId": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "reasoningEffort": {
+                              "type": "string",
+                              "enum": [
+                                "none",
+                                "low",
+                                "medium",
+                                "high",
+                                "xhigh"
+                              ]
+                            }
+                          },
                           "additionalProperties": false
                         },
                         "userState": {

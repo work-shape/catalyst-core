@@ -41,6 +41,7 @@ import type {
   ApiCredentialRecord,
   ServicePrincipalRecord,
   StructuredDataResourceRecord,
+  UserModelPreference,
   UserRecord,
   WorkspaceAccessRequest,
   WorkspaceMembership,
@@ -59,6 +60,7 @@ export const productUsers = pgTable(
     permissionRefs: jsonb("permission_refs").$type<string[]>().notNull(),
     permissions: jsonb("permissions").$type<string[]>().notNull().default([]),
     status: text("status").$type<UserRecord["status"]>().notNull(),
+    modelPreference: jsonb("model_preference").$type<UserModelPreference>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
     lastAuthenticatedAt: timestamp("last_authenticated_at", { withTimezone: true })

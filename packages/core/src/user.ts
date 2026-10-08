@@ -1,3 +1,4 @@
+import type { ReasoningEffortConfig } from "./config";
 import { AppError } from "./errors";
 import type { AuthenticatedUser, UserRole } from "./identity";
 import type { ClientInstanceId, UserId } from "./ids";
@@ -92,6 +93,21 @@ export interface DeleteUserInput {
   userId: UserId;
 }
 
+/**
+ * The model and the reasoning efforts a user last picked. A new conversation starts from them
+ * where its agent offers them; without a pick it follows the configured defaults.
+ */
+export interface UserModelPreference {
+  modelBindingId?: string;
+  /** Effort picks by the binding id of the model each was made for. */
+  reasoningEfforts: Record<string, ReasoningEffortConfig>;
+}
+
+export interface UserModelPreferenceInput {
+  clientInstanceId: ClientInstanceId;
+  userId: UserId;
+}
+
 export interface UserStore {
   resolveUserIdentity(input: ResolveUserIdentityInput): Promise<AuthenticatedUser>;
   listUsers(input: { clientInstanceId: ClientInstanceId }): Promise<UserRecord[]>;
@@ -100,6 +116,10 @@ export interface UserStore {
   deleteUser(input: DeleteUserInput): Promise<UserRecord>;
   upsertUserIdentity(input: UpsertUserIdentityInput): Promise<UserRecord>;
   deleteUserIdentity(input: DeleteUserIdentityInput): Promise<UserRecord>;
+  getUserModelPreference(input: UserModelPreferenceInput): Promise<UserModelPreference | undefined>;
+  setUserModelPreference(
+    input: UserModelPreferenceInput & { preference: UserModelPreference }
+  ): Promise<void>;
 }
 
 export function createUserId(): UserId {

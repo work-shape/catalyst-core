@@ -34,6 +34,7 @@ import {
   useWorkspaceConfigQuery,
   useWorkspaceConversationsQuery,
   useWorkspaceMeQuery,
+  useWorkspaceModelPreferenceQuery,
   useWorkspaceThreadQuery
 } from "../api/workspace-queries";
 import {
@@ -64,10 +65,12 @@ import {
 } from "../workspace-utils";
 import {
   agentModelSelection,
+  conversationModelPicks,
   modelReasoningEffortSelection,
+  NO_MODEL_PICKS,
   type AgentSelectableModel,
-  type ReasoningEffort,
-  type ReasoningEffortPicks
+  type ModelPicks,
+  type ReasoningEffort
 } from "./agent-model-selection";
 import { useWorkspaceDraft, useWorkspaceDraftController } from "./workspace-drafts";
 import {
@@ -324,8 +327,11 @@ export function useWorkspaceChatModel({
 }: WorkspaceChatModelInput): WorkspaceChatModel {
   const [notice, setNotice] = useState<string | undefined>();
   const [selectedAgentName, setSelectedAgentName] = useState<string | undefined>();
-  const [pickedModelBindingId, setPickedModelBindingId] = useState<string | undefined>();
-  const [reasoningEffortPicks, setReasoningEffortPicks] = useState<ReasoningEffortPicks>({});
+  // The user's default once they change it here; until then the stored one applies.
+  const [changedUserModelPicks, setChangedUserModelPicks] = useState<ModelPicks | undefined>();
+  const [changedConversationModelPicks, setChangedConversationModelPicks] = useState<
+    Readonly<Record<string, ModelPicks>>
+  >({});
   const { apiBaseUrl, client } = useWorkspaceApiClient();
   const routeState = useWorkspaceRouteState();
   const chrome = useWorkspaceChromeState();
@@ -346,6 +352,11 @@ export function useWorkspaceChatModel({
     authScope: WORKSPACE_AUTH_SCOPE,
     client,
     localePreference: preferences.localePreference,
+    enabled: isAuthenticated
+  });
+  const modelPreferenceQuery = useWorkspaceModelPreferenceQuery({
+    apiBaseUrl,
+    client,
     enabled: isAuthenticated
   });
   const threadQuery = useWorkspaceThreadQuery({
@@ -639,14 +650,35 @@ export function useWorkspaceChatModel({
     route.kind
   ]);
   const activeAgent = config?.agents.find((agent) => agent.name === activeAgentName);
+  const selectedThread =
+    threadQuery.data?.conversation.id === selectedConversationId ? threadQuery.data : undefined;
+  const modelPicks = conversationModelPicks({
+    agent: activeAgent,
+    changed: selectedConversationId
+      ? changedConversationModelPicks[selectedConversationId]
+      : undefined,
+    latestRun: selectedThread?.modelSelection,
+    userDefault: changedUserModelPicks ?? modelPreferenceQuery.data ?? NO_MODEL_PICKS
+  });
   const { selectableModels, selectedModel } = agentModelSelection(
     activeAgent,
-    pickedModelBindingId
+    modelPicks.modelBindingId
   );
+  // A change applies to the conversation on screen and becomes the default for new ones.
+  const changeModelPicks = (picks: ModelPicks) => {
+    if (selectedConversationId) {
+      setChangedConversationModelPicks((changed) => ({
+        ...changed,
+        [selectedConversationId]: picks
+      }));
+    }
+    setChangedUserModelPicks(picks);
+    void client.account.modelPreference.set(picks).catch(() => undefined);
+  };
   const selectedModelBindingId = selectedModel?.bindingId;
   const reasoningEffortSelection = modelReasoningEffortSelection(
     selectedModel,
-    reasoningEffortPicks
+    modelPicks.reasoningEfforts
   );
   const configuredCompactThresholdTokens =
     selectedModel?.compactThresholdTokens ?? activeAgent?.compactThresholdTokens;
@@ -654,13 +686,6 @@ export function useWorkspaceChatModel({
   useEffect(() => {
     displayPanel.close();
   }, [displayPanel.close, selectedConversationId]);
-
-  // A pick the active agent does not offer is dropped, so it does not return with a later agent.
-  useEffect(() => {
-    if (activeAgent && pickedModelBindingId && selectedModelBindingId !== pickedModelBindingId) {
-      setPickedModelBindingId(undefined);
-    }
-  }, [activeAgent, pickedModelBindingId, selectedModelBindingId]);
 
   const documentTitle = config?.ui.title
     ? createEnvironmentDocumentTitle(config.ui.title, config.clientInstance.environment)
@@ -933,13 +958,17 @@ export function useWorkspaceChatModel({
       selectAgentName: setSelectedAgentName,
       // Picking the agent's own model is not a pick: the next agent then uses its own model too.
       selectModelBindingId: (modelBindingId) =>
-        setPickedModelBindingId(
-          modelBindingId && modelBindingId !== selectableModels[0]?.bindingId
-            ? modelBindingId
-            : undefined
-        ),
+        changeModelPicks({
+          ...(modelBindingId && modelBindingId !== selectableModels[0]?.bindingId
+            ? { modelBindingId }
+            : {}),
+          reasoningEfforts: modelPicks.reasoningEfforts
+        }),
       selectReasoningEffort: (modelBindingId, effort) =>
-        setReasoningEffortPicks((picks) => ({ ...picks, [modelBindingId]: effort })),
+        changeModelPicks({
+          ...modelPicks,
+          reasoningEfforts: { ...modelPicks.reasoningEfforts, [modelBindingId]: effort }
+        }),
       draftAttachments: draftAttachmentController.draftAttachments,
       localUploadingAttachments: draftAttachmentController.visibleUploadingAttachments,
       conversationRunning: selectedConversationRunning,

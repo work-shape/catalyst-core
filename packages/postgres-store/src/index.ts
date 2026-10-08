@@ -68,6 +68,8 @@ import {
   type UpdateWorkspaceInput,
   type UpdateAgentRunStatusInput,
   type UpsertUserIdentityInput,
+  type UserModelPreference,
+  type UserModelPreferenceInput,
   type UserRecord,
   type UserStore,
   type ServicePrincipalRecord,
@@ -205,6 +207,8 @@ import {
   createUser as createPostgresUser,
   deleteUser as deletePostgresUser,
   deleteUserIdentity as deletePostgresUserIdentity,
+  getUserModelPreference as getPostgresUserModelPreference,
+  setUserModelPreference as setPostgresUserModelPreference,
   listUsers as listPostgresUsers,
   resolveUserIdentity as resolvePostgresUserIdentity,
   updateUser as updatePostgresUser,
@@ -391,6 +395,18 @@ export class PostgresPlatformStore
 
   async deleteUserIdentity(input: DeleteUserIdentityInput): Promise<UserRecord> {
     return deletePostgresUserIdentity(this.db, input);
+  }
+
+  async getUserModelPreference(
+    input: UserModelPreferenceInput
+  ): Promise<UserModelPreference | undefined> {
+    return getPostgresUserModelPreference(this.db, input);
+  }
+
+  async setUserModelPreference(
+    input: UserModelPreferenceInput & { preference: UserModelPreference }
+  ): Promise<void> {
+    return setPostgresUserModelPreference(this.db, input);
   }
 
   async listServicePrincipals(

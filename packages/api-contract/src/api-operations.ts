@@ -26,6 +26,7 @@ import {
   safeConfigSchema,
   setConfigAgentAvailabilityRequestSchema,
   setDefaultConfigAgentRequestSchema,
+  userModelPreferenceSchema,
   validateConfigAssetsResponseSchema
 } from "./configuration";
 import {
@@ -148,6 +149,19 @@ export const apiOperations = {
     path: "/api/me",
     requestSchema: updateCurrentUserRequestSchema,
     responseSchema: apiUserSchema
+  }),
+  getCurrentUserModelPreference: defineJsonApiOperation({
+    operationId: "getCurrentUserModelPreference",
+    method: "GET",
+    path: "/api/me/model-preference",
+    responseSchema: userModelPreferenceSchema
+  }),
+  setCurrentUserModelPreference: defineJsonApiOperation({
+    operationId: "setCurrentUserModelPreference",
+    method: "PUT",
+    path: "/api/me/model-preference",
+    requestSchema: userModelPreferenceSchema,
+    responseSchema: userModelPreferenceSchema
   }),
   changeCurrentUserPassword: defineJsonApiOperation({
     operationId: "changeCurrentUserPassword",

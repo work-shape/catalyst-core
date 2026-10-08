@@ -1,6 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { apiOperations } from "@vivd-catalyst/api-contract";
-import { requireAuthScope, resolveEffectivePermissions } from "@vivd-catalyst/core";
+import {
+  asUserId,
+  getSubjectUserId,
+  requireAuthScope,
+  resolveEffectivePermissions
+} from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "../types";
 import {
   authenticateRequest,
@@ -49,6 +54,31 @@ export function registerUserAccountRoutes(app: FastifyInstance, options: ChatSer
       ...updated,
       permissions: [...resolveEffectivePermissions(updated)]
     };
+  });
+
+  app.get(apiOperations.getCurrentUserModelPreference.path, async (request) => {
+    const { user } = await authenticateRequest(options, request);
+    requireAuthScope(user, "me:read");
+    const preference = await options.userStore.getUserModelPreference({
+      clientInstanceId: options.clientInstanceId,
+      userId: asUserId(getSubjectUserId(user))
+    });
+    return preference ?? { reasoningEfforts: {} };
+  });
+
+  app.put(apiOperations.setCurrentUserModelPreference.path, async (request) => {
+    const { user } = await authenticateRequest(options, request);
+    requireAuthScope(user, "me:write");
+    const preference = parseBody(
+      apiOperations.setCurrentUserModelPreference.requestSchema,
+      request.body
+    );
+    await options.userStore.setUserModelPreference({
+      clientInstanceId: options.clientInstanceId,
+      userId: asUserId(getSubjectUserId(user)),
+      preference
+    });
+    return preference;
   });
 
   app.post(apiOperations.changeCurrentUserPassword.path, async (request) => {
