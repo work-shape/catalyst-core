@@ -1,6 +1,6 @@
 {
   "name": "@vivd-solutions/registry-canary",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Throwaway GitHub Packages publishing canary.",
   "private": false,
   "main": "index.js",
