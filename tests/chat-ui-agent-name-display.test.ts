@@ -102,56 +102,57 @@ function labelContent(markup: string): string {
   return content;
 }
 
-/** The tone the shared chip gives the agent's name, and the classes that tone resolves to. */
-function agentName(markup: string): { tone: string; classes: string[] } {
-  const [, classes, tone] =
-    /<span class="([^"]*)" data-agent-chip-name="([^"]*)">Catalyst Assistant<\/span>/u.exec(
-      markup
-    ) ?? [];
-  if (classes === undefined || tone === undefined) throw new Error("agent name not found");
-  return { tone, classes: classes.split(" ") };
+/** The chip as the button that opens the agent list. */
+function chipButton(markup: string): string | undefined {
+  return /<button[^>]*aria-haspopup[^>]*>.*?<\/button>/u.exec(markup)?.[0];
 }
 
-describe("named agent chip in the header", () => {
-  it("names a single agent on a plain label", () => {
-    const markup = renderHeader();
+describe("agent chip in the header", () => {
+  const settings = [
+    ["shows", true],
+    ["hides", false]
+  ] as const;
 
-    expect(markup).toContain(">Catalyst Assistant<");
-    expect(markup).toContain('title="Catalyst Assistant"');
-    expect(markup).not.toContain("Select agent");
-    expect(markup).not.toContain("aria-haspopup");
+  it.each(settings)(
+    "is the icon alone on a button that announces the agent list when the instance %s the name",
+    (_, showAgentName) => {
+      for (const agents of [oneAgent, severalAgents]) {
+        const markup = renderHeader({ agents, showAgentName });
+
+        expect(markup).toContain('aria-label="Select agent: Catalyst Assistant"');
+        expect(markup).toContain('title="Catalyst Assistant"');
+        expect(markup).toContain('aria-haspopup="listbox"');
+        expect(markup).toContain("<svg");
+        expect(markup).not.toContain(">Catalyst Assistant<");
+        expect(markup).not.toContain("Research Assistant");
+        expect(markup).not.toContain("data-agent-chip-beside-icon");
+      }
+    }
+  );
+
+  it("is the same chip whatever the instance shows on the start page", () => {
+    for (const agents of [oneAgent, severalAgents]) {
+      const named = chipButton(renderHeader({ agents, showAgentName: true }));
+
+      expect(named).toBeDefined();
+      expect(chipButton(renderHeader({ agents, showAgentName: false }))).toBe(named);
+    }
   });
 
-  it("names the selected agent on the picker when there are several", () => {
-    const markup = renderHeader({ agents: severalAgents });
-
-    expect(markup).toContain('aria-label="Select agent: Catalyst Assistant"');
-    expect(markup).toContain('aria-haspopup="listbox"');
-    expect(markup).toContain(">Catalyst Assistant<");
-    expect(markup).not.toContain("Research Assistant");
-  });
-
-  it("labels the picker in German", () => {
+  it("labels the chip in German", () => {
     expect(renderHeader({ agents: severalAgents, locale: "de" })).toContain(
       'aria-label="Agent auswählen: Catalyst Assistant"'
     );
   });
 
-  it("keeps only the icon on narrow screens, with the name as title and for screen readers", () => {
-    for (const agents of [oneAgent, severalAgents]) {
-      const markup = renderHeader({ agents });
-
-      expect(markup).toContain('title="Catalyst Assistant"');
-      expect(markup).toMatch(/max-sm:sr-only"><span [^>]*>Catalyst Assistant<\/span>/u);
-    }
-  });
-
   it("stays empty while the start page shows the agent", () => {
-    for (const agents of [oneAgent, severalAgents]) {
-      const markup = renderHeader({ agents, showAgentSelector: false });
+    for (const showAgentName of [true, false]) {
+      for (const agents of [oneAgent, severalAgents]) {
+        const markup = renderHeader({ agents, showAgentName, showAgentSelector: false });
 
-      expect(markup).not.toContain("Catalyst Assistant");
-      expect(markup).not.toContain("aria-haspopup");
+        expect(markup).not.toContain("Catalyst Assistant");
+        expect(markup).not.toContain("aria-haspopup");
+      }
     }
   });
 });
@@ -162,45 +163,40 @@ describe("named agent chip on the start page", () => {
 
     expect(markup).not.toContain("<button");
     expect(markup).toContain(">Catalyst Assistant<");
+    expect(markup).toContain('title="Catalyst Assistant"');
     expect(markup.indexOf("Catalyst Assistant")).toBeLessThan(markup.indexOf("How can I help?"));
     expect(markup).not.toContain("invisible");
   });
 
+  it("names the selected agent on the picker when there are several", () => {
+    const markup = renderStartPage(severalAgents);
+
+    expect(markup).toContain('aria-label="Select agent: Catalyst Assistant"');
+    expect(markup).toContain('aria-haspopup="listbox"');
+    expect(markup).toContain(">Catalyst Assistant<");
+    expect(markup).not.toContain("Research Assistant");
+  });
+
   it("gives a single agent's label the same icon and name as the picker", () => {
     const label = labelContent(renderStartPage(oneAgent));
-    const picker = renderStartPage(severalAgents);
 
     expect(label).toContain("<svg");
     expect(label).toContain(">Catalyst Assistant<");
-    expect(picker).toContain(`${label}<svg`);
-    expect(labelContent(renderHeader())).toContain(">Catalyst Assistant<");
-    expect(renderHeader({ agents: severalAgents })).toContain(
-      `${labelContent(renderHeader())}<svg`
-    );
+    expect(renderStartPage(severalAgents)).toContain(`${label}<svg`);
   });
 
-  it("leads with a strong name, which the header quietens at the same size", () => {
-    for (const agents of [oneAgent, severalAgents]) {
-      const start = agentName(renderStartPage(agents));
-      const header = agentName(renderHeader({ agents }));
+  it("marks the icon that flies and everything beside it that stays behind", () => {
+    const one = renderStartPage(oneAgent);
+    const several = renderStartPage(severalAgents);
 
-      expect(start.tone).toBe("strong");
-      expect(start.classes).toContain("font-semibold");
-      expect(start.classes).not.toContain("text-muted-foreground");
-      expect(header.tone).toBe("subtle");
-      expect(header.classes).toEqual(
-        expect.arrayContaining(["font-medium", "text-muted-foreground"])
-      );
-      expect(header.classes).not.toContain("font-semibold");
-      expect(start.classes).toContain("text-sm");
-      expect(header.classes).toContain("text-sm");
+    for (const markup of [one, several]) {
+      expect(markup.match(/data-agent-chip-icon/gu)).toHaveLength(1);
+      expect(markup).toMatch(/data-agent-chip-beside-icon="">Catalyst Assistant</u);
     }
-  });
-
-  it("always shows the name, on narrow screens too", () => {
-    for (const agents of [oneAgent, severalAgents]) {
-      expect(renderStartPage(agents)).not.toContain("max-sm:sr-only");
-    }
+    // The name, and with several agents the picker's chevron.
+    expect(one.match(/data-agent-chip-beside-icon/gu)).toHaveLength(1);
+    expect(several.match(/data-agent-chip-beside-icon/gu)).toHaveLength(2);
+    expect(renderHeader({ agents: severalAgents }).match(/data-agent-chip-icon/gu)).toHaveLength(1);
   });
 
   it("only keeps its place once the header shows the agent", () => {
@@ -213,43 +209,30 @@ describe("named agent chip on the start page", () => {
   });
 });
 
-describe("agent chip without the name", () => {
-  const placements = [
-    ["header", (agents: typeof severalAgents) => renderHeader({ agents, showAgentName: false })],
-    ["start page", (agents: typeof severalAgents) => renderStartPage(agents, false, false)]
-  ] as const;
-
-  it.each(placements)(
-    "is the icon alone in the %s, on a button that announces the agent list",
-    (_, render) => {
-      for (const agents of [oneAgent, severalAgents]) {
-        const markup = render(agents);
-
-        expect(markup).toContain('aria-label="Select agent: Catalyst Assistant"');
-        expect(markup).toContain('title="Catalyst Assistant"');
-        expect(markup).toContain('aria-haspopup="listbox"');
-        expect(markup).toContain("<svg");
-        expect(markup).not.toContain(">Catalyst Assistant<");
-        expect(markup).not.toContain("data-agent-chip-name");
-      }
-    }
-  );
-
-  it("is the same chip on the start page and in the header, so only its place changes", () => {
-    const chip = (markup: string) => /<button[^>]*aria-haspopup[^>]*>.*?<\/button>/u.exec(markup);
-
+describe("agent chip on the start page without the name", () => {
+  it("is the icon alone on a button that announces the agent list", () => {
     for (const agents of [oneAgent, severalAgents]) {
-      const start = chip(renderStartPage(agents, false, false))?.[0];
+      const markup = renderStartPage(agents, false, false);
 
-      expect(start).toBeDefined();
-      expect(chip(renderHeader({ agents, showAgentName: false }))?.[0]).toBe(start);
+      expect(markup).toContain('aria-label="Select agent: Catalyst Assistant"');
+      expect(markup).toContain('title="Catalyst Assistant"');
+      expect(markup).toContain('aria-haspopup="listbox"');
+      expect(markup).toContain("<svg");
+      expect(markup).not.toContain(">Catalyst Assistant<");
+      expect(markup).not.toContain("data-agent-chip-beside-icon");
     }
   });
 
-  it("keeps the start page for the chip until the header shows it", () => {
-    expect(renderHeader({ showAgentName: false, showAgentSelector: false })).not.toContain(
-      "aria-haspopup"
-    );
+  it("is the same chip as in the header, so only its place changes", () => {
+    for (const agents of [oneAgent, severalAgents]) {
+      const start = chipButton(renderStartPage(agents, false, false));
+
+      expect(start).toBeDefined();
+      expect(chipButton(renderHeader({ agents, showAgentName: false }))).toBe(start);
+    }
+  });
+
+  it("only keeps its place once the header shows the agent", () => {
     expect(renderStartPage(oneAgent, true, false)).toContain("invisible");
   });
 });

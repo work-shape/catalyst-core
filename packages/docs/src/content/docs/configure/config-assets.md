@@ -83,7 +83,8 @@ state.
 
 Two boolean release-config settings decide what the chat shows of its agents.
 `ui.showAgentName` is `true` by default and puts the selected agent's name
-beside its icon; with `false` the chat shows the icon alone and opens the
+beside its icon on the start page; with `false` the start page shows the icon
+alone. In a conversation the chat always shows the icon alone, which opens the
 selector when the pointer is on it. `ui.showAgentDescriptions` is `false` by
 default; with `true` the selector lists each description, and otherwise, or
 without a description, only the display name.

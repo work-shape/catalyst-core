@@ -14,25 +14,19 @@ import { cn } from "../ui/cn";
 
 type Agent = SafeConfig["agents"][number];
 
-/** The header shares its row with other controls; the start page has the full width. */
+/** The start page introduces the agent; the header of a conversation only keeps its icon. */
 type AgentChipPlacement = "header" | "start-page";
 
-/** Finds the agent's name inside a chip; its value is the tone the name is shown in. */
-export const AGENT_CHIP_NAME_SELECTOR = "[data-agent-chip-name]";
+/** Finds the icon of a chip: the part that flies from the start page into the header. */
+export const AGENT_CHIP_ICON_SELECTOR = "[data-agent-chip-icon]";
+/** Finds what stands beside the icon on the start page and stays behind when it leaves. */
+export const AGENT_CHIP_BESIDE_ICON_SELECTOR = "[data-agent-chip-beside-icon]";
 
 /**
- * On the start page the name leads; in the header it steps back behind the
- * conversation, and only pointing at the picker or focusing it brings it forward.
+ * What an instance shows of its agents: `ui.showAgentName` puts the name beside
+ * the icon on the start page, `ui.showAgentDescriptions` the descriptions in the
+ * agent list.
  */
-const agentNameToneClassName = {
-  strong: "font-semibold",
-  subtle: cn(
-    "font-medium text-muted-foreground transition-colors",
-    "group-hover/agent-chip:text-foreground group-focus-visible/agent-chip:text-foreground"
-  )
-} as const;
-
-/** What an instance shows of its agents: `ui.showAgentName` and `ui.showAgentDescriptions`. */
 export interface AgentChipDisplay {
   showName: boolean;
   showDescriptions: boolean;
@@ -50,11 +44,12 @@ export function agentChipDisplayFor(
 /**
  * The agent of a conversation as a chip.
  *
- * Without the name the chip is the icon alone, and pointing at it opens the
- * agent list: that is how the user learns which agent it is, so it opens for a
- * single agent too. With the name beside the icon, several agents make the chip
- * a picker that opens on click; a single one leaves nothing to choose, so it is
- * a plain label that looks the same.
+ * In the header of a conversation the chip is always the icon alone, and so it
+ * is on the start page of an instance that hides the name. Pointing at the icon
+ * opens the agent list: that is how the user learns which agent it is, so it
+ * opens for a single agent too. With the name beside the icon on the start
+ * page, several agents make the chip a picker that opens on click; a single one
+ * leaves nothing to choose, so it is a plain label that looks the same.
  */
 export function AgentSelector({
   agents,
@@ -71,16 +66,18 @@ export function AgentSelector({
 }) {
   const selectedAgent = agents.find((agent) => agent.name === selectedAgentName) ?? agents[0];
 
+  const showName = display.showName && placement === "start-page";
+
   if (!selectedAgent) {
     return null;
   }
-  if (display.showName && agents.length === 1) {
-    return <AgentChip agentLabel={selectedAgent.displayName} placement={placement} showName />;
+  if (showName && agents.length === 1) {
+    return <AgentChip agentLabel={selectedAgent.displayName} showName />;
   }
   return (
     <AgentPicker
       agents={agents}
-      display={display}
+      display={{ ...display, showName }}
       placement={placement}
       selectedAgent={selectedAgent}
       onSelectAgent={onSelectAgent}
@@ -90,12 +87,10 @@ export function AgentSelector({
 
 function AgentChip({
   agentLabel,
-  placement,
   showName,
   picker
 }: {
   agentLabel: string;
-  placement: AgentChipPlacement;
   showName: boolean;
   /** Makes the chip the button that opens the agent list. */
   picker?: {
@@ -105,22 +100,19 @@ function AgentChip({
   };
 }) {
   const { t } = useTranslation();
-  const inHeader = placement === "header";
-  const nameTone = inHeader ? "subtle" : "strong";
   const iconOnlyOpen = !showName && picker?.open === true;
   const className = cn(
     "inline-flex min-w-0 items-center rounded-md text-left align-top text-foreground",
-    !showName
-      ? "size-10 shrink-0 justify-center"
-      : // Below `sm` the header keeps only the icon; the name remains as the title
-        // and for screen readers.
-        inHeader
-        ? "max-w-[min(32rem,calc(100vw-8.5rem))] max-sm:size-10 max-sm:justify-center sm:h-11 sm:gap-3 sm:px-2.5"
-        : "h-11 max-w-[min(32rem,calc(100vw-2.5rem))] gap-3 px-2.5"
+    showName
+      ? "h-11 max-w-[min(32rem,calc(100vw-2.5rem))] gap-3 px-2.5"
+      : "size-10 shrink-0 justify-center"
   );
   const content = (
     <>
-      <span className="grid size-8 shrink-0 place-items-center rounded-md bg-[color-mix(in_srgb,var(--primary)_10%,var(--background))] text-primary">
+      <span
+        className="grid size-8 shrink-0 place-items-center rounded-md bg-[color-mix(in_srgb,var(--primary)_10%,var(--background))] text-primary"
+        data-agent-chip-icon=""
+      >
         {/*
           Alone, the icon is also the only sign that the list is open. Both
           icons stay mounted: replacing the one under a resting pointer makes
@@ -133,13 +125,8 @@ function AgentChip({
         )}
       </span>
       {showName ? (
-        <span className={cn("grid min-w-0", inHeader && "max-sm:sr-only")}>
-          <span
-            className={cn("truncate text-sm", agentNameToneClassName[nameTone])}
-            data-agent-chip-name={nameTone}
-          >
-            {agentLabel}
-          </span>
+        <span className="min-w-0 truncate text-sm font-semibold" data-agent-chip-beside-icon="">
+          {agentLabel}
         </span>
       ) : null}
       {showName && picker ? (
@@ -147,10 +134,10 @@ function AgentChip({
           size={15}
           className={cn(
             "shrink-0 text-muted-foreground transition-transform",
-            inHeader && "max-sm:hidden",
             picker.open && "rotate-180"
           )}
           aria-hidden="true"
+          data-agent-chip-beside-icon=""
         />
       ) : null}
     </>
@@ -169,7 +156,7 @@ function AgentChip({
       type="button"
       className={cn(
         className,
-        "group/agent-chip transition-colors outline-none hover:bg-accent/70 focus-visible:ring-[3px] focus-visible:ring-ring/40"
+        "transition-colors outline-none hover:bg-accent/70 focus-visible:ring-[3px] focus-visible:ring-ring/40"
       )}
       aria-label={`${t("selectAgent")}: ${agentLabel}`}
       title={agentLabel}
@@ -267,7 +254,6 @@ function AgentPicker({
     >
       <AgentChip
         agentLabel={selectedAgent.displayName}
-        placement={placement}
         showName={display.showName}
         picker={{
           open,

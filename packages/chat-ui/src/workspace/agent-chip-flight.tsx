@@ -9,26 +9,26 @@ import {
   type ReactNode,
   type RefObject
 } from "react";
-import { AGENT_CHIP_NAME_SELECTOR } from "./agent-selector";
+import { AGENT_CHIP_BESIDE_ICON_SELECTOR, AGENT_CHIP_ICON_SELECTOR } from "./agent-selector";
 
 const FLIGHT_MS = 360;
 const FLIGHT_EASING = "cubic-bezier(0.2, 0, 0, 1)";
+/** The name is gone within the first third of the flight, before the icon is far away. */
+const NAME_FADE_MS = FLIGHT_MS / 3;
 
 /**
- * Carries the agent chip from the centre of the start page into the header
+ * Carries the agent's icon from the centre of the start page into the header
  * when the first message is sent.
  *
  * Only one of the two chips is visible at a time. The start page's chip is the
- * origin: it is measured on departure and from then on only keeps its place,
- * so the heading and composer stay where they are. The header chip is the one
- * that travels: it mounts at its final position and is moved there from the
- * origin's rectangle, which is why the route change that follows the first
- * message neither interrupts nor repeats the flight.
+ * origin: its icon is measured on departure and from then on the chip only
+ * keeps its place, so the heading and composer stay where they are. The header
+ * chip is the one that travels: it mounts at its final position and is moved
+ * there from where the origin's icon was, which is why the route change that
+ * follows the first message neither interrupts nor repeats the flight.
  *
- * Where the chip carries the agent's name, the header shows it more quietly
- * than the start page. The name's colour eases to that on the way; its weight
- * cannot ease in every font, so it is the header's from the first frame, where
- * the lift-off hides the change. A chip that is the icon alone only moves.
+ * The header shows the icon alone. A name beside the icon on the start page
+ * does not travel: it fades out where it stands while the icon lifts off.
  */
 export interface AgentChipFlight {
   /** False while the start page shows the chip above its heading. */
@@ -67,16 +67,14 @@ export function AgentChipFlightProvider({
   );
 }
 
-/** What the eye saw on the start page at the moment the chip left it. */
-interface DepartedChip {
-  rect: DOMRect;
-  nameColor: string | undefined;
+function iconRectOf(chip: Element): DOMRect {
+  return (chip.querySelector(AGENT_CHIP_ICON_SELECTOR) ?? chip).getBoundingClientRect();
 }
 
 export function useAgentChipFlightState(onStartPage: boolean): AgentChipFlight {
   const originRef = useRef<HTMLDivElement>(null);
   const destinationRef = useRef<HTMLDivElement>(null);
-  const departedChipRef = useRef<DepartedChip | undefined>(undefined);
+  const departedIconRef = useRef<DOMRect | undefined>(undefined);
   const [departed, setDeparted] = useState(false);
 
   // Once the route has left the start page it keeps the chip in the header by
@@ -86,44 +84,53 @@ export function useAgentChipFlightState(onStartPage: boolean): AgentChipFlight {
   }
 
   useLayoutEffect(() => {
-    const origin = departedChipRef.current;
+    const originIcon = departedIconRef.current;
     const chip = destinationRef.current;
-    departedChipRef.current = undefined;
+    departedIconRef.current = undefined;
     if (
       !departed ||
-      !origin ||
+      !originIcon ||
       !chip ||
       typeof chip.animate !== "function" ||
       window.matchMedia("(prefers-reduced-motion: reduce)").matches
     ) {
       return;
     }
-    const timing = { duration: FLIGHT_MS, easing: FLIGHT_EASING };
-    const destination = chip.getBoundingClientRect();
+    const icon = iconRectOf(chip);
     chip.animate(
       [
         {
-          transform: `translate(${origin.rect.left - destination.left}px, ${origin.rect.top - destination.top}px)`
+          transform: `translate(${originIcon.left - icon.left}px, ${originIcon.top - icon.top}px)`
         },
         { transform: "none" }
       ],
-      timing
+      { duration: FLIGHT_MS, easing: FLIGHT_EASING }
     );
-    const name = chip.querySelector(AGENT_CHIP_NAME_SELECTOR);
-    if (name && origin.nameColor) {
-      name.animate([{ color: origin.nameColor }, { color: getComputedStyle(name).color }], timing);
-    }
+    // The origin chip is hidden by now; what stood beside its icon stays
+    // visible for as long as it takes to fade.
+    const fades = Array.from(
+      originRef.current?.querySelectorAll(AGENT_CHIP_BESIDE_ICON_SELECTOR) ?? [],
+      (left) =>
+        left.animate(
+          [
+            { opacity: 1, visibility: "visible" },
+            { opacity: 0, visibility: "visible" }
+          ],
+          { duration: NAME_FADE_MS, easing: "ease-out" }
+        )
+    );
+    // A first message that does not go out puts the chip back on the start
+    // page: whatever is still fading then is shown in full at once.
+    return () => {
+      for (const fade of fades) {
+        fade.cancel();
+      }
+    };
   }, [departed]);
 
   const depart = useCallback(() => {
     const origin = originRef.current;
-    const name = origin?.querySelector(AGENT_CHIP_NAME_SELECTOR);
-    departedChipRef.current = origin
-      ? {
-          rect: origin.getBoundingClientRect(),
-          nameColor: name ? getComputedStyle(name).color : undefined
-        }
-      : undefined;
+    departedIconRef.current = origin ? iconRectOf(origin) : undefined;
     setDeparted(true);
   }, []);
   const cancel = useCallback(() => setDeparted(false), []);

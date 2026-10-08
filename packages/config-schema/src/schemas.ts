@@ -695,8 +695,8 @@ export const uiConfigSchema = z
     faviconUrl: z.string().url().or(z.string().startsWith("/")).optional(),
     title: localizedStringSchema.default("Vivd Catalyst"),
     welcomeMessage: localizedStringSchema.default("How can I help?"),
-    // The agent's name stands beside its icon; when false the agent is the icon
-    // alone, which opens the agent list on hover.
+    // The start page names the agent beside its icon; when false it shows the
+    // icon alone, as a conversation always does.
     showAgentName: z.boolean().default(true),
     // When true the agent list shows each agent's description under its name.
     showAgentDescriptions: z.boolean().default(false),

@@ -38,13 +38,14 @@ contain breaking changes; a patch version does not.
   hover and on keyboard focus, and the row's menu repeats it for touch.
 - **Administration:** saving an agent or skill confirms it next to the save button until the
   form is edited again.
-- **Chat:** the agent's icon and name sit centred above the composer on the start page; when a
-  conversation starts they move to the top left of the header and stay there, the name in a
-  quieter tone. Several agents make the name a picker that opens on click, a single agent a
-  plain label, and below the `sm` width the header shows the icon only. `ui.showAgentName` is
-  now `true` by default and no longer adds the client name beneath the agent; with
-  `ui.showAgentName: false` the chip is the icon alone, and pointing at it opens the agent
-  list, with a single agent too.
+- **Chat:** the start page introduces the agent with its icon and name, centred above the
+  composer: several agents make the name a picker that opens on click, a single agent a plain
+  label. When a conversation starts the icon moves to the top left of the header while the name
+  fades out; in a conversation the header shows the icon alone, and pointing at it opens the
+  agent list, with a single agent too. `ui.showAgentName` is now `true` by default, decides
+  only whether the start page shows the name beside the icon, and no longer adds the client
+  name beneath the agent; with `ui.showAgentName: false` the start page shows the icon alone
+  as well.
 - **Chat:** the agent list shows each agent's description only with the new
   `ui.showAgentDescriptions: true`; by default it lists the names alone.
 
