@@ -29,6 +29,9 @@ const POPOVER_HEIGHT = 340;
 const VIEWPORT_GUTTER = 16;
 /** Tailwind's `sm` breakpoint, from which panels open beside the menu. */
 const BESIDE_MENU_QUERY = "(min-width: 40rem)";
+/** The menu's `w-64`, and what a `w-72` panel beside it takes with the gap between them. */
+const MENU_WIDTH = "16rem";
+const PANEL_ROOM = 294;
 
 /** Whether the composer has anything to offer: another model, or an effort for the only one. */
 export function hasModelChoice(
@@ -69,6 +72,7 @@ export function ModelPicker({
   const [opensDown, setOpensDown] = useState(false);
   const [panel, setPanel] = useState<Panel | undefined>();
   const [previewedModel, setPreviewedModel] = useState<AgentSelectableModel | undefined>();
+  const [opensRight, setOpensRight] = useState(false);
   const [nudge, setNudge] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -101,12 +105,15 @@ export function ModelPicker({
     };
   }, [open]);
 
-  // The popover hangs from the trigger's right edge and grows to the left with each panel.
-  // Where that would push it past the left edge, it moves right by what it overhangs.
+  // The menu sits above the trigger, flush with its right edge. Panels open to its right where
+  // the window has room for one, and to its left otherwise. Whatever would still pass a window
+  // edge moves the popover back by what it overhangs.
   useLayoutEffect(() => {
     if (open && popoverRef.current) {
-      const naturalLeft = popoverRef.current.getBoundingClientRect().left - nudge;
-      setNudge(Math.max(0, VIEWPORT_GUTTER - naturalLeft));
+      const rect = popoverRef.current.getBoundingClientRect();
+      const overhangsLeft = VIEWPORT_GUTTER - (rect.left - nudge);
+      const overhangsRight = rect.right - nudge - (window.innerWidth - VIEWPORT_GUTTER);
+      setNudge(overhangsRight > 0 ? -overhangsRight : Math.max(0, overhangsLeft));
     }
   }, [open, panel, previewedModel]);
 
@@ -120,7 +127,12 @@ export function ModelPicker({
   const shownPanel = panel === "reasoning" && !offersReasoning ? undefined : panel;
 
   function toggle() {
-    setOpensDown((rootRef.current?.getBoundingClientRect().top ?? POPOVER_HEIGHT) < POPOVER_HEIGHT);
+    const trigger = rootRef.current?.getBoundingClientRect();
+    setOpensDown((trigger?.top ?? POPOVER_HEIGHT) < POPOVER_HEIGHT);
+    setOpensRight(
+      window.matchMedia(BESIDE_MENU_QUERY).matches &&
+        window.innerWidth - VIEWPORT_GUTTER - (trigger?.right ?? window.innerWidth) >= PANEL_ROOM
+    );
     setPanel(undefined);
     setPreviewedModel(undefined);
     setNudge(0);
@@ -151,13 +163,20 @@ export function ModelPicker({
       }}
       onClick={() => showPanel(rowPanel)}
     >
-      {/* Panels open to the left beside the menu, and in its place on a narrow screen. */}
-      <ChevronLeft size={14} className="shrink-0 opacity-60 max-sm:hidden" aria-hidden="true" />
+      {/* The chevron points to where the panel opens: beside the menu, or in its place on a
+          narrow screen. */}
+      {opensRight ? null : (
+        <ChevronLeft size={14} className="shrink-0 opacity-60 max-sm:hidden" aria-hidden="true" />
+      )}
       <span className="font-medium">{label}</span>
       <span className="ml-auto flex min-w-0 items-center gap-1.5 text-muted-foreground">
         {value}
       </span>
-      <ChevronRight size={14} className="shrink-0 opacity-60 sm:hidden" aria-hidden="true" />
+      <ChevronRight
+        size={14}
+        className={cn("shrink-0 opacity-60", !opensRight && "sm:hidden")}
+        aria-hidden="true"
+      />
     </button>
   );
 
@@ -207,9 +226,13 @@ export function ModelPicker({
           ref={popoverRef}
           role="dialog"
           aria-label={t("selectModel")}
-          style={{ right: -nudge }}
+          style={
+            opensRight ? { left: `calc(100% - ${MENU_WIDTH} + ${nudge}px)` } : { right: -nudge }
+          }
           className={cn(
             "absolute z-50 flex max-w-[calc(100vw-2rem)] gap-1.5",
+            // Card, panel and menu are written left to right; opening rightwards reverses them.
+            opensRight && "flex-row-reverse",
             opensDown ? "top-full mt-2 items-start" : "bottom-full mb-2 items-end"
           )}
         >
@@ -306,7 +329,7 @@ export function ModelPicker({
             ) : reasoningEffort ? (
               // A model with a fixed effort still says which one it runs with.
               <div className="flex h-9 items-center gap-2 px-2 text-sm text-muted-foreground">
-                <span className="w-3.5 shrink-0 max-sm:hidden" />
+                {opensRight ? null : <span className="w-3.5 shrink-0 max-sm:hidden" />}
                 <span className="font-medium">{t("modelPickerReasoning")}</span>
                 <span className="ml-auto">{t(reasoningEffortLabels[reasoningEffort])}</span>
               </div>
