@@ -82,6 +82,7 @@ import {
   useWorkspaceTheme
 } from "./workspace-ui-state";
 import { createTranslationContext } from "../i18n";
+import { workspaceSendBlockedReason } from "./workspace-send-blocked-reason";
 
 export const WORKSPACE_AUTH_SCOPE = "standalone";
 
@@ -973,7 +974,15 @@ export function useWorkspaceChatModel({
       localUploadingAttachments: draftAttachmentController.visibleUploadingAttachments,
       conversationRunning: selectedConversationRunning,
       activeRun: controller.activeRun,
-      sendBlockedReason: draftAttachmentController.sendBlockedReason,
+      sendBlockedReason: workspaceSendBlockedReason({
+        attachmentBlockedReason: draftAttachmentController.sendBlockedReason,
+        selectedConversationId,
+        collaborationWorkspacesAvailable,
+        activeCollaborationWorkspaceId,
+        loading: collaborationWorkspace.loading,
+        loadFailed: collaborationWorkspace.loadFailed,
+        locale: activeLocale
+      }),
       attachmentsEnabled,
       attachmentAccept,
       fileDropzone,

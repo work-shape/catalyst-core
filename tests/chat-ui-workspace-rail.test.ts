@@ -1,11 +1,13 @@
 import { createElement, type ReactNode } from "../packages/chat-ui/node_modules/react";
 import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
-import type { ConversationListItem, SafeConfig } from "@vivd-catalyst/api-client";
+import type { ConversationListItem, LocaleCode, SafeConfig } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 import { CollaborationWorkspaceSelector } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-selector";
 import { WorkspaceRail } from "../packages/chat-ui/src/workspace/workspace-rail";
 import { withoutDraftAttachment } from "../packages/chat-ui/src/conversation/draft-attachment-controller";
+import { collaborationWorkspacesAvailableFor } from "../packages/chat-ui/src/chat-workspace";
+import { workspaceSendBlockedReason } from "../packages/chat-ui/src/workspace/workspace-send-blocked-reason";
 import {
   activeAgentNameFor,
   collaborationWorkspaceChromeVisibleFor,
@@ -14,6 +16,112 @@ import {
 } from "../packages/chat-ui/src/workspace/workspace-chat-model";
 
 const noop = () => undefined;
+
+describe.each<{ locale: LocaleCode; loadingReason: string; failedReason: string }>([
+  {
+    locale: "en",
+    loadingReason: "Loading workspaces…",
+    failedReason: "Workspaces could not be loaded."
+  },
+  {
+    locale: "de",
+    loadingReason: "Arbeitsbereiche werden geladen…",
+    failedReason: "Arbeitsbereiche konnten nicht geladen werden."
+  }
+])("workspace send guard ($locale)", ({ locale, loadingReason, failedReason }) => {
+  const pending: Parameters<typeof workspaceSendBlockedReason>[0] = {
+    attachmentBlockedReason: undefined,
+    selectedConversationId: undefined,
+    collaborationWorkspacesAvailable: true,
+    activeCollaborationWorkspaceId: undefined,
+    loading: true,
+    loadFailed: false,
+    locale
+  };
+  const cases: {
+    name: string;
+    input: Partial<Parameters<typeof workspaceSendBlockedReason>[0]>;
+    expected: string | undefined;
+  }[] = [
+    { name: "pending", input: {}, expected: loadingReason },
+    {
+      name: "ready after pending",
+      input: { loading: false, activeCollaborationWorkspaceId: "workspace_personal" },
+      expected: undefined
+    },
+    {
+      name: "failed",
+      input: { loading: false, loadFailed: true },
+      expected: failedReason
+    },
+    { name: "empty", input: { loading: false }, expected: failedReason },
+    {
+      name: "existing conversation while pending",
+      input: { selectedConversationId: "conv_existing" },
+      expected: undefined
+    },
+    {
+      name: "existing conversation after failure",
+      input: { selectedConversationId: "conv_existing", loading: false, loadFailed: true },
+      expected: undefined
+    },
+    {
+      name: "workspaces unavailable while pending",
+      input: { collaborationWorkspacesAvailable: false },
+      expected: undefined
+    },
+    {
+      name: "workspaces unavailable after failure",
+      input: { collaborationWorkspacesAvailable: false, loading: false, loadFailed: true },
+      expected: undefined
+    },
+    {
+      name: "embedded token widget",
+      input: {
+        collaborationWorkspacesAvailable: collaborationWorkspacesAvailableFor({
+          token: "test-session-token"
+        })
+      },
+      expected: undefined
+    },
+    {
+      name: "embedded token provider widget",
+      input: {
+        collaborationWorkspacesAvailable: collaborationWorkspacesAvailableFor({
+          getToken: () => "test-session-token"
+        })
+      },
+      expected: undefined
+    },
+    {
+      name: "attachment precedence while pending",
+      input: { attachmentBlockedReason: "attachment blocked" },
+      expected: "attachment blocked"
+    },
+    {
+      name: "attachment precedence after failure",
+      input: {
+        attachmentBlockedReason: "attachment blocked",
+        loading: false,
+        loadFailed: true
+      },
+      expected: "attachment blocked"
+    },
+    {
+      name: "attachment precedence when ready",
+      input: {
+        attachmentBlockedReason: "attachment blocked",
+        loading: false,
+        activeCollaborationWorkspaceId: "workspace_personal"
+      },
+      expected: "attachment blocked"
+    }
+  ];
+
+  it.each(cases)("$name", ({ input, expected }) => {
+    expect(workspaceSendBlockedReason({ ...pending, ...input })).toBe(expected);
+  });
+});
 
 describe("abandoned draft conversation", () => {
   const emptied = {
