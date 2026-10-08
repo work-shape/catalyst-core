@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
   AppError,
@@ -25,6 +25,7 @@ import {
   type ModelCallGovernance
 } from "@vivd-catalyst/agent-runtime";
 import {
+  OpenAiCompatibleChatProvider,
   modelContentText,
   type ModelCompletionStreamEvent,
   type ModelMessage,
@@ -1603,6 +1604,111 @@ describe("local agent runtime", () => {
       modelOutput: ""
     });
   });
+
+  it.each(["chat_completions", "responses"] as const)(
+    "retries an interrupted successful %s JSON response",
+    async (api) => {
+      const clientInstanceId = asClientInstanceId("provider-body-retry-client");
+      const context: RuntimeCallContext = {
+        clientInstanceId,
+        correlationId: "corr-provider-body-retry",
+        user: {
+          id: "user-1",
+          externalUserId: "user-1",
+          displayLabel: "User",
+          roles: ["user"],
+          permissionRefs: [],
+          clientInstanceId,
+          authSource: "test"
+        }
+      };
+      const store = new InMemoryPlatformStore();
+      const conversationId = await createConversationWithMessages(store, {
+        clientInstanceId,
+        messages: []
+      });
+      const providerConfig: ModelProviderConfig = {
+        id: "test-provider",
+        type: "openai-compatible",
+        model: "test-model",
+        baseUrl: "https://provider.test/v1",
+        apiKeyEnvName: "TEST_KEY"
+      };
+      const provider = new OpenAiCompatibleChatProvider({
+        id: providerConfig.id,
+        api,
+        model: providerConfig.model,
+        baseUrl: "https://provider.test/v1",
+        apiKey: "test"
+      });
+      const interrupted = new TypeError("terminated", {
+        cause: Object.assign(new Error("socket closed"), { code: "UND_ERR_SOCKET" })
+      });
+      const fetchMock = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValueOnce(
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.error(interrupted);
+              }
+            }),
+            { status: 200 }
+          )
+        )
+        .mockResolvedValueOnce(
+          Response.json(
+            api === "chat_completions"
+              ? { choices: [{ message: { content: "Recovered after interruption." } }] }
+              : {
+                  output: [
+                    {
+                      type: "message",
+                      content: [{ type: "output_text", text: "Recovered after interruption." }]
+                    }
+                  ]
+                }
+          )
+        );
+      try {
+        const runtime = new LocalAgentRuntime({
+          assetSource: createStaticConfigAssetSource({
+            agents: [
+              {
+                name: "retry_agent",
+                skillNames: [],
+                displayName: "Retry Agent",
+                instructions: "Help the user.",
+                modelProviderId: providerConfig.id,
+                toolNames: [],
+                initialPrompts: []
+              }
+            ]
+          }),
+          modelProviders: [providerConfig],
+          defaultModelProvider: providerConfig,
+          conversationHistory: store,
+          modelProvider: { id: provider.id, complete: provider.complete.bind(provider) },
+          toolRegistry: new ToolRegistry({ tools: [] }),
+          toolExecution: createUnusedToolExecution(),
+          usageGovernance: new ModelUsageGovernance({ store, budget: {}, safeguards: {} })
+        });
+        const run = await runtime.start(
+          { agentName: "retry_agent", conversationId, message: { text: "hello" } },
+          context
+        );
+        const events = [];
+        for await (const event of runtime.observe(run.runId, context)) {
+          events.push(event);
+        }
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(events.map((event) => event.type)).toContain("run_completed");
+        expect(events.map((event) => event.type)).not.toContain("run_failed");
+      } finally {
+        fetchMock.mockRestore();
+      }
+    }
+  );
 
   it("retries a transient provider disconnect before streamed output or tool execution", async () => {
     const clientInstanceId = asClientInstanceId("provider-stream-retry-client");

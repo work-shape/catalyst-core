@@ -10,8 +10,8 @@ export function installErrorHandler(app: FastifyInstance): void {
         .send({
           error: {
             code: error.code,
-            message: error.message,
-            details: error.details
+            message: error.exposeMessage ? error.message : "Internal server error",
+            ...(error.statusCode < 500 ? { details: error.details } : {})
           }
         });
       return;

@@ -12,6 +12,7 @@ import {
   toModelUsage,
   toResponsesModelUsage
 } from "./openai-compatible-mapping";
+import { readProviderErrorMetadata } from "./provider-error";
 import { parseToolInput } from "./tool-input";
 import type { OpenAiCompatibleResponse, OpenAiResponsesResponse } from "./openai-compatible-types";
 
@@ -167,7 +168,8 @@ export async function* streamOpenAiResponsesCompletion(
   body: ReadableStream<Uint8Array>,
   toolNameMap: Map<string, string>,
   providerId: string,
-  previousContinuation: ModelProviderContinuation | undefined
+  previousContinuation: ModelProviderContinuation | undefined,
+  headers?: Headers
 ): AsyncIterable<ModelCompletionStreamEvent> {
   let text = "";
   let usage = noReportedUsage();
@@ -283,13 +285,8 @@ export async function* streamOpenAiResponsesCompletion(
     }
 
     if (payload.type === "response.failed" || payload.type === "error") {
-      const message =
-        payload.response?.error?.message ??
-        payload.error?.message ??
-        payload.message ??
-        "Model provider stream failed";
-      const providerErrorCode =
-        payload.response?.error?.code ?? payload.error?.code ?? payload.code;
+      const metadata = readProviderErrorMetadata(payload.response ?? payload, headers);
+      const { providerErrorCode } = metadata;
       // The request was accepted with 200, so the failure carries no HTTP status. Map the
       // provider's own transient codes to one, which is what callers retry on.
       const status =
@@ -298,8 +295,9 @@ export async function* streamOpenAiResponsesCompletion(
           : providerErrorCode === "rate_limit_exceeded"
             ? 429
             : undefined;
-      throw new AppError("INTERNAL", message, {
-        ...(providerErrorCode ? { providerErrorCode } : {}),
+      throw new AppError("INTERNAL", "Model provider stream failed", {
+        providerId,
+        ...metadata,
         ...(status ? { status } : {})
       });
     }

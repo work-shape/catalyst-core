@@ -1295,20 +1295,5 @@ function isUsableGeneratedTitle(title: string): boolean {
 }
 
 function toAuditErrorMetadata(error: unknown): JsonObject {
-  if (isAppError(error)) {
-    return {
-      errorCode: error.code,
-      errorMessage: error.message
-    };
-  }
-  if (error instanceof Error) {
-    return {
-      errorCode: "INTERNAL",
-      errorMessage: error.message
-    };
-  }
-  return {
-    errorCode: "INTERNAL",
-    errorMessage: "Conversation title generation failed"
-  };
+  return { errorCode: isAppError(error) ? error.code : "INTERNAL" };
 }

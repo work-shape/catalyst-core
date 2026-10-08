@@ -359,6 +359,32 @@ describe("password setup by email", () => {
     expect(harness.transport.list()).toHaveLength(1);
   });
 
+  it("exposes the fixed invitation delivery failure through HTTP", async () => {
+    const harness = await createMailHarness();
+    vi.spyOn(harness.transport, "deliver").mockResolvedValue({
+      ok: false,
+      reason: "private transport failure"
+    });
+    try {
+      const created = await harness.server.inject({
+        method: "POST",
+        url: "/api/superadmin/users",
+        payload: { displayLabel: "Grace", email: "grace@example.test" }
+      });
+      expect(created.statusCode).toBe(200);
+      const invited = await harness.server.inject({
+        method: "POST",
+        url: `/api/superadmin/users/${created.json<{ id: string }>().id}/invitation`
+      });
+      expect(invited.statusCode).toBe(500);
+      expect(invited.json()).toEqual({
+        error: { code: "INTERNAL", message: "The invitation email could not be sent" }
+      });
+    } finally {
+      await harness.server.close();
+    }
+  });
+
   it("lets a superadmin invite a user who then sets their own password", async () => {
     const harness = await createMailHarness();
     const created = await harness.server.inject({

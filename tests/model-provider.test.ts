@@ -1417,7 +1417,7 @@ describe("OpenAI-compatible model provider", () => {
 
     await expect(stream.next()).rejects.toMatchObject({
       code: "INTERNAL",
-      message: "The server had an error",
+      message: "Model provider stream failed",
       details: { status: 500, providerErrorCode: "server_error" }
     });
   });
@@ -1466,7 +1466,7 @@ describe("OpenAI-compatible model provider", () => {
     }
   });
 
-  it("surfaces provider error bodies from stream requests", async () => {
+  it("keeps only structured provider diagnostics from stream requests", async () => {
     const fetchMock = vi.fn(async () => {
       return new Response(
         JSON.stringify({
@@ -1522,11 +1522,11 @@ describe("OpenAI-compatible model provider", () => {
 
     expect(thrown).toBeInstanceOf(AppError);
     expect(thrown).toMatchObject({
-      message: expect.stringContaining("Unsupported parameter: reasoning_effort"),
+      message: "Model provider request failed",
       details: {
         providerId: "openai",
         status: 400,
-        providerError: expect.stringContaining("Unsupported parameter: reasoning_effort")
+        providerErrorType: "invalid_request_error"
       }
     });
   });

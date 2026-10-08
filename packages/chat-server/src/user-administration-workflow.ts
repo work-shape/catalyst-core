@@ -344,7 +344,9 @@ export class UserAdministrationWorkflow {
       }
     });
     if (!result.ok) {
-      throw new AppError("INTERNAL", "The invitation email could not be sent");
+      throw new AppError("INTERNAL", "The invitation email could not be sent", undefined, {
+        exposeMessage: true
+      });
     }
     return { ok: true };
   }

@@ -29,6 +29,7 @@ import {
   toResponsesModelUsage,
   type OpenAiCompatibleProviderTool
 } from "./openai-compatible-mapping";
+import { readProviderErrorMetadata } from "./provider-error";
 import { parseToolInput } from "./tool-input";
 import {
   streamOpenAiCompatibleCompletion,
@@ -98,10 +99,10 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     });
 
     if (!response.ok) {
-      throw await this.createProviderError(response, "request");
+      throw await this.createProviderError(response);
     }
 
-    const payload = (await response.json()) as OpenAiCompatibleResponse;
+    const payload = (await this.readResponseJson(response)) as OpenAiCompatibleResponse;
     const message = payload.choices?.[0]?.message;
     if (!message) {
       throw new AppError("INTERNAL", "Model provider returned no message");
@@ -141,7 +142,7 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     });
 
     if (!response.ok) {
-      throw await this.createProviderError(response, "stream request");
+      throw await this.createProviderError(response);
     }
     if (!response.body) {
       throw new AppError("INTERNAL", "Model provider stream returned no response body", {
@@ -165,10 +166,10 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     });
 
     if (!response.ok) {
-      throw await this.createProviderError(response, "request");
+      throw await this.createProviderError(response);
     }
 
-    const payload = (await response.json()) as OpenAiResponsesResponse;
+    const payload = (await this.readResponseJson(response)) as OpenAiResponsesResponse;
     const webMetadata = readOpenAiResponsesWebMetadata(payload);
     return {
       text: readOpenAiResponsesText(payload),
@@ -202,7 +203,7 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     });
 
     if (!response.ok) {
-      throw await this.createProviderError(response, "stream request");
+      throw await this.createProviderError(response);
     }
     if (!response.body) {
       throw new AppError("INTERNAL", "Model provider stream returned no response body", {
@@ -214,7 +215,8 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
       response.body,
       toolNameMap,
       this.id,
-      request.continuation
+      request.continuation,
+      response.headers
     );
   }
 
@@ -337,20 +339,28 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     };
   }
 
-  private async createProviderError(
-    response: Response,
-    operation: "request" | "stream request"
-  ): Promise<AppError> {
-    const errorBody = await readProviderErrorBody(response);
-    return new AppError(
-      "INTERNAL",
-      `Model provider ${operation} failed with ${response.status}${errorBody ? `: ${errorBody}` : ""}`,
-      {
+  private async readResponseJson(response: Response): Promise<unknown> {
+    try {
+      return await response.json();
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) {
+        throw error;
+      }
+      throw new AppError("INTERNAL", "Model provider returned invalid JSON", {
         providerId: this.id,
         status: response.status,
-        providerError: errorBody
-      }
-    );
+        ...readProviderErrorMetadata(undefined, response.headers)
+      });
+    }
+  }
+
+  private async createProviderError(response: Response): Promise<AppError> {
+    const payload: unknown = await response.json().catch(() => undefined);
+    return new AppError("INTERNAL", "Model provider request failed", {
+      providerId: this.id,
+      status: response.status,
+      ...readProviderErrorMetadata(payload, response.headers)
+    });
   }
 }
 
@@ -401,20 +411,4 @@ function isOpenAiResponsesFunctionCall(
     typeof item.name === "string" &&
     typeof item.arguments === "string"
   );
-}
-
-const providerErrorBodyLimit = 2000;
-
-async function readProviderErrorBody(response: Response): Promise<string | undefined> {
-  try {
-    const body = (await response.text()).trim();
-    if (!body) {
-      return undefined;
-    }
-    return body.length > providerErrorBodyLimit
-      ? `${body.slice(0, providerErrorBodyLimit)}...`
-      : body;
-  } catch {
-    return undefined;
-  }
 }
