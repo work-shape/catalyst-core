@@ -1,8 +1,8 @@
 import {
   defaultReasoningEffortForAgentBinding,
   modelUsageTierFromRates,
+  reasoningEffortChoiceForBinding,
   userSelectableModelBindingsForAgent,
-  userSelectableReasoningEffortsForBinding,
   type LocaleCode,
   type ModelBindingConfig,
   type ModelProviderConfig,
@@ -146,7 +146,7 @@ function modelView(
     reasoningEffort: ReasoningEffortConfig | undefined;
   }
 ) {
-  const { provider, binding, model, reasoningEffort } = selection;
+  const { provider, binding, model } = selection;
   const description = binding?.description
     ? resolveLocalizedString(binding.description, locale, config.localization.defaultLocale)
     : undefined;
@@ -156,6 +156,7 @@ function modelView(
     (candidate) => candidate.providerId === provider.id && candidate.model === model
   );
   const usageTier = binding?.usageTier ?? (rates ? modelUsageTierFromRates(rates) : undefined);
+  const reasoning = reasoningEffortChoiceForBinding(binding, provider, selection.reasoningEffort);
   return {
     ...(binding ? { bindingId: binding.id } : {}),
     model,
@@ -164,8 +165,8 @@ function modelView(
     ...(description ? { description } : {}),
     ...(residency ? { residency } : {}),
     ...(usageTier ? { usageTier } : {}),
-    ...(reasoningEffort ? { reasoningEffort } : {}),
-    selectableReasoningEfforts: userSelectableReasoningEffortsForBinding(binding, reasoningEffort)
+    ...(reasoning.defaultEffort ? { reasoningEffort: reasoning.defaultEffort } : {}),
+    selectableReasoningEfforts: reasoning.selectable
   };
 }
 

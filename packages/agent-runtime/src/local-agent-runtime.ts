@@ -2,7 +2,7 @@ import {
   AppError,
   defaultReasoningEffortForAgentBinding,
   isModelBindingUserSelectableForAgent,
-  userSelectableReasoningEffortsForBinding,
+  reasoningEffortChoiceForBinding,
   type AgentConfig,
   type ConfigAssetSource,
   type AgentRunHandle,
@@ -626,18 +626,21 @@ export class LocalAgentRuntime implements AgentRuntime {
         );
       }
       const provider = this.getModelProvider(binding.providerId);
+      const configuredEffort =
+        defaultReasoningEffortForAgentBinding(agent, binding) ??
+        (provider.type === "openai-compatible" ? provider.reasoningEffort : undefined);
       return {
         provider,
         model: binding.model ?? provider.model,
         // An effort the user picked wins while the binding still offers it; a pick the binding
-        // no longer offers falls back to the configured default instead of failing the run.
+        // no longer offers falls back to the configured effort instead of failing the run.
         reasoningEffort:
-          (userSelectedReasoningEffort &&
-          userSelectableReasoningEffortsForBinding(binding).includes(userSelectedReasoningEffort)
+          userSelectedReasoningEffort &&
+          reasoningEffortChoiceForBinding(binding, provider, configuredEffort).selectable.includes(
+            userSelectedReasoningEffort
+          )
             ? userSelectedReasoningEffort
-            : undefined) ??
-          defaultReasoningEffortForAgentBinding(agent, binding) ??
-          (provider.type === "openai-compatible" ? provider.reasoningEffort : undefined),
+            : configuredEffort,
         // A user-selected binding gets fast mode only when that binding supports it.
         fastMode: agent.fastMode === true && binding.supportsFastMode === true
       };

@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { createSafeConfigView, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 
 const noChoice = { selectableReasoningEfforts: [] };
+// What a binding offers when release config does not say: three efforts around an assumed medium.
+const defaultChoice = {
+  reasoningEffort: "medium",
+  selectableReasoningEfforts: ["low", "medium", "high"]
+};
 
 describe("user-selectable model config", () => {
   it("offers each agent its own model plus its listed user-selectable bindings", () => {
@@ -108,14 +113,20 @@ describe("user-selectable model config", () => {
         bindingId: "conversationTitle",
         model: "gpt-5.6-luna",
         compactThresholdTokens: 270_000,
-        ...noChoice
+        ...defaultChoice
       },
-      { bindingId: "terra", model: "gpt-5.6-terra", compactThresholdTokens: 270_000, ...noChoice }
+      {
+        bindingId: "terra",
+        model: "gpt-5.6-terra",
+        compactThresholdTokens: 270_000,
+        ...defaultChoice
+      }
     ]);
-    // An agent on the provider default has no binding id for its own model.
+    // An agent on the provider default has no binding for its own model: no id, and no choice
+    // of effort.
     expect(safeConfig.agents[2]?.selectableModels).toEqual([
       { model: "gpt-5.6-sol", compactThresholdTokens: 270_000, ...noChoice },
-      { bindingId: "sol", model: "gpt-5.6-sol", compactThresholdTokens: 270_000, ...noChoice }
+      { bindingId: "sol", model: "gpt-5.6-sol", compactThresholdTokens: 270_000, ...defaultChoice }
     ]);
   });
 
@@ -145,10 +156,16 @@ describe("user-selectable model config", () => {
           model: "gpt-5.6-sol",
           reasoningEffort: "medium",
           description: { en: "For complex work.", de: "Für komplexe Aufgaben." },
-          userSelectableReasoningEfforts: ["high", "low", "medium"]
+          userSelectableReasoningEfforts: ["xhigh", "low"]
         },
         { id: "luna", providerId: "azure-eu", model: "gpt-5.6-luna", reasoningEffort: "low" },
-        { id: "opus", providerId: "global", vendor: "anthropic", usageTier: "very_high" },
+        {
+          id: "opus",
+          providerId: "global",
+          vendor: "anthropic",
+          usageTier: "very_high",
+          userSelectableReasoningEfforts: []
+        },
         { id: "unpriced", providerId: "azure-eu", model: "gpt-unpriced" }
       ],
       usage: {
@@ -217,19 +234,22 @@ describe("user-selectable model config", () => {
         residency: "eu",
         // (3 × 5 + 30) / 4 = 11.25 per million tokens.
         usageTier: "high",
-        // The agent's own effort for its own model, offered efforts weakest first.
+        // The agent's own effort for its own model joins the efforts the binding lists, weakest
+        // first.
         reasoningEffort: "high",
-        selectableReasoningEfforts: ["low", "medium", "high"]
+        selectableReasoningEfforts: ["low", "high", "xhigh"]
       },
       {
         bindingId: "luna",
         model: "gpt-5.6-luna",
         residency: "eu",
         usageTier: "low",
+        // The effort the agent sets for this model, among the efforts offered by default.
         reasoningEffort: "medium",
-        ...noChoice
+        selectableReasoningEfforts: ["low", "medium", "high"]
       },
-      // Release config overrides the tier its prices would give.
+      // Release config overrides the tier its prices would give, and an empty list of efforts
+      // leaves users no choice.
       {
         bindingId: "opus",
         model: "claude-opus",
@@ -238,7 +258,7 @@ describe("user-selectable model config", () => {
         ...noChoice
       },
       // No rate card entry and no override: the picker shows no tier.
-      { bindingId: "unpriced", model: "gpt-unpriced", residency: "eu", ...noChoice }
+      { bindingId: "unpriced", model: "gpt-unpriced", residency: "eu", ...defaultChoice }
     ]);
   });
 

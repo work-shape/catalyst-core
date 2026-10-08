@@ -35,7 +35,7 @@ import {
   isAppError,
   defaultReasoningEffortForAgentBinding,
   isModelBindingUserSelectableForAgent,
-  userSelectableReasoningEffortsForBinding,
+  reasoningEffortChoiceForBinding,
   readAssistantFinalMetadata,
   readUserMessageMetadata
 } from "@vivd-catalyst/core";
@@ -149,15 +149,16 @@ export class ConversationWorkflow {
       const binding = this.options.config.modelBindings.find(
         (candidate) => candidate.id === bindingId
       );
-      const defaultEffort =
-        binding &&
-        ((agent && defaultReasoningEffortForAgentBinding(agent, binding)) ??
-          resolveModelBinding(this.options.config, binding.id).reasoningEffort);
-      if (
-        !userSelectableReasoningEffortsForBinding(binding, defaultEffort).includes(
-          requestedReasoningEffort
-        )
-      ) {
+      const selection = binding && resolveModelBinding(this.options.config, binding.id);
+      const offered = selection
+        ? reasoningEffortChoiceForBinding(
+            binding,
+            selection.provider,
+            (agent && defaultReasoningEffortForAgentBinding(agent, binding)) ??
+              selection.reasoningEffort
+          ).selectable
+        : [];
+      if (!offered.includes(requestedReasoningEffort)) {
         throw new AppError(
           "VALIDATION_FAILED",
           `Reasoning effort '${requestedReasoningEffort}' is not available for user selection`

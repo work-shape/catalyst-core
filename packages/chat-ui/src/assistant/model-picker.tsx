@@ -42,9 +42,9 @@ type Panel = "model" | "reasoning";
 const surfaceClassName = "rounded-xl border bg-popover text-popover-foreground shadow-lg";
 
 /**
- * The composer's model control. It opens as a short menu naming the model and its reasoning
- * effort; each row opens its own panel beside it, and a model under the pointer brings up a
- * card describing it. On a narrow screen a panel takes the menu's place instead.
+ * The composer's model control. It always opens as a short menu naming the model and its
+ * reasoning effort; each row opens its own panel beside it, and a model under the pointer
+ * brings up a card describing it. On a narrow screen a panel takes the menu's place instead.
  */
 export function ModelPicker({
   models,
@@ -114,15 +114,9 @@ export function ModelPicker({
   }
 
   const efforts = selectedModel.selectableReasoningEfforts;
-  const offersModels = models.length > 1;
   const offersReasoning = efforts.length > 1 && reasoningEffort !== undefined;
-  // With a single thing to choose there is nothing for a menu to lead to.
-  const onlyPanel: Panel | undefined = !offersReasoning
-    ? "model"
-    : !offersModels
-      ? "reasoning"
-      : undefined;
-  const shownPanel = onlyPanel ?? panel;
+  // Picking a model whose effort is fixed closes the reasoning panel with it.
+  const shownPanel = panel === "reasoning" && !offersReasoning ? undefined : panel;
 
   function toggle() {
     setOpensDown((rootRef.current?.getBoundingClientRect().top ?? POPOVER_HEIGHT) < POPOVER_HEIGHT);
@@ -166,7 +160,7 @@ export function ModelPicker({
     </button>
   );
 
-  const backRow = onlyPanel ? null : (
+  const backRow = (
     <button
       type="button"
       className="flex h-9 w-full items-center gap-1.5 border-b px-3 text-left text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground sm:hidden"
@@ -287,29 +281,36 @@ export function ModelPicker({
             </div>
           ) : null}
 
-          {onlyPanel ? null : (
-            <div
-              className={cn(
-                surfaceClassName,
-                "grid w-64 shrink-0 gap-0.5 p-1.5",
-                shownPanel && "max-sm:hidden"
-              )}
-            >
-              {menuRow(
-                "model",
-                t("modelPickerModel"),
-                <>
-                  <ModelVendorIcon model={selectedModel} size={14} className="shrink-0" />
-                  <span className="truncate">{formatModelLabel(selectedModel.model)}</span>
-                </>
-              )}
-              {menuRow(
+          <div
+            className={cn(
+              surfaceClassName,
+              "grid w-64 shrink-0 gap-0.5 p-1.5",
+              shownPanel && "max-sm:hidden"
+            )}
+          >
+            {menuRow(
+              "model",
+              t("modelPickerModel"),
+              <>
+                <ModelVendorIcon model={selectedModel} size={14} className="shrink-0" />
+                <span className="truncate">{formatModelLabel(selectedModel.model)}</span>
+              </>
+            )}
+            {offersReasoning ? (
+              menuRow(
                 "reasoning",
                 t("modelPickerReasoning"),
-                t(reasoningEffortLabels[reasoningEffort!])
-              )}
-            </div>
-          )}
+                t(reasoningEffortLabels[reasoningEffort])
+              )
+            ) : reasoningEffort ? (
+              // A model with a fixed effort still says which one it runs with.
+              <div className="flex h-9 items-center gap-2 px-2 text-sm text-muted-foreground">
+                <span className="w-3.5 shrink-0 max-sm:hidden" />
+                <span className="font-medium">{t("modelPickerReasoning")}</span>
+                <span className="ml-auto">{t(reasoningEffortLabels[reasoningEffort])}</span>
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
     </div>

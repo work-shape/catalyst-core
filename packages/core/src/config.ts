@@ -87,8 +87,8 @@ export interface ModelBindingConfig {
   /** Overrides the usage tier derived from the Customer Rate Card. */
   usageTier?: ModelUsageTier;
   /**
-   * Reasoning efforts a user may pick for this model in the chat. Empty or unset leaves the
-   * effort to the agent's model settings.
+   * Reasoning efforts a user may pick for this model in the chat. Unset offers low, medium and
+   * high; an empty list leaves the effort to the agent's model settings.
    */
   userSelectableReasoningEfforts?: ReasoningEffortConfig[];
 }
@@ -119,20 +119,43 @@ export function modelUsageTierFromRates(
   return MODEL_USAGE_TIERS[tier === -1 ? MODEL_USAGE_TIERS.length - 1 : tier]!;
 }
 
+/** Offered for a model whose binding does not say which efforts users may pick. */
+const DEFAULT_USER_SELECTABLE_REASONING_EFFORTS: readonly ReasoningEffortConfig[] = [
+  "low",
+  "medium",
+  "high"
+];
+/** What the picker shows for a model with no configured effort: the provider's own default. */
+const ASSUMED_REASONING_EFFORT: ReasoningEffortConfig = "medium";
+
 /**
- * The efforts a user may pick for a binding, weakest first; none when the binding offers no
- * choice. The effort a run would use anyway is always among them, so the user can return to
- * it without release config having to list it.
+ * The reasoning efforts a user may pick for a model, weakest first, and the one a run uses
+ * when they pick none. A binding offers low, medium and high unless it lists its own efforts;
+ * an empty list leaves no choice. The default is always among the efforts offered, so the
+ * user can return to it. A model without a binding or on a provider without reasoning offers
+ * no choice.
  */
-export function userSelectableReasoningEffortsForBinding(
+export function reasoningEffortChoiceForBinding(
   binding: Pick<ModelBindingConfig, "userSelectableReasoningEfforts"> | undefined,
-  defaultEffort?: ReasoningEffortConfig
-): ReasoningEffortConfig[] {
-  const offered = new Set(binding?.userSelectableReasoningEfforts ?? []);
+  provider: Pick<ModelProviderConfig, "type">,
+  configuredEffort: ReasoningEffortConfig | undefined
+): { defaultEffort: ReasoningEffortConfig | undefined; selectable: ReasoningEffortConfig[] } {
+  const offered = new Set(
+    binding?.userSelectableReasoningEfforts ??
+      (binding && provider.type === "openai-compatible"
+        ? DEFAULT_USER_SELECTABLE_REASONING_EFFORTS
+        : [])
+  );
   if (offered.size === 0) {
-    return [];
+    return { defaultEffort: configuredEffort, selectable: [] };
   }
-  return REASONING_EFFORTS.filter((effort) => offered.has(effort) || effort === defaultEffort);
+  const defaultEffort = configuredEffort ?? ASSUMED_REASONING_EFFORT;
+  return {
+    defaultEffort,
+    selectable: REASONING_EFFORTS.filter(
+      (effort) => offered.has(effort) || effort === defaultEffort
+    )
+  };
 }
 
 /**

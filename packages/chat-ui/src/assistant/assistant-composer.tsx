@@ -303,14 +303,6 @@ export function AssistantComposer({
               composerExpanded ? "row-start-2" : "row-start-1"
             )}
           >
-            <ModelPicker
-              models={selectableModels}
-              selectedModelBindingId={selectedModelBindingId}
-              reasoningEffort={selectedReasoningEffort}
-              disabled={conversationRunning}
-              onSelectModelBinding={onSelectModelBinding}
-              onSelectReasoningEffort={onSelectReasoningEffort}
-            />
             {showContextIndicator && contextSnapshot ? (
               <div className="flex h-9 shrink-0 items-center">
                 <ContextIndicator
@@ -319,6 +311,14 @@ export function AssistantComposer({
                 />
               </div>
             ) : null}
+            <ModelPicker
+              models={selectableModels}
+              selectedModelBindingId={selectedModelBindingId}
+              reasoningEffort={selectedReasoningEffort}
+              disabled={conversationRunning}
+              onSelectModelBinding={onSelectModelBinding}
+              onSelectReasoningEffort={onSelectReasoningEffort}
+            />
             <ComposerAction
               disabled={Boolean(sendBlockedReason)}
               disabledReason={sendBlockedReason}

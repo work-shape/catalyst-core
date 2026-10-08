@@ -291,7 +291,8 @@ agent; add one to a binding only when that model needs a different fallback.
 ### What the model picker shows
 
 The composer's model picker appears when the agent offers more than one model, or when its
-only model offers a choice of reasoning effort. Four optional binding keys feed it:
+only model offers a choice of reasoning effort. It opens as a two-row menu, model and
+reasoning; each row leads to its own panel. Four optional binding keys feed it:
 
 ```yaml
 modelBindings:
@@ -309,8 +310,11 @@ modelBindings:
 
 - `description` is the text on the model card, localized like other display strings.
 - `userSelectableReasoningEfforts` lists the efforts a chat user may pick for this model.
-  Empty or unset, users get no choice and the agent's model settings decide. The effort the
-  agent would use anyway is always offered, so the user can return to it. The run API accepts
+  Unset, a binding on an `openai-compatible` provider offers `low`, `medium` and `high`. An
+  empty list gives users no choice and leaves the effort to the agent's model settings. The
+  effort the agent would use anyway is always offered, so the user can return to it. Where
+  neither agent, binding nor provider sets an effort, the picker starts on `medium`; nothing
+  is sent to the provider until the user picks one. The run API accepts
   `reasoningEffort` only when the model that will run offers it, and the picked effort is
   stored on the run. A higher effort uses more tokens, which are billed as usual.
 - `vendor` names who makes the model, for its logo: `openai`, `anthropic`, `mistral` or
