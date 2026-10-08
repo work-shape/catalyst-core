@@ -238,6 +238,13 @@ function ChatWorkspaceContent({
           sidebarOpen={model.chrome.sidebarOpen}
           selectedAgentName={model.config.activeAgentName}
           showAgentName={model.config.config.ui.showAgentName}
+          showAgentSelector={
+            !(
+              model.route.view === "chat" &&
+              !model.route.selectedConversationId &&
+              model.config.config.agents.length > 1
+            )
+          }
           themeMode={model.config.resolvedThemeMode}
           onSelectAgent={model.config.selectAgentName}
           onToggleSidebar={model.chrome.toggleSidebar}

@@ -6,12 +6,15 @@ import { cn } from "../ui/cn";
 
 export function AgentSelector({
   agents,
+  align = "start",
   contextLabel,
   selectedAgentName,
   showName,
   onSelectAgent
 }: {
   agents: SafeConfig["agents"];
+  /** Which edge of the trigger the list hangs from. */
+  align?: "start" | "center";
   contextLabel?: string;
   selectedAgentName: string | undefined;
   showName: boolean;
@@ -77,7 +80,13 @@ export function AgentSelector({
           "inline-flex min-w-0 items-center rounded-md text-left text-foreground transition-colors outline-none",
           "hover:bg-accent/70 focus-visible:ring-[3px] focus-visible:ring-ring/40",
           showName
-            ? "h-11 max-w-[min(32rem,calc(100vw-8.5rem))] gap-3 px-2.5"
+            ? cn(
+                "h-11 gap-3 px-2.5",
+                // The header shares its row with other controls; centred it has the full width.
+                align === "center"
+                  ? "max-w-[min(32rem,calc(100vw-2.5rem))]"
+                  : "max-w-[min(32rem,calc(100vw-8.5rem))]"
+              )
             : "size-10 shrink-0 justify-center"
         )}
         aria-label={t("selectAgent")}
@@ -118,7 +127,12 @@ export function AgentSelector({
       {open ? (
         // The wrapper's padding is the gap to the trigger, so it stays inside
         // the hover area and the list does not close while moving into it.
-        <div className="absolute left-0 top-full z-50 pt-2">
+        <div
+          className={cn(
+            "absolute top-full z-50 pt-2",
+            align === "center" ? "left-1/2 -translate-x-1/2" : "left-0"
+          )}
+        >
           <div className="grid w-[min(19rem,calc(100vw-2rem))] gap-1 rounded-md border bg-popover p-1.5 text-popover-foreground shadow-lg">
             <div role="listbox" className="grid gap-1">
               {agents.map((agent) => {

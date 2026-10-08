@@ -24,6 +24,7 @@ function renderWorkspaceChrome(
         sidebarOpen: false,
         selectedAgentName: undefined,
         showAgentName: false,
+        showAgentSelector: true,
         themeMode: "light",
         onSelectAgent: noop,
         onToggleSidebar: noop,

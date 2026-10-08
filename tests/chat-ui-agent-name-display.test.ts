@@ -14,7 +14,7 @@ const agents = [
   }
 ];
 
-function renderChrome(showAgentName: boolean) {
+function renderChrome(showAgentName: boolean, showAgentSelector = true) {
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
@@ -28,6 +28,7 @@ function renderChrome(showAgentName: boolean) {
         sidebarOpen: false,
         selectedAgentName: "catalyst_assistant",
         showAgentName,
+        showAgentSelector,
         themeMode: "light" as const,
         onSelectAgent: noop,
         onToggleSidebar: noop,
@@ -53,5 +54,12 @@ describe("agent selector name display", () => {
     // The names only exist as the tooltip, never as rendered label text.
     expect(markup).not.toContain(">Catalyst Assistant<");
     expect(markup).not.toContain(">Vivd Catalyst<");
+  });
+
+  it("leaves the picker to the start page when asked to", () => {
+    const markup = renderChrome(true, false);
+
+    expect(markup).not.toContain('aria-label="Select agent"');
+    expect(markup).not.toContain("Catalyst Assistant");
   });
 });

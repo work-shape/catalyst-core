@@ -9,6 +9,7 @@ import { ArrowDown, Bot, CircleAlert, Lock, Sparkles } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, type RefObject } from "react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
+import { AgentSelector } from "../workspace/agent-selector";
 import { AssistantActivityStatus } from "./assistant-activity-status";
 import { AssistantComposer, type LocalUploadingAttachment } from "./assistant-composer";
 import { ThreadMessage } from "./assistant-message";
@@ -143,7 +144,9 @@ export function AssistantThread({
             {startPage ? (
               <ThreadWelcomeHeading
                 agent={agent}
+                agents={agents}
                 fallbackWelcomeMessage={config?.ui.welcomeMessage ?? t("genericWelcome")}
+                onSelectAgent={onSelectAgent}
               />
             ) : null}
 
@@ -227,14 +230,7 @@ export function AssistantThread({
               </div>
             </ThreadPrimitive.ViewportFooter>
 
-            {startPage ? (
-              <ThreadStartBlock
-                agents={agents}
-                initialPrompts={initialPrompts}
-                selectedAgentName={agent?.name}
-                onSelectAgent={onSelectAgent}
-              />
-            ) : null}
+            {startPage ? <ThreadStartBlock initialPrompts={initialPrompts} /> : null}
           </div>
         </ThreadPrimitive.Viewport>
       </ThreadPrimitive.Root>
@@ -331,18 +327,36 @@ function useComposerSettleTransition(
   return composerRef;
 }
 
-function ThreadWelcomeHeading({
+/**
+ * The start page heading. With several agents on offer the badge above the
+ * welcome message is the agent picker; a single agent leaves nothing to choose.
+ */
+export function ThreadWelcomeHeading({
   agent,
-  fallbackWelcomeMessage
+  agents,
+  fallbackWelcomeMessage,
+  onSelectAgent
 }: {
   agent: SafeConfig["agents"][number] | undefined;
+  agents: SafeConfig["agents"];
   fallbackWelcomeMessage: string | undefined;
+  onSelectAgent: (agentName: string) => void;
 }) {
   return (
     <div className="flex flex-[2] basis-0 flex-col items-center justify-end gap-3 pb-4 text-center">
-      <span className="grid size-10 place-items-center rounded-lg border bg-card text-primary shadow-xs">
-        <Bot size={20} aria-hidden="true" />
-      </span>
+      {agents.length > 1 ? (
+        <AgentSelector
+          agents={agents}
+          align="center"
+          selectedAgentName={agent?.name}
+          showName
+          onSelectAgent={onSelectAgent}
+        />
+      ) : (
+        <span className="grid size-10 place-items-center rounded-lg border bg-card text-primary shadow-xs">
+          <Bot size={20} aria-hidden="true" />
+        </span>
+      )}
       <div className="grid gap-1">
         <h2 className="text-xl font-semibold tracking-normal">
           {agent?.welcomeMessage ?? fallbackWelcomeMessage ?? "How can I help?"}
@@ -363,15 +377,9 @@ const startCardClassName = cn(
 );
 
 function ThreadStartBlock({
-  agents,
-  initialPrompts,
-  selectedAgentName,
-  onSelectAgent
+  initialPrompts
 }: {
-  agents: SafeConfig["agents"];
   initialPrompts: Array<{ title: string; prompt: string }>;
-  selectedAgentName: string | undefined;
-  onSelectAgent: (agentName: string) => void;
 }) {
   return (
     <div className="grid flex-[3] basis-0 content-start gap-5 pb-8 pt-2">
@@ -393,65 +401,7 @@ function ThreadStartBlock({
           ))}
         </div>
       ) : null}
-      <StartPageAgentCards
-        agents={agents}
-        selectedAgentName={selectedAgentName}
-        onSelectAgent={onSelectAgent}
-      />
       <div data-slot="workspace-apps" className="empty:hidden" />
-    </div>
-  );
-}
-
-/** One card per available agent; a single agent leaves nothing to choose. */
-export function StartPageAgentCards({
-  agents,
-  selectedAgentName,
-  onSelectAgent
-}: {
-  agents: SafeConfig["agents"];
-  selectedAgentName: string | undefined;
-  onSelectAgent: (agentName: string) => void;
-}) {
-  const { t } = useTranslation();
-
-  if (agents.length < 2) {
-    return null;
-  }
-
-  return (
-    <div role="group" aria-label={t("selectAgent")} className="grid gap-2 sm:grid-cols-3">
-      {agents.map((agent) => {
-        const selected = agent.name === selectedAgentName;
-        return (
-          <button
-            key={agent.name}
-            type="button"
-            aria-pressed={selected}
-            data-testid="start-page-agent-card"
-            className={cn(
-              startCardClassName,
-              "grid min-w-0 content-start gap-1",
-              selected && "border-primary/60 bg-accent"
-            )}
-            onClick={() => onSelectAgent(agent.name)}
-          >
-            <span className="flex min-w-0 items-center gap-2 font-medium">
-              <Bot
-                size={15}
-                className={cn("shrink-0", selected ? "text-primary" : "text-muted-foreground")}
-                aria-hidden="true"
-              />
-              <span className="truncate">{agent.displayName}</span>
-            </span>
-            {agent.description ? (
-              <span className="line-clamp-2 text-xs leading-5 text-muted-foreground">
-                {agent.description}
-              </span>
-            ) : null}
-          </button>
-        );
-      })}
     </div>
   );
 }

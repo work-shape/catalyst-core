@@ -96,6 +96,7 @@ export function WorkspaceChrome({
   sidebarOpen,
   selectedAgentName,
   showAgentName,
+  showAgentSelector,
   themeMode,
   onSelectAgent,
   onToggleSidebar,
@@ -109,6 +110,8 @@ export function WorkspaceChrome({
   sidebarOpen: boolean;
   selectedAgentName: string | undefined;
   showAgentName: boolean;
+  /** False while the start page offers its own agent picker. */
+  showAgentSelector: boolean;
   themeMode: ResolvedThemeMode;
   onSelectAgent: (agentName: string) => void;
   onToggleSidebar: () => void;
@@ -163,7 +166,7 @@ export function WorkspaceChrome({
               <PanelLeft size={17} aria-hidden="true" />
             </button>
           ) : null}
-          {agents.length > 0 ? (
+          {showAgentSelector && agents.length > 0 ? (
             <AgentSelector
               agents={agents}
               contextLabel={contextLabel}
