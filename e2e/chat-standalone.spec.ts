@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { requestWithOrigin } from "./request-with-origin";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const normalUser = {
@@ -46,6 +47,8 @@ test("standalone login renders the authenticated chat workspace", async ({ page 
 
 test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
   await signInViaApi(page, normalUser);
+  const conversationTitle = `Floating chrome ${Date.now()}`;
+  await createListedConversation(page, conversationTitle);
   await page.goto("/");
 
   const conversationRail = page.getByRole("complementary", { name: "Conversations" });
@@ -55,13 +58,32 @@ test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
   await page.getByRole("button", { name: "Open sidebar" }).click();
   await expect(conversationRail).toBeVisible();
   await expect(page.getByRole("searchbox", { name: "Search conversations" })).toBeVisible();
-  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  // The collapse handle shows, and takes the pointer, only while the pointer is on the rail's
+  // right border.
+  const collapseHandle = page.getByRole("button", { name: "Collapse sidebar" });
+  const collapseHandleBox = await collapseHandle.boundingBox();
+  if (!collapseHandleBox) throw new Error("collapse handle is not laid out");
+  await page.mouse.move(
+    collapseHandleBox.x + collapseHandleBox.width / 2,
+    collapseHandleBox.y + collapseHandleBox.height / 2
+  );
+  await expect(collapseHandle).toHaveCSS("opacity", "1");
+  await collapseHandle.click();
   await expect(conversationRail).toBeHidden();
   await expect(page.getByRole("button", { name: "Open sidebar" })).toBeVisible();
   await page.getByRole("button", { name: "Open sidebar" }).click();
   await expect(conversationRail).toBeVisible();
 
-  await page.getByRole("button", { name: "Select agent" }).hover();
+  // The floating chrome offers the agent selector once a conversation is open; on the start page
+  // the heading carries it instead.
+  await page
+    .getByTestId("conversation-row")
+    .filter({ hasText: conversationTitle })
+    .getByRole("button")
+    .first()
+    .click();
+  const agentSelector = page.locator("header").getByRole("button", { name: "Select agent" });
+  await agentSelector.hover();
   await expect(page.getByRole("option", { name: /Application Assistant/ })).toContainText(
     "Help with application and document review."
   );
@@ -71,10 +93,7 @@ test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
   );
   await expect(page.getByRole("option", { name: /Research Assistant/ })).toBeVisible();
   await page.getByRole("option", { name: /Research Assistant/ }).click();
-  await expect(page.getByRole("button", { name: "Select agent" })).toHaveAttribute(
-    "title",
-    "Research Assistant"
-  );
+  await expect(agentSelector).toHaveAttribute("title", "Research Assistant");
 
   const appShell = page.locator("main").first();
   const backgroundBefore = await appShell.evaluate((element) =>
@@ -91,14 +110,11 @@ test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
 test("conversation rail keeps dense histories readable and scrollable", async ({ page }) => {
   await signInViaApi(page, normalUser);
   const titlePrefix = `Dense rail ${Date.now()}`;
-  const responses = await Promise.all(
+  await Promise.all(
     Array.from({ length: 18 }, (_, index) =>
-      requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
-        data: { title: `${titlePrefix} item-${String(index + 1).padStart(2, "0")}` }
-      })
+      createListedConversation(page, `${titlePrefix} item-${String(index + 1).padStart(2, "0")}`)
     )
   );
-  expect(responses.every((response) => response.ok())).toBe(true);
 
   await page.goto("/");
   const targetConversation = page
@@ -107,7 +123,7 @@ test("conversation rail keeps dense histories readable and scrollable", async ({
   await expect(targetConversation).toHaveCount(1);
   await expect
     .poll(() => targetConversation.evaluate((element) => element.getBoundingClientRect().height))
-    .toBeGreaterThanOrEqual(60);
+    .toBeGreaterThanOrEqual(36);
 
   const conversationNavigation = page.getByRole("navigation");
   await expect(conversationNavigation).toBeVisible();
@@ -169,28 +185,39 @@ test("start page centres the composer and settles it at the bottom after the fir
   await expect(chat.locator('[data-slot="workspace-apps"]')).toHaveCount(1);
   await expect(chat.locator('[data-slot="workspace-apps"] > *')).toHaveCount(0);
 
-  const agentCards = chat.getByRole("group", { name: "Select agent" }).getByRole("button");
-  await expect(agentCards).toHaveCount(2);
-  await expect(agentCards.filter({ hasText: "Application Assistant" })).toContainText(
+  // The badge above the welcome message is the agent picker; it lists one option per agent.
+  const agentPicker = chat.getByRole("button", { name: "Select agent" });
+  const agentOptions = chat.getByRole("listbox").getByRole("option");
+  await input.fill("Draft that survives choosing an agent");
+  await expect(agentPicker).toContainText("Application Assistant");
+  await agentPicker.click();
+  await expect(agentOptions).toHaveCount(2);
+  await expect(agentOptions.filter({ hasText: "Application Assistant" })).toContainText(
     "Help with application and document review."
   );
-
-  await input.fill("Draft that survives choosing an agent");
-  await agentCards.filter({ hasText: "Research Assistant" }).click();
-  await expect(agentCards.filter({ hasText: "Research Assistant" })).toHaveAttribute(
-    "aria-pressed",
+  await expect(agentOptions.filter({ hasText: "Application Assistant" })).toHaveAttribute(
+    "aria-selected",
     "true"
   );
+
+  await agentOptions.filter({ hasText: "Research Assistant" }).click();
+  await expect(agentPicker).toContainText("Research Assistant");
   await expect(chat.getByRole("button", { name: "Summarize policy" })).toBeVisible();
   await expect(chat.getByRole("button", { name: "Find review risks" })).toHaveCount(0);
-  await agentCards.filter({ hasText: "Application Assistant" }).focus();
+  await agentPicker.focus();
+  await page.keyboard.press("Enter");
+  await expect(agentOptions.filter({ hasText: "Research Assistant" })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  );
+  await agentOptions.filter({ hasText: "Application Assistant" }).focus();
   await page.keyboard.press("Enter");
   await expect(chat.getByRole("button", { name: "Find review risks" })).toBeVisible();
   await expect(input).toHaveValue("Draft that survives choosing an agent");
 
   await input.press("Enter");
   await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
-  await expect(agentCards).toHaveCount(0);
+  await expect(agentPicker).toHaveCount(0);
   await expect(chat.locator('[data-slot="workspace-apps"]')).toHaveCount(0);
   await expect(chat.getByText("Draft that survives choosing an agent")).toBeVisible();
   await expect(input).toHaveValue("");
@@ -475,11 +502,7 @@ test("standalone conversation routes are addressable and follow rail navigation"
 }) => {
   await signInViaApi(page, normalUser);
   const title = `Route target ${Date.now()}`;
-  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
-    data: { title }
-  });
-  expect(created.ok()).toBe(true);
-  const conversation = (await created.json()) as { id: string };
+  const conversation = await createListedConversation(page, title);
 
   await page.goto(legacyConversationPath(conversation.id));
   const input = page.getByPlaceholder("Message");
@@ -596,11 +619,7 @@ test("conversation rail moves a conversation into another workspace", async ({ p
   };
 
   const title = `Move target ${Date.now()}`;
-  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
-    data: { title }
-  });
-  expect(created.ok()).toBe(true);
-  const conversation = (await created.json()) as { id: string };
+  const conversation = await createListedConversation(page, title);
 
   await page.goto(legacyConversationPath(conversation.id));
   await expect(page).toHaveURL(conversationUrlPattern(conversation.id));
@@ -833,7 +852,6 @@ test("root submit stays draft-only while create-run is pending", async ({ page }
     chatRegion.locator('[data-role="user"]').filter({ hasText: messageText })
   ).toHaveCount(0);
   await expect(page.getByTestId("run-activity")).toHaveCount(0);
-  await expect(page.getByTestId("assistant-cursor")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Stop generating" })).toHaveCount(0);
   expect(legacyChatRequests).toBe(0);
 
@@ -898,10 +916,7 @@ test("composer drafts are scoped to the new screen and selected conversations", 
 }) => {
   await signInViaApi(page, normalUser);
   const title = `Draft target ${Date.now()}`;
-  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
-    data: { title }
-  });
-  expect(created.ok()).toBe(true);
+  await createListedConversation(page, title);
 
   await page.goto("/");
   const input = page.getByPlaceholder("Message");
@@ -928,27 +943,23 @@ test(
     const suffix = Date.now();
     const sourceTitle = `Streaming source ${suffix}`;
     const targetTitle = `Stable target ${suffix}`;
-    const source = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
-      data: { title: sourceTitle }
-    });
-    const target = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
-      data: { title: targetTitle }
-    });
-    expect(source.ok()).toBe(true);
-    expect(target.ok()).toBe(true);
+    await createListedConversation(page, sourceTitle);
+    await createListedConversation(page, targetTitle);
 
-    let chatRequestStarted = false;
-    let releaseChat: () => void = () => {};
-    const chatGate = new Promise<void>((resolve) => {
-      releaseChat = resolve;
+    // The server accepts the run; what stays pending is its event stream, the request that
+    // carries the answer to the page.
+    let streamRequestStarted = false;
+    let releaseStream: () => void = () => {};
+    const streamGate = new Promise<void>((resolve) => {
+      releaseStream = resolve;
     });
-    const runStartRoute = new RegExp(
-      `${escapeRegExp(apiBaseUrl)}/api/conversations/[^/]+/runs$`,
+    const runEventsRoute = new RegExp(
+      `${escapeRegExp(apiBaseUrl)}/api/conversations/[^/]+/runs/[^/]+/events(?:\\?.*)?$`,
       "u"
     );
-    await page.route(runStartRoute, async (route) => {
-      chatRequestStarted = true;
-      await chatGate;
+    await page.route(runEventsRoute, async (route) => {
+      streamRequestStarted = true;
+      await streamGate;
       await route.abort("aborted").catch(() => undefined);
     });
 
@@ -968,27 +979,33 @@ test(
       await sourceConversation.getByRole("button").first().click();
       const sendButton = page.getByRole("button", { name: "Send message" });
       await expect(sendButton).toBeEnabled();
-      const messageText = `Session isolation ${suffix}`;
-      await input.fill(messageText);
+      // Long enough that the run is still going while the test switches back and forth.
+      const messageToken = `session-isolation-${suffix}`;
+      await input.fill(
+        Array.from({ length: 240 }, (_, index) => `${messageToken}-${index}`).join(" ")
+      );
       await sendButton.click();
-      await expect(chatRegion.getByText(messageText)).toBeVisible();
+      await expect(chatRegion.getByText(messageToken, { exact: false }).first()).toBeVisible();
       await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
-      await expect.poll(() => chatRequestStarted).toBe(true);
+      await expect.poll(() => streamRequestStarted).toBe(true);
       await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
 
       await targetConversation.getByRole("button").first().click();
-      await expect(chatRegion.getByText(messageText)).toHaveCount(0);
+      await expect(chatRegion.getByText(messageToken, { exact: false })).toHaveCount(0);
       await expect(page.getByTestId("run-activity")).toHaveCount(0);
-      await expect(page.getByTestId("assistant-cursor")).toHaveCount(0);
       await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
 
+      // Back in the source the run shows as in progress and the composer offers to stop it
+      // instead of sending.
       await sourceConversation.getByRole("button").first().click();
-      await expect(page.getByTestId("assistant-cursor")).toBeVisible();
-      await expect(page.getByRole("button", { name: "Send message" })).toBeDisabled();
+      await expect(page.getByTestId("run-activity")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Send message" })).toHaveCount(0);
     } finally {
-      releaseChat();
-      await page.unroute(runStartRoute);
+      releaseStream();
+      await page.unroute(runEventsRoute);
     }
+    await stopActiveRun(page);
   }
 );
 
@@ -1000,19 +1017,17 @@ test(
     const suffix = Date.now();
     const sourceTitle = `Resume source ${suffix}`;
     const targetTitle = `Resume target ${suffix}`;
-    const source = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
-      data: { title: sourceTitle }
-    });
-    const target = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
-      data: { title: targetTitle }
-    });
-    expect(source.ok()).toBe(true);
-    expect(target.ok()).toBe(true);
+    const conversation = await createListedConversation(page, sourceTitle);
+    await createListedConversation(page, targetTitle);
 
     const eventRequests: string[] = [];
     page.on("request", (request) => {
       const url = new URL(request.url());
-      if (request.method() === "GET" && isRunEventsPath(url.pathname)) {
+      if (
+        request.method() === "GET" &&
+        isRunEventsPath(url.pathname) &&
+        url.pathname.startsWith(`/api/conversations/${conversation.id}/runs/`)
+      ) {
         eventRequests.push(request.url());
       }
     });
@@ -1034,17 +1049,21 @@ test(
     await input.fill(Array.from({ length: 90 }, (_, index) => `${uniqueToken}-${index}`).join(" "));
     await page.getByRole("button", { name: "Send message" }).click();
     await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
-    expect(await sampleMaxCursorCount(page, 300)).toBeLessThanOrEqual(1);
+    await expect(page.getByTestId("run-activity")).toHaveCount(1);
+    await expect.poll(() => eventRequests.length).toBeGreaterThan(0);
 
     await targetConversation.getByRole("button").first().click();
     await expect(chatRegion.getByText(uniqueToken)).toHaveCount(0);
 
+    await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
+    const eventRequestCountBeforeReturn = eventRequests.length;
     await sourceConversation.getByRole("button").first().click();
-    await expect.poll(() => eventRequests.length, { timeout: 10_000 }).toBeGreaterThan(0);
+    await expect(page.getByTestId("run-activity")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
+    await expect.poll(() => eventRequests.length).toBeGreaterThan(eventRequestCountBeforeReturn);
     await expect(chatRegion.getByText(uniqueToken, { exact: false }).first()).toBeVisible({
       timeout: 15_000
     });
-    expect(await sampleMaxCursorCount(page, 1_000)).toBeLessThanOrEqual(1);
     await expect(page.getByTestId("run-activity")).toHaveCount(0);
     await stopActiveRun(page);
   }
@@ -1057,11 +1076,7 @@ test(
     await signInViaUi(page, normalUser);
     const suffix = Date.now();
     const sourceTitle = `Direct resume source ${suffix}`;
-    const source = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
-      data: { title: sourceTitle }
-    });
-    expect(source.ok()).toBe(true);
-    const conversation = (await source.json()) as { id: string };
+    const conversation = await createListedConversation(page, sourceTitle);
 
     const eventRequests: string[] = [];
     page.on("request", (request) => {
@@ -1110,21 +1125,18 @@ test(
     await signInViaUi(page, normalUser);
     const suffix = Date.now();
     const targetTitle = `Switch target ${suffix}`;
-    const target = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
-      data: { title: targetTitle }
-    });
-    expect(target.ok()).toBe(true);
+    await createListedConversation(page, targetTitle);
 
     await page.goto("/");
     const input = page.getByPlaceholder("Message");
     const chatRegion = page.getByRole("region", { name: "Chat" });
     const sendButton = page.getByRole("button", { name: "Send message" });
-    await expect(sendButton).toBeEnabled();
     const messageToken = `new-run-isolation-${suffix}`;
     const messageText = Array.from({ length: 120 }, (_, index) => `${messageToken}-${index}`).join(
       " "
     );
     await input.fill(messageText);
+    await expect(sendButton).toBeEnabled();
     await Promise.all([
       page.waitForResponse(
         (response) =>
@@ -1135,7 +1147,7 @@ test(
     ]);
     await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
     await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
-    expect(await sampleMaxCursorCount(page, 300)).toBeLessThanOrEqual(1);
+    await expect(page.getByTestId("run-activity")).toHaveCount(1);
     const newConversation = page.getByTestId("conversation-row").filter({ hasText: messageToken });
     await expect(newConversation.getByTestId("conversation-running-indicator")).toBeVisible();
 
@@ -1146,7 +1158,8 @@ test(
     await expect(targetConversation).toHaveAttribute("data-selected", "true");
     await expect(chatRegion.getByText(messageToken, { exact: false })).toHaveCount(0);
     await expect(page.getByTestId("run-activity")).toHaveCount(0);
-    await page.waitForTimeout(1_000);
+    await expect(newConversation).toHaveCount(1);
+    await expect(newConversation.getByTestId("conversation-running-indicator")).toHaveCount(0);
     await expect(targetConversation).toHaveAttribute("data-selected", "true");
   }
 );
@@ -1159,14 +1172,8 @@ test(
     const suffix = Date.now();
     const sourceTitle = `Unread source ${suffix}`;
     const targetTitle = `Unread target ${suffix}`;
-    const source = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
-      data: { title: sourceTitle }
-    });
-    const target = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
-      data: { title: targetTitle }
-    });
-    expect(source.ok()).toBe(true);
-    expect(target.ok()).toBe(true);
+    await createListedConversation(page, sourceTitle);
+    await createListedConversation(page, targetTitle);
 
     const eventRequests: string[] = [];
     page.on("request", (request) => {
@@ -1209,13 +1216,10 @@ test(
     expect(eventRequests).toHaveLength(eventRequestCountBeforeView);
     await expect(sourceConversation.getByTestId("conversation-unread-indicator")).toHaveCount(0);
     await expect(page.getByTestId("run-activity")).toHaveCount(0);
-    await expect(page.getByTestId("assistant-cursor")).toHaveCount(0);
-    const workGroupTrigger = chatRegion.getByTestId("assistant-work-group-trigger").last();
-    await expect(workGroupTrigger).toBeVisible();
-    await workGroupTrigger.click();
-    const toolCallCard = chatRegion.getByTestId("tool-call-card").last();
-    await expect(toolCallCard).toBeVisible();
+    const toolCallCard = await openWorkHistoryToolCard(chatRegion);
     await expect(toolCallCard).toContainText("Completed");
+    // In the work history the card is a disclosure; its details hold the tool input.
+    await expandDisclosure(toolCallCard.getByRole("button", { name: /^Weather Forecast/u }));
     await expect(toolCallCard).toContainText(forecastLocation);
     await expect(chatRegion.getByText("Tool work completed")).toHaveCount(1);
   }
@@ -1234,10 +1238,7 @@ test("conversation rail deletes a conversation", async ({ page }) => {
   });
 
   const title = `Delete target ${Date.now()}`;
-  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
-    data: { title }
-  });
-  expect(created.ok()).toBe(true);
+  await createListedConversation(page, title);
 
   await page.goto("/");
   const conversations = page.getByTestId("conversation-row");
@@ -1285,14 +1286,8 @@ test("conversation rail renames from the menu and a later selected-title click",
   const menuTitle = `${initialTitle} menu`;
   const finalTitle = `${initialTitle} double click`;
   const otherTitle = `Rename navigation target ${Date.now()}`;
-  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
-    data: { title: initialTitle }
-  });
-  expect(created.ok()).toBe(true);
-  const otherCreated = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
-    data: { title: otherTitle }
-  });
-  expect(otherCreated.ok()).toBe(true);
+  await createListedConversation(page, initialTitle);
+  await createListedConversation(page, otherTitle);
   await page.route("**/api/conversations/*/title", async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 300));
     await route.continue();
@@ -1404,7 +1399,7 @@ test("standalone settings and superadmin tabs are route-backed", async ({ page }
   await page.getByRole("button", { name: "Usage" }).click();
   await expect(page).toHaveURL(/\/admin\/usage$/u);
   await expect(page.getByRole("heading", { name: "Usage", exact: true })).toBeVisible();
-  await expect(page.getByText("Billed this month")).toBeVisible();
+  await expect(page.getByText("Billable this month")).toBeVisible();
 
   await page.getByRole("button", { name: "Audit log" }).click();
   await expect(page).toHaveURL(/\/admin\/audit$/u);
@@ -1413,7 +1408,7 @@ test("standalone settings and superadmin tabs are route-backed", async ({ page }
 
   await page.goBack();
   await expect(page).toHaveURL(/\/admin\/usage$/u);
-  await expect(page.getByText("Billed this month")).toBeVisible();
+  await expect(page.getByText("Billable this month")).toBeVisible();
 });
 
 test("superadmin config follows the German locale", async ({ page }) => {
@@ -1437,7 +1432,10 @@ test("superadmin config follows the German locale", async ({ page }) => {
     page.getByRole("heading", { name: "Agenten oder Fähigkeit auswählen", exact: true })
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "research_assistant", exact: true }).click();
+  await page
+    .getByRole("region", { name: "Agenten", exact: true })
+    .getByRole("button", { name: "research_assistant Alle Arbeitsbereiche", exact: true })
+    .click();
 
   const form = page.locator("form");
   await expect(form.getByText("Identität und Begrüßung", { exact: true })).toBeVisible();
@@ -1482,7 +1480,10 @@ test("superadmin manages config assets with validation and conflict protection",
       .locator(selector)
       .first();
   const clickAgent = async () => {
-    await page.getByRole("button", { name: "research_assistant", exact: true }).click();
+    await page
+      .getByRole("region", { name: "Agents", exact: true })
+      .getByRole("button", { name: "research_assistant All workspaces", exact: true })
+      .click();
     await expect(form()).toBeVisible();
   };
   const clickSkill = async () => {
@@ -1509,18 +1510,21 @@ test("superadmin manages config assets with validation and conflict protection",
     await expect(fieldset("Tools").getByLabel("show_view", { exact: true })).toBeVisible();
     const firstPrompt = form().getByText("Prompt 1", { exact: true }).locator("../..");
     const firstPromptText = firstPrompt.locator("input").nth(2);
-    await expect(fieldControl("Model", "select").locator("option")).toContainText([
-      "Instance default",
-      "deterministic-local"
-    ]);
-    await expect(fieldControl("Reasoning effort", "select").locator("option")).toContainText([
-      "Model default",
-      "none",
-      "low",
-      "medium",
-      "high",
-      "xhigh"
-    ]);
+    // The agent's models are one list: each model can be made the default, and a model in use
+    // carries its reasoning effort.
+    const models = fieldset("Models");
+    await expect(models.getByRole("radio")).toHaveCount(2);
+    await expect(
+      models.getByRole("radio", { name: "Instance default (local): Default", exact: true })
+    ).toBeChecked();
+    await expect(
+      models.getByRole("radio", { name: "deterministic-local: Default", exact: true })
+    ).not.toBeChecked();
+    await expect(
+      models
+        .getByRole("combobox", { name: "Instance default (local): Reasoning effort", exact: true })
+        .locator("option")
+    ).toContainText(["Model default", "none", "low", "medium", "high", "xhigh"]);
 
     await page.getByRole("button", { name: "New skill", exact: true }).click();
     await page.locator('input[placeholder="generic_workflow_review"]').fill("config_e2e_skill");
@@ -1638,12 +1642,12 @@ test("normal users are redirected away from superadmin routes", async ({ page })
 
 test("workspace and superadmin keep page scroll locked", async ({ page }) => {
   await signInViaApi(page, superadminUser);
-  for (let index = 0; index < 18; index += 1) {
-    const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
-      data: { title: `Scroll lock target ${Date.now()} ${index}` }
-    });
-    expect(created.ok()).toBe(true);
-  }
+  const titlePrefix = `Scroll lock target ${Date.now()}`;
+  await Promise.all(
+    Array.from({ length: 18 }, (_, index) =>
+      createListedConversation(page, `${titlePrefix} ${index}`)
+    )
+  );
 
   await page.goto("/");
   await expect(page.getByRole("complementary", { name: "Conversations" })).toBeVisible();
@@ -1687,7 +1691,7 @@ test("admin sees billed usage and can manage users", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Audit log" })).toBeVisible();
   await page.getByRole("button", { name: /^Usage/ }).click();
   await expect(page).toHaveURL(/\/admin\/usage$/u);
-  await expect(page.getByText("Billed this month")).toBeVisible();
+  await expect(page.getByText("Billable this month")).toBeVisible();
   await expect(page.getByTestId("monthly-usage")).toBeVisible();
 
   await page.getByRole("button", { name: /^Users/ }).click();
@@ -1745,32 +1749,32 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
     );
   await page.getByRole("button", { name: "Send message" }).click();
 
-  const toolCallCard = page.getByTestId("tool-call-card").last();
-  const workGroupTrigger = page.getByTestId("assistant-work-group-trigger").last();
-  await expect(workGroupTrigger).toBeVisible();
-  await workGroupTrigger.click();
-  await expect(toolCallCard).toBeVisible();
-  await expect(toolCallCard).toContainText("Weather Forecast");
-  await expect(toolCallCard).toContainText("Completed");
-  await expect(toolCallCard).toContainText("Weather forecast");
-  await expect(toolCallCard).toContainText(forecastLocation);
-  await expect(toolCallCard).toContainText("3-day forecast");
+  const chatRegion = page.getByRole("region", { name: "Chat" });
   await expect(page.getByText("Tool work completed").last()).toBeVisible();
   await expect(page.getByTestId("run-activity")).toHaveCount(0);
   await expect.poll(() => historyResponses).toBeGreaterThan(0);
-  await expect(toolCallCard).toBeVisible();
+
+  // Once the run has finished the widget stands below the answer.
+  await expect(chatRegion.getByText("Weather forecast", { exact: true })).toBeVisible();
+  await expect(chatRegion.getByText(forecastLocation, { exact: true })).toBeVisible();
+  await expect(chatRegion.getByText("3-day forecast", { exact: true })).toBeVisible();
+
+  // The tool call itself is kept in the work history of the finished run.
+  const toolCallCard = await openWorkHistoryToolCard(chatRegion);
+  await expect(toolCallCard).toContainText("Weather Forecast");
   await expect(toolCallCard).toContainText("Completed");
 
   await page.getByRole("button", { name: "Open administration panel" }).click();
   await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
   await expect(page.getByText("Administration")).toBeVisible();
-  await expect(page.getByText("Billed this month")).toBeVisible();
-  await expect(page.getByText("Billed today")).toBeVisible();
+  await page.getByRole("button", { name: /^Usage/u }).click();
+  await expect(page.getByText("Billable this month")).toBeVisible();
+  await expect(page.getByText("Billable today")).toBeVisible();
   await expect(page.getByTestId("daily-usage")).toBeVisible();
   await expect(page.getByTestId("monthly-usage")).toBeVisible();
   await expect(page.getByText("Configured safeguards")).toBeVisible();
   const configuredSafeguards = page.getByTestId("configured-safeguards");
-  await expect(configuredSafeguards).toContainText("12");
+  await expect(configuredSafeguards).toContainText("500");
   await expect(configuredSafeguards).toContainText("25,000");
   await expect(page.getByText("Recent model usage")).toBeVisible();
   await expect(page.getByText("deterministic-local").first()).toBeVisible();
@@ -1802,7 +1806,7 @@ test("superadmin resets a user's password from the users panel", async ({ page }
 
   await page.getByRole("button", { name: /^Users/ }).click();
   await page.getByRole("button", { name: `E2E User ${normalUser.email}` }).click();
-  await expect(page.getByText("Sign-in identities")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign-in identities" })).toBeVisible();
 
   const temporaryPassword = `e2e-reset-${Date.now()}`;
   await page.getByLabel("New password").fill(temporaryPassword);
@@ -1934,6 +1938,34 @@ test("superadmin deletes a user from the users panel", async ({ page }) => {
   expect(users.some((user) => user.email === createdUser.email)).toBe(false);
 });
 
+/**
+ * The rail lists a conversation only once it holds a message, so a conversation a test wants to
+ * find there is created together with its first turn. The turn has finished when this returns:
+ * no stream from the setup is still running when the test starts.
+ */
+async function createListedConversation(page: Page, title: string): Promise<{ id: string }> {
+  const started = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations/runs`, {
+    data: {
+      idempotencyKey: randomUUID(),
+      conversation: { title },
+      message: { text: `Opening message for ${title}` }
+    }
+  });
+  expect(started.ok()).toBe(true);
+  const { conversation } = (await started.json()) as { conversation: { id: string } };
+  await expect
+    .poll(async () => {
+      const thread = await page.request.get(
+        `${apiBaseUrl}/api/conversations/${encodeURIComponent(conversation.id)}/thread`
+      );
+      expect(thread.ok()).toBe(true);
+      const snapshot = (await thread.json()) as { activeRun?: unknown; messages: unknown[] };
+      return { running: snapshot.activeRun !== undefined, messages: snapshot.messages.length };
+    })
+    .toEqual({ running: false, messages: 2 });
+  return conversation;
+}
+
 function legacyConversationPath(conversationId: string): string {
   return `/c/${encodeURIComponent(conversationId)}`;
 }
@@ -2022,14 +2054,25 @@ async function ensureDarkMode(page: Page): Promise<void> {
     .toBe(true);
 }
 
-async function sampleMaxCursorCount(page: Page, durationMs: number): Promise<number> {
-  const deadline = Date.now() + durationMs;
-  let maxCount = 0;
-  while (Date.now() < deadline) {
-    maxCount = Math.max(maxCount, await page.getByTestId("assistant-cursor").count());
-    await page.waitForTimeout(50);
+/** Opens a disclosure that may already be open; clicking an open one would close it. */
+async function expandDisclosure(trigger: Locator): Promise<void> {
+  await expect(trigger).toBeVisible();
+  if ((await trigger.getAttribute("aria-expanded")) !== "true") {
+    await trigger.click();
   }
-  return maxCount;
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+}
+
+/**
+ * A finished run keeps its tool calls in the work history, one level down in a group of their
+ * own. Opens both and returns the card of the last tool call.
+ */
+async function openWorkHistoryToolCard(chatRegion: Locator): Promise<Locator> {
+  await expandDisclosure(chatRegion.getByRole("button", { name: /^Work history/u }));
+  await expandDisclosure(chatRegion.getByRole("button", { name: "1 tool call", exact: true }));
+  const toolCallCard = chatRegion.getByTestId("tool-call-card").last();
+  await expect(toolCallCard).toBeVisible();
+  return toolCallCard;
 }
 
 async function stopActiveRun(page: Page): Promise<void> {

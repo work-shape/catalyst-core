@@ -79,7 +79,7 @@ modelBindings:
 usage:
   budget: {}
   safeguards:
-    modelCallsPerDay: 12
+    modelCallsPerDay: 500
     tokensPerDay: 25000
     tokensPerMonth: 250000
   costs:
