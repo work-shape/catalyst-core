@@ -86,12 +86,23 @@ modelBindings:
   - id: gpt56Sol
     providerId: openai
     model: gpt-5.6-sol
+    description:
+      en: For complex analysis and multi-step work. Slower and the most thorough.
+      de: Für komplexe Analysen und mehrstufige Aufgaben. Langsamer und am gründlichsten.
+    userSelectableReasoningEfforts: [low, medium, high, xhigh]
   - id: gpt56Terra
     providerId: openai
     model: gpt-5.6-terra
+    description:
+      en: Balanced model for writing, documents and tool use.
+      de: Ausgewogenes Modell für Texte, Dokumente und Werkzeuge.
+    userSelectableReasoningEfforts: [low, medium, high]
   - id: gpt56Luna
     providerId: openai
     model: gpt-5.6-luna
+    description:
+      en: Fast answers for everyday questions and short drafts.
+      de: Schnelle Antworten für Alltagsfragen und kurze Entwürfe.
   - id: guardrailCheck
     providerId: openai
     model: gpt-5-nano
