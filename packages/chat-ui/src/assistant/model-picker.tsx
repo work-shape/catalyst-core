@@ -107,7 +107,8 @@ export function ModelPicker({
 
   // The menu sits above the trigger, flush with its right edge. Panels open to its right where
   // the window has room for one, and to its left otherwise. Whatever would still pass a window
-  // edge moves the popover back by what it overhangs.
+  // edge moves the popover back by what it overhangs. The model card sits on top of the menu,
+  // beside the list, so it needs no room of its own and never moves the list under the pointer.
   useLayoutEffect(() => {
     if (open && popoverRef.current) {
       const rect = popoverRef.current.getBoundingClientRect();
@@ -115,7 +116,7 @@ export function ModelPicker({
       const overhangsRight = rect.right - nudge - (window.innerWidth - VIEWPORT_GUTTER);
       setNudge(overhangsRight > 0 ? -overhangsRight : Math.max(0, overhangsLeft));
     }
-  }, [open, panel, previewedModel]);
+  }, [open, panel, opensRight]);
 
   if (!selectedModel || !hasModelChoice(models, selectedModel)) {
     return null;
@@ -231,13 +232,11 @@ export function ModelPicker({
           }
           className={cn(
             "absolute z-50 flex max-w-[calc(100vw-2rem)] gap-1.5",
-            // Card, panel and menu are written left to right; opening rightwards reverses them.
+            // Panel and menu are written left to right; opening rightwards reverses them.
             opensRight && "flex-row-reverse",
             opensDown ? "top-full mt-2 items-start" : "bottom-full mb-2 items-end"
           )}
         >
-          {shownPanel === "model" && previewedModel ? <ModelCard model={previewedModel} /> : null}
-
           {shownPanel === "model" ? (
             <div className={cn(surfaceClassName, "w-72 max-w-full overflow-hidden")}>
               {backRow}
@@ -308,10 +307,19 @@ export function ModelPicker({
           <div
             className={cn(
               surfaceClassName,
-              "grid w-64 shrink-0 gap-0.5 p-1.5",
+              "relative grid w-64 shrink-0 gap-0.5 p-1.5",
               shownPanel && "max-sm:hidden"
             )}
           >
+            {shownPanel === "model" && previewedModel ? (
+              <ModelCard
+                model={previewedModel}
+                className={cn(
+                  "absolute -inset-x-px",
+                  opensDown ? "top-full mt-1.5" : "bottom-full mb-1.5"
+                )}
+              />
+            ) : null}
             {menuRow(
               "model",
               t("modelPickerModel"),
@@ -395,14 +403,18 @@ function ReasoningEffortSlider({
   );
 }
 
-function ModelCard({ model }: { model: AgentSelectableModel }) {
+function ModelCard({ model, className }: { model: AgentSelectableModel; className?: string }) {
   const { t } = useTranslation();
   const vendorLabel = modelVendorLabel(model);
   const level = model.usageTier ? usageTiers.indexOf(model.usageTier) : -1;
 
   return (
     <div
-      className={cn(surfaceClassName, "hidden w-64 shrink-0 content-start gap-3 p-3.5 sm:grid")}
+      className={cn(
+        surfaceClassName,
+        "pointer-events-none hidden content-start gap-3 p-3.5 sm:grid",
+        className
+      )}
       aria-live="polite"
     >
       <div className="flex min-w-0 items-center gap-2 text-sm">
