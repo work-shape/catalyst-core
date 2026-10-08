@@ -530,9 +530,11 @@ function UserMessage() {
       />
       <MessageAttachments />
       <div className="chat-user-message-bubble max-w-[min(42rem,88%)] rounded-2xl rounded-tr-md bg-primary px-4 py-2.5 text-sm leading-6 text-primary-foreground shadow-xs [overflow-wrap:anywhere]">
-        <MessagePrimitive.Parts
-          components={{ Text: UserTextPart, File: FilePart, Image: ImagePart }}
-        />
+        <CollapsibleUserContent>
+          <MessagePrimitive.Parts
+            components={{ Text: UserTextPart, File: FilePart, Image: ImagePart }}
+          />
+        </CollapsibleUserContent>
       </div>
       <div className="flex min-h-8 items-center gap-1 opacity-100 md:absolute md:right-0 md:top-full md:opacity-0 md:transition-opacity md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
         <ActionBarPrimitive.Copy
@@ -547,6 +549,60 @@ function UserMessage() {
         </TooltipIconButton>
       </div>
     </MessagePrimitive.Root>
+  );
+}
+
+const USER_MESSAGE_COLLAPSED_HEIGHT = 240;
+// Only collapse when it hides a meaningful amount; a few extra lines stay visible.
+const USER_MESSAGE_COLLAPSE_THRESHOLD = 320;
+
+/** Long pasted messages stay one click away so the thread keeps its shape. */
+function CollapsibleUserContent({ children }: { children: ReactNode }) {
+  const { t } = useTranslation();
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [overflowing, setOverflowing] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    if (!content) return;
+    const measure = () => setOverflowing(content.scrollHeight > USER_MESSAGE_COLLAPSE_THRESHOLD);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
+
+  const collapsed = overflowing && !expanded;
+
+  return (
+    <div className="grid min-w-0 gap-1.5">
+      <div
+        ref={contentRef}
+        className="min-w-0 overflow-hidden"
+        style={
+          collapsed
+            ? {
+                maxHeight: USER_MESSAGE_COLLAPSED_HEIGHT,
+                maskImage: "linear-gradient(to bottom, black 70%, transparent)"
+              }
+            : undefined
+        }
+      >
+        {children}
+      </div>
+      {overflowing ? (
+        <button
+          type="button"
+          className="w-fit cursor-pointer rounded-sm text-xs font-medium underline underline-offset-2 opacity-90 outline-none hover:opacity-100 focus-visible:ring-[3px] focus-visible:ring-primary-foreground/50"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? t("showLess") : t("showMore")}
+        </button>
+      ) : null}
+    </div>
   );
 }
 
