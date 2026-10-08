@@ -18,7 +18,8 @@ export class NativeProcessError extends Error {
     readonly command: string,
     readonly stderr = "",
     readonly exitCode?: number,
-    options?: ErrorOptions
+    options?: ErrorOptions,
+    readonly signal?: NodeJS.Signals
   ) {
     super(
       stderr ||
@@ -77,14 +78,31 @@ export async function runNativeProcess(
       finish();
       reject(processError(input.command, error));
     });
-    child.on("close", (code) => {
+    child.on("close", (code, signal) => {
       if (settled) return;
       finish();
       const errorText = stderr.toString("utf8").trim();
-      if (forcedFailure) reject(new NativeProcessError(forcedFailure, input.command, errorText));
+      if (forcedFailure)
+        reject(
+          new NativeProcessError(
+            forcedFailure,
+            input.command,
+            errorText,
+            code ?? undefined,
+            undefined,
+            signal ?? undefined
+          )
+        );
       else if (code !== 0) {
         reject(
-          new NativeProcessError("process_failed", input.command, errorText, code ?? undefined)
+          new NativeProcessError(
+            "process_failed",
+            input.command,
+            errorText,
+            code ?? undefined,
+            undefined,
+            signal ?? undefined
+          )
         );
       } else resolve({ stdout: stdout.toString("utf8"), stderr: errorText });
     });
