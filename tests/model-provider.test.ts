@@ -1379,6 +1379,49 @@ describe("OpenAI-compatible model provider", () => {
     });
   });
 
+  it("marks a provider server error inside a Responses stream as retryable", async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        createSseStream(
+          [
+            {
+              type: "response.failed",
+              response: {
+                error: { code: "server_error", message: "The server had an error" }
+              }
+            }
+          ],
+          false
+        ),
+        { status: 200, headers: { "content-type": "text/event-stream" } }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new OpenAiCompatibleChatProvider({
+      id: "openai",
+      api: "responses",
+      model: "gpt-5.5",
+      baseUrl: "https://example.test/v1",
+      apiKey: "test"
+    });
+
+    const stream = provider.stream!(
+      {
+        providerId: "openai",
+        model: "gpt-5.5",
+        messages: [{ role: "user", content: "check the documents" }],
+        tools: []
+      },
+      createModelProviderTestContext()
+    )[Symbol.asyncIterator]();
+
+    await expect(stream.next()).rejects.toMatchObject({
+      code: "INTERNAL",
+      message: "The server had an error",
+      details: { status: 500, providerErrorCode: "server_error" }
+    });
+  });
+
   it("surfaces provider error bodies from stream requests", async () => {
     const fetchMock = vi.fn(async () => {
       return new Response(

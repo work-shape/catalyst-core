@@ -59,6 +59,7 @@ interface OpenAiResponsesStreamEvent {
       };
     };
     error?: {
+      code?: string;
       message?: string;
     } | null;
   };
@@ -73,8 +74,11 @@ interface OpenAiResponsesStreamEvent {
     [key: string]: unknown;
   };
   error?: {
+    code?: string;
     message?: string;
   };
+  code?: string;
+  message?: string;
 }
 
 export async function* streamOpenAiCompatibleCompletion(
@@ -282,8 +286,22 @@ export async function* streamOpenAiResponsesCompletion(
       const message =
         payload.response?.error?.message ??
         payload.error?.message ??
+        payload.message ??
         "Model provider stream failed";
-      throw new AppError("INTERNAL", message);
+      const providerErrorCode =
+        payload.response?.error?.code ?? payload.error?.code ?? payload.code;
+      // The request was accepted with 200, so the failure carries no HTTP status. Map the
+      // provider's own transient codes to one, which is what callers retry on.
+      const status =
+        providerErrorCode === "server_error"
+          ? 500
+          : providerErrorCode === "rate_limit_exceeded"
+            ? 429
+            : undefined;
+      throw new AppError("INTERNAL", message, {
+        ...(providerErrorCode ? { providerErrorCode } : {}),
+        ...(status ? { status } : {})
+      });
     }
   }
 
