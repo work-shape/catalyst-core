@@ -420,7 +420,7 @@ async function* readServerSentEventData(body: ReadableStream<Uint8Array>): Async
   const parser = new ServerSentEventDataLineParser();
 
   while (true) {
-    const { done, value } = await reader.read();
+    const { done, value } = await readWithinIdleLimit(reader);
     if (done) {
       break;
     }
@@ -428,6 +428,33 @@ async function* readServerSentEventData(body: ReadableStream<Uint8Array>): Async
   }
 
   yield* parser.push(decoder.decode(), true);
+}
+
+/**
+ * A provider can accept a request and then send nothing more. Long reasoning is quiet for
+ * minutes, so the limit is generous; past it the request is given up as a timeout, which callers
+ * retry.
+ */
+export const MODEL_STREAM_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
+
+async function readWithinIdleLimit(
+  reader: ReadableStreamDefaultReader<Uint8Array>
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const idle = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(
+      () => reject(new AppError("TIMEOUT", "Model provider stream sent no data for 10 minutes")),
+      MODEL_STREAM_IDLE_TIMEOUT_MS
+    );
+  });
+  try {
+    return await Promise.race([reader.read(), idle]);
+  } catch (error) {
+    void reader.cancel().catch(() => undefined);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export class ServerSentEventDataLineParser {

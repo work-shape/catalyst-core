@@ -1422,6 +1422,50 @@ describe("OpenAI-compatible model provider", () => {
     });
   });
 
+  it("gives up a Responses stream that goes silent as a retryable timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      let cancelled = false;
+      const fetchMock = vi.fn(async () => {
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            cancel() {
+              cancelled = true;
+            }
+          }),
+          { status: 200, headers: { "content-type": "text/event-stream" } }
+        );
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const provider = new OpenAiCompatibleChatProvider({
+        id: "openai",
+        api: "responses",
+        model: "gpt-5.5",
+        baseUrl: "https://example.test/v1",
+        apiKey: "test"
+      });
+
+      const next = provider.stream!(
+        {
+          providerId: "openai",
+          model: "gpt-5.5",
+          messages: [{ role: "user", content: "check the documents" }],
+          tools: []
+        },
+        createModelProviderTestContext()
+      )
+        [Symbol.asyncIterator]()
+        .next();
+      const outcome = expect(next).rejects.toMatchObject({ code: "TIMEOUT" });
+      await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+
+      await outcome;
+      expect(cancelled).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("surfaces provider error bodies from stream requests", async () => {
     const fetchMock = vi.fn(async () => {
       return new Response(
