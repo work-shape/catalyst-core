@@ -3,6 +3,17 @@
 All platform packages are released in lockstep under one version. Before 1.0 a minor version may
 contain breaking changes; a patch version does not.
 
+## 0.6.3 — 2026-10-08
+
+### Fixed
+
+- **Chat:** a file is read before its upload request opens, and an upload that fails without an
+  answer from the API is retried. A browser that could not read a file promptly used to stall
+  the request until the reverse proxy gave up. The remaining error names the file.
+- **Models:** a provider `server_error` or `rate_limit_exceeded` inside a Responses stream is
+  retried like the same failure on the request. A stream that stays silent for 10 minutes is
+  given up as a timeout instead of holding the run until the provider answers.
+
 ## 0.6.2 — 2026-10-08
 
 ### Changed
