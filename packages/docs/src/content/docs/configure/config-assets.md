@@ -155,7 +155,9 @@ skill already exists. Independent changes to the same skill can both be approved
 
 Approval writes a skill revision with the approving user as actor and the
 request ID and summary as provenance. Creating a skill adds it to the proposing
-agent in the same atomic write. Proposals are limited to 4,000 characters per
+agent in the same atomic write. A proposal for a new skill may also carry its
+supporting files, such as `references/checklist.md`, as `create_resource`
+operations after `create_skill`. Proposals are limited to 20,000 characters per
 operation text, 60,000 per root or resource, and 30 resources per skill.
 
 The same permission allows reverting an approved request. Revert writes a new

@@ -41,7 +41,7 @@ export function createProposeSkillChangeTool(options: {
   return defineTool({
     name: "propose_skill_change",
     description:
-      "Propose one small, exact skill change per call. Read the skill with read_skill first. Never include personal or customer-specific data: skills are shared by all users. Tell the user in your reply what would change and that it needs a person's approval; it is not active until approved.",
+      "Propose one small, exact skill change per call. Read the skill with read_skill first. A new skill is one create_skill operation, optionally followed by create_resource operations for its supporting files, for example references/checklist.md. Never include personal or customer-specific data: skills are shared by all users. Tell the user in your reply what would change and that it needs a person's approval; it is not active until approved.",
     permission: { mode: "allow" },
     inputSchema: proposeSkillChangeInputSchema,
     async execute(input, context) {

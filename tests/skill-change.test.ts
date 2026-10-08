@@ -182,7 +182,21 @@ describe("skill changes", () => {
       isNewSkill: true,
       newSkill: { name: "new", content: "Guidance" }
     });
-    expect(() => applySkillChange(undefined, [create, replace("x")])).toThrow("only operation");
+    const reference = {
+      type: "create_resource" as const,
+      resourcePath: "references/checklist.md",
+      content: "Checklist"
+    };
+    expect(applySkillChange(undefined, [create, reference]).resources).toEqual([
+      { path: "references/checklist.md", mediaType: "text/markdown", content: "Checklist" }
+    ]);
+    expect(createSkillChangePreview(undefined, [create, reference]).changes).toEqual([
+      { type: "new_resource", target: "references/checklist.md", after: "Checklist" }
+    ]);
+    expect(() => applySkillChange(undefined, [create, replace("x")])).toThrow(
+      "only be followed by create_resource"
+    );
+    expect(() => applySkillChange(undefined, [reference, create])).toThrow("first operation");
     expect(() => applySkillChange(skill, [create])).toThrow("already exists");
   });
 });

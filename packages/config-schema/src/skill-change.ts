@@ -12,7 +12,7 @@ import {
   skillResourceMediaTypeForPath
 } from "./schemas";
 
-export const SKILL_CHANGE_MAX_OPERATION_TEXT = 4_000;
+export const SKILL_CHANGE_MAX_OPERATION_TEXT = 20_000;
 export const SKILL_CHANGE_MAX_CONTENT = 60_000;
 export const SKILL_CHANGE_MAX_RESOURCES = 30;
 const text = z.string().max(SKILL_CHANGE_MAX_OPERATION_TEXT);
@@ -50,10 +50,20 @@ export const skillChangeOperationsSchema = z
   .array(skillChangeOperationSchema)
   .min(1)
   .superRefine((operations, ctx) => {
-    if (operations.some((op) => op.type === "create_skill") && operations.length !== 1) {
+    const creations = operations.filter((op) => op.type === "create_skill");
+    if (creations.length === 0) {
+      return;
+    }
+    if (creations.length > 1 || operations[0]?.type !== "create_skill") {
       ctx.addIssue({
         code: "custom",
-        message: "create_skill must be the only operation in its request"
+        message: "create_skill must be the first operation and occur only once"
+      });
+    }
+    if (operations.slice(1).some((op) => op.type !== "create_resource")) {
+      ctx.addIssue({
+        code: "custom",
+        message: "create_skill can only be followed by create_resource operations"
       });
     }
   });

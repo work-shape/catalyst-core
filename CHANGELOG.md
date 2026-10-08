@@ -3,6 +3,14 @@
 All platform packages are released in lockstep under one version. Before 1.0 a minor version may
 contain breaking changes; a patch version does not.
 
+## Unreleased
+
+### Changed
+
+- **Skill change proposals:** a proposal for a new skill can carry its supporting files in the
+  same request: `create_skill` first, followed by `create_resource` operations such as
+  `references/checklist.md`. The limit per operation text is 20,000 characters instead of 4,000.
+
 ## 0.6.0 — 2026-10-06
 
 ### Added
