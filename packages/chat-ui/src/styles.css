@@ -402,3 +402,49 @@
     animation: none;
   }
 }
+
+/* The model picker draws its own track; the native range only supplies the thumb and input. */
+.model-picker-range {
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+}
+
+.model-picker-range::-webkit-slider-runnable-track {
+  height: 100%;
+  background: transparent;
+}
+
+.model-picker-range::-moz-range-track {
+  height: 100%;
+  background: transparent;
+}
+
+.model-picker-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+}
+
+.model-picker-range::-moz-range-thumb {
+  box-sizing: border-box;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+}
+
+.model-picker-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 40%, transparent);
+}
+
+.model-picker-range:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 40%, transparent);
+}

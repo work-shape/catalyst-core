@@ -3,10 +3,10 @@ import { AlertCircle, CheckCircle2, Paperclip, RotateCcw, Send, Square, X } from
 import type { FormEvent, KeyboardEvent } from "react";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { DraftAttachment } from "@vivd-catalyst/api-client";
-import { formatModelLabel } from "../model-label";
-import type { AgentSelectableModel } from "../workspace/agent-model-selection";
+import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
 import { AttachmentPreview } from "../attachment-preview";
 import { ContextIndicator } from "./context-indicator";
+import { ModelPicker } from "./model-picker";
 import { useTranslation, type TranslationContextValue } from "../i18n";
 import { isComposerBlockedByActiveRun, shouldShowCancelAction } from "./thread-activity";
 import { Button } from "../ui/button";
@@ -31,11 +31,13 @@ export function AssistantComposer({
   attachmentAccept,
   selectableModels,
   selectedModelBindingId,
+  selectedReasoningEffort,
   showContextIndicator,
   contextSnapshot,
   focusRequestId,
   onCancelRun,
   onSelectModelBinding,
+  onSelectReasoningEffort,
   onFilesSelected,
   onRemoveAttachment,
   onRetryAttachment,
@@ -51,6 +53,7 @@ export function AssistantComposer({
   /** The active agent's own model first, then the models users may pick instead. */
   selectableModels: AgentSelectableModel[];
   selectedModelBindingId: string | undefined;
+  selectedReasoningEffort: ReasoningEffort | undefined;
   showContextIndicator: boolean;
   contextSnapshot:
     | {
@@ -61,6 +64,7 @@ export function AssistantComposer({
   focusRequestId: number;
   onCancelRun: () => void;
   onSelectModelBinding: (modelBindingId: string) => void;
+  onSelectReasoningEffort: (modelBindingId: string, effort: ReasoningEffort) => void;
   onFilesSelected: (files: File[]) => void;
   onRemoveAttachment: (attachmentId: string) => void;
   onRetryAttachment: (attachmentId: string) => void;
@@ -299,24 +303,14 @@ export function AssistantComposer({
               composerExpanded ? "row-start-2" : "row-start-1"
             )}
           >
-            {selectableModels.length > 1 ? (
-              <label className="min-w-0 shrink">
-                <span className="sr-only">{t("selectModel")}</span>
-                <select
-                  className="h-9 max-w-44 truncate rounded-full bg-transparent px-2 text-xs font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50"
-                  aria-label={t("selectModel")}
-                  value={selectedModelBindingId ?? ""}
-                  disabled={conversationRunning}
-                  onChange={(event) => onSelectModelBinding(event.target.value)}
-                >
-                  {selectableModels.map((model) => (
-                    <option key={model.bindingId ?? ""} value={model.bindingId ?? ""}>
-                      {formatModelLabel(model.model)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
+            <ModelPicker
+              models={selectableModels}
+              selectedModelBindingId={selectedModelBindingId}
+              reasoningEffort={selectedReasoningEffort}
+              disabled={conversationRunning}
+              onSelectModelBinding={onSelectModelBinding}
+              onSelectReasoningEffort={onSelectReasoningEffort}
+            />
             {showContextIndicator && contextSnapshot ? (
               <div className="flex h-9 shrink-0 items-center">
                 <ContextIndicator

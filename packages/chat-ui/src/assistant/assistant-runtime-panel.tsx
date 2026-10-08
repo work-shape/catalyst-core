@@ -77,10 +77,13 @@ function AssistantRuntimePane({
     selectedAgentName,
     selectableModels,
     selectedModelBindingId,
+    selectedReasoningEffort,
+    requestedReasoningEffort,
     showContextIndicator,
     contextSnapshot,
     selectAgentName: onSelectAgent,
     selectModelBindingId,
+    selectReasoningEffort,
     draftAttachments,
     localUploadingAttachments,
     conversationRunning,
@@ -152,6 +155,7 @@ function AssistantRuntimePane({
       void startProductConversationRun({
         agentName: selectedAgentName,
         modelBindingId: selectedModelBindingId,
+        reasoningEffort: requestedReasoningEffort,
         client,
         collaborationWorkspaceId,
         conversationId: undefined,
@@ -185,6 +189,7 @@ function AssistantRuntimePane({
       locale,
       onMessageSubmitted,
       onRunStarted,
+      requestedReasoningEffort,
       selectedAgentName,
       selectedModelBindingId,
       selectedConversationId,
@@ -225,6 +230,7 @@ function AssistantRuntimePane({
         locale,
         selectedAgentName,
         selectedModelBindingId,
+        selectedReasoningEffort: requestedReasoningEffort,
         isSendDisabled: () => sendDisabledReason,
         onMessageSubmitted,
         onRunStarted
@@ -235,6 +241,7 @@ function AssistantRuntimePane({
       locale,
       onMessageSubmitted,
       onRunStarted,
+      requestedReasoningEffort,
       selectedAgentName,
       selectedModelBindingId,
       selectedConversationId,
@@ -309,6 +316,7 @@ function AssistantRuntimePane({
           selectedAgentName={selectedAgentName}
           selectableModels={selectableModels}
           selectedModelBindingId={selectedModelBindingId}
+          selectedReasoningEffort={selectedReasoningEffort}
           showContextIndicator={showContextIndicator}
           contextSnapshot={contextSnapshot}
           notice={visibleNotice}
@@ -329,6 +337,7 @@ function AssistantRuntimePane({
           onCancelRun={onCancelRun}
           onSelectAgent={onSelectAgent}
           onSelectModelBinding={selectModelBindingId}
+          onSelectReasoningEffort={selectReasoningEffort}
           onFilesSelected={onFilesSelected}
           onRemoveDraftAttachment={onRemoveDraftAttachment}
           onRetryDraftAttachment={onRetryDraftAttachment}

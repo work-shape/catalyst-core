@@ -4,6 +4,7 @@ import type {
   LocaleCode,
   StartConversationRunResponse
 } from "@vivd-catalyst/api-client";
+import type { ReasoningEffort } from "../workspace/agent-model-selection";
 
 export interface ProductRunTransportOptions {
   client: {
@@ -14,6 +15,8 @@ export interface ProductRunTransportOptions {
   locale: LocaleCode;
   selectedAgentName?: string;
   selectedModelBindingId?: string;
+  /** The effort the user picked for the selected model; unset runs with its default. */
+  selectedReasoningEffort?: ReasoningEffort;
   isSendDisabled?: () => string | undefined;
   createIdempotencyKey?: () => string;
   onMessageSubmitted?: (conversationId: string) => void;
@@ -51,6 +54,7 @@ export class ProductConversationRunTransport implements ChatTransport<UIMessage>
     const response = await startProductConversationRun({
       agentName: this.options.selectedAgentName,
       modelBindingId: this.options.selectedModelBindingId,
+      reasoningEffort: this.options.selectedReasoningEffort,
       client: this.options.client,
       collaborationWorkspaceId: this.options.collaborationWorkspaceId,
       conversationId: this.options.selectedConversationId,
@@ -89,6 +93,7 @@ export class ProductConversationRunTransport implements ChatTransport<UIMessage>
 export async function startProductConversationRun({
   agentName,
   modelBindingId,
+  reasoningEffort,
   client,
   collaborationWorkspaceId,
   conversationId,
@@ -98,6 +103,7 @@ export async function startProductConversationRun({
 }: {
   agentName?: string;
   modelBindingId?: string;
+  reasoningEffort?: ReasoningEffort;
   client: {
     runs: Pick<ApiClient["runs"], "create" | "start">;
   };
@@ -111,6 +117,7 @@ export async function startProductConversationRun({
     idempotencyKey,
     ...(agentName ? { agentName } : {}),
     ...(modelBindingId ? { modelBindingId } : {}),
+    ...(reasoningEffort ? { reasoningEffort } : {}),
     locale,
     message: {
       text

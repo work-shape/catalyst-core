@@ -8,7 +8,7 @@ import {
 import { ArrowDown, Bot, CircleAlert, Lock, Sparkles } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, type RefObject } from "react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
-import type { AgentSelectableModel } from "../workspace/agent-model-selection";
+import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
 import { AssistantActivityStatus } from "./assistant-activity-status";
 import { AssistantComposer, type LocalUploadingAttachment } from "./assistant-composer";
 import { ThreadMessage } from "./assistant-message";
@@ -26,6 +26,7 @@ export function AssistantThread({
   selectedAgentName,
   selectableModels,
   selectedModelBindingId,
+  selectedReasoningEffort,
   showContextIndicator,
   contextSnapshot,
   notice,
@@ -46,6 +47,7 @@ export function AssistantThread({
   onCancelRun,
   onSelectAgent,
   onSelectModelBinding,
+  onSelectReasoningEffort,
   onFilesSelected,
   onRemoveDraftAttachment,
   onRetryDraftAttachment,
@@ -59,6 +61,7 @@ export function AssistantThread({
   selectedAgentName: string | undefined;
   selectableModels: AgentSelectableModel[];
   selectedModelBindingId: string | undefined;
+  selectedReasoningEffort: ReasoningEffort | undefined;
   showContextIndicator: boolean;
   contextSnapshot:
     | {
@@ -90,6 +93,7 @@ export function AssistantThread({
   onCancelRun: () => void;
   onSelectAgent: (agentName: string) => void;
   onSelectModelBinding: (modelBindingId: string) => void;
+  onSelectReasoningEffort: (modelBindingId: string, effort: ReasoningEffort) => void;
   onFilesSelected: (files: File[]) => void;
   onRemoveDraftAttachment: (attachmentId: string) => void;
   onRetryDraftAttachment: (attachmentId: string) => void;
@@ -207,11 +211,13 @@ export function AssistantThread({
                     attachmentAccept={attachmentAccept}
                     selectableModels={selectableModels}
                     selectedModelBindingId={selectedModelBindingId}
+                    selectedReasoningEffort={selectedReasoningEffort}
                     showContextIndicator={showContextIndicator}
                     contextSnapshot={contextSnapshot}
                     focusRequestId={composerFocusRequestId}
                     onCancelRun={onCancelRun}
                     onSelectModelBinding={onSelectModelBinding}
+                    onSelectReasoningEffort={onSelectReasoningEffort}
                     onFilesSelected={onFilesSelected}
                     onRemoveAttachment={onRemoveDraftAttachment}
                     onRetryAttachment={onRetryDraftAttachment}

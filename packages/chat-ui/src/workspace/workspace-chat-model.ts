@@ -62,7 +62,13 @@ import {
   applyFavicon,
   createEnvironmentDocumentTitle
 } from "../workspace-utils";
-import { agentModelSelection, type AgentSelectableModel } from "./agent-model-selection";
+import {
+  agentModelSelection,
+  modelReasoningEffortSelection,
+  type AgentSelectableModel,
+  type ReasoningEffort,
+  type ReasoningEffortPicks
+} from "./agent-model-selection";
 import { useWorkspaceDraft, useWorkspaceDraftController } from "./workspace-drafts";
 import {
   useWorkspaceChromeState,
@@ -274,6 +280,10 @@ export interface SelectedChatModel {
   /** The active agent's own model first, then the models users may pick instead. */
   selectableModels: AgentSelectableModel[];
   selectedModelBindingId: string | undefined;
+  /** The effort a run with the selected model would use. */
+  selectedReasoningEffort: ReasoningEffort | undefined;
+  /** That effort when the user picked it; unset leaves the run to the model's default. */
+  requestedReasoningEffort: ReasoningEffort | undefined;
   showContextIndicator: boolean;
   contextSnapshot:
     | {
@@ -283,6 +293,7 @@ export interface SelectedChatModel {
     | undefined;
   selectAgentName(agentName: string): void;
   selectModelBindingId(modelBindingId: string): void;
+  selectReasoningEffort(modelBindingId: string, effort: ReasoningEffort): void;
   draftAttachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
   conversationRunning: boolean;
@@ -314,6 +325,7 @@ export function useWorkspaceChatModel({
   const [notice, setNotice] = useState<string | undefined>();
   const [selectedAgentName, setSelectedAgentName] = useState<string | undefined>();
   const [pickedModelBindingId, setPickedModelBindingId] = useState<string | undefined>();
+  const [reasoningEffortPicks, setReasoningEffortPicks] = useState<ReasoningEffortPicks>({});
   const { apiBaseUrl, client } = useWorkspaceApiClient();
   const routeState = useWorkspaceRouteState();
   const chrome = useWorkspaceChromeState();
@@ -632,6 +644,10 @@ export function useWorkspaceChatModel({
     pickedModelBindingId
   );
   const selectedModelBindingId = selectedModel?.bindingId;
+  const reasoningEffortSelection = modelReasoningEffortSelection(
+    selectedModel,
+    reasoningEffortPicks
+  );
   const configuredCompactThresholdTokens =
     selectedModel?.compactThresholdTokens ?? activeAgent?.compactThresholdTokens;
 
@@ -906,6 +922,8 @@ export function useWorkspaceChatModel({
       selectedAgentName: activeAgentName,
       selectableModels,
       selectedModelBindingId,
+      selectedReasoningEffort: reasoningEffortSelection.reasoningEffort,
+      requestedReasoningEffort: reasoningEffortSelection.requested,
       showContextIndicator: preferences.showContextIndicator,
       contextSnapshot: resolveContextUsage(
         messages,
@@ -920,6 +938,8 @@ export function useWorkspaceChatModel({
             ? modelBindingId
             : undefined
         ),
+      selectReasoningEffort: (modelBindingId, effort) =>
+        setReasoningEffortPicks((picks) => ({ ...picks, [modelBindingId]: effort })),
       draftAttachments: draftAttachmentController.draftAttachments,
       localUploadingAttachments: draftAttachmentController.visibleUploadingAttachments,
       conversationRunning: selectedConversationRunning,
