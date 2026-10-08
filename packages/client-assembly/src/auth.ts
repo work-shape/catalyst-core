@@ -104,6 +104,7 @@ export async function createClientInstanceAuth(
   return {
     allowedOrigins,
     authAdapter: new IdentityResolvingAuthAdapter(
+      // The composite excludes ambient cookie/development auth for explicit credentials.
       new CompositeAuthAdapter(adapters),
       input.userStore,
       {

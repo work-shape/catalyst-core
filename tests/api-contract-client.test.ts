@@ -9,6 +9,55 @@ import {
 import { ApiError, createApiClient } from "@vivd-catalyst/api-client";
 
 describe("api operation catalog and client", () => {
+  it.each([
+    { name: "cookie", getToken: undefined, credentials: "include", authorization: null },
+    {
+      name: "token",
+      getToken: () => "test-token",
+      credentials: "omit",
+      authorization: "Bearer test-token"
+    },
+    {
+      name: "empty token source",
+      getToken: () => undefined,
+      credentials: "omit",
+      authorization: null
+    }
+  ])(
+    "uses $name mode for JSON, downloads and event streams",
+    async ({ getToken, credentials, authorization }) => {
+      const requests: Request[] = [];
+      const client = createApiClient({
+        baseUrl: "https://chat.example",
+        getToken,
+        browserManagedDownloads: true,
+        fetchImpl: async (input, init) => {
+          const request = input instanceof Request ? input : new Request(input, init);
+          requests.push(request);
+          if (request.url.endsWith("/events")) return new Response(null, { status: 204 });
+          if (request.url.includes("/content")) return new Response("download");
+          return Response.json([]);
+        }
+      });
+      await client.conversations.list();
+      await client.conversations.files.getContent("conv_1", "file_1", true);
+      await client.conversations.artifacts.getContent("conv_1", "artifact_1");
+      for await (const event of client.runs.observe("conv_1", "run_1")) {
+        expect.fail(`Unexpected event: ${event.type}`);
+      }
+      expect(requests).toHaveLength(4);
+      for (const request of requests) {
+        expect(request.credentials).toBe(credentials);
+        expect(request.headers.get("authorization")).toBe(authorization);
+      }
+      expect(client.browserManagedDownloads).toBe(getToken === undefined);
+      expect(
+        createApiClient({ baseUrl: "https://chat.example", browserManagedDownloads: false })
+          .browserManagedDownloads
+      ).toBe(false);
+    }
+  );
+
   it("accepts assistant final metadata with normalized web sources and citations", () => {
     const parsed = assistantFinalMessageMetadataSchema.safeParse({
       version: 1,
@@ -273,7 +322,7 @@ describe("api operation catalog and client", () => {
       })}`
     );
     expect(request?.method).toBe(operation.method);
-    expect(request?.credentials).toBe("include");
+    expect(request?.credentials).toBe("omit");
     expect(request?.headers.get("authorization")).toBe("Bearer test-token");
   });
 
@@ -339,7 +388,7 @@ describe("api operation catalog and client", () => {
       })}`
     );
     expect(request?.method).toBe("GET");
-    expect(request?.credentials).toBe("include");
+    expect(request?.credentials).toBe("omit");
     expect(request?.headers.get("authorization")).toBe("Bearer test-token");
   });
 
@@ -421,7 +470,7 @@ describe("api operation catalog and client", () => {
       })}`
     );
     expect(request?.method).toBe("GET");
-    expect(request?.credentials).toBe("include");
+    expect(request?.credentials).toBe("omit");
     expect(request?.headers.get("authorization")).toBe("Bearer test-token");
   });
 

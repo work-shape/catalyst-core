@@ -488,6 +488,7 @@ async function createMailHarness(input: { mailEnabled?: boolean; listCaptured?: 
     config,
     clientInstanceId,
     authAdapter: {
+      credentialMode: "ambient",
       id: "test-auth",
       async authenticate() {
         return { ...admin, scopes: ["*"] };

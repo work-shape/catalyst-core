@@ -215,6 +215,7 @@ describe("client instance app vertical slice", () => {
       config,
       clientInstanceId,
       authAdapter: {
+        credentialMode: "ambient",
         id: "better-auth-test",
         async authenticate() {
           return standaloneUser;
@@ -517,6 +518,7 @@ describe("client instance app vertical slice", () => {
       config,
       clientInstanceId,
       authAdapter: {
+        credentialMode: "ambient",
         id: "test-auth",
         async authenticate() {
           return createTestUser("superadmin-1", clientInstanceId);

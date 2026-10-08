@@ -1,9 +1,14 @@
 import { Readable } from "node:stream";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
+import { hasExplicitCredentials } from "@vivd-catalyst/auth";
+import { AppError } from "@vivd-catalyst/core";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { ChatServerOptions } from "../types";
 
-export function registerBetterAuthRoutes(app: FastifyInstance, options: ChatServerOptions): void {
+export function registerBetterAuthRoutes(
+  app: FastifyInstance,
+  options: Pick<ChatServerOptions, "standaloneAuth">
+): void {
   if (!options.standaloneAuth) {
     return;
   }
@@ -12,6 +17,12 @@ export function registerBetterAuthRoutes(app: FastifyInstance, options: ChatServ
     method: ["GET", "POST"],
     url: "/api/auth/*",
     handler: async (request, reply) => {
+      if (hasExplicitCredentials(request.headers)) {
+        throw new AppError(
+          "UNAUTHENTICATED",
+          "Standalone auth endpoints do not accept explicit credential headers"
+        );
+      }
       const response = await options.standaloneAuth!.handleRequest(
         new Request(toAuthRequestUrl(request.url, options), {
           method: request.method,
@@ -44,7 +55,10 @@ export function sendWebResponse(reply: FastifyReply, response: Response): Fastif
   return reply.send(Readable.fromWeb(response.body as NodeReadableStream<Uint8Array>));
 }
 
-function toAuthRequestUrl(requestUrl: string, options: ChatServerOptions): string {
+function toAuthRequestUrl(
+  requestUrl: string,
+  options: Pick<ChatServerOptions, "standaloneAuth">
+): string {
   const origin = new URL(options.standaloneAuth!.baseUrl).origin;
   return new URL(requestUrl, origin).toString();
 }

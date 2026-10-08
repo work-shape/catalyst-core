@@ -38,8 +38,19 @@ Bearer tokens, API-key exchange, and server credentials do not require this cook
 but browser callers still need their origin configured for CORS. Custom cookie auth adapters
 must return `authenticationMethod: "session-cookie"` on the authenticated user.
 
-The widget transport includes credentials even when it sends a bearer token. If a standalone
-session cookie authenticates the request first, the cookie origin check applies.
+An `Authorization` or `X-Server-Credential` header excludes standalone cookie and development
+authentication, regardless of adapter order. Invalid explicit credentials never fall back to
+a standalone session. Token-authenticated requests do not use the cookie origin check.
+The cookie-only `/api/auth/*` endpoints, including session lookup and sign-out, reject
+requests carrying either explicit credential header without accessing the session.
+
+The API client omits cookies whenever `getToken` is configured, even if it currently returns
+no token. Passing a widget `token` also selects this mode. Token-mode downloads and event
+streams use the same transport; browser-managed downloads are disabled even if requested.
+Without a token source, standalone requests, downloads, and event streams keep using cookies.
+Every auth adapter must declare `credentialMode: "ambient"` or `"explicit"`. Only explicitly
+marked credential adapters are consulted when an explicit credential header is present;
+unmarked adapters are excluded too. Wrappers must preserve the wrapped adapter's mode.
 
 ## Token Claims
 

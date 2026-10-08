@@ -95,6 +95,7 @@ export class HmacSessionTokenIssuer {
 
 export class HmacSessionTokenAuthAdapter implements AuthAdapter {
   readonly id = "session-token";
+  readonly credentialMode = "explicit";
   private readonly options: HmacSessionTokenOptions;
 
   constructor(options: HmacSessionTokenOptions) {

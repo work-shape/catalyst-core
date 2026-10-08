@@ -263,6 +263,7 @@ async function createFixture() {
     config,
     clientInstanceId,
     authAdapter: {
+      credentialMode: "explicit",
       id: "api-access-admin-test",
       async authenticate(request) {
         const authorization = request.headers.authorization;

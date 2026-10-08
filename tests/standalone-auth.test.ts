@@ -1,6 +1,19 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { asClientInstanceId } from "@vivd-catalyst/core";
-import { createStandaloneAuthRuntime, type StandaloneAuthRuntime } from "@vivd-catalyst/auth";
+import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+import {
+  CompositeAuthAdapter,
+  DevelopmentAuthAdapter,
+  HmacSessionTokenAuthAdapter,
+  HmacSessionTokenIssuer,
+  IdentityResolvingAuthAdapter,
+  createStandaloneAuthRuntime,
+  type StandaloneAuthRuntime
+} from "@vivd-catalyst/auth";
+import { authenticateRequest } from "../packages/chat-server/src/request-context";
+import Fastify from "../packages/chat-server/node_modules/fastify/fastify.js";
+import { installErrorHandler } from "../packages/chat-server/src/errors";
+import { registerBetterAuthRoutes } from "../packages/chat-server/src/routes/better-auth-routes";
 import { hashPassword } from "../packages/auth/node_modules/better-auth/dist/crypto/index.mjs";
 
 const { authDatabase, closeDatabase } = vi.hoisted(() => ({
@@ -137,6 +150,190 @@ describe("standalone auth email routes", () => {
       })
     ).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
   });
+
+  it("prefers a valid bearer identity over a valid session cookie", async () => {
+    const { composite, request, cookie, chatSessionToken } = await createMixedCredentials();
+    await expect(composite.authenticate(request)).resolves.toMatchObject({
+      id: "usr_provisioned",
+      authenticationMethod: "session-cookie"
+    });
+    await expect(
+      composite.authenticate({
+        ...request,
+        headers: { cookie, authorization: `Bearer ${chatSessionToken}` }
+      })
+    ).resolves.toMatchObject({ externalUserId: "widget-user" });
+  });
+
+  it("refuses invalid explicit credentials without cookie or development fallback", async () => {
+    const { composite, request, cookie } = await createMixedCredentials();
+    for (const headers of [
+      { authorization: "Bearer invalid" },
+      { Authorization: "Bearer invalid" },
+      { authorization: "" },
+      { authorization: "Basic invalid" },
+      { "x-server-credential": "invalid" },
+      { "X-Server-Credential": "" }
+    ]) {
+      await expect(
+        composite.authenticate({ ...request, headers: { cookie, ...headers } })
+      ).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+    }
+  });
+
+  it("does not apply the cookie origin guard to a token authenticated request", async () => {
+    const {
+      composite,
+      request: { clientInstanceId },
+      cookie,
+      chatSessionToken
+    } = await createMixedCredentials();
+    const options = { clientInstanceId, authAdapter: composite };
+    const writeRequest = {
+      method: "POST",
+      protocol: "https",
+      host: "api.example.test",
+      headers: { cookie, origin: "https://foreign.test" }
+    } as Parameters<typeof authenticateRequest>[1];
+    await expect(authenticateRequest(options, writeRequest)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "Session request origin is not allowed"
+    });
+    await expect(
+      authenticateRequest(options, {
+        ...writeRequest,
+        headers: { ...writeRequest.headers, authorization: `Bearer ${chatSessionToken}` }
+      })
+    ).resolves.toMatchObject({ user: { externalUserId: "widget-user" } });
+    await expect(
+      authenticateRequest(options, {
+        ...writeRequest,
+        headers: { ...writeRequest.headers, authorization: "Bearer invalid" }
+      })
+    ).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  });
+
+  it.each([false, true])(
+    "refuses explicit credentials before calling a direct ambient adapter (wrapped: %s)",
+    async (wrapped) => {
+      const {
+        cookie,
+        request: { clientInstanceId }
+      } = await createMixedCredentials();
+      const authAdapter = wrapped
+        ? new IdentityResolvingAuthAdapter(auth.authAdapter, new InMemoryPlatformStore())
+        : auth.authAdapter;
+      const authenticate = vi.spyOn(auth.authAdapter, "authenticate");
+      const server = Fastify();
+      installErrorHandler(server);
+      server.get("/identity", async (request) =>
+        authenticateRequest({ clientInstanceId, authAdapter }, request)
+      );
+      try {
+        const response = await server.inject({
+          method: "GET",
+          url: "/identity",
+          headers: { cookie, authorization: "Bearer invalid" }
+        });
+        expect(response.statusCode).toBe(401);
+        expect(response.json()).toMatchObject({ error: { code: "UNAUTHENTICATED" } });
+        expect(authenticate).not.toHaveBeenCalled();
+      } finally {
+        authenticate.mockRestore();
+        await server.close();
+      }
+    }
+  );
+
+  it.each([
+    ["authorization", "GET", "/api/auth/get-session"],
+    ["authorization", "POST", "/api/auth/sign-out"],
+    ["x-server-credential", "GET", "/api/auth/get-session"],
+    ["x-server-credential", "POST", "/api/auth/sign-out"]
+  ] as const)("refuses %s on %s %s without changing the session", async (header, method, url) => {
+    const { cookie, chatSessionToken } = await createMixedCredentials();
+    const server = Fastify();
+    installErrorHandler(server);
+    registerBetterAuthRoutes(server, { standaloneAuth: auth });
+    try {
+      const sessionBefore = structuredClone(authDatabase.session);
+      for (const value of [
+        header === "authorization" ? `Bearer ${chatSessionToken}` : "invalid",
+        ""
+      ]) {
+        const response = await server.inject({
+          method,
+          url,
+          headers: { cookie, origin: baseUrl, [header]: value }
+        });
+        expect(response.statusCode).toBe(401);
+        expect(response.json()).toMatchObject({ error: { code: "UNAUTHENTICATED" } });
+        expect(response.headers["set-cookie"]).toBeUndefined();
+        expect(authDatabase.session).toEqual(sessionBefore);
+      }
+
+      const session = await server.inject({
+        method: "GET",
+        url: "/api/auth/get-session",
+        headers: { cookie }
+      });
+      expect(session.statusCode).toBe(200);
+      expect(session.json()).toMatchObject({ user: { id: "usr_provisioned" } });
+      const signedOut = await server.inject({
+        method: "POST",
+        url: "/api/auth/sign-out",
+        headers: { cookie, origin: baseUrl }
+      });
+      expect(signedOut.statusCode).toBe(200);
+      expect(authDatabase.session).toHaveLength(sessionBefore.length - 1);
+      const afterSignOut = await server.inject({
+        method: "GET",
+        url: "/api/auth/get-session",
+        headers: { cookie }
+      });
+      expect(afterSignOut.statusCode).toBe(200);
+      expect(afterSignOut.json()).toBeNull();
+    } finally {
+      await server.close();
+    }
+  });
+
+  async function createMixedCredentials() {
+    const response = await postAuth("/api/auth/sign-in/email", { email, password });
+    expect(response.status).toBe(200);
+    const cookie = response.headers
+      .getSetCookie()
+      .map((value) => value.split(";")[0])
+      .join("; ");
+    const clientInstanceId = asClientInstanceId("standalone_auth_test");
+    const tokenOptions = {
+      clientInstanceId,
+      secret: "test-session-token-secret-long-enough",
+      issuer: "widget",
+      ttlSeconds: 900
+    };
+    const { chatSessionToken } = new HmacSessionTokenIssuer(tokenOptions).issue({
+      externalUserId: "widget-user",
+      displayLabel: "Widget User"
+    });
+    // Put ambient adapters first so precedence cannot depend on adapter order.
+    const composite = new CompositeAuthAdapter([
+      auth.authAdapter,
+      new DevelopmentAuthAdapter({
+        enabled: true,
+        user: {
+          id: "dev",
+          externalUserId: "dev",
+          displayLabel: "Dev",
+          roles: [],
+          permissionRefs: []
+        }
+      }),
+      new HmacSessionTokenAuthAdapter(tokenOptions)
+    ]);
+    const request = { clientInstanceId, correlationId: "precedence-test", headers: { cookie } };
+    return { composite, request, cookie, chatSessionToken };
+  }
 
   function postAuth(path: string, body: Record<string, string>): Promise<Response> {
     return auth.handleRequest(

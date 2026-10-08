@@ -710,6 +710,7 @@ async function createPreviewServer(
     config,
     clientInstanceId,
     authAdapter: {
+      credentialMode: "ambient",
       id: "test-auth",
       async authenticate() {
         return owner;

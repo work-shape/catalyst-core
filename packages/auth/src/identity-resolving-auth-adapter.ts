@@ -13,6 +13,7 @@ export interface IdentityResolvingAuthAdapterOptions {
 
 export class IdentityResolvingAuthAdapter implements AuthAdapter {
   readonly id: string;
+  readonly credentialMode: AuthAdapter["credentialMode"];
 
   constructor(
     private readonly adapter: AuthAdapter,
@@ -20,6 +21,7 @@ export class IdentityResolvingAuthAdapter implements AuthAdapter {
     private readonly options: IdentityResolvingAuthAdapterOptions = {}
   ) {
     this.id = `${adapter.id}:identity-resolved`;
+    this.credentialMode = adapter.credentialMode;
   }
 
   async authenticate(request: AuthRequest): Promise<AuthenticatedIdentity> {

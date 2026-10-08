@@ -6,6 +6,7 @@ export interface ApiClientOptions {
   baseUrl: string;
   getToken?: () => string | undefined | Promise<string | undefined>;
   fetchImpl?: typeof fetch;
+  /** Only available without a token source; browser navigation cannot send a bearer token. */
   browserManagedDownloads?: boolean;
 }
 
@@ -31,9 +32,10 @@ type GeneratedResult<T> =
 
 export function createApiClientTransport(options: ApiClientOptions) {
   const baseUrl = options.baseUrl.replace(/\/$/u, "");
+  const cookieMode = options.getToken === undefined;
   const generatedClient = createGeneratedClient({
     baseUrl,
-    credentials: "include",
+    credentials: cookieMode ? "include" : "omit",
     fetch: options.fetchImpl
   });
 
@@ -47,7 +49,7 @@ export function createApiClientTransport(options: ApiClientOptions) {
 
   return {
     baseUrl,
-    browserManagedDownloads: options.browserManagedDownloads ?? !options.getToken,
+    browserManagedDownloads: cookieMode && (options.browserManagedDownloads ?? true),
     generatedClient,
     buildUrl: (path: string) => `${baseUrl}${path}`,
     async unwrapJson<T>(

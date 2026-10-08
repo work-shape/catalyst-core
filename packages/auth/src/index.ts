@@ -1,4 +1,5 @@
 export * from "./types";
+export * from "./explicit-credentials";
 export * from "./development-auth-adapter";
 export * from "./hmac-session-token";
 export * from "./service-access-token";

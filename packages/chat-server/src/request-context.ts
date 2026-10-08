@@ -14,10 +14,11 @@ import {
   normalizeAuthenticatedUser
 } from "@vivd-catalyst/core";
 import { resolveConfigLocale } from "@vivd-catalyst/config-schema";
+import { hasExplicitCredentials } from "@vivd-catalyst/auth";
 import type { ChatServerOptions } from "./types";
 
 export async function authenticateRequest(
-  options: ChatServerOptions,
+  options: Pick<ChatServerOptions, "clientInstanceId" | "authAdapter" | "allowedOrigins">,
   request: FastifyRequest
 ): Promise<{ user: AuthenticatedUser; context: RuntimeCallContext }> {
   const correlationId = createCorrelationId(request);
@@ -111,10 +112,16 @@ export function createCorrelationId(request: FastifyRequest): string {
 }
 
 async function authenticateIdentity(
-  options: ChatServerOptions,
+  options: Pick<ChatServerOptions, "clientInstanceId" | "authAdapter" | "allowedOrigins">,
   request: FastifyRequest,
   correlationId: string
 ): Promise<AuthenticatedIdentity> {
+  if (
+    hasExplicitCredentials(request.headers) &&
+    options.authAdapter.credentialMode !== "explicit"
+  ) {
+    throw new AppError("UNAUTHENTICATED", "Auth adapter does not accept explicit credentials");
+  }
   const identity = await options.authAdapter.authenticate({
     headers: request.headers,
     clientInstanceId: options.clientInstanceId,

@@ -265,6 +265,7 @@ describe("client instance app vertical slice", () => {
       config,
       clientInstanceId,
       authAdapter: {
+        credentialMode: "ambient",
         id: "test-auth",
         async authenticate() {
           return owner;

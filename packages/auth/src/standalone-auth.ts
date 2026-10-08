@@ -180,6 +180,7 @@ export async function createStandaloneAuthRuntime(
 
 class BetterAuthAdapter implements AuthAdapter {
   readonly id = STANDALONE_AUTH_SOURCE;
+  readonly credentialMode = "ambient";
 
   constructor(
     private readonly auth: BetterAuthSessionApi,

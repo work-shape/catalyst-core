@@ -10,5 +10,7 @@ export interface AuthRequest {
 
 export interface AuthAdapter {
   readonly id: string;
+  /** Only explicit adapters may run when an explicit credential header is present. */
+  readonly credentialMode: "ambient" | "explicit";
   authenticate(request: AuthRequest): Promise<AuthenticatedIdentity>;
 }

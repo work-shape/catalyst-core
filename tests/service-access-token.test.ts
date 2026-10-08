@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CompositeAuthAdapter,
   ApiKeyAccessTokenExchange,
   HmacServiceAccessTokenAuthAdapter,
   IdentityResolvingAuthAdapter
@@ -49,7 +50,9 @@ describe("service access tokens", () => {
   it("bypasses product-user identity resolution", async () => {
     const fixture = await createFixture();
     const issued = await fixture.exchange.exchange(fixture.apiKey);
-    const resolving = new IdentityResolvingAuthAdapter(fixture.adapter, fixture.store);
+    const resolving = new CompositeAuthAdapter([
+      new IdentityResolvingAuthAdapter(fixture.adapter, fixture.store)
+    ]);
 
     await expect(
       resolving.authenticate(authRequest(fixture.clientInstanceId, issued.accessToken))

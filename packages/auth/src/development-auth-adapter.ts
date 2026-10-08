@@ -24,6 +24,7 @@ export interface DevelopmentAuthAdapterOptions {
 
 export class DevelopmentAuthAdapter implements AuthAdapter {
   readonly id = "development";
+  readonly credentialMode = "ambient";
   private readonly enabled: boolean;
   private readonly usersById: Map<string, DevelopmentAuthUser>;
   private readonly defaultUserId: string | undefined;

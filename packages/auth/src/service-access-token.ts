@@ -105,6 +105,7 @@ export class ApiKeyAccessTokenExchange {
 
 export class HmacServiceAccessTokenAuthAdapter implements AuthAdapter {
   readonly id = "service-access-token";
+  readonly credentialMode = "explicit";
   private readonly options: Required<Pick<ServiceAccessTokenOptions, "issuer" | "ttlSeconds">> &
     ServiceAccessTokenOptions;
 

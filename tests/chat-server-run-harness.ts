@@ -35,6 +35,7 @@ export async function createStaleRunRecoveryFixture(
     config,
     clientInstanceId,
     authAdapter: {
+      credentialMode: "ambient",
       id: "test-auth",
       async authenticate(request) {
         const rawUserId = request.headers["x-test-user"];

@@ -160,7 +160,7 @@ describe("browser origin policy", () => {
     }
   );
 
-  it("guards the config-asset identity path and does not let a bearer header disguise cookie authentication", async () => {
+  it("refuses invalid explicit credentials on the config-asset identity path", async () => {
     const app = await createCookieApp();
     try {
       const response = await app.server.inject({
@@ -173,9 +173,9 @@ describe("browser origin policy", () => {
         },
         payload: {}
       });
-      expect(response.statusCode).toBe(403);
+      expect(response.statusCode).toBe(401);
       expect(response.json()).toMatchObject({
-        error: { message: "Session request origin is not allowed" }
+        error: { code: "UNAUTHENTICATED" }
       });
     } finally {
       await app.close();
@@ -234,7 +234,11 @@ describe("browser origin policy", () => {
         const response = await app.server.inject({
           method: "POST",
           url: "/api/conversations",
-          headers: { origin, authorization: `Bearer ${chatSessionToken}` },
+          headers: {
+            cookie: "test-session=present",
+            origin,
+            authorization: `Bearer ${chatSessionToken}`
+          },
           payload: { title: "Widget conversation" }
         });
         expect(response.statusCode, response.body).toBe(200);
