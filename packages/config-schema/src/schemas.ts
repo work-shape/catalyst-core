@@ -695,9 +695,9 @@ export const uiConfigSchema = z
     faviconUrl: z.string().url().or(z.string().startsWith("/")).optional(),
     title: localizedStringSchema.default("Vivd Catalyst"),
     welcomeMessage: localizedStringSchema.default("How can I help?"),
-    // The agent is an icon that opens the agent list on hover; when true its
-    // name stands beside the icon.
-    showAgentName: z.boolean().default(false),
+    // The agent's name stands beside its icon; when false the agent is the icon
+    // alone, which opens the agent list on hover.
+    showAgentName: z.boolean().default(true),
     // When true the agent list shows each agent's description under its name.
     showAgentDescriptions: z.boolean().default(false),
     resources: z.object({ enabled: z.boolean().default(true) }).default({ enabled: true }),
@@ -712,7 +712,7 @@ export const uiConfigSchema = z
   .default({
     title: "Vivd Catalyst",
     welcomeMessage: "How can I help?",
-    showAgentName: false,
+    showAgentName: true,
     showAgentDescriptions: false,
     resources: { enabled: true },
     collaborationWorkspaces: { enabled: false },

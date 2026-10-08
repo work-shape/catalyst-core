@@ -81,12 +81,12 @@ selector. `displayName` and `description` accept a plain string or an `en`/`de`
 map. Keep `welcomeMessage` and `welcomeSubtitle` for the conversation's empty
 state.
 
-Two boolean release-config settings decide what the chat shows of its agents,
-both `false` by default. `ui.showAgentDescriptions: true` lists each
-description in the selector; otherwise, and without a description, the selector
-shows only the display name. `ui.showAgentName: true` puts the selected agent's
-name beside its icon; otherwise the chat shows the icon alone and opens the
-selector when the pointer is on it.
+Two boolean release-config settings decide what the chat shows of its agents.
+`ui.showAgentName` is `true` by default and puts the selected agent's name
+beside its icon; with `false` the chat shows the icon alone and opens the
+selector when the pointer is on it. `ui.showAgentDescriptions` is `false` by
+default; with `true` the selector lists each description, and otherwise, or
+without a description, only the display name.
 
 Admins with the `config_assets.write` permission edit assets in the admin panel's Config tab. Release config decides how much of an agent is interactively editable:
 

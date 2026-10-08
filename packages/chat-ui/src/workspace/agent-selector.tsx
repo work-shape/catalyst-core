@@ -42,7 +42,7 @@ export function agentChipDisplayFor(
   ui: Pick<SafeConfig["ui"], "showAgentName" | "showAgentDescriptions"> | undefined
 ): AgentChipDisplay {
   return {
-    showName: ui?.showAgentName ?? false,
+    showName: ui?.showAgentName ?? true,
     showDescriptions: ui?.showAgentDescriptions ?? false
   };
 }

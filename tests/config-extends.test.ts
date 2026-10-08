@@ -88,7 +88,7 @@ describe("config file extends", () => {
 
   it("deep-merges inline UI over a UI file before applying defaults", async () => {
     const root = await writeFixtures({
-      "ui.yaml": ["title: File title", "showAgentName: true", 'accentColor: "#111111"', ""].join(
+      "ui.yaml": ["title: File title", "showAgentName: false", 'accentColor: "#111111"', ""].join(
         "\n"
       ),
       "app.yaml": [
@@ -104,7 +104,7 @@ describe("config file extends", () => {
 
     const config = await loadClientInstanceConfigFromFile(join(root, "app.yaml"));
     expect(config.ui.title).toBe("Overlay title");
-    expect(config.ui.showAgentName).toBe(true);
+    expect(config.ui.showAgentName).toBe(false);
     expect(config.ui.accentColor).toBe("#111111");
     expect(config.ui.collaborationWorkspaces.enabled).toBe(true);
     expect(config.ui.defaultThemeMode).toBe("system");
@@ -112,34 +112,34 @@ describe("config file extends", () => {
 
   it("loads UI from a file without an inline overlay", async () => {
     const root = await writeFixtures({
-      "ui.yaml": ["welcomeMessage: File welcome", "showAgentName: true", ""].join("\n"),
+      "ui.yaml": ["welcomeMessage: File welcome", "showAgentName: false", ""].join("\n"),
       "app.yaml": `${baseConfig}uiFile: ./ui.yaml\n`
     });
 
     const config = await loadClientInstanceConfigFromFile(join(root, "app.yaml"));
     expect(config.ui.welcomeMessage).toBe("File welcome");
-    expect(config.ui.showAgentName).toBe(true);
+    expect(config.ui.showAgentName).toBe(false);
     expect(config.ui.defaultThemeMode).toBe("system");
   });
 
   it("loads inline UI without a UI file", async () => {
     const root = await writeFixtures({
-      "app.yaml": [baseConfig, "ui:", "  title: Inline title", "  showAgentName: true", ""].join(
+      "app.yaml": [baseConfig, "ui:", "  title: Inline title", "  showAgentName: false", ""].join(
         "\n"
       )
     });
 
     const config = await loadClientInstanceConfigFromFile(join(root, "app.yaml"));
     expect(config.ui.title).toBe("Inline title");
-    expect(config.ui.showAgentName).toBe(true);
+    expect(config.ui.showAgentName).toBe(false);
     expect(config.ui.defaultThemeMode).toBe("system");
   });
 
-  it("serves the agent's name and the agent descriptions as off unless YAML turns each on", async () => {
+  it("serves the agent's name as on and the agent descriptions as off unless YAML says otherwise", async () => {
     const root = await writeFixtures({
       "defaults.yaml": baseConfig,
       "descriptions.yaml": [baseConfig, "ui:", "  showAgentDescriptions: true", ""].join("\n"),
-      "name.yaml": [baseConfig, "ui:", "  showAgentName: true", ""].join("\n")
+      "name.yaml": [baseConfig, "ui:", "  showAgentName: false", ""].join("\n")
     });
     // What the config endpoint hands the chat, and the branding it is built from.
     const settings = async (file: string) => {
@@ -157,15 +157,15 @@ describe("config file extends", () => {
     };
 
     expect(await settings("defaults.yaml")).toEqual({
-      showAgentName: false,
+      showAgentName: true,
       showAgentDescriptions: false
     });
     expect(await settings("descriptions.yaml")).toEqual({
-      showAgentName: false,
+      showAgentName: true,
       showAgentDescriptions: true
     });
     expect(await settings("name.yaml")).toEqual({
-      showAgentName: true,
+      showAgentName: false,
       showAgentDescriptions: false
     });
   });

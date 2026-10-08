@@ -46,7 +46,7 @@ test("standalone login renders the authenticated chat workspace", async ({ page 
 });
 
 test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
-  await serveAgentSettings(page, { showAgentName: true, showAgentDescriptions: true });
+  await serveAgentSettings(page, { showAgentDescriptions: true });
   await signInViaApi(page, normalUser);
   const conversationTitle = `Floating chrome ${Date.now()}`;
   await createListedConversation(page, conversationTitle);
@@ -173,7 +173,7 @@ test("composer grows for multiline input", async ({ page }) => {
 test("start page centres the composer and settles it at the bottom after the first message", async ({
   page
 }) => {
-  await serveAgentSettings(page, { showAgentName: true, showAgentDescriptions: true });
+  await serveAgentSettings(page, { showAgentDescriptions: true });
   await signInViaUi(page, normalUser);
   await page.goto("/");
 
@@ -267,7 +267,6 @@ test("start page centres the composer and settles it at the bottom after the fir
 
 test("the named agent chip flies from the start page into the header once", async ({ page }) => {
   const headerAnimations = await recordHeaderAnimations(page, true);
-  await serveAgentSettings(page, { showAgentName: true });
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
   const releaseCreateRun = await holdCreateRun(page);
@@ -371,7 +370,6 @@ test("the named agent chip flies from the start page into the header once", asyn
 
 test("the named agent chip is simply in the header when motion is reduced", async ({ page }) => {
   const headerAnimations = await recordHeaderAnimations(page);
-  await serveAgentSettings(page, { showAgentName: true });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
@@ -406,6 +404,7 @@ test("the named agent chip is simply in the header when motion is reduced", asyn
 test("without its name the agent chip is an icon that opens the agent list under the pointer", async ({
   page
 }) => {
+  await serveAgentSettings(page, { showAgentName: false });
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
 
@@ -510,6 +509,7 @@ test("without its name the agent chip is an icon that opens the agent list under
 test("the agent icon's list is chosen from with Tab and Enter and stays while the keyboard is in it", async ({
   page
 }) => {
+  await serveAgentSettings(page, { showAgentName: false });
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
 
@@ -564,6 +564,7 @@ test("the agent icon's list is chosen from with Tab and Enter and stays while th
 test("a tap opens the agent icon's list and chooses from it", async ({ browser, baseURL }) => {
   const context = await browser.newContext({ baseURL, hasTouch: true });
   const page = await context.newPage();
+  await serveAgentSettings(page, { showAgentName: false });
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
 
@@ -632,6 +633,7 @@ for (const showAgentName of [false, true]) {
 
 test("the agent icon alone flies from the start page into the header", async ({ page }) => {
   const headerAnimations = await recordHeaderAnimations(page, true);
+  await serveAgentSettings(page, { showAgentName: false });
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
   const releaseCreateRun = await holdCreateRun(page);
@@ -696,7 +698,11 @@ test("the agent icon alone flies from the start page into the header", async ({ 
 });
 
 test("a single agent's icon names it in the list it opens under the pointer", async ({ page }) => {
-  await serveAgentSettings(page, { singleAgent: true, showAgentDescriptions: true });
+  await serveAgentSettings(page, {
+    singleAgent: true,
+    showAgentName: false,
+    showAgentDescriptions: true
+  });
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
 
@@ -722,7 +728,7 @@ test("a single agent's icon names it in the list it opens under the pointer", as
 });
 
 test("a single named agent is a plain label that opens nothing", async ({ page }) => {
-  await serveAgentSettings(page, { singleAgent: true, showAgentName: true });
+  await serveAgentSettings(page, { singleAgent: true });
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
 

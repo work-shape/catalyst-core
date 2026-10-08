@@ -289,8 +289,8 @@ describe("agent list", () => {
 });
 
 describe("agent settings", () => {
-  it("show neither the name nor descriptions before the instance's settings are known", () => {
-    expect(agentChipDisplayFor(undefined)).toEqual({ showName: false, showDescriptions: false });
+  it("show the name without descriptions before the instance's settings are known", () => {
+    expect(agentChipDisplayFor(undefined)).toEqual({ showName: true, showDescriptions: false });
   });
 
   it("follow ui.showAgentName and ui.showAgentDescriptions independently", () => {
