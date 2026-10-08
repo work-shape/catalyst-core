@@ -405,3 +405,67 @@ describe("workspace rail private conversation marker", () => {
     expect(markup).not.toContain("conversation-private-marker");
   });
 });
+
+describe("workspace rail conversation rows", () => {
+  const day = 24 * 60 * 60 * 1000;
+  const conversation = {
+    id: "conv_1",
+    clientInstanceId: "client",
+    collaborationWorkspaceId: "cw_shared",
+    createdByUserId: "user_1",
+    createdByExternalUserId: "external_1",
+    visibility: "workspace",
+    title: "Angebot Q3",
+    status: "active",
+    createdAt: "2026-08-01T10:00:00.000Z",
+    updatedAt: "2026-08-01T10:00:00.000Z",
+    retainedUntil: new Date(Date.now() + 3 * day).toISOString()
+  } as ConversationListItem;
+  const later = { ...conversation, id: "conv_2", title: "Notizen" };
+  later.retainedUntil = new Date(Date.now() + 30 * day).toISOString();
+
+  function renderRows(expireConversations: boolean): string {
+    return renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { locale: "en" },
+        createElement(WorkspaceRail, {
+          config: { ...railConfig, retention: { expireConversations } } as SafeConfig,
+          conversations: [conversation, later],
+          selectedConversationId: undefined,
+          canViewAdministration: false,
+          view: "chat",
+          creatingConversation: false,
+          deletingConversation: false,
+          canMoveConversation: false,
+          userMenu: null,
+          onToggleSidebar: noop,
+          onViewChange: noop,
+          onCreateConversation: noop,
+          onSelectConversation: noop,
+          onRenameConversation: async () => undefined,
+          onMoveConversation: noop,
+          onDeleteConversation: noop
+        })
+      )
+    );
+  }
+
+  it("warns only on the conversation that retention deletes within a week", () => {
+    const markup = renderRows(true);
+
+    expect(markup.match(/data-testid="conversation-expiry-warning"/gu)).toHaveLength(1);
+    expect(markup).toMatch(/aria-label="Will be deleted on [A-Z][a-z]+ \d+"/u);
+  });
+
+  it("does not warn on an instance that keeps conversations indefinitely", () => {
+    expect(renderRows(false)).not.toContain("conversation-expiry-warning");
+  });
+
+  it("shows the title without the last-updated date", () => {
+    const markup = renderRows(false);
+
+    expect(markup).toContain("Angebot Q3");
+    expect(markup).not.toContain("Aug 1");
+  });
+});

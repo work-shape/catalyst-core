@@ -22,6 +22,12 @@ contain breaking changes; a patch version does not.
   used, and a user who never picked anything follows the configured defaults. The pick is
   stored per user (`/api/me/model-preference`); a migration adds `product_users.model_preference`.
 
+### Changed
+
+- **Chat:** the conversation list is a compact single-line list without the last-updated date.
+  A conversation within seven days of its retention date turns amber and carries a warning
+  with the deletion date, on instances with `retention.expireConversations` enabled.
+
 ## 0.6.3 — 2026-10-08
 
 ### Fixed

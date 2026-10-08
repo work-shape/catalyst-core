@@ -1159,7 +1159,6 @@ test(
     await expect(sourceConversation.getByTestId("conversation-unread-indicator")).toBeVisible({
       timeout: 20_000
     });
-    await expect(sourceConversation.getByTestId("conversation-unread-label")).toBeVisible();
 
     const eventRequestCountBeforeView = eventRequests.length;
     await sourceConversation.getByRole("button").first().click();

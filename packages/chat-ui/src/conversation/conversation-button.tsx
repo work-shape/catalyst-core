@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ThreadListItemMorePrimitive } from "@assistant-ui/react";
-import { FolderInput, Lock, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { FolderInput, Lock, MoreHorizontal, Pencil, Trash2, TriangleAlert } from "lucide-react";
 import type { ConversationListItem } from "@vivd-catalyst/api-client";
 import { useTranslation } from "../i18n";
 import { Button } from "../ui/button";
@@ -8,9 +8,13 @@ import { cn } from "../ui/cn";
 import { Dialog } from "../ui/dialog";
 import { Spinner } from "../ui/spinner";
 
+/** How long before its retention date a conversation is marked as about to be deleted. */
+export const RETENTION_WARNING_DAYS = 7;
+
 export function ConversationButton({
   conversation,
   selected,
+  expires,
   onSelect,
   onRename,
   onMove,
@@ -19,6 +23,8 @@ export function ConversationButton({
 }: {
   conversation: ConversationListItem;
   selected: boolean;
+  /** Whether the client instance deletes conversations at their retention date. */
+  expires: boolean;
   onSelect: () => void;
   onRename: (title: string) => Promise<void>;
   /** Absent while the user belongs to a single Collaboration Workspace. */
@@ -37,6 +43,10 @@ export function ConversationButton({
   const wasSelectedRef = useRef(selected);
   const running = Boolean(conversation.activeRun);
   const unread = Boolean(conversation.unread && !selected);
+  const expiresAt = expires ? retentionWarningDate(conversation.retainedUntil) : undefined;
+  const expiryLabel = expiresAt
+    ? t("conversationExpiresOn", { date: formatDeletionDate(expiresAt, locale) })
+    : undefined;
 
   const exitEditing = useCallback(() => {
     if (saving) {
@@ -111,21 +121,21 @@ export function ConversationButton({
         data-testid="conversation-row"
         data-selected={selected ? "true" : undefined}
         className={cn(
-          "group/conversation relative grid min-h-[3.75rem] min-w-0 grid-cols-[minmax(0,1fr)_2.25rem] items-center overflow-hidden rounded-md border border-transparent transition-colors",
+          "group/conversation relative grid min-h-9 min-w-0 grid-cols-[minmax(0,1fr)_2.25rem] items-center overflow-hidden rounded-md border border-transparent transition-colors",
           "hover:bg-sidebar-accent/55",
           selected && "bg-sidebar-accent/80"
         )}
       >
         {selected ? (
           <span
-            className="absolute inset-y-2 left-0 w-0.5 rounded-r-full bg-primary"
+            className="absolute inset-y-1.5 left-0 w-0.5 rounded-r-full bg-primary"
             aria-hidden="true"
           />
         ) : null}
         {editing ? (
           <form
             ref={editorFormRef}
-            className="grid min-w-0 gap-0.5 px-1 py-2.5"
+            className="grid min-w-0 px-1 py-1"
             onBlur={(event) => {
               if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
                 exitEditing();
@@ -152,77 +162,72 @@ export function ConversationButton({
                 }
               }}
             />
-            <span className="truncate text-[0.8125rem] text-muted-foreground">
-              {saving
-                ? t("saving")
-                : formatConversationDate(conversation.updatedAt, locale, t("updatedRecently"))}
-            </span>
           </form>
         ) : (
           <Button
-            className="h-auto min-w-0 justify-start px-2 py-3 text-left text-foreground hover:bg-transparent"
+            className={cn(
+              "h-auto min-w-0 justify-start px-2 py-2 text-left text-foreground hover:bg-transparent",
+              expiresAt && "text-warning hover:text-warning"
+            )}
             type="button"
             variant="ghost"
             onClick={onSelect}
           >
-            <span className="grid min-w-0 gap-0.5">
-              <span className="inline-flex min-w-0 items-center gap-1.5">
-                {running ? (
-                  <Spinner
-                    size="sm"
-                    className="shrink-0 text-primary"
-                    data-testid="conversation-running-icon"
-                  />
-                ) : null}
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              {running ? (
+                <Spinner
+                  size="sm"
+                  className="shrink-0 text-primary"
+                  data-testid="conversation-running-indicator"
+                  role="img"
+                  aria-hidden={false}
+                  aria-label={t("conversationRunning")}
+                />
+              ) : null}
+              <span
+                className="min-w-0"
+                onClick={(event) => {
+                  if (!selected) {
+                    return;
+                  }
+                  event.preventDefault();
+                  event.stopPropagation();
+                  startEditing();
+                }}
+              >
+                <AnimatedConversationTitle title={conversation.title} />
+              </span>
+              {conversation.visibility === "private" ? (
                 <span
-                  className="min-w-0"
-                  onClick={(event) => {
-                    if (!selected) {
-                      return;
-                    }
-                    event.preventDefault();
-                    event.stopPropagation();
-                    startEditing();
-                  }}
+                  className="shrink-0 text-muted-foreground"
+                  data-testid="conversation-private-marker"
+                  role="img"
+                  aria-label={t("conversationPrivate")}
+                  title={t("conversationPrivate")}
                 >
-                  <AnimatedConversationTitle title={conversation.title} />
+                  <Lock size={12} aria-hidden="true" />
                 </span>
-                {conversation.visibility === "private" ? (
-                  <span
-                    className="shrink-0 text-muted-foreground"
-                    data-testid="conversation-private-marker"
-                    role="img"
-                    aria-label={t("conversationPrivate")}
-                    title={t("conversationPrivate")}
-                  >
-                    <Lock size={12} aria-hidden="true" />
-                  </span>
-                ) : null}
-                {unread ? (
-                  <span
-                    className="size-1.5 shrink-0 rounded-full bg-primary"
-                    data-testid="conversation-unread-indicator"
-                    aria-label={t("conversationUnread")}
-                    title={t("conversationUnread")}
-                  />
-                ) : null}
-              </span>
-              <span className="truncate text-[0.8125rem] text-muted-foreground">
-                {running ? (
-                  <span
-                    className="inline-flex min-w-0 items-center gap-1 text-primary"
-                    data-testid="conversation-running-indicator"
-                  >
-                    {t("conversationRunning")}
-                  </span>
-                ) : unread ? (
-                  <span className="text-primary" data-testid="conversation-unread-label">
-                    {t("conversationUnread")}
-                  </span>
-                ) : (
-                  formatConversationDate(conversation.updatedAt, locale, t("updatedRecently"))
-                )}
-              </span>
+              ) : null}
+              {expiryLabel ? (
+                <span
+                  className="shrink-0"
+                  data-testid="conversation-expiry-warning"
+                  role="img"
+                  aria-label={expiryLabel}
+                  title={expiryLabel}
+                >
+                  <TriangleAlert size={13} aria-hidden="true" />
+                </span>
+              ) : null}
+              {unread ? (
+                <span
+                  className="size-1.5 shrink-0 rounded-full bg-primary"
+                  data-testid="conversation-unread-indicator"
+                  role="img"
+                  aria-label={t("conversationUnread")}
+                  title={t("conversationUnread")}
+                />
+              ) : null}
             </span>
           </Button>
         )}
@@ -403,15 +408,13 @@ function prefersReducedMotion(): boolean {
   );
 }
 
-function formatConversationDate(value: string, locale: string, fallback: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return fallback;
-  }
-  return new Intl.DateTimeFormat(locale, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(date);
+/** The retention date, once it is close enough to warn about. */
+export function retentionWarningDate(retainedUntil: string, now = Date.now()): Date | undefined {
+  const date = new Date(retainedUntil);
+  const remaining = date.getTime() - now;
+  return remaining <= RETENTION_WARNING_DAYS * 24 * 60 * 60 * 1000 ? date : undefined;
+}
+
+function formatDeletionDate(date: Date, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { month: "long", day: "numeric" }).format(date);
 }

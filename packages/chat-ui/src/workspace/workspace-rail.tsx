@@ -222,7 +222,7 @@ export function WorkspaceRail({
         </label>
       </div>
 
-      <nav className="chat-scrollbar -ml-1 -mr-3 grid min-h-0 auto-rows-max content-start gap-1 overflow-y-auto overflow-x-hidden pl-1 pr-3 pb-3">
+      <nav className="chat-scrollbar -ml-1 -mr-3 grid min-h-0 auto-rows-max content-start gap-0.5 overflow-y-auto overflow-x-hidden pl-1 pr-3 pb-3">
         {conversations.length === 0 ? (
           <div className="rounded-md border border-dashed border-sidebar-border px-3 py-4 text-sm text-muted-foreground">
             {t("noConversations")}
@@ -237,6 +237,7 @@ export function WorkspaceRail({
               key={conversation.id}
               conversation={conversation}
               selected={conversation.id === selectedConversationId}
+              expires={config.retention?.expireConversations === true}
               onSelect={() => onSelectConversation(conversation.id)}
               onRename={(title) => onRenameConversation(conversation.id, title)}
               onMove={
