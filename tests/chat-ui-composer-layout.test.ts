@@ -52,7 +52,7 @@ describe("start page agent picker", () => {
     const markup = renderWelcomeHeading(agents);
 
     expect(markup.match(/<button/gu)).toHaveLength(1);
-    expect(markup).toContain('aria-label="Select agent"');
+    expect(markup).toContain('aria-label="Select agent: Research Assistant"');
     expect(markup).toContain('aria-haspopup="listbox"');
     expect(markup).toContain(">Research Assistant<");
     expect(markup).not.toContain("Application Assistant");

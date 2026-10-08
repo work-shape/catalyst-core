@@ -1,6 +1,6 @@
 import { PanelLeft } from "lucide-react";
 import { type SafeConfig } from "@vivd-catalyst/api-client";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, ReactNode, Ref } from "react";
 import { AgentSelector } from "./agent-selector";
 import { useTranslation } from "../i18n";
 import { type ResolvedThemeMode } from "../theme";
@@ -87,7 +87,18 @@ function StatusPanel({
   );
 }
 
+/** The agent's name always shows; `showAgentName` adds the client's name under it. */
+export function agentContextLabelFor(config: {
+  ui: Pick<SafeConfig["ui"], "showAgentName" | "clientName">;
+  clientInstance: Pick<SafeConfig["clientInstance"], "displayName">;
+}): string | undefined {
+  return config.ui.showAgentName
+    ? (config.ui.clientName ?? config.clientInstance.displayName)
+    : undefined;
+}
+
 export function WorkspaceChrome({
+  agentChipRef,
   agents,
   contextLabel,
   displayPanelOpen,
@@ -95,22 +106,23 @@ export function WorkspaceChrome({
   environment,
   sidebarOpen,
   selectedAgentName,
-  showAgentName,
   showAgentSelector,
   themeMode,
   onSelectAgent,
   onToggleSidebar,
   onToggleTheme
 }: {
+  /** The element the start page's agent chip flies into. */
+  agentChipRef?: Ref<HTMLDivElement>;
   agents: SafeConfig["agents"];
+  /** Shown under the agent's name. */
   contextLabel?: string;
   displayPanelOpen: boolean;
   displayPanelWidth: number;
   environment: SafeConfig["clientInstance"]["environment"] | undefined;
   sidebarOpen: boolean;
   selectedAgentName: string | undefined;
-  showAgentName: boolean;
-  /** False while the start page offers its own agent picker. */
+  /** False while the start page shows the agent above its heading. */
   showAgentSelector: boolean;
   themeMode: ResolvedThemeMode;
   onSelectAgent: (agentName: string) => void;
@@ -167,13 +179,15 @@ export function WorkspaceChrome({
             </button>
           ) : null}
           {showAgentSelector && agents.length > 0 ? (
-            <AgentSelector
-              agents={agents}
-              contextLabel={contextLabel}
-              selectedAgentName={selectedAgentName}
-              showName={showAgentName}
-              onSelectAgent={onSelectAgent}
-            />
+            <div ref={agentChipRef} className="min-w-0">
+              <AgentSelector
+                agents={agents}
+                contextLabel={contextLabel}
+                placement="header"
+                selectedAgentName={selectedAgentName}
+                onSelectAgent={onSelectAgent}
+              />
+            </div>
           ) : null}
         </div>
         <div className="pointer-events-auto flex shrink-0 items-center gap-2">

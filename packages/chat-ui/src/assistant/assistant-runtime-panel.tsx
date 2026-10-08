@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } fro
 import { AssistantRuntimeProvider, useComposer, useComposerRuntime } from "@assistant-ui/react";
 import { useChatRuntime, type UseChatRuntimeOptions } from "@assistant-ui/react-ai-sdk";
 import type { UIMessage } from "ai";
+import { useAgentChipFlight } from "../workspace/agent-chip-flight";
 import type { SelectedChatModel } from "../workspace/workspace-chat-model";
 import type { LocaleCode } from "@vivd-catalyst/core";
 import {
@@ -101,6 +102,7 @@ function AssistantRuntimePane({
     cancelSelectedRun: onCancelRun
   } = chat;
   const { t } = useTranslation();
+  const { depart: departAgentChip, cancel: cancelAgentChipDeparture } = useAgentChipFlight();
   const activeRef = useRef(true);
   const rootSubmitPendingRef = useRef(false);
   const [optimisticPending, setOptimisticPending] = useState(false);
@@ -152,6 +154,7 @@ function AssistantRuntimePane({
 
       setRootSubmitPendingIfActive(true);
       setRootSubmitError(undefined);
+      departAgentChip();
       void startProductConversationRun({
         agentName: selectedAgentName,
         modelBindingId: selectedModelBindingId,
@@ -175,6 +178,7 @@ function AssistantRuntimePane({
             return;
           }
           setRootSubmitError(error instanceof Error ? error.message : "Message send failed");
+          cancelAgentChipDeparture();
         })
         .finally(() => {
           setRootSubmitPendingIfActive(false);
@@ -184,8 +188,10 @@ function AssistantRuntimePane({
     },
     [
       baseSendDisabledReason,
+      cancelAgentChipDeparture,
       client,
       collaborationWorkspaceId,
+      departAgentChip,
       locale,
       onMessageSubmitted,
       onRunStarted,

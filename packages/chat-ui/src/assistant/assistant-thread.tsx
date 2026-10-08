@@ -5,9 +5,10 @@ import {
   useAuiState,
   useThreadViewportStore
 } from "@assistant-ui/react";
-import { ArrowDown, Bot, CircleAlert, Lock, Sparkles } from "lucide-react";
+import { ArrowDown, CircleAlert, Lock, Sparkles } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, type RefObject } from "react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
+import { useAgentChipFlight } from "../workspace/agent-chip-flight";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
 import { AgentSelector } from "../workspace/agent-selector";
 import { AssistantActivityStatus } from "./assistant-activity-status";
@@ -328,8 +329,9 @@ function useComposerSettleTransition(
 }
 
 /**
- * The start page heading. With several agents on offer the badge above the
- * welcome message is the agent picker; a single agent leaves nothing to choose.
+ * The start page heading with the agent above the welcome message. Once the
+ * header shows the agent, the chip here only keeps its place, so nothing below
+ * it moves.
  */
 export function ThreadWelcomeHeading({
   agent,
@@ -342,21 +344,23 @@ export function ThreadWelcomeHeading({
   fallbackWelcomeMessage: string | undefined;
   onSelectAgent: (agentName: string) => void;
 }) {
+  const agentChipFlight = useAgentChipFlight();
+
   return (
     <div className="flex flex-[2] basis-0 flex-col items-center justify-end gap-3 pb-4 text-center">
-      {agents.length > 1 ? (
-        <AgentSelector
-          agents={agents}
-          align="center"
-          selectedAgentName={agent?.name}
-          showName
-          onSelectAgent={onSelectAgent}
-        />
-      ) : (
-        <span className="grid size-10 place-items-center rounded-lg border bg-card text-primary shadow-xs">
-          <Bot size={20} aria-hidden="true" />
-        </span>
-      )}
+      {agents.length > 0 ? (
+        <div
+          ref={agentChipFlight.originRef}
+          className={cn("max-w-full min-w-0", agentChipFlight.chipInHeader && "invisible")}
+        >
+          <AgentSelector
+            agents={agents}
+            placement="start-page"
+            selectedAgentName={agent?.name}
+            onSelectAgent={onSelectAgent}
+          />
+        </div>
+      ) : null}
       <div className="grid gap-1">
         <h2 className="text-xl font-semibold tracking-normal">
           {agent?.welcomeMessage ?? fallbackWelcomeMessage ?? "How can I help?"}

@@ -74,16 +74,22 @@ test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
   await page.getByRole("button", { name: "Open sidebar" }).click();
   await expect(conversationRail).toBeVisible();
 
-  // The floating chrome offers the agent selector once a conversation is open; on the start page
-  // the heading carries it instead.
+  // The floating chrome names the agent once a conversation is open; on the start page the
+  // heading carries it instead.
+  const agentSelector = page.locator("header").getByRole("button", { name: "Select agent" });
+  await expect(
+    page.getByRole("region", { name: "Chat" }).getByRole("button", { name: "Select agent" })
+  ).toContainText("Application Assistant");
+  await expect(agentSelector).toHaveCount(0);
   await page
     .getByTestId("conversation-row")
     .filter({ hasText: conversationTitle })
     .getByRole("button")
     .first()
     .click();
-  const agentSelector = page.locator("header").getByRole("button", { name: "Select agent" });
-  await agentSelector.hover();
+  await expect(agentSelector).toContainText("Application Assistant");
+  await expect(agentSelector.locator("svg").first()).toBeVisible();
+  await agentSelector.click();
   await expect(page.getByRole("option", { name: /Application Assistant/ })).toContainText(
     "Help with application and document review."
   );
@@ -93,7 +99,21 @@ test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
   );
   await expect(page.getByRole("option", { name: /Research Assistant/ })).toBeVisible();
   await page.getByRole("option", { name: /Research Assistant/ }).click();
+  await expect(agentSelector).toContainText("Research Assistant");
+
+  await page.getByRole("button", { name: "Close sidebar" }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(agentSelector).toBeVisible();
+  await expect(agentSelector.locator("svg").first()).toBeVisible();
+  await expect(agentSelector).toHaveAccessibleName("Select agent: Research Assistant");
   await expect(agentSelector).toHaveAttribute("title", "Research Assistant");
+  // Screen-reader-only text has a box, so Playwright's visibility matcher alone would pass.
+  // Check that the rendered name is clipped out while the icon remains visible.
+  const agentName = agentSelector.getByText("Research Assistant", { exact: true }).locator("..");
+  await expect(agentName).toHaveCSS("clip-path", "inset(50%)");
+  await expect(agentName).toHaveCSS("width", "1px");
+  await expect(agentName).toHaveCSS("height", "1px");
+  await expect(agentName).toHaveCSS("overflow", "hidden");
 
   const appShell = page.locator("main").first();
   const backgroundBefore = await appShell.evaluate((element) =>
@@ -185,12 +205,17 @@ test("start page centres the composer and settles it at the bottom after the fir
   await expect(chat.locator('[data-slot="workspace-apps"]')).toHaveCount(1);
   await expect(chat.locator('[data-slot="workspace-apps"] > *')).toHaveCount(0);
 
-  // The badge above the welcome message is the agent picker; it lists one option per agent.
+  // The chip above the welcome message names the agent and is the picker; it lists one option
+  // per agent. The header shows no agent while the start page does.
   const agentPicker = chat.getByRole("button", { name: "Select agent" });
-  const agentOptions = chat.getByRole("listbox").getByRole("option");
+  const agentListbox = chat.getByRole("listbox");
+  const agentOptions = agentListbox.getByRole("option");
+  const headerAgent = page.locator("header").getByRole("button", { name: "Select agent" });
   await input.fill("Draft that survives choosing an agent");
   await expect(agentPicker).toContainText("Application Assistant");
+  await expect(headerAgent).toHaveCount(0);
   await agentPicker.click();
+  await expect(agentListbox).toHaveAccessibleName("Select agent");
   await expect(agentOptions).toHaveCount(2);
   await expect(agentOptions.filter({ hasText: "Application Assistant" })).toContainText(
     "Help with application and document review."
@@ -202,6 +227,7 @@ test("start page centres the composer and settles it at the bottom after the fir
 
   await agentOptions.filter({ hasText: "Research Assistant" }).click();
   await expect(agentPicker).toContainText("Research Assistant");
+  await expect(agentPicker).toBeFocused();
   await expect(chat.getByRole("button", { name: "Summarize policy" })).toBeVisible();
   await expect(chat.getByRole("button", { name: "Find review risks" })).toHaveCount(0);
   await agentPicker.focus();
@@ -211,17 +237,231 @@ test("start page centres the composer and settles it at the bottom after the fir
     "true"
   );
   await agentOptions.filter({ hasText: "Application Assistant" }).focus();
+  await page.keyboard.press("Escape");
+  await expect(agentListbox).toHaveCount(0);
+  await expect(agentPicker).toBeFocused();
   await page.keyboard.press("Enter");
+  await expect(agentListbox).toHaveAccessibleName("Select agent");
+  await agentOptions.filter({ hasText: "Application Assistant" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(agentListbox).toHaveCount(0);
+  await expect(agentPicker).toBeFocused();
   await expect(chat.getByRole("button", { name: "Find review risks" })).toBeVisible();
   await expect(input).toHaveValue("Draft that survives choosing an agent");
 
   await input.press("Enter");
   await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
   await expect(agentPicker).toHaveCount(0);
+  await expect(headerAgent).toContainText("Application Assistant");
+  await expect(headerAgent.locator("svg").first()).toBeVisible();
   await expect(chat.locator('[data-slot="workspace-apps"]')).toHaveCount(0);
   await expect(chat.getByText("Draft that survives choosing an agent")).toBeVisible();
   await expect(input).toHaveValue("");
   await expect.poll(async () => (await composerPlacement()).bottomGap).toBeLessThan(40);
+});
+
+test("the agent chip flies from the start page into the header once", async ({ page }) => {
+  const headerAnimations = await recordHeaderAnimations(page, true);
+  await signInViaUi(page, normalUser);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
+
+  let releaseCreateRun = () => {};
+  const createRunGate = new Promise<void>((resolve) => {
+    releaseCreateRun = resolve;
+  });
+  await page.route(`${apiBaseUrl}/api/conversations/runs`, async (route) => {
+    if (route.request().method() === "POST") {
+      await createRunGate;
+    }
+    await route.continue();
+  });
+
+  const chat = page.getByRole("region", { name: "Chat" });
+  const header = page.locator("header");
+  const startChip = chat.getByRole("button", { name: "Select agent" });
+  const headerChip = header.getByRole("button", { name: "Select agent" });
+  const heading = chat.getByRole("heading", { name: "E2E ready." });
+  const composer = chat.locator("form").filter({ has: page.getByPlaceholder("Message") });
+  const startName = startChip.locator("[data-agent-chip-name]");
+  const headerName = headerChip.locator("[data-agent-chip-name]");
+  const messageText = `Agent chip flight ${Date.now()}`;
+
+  await expect(startChip).toContainText("Application Assistant");
+  await expect(headerChip).toHaveCount(0);
+  await expect(startName).toHaveCSS("font-weight", "600");
+  const startNameColor = await startName.evaluate((name) => getComputedStyle(name).color);
+  const startChipBox = await startChip.boundingBox();
+  const headingBox = await heading.boundingBox();
+  const composerBox = await composer.boundingBox();
+  if (!startChipBox) throw new Error("start page agent chip is not laid out");
+
+  await page.getByPlaceholder("Message").fill(messageText);
+  await page.getByRole("button", { name: "Send message" }).click();
+
+  // The chip leaves with the click, before the server has answered, and nothing else moves.
+  await expect(headerChip).toContainText("Application Assistant");
+  await expect(startChip).toHaveCount(0);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
+  expect(await heading.boundingBox()).toEqual(headingBox);
+  expect(await composer.boundingBox()).toEqual(composerBox);
+  // The chip's movement and its name's colour.
+  expect(await headerAnimations()).toHaveLength(2);
+  await headerChip.evaluate((chip) => chip.setAttribute("data-flown", "true"));
+
+  // Inspect the real Web Animation, paused by the recorder before it can finish.
+  const flight = await headerChip.evaluate((chip) => {
+    const header = chip.closest("header");
+    const [animation] = (header?.getAnimations({ subtree: true }) ?? []).filter(
+      ({ effect }) =>
+        effect instanceof KeyframeEffect &&
+        effect.target instanceof Element &&
+        effect.target !== header &&
+        effect.target.contains(chip)
+    );
+    const effect = animation?.effect;
+    if (
+      !animation ||
+      !(effect instanceof KeyframeEffect) ||
+      !(effect.target instanceof Element) ||
+      !effect.target.contains(chip)
+    ) {
+      throw new Error("header agent chip flight not found");
+    }
+    const duration = effect.getTiming().duration;
+    if (typeof duration !== "number") throw new Error("chip flight duration is not numeric");
+    const keyframes = effect.getKeyframes();
+    const position = () => {
+      const { x, y } = chip.getBoundingClientRect();
+      return { x, y };
+    };
+    animation.pause();
+    animation.currentTime = 0;
+    const origin = position();
+    animation.currentTime = duration;
+    const destination = position();
+    animation.currentTime = duration / 2;
+    return {
+      duration,
+      firstTransform: String(keyframes[0]?.transform ?? ""),
+      lastTransform: String(keyframes.at(-1)?.transform ?? ""),
+      origin,
+      destination,
+      midpoint: position()
+    };
+  });
+  expect(flight.duration).toBeGreaterThanOrEqual(300);
+  expect(flight.duration).toBeLessThanOrEqual(400);
+  expect(flight.lastTransform).toBe("none");
+  const [fromX, fromY] = (/translate\((.+)px, (.+)px\)/u.exec(flight.firstTransform) ?? []).slice(
+    1
+  );
+  expect(Number(fromX)).toBeCloseTo(startChipBox.x - flight.destination.x, 0);
+  expect(Number(fromY)).toBeCloseTo(startChipBox.y - flight.destination.y, 0);
+  expect(flight.origin.x).toBeCloseTo(startChipBox.x, 0);
+  expect(flight.origin.y).toBeCloseTo(startChipBox.y, 0);
+  expect(flight.destination.y).toBeLessThan(startChipBox.y);
+  for (const axis of ["x", "y"] as const) {
+    expect(flight.midpoint[axis]).toBeGreaterThan(
+      Math.min(flight.origin[axis], flight.destination[axis])
+    );
+    expect(flight.midpoint[axis]).toBeLessThan(
+      Math.max(flight.origin[axis], flight.destination[axis])
+    );
+  }
+
+  // On the way the name's colour eases from the start page's to the header's quieter one,
+  // which the picker's chevron already has.
+  const mutedColor = await headerChip
+    .locator("svg")
+    .last()
+    .evaluate((chevron) => getComputedStyle(chevron).color);
+  const nameColor = await headerName.evaluate((name) => {
+    const [animation] = name.getAnimations();
+    const duration = animation?.effect?.getTiming().duration;
+    if (!animation || typeof duration !== "number") {
+      throw new Error("agent name colour animation not found");
+    }
+    const at = (time: number) => {
+      animation.currentTime = time;
+      return getComputedStyle(name).color;
+    };
+    animation.pause();
+    return { duration, start: at(0), end: at(duration), midpoint: at(duration / 2) };
+  });
+  expect(nameColor.duration).toBe(flight.duration);
+  expect(nameColor.start).toBe(startNameColor);
+  expect(nameColor.end).toBe(mutedColor);
+  expect(mutedColor).not.toBe(startNameColor);
+  expect([nameColor.start, nameColor.end]).not.toContain(nameColor.midpoint);
+  // Its weight is the header's lighter one from the first frame.
+  await expect(headerName).toHaveCSS("font-weight", "500");
+
+  await expect(headerChip).toBeVisible();
+  await header.evaluate((element) => {
+    for (const animation of element.getAnimations({ subtree: true })) {
+      if (animation.playState === "paused") animation.play();
+    }
+  });
+  await expect
+    .poll(() => header.evaluate((element) => element.getAnimations({ subtree: true }).length))
+    .toBe(0);
+  await expect(headerName).toHaveCSS("color", mutedColor);
+
+  // The route change keeps the chip that flew in instead of repeating its arrival.
+  releaseCreateRun();
+  await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
+  await expect(chat.locator('[data-role="user"]').filter({ hasText: messageText })).toHaveCount(1);
+  await expect(headerChip).toHaveAttribute("data-flown", "true");
+  expect(await headerAnimations()).toHaveLength(2);
+
+  // Reloading the conversation and opening it from the list show the chip without a flight.
+  await page.reload();
+  await expect(chat.locator('[data-role="user"]').filter({ hasText: messageText })).toHaveCount(1);
+  await expect(headerChip).toContainText("Application Assistant");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await expect(startChip).toContainText("Application Assistant");
+  await expect(headerChip).toHaveCount(0);
+  await page
+    .getByTestId("conversation-row")
+    .filter({ hasText: messageText })
+    .getByRole("button")
+    .first()
+    .click();
+  await expect(headerChip).toContainText("Application Assistant");
+  expect(await headerAnimations()).toHaveLength(0);
+});
+
+test("the agent chip is simply in the header when motion is reduced", async ({ page }) => {
+  const headerAnimations = await recordHeaderAnimations(page);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await signInViaUi(page, normalUser);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
+
+  const startChip = page
+    .getByRole("region", { name: "Chat" })
+    .getByRole("button", { name: "Select agent" });
+  const headerChip = page.locator("header").getByRole("button", { name: "Select agent" });
+  const headerName = headerChip.locator("[data-agent-chip-name]");
+  await expect(startChip).toContainText("Application Assistant");
+  const startNameColor = await startChip
+    .locator("[data-agent-chip-name]")
+    .evaluate((name) => getComputedStyle(name).color);
+
+  await page.getByPlaceholder("Message").fill(`Agent chip without motion ${Date.now()}`);
+  await page.getByRole("button", { name: "Send message" }).click();
+
+  await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
+  await expect(headerChip).toContainText("Application Assistant");
+  await expect(startChip).toHaveCount(0);
+  expect(await headerAnimations()).toHaveLength(0);
+  // The name is quiet at once: the muted colour the chevron has, and the lighter weight.
+  const mutedColor = await headerChip
+    .locator("svg")
+    .last()
+    .evaluate((chevron) => getComputedStyle(chevron).color);
+  expect(mutedColor).not.toBe(startNameColor);
+  await expect(headerName).toHaveCSS("color", mutedColor);
+  await expect(headerName).toHaveCSS("font-weight", "500");
 });
 
 test("composer sends on Enter and inserts a newline on Shift+Enter", async ({ page }) => {
@@ -2023,6 +2263,42 @@ async function signInViaUi(
       .getByRole("complementary", { name: "Conversations" })
       .getByRole("searchbox", { name: "Search conversations" })
   ).toBeVisible();
+}
+
+/**
+ * Records every animation started inside the header, where the agent chip's flight is the
+ * only source: its movement and its name's colour. Optionally pauses them at departure so
+ * geometry and colour checks cannot miss a short flight.
+ */
+async function recordHeaderAnimations(
+  page: Page,
+  pauseAtDeparture = false
+): Promise<() => Promise<string[]>> {
+  await page.addInitScript((pauseAtDeparture) => {
+    const animate = Element.prototype.animate;
+    Element.prototype.animate = function (this: Element, ...args: Parameters<Element["animate"]>) {
+      const animation = animate.apply(this, args);
+      if (this.closest("header")) {
+        const { dataset } = document.documentElement;
+        const seen: unknown = JSON.parse(dataset.headerAnimations ?? "[]");
+        const [firstKeyframe] = Array.isArray(args[0]) ? args[0] : [];
+        dataset.headerAnimations = JSON.stringify([
+          ...(Array.isArray(seen) ? seen : []),
+          String(firstKeyframe?.transform ?? "")
+        ]);
+        if (pauseAtDeparture) {
+          animation.pause();
+          animation.currentTime = 0;
+        }
+      }
+      return animation;
+    };
+  }, pauseAtDeparture);
+  return () =>
+    page.evaluate(() => {
+      const seen: unknown = JSON.parse(document.documentElement.dataset.headerAnimations ?? "[]");
+      return Array.isArray(seen) ? seen.map(String) : [];
+    });
 }
 
 async function signInViaApi(page: Page, user: { email: string; password: string }): Promise<void> {

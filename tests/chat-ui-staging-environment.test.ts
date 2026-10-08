@@ -23,7 +23,6 @@ function renderWorkspaceChrome(
         environment,
         sidebarOpen: false,
         selectedAgentName: undefined,
-        showAgentName: false,
         showAgentSelector: true,
         themeMode: "light",
         onSelectAgent: noop,

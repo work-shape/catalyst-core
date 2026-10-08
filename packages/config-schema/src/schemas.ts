@@ -695,8 +695,8 @@ export const uiConfigSchema = z
     faviconUrl: z.string().url().or(z.string().startsWith("/")).optional(),
     title: localizedStringSchema.default("Vivd Catalyst"),
     welcomeMessage: localizedStringSchema.default("How can I help?"),
-    // When false the agent switcher is an icon-only control; the agent and
-    // client names are only shown inside its dropdown.
+    // The header always names the agent beside its icon; when true the client
+    // name is shown under it.
     showAgentName: z.boolean().default(false),
     resources: z.object({ enabled: z.boolean().default(true) }).default({ enabled: true }),
     collaborationWorkspaces: z

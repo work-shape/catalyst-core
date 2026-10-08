@@ -14,9 +14,15 @@ import { ResourcesPanel, ResourcesPanelToggle, useResourcesPanelState } from "./
 import { isResourcesPanelAvailable } from "./resources-panel-model";
 import { ToolDisplayPanel, useToolDisplayPanel } from "./tool-display-panel";
 import { cn } from "./ui/cn";
+import { AgentChipFlightProvider, useAgentChipFlightState } from "./workspace/agent-chip-flight";
 import { ClientBrandingHeader } from "./workspace/client-branding";
 import { UserMenu } from "./workspace/user-menu";
-import { ConfigCheckPanel, SessionCheckPanel, WorkspaceChrome } from "./workspace/workspace-chrome";
+import {
+  agentContextLabelFor,
+  ConfigCheckPanel,
+  SessionCheckPanel,
+  WorkspaceChrome
+} from "./workspace/workspace-chrome";
 import { WorkspaceRail } from "./workspace/workspace-rail";
 import { type WorkspaceRoute, type WorkspaceRouteChangeOptions } from "./workspace/workspace-route";
 import { useWorkspaceChatModel, WORKSPACE_AUTH_SCOPE } from "./workspace/workspace-chat-model";
@@ -86,6 +92,9 @@ function ChatWorkspaceContent({
     manageDocumentTitle,
     collaborationWorkspacesAvailable
   });
+  const agentChipFlight = useAgentChipFlightState(
+    model.route.view === "chat" && !model.route.selectedConversationId
+  );
   const [displayPanelWidth, setDisplayPanelWidth] = useState(0);
   const [passwordSetupToken, setPasswordSetupToken] = useState(readPasswordSetupToken);
 
@@ -228,23 +237,15 @@ function ChatWorkspaceContent({
         ) : null}
 
         <WorkspaceChrome
+          agentChipRef={agentChipFlight.destinationRef}
           agents={model.config.config.agents}
-          contextLabel={
-            model.config.config.ui.clientName ?? model.config.config.clientInstance.displayName
-          }
+          contextLabel={agentContextLabelFor(model.config.config)}
           displayPanelOpen={model.toolDisplay.open}
           displayPanelWidth={displayPanelWidth}
           environment={model.config.config.clientInstance.environment}
           sidebarOpen={model.chrome.sidebarOpen}
           selectedAgentName={model.config.activeAgentName}
-          showAgentName={model.config.config.ui.showAgentName}
-          showAgentSelector={
-            !(
-              model.route.view === "chat" &&
-              !model.route.selectedConversationId &&
-              model.config.config.agents.length > 1
-            )
-          }
+          showAgentSelector={agentChipFlight.chipInHeader}
           themeMode={model.config.resolvedThemeMode}
           onSelectAgent={model.config.selectAgentName}
           onToggleSidebar={model.chrome.toggleSidebar}
@@ -296,7 +297,9 @@ function ChatWorkspaceContent({
                     onDragLeave={chat.fileDropzone.onChatDragLeave}
                     onDrop={chat.fileDropzone.onChatDrop}
                   >
-                    <AssistantRuntimePanel chat={chat} />
+                    <AgentChipFlightProvider flight={agentChipFlight}>
+                      <AssistantRuntimePanel chat={chat} />
+                    </AgentChipFlightProvider>
                     {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
                     {resourcesAvailable &&
                     resourcesConversationId &&
