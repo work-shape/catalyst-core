@@ -288,6 +288,42 @@ rather than an arbitrary provider or model name, and an omitted choice keeps the
 agent's configured binding. Put shared reasoning defaults on the provider or
 agent; add one to a binding only when that model needs a different fallback.
 
+### What the model picker shows
+
+The composer's model picker appears when the agent offers more than one model, or when its
+only model offers a choice of reasoning effort. Four optional binding keys feed it:
+
+```yaml
+modelBindings:
+  - id: primary
+    providerId: azure-eu
+    model: gpt-5.6-sol
+    reasoningEffort: medium
+    description:
+      en: For complex analysis and multi-step work.
+      de: Für komplexe Analysen und mehrstufige Aufgaben.
+    userSelectableReasoningEfforts: [low, medium, high]
+    vendor: openai
+    usageTier: high
+```
+
+- `description` is the text on the model card, localized like other display strings.
+- `userSelectableReasoningEfforts` lists the efforts a chat user may pick for this model.
+  Empty or unset, users get no choice and the agent's model settings decide. The effort the
+  agent would use anyway is always offered, so the user can return to it. The run API accepts
+  `reasoningEffort` only when the model that will run offers it, and the picked effort is
+  stored on the run. A higher effort uses more tokens, which are billed as usual.
+- `vendor` names who makes the model, for its logo: `openai`, `anthropic`, `mistral` or
+  `google`. Without it the picker reads the vendor from the model id, and shows a neutral icon
+  when it cannot tell.
+- `usageTier` (`low`, `moderate`, `high`, `very_high`) overrides the usage consumption shown
+  for the model. Without it the tier comes from the model's Customer Rate Card entry: three
+  parts uncached input price to one part output price per million tokens, below 1 is `low`,
+  below 5 `moderate`, below 15 `high`, anything above `very_high`. The bounds are fixed, so
+  adding a model never moves another one. A model without a rate card entry shows no tier.
+
+The EU mark is shown for models whose provider declares `compliance.residency: eu`.
+
 ## Mail
 
 Mail is off by default. Enabling it adds a forgot-password link to the login panel and lets user

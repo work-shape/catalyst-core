@@ -60,6 +60,7 @@ export function createTestConfig(
       reasoningEffort?: "none" | "low" | "medium" | "high" | "xhigh";
       agentSelectable?: boolean;
       userSelectable?: boolean;
+      userSelectableReasoningEfforts?: Array<"none" | "low" | "medium" | "high" | "xhigh">;
     }>;
     agentModelBindingId?: string;
     agentUserSelectableModelBindingIds?: string[];

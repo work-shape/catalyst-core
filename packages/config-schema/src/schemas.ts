@@ -21,6 +21,7 @@ import type {
 } from "@vivd-catalyst/core";
 import {
   AGENT_EDITABLE_FIELDS,
+  MODEL_USAGE_TIERS,
   REASONING_EFFORTS,
   SKILL_RESOURCE_MEDIA_TYPES
 } from "@vivd-catalyst/core";
@@ -266,7 +267,11 @@ export const modelBindingConfigSchema = z.object({
   agentSelectable: z.boolean().default(true),
   // Accepted for compatibility; no effect. Each agent lists the models its users may pick.
   userSelectable: z.boolean().default(false),
-  supportsFastMode: z.boolean().default(false)
+  supportsFastMode: z.boolean().default(false),
+  description: localizedStringSchema.optional(),
+  vendor: z.string().min(1).optional(),
+  usageTier: z.enum(MODEL_USAGE_TIERS).optional(),
+  userSelectableReasoningEfforts: z.array(z.enum(REASONING_EFFORTS)).optional()
 });
 
 const welcomeSubtitleSchema = z.union([

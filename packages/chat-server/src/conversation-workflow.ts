@@ -19,6 +19,7 @@ import {
   type ConversationId,
   type ConversationVisibility,
   type JsonObject,
+  type ReasoningEffortConfig,
   type RuntimeCallContext,
   type RunObservation,
   type RunStartCommand,
@@ -32,11 +33,16 @@ import {
   getSubjectUserId,
   withoutAssistantProviderContinuation,
   isAppError,
+  defaultReasoningEffortForAgentBinding,
   isModelBindingUserSelectableForAgent,
+  userSelectableReasoningEffortsForBinding,
   readAssistantFinalMetadata,
   readUserMessageMetadata
 } from "@vivd-catalyst/core";
-import { getModelSelectionForConversationTitles } from "@vivd-catalyst/config-schema";
+import {
+  getModelSelectionForConversationTitles,
+  resolveModelBinding
+} from "@vivd-catalyst/config-schema";
 import type { ModelMessage } from "@vivd-catalyst/model-provider";
 import { getWorkspaceAssetSnapshot } from "./agent-availability";
 import { createEmptyAttachmentManifest } from "./attachments";
@@ -67,6 +73,7 @@ export interface CreateConversationCommand {
 export interface SendConversationMessageCommand {
   agentName?: string;
   modelBindingId?: string;
+  reasoningEffort?: ReasoningEffortConfig;
   idempotencyKey?: string;
   text: string;
 }
@@ -100,12 +107,14 @@ export class ConversationWorkflow {
   /**
    * An agent that is unknown and one that is not available in this workspace are
    * indistinguishable to the caller. A requested model must be one this agent offers to
-   * users: its own binding or one of its user-selectable bindings.
+   * users: its own binding or one of its user-selectable bindings. A requested reasoning
+   * effort must be one the model that will run offers to users.
    */
   private async resolveRunAgentName(
     workspace: CollaborationWorkspace,
     requestedAgentName: string | undefined,
-    requestedModelBindingId: string | undefined
+    requestedModelBindingId: string | undefined,
+    requestedReasoningEffort: ReasoningEffortConfig | undefined
   ): Promise<string> {
     const assets = await getWorkspaceAssetSnapshot(this.options, workspace);
     const agentName = requestedAgentName ?? assets.defaultAgentName;
@@ -134,6 +143,26 @@ export class ConversationWorkflow {
         "VALIDATION_FAILED",
         `Model binding '${requestedModelBindingId}' is not available for user selection`
       );
+    }
+    if (requestedReasoningEffort) {
+      const bindingId = requestedModelBindingId ?? agent?.modelBindingId;
+      const binding = this.options.config.modelBindings.find(
+        (candidate) => candidate.id === bindingId
+      );
+      const defaultEffort =
+        binding &&
+        ((agent && defaultReasoningEffortForAgentBinding(agent, binding)) ??
+          resolveModelBinding(this.options.config, binding.id).reasoningEffort);
+      if (
+        !userSelectableReasoningEffortsForBinding(binding, defaultEffort).includes(
+          requestedReasoningEffort
+        )
+      ) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `Reasoning effort '${requestedReasoningEffort}' is not available for user selection`
+        );
+      }
     }
     return agentName;
   }
@@ -413,7 +442,8 @@ export class ConversationWorkflow {
       const agentName = await this.resolveRunAgentName(
         await this.requireMemberWorkspace(user, conversation.collaborationWorkspaceId),
         command.agentName,
-        command.modelBindingId
+        command.modelBindingId,
+        command.reasoningEffort
       );
       const attachments = this.options.attachments;
       const draftAttachments = attachments
@@ -445,6 +475,7 @@ export class ConversationWorkflow {
           inputMessageId: userMessageId,
           agentName,
           modelBindingId: command.modelBindingId,
+          reasoningEffort: command.reasoningEffort,
           locale: context.locale,
           authorization: {
             principal: context.principal ?? getAuthPrincipal(user),
@@ -473,6 +504,7 @@ export class ConversationWorkflow {
         {
           agentName: prepared.run.agentName,
           modelBindingId: prepared.run.modelBindingId,
+          reasoningEffort: prepared.run.reasoningEffort,
           conversationId,
           idempotencyKey: command.idempotencyKey,
           inputMessageId: prepared.userMessage.id,
@@ -557,7 +589,8 @@ export class ConversationWorkflow {
       await this.resolveRunAgentName(
         await this.resolveTargetWorkspace(user, command.collaborationWorkspaceId),
         command.agentName,
-        command.modelBindingId
+        command.modelBindingId,
+        command.reasoningEffort
       );
       const conversation = await this.createConversation(user, context, {
         title: command.title ?? createConversationTitle(command.text),

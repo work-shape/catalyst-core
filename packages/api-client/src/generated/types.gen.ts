@@ -642,6 +642,12 @@ export type GetConfigResponses = {
                 bindingId?: string;
                 model: string;
                 compactThresholdTokens?: number;
+                vendor?: string;
+                description?: string;
+                residency?: 'global' | 'eu' | 'unknown';
+                usageTier?: 'low' | 'moderate' | 'high' | 'very_high';
+                reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+                selectableReasoningEfforts: Array<'none' | 'low' | 'medium' | 'high' | 'xhigh'>;
             }>;
             compactThresholdTokens?: number;
             welcomeMessage?: string;
@@ -907,6 +913,12 @@ export type ListCollaborationWorkspaceAgentsResponses = {
                 bindingId?: string;
                 model: string;
                 compactThresholdTokens?: number;
+                vendor?: string;
+                description?: string;
+                residency?: 'global' | 'eu' | 'unknown';
+                usageTier?: 'low' | 'moderate' | 'high' | 'very_high';
+                reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+                selectableReasoningEfforts: Array<'none' | 'low' | 'medium' | 'high' | 'xhigh'>;
             }>;
             compactThresholdTokens?: number;
             welcomeMessage?: string;
@@ -1919,6 +1931,7 @@ export type StartConversationRunData = {
         idempotencyKey: string;
         agentName?: string;
         modelBindingId?: string;
+        reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
         locale?: 'en' | 'de';
         message: {
             text: string;
@@ -2310,6 +2323,7 @@ export type CreateConversationRunData = {
         idempotencyKey: string;
         agentName?: string;
         modelBindingId?: string;
+        reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
         locale?: 'en' | 'de';
         message: {
             text: string;

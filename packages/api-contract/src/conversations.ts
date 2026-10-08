@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { localeCodeSchema } from "./configuration";
+import { localeCodeSchema, reasoningEffortSchema } from "./configuration";
 
 export const conversationVisibilitySchema = z.enum(["workspace", "private"]);
 
@@ -609,6 +609,7 @@ export const startConversationRunRequestSchema = z.object({
   idempotencyKey: z.string().min(1),
   agentName: z.string().min(1).optional(),
   modelBindingId: z.string().min(1).optional(),
+  reasoningEffort: reasoningEffortSchema.optional(),
   locale: localeCodeSchema.optional(),
   message: z.object({
     text: z.string().min(1)

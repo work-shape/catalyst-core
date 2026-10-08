@@ -1262,6 +1262,7 @@ export class InMemoryPlatformStore
       inputMessageId: input.inputMessageId,
       agentName: input.agentName,
       modelBindingId: input.modelBindingId,
+      reasoningEffort: input.reasoningEffort,
       locale: input.locale,
       authorization: input.authorization,
       status: input.status ?? "running",

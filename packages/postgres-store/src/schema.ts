@@ -358,6 +358,7 @@ export const agentRuns = pgTable(
       .references(() => messages.id, { onDelete: "cascade" }),
     agentName: text("agent_name").notNull(),
     modelBindingId: text("model_binding_id"),
+    reasoningEffort: text("reasoning_effort").$type<AgentRun["reasoningEffort"]>(),
     locale: text("locale").$type<AgentRun["locale"]>(),
     authorizationContext: jsonb("authorization_context").$type<AgentRun["authorization"]>(),
     status: text("status").$type<AgentRun["status"]>().notNull(),

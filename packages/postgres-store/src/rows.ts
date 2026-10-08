@@ -206,6 +206,7 @@ export function mapAgentRun(row: AgentRunRow | undefined): AgentRun {
     inputMessageId: asMessageId(row.inputMessageId),
     agentName: row.agentName,
     modelBindingId: row.modelBindingId ?? undefined,
+    reasoningEffort: row.reasoningEffort ?? undefined,
     locale: row.locale ?? undefined,
     authorization: row.authorizationContext ?? undefined,
     status: row.status,

@@ -842,7 +842,8 @@ describe("local agent runtime", () => {
           id: "primaryReasoning",
           providerId: "test-provider",
           model: "bound-model",
-          reasoningEffort: "high"
+          reasoningEffort: "high",
+          userSelectableReasoningEfforts: ["low", "high"]
         },
         {
           id: "unlisted",
@@ -875,12 +876,16 @@ describe("local agent runtime", () => {
       })
     });
 
-    const requestFor = async (modelBindingId: string | undefined) => {
+    const requestFor = async (
+      modelBindingId: string | undefined,
+      reasoningEffort?: "low" | "medium"
+    ) => {
       providerRequest = undefined;
       const run = await runtime.start(
         {
           agentName: "binding_agent",
           modelBindingId,
+          reasoningEffort,
           conversationId,
           message: { text: "Use the bound model." }
         },
@@ -912,6 +917,17 @@ describe("local agent runtime", () => {
         reasoningEffort: "xhigh"
       });
     }
+    // An effort the user picked wins while the model that runs offers it.
+    expect(await requestFor(undefined, "low")).toMatchObject({
+      model: "bound-model",
+      reasoningEffort: "low"
+    });
+    // A pick the model does not offer falls back to the configured effort.
+    expect(await requestFor(undefined, "medium")).toMatchObject({ reasoningEffort: "xhigh" });
+    expect(await requestFor("alternate", "low")).toMatchObject({
+      model: "user-selected-model",
+      reasoningEffort: "low"
+    });
 
     // A userSelectable binding the agent does not list is rejected by the runtime itself.
     providerRequest = undefined;

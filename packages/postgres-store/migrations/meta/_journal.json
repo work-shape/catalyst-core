@@ -211,6 +211,13 @@
       "when": 1791208221526,
       "tag": "0029_usage_fast_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1791458216311,
+      "tag": "0030_agent_run_reasoning_effort",
+      "breakpoints": true
     }
   ]
 }

@@ -5,12 +5,15 @@ import type { ManagedFileRef } from "./files";
 import type { AttachmentManifest } from "./files";
 import type { AuthPrincipal, AuthScope, DelegatedActor, RuntimeCallContext } from "./identity";
 import type { LocaleCode } from "./localization";
+import type { ReasoningEffortConfig } from "./config";
 import type { ToolExecutionResult } from "./tool-execution";
 import type { AppendAssistantMessageInput, ChatMessage, CreateMessageInput } from "./conversation";
 
 export interface StartAgentRunInput {
   agentName: string;
   modelBindingId?: string;
+  /** The reasoning effort the user picked; unset runs with the configured default. */
+  reasoningEffort?: ReasoningEffortConfig;
   conversationId: ConversationId;
   idempotencyKey?: string;
   inputMessageId?: MessageId;
@@ -64,6 +67,8 @@ export interface AgentRun {
   inputMessageId: MessageId;
   agentName: string;
   modelBindingId?: string;
+  /** The reasoning effort the user picked; unset runs with the configured default. */
+  reasoningEffort?: ReasoningEffortConfig;
   locale?: LocaleCode;
   authorization?: AgentRunAuthorization;
   status: AgentRunStatus;
@@ -326,6 +331,8 @@ export interface CreateAgentRunInput {
   inputMessageId: MessageId;
   agentName: string;
   modelBindingId?: string;
+  /** The reasoning effort the user picked; unset runs with the configured default. */
+  reasoningEffort?: ReasoningEffortConfig;
   locale?: LocaleCode;
   authorization?: AgentRunAuthorization;
   status?: "queued" | "running";

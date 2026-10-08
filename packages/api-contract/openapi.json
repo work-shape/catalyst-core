@@ -2187,10 +2187,57 @@
                                 },
                                 "compactThresholdTokens": {
                                   "type": "number"
+                                },
+                                "vendor": {
+                                  "type": "string"
+                                },
+                                "description": {
+                                  "type": "string"
+                                },
+                                "residency": {
+                                  "type": "string",
+                                  "enum": [
+                                    "global",
+                                    "eu",
+                                    "unknown"
+                                  ]
+                                },
+                                "usageTier": {
+                                  "type": "string",
+                                  "enum": [
+                                    "low",
+                                    "moderate",
+                                    "high",
+                                    "very_high"
+                                  ]
+                                },
+                                "reasoningEffort": {
+                                  "type": "string",
+                                  "enum": [
+                                    "none",
+                                    "low",
+                                    "medium",
+                                    "high",
+                                    "xhigh"
+                                  ]
+                                },
+                                "selectableReasoningEfforts": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "low",
+                                      "medium",
+                                      "high",
+                                      "xhigh"
+                                    ]
+                                  }
                                 }
                               },
                               "required": [
-                                "model"
+                                "model",
+                                "selectableReasoningEfforts"
                               ],
                               "additionalProperties": false
                             }
@@ -3413,10 +3460,57 @@
                                 },
                                 "compactThresholdTokens": {
                                   "type": "number"
+                                },
+                                "vendor": {
+                                  "type": "string"
+                                },
+                                "description": {
+                                  "type": "string"
+                                },
+                                "residency": {
+                                  "type": "string",
+                                  "enum": [
+                                    "global",
+                                    "eu",
+                                    "unknown"
+                                  ]
+                                },
+                                "usageTier": {
+                                  "type": "string",
+                                  "enum": [
+                                    "low",
+                                    "moderate",
+                                    "high",
+                                    "very_high"
+                                  ]
+                                },
+                                "reasoningEffort": {
+                                  "type": "string",
+                                  "enum": [
+                                    "none",
+                                    "low",
+                                    "medium",
+                                    "high",
+                                    "xhigh"
+                                  ]
+                                },
+                                "selectableReasoningEfforts": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "low",
+                                      "medium",
+                                      "high",
+                                      "xhigh"
+                                    ]
+                                  }
                                 }
                               },
                               "required": [
-                                "model"
+                                "model",
+                                "selectableReasoningEfforts"
                               ],
                               "additionalProperties": false
                             }
@@ -7013,6 +7107,16 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "reasoningEffort": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "low",
+                      "medium",
+                      "high",
+                      "xhigh"
+                    ]
+                  },
                   "locale": {
                     "type": "string",
                     "enum": [
@@ -8750,6 +8854,16 @@
                   "modelBindingId": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "reasoningEffort": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "low",
+                      "medium",
+                      "high",
+                      "xhigh"
+                    ]
                   },
                   "locale": {
                     "type": "string",

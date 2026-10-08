@@ -80,6 +80,75 @@ export interface ModelBindingConfig {
   /** Accepted for compatibility; no effect. Each agent lists the models its users may pick. */
   userSelectable?: boolean;
   supportsFastMode?: boolean;
+  /** Shown on the model card in the chat's model picker. */
+  description?: LocalizedStringConfig;
+  /** Who makes the model, for its icon. Derived from the model id when unset. */
+  vendor?: string;
+  /** Overrides the usage tier derived from the Customer Rate Card. */
+  usageTier?: ModelUsageTier;
+  /**
+   * Reasoning efforts a user may pick for this model in the chat. Empty or unset leaves the
+   * effort to the agent's model settings.
+   */
+  userSelectableReasoningEfforts?: ReasoningEffortConfig[];
+}
+
+export const MODEL_USAGE_TIERS = ["low", "moderate", "high", "very_high"] as const;
+export type ModelUsageTier = (typeof MODEL_USAGE_TIERS)[number];
+
+/**
+ * Upper bounds of the first three usage tiers, as a blended price per million tokens in the
+ * rate card's currency. The scale is fixed so adding or removing a model never moves another
+ * model into a different tier.
+ */
+const MODEL_USAGE_TIER_BOUNDS = [1, 5, 15] as const;
+
+/**
+ * How much of a usage limit a model consumes relative to others, from its rate card prices.
+ * Runs read roughly three input tokens per output token, so the blend weights them 3:1.
+ */
+export function modelUsageTierFromRates(
+  rates: Pick<
+    UsageRateCardTokenRatesConfig,
+    "uncachedInputPricePerMillionTokens" | "outputPricePerMillionTokens"
+  >
+): ModelUsageTier {
+  const blended =
+    (3 * rates.uncachedInputPricePerMillionTokens + rates.outputPricePerMillionTokens) / 4;
+  const tier = MODEL_USAGE_TIER_BOUNDS.findIndex((bound) => blended < bound);
+  return MODEL_USAGE_TIERS[tier === -1 ? MODEL_USAGE_TIERS.length - 1 : tier]!;
+}
+
+/**
+ * The efforts a user may pick for a binding, weakest first; none when the binding offers no
+ * choice. The effort a run would use anyway is always among them, so the user can return to
+ * it without release config having to list it.
+ */
+export function userSelectableReasoningEffortsForBinding(
+  binding: Pick<ModelBindingConfig, "userSelectableReasoningEfforts"> | undefined,
+  defaultEffort?: ReasoningEffortConfig
+): ReasoningEffortConfig[] {
+  const offered = new Set(binding?.userSelectableReasoningEfforts ?? []);
+  if (offered.size === 0) {
+    return [];
+  }
+  return REASONING_EFFORTS.filter((effort) => offered.has(effort) || effort === defaultEffort);
+}
+
+/**
+ * The effort a run uses when the user picks none. The agent's own effort belongs to its own
+ * model; a model the user picked instead uses the effort configured for that binding on this
+ * agent, then the binding's default.
+ */
+export function defaultReasoningEffortForAgentBinding(
+  agent: Pick<AgentConfig, "modelBindingId" | "reasoningEffort" | "modelReasoningEfforts">,
+  binding: Pick<ModelBindingConfig, "id" | "reasoningEffort">
+): ReasoningEffortConfig | undefined {
+  return (
+    (binding.id === agent.modelBindingId
+      ? agent.reasoningEffort
+      : agent.modelReasoningEfforts?.[binding.id]) ?? binding.reasoningEffort
+  );
 }
 
 export interface AgentConfig {

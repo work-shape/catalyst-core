@@ -1,6 +1,8 @@
 import {
   AppError,
+  defaultReasoningEffortForAgentBinding,
   isModelBindingUserSelectableForAgent,
+  userSelectableReasoningEffortsForBinding,
   type AgentConfig,
   type ConfigAssetSource,
   type AgentRunHandle,
@@ -164,6 +166,7 @@ export class LocalAgentRuntime implements AgentRuntime {
         inputMessageId: input.inputMessageId,
         agentName: input.agentName,
         modelBindingId: input.modelBindingId,
+        reasoningEffort: input.reasoningEffort,
         locale: context.locale,
         authorization: {
           principal: context.principal ?? getAuthPrincipal(context.user),
@@ -324,7 +327,11 @@ export class LocalAgentRuntime implements AgentRuntime {
     const state = this.getRun(runId);
     const assets = await this.options.assetSource.getSnapshot();
     const agent = getSnapshotAgentConfig(assets, input.agentName);
-    const modelSelection = this.getModelSelectionForAgent(agent, input.modelBindingId);
+    const modelSelection = this.getModelSelectionForAgent(
+      agent,
+      input.modelBindingId,
+      input.reasoningEffort
+    );
     const tools = materializeModelTools({
       agent,
       modelProvider: modelSelection.provider,
@@ -591,7 +598,8 @@ export class LocalAgentRuntime implements AgentRuntime {
 
   private getModelSelectionForAgent(
     agent: AgentConfig,
-    userSelectedBindingId?: string
+    userSelectedBindingId?: string,
+    userSelectedReasoningEffort?: ReasoningEffortConfig
   ): {
     provider: ModelProviderConfig;
     model: string;
@@ -621,13 +629,14 @@ export class LocalAgentRuntime implements AgentRuntime {
       return {
         provider,
         model: binding.model ?? provider.model,
-        // The agent's own effort belongs to its own model; a model the user picked instead
-        // uses the effort configured for that binding on this agent.
+        // An effort the user picked wins while the binding still offers it; a pick the binding
+        // no longer offers falls back to the configured default instead of failing the run.
         reasoningEffort:
-          (bindingId === agent.modelBindingId
-            ? agent.reasoningEffort
-            : agent.modelReasoningEfforts?.[bindingId]) ??
-          binding.reasoningEffort ??
+          (userSelectedReasoningEffort &&
+          userSelectableReasoningEffortsForBinding(binding).includes(userSelectedReasoningEffort)
+            ? userSelectedReasoningEffort
+            : undefined) ??
+          defaultReasoningEffortForAgentBinding(agent, binding) ??
           (provider.type === "openai-compatible" ? provider.reasoningEffort : undefined),
         // A user-selected binding gets fast mode only when that binding supports it.
         fastMode: agent.fastMode === true && binding.supportsFastMode === true

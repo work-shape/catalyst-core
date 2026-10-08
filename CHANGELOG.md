@@ -3,6 +3,21 @@
 All platform packages are released in lockstep under one version. Before 1.0 a minor version may
 contain breaking changes; a patch version does not.
 
+## Unreleased
+
+### Added
+
+- **Chat:** the composer's model selector is a model picker. It opens as a short menu with the
+  model and its reasoning effort; the model list shows each model's provider logo and an EU
+  mark for providers with `compliance.residency: eu`, and a model under the pointer brings up a
+  card with its description and usage consumption. A model binding can carry `description`,
+  `vendor` and `usageTier` for it. The usage tier comes from the Customer Rate Card unless the
+  binding sets one.
+- **Chat:** users can pick the reasoning effort of a model whose binding lists
+  `userSelectableReasoningEfforts`. The agent's configured effort stays the default. The run
+  API accepts `reasoningEffort` and rejects an effort the model that runs does not offer. A
+  migration adds `agent_runs.reasoning_effort`.
+
 ## 0.6.3 — 2026-10-08
 
 ### Fixed

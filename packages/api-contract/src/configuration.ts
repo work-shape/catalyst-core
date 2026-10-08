@@ -10,6 +10,8 @@ export const localizationSchema = z.object({
 });
 
 export const reasoningEffortSchema = z.enum(["none", "low", "medium", "high", "xhigh"]);
+export const modelUsageTierSchema = z.enum(["low", "moderate", "high", "very_high"]);
+export const modelResidencySchema = z.enum(["global", "eu", "unknown"]);
 
 export const agentEditableFieldSchema = z.enum([
   "displayName",
@@ -129,7 +131,16 @@ export const safeConfigSchema = z.object({
         z.object({
           bindingId: z.string().optional(),
           model: z.string(),
-          compactThresholdTokens: z.number().optional()
+          compactThresholdTokens: z.number().optional(),
+          /** Who makes the model, when release config names it; otherwise read from the model id. */
+          vendor: z.string().optional(),
+          description: z.string().optional(),
+          residency: modelResidencySchema.optional(),
+          usageTier: modelUsageTierSchema.optional(),
+          /** The effort a run uses when the user picks none. */
+          reasoningEffort: reasoningEffortSchema.optional(),
+          /** Efforts the user may pick instead; empty when the model offers no choice. */
+          selectableReasoningEfforts: z.array(reasoningEffortSchema)
         })
       ),
       compactThresholdTokens: z.number().optional(),

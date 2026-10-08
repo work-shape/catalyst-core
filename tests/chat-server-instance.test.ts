@@ -42,8 +42,8 @@ describe("client instance app vertical slice", () => {
     });
     const config = await app.server.inject({ method: "GET", url: "/api/config" });
     expect(config.json().agents[0].selectableModels).toEqual([
-      { bindingId: "own", model: "own-model" },
-      { bindingId: "offered", model: "offered-model" }
+      { bindingId: "own", model: "own-model", selectableReasoningEfforts: [] },
+      { bindingId: "offered", model: "offered-model", selectableReasoningEfforts: [] }
     ]);
 
     const start = (modelBindingId: string) =>
@@ -70,6 +70,69 @@ describe("client instance app vertical slice", () => {
 
     for (const modelBindingId of ["own", "offered"]) {
       const started = await start(modelBindingId);
+      expect(started.statusCode).toBe(200);
+      const { conversation, run } = started.json() as {
+        conversation: { id: string };
+        run: { id: string };
+      };
+      await drainRunEvents(app.server, conversation.id, run.id);
+    }
+    await app.close();
+  });
+
+  it("accepts only the reasoning efforts the model that runs offers to users", async () => {
+    const app = await createClientInstanceApp({
+      config: createTestConfig({
+        agentModelBindingId: "own",
+        agentUserSelectableModelBindingIds: ["offered"],
+        modelBindings: [
+          {
+            id: "own",
+            providerId: "local",
+            model: "own-model",
+            reasoningEffort: "medium",
+            userSelectableReasoningEfforts: ["high", "low"]
+          },
+          { id: "offered", providerId: "local", model: "offered-model" }
+        ]
+      }),
+      env: {},
+      storeMode: "memory",
+      tools: []
+    });
+    const config = await app.server.inject({ method: "GET", url: "/api/config" });
+    expect(config.json().agents[0].selectableModels).toEqual([
+      {
+        bindingId: "own",
+        model: "own-model",
+        reasoningEffort: "medium",
+        // The default stays selectable so the user can return to it.
+        selectableReasoningEfforts: ["low", "medium", "high"]
+      },
+      { bindingId: "offered", model: "offered-model", selectableReasoningEfforts: [] }
+    ]);
+
+    const start = (reasoningEffort: string, modelBindingId?: string) =>
+      app.server.inject({
+        method: "POST",
+        url: "/api/conversations/runs",
+        payload: {
+          idempotencyKey: `start-${modelBindingId ?? "own"}-${reasoningEffort}`,
+          modelBindingId,
+          reasoningEffort,
+          message: { text: "Hello" }
+        }
+      });
+    // "xhigh" is not offered by the agent's own model, and "offered" offers no choice at all.
+    for (const rejected of [await start("xhigh"), await start("low", "offered")]) {
+      expect(rejected.statusCode).toBe(422);
+      expect(rejected.json().error.message).toMatch(/is not available for user selection$/u);
+    }
+    const conversations = await app.server.inject({ method: "GET", url: "/api/conversations" });
+    expect(conversations.json()).toEqual([]);
+
+    for (const reasoningEffort of ["high", "medium"]) {
+      const started = await start(reasoningEffort);
       expect(started.statusCode).toBe(200);
       const { conversation, run } = started.json() as {
         conversation: { id: string };

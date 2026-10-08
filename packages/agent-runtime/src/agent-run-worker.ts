@@ -353,6 +353,7 @@ export class AgentRunWorker {
     return {
       agentName: run.agentName,
       modelBindingId: run.modelBindingId,
+      reasoningEffort: run.reasoningEffort,
       conversationId: run.conversationId,
       idempotencyKey: run.idempotencyKey,
       inputMessageId: run.inputMessageId,

@@ -1,11 +1,17 @@
 import {
+  defaultReasoningEffortForAgentBinding,
+  modelUsageTierFromRates,
   userSelectableModelBindingsForAgent,
+  userSelectableReasoningEffortsForBinding,
+  type LocaleCode,
+  type ModelBindingConfig,
   type ModelProviderConfig,
+  type ReasoningEffortConfig,
   type RuntimeAssetSnapshot
 } from "@vivd-catalyst/core";
 import type { AgentConfig, ClientInstanceConfig } from "./schemas";
 import { createClientBranding, isPasswordMailEnabled } from "./branding";
-import { getModelSelectionForAgent } from "./selectors";
+import { getModelSelectionForAgent, resolveModelBinding } from "./selectors";
 import {
   resolveConfigLocale,
   resolveLocalizedString,
@@ -74,7 +80,7 @@ export function createSafeConfigView(
       ),
       ...compactionThresholdView(getModelSelectionForAgent(config, agent).provider),
       ...(agent.modelBindingId ? { defaultModelBindingId: agent.modelBindingId } : {}),
-      selectableModels: agentSelectableModels(config, agent),
+      selectableModels: agentSelectableModels(config, agent, locale),
       welcomeMessage: resolveLocalizedString(
         agent.welcomeMessage,
         locale,
@@ -103,29 +109,63 @@ export function createSafeConfigView(
 }
 
 /** The agent's own model first, then the bindings users may pick instead. */
-function agentSelectableModels(config: ClientInstanceConfig, agent: AgentConfig) {
+function agentSelectableModels(
+  config: ClientInstanceConfig,
+  agent: AgentConfig,
+  locale: LocaleCode
+) {
   const own = getModelSelectionForAgent(config, agent);
   return [
-    {
-      ...(agent.modelBindingId ? { bindingId: agent.modelBindingId } : {}),
+    modelView(config, locale, {
+      provider: own.provider,
+      binding: own.binding,
       model: own.model,
-      ...compactionThresholdView(own.provider)
-    },
-    ...userSelectableModelBindingsForAgent(agent, config.modelBindings).map((binding) =>
-      bindingModelView(config, binding)
-    )
+      reasoningEffort: own.reasoningEffort
+    }),
+    ...userSelectableModelBindingsForAgent(agent, config.modelBindings).map((binding) => {
+      const selection = resolveModelBinding(config, binding.id);
+      return modelView(config, locale, {
+        provider: selection.provider,
+        binding,
+        model: selection.model,
+        reasoningEffort:
+          defaultReasoningEffortForAgentBinding(agent, binding) ?? selection.reasoningEffort
+      });
+    })
   ];
 }
 
-function bindingModelView(
+/** What the model picker shows for one model: who makes it, where it runs and what it costs. */
+function modelView(
   config: ClientInstanceConfig,
-  binding: ClientInstanceConfig["modelBindings"][number]
+  locale: LocaleCode,
+  selection: {
+    provider: ModelProviderConfig;
+    binding: ModelBindingConfig | undefined;
+    model: string;
+    reasoningEffort: ReasoningEffortConfig | undefined;
+  }
 ) {
-  const provider = config.modelProviders.find((candidate) => candidate.id === binding.providerId)!;
+  const { provider, binding, model, reasoningEffort } = selection;
+  const description = binding?.description
+    ? resolveLocalizedString(binding.description, locale, config.localization.defaultLocale)
+    : undefined;
+  const residency =
+    provider.type === "openai-compatible" ? provider.compliance?.residency : undefined;
+  const rates = config.usage.costs.customer?.models.find(
+    (candidate) => candidate.providerId === provider.id && candidate.model === model
+  );
+  const usageTier = binding?.usageTier ?? (rates ? modelUsageTierFromRates(rates) : undefined);
   return {
-    bindingId: binding.id,
-    model: binding.model ?? provider.model,
-    ...compactionThresholdView(provider)
+    ...(binding ? { bindingId: binding.id } : {}),
+    model,
+    ...compactionThresholdView(provider),
+    ...(binding?.vendor ? { vendor: binding.vendor } : {}),
+    ...(description ? { description } : {}),
+    ...(residency ? { residency } : {}),
+    ...(usageTier ? { usageTier } : {}),
+    ...(reasoningEffort ? { reasoningEffort } : {}),
+    selectableReasoningEfforts: userSelectableReasoningEffortsForBinding(binding, reasoningEffort)
   };
 }
 

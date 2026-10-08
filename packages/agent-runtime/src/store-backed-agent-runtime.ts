@@ -40,7 +40,8 @@ export class StoreBackedAgentRuntime implements AgentRuntime {
       run.conversationId !== input.conversationId ||
       run.inputMessageId !== input.inputMessageId ||
       run.agentName !== input.agentName ||
-      run.modelBindingId !== input.modelBindingId
+      run.modelBindingId !== input.modelBindingId ||
+      run.reasoningEffort !== input.reasoningEffort
     ) {
       throw new AppError("CONFLICT", "Prepared agent run does not match its dispatch input");
     }
