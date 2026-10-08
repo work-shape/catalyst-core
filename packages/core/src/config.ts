@@ -43,7 +43,7 @@ export interface OpenAiCompatibleContextManagementConfig {
     compactThresholdTokens: number;
   };
 }
-export const REASONING_EFFORTS = ["none", "low", "medium", "high", "xhigh"] as const;
+export const REASONING_EFFORTS = ["none", "low", "medium", "high", "xhigh", "max"] as const;
 export type ReasoningEffortConfig = (typeof REASONING_EFFORTS)[number];
 
 export const AGENT_EDITABLE_FIELDS = [
@@ -123,7 +123,9 @@ export function modelUsageTierFromRates(
 const DEFAULT_USER_SELECTABLE_REASONING_EFFORTS: readonly ReasoningEffortConfig[] = [
   "low",
   "medium",
-  "high"
+  "high",
+  "xhigh",
+  "max"
 ];
 /** What the picker shows for a model with no configured effort: the provider's own default. */
 const ASSUMED_REASONING_EFFORT: ReasoningEffortConfig = "medium";

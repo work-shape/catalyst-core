@@ -20,7 +20,8 @@ const reasoningEffortLabels: Record<ReasoningEffort, TranslationKey> = {
   low: "reasoningEffortLow",
   medium: "reasoningEffortMedium",
   high: "reasoningEffortHigh",
-  xhigh: "reasoningEffortXhigh"
+  xhigh: "reasoningEffortXhigh",
+  max: "reasoningEffortMax"
 };
 
 /** Room the popover needs above the composer before it opens downwards instead. */

@@ -464,7 +464,7 @@ export type GetCurrentUserModelPreferenceResponses = {
     200: {
         modelBindingId?: string;
         reasoningEfforts: {
-            [key: string]: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+            [key: string]: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
         };
     };
 };
@@ -475,7 +475,7 @@ export type SetCurrentUserModelPreferenceData = {
     body: {
         modelBindingId?: string;
         reasoningEfforts: {
-            [key: string]: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+            [key: string]: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
         };
     };
     path?: never;
@@ -490,7 +490,7 @@ export type SetCurrentUserModelPreferenceResponses = {
     200: {
         modelBindingId?: string;
         reasoningEfforts: {
-            [key: string]: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+            [key: string]: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
         };
     };
 };
@@ -693,8 +693,8 @@ export type GetConfigResponses = {
                 description?: string;
                 residency?: 'global' | 'eu' | 'unknown';
                 usageTier?: 'low' | 'moderate' | 'high' | 'very_high';
-                reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
-                selectableReasoningEfforts: Array<'none' | 'low' | 'medium' | 'high' | 'xhigh'>;
+                reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+                selectableReasoningEfforts: Array<'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'>;
             }>;
             compactThresholdTokens?: number;
             welcomeMessage?: string;
@@ -964,8 +964,8 @@ export type ListCollaborationWorkspaceAgentsResponses = {
                 description?: string;
                 residency?: 'global' | 'eu' | 'unknown';
                 usageTier?: 'low' | 'moderate' | 'high' | 'very_high';
-                reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
-                selectableReasoningEfforts: Array<'none' | 'low' | 'medium' | 'high' | 'xhigh'>;
+                reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+                selectableReasoningEfforts: Array<'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'>;
             }>;
             compactThresholdTokens?: number;
             welcomeMessage?: string;
@@ -1656,7 +1656,7 @@ export type GetConversationThreadResponses = {
         };
         modelSelection?: {
             modelBindingId?: string;
-            reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+            reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
         };
         userState: {
             clientInstanceId: string;
@@ -1982,7 +1982,7 @@ export type StartConversationRunData = {
         idempotencyKey: string;
         agentName?: string;
         modelBindingId?: string;
-        reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+        reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
         locale?: 'en' | 'de';
         message: {
             text: string;
@@ -2353,7 +2353,7 @@ export type StartConversationRunResponses = {
             };
             modelSelection?: {
                 modelBindingId?: string;
-                reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+                reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
             };
             userState: {
                 clientInstanceId: string;
@@ -2378,7 +2378,7 @@ export type CreateConversationRunData = {
         idempotencyKey: string;
         agentName?: string;
         modelBindingId?: string;
-        reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+        reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
         locale?: 'en' | 'de';
         message: {
             text: string;
@@ -2752,7 +2752,7 @@ export type CreateConversationRunResponses = {
             };
             modelSelection?: {
                 modelBindingId?: string;
-                reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+                reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
             };
             userState: {
                 clientInstanceId: string;
@@ -3732,7 +3732,7 @@ export type GetConfigAssetsOverviewResponses = {
                 model: string;
             }>;
             fastModeModelBindingIds: Array<string>;
-            reasoningEfforts: Array<'none' | 'low' | 'medium' | 'high' | 'xhigh'>;
+            reasoningEfforts: Array<'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'>;
             enabledToolNames: Array<string>;
         };
     };

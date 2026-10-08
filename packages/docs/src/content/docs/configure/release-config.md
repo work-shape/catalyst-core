@@ -272,7 +272,7 @@ later model requests, and keeps the durable conversation transcript unchanged.
 Do not configure this block for `api: chat_completions`; startup validation
 rejects that unsupported combination.
 
-Agent configuration may override a binding's default with one of Catalyst's product-owned reasoning efforts: `none`, `low`, `medium`, `high`, or `xhigh`. Only bindings with `agentSelectable: true` are valid agent choices; set it to `false` for internal bindings such as conversation-title generation. The server validates model-binding references and reasoning values; the UI does not accept arbitrary model identifiers.
+Agent configuration may override a binding's default with one of Catalyst's product-owned reasoning efforts: `none`, `low`, `medium`, `high`, `xhigh`, or `max`. Only bindings with `agentSelectable: true` are valid agent choices; set it to `false` for internal bindings such as conversation-title generation. The server validates model-binding references and reasoning values; the UI does not accept arbitrary model identifiers.
 
 An agent's `modelBindingId`, `reasoningEffort`, `fastMode`, `userSelectableModelBindingIds`, and `modelReasoningEfforts` are editable in the admin panel exactly when the caller holds the `agent_models.manage` permission, and the server rejects an interactive change to any of them without it. Superadmins hold the permission by default; a superadmin can grant it to individual users. `modelBindingId` and `reasoningEffort` remain valid `editableAgentFields` values for compatibility but no longer have an effect. `catalyst config push` is unchanged and may set all five.
 
@@ -310,8 +310,10 @@ modelBindings:
 
 - `description` is the text on the model card, localized like other display strings.
 - `userSelectableReasoningEfforts` lists the efforts a chat user may pick for this model.
-  Unset, a binding on an `openai-compatible` provider offers `low`, `medium` and `high`. An
-  empty list gives users no choice and leaves the effort to the agent's model settings. The
+  Unset, a binding on an `openai-compatible` provider offers `low`, `medium`, `high`, `xhigh`
+  and `max`. Catalyst passes the pick to the provider unchanged, so list fewer for a model
+  that rejects some of them: a run with an effort the model does not accept fails. An empty
+  list gives users no choice and leaves the effort to the agent's model settings. The
   effort the agent would use anyway is always offered, so the user can return to it. Where
   neither agent, binding nor provider sets an effort, the picker starts on `medium`; nothing
   is sent to the provider until the user picks one. The run API accepts

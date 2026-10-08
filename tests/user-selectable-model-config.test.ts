@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { createSafeConfigView, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 
 const noChoice = { selectableReasoningEfforts: [] };
-// What a binding offers when release config does not say: three efforts around an assumed medium.
+// What a binding offers when release config does not say, starting on an assumed medium.
 const defaultChoice = {
   reasoningEffort: "medium",
-  selectableReasoningEfforts: ["low", "medium", "high"]
+  selectableReasoningEfforts: ["low", "medium", "high", "xhigh", "max"]
 };
 
 describe("user-selectable model config", () => {
@@ -246,7 +246,7 @@ describe("user-selectable model config", () => {
         usageTier: "low",
         // The effort the agent sets for this model, among the efforts offered by default.
         reasoningEffort: "medium",
-        selectableReasoningEfforts: ["low", "medium", "high"]
+        selectableReasoningEfforts: ["low", "medium", "high", "xhigh", "max"]
       },
       // Release config overrides the tier its prices would give, and an empty list of efforts
       // leaves users no choice.

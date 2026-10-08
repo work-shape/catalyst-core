@@ -13,9 +13,10 @@ contain breaking changes; a patch version does not.
   card with its description and usage consumption. A model binding can carry `description`,
   `vendor` and `usageTier` for it. The usage tier comes from the Customer Rate Card unless the
   binding sets one.
-- **Chat:** users can pick the reasoning effort of a model: `low`, `medium` or `high` unless
-  the binding's `userSelectableReasoningEfforts` lists others, and an empty list turns the
-  choice off. The agent's configured effort stays the default. The run
+- **Chat:** users can pick the reasoning effort of a model: `low`, `medium`, `high`, `xhigh`
+  or `max` unless the binding's `userSelectableReasoningEfforts` lists others, and an empty
+  list turns the choice off. `max` is a new reasoning effort, also available in agent model
+  settings. The agent's configured effort stays the default. The run
   API accepts `reasoningEffort` and rejects an effort the model that runs does not offer. A
   migration adds `agent_runs.reasoning_effort`.
 - **Chat:** a model or reasoning effort the user picks becomes their default for new

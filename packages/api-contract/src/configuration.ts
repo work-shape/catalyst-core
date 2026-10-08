@@ -9,7 +9,7 @@ export const localizationSchema = z.object({
   supportedLocales: z.array(localeCodeSchema)
 });
 
-export const reasoningEffortSchema = z.enum(["none", "low", "medium", "high", "xhigh"]);
+export const reasoningEffortSchema = z.enum(["none", "low", "medium", "high", "xhigh", "max"]);
 
 /**
  * The model and reasoning efforts a user last picked, which a new conversation starts from.

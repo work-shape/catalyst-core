@@ -585,6 +585,7 @@ const translations = {
     reasoningEffortMedium: "Medium",
     reasoningEffortNone: "None",
     reasoningEffortXhigh: "Extra high",
+    reasoningEffortMax: "Max",
     sendMessage: "Send message",
     sessionCheckingDescription: "Your account is being checked before the chat loads.",
     sessionUnavailableDescription: "The service could not be reached. Try again.",
@@ -1294,6 +1295,7 @@ const translations = {
     reasoningEffortMedium: "Mittel",
     reasoningEffortNone: "Kein",
     reasoningEffortXhigh: "Sehr hoch",
+    reasoningEffortMax: "Maximal",
     sendMessage: "Nachricht senden",
     sessionCheckingDescription: "Dein Konto wird geprüft, bevor der Chat geladen wird.",
     sessionUnavailableDescription:
