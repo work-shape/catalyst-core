@@ -17,6 +17,7 @@ function renderWorkspaceChrome(
       TranslationProvider,
       { locale },
       createElement(WorkspaceChrome, {
+        agentDisplay: { showName: false, showDescriptions: false },
         agents: [],
         displayPanelOpen,
         displayPanelWidth: 560,

@@ -25,9 +25,10 @@ const FLIGHT_EASING = "cubic-bezier(0.2, 0, 0, 1)";
  * origin's rectangle, which is why the route change that follows the first
  * message neither interrupts nor repeats the flight.
  *
- * The header names the agent more quietly than the start page. The name's
- * colour eases to that on the way; its weight cannot ease in every font, so it
- * is the header's from the first frame, where the lift-off hides the change.
+ * Where the chip carries the agent's name, the header shows it more quietly
+ * than the start page. The name's colour eases to that on the way; its weight
+ * cannot ease in every font, so it is the header's from the first frame, where
+ * the lift-off hides the change. A chip that is the icon alone only moves.
  */
 export interface AgentChipFlight {
   /** False while the start page shows the chip above its heading. */

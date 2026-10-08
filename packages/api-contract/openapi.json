@@ -1904,6 +1904,9 @@
                     "showAgentName": {
                       "type": "boolean"
                     },
+                    "showAgentDescriptions": {
+                      "type": "boolean"
+                    },
                     "accentColor": {
                       "type": "string"
                     },
@@ -2002,6 +2005,7 @@
                     "title",
                     "welcomeMessage",
                     "showAgentName",
+                    "showAgentDescriptions",
                     "accentColor",
                     "theme",
                     "darkTheme",
@@ -2472,6 +2476,9 @@
                         "showAgentName": {
                           "type": "boolean"
                         },
+                        "showAgentDescriptions": {
+                          "type": "boolean"
+                        },
                         "accentColor": {
                           "type": "string"
                         },
@@ -2563,6 +2570,7 @@
                         "title",
                         "welcomeMessage",
                         "showAgentName",
+                        "showAgentDescriptions",
                         "accentColor",
                         "theme",
                         "darkTheme",

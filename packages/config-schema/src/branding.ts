@@ -20,6 +20,7 @@ export interface ClientBranding {
   title: string;
   welcomeMessage: string;
   showAgentName: boolean;
+  showAgentDescriptions: boolean;
   accentColor: string;
   theme: {
     accentColor: string;
@@ -75,6 +76,7 @@ export function createClientBranding(
       config.localization.defaultLocale
     ),
     showAgentName: config.ui.showAgentName,
+    showAgentDescriptions: config.ui.showAgentDescriptions,
     accentColor,
     theme: {
       ...config.ui.theme,

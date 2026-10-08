@@ -3,7 +3,11 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import { AppError } from "@vivd-catalyst/core";
-import { loadClientInstanceConfigFromFile } from "@vivd-catalyst/config-schema";
+import {
+  createClientBranding,
+  createSafeConfigView,
+  loadClientInstanceConfigFromFile
+} from "@vivd-catalyst/config-schema";
 
 const baseConfig = [
   "version: 1",
@@ -129,6 +133,41 @@ describe("config file extends", () => {
     expect(config.ui.title).toBe("Inline title");
     expect(config.ui.showAgentName).toBe(true);
     expect(config.ui.defaultThemeMode).toBe("system");
+  });
+
+  it("serves the agent's name and the agent descriptions as off unless YAML turns each on", async () => {
+    const root = await writeFixtures({
+      "defaults.yaml": baseConfig,
+      "descriptions.yaml": [baseConfig, "ui:", "  showAgentDescriptions: true", ""].join("\n"),
+      "name.yaml": [baseConfig, "ui:", "  showAgentName: true", ""].join("\n")
+    });
+    // What the config endpoint hands the chat, and the branding it is built from.
+    const settings = async (file: string) => {
+      const config = await loadClientInstanceConfigFromFile(join(root, file));
+      const { showAgentName, showAgentDescriptions } = createSafeConfigView(config, {
+        version: 1,
+        defaultAgentName: "none",
+        agents: [],
+        skills: []
+      }).ui;
+      const branding = createClientBranding(config);
+      expect(branding.showAgentName).toBe(showAgentName);
+      expect(branding.showAgentDescriptions).toBe(showAgentDescriptions);
+      return { showAgentName, showAgentDescriptions };
+    };
+
+    expect(await settings("defaults.yaml")).toEqual({
+      showAgentName: false,
+      showAgentDescriptions: false
+    });
+    expect(await settings("descriptions.yaml")).toEqual({
+      showAgentName: false,
+      showAgentDescriptions: true
+    });
+    expect(await settings("name.yaml")).toEqual({
+      showAgentName: true,
+      showAgentDescriptions: false
+    });
   });
 
   it("rejects unknown inline UI overlay keys", async () => {

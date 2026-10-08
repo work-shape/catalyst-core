@@ -10,7 +10,11 @@ import { useLayoutEffect, useMemo, useRef, type RefObject } from "react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
 import { useAgentChipFlight } from "../workspace/agent-chip-flight";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
-import { AgentSelector } from "../workspace/agent-selector";
+import {
+  agentChipDisplayFor,
+  AgentSelector,
+  type AgentChipDisplay
+} from "../workspace/agent-selector";
 import { AssistantActivityStatus } from "./assistant-activity-status";
 import { AssistantComposer, type LocalUploadingAttachment } from "./assistant-composer";
 import { ThreadMessage } from "./assistant-message";
@@ -145,6 +149,7 @@ export function AssistantThread({
             {startPage ? (
               <ThreadWelcomeHeading
                 agent={agent}
+                agentDisplay={agentChipDisplayFor(config?.ui)}
                 agents={agents}
                 fallbackWelcomeMessage={config?.ui.welcomeMessage ?? t("genericWelcome")}
                 onSelectAgent={onSelectAgent}
@@ -335,11 +340,13 @@ function useComposerSettleTransition(
  */
 export function ThreadWelcomeHeading({
   agent,
+  agentDisplay,
   agents,
   fallbackWelcomeMessage,
   onSelectAgent
 }: {
   agent: SafeConfig["agents"][number] | undefined;
+  agentDisplay: AgentChipDisplay;
   agents: SafeConfig["agents"];
   fallbackWelcomeMessage: string | undefined;
   onSelectAgent: (agentName: string) => void;
@@ -355,6 +362,7 @@ export function ThreadWelcomeHeading({
         >
           <AgentSelector
             agents={agents}
+            display={agentDisplay}
             placement="start-page"
             selectedAgentName={agent?.name}
             onSelectAgent={onSelectAgent}

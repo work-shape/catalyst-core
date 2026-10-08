@@ -7,10 +7,8 @@ import {
   AgentChipFlightProvider,
   useAgentChipFlightState
 } from "../packages/chat-ui/src/workspace/agent-chip-flight";
-import {
-  agentContextLabelFor,
-  WorkspaceChrome
-} from "../packages/chat-ui/src/workspace/workspace-chrome";
+import { agentChipDisplayFor, AgentList } from "../packages/chat-ui/src/workspace/agent-selector";
+import { WorkspaceChrome } from "../packages/chat-ui/src/workspace/workspace-chrome";
 
 const noop = () => undefined;
 
@@ -18,6 +16,7 @@ const oneAgent = [
   {
     name: "catalyst_assistant",
     displayName: "Catalyst Assistant",
+    description: "Answers questions about Catalyst.",
     initialPrompts: []
   }
 ];
@@ -30,15 +29,18 @@ const severalAgents = [
   }
 ];
 
+/** The instance's two agent settings, as the chip receives them. */
+function display(ui: { showAgentName?: boolean; showAgentDescriptions?: boolean } = {}) {
+  return agentChipDisplayFor({ showAgentName: false, showAgentDescriptions: false, ...ui });
+}
+
 function renderHeader({
   agents = oneAgent,
-  clientName,
   locale = "en",
-  showAgentName = false,
+  showAgentName = true,
   showAgentSelector = true
 }: {
-  agents?: typeof oneAgent;
-  clientName?: string;
+  agents?: typeof severalAgents;
   locale?: "de" | "en";
   showAgentName?: boolean;
   showAgentSelector?: boolean;
@@ -48,11 +50,8 @@ function renderHeader({
       TranslationProvider,
       { locale },
       createElement(WorkspaceChrome, {
+        agentDisplay: display({ showAgentName }),
         agents,
-        contextLabel: agentContextLabelFor({
-          ui: { showAgentName, clientName },
-          clientInstance: { displayName: "Vivd Catalyst" }
-        }),
         displayPanelOpen: false,
         displayPanelWidth: 0,
         environment: "production" as const,
@@ -68,7 +67,7 @@ function renderHeader({
   );
 }
 
-function renderStartPage(agents: typeof oneAgent, chipInHeader = false) {
+function renderStartPage(agents: typeof severalAgents, chipInHeader = false, showAgentName = true) {
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
@@ -86,6 +85,7 @@ function renderStartPage(agents: typeof oneAgent, chipInHeader = false) {
         },
         createElement(ThreadWelcomeHeading, {
           agent: agents[0],
+          agentDisplay: display({ showAgentName }),
           agents,
           fallbackWelcomeMessage: "How can I help?",
           onSelectAgent: noop
@@ -112,7 +112,7 @@ function agentName(markup: string): { tone: string; classes: string[] } {
   return { tone, classes: classes.split(" ") };
 }
 
-describe("agent chip in the header", () => {
+describe("named agent chip in the header", () => {
   it("names a single agent on a plain label", () => {
     const markup = renderHeader();
 
@@ -146,27 +146,6 @@ describe("agent chip in the header", () => {
     }
   });
 
-  it.each([undefined, "Client label"])(
-    "uses ui.showAgentName to control the client subtitle with clientName %s",
-    (clientName) => {
-      const clientLabel = clientName ?? "Vivd Catalyst";
-      const shown = renderHeader({ clientName, showAgentName: true });
-      const hidden = renderHeader({ clientName, showAgentName: false });
-
-      expect(shown).toContain(`>${clientLabel}<`);
-      expect(hidden).not.toContain(clientLabel);
-      expect(shown).toContain(">Catalyst Assistant<");
-      expect(hidden).toContain(">Catalyst Assistant<");
-    }
-  );
-
-  it("prefers the configured client name over the instance display name", () => {
-    const markup = renderHeader({ clientName: "Client label", showAgentName: true });
-
-    expect(markup).toContain(">Client label<");
-    expect(markup).not.toContain("Vivd Catalyst");
-  });
-
   it("stays empty while the start page shows the agent", () => {
     for (const agents of [oneAgent, severalAgents]) {
       const markup = renderHeader({ agents, showAgentSelector: false });
@@ -177,7 +156,7 @@ describe("agent chip in the header", () => {
   });
 });
 
-describe("agent chip on the start page", () => {
+describe("named agent chip on the start page", () => {
   it("names a single agent above the welcome message without anything to open", () => {
     const markup = renderStartPage(oneAgent);
 
@@ -231,6 +210,95 @@ describe("agent chip on the start page", () => {
       expect(markup).toContain("invisible");
       expect(markup).toContain("How can I help?");
     }
+  });
+});
+
+describe("agent chip without the name", () => {
+  const placements = [
+    ["header", (agents: typeof severalAgents) => renderHeader({ agents, showAgentName: false })],
+    ["start page", (agents: typeof severalAgents) => renderStartPage(agents, false, false)]
+  ] as const;
+
+  it.each(placements)(
+    "is the icon alone in the %s, on a button that announces the agent list",
+    (_, render) => {
+      for (const agents of [oneAgent, severalAgents]) {
+        const markup = render(agents);
+
+        expect(markup).toContain('aria-label="Select agent: Catalyst Assistant"');
+        expect(markup).toContain('title="Catalyst Assistant"');
+        expect(markup).toContain('aria-haspopup="listbox"');
+        expect(markup).toContain("<svg");
+        expect(markup).not.toContain(">Catalyst Assistant<");
+        expect(markup).not.toContain("data-agent-chip-name");
+      }
+    }
+  );
+
+  it("is the same chip on the start page and in the header, so only its place changes", () => {
+    const chip = (markup: string) => /<button[^>]*aria-haspopup[^>]*>.*?<\/button>/u.exec(markup);
+
+    for (const agents of [oneAgent, severalAgents]) {
+      const start = chip(renderStartPage(agents, false, false))?.[0];
+
+      expect(start).toBeDefined();
+      expect(chip(renderHeader({ agents, showAgentName: false }))?.[0]).toBe(start);
+    }
+  });
+
+  it("keeps the start page for the chip until the header shows it", () => {
+    expect(renderHeader({ showAgentName: false, showAgentSelector: false })).not.toContain(
+      "aria-haspopup"
+    );
+    expect(renderStartPage(oneAgent, true, false)).toContain("invisible");
+  });
+});
+
+describe("agent list", () => {
+  function renderList(showAgentDescriptions: boolean | undefined) {
+    return renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { locale: "en" as const },
+        createElement(AgentList, {
+          agents: severalAgents,
+          selectedAgent: severalAgents[0],
+          showDescriptions: display({ showAgentDescriptions }).showDescriptions,
+          onSelectAgent: noop
+        })
+      )
+    );
+  }
+
+  it("names the agents without their descriptions unless the instance shows them", () => {
+    for (const markup of [renderList(undefined), renderList(false)]) {
+      expect(markup).toContain(">Catalyst Assistant<");
+      expect(markup).toContain(">Research Assistant<");
+      expect(markup).not.toContain("Answers questions about Catalyst.");
+    }
+  });
+
+  it("puts each description under its agent's name when the instance shows them", () => {
+    const markup = renderList(true);
+
+    expect(markup).toContain(
+      '>Catalyst Assistant</span><span class="text-xs text-muted-foreground [overflow-wrap:anywhere]">Answers questions about Catalyst.<'
+    );
+    expect(markup).toMatch(/>Research Assistant<\/span><\/span><\/button>/u);
+  });
+});
+
+describe("agent settings", () => {
+  it("show neither the name nor descriptions before the instance's settings are known", () => {
+    expect(agentChipDisplayFor(undefined)).toEqual({ showName: false, showDescriptions: false });
+  });
+
+  it("follow ui.showAgentName and ui.showAgentDescriptions independently", () => {
+    expect(display({ showAgentName: true })).toEqual({ showName: true, showDescriptions: false });
+    expect(display({ showAgentDescriptions: true })).toEqual({
+      showName: false,
+      showDescriptions: true
+    });
   });
 });
 

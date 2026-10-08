@@ -57,6 +57,7 @@ const clientUiBrandingSchema = z.object({
   title: z.string(),
   welcomeMessage: z.string(),
   showAgentName: z.boolean(),
+  showAgentDescriptions: z.boolean(),
   accentColor: z.string(),
   theme: z.object({
     accentColor: z.string(),

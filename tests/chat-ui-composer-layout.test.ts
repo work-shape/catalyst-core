@@ -26,6 +26,7 @@ function renderWelcomeHeading(availableAgents: typeof agents) {
       { locale: "en" as const },
       createElement(ThreadWelcomeHeading, {
         agent: availableAgents.at(-1),
+        agentDisplay: { showName: true, showDescriptions: false },
         agents: availableAgents,
         fallbackWelcomeMessage: "How can I help?",
         onSelectAgent: () => undefined
@@ -47,7 +48,7 @@ describe("assistant composer layout", () => {
   });
 });
 
-describe("start page agent picker", () => {
+describe("start page agent picker with the agent's name", () => {
   it("names the selected agent on a picker above the welcome message", () => {
     const markup = renderWelcomeHeading(agents);
 

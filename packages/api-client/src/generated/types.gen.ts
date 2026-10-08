@@ -588,6 +588,7 @@ export type GetBrandingResponses = {
         title: string;
         welcomeMessage: string;
         showAgentName: boolean;
+        showAgentDescriptions: boolean;
         accentColor: string;
         theme: {
             accentColor: string;
@@ -718,6 +719,7 @@ export type GetConfigResponses = {
             title: string;
             welcomeMessage: string;
             showAgentName: boolean;
+            showAgentDescriptions: boolean;
             accentColor: string;
             theme: {
                 accentColor: string;

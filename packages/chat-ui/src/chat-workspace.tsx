@@ -15,14 +15,10 @@ import { isResourcesPanelAvailable } from "./resources-panel-model";
 import { ToolDisplayPanel, useToolDisplayPanel } from "./tool-display-panel";
 import { cn } from "./ui/cn";
 import { AgentChipFlightProvider, useAgentChipFlightState } from "./workspace/agent-chip-flight";
+import { agentChipDisplayFor } from "./workspace/agent-selector";
 import { ClientBrandingHeader } from "./workspace/client-branding";
 import { UserMenu } from "./workspace/user-menu";
-import {
-  agentContextLabelFor,
-  ConfigCheckPanel,
-  SessionCheckPanel,
-  WorkspaceChrome
-} from "./workspace/workspace-chrome";
+import { ConfigCheckPanel, SessionCheckPanel, WorkspaceChrome } from "./workspace/workspace-chrome";
 import { WorkspaceRail } from "./workspace/workspace-rail";
 import { type WorkspaceRoute, type WorkspaceRouteChangeOptions } from "./workspace/workspace-route";
 import { useWorkspaceChatModel, WORKSPACE_AUTH_SCOPE } from "./workspace/workspace-chat-model";
@@ -239,7 +235,7 @@ function ChatWorkspaceContent({
         <WorkspaceChrome
           agentChipRef={agentChipFlight.destinationRef}
           agents={model.config.config.agents}
-          contextLabel={agentContextLabelFor(model.config.config)}
+          agentDisplay={agentChipDisplayFor(model.config.config.ui)}
           displayPanelOpen={model.toolDisplay.open}
           displayPanelWidth={displayPanelWidth}
           environment={model.config.config.clientInstance.environment}

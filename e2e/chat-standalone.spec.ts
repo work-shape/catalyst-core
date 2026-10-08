@@ -29,8 +29,8 @@ test("standalone login renders the authenticated chat workspace", async ({ page 
   await expect(page.getByText("E2E Customer")).toBeVisible();
   await expect(page.getByText("E2E User")).toBeVisible();
   await expect(page.getByRole("button", { name: "E2E User account" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Select agent" })).toContainText(
-    "Application Assistant"
+  await expect(page.getByRole("button", { name: "Select agent" })).toHaveAccessibleName(
+    "Select agent: Application Assistant"
   );
   await expect(page.getByRole("button", { name: "Close sidebar" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
@@ -46,6 +46,7 @@ test("standalone login renders the authenticated chat workspace", async ({ page 
 });
 
 test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
+  await serveAgentSettings(page, { showAgentName: true, showAgentDescriptions: true });
   await signInViaApi(page, normalUser);
   const conversationTitle = `Floating chrome ${Date.now()}`;
   await createListedConversation(page, conversationTitle);
@@ -172,6 +173,7 @@ test("composer grows for multiline input", async ({ page }) => {
 test("start page centres the composer and settles it at the bottom after the first message", async ({
   page
 }) => {
+  await serveAgentSettings(page, { showAgentName: true, showAgentDescriptions: true });
   await signInViaUi(page, normalUser);
   await page.goto("/");
 
@@ -214,6 +216,9 @@ test("start page centres the composer and settles it at the bottom after the fir
   await input.fill("Draft that survives choosing an agent");
   await expect(agentPicker).toContainText("Application Assistant");
   await expect(headerAgent).toHaveCount(0);
+  // Beside its name the chip opens on a click, not under the pointer.
+  await agentPicker.hover();
+  await expect(agentPicker).toHaveAttribute("aria-expanded", "false");
   await agentPicker.click();
   await expect(agentListbox).toHaveAccessibleName("Select agent");
   await expect(agentOptions).toHaveCount(2);
@@ -260,21 +265,12 @@ test("start page centres the composer and settles it at the bottom after the fir
   await expect.poll(async () => (await composerPlacement()).bottomGap).toBeLessThan(40);
 });
 
-test("the agent chip flies from the start page into the header once", async ({ page }) => {
+test("the named agent chip flies from the start page into the header once", async ({ page }) => {
   const headerAnimations = await recordHeaderAnimations(page, true);
+  await serveAgentSettings(page, { showAgentName: true });
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
-
-  let releaseCreateRun = () => {};
-  const createRunGate = new Promise<void>((resolve) => {
-    releaseCreateRun = resolve;
-  });
-  await page.route(`${apiBaseUrl}/api/conversations/runs`, async (route) => {
-    if (route.request().method() === "POST") {
-      await createRunGate;
-    }
-    await route.continue();
-  });
+  const releaseCreateRun = await holdCreateRun(page);
 
   const chat = page.getByRole("region", { name: "Chat" });
   const header = page.locator("header");
@@ -308,66 +304,8 @@ test("the agent chip flies from the start page into the header once", async ({ p
   expect(await headerAnimations()).toHaveLength(2);
   await headerChip.evaluate((chip) => chip.setAttribute("data-flown", "true"));
 
-  // Inspect the real Web Animation, paused by the recorder before it can finish.
-  const flight = await headerChip.evaluate((chip) => {
-    const header = chip.closest("header");
-    const [animation] = (header?.getAnimations({ subtree: true }) ?? []).filter(
-      ({ effect }) =>
-        effect instanceof KeyframeEffect &&
-        effect.target instanceof Element &&
-        effect.target !== header &&
-        effect.target.contains(chip)
-    );
-    const effect = animation?.effect;
-    if (
-      !animation ||
-      !(effect instanceof KeyframeEffect) ||
-      !(effect.target instanceof Element) ||
-      !effect.target.contains(chip)
-    ) {
-      throw new Error("header agent chip flight not found");
-    }
-    const duration = effect.getTiming().duration;
-    if (typeof duration !== "number") throw new Error("chip flight duration is not numeric");
-    const keyframes = effect.getKeyframes();
-    const position = () => {
-      const { x, y } = chip.getBoundingClientRect();
-      return { x, y };
-    };
-    animation.pause();
-    animation.currentTime = 0;
-    const origin = position();
-    animation.currentTime = duration;
-    const destination = position();
-    animation.currentTime = duration / 2;
-    return {
-      duration,
-      firstTransform: String(keyframes[0]?.transform ?? ""),
-      lastTransform: String(keyframes.at(-1)?.transform ?? ""),
-      origin,
-      destination,
-      midpoint: position()
-    };
-  });
-  expect(flight.duration).toBeGreaterThanOrEqual(300);
-  expect(flight.duration).toBeLessThanOrEqual(400);
-  expect(flight.lastTransform).toBe("none");
-  const [fromX, fromY] = (/translate\((.+)px, (.+)px\)/u.exec(flight.firstTransform) ?? []).slice(
-    1
-  );
-  expect(Number(fromX)).toBeCloseTo(startChipBox.x - flight.destination.x, 0);
-  expect(Number(fromY)).toBeCloseTo(startChipBox.y - flight.destination.y, 0);
-  expect(flight.origin.x).toBeCloseTo(startChipBox.x, 0);
-  expect(flight.origin.y).toBeCloseTo(startChipBox.y, 0);
-  expect(flight.destination.y).toBeLessThan(startChipBox.y);
-  for (const axis of ["x", "y"] as const) {
-    expect(flight.midpoint[axis]).toBeGreaterThan(
-      Math.min(flight.origin[axis], flight.destination[axis])
-    );
-    expect(flight.midpoint[axis]).toBeLessThan(
-      Math.max(flight.origin[axis], flight.destination[axis])
-    );
-  }
+  const flight = await agentChipFlight(headerChip);
+  expectFlightFrom(flight, startChipBox);
 
   // On the way the name's colour eases from the start page's to the header's quieter one,
   // which the picker's chevron already has.
@@ -431,8 +369,9 @@ test("the agent chip flies from the start page into the header once", async ({ p
   expect(await headerAnimations()).toHaveLength(0);
 });
 
-test("the agent chip is simply in the header when motion is reduced", async ({ page }) => {
+test("the named agent chip is simply in the header when motion is reduced", async ({ page }) => {
   const headerAnimations = await recordHeaderAnimations(page);
+  await serveAgentSettings(page, { showAgentName: true });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
@@ -462,6 +401,337 @@ test("the agent chip is simply in the header when motion is reduced", async ({ p
   expect(mutedColor).not.toBe(startNameColor);
   await expect(headerName).toHaveCSS("color", mutedColor);
   await expect(headerName).toHaveCSS("font-weight", "500");
+});
+
+test("without its name the agent chip is an icon that opens the agent list under the pointer", async ({
+  page
+}) => {
+  await signInViaUi(page, normalUser);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
+
+  const chat = page.getByRole("region", { name: "Chat" });
+  const input = page.getByPlaceholder("Message");
+  const listbox = page.getByRole("listbox", { name: "Select agent" });
+  const options = listbox.getByRole("option");
+  const boxOf = async (locator: Locator) => {
+    const box = await locator.boundingBox();
+    if (!box) throw new Error("element is not laid out");
+    return { ...box, centreX: box.x + box.width / 2, centreY: box.y + box.height / 2 };
+  };
+
+  // Somewhere the list does not reach: the lower edge of the chat area.
+  const leaveChip = async () => {
+    const chatBox = await boxOf(chat);
+    await page.mouse.move(chatBox.centreX, chatBox.y + chatBox.height - 4, { steps: 4 });
+  };
+
+  const checkChip = async (chip: Locator) => {
+    // The icon alone: no name beside it, the agent's name only for assistive technology.
+    await expect(chip).toHaveAccessibleName("Select agent: Application Assistant");
+    await expect(chip).toHaveAttribute("title", "Application Assistant");
+    await expect(chip).toHaveText("");
+    await expect(chip.locator("[data-agent-chip-name]")).toHaveCount(0);
+    const chipBox = await boxOf(chip);
+    expect(chipBox.width).toBe(40);
+    expect(chipBox.height).toBe(40);
+    await expect(chip.locator("svg.lucide-bot")).toBeVisible();
+    await expect(listbox).toHaveCount(0);
+
+    // Pointing at it opens the list, and the icon turns into the sign that it is open.
+    await chip.hover();
+    await expect(listbox).toBeVisible();
+    await expect(chip).toHaveAttribute("aria-expanded", "true");
+    await expect(chip.locator("svg.lucide-chevron-down")).toBeVisible();
+    await expect(chip.locator("svg.lucide-bot")).toBeHidden();
+    // Agents are listed by name alone unless the instance shows descriptions.
+    await expect(options).toHaveText(["Application Assistant", "Research Assistant"]);
+    await expect(options.first()).toHaveAttribute("aria-selected", "true");
+
+    // The list stays open while the pointer crosses the gap straight down into it and moves
+    // on to an agent, and under a click.
+    const optionBox = await boxOf(options.last());
+    await page.mouse.move(chipBox.centreX, optionBox.centreY, { steps: 12 });
+    await expect(listbox).toBeVisible();
+    await page.mouse.move(optionBox.centreX, optionBox.centreY, { steps: 4 });
+    await expect(listbox).toBeVisible();
+    // A click there keeps it open, and opens it again once Escape has closed it under the
+    // resting pointer.
+    await chip.click();
+    await expect(listbox).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(listbox).toHaveCount(0);
+    await chip.click();
+    await expect(listbox).toBeVisible();
+
+    // Leaving closes it and brings the icon back.
+    await leaveChip();
+    await expect(listbox).toHaveCount(0);
+    await expect(chip).toHaveAttribute("aria-expanded", "false");
+    await expect(chip.locator("svg.lucide-bot")).toBeVisible();
+
+    // The keyboard opens and closes it too.
+    await chip.focus();
+    await page.keyboard.press("Enter");
+    await expect(listbox).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(listbox).toHaveCount(0);
+    await expect(chip).toBeFocused();
+  };
+
+  const startChip = chat.getByRole("button", { name: "Select agent" });
+  const headerChip = page.locator("header").getByRole("button", { name: "Select agent" });
+  await expect(headerChip).toHaveCount(0);
+  await checkChip(startChip);
+
+  // Choosing an agent closes the list and renames the chip.
+  await startChip.hover();
+  await options.filter({ hasText: "Research Assistant" }).click();
+  await expect(listbox).toHaveCount(0);
+  await expect(startChip).toHaveAccessibleName("Select agent: Research Assistant");
+  await expect(chat.getByRole("button", { name: "Summarize policy" })).toBeVisible();
+  await leaveChip();
+  await startChip.hover();
+  await options.filter({ hasText: "Application Assistant" }).click();
+  await expect(startChip).toHaveAccessibleName("Select agent: Application Assistant");
+
+  // In a conversation the header carries the same chip.
+  await input.fill(`Agent icon ${Date.now()}`);
+  await input.press("Enter");
+  await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
+  await expect(startChip).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.locator("header").evaluate((header) => header.getAnimations({ subtree: true }).length)
+    )
+    .toBe(0);
+  await checkChip(headerChip);
+});
+
+test("the agent icon's list is chosen from with Tab and Enter and stays while the keyboard is in it", async ({
+  page
+}) => {
+  await signInViaUi(page, normalUser);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
+
+  const chat = page.getByRole("region", { name: "Chat" });
+  const chip = chat.getByRole("button", { name: "Select agent" });
+  const listbox = chat.getByRole("listbox", { name: "Select agent" });
+  const research = listbox.getByRole("option", { name: "Research Assistant" });
+  const leaveChip = async () => {
+    const chatBox = await chat.boundingBox();
+    if (!chatBox) throw new Error("chat area is not laid out");
+    await page.mouse.move(chatBox.x + chatBox.width / 2, chatBox.y + chatBox.height - 4, {
+      steps: 4
+    });
+  };
+
+  // Keyboard alone: Enter opens, Tab walks the agents, Enter chooses.
+  await chip.focus();
+  await page.keyboard.press("Enter");
+  await expect(listbox).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(listbox.getByRole("option", { name: "Application Assistant" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(research).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(listbox).toHaveCount(0);
+  await expect(chip).toHaveAccessibleName("Select agent: Research Assistant");
+  await expect(chip).toBeFocused();
+
+  // Opened under the pointer, the list stays when the pointer leaves while the keyboard is on
+  // an agent, so Enter still chooses it.
+  await chip.hover();
+  await expect(listbox).toBeVisible();
+  await page.keyboard.press("Tab");
+  const application = listbox.getByRole("option", { name: "Application Assistant" });
+  await expect(application).toBeFocused();
+  await leaveChip();
+  await expect(application).toBeFocused();
+  await expect(listbox).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(listbox).toHaveCount(0);
+  await expect(chip).toHaveAccessibleName("Select agent: Application Assistant");
+
+  // With the pointer away, the list closes once the keyboard leaves it too.
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  await expect(research).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(listbox).toHaveCount(0);
+});
+
+test("a tap opens the agent icon's list and chooses from it", async ({ browser, baseURL }) => {
+  const context = await browser.newContext({ baseURL, hasTouch: true });
+  const page = await context.newPage();
+  await signInViaUi(page, normalUser);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
+
+  const chat = page.getByRole("region", { name: "Chat" });
+  const chip = chat.getByRole("button", { name: "Select agent" });
+  const listbox = chat.getByRole("listbox", { name: "Select agent" });
+  await expect(chip).toHaveAccessibleName("Select agent: Application Assistant");
+  await expect(listbox).toHaveCount(0);
+
+  await chip.tap();
+  await expect(listbox.getByRole("option")).toHaveText([
+    "Application Assistant",
+    "Research Assistant"
+  ]);
+  await listbox.getByRole("option", { name: "Research Assistant" }).tap();
+  await expect(listbox).toHaveCount(0);
+  await expect(chip).toHaveAccessibleName("Select agent: Research Assistant");
+  // A second tap on the icon closes the list it opened.
+  await chip.tap();
+  await expect(listbox).toBeVisible();
+  await chip.tap();
+  await expect(listbox).toHaveCount(0);
+  await context.close();
+});
+
+for (const showAgentName of [false, true]) {
+  test(`the agent list fits a narrow window ${showAgentName ? "with" : "without"} the agent's name`, async ({
+    page
+  }) => {
+    await serveAgentSettings(page, { showAgentName, showAgentDescriptions: true });
+    await signInViaApi(page, normalUser);
+    const conversationTitle = `Narrow agent list ${Date.now()}`;
+    await createListedConversation(page, conversationTitle);
+    await page.goto("/");
+    await page
+      .getByTestId("conversation-row")
+      .filter({ hasText: conversationTitle })
+      .getByRole("button")
+      .first()
+      .click();
+    await page.getByRole("button", { name: "Close sidebar" }).click();
+    await page.setViewportSize({ width: 320, height: 640 });
+
+    // The header's list hangs from the chip's left edge and ends inside the window.
+    const headerChip = page.locator("header").getByRole("button", { name: "Select agent" });
+    const list = page.getByRole("listbox", { name: "Select agent" }).locator("..");
+    await headerChip.click();
+    await expect(page.getByRole("option")).toHaveCount(2);
+    const chipBox = await headerChip.boundingBox();
+    const listBox = await list.boundingBox();
+    if (!chipBox || !listBox) throw new Error("agent list is not laid out");
+    expect(listBox.x).toBeCloseTo(chipBox.x, 0);
+    expect(listBox.x + listBox.width).toBeLessThanOrEqual(320 - 16);
+    expect(listBox.width).toBeGreaterThan(200);
+    // Nothing in it is cut off either.
+    for (const option of await page.getByRole("option").all()) {
+      const optionBox = await option.boundingBox();
+      if (!optionBox) throw new Error("agent option is not laid out");
+      expect(optionBox.x + optionBox.width).toBeLessThanOrEqual(listBox.x + listBox.width);
+    }
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
+    ).toBe(true);
+  });
+}
+
+test("the agent icon alone flies from the start page into the header", async ({ page }) => {
+  const headerAnimations = await recordHeaderAnimations(page, true);
+  await signInViaUi(page, normalUser);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
+  const releaseCreateRun = await holdCreateRun(page);
+
+  const chat = page.getByRole("region", { name: "Chat" });
+  const header = page.locator("header");
+  const startChip = chat.getByRole("button", { name: "Select agent" });
+  const headerChip = header.getByRole("button", { name: "Select agent" });
+  const heading = chat.getByRole("heading", { name: "E2E ready." });
+  const messageText = `Agent icon flight ${Date.now()}`;
+
+  await expect(startChip).toHaveAccessibleName("Select agent: Application Assistant");
+  await expect(headerChip).toHaveCount(0);
+  const startChipBox = await startChip.boundingBox();
+  const headingBox = await heading.boundingBox();
+  if (!startChipBox) throw new Error("start page agent chip is not laid out");
+
+  await page.getByPlaceholder("Message").fill(messageText);
+  await page.getByRole("button", { name: "Send message" }).click();
+
+  // The icon leaves with the click, before the server has answered, and the heading stays.
+  await expect(headerChip).toHaveAccessibleName("Select agent: Application Assistant");
+  await expect(startChip).toHaveCount(0);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
+  expect(await heading.boundingBox()).toEqual(headingBox);
+  // Only the movement: there is no name whose colour could change.
+  expect(await headerAnimations()).toHaveLength(1);
+  await expect(header.locator("[data-agent-chip-name]")).toHaveCount(0);
+  await expect(headerChip).toHaveText("");
+  await headerChip.evaluate((chip) => chip.setAttribute("data-flown", "true"));
+
+  const flight = await agentChipFlight(headerChip);
+  expectFlightFrom(flight, startChipBox);
+  // The same icon arrives that left.
+  const headerChipBox = await headerChip.boundingBox();
+  expect(headerChipBox?.width).toBe(startChipBox.width);
+  expect(headerChipBox?.height).toBe(startChipBox.height);
+
+  await header.evaluate((element) => {
+    for (const animation of element.getAnimations({ subtree: true })) {
+      if (animation.playState === "paused") animation.play();
+    }
+  });
+  await expect
+    .poll(() => header.evaluate((element) => element.getAnimations({ subtree: true }).length))
+    .toBe(0);
+
+  // The route change keeps the icon that flew in, and the pointer on the send button did not
+  // open the agent list.
+  releaseCreateRun();
+  await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
+  await expect(chat.locator('[data-role="user"]').filter({ hasText: messageText })).toHaveCount(1);
+  await expect(headerChip).toHaveAttribute("data-flown", "true");
+  expect(await headerAnimations()).toHaveLength(1);
+  await expect(page.getByRole("listbox")).toHaveCount(0);
+
+  // Reloading the conversation shows the icon without a flight.
+  await page.reload();
+  await expect(chat.locator('[data-role="user"]').filter({ hasText: messageText })).toHaveCount(1);
+  await expect(headerChip).toHaveAccessibleName("Select agent: Application Assistant");
+  expect(await headerAnimations()).toHaveLength(0);
+});
+
+test("a single agent's icon names it in the list it opens under the pointer", async ({ page }) => {
+  await serveAgentSettings(page, { singleAgent: true, showAgentDescriptions: true });
+  await signInViaUi(page, normalUser);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
+
+  const chat = page.getByRole("region", { name: "Chat" });
+  const chip = chat.getByRole("button", { name: "Select agent" });
+  const listbox = chat.getByRole("listbox", { name: "Select agent" });
+  await expect(chip).toHaveAccessibleName("Select agent: Application Assistant");
+  await expect(chip).toHaveText("");
+  await expect(listbox).toHaveCount(0);
+
+  await chip.hover();
+  await expect(listbox.getByRole("option")).toHaveCount(1);
+  // This instance shows descriptions, so the agent's stands under its name.
+  await expect(listbox.getByRole("option").locator("span > span")).toHaveText([
+    "Application Assistant",
+    "Help with application and document review."
+  ]);
+
+  const chatBox = await chat.boundingBox();
+  if (!chatBox) throw new Error("chat area is not laid out");
+  await page.mouse.move(chatBox.x + chatBox.width / 2, chatBox.y + chatBox.height - 4);
+  await expect(listbox).toHaveCount(0);
+});
+
+test("a single named agent is a plain label that opens nothing", async ({ page }) => {
+  await serveAgentSettings(page, { singleAgent: true, showAgentName: true });
+  await signInViaUi(page, normalUser);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
+
+  const chat = page.getByRole("region", { name: "Chat" });
+  const label = chat.getByTitle("Application Assistant");
+  await expect(label).toHaveText("Application Assistant");
+  await expect(chat.getByRole("button", { name: "Select agent" })).toHaveCount(0);
+  await label.hover();
+  await expect(page.getByRole("listbox")).toHaveCount(0);
 });
 
 test("composer sends on Enter and inserts a newline on Shift+Enter", async ({ page }) => {
@@ -688,8 +958,8 @@ test("new conversation action opens an unsaved draft screen", async ({ page }) =
   await page.goto("/");
   const newConversationButton = page.getByRole("button", { name: "New", exact: true });
   await expect(newConversationButton).toBeVisible();
-  await expect(page.getByRole("button", { name: "Select agent" })).toContainText(
-    "Application Assistant"
+  await expect(page.getByRole("button", { name: "Select agent" })).toHaveAccessibleName(
+    "Select agent: Application Assistant"
   );
   await expect(page.getByRole("button", { name: "Add attachment" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Find review risks" })).toBeVisible();
@@ -2299,6 +2569,129 @@ async function recordHeaderAnimations(
       const seen: unknown = JSON.parse(document.documentElement.dataset.headerAnimations ?? "[]");
       return Array.isArray(seen) ? seen.map(String) : [];
     });
+}
+
+/**
+ * Serves the instance's config with these agent settings, as its `ui` section would set them,
+ * and optionally with the first agent only.
+ */
+async function serveAgentSettings(
+  page: Page,
+  settings: { showAgentName?: boolean; showAgentDescriptions?: boolean; singleAgent?: boolean }
+): Promise<void> {
+  const { singleAgent = false, ...ui } = settings;
+  await page.route(
+    ({ pathname }) =>
+      pathname === "/api/config" ||
+      /^\/api\/collaboration-workspaces\/[^/]+\/agents$/u.test(pathname),
+    async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      const response = await route.fetch();
+      const body: { ui?: object; agents?: unknown[] } = await response.json();
+      await route.fulfill({
+        response,
+        json: {
+          ...body,
+          ...(body.ui ? { ui: { ...body.ui, ...ui } } : {}),
+          ...(singleAgent && body.agents ? { agents: body.agents.slice(0, 1) } : {})
+        }
+      });
+    }
+  );
+}
+
+/** Holds back the server's answer to the first message until the returned release is called. */
+async function holdCreateRun(page: Page): Promise<() => void> {
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(`${apiBaseUrl}/api/conversations/runs`, async (route) => {
+    if (route.request().method() === "POST") {
+      await gate;
+    }
+    await route.continue();
+  });
+  return () => release();
+}
+
+interface AgentChipFlight {
+  duration: number;
+  firstTransform: string;
+  lastTransform: string;
+  origin: { x: number; y: number };
+  destination: { x: number; y: number };
+  midpoint: { x: number; y: number };
+}
+
+/** Inspects the real Web Animation of the chip, paused by the recorder before it can finish. */
+async function agentChipFlight(headerChip: Locator): Promise<AgentChipFlight> {
+  return headerChip.evaluate((chip) => {
+    const header = chip.closest("header");
+    const [animation] = (header?.getAnimations({ subtree: true }) ?? []).filter(
+      ({ effect }) =>
+        effect instanceof KeyframeEffect &&
+        effect.target instanceof Element &&
+        effect.target !== header &&
+        effect.target.contains(chip)
+    );
+    const effect = animation?.effect;
+    if (
+      !animation ||
+      !(effect instanceof KeyframeEffect) ||
+      !(effect.target instanceof Element) ||
+      !effect.target.contains(chip)
+    ) {
+      throw new Error("header agent chip flight not found");
+    }
+    const duration = effect.getTiming().duration;
+    if (typeof duration !== "number") throw new Error("chip flight duration is not numeric");
+    const keyframes = effect.getKeyframes();
+    const position = () => {
+      const { x, y } = chip.getBoundingClientRect();
+      return { x, y };
+    };
+    animation.pause();
+    animation.currentTime = 0;
+    const origin = position();
+    animation.currentTime = duration;
+    const destination = position();
+    animation.currentTime = duration / 2;
+    return {
+      duration,
+      firstTransform: String(keyframes[0]?.transform ?? ""),
+      lastTransform: String(keyframes.at(-1)?.transform ?? ""),
+      origin,
+      destination,
+      midpoint: position()
+    };
+  });
+}
+
+/** One eased movement of 300 to 400 ms from where the start page showed the chip. */
+function expectFlightFrom(flight: AgentChipFlight, startChipBox: { x: number; y: number }): void {
+  expect(flight.duration).toBeGreaterThanOrEqual(300);
+  expect(flight.duration).toBeLessThanOrEqual(400);
+  expect(flight.lastTransform).toBe("none");
+  const [fromX, fromY] = (/translate\((.+)px, (.+)px\)/u.exec(flight.firstTransform) ?? []).slice(
+    1
+  );
+  expect(Number(fromX)).toBeCloseTo(startChipBox.x - flight.destination.x, 0);
+  expect(Number(fromY)).toBeCloseTo(startChipBox.y - flight.destination.y, 0);
+  expect(flight.origin.x).toBeCloseTo(startChipBox.x, 0);
+  expect(flight.origin.y).toBeCloseTo(startChipBox.y, 0);
+  expect(flight.destination.y).toBeLessThan(startChipBox.y);
+  for (const axis of ["x", "y"] as const) {
+    expect(flight.midpoint[axis]).toBeGreaterThan(
+      Math.min(flight.origin[axis], flight.destination[axis])
+    );
+    expect(flight.midpoint[axis]).toBeLessThan(
+      Math.max(flight.origin[axis], flight.destination[axis])
+    );
+  }
 }
 
 async function signInViaApi(page: Page, user: { email: string; password: string }): Promise<void> {

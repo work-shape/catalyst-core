@@ -1,7 +1,7 @@
 import { PanelLeft } from "lucide-react";
 import { type SafeConfig } from "@vivd-catalyst/api-client";
 import type { CSSProperties, ReactNode, Ref } from "react";
-import { AgentSelector } from "./agent-selector";
+import { AgentSelector, type AgentChipDisplay } from "./agent-selector";
 import { useTranslation } from "../i18n";
 import { type ResolvedThemeMode } from "../theme";
 import { Button } from "../ui/button";
@@ -87,20 +87,10 @@ function StatusPanel({
   );
 }
 
-/** The agent's name always shows; `showAgentName` adds the client's name under it. */
-export function agentContextLabelFor(config: {
-  ui: Pick<SafeConfig["ui"], "showAgentName" | "clientName">;
-  clientInstance: Pick<SafeConfig["clientInstance"], "displayName">;
-}): string | undefined {
-  return config.ui.showAgentName
-    ? (config.ui.clientName ?? config.clientInstance.displayName)
-    : undefined;
-}
-
 export function WorkspaceChrome({
   agentChipRef,
+  agentDisplay,
   agents,
-  contextLabel,
   displayPanelOpen,
   displayPanelWidth,
   environment,
@@ -114,9 +104,8 @@ export function WorkspaceChrome({
 }: {
   /** The element the start page's agent chip flies into. */
   agentChipRef?: Ref<HTMLDivElement>;
+  agentDisplay: AgentChipDisplay;
   agents: SafeConfig["agents"];
-  /** Shown under the agent's name. */
-  contextLabel?: string;
   displayPanelOpen: boolean;
   displayPanelWidth: number;
   environment: SafeConfig["clientInstance"]["environment"] | undefined;
@@ -182,7 +171,7 @@ export function WorkspaceChrome({
             <div ref={agentChipRef} className="min-w-0">
               <AgentSelector
                 agents={agents}
-                contextLabel={contextLabel}
+                display={agentDisplay}
                 placement="header"
                 selectedAgentName={selectedAgentName}
                 onSelectAgent={onSelectAgent}

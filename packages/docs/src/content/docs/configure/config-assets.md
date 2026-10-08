@@ -77,9 +77,16 @@ For one compatibility release, a CLI without `CATALYST_API_KEY` falls back to `C
 Agent `name` is the stable technical identifier used by config references and
 agent selection. Use `displayName` for the user-facing name and an optional
 localized `description` for the short explanation beneath it in the agent
-selector. Without a description, the selector shows only the display name.
-These fields accept a plain string or an `en`/`de` map. Keep `welcomeMessage`
-and `welcomeSubtitle` for the conversation's empty state.
+selector. `displayName` and `description` accept a plain string or an `en`/`de`
+map. Keep `welcomeMessage` and `welcomeSubtitle` for the conversation's empty
+state.
+
+Two boolean release-config settings decide what the chat shows of its agents,
+both `false` by default. `ui.showAgentDescriptions: true` lists each
+description in the selector; otherwise, and without a description, the selector
+shows only the display name. `ui.showAgentName: true` puts the selected agent's
+name beside its icon; otherwise the chat shows the icon alone and opens the
+selector when the pointer is on it.
 
 Admins with the `config_assets.write` permission edit assets in the admin panel's Config tab. Release config decides how much of an agent is interactively editable:
 

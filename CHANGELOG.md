@@ -37,11 +37,14 @@ contain breaking changes; a patch version does not.
   with the deletion date, on instances with `retention.expireConversations` enabled.
 - **Administration:** saving an agent or skill confirms it next to the save button until the
   form is edited again.
-- **Chat:** the agent's name stands beside its icon. On the start page the icon and name sit
-  centred above the composer; when a conversation starts they move to the top left of the
-  header and stay there, the name in a quieter tone. With several agents the name opens the
-  agent picker; below the `sm` width the header shows the icon only. `ui.showAgentName` now
-  only adds the client name beneath the agent on the start page.
+- **Chat:** the agent's icon sits centred above the composer on the start page; when a
+  conversation starts it moves to the top left of the header and stays there. Pointing at the
+  icon opens the agent list, with a single agent too. With `ui.showAgentName: true` the agent's
+  name stands beside the icon, in a quieter tone in the header: several agents make it a picker
+  that opens on click, a single agent a plain label, and below the `sm` width the header shows
+  the icon only. `ui.showAgentName` no longer adds the client name beneath the agent.
+- **Chat:** the agent list shows each agent's description only with the new
+  `ui.showAgentDescriptions: true`; by default it lists the names alone.
 
 ## 0.6.3 — 2026-10-08
 
