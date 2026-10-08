@@ -1,3 +1,4 @@
+import { requestWithOrigin } from "./request-with-origin";
 import { expect, test, type Page } from "@playwright/test";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
@@ -92,7 +93,7 @@ test("conversation rail keeps dense histories readable and scrollable", async ({
   const titlePrefix = `Dense rail ${Date.now()}`;
   const responses = await Promise.all(
     Array.from({ length: 18 }, (_, index) =>
-      page.request.post(`${apiBaseUrl}/api/conversations`, {
+      requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
         data: { title: `${titlePrefix} item-${String(index + 1).padStart(2, "0")}` }
       })
     )
@@ -474,7 +475,7 @@ test("standalone conversation routes are addressable and follow rail navigation"
 }) => {
   await signInViaApi(page, normalUser);
   const title = `Route target ${Date.now()}`;
-  const created = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
     data: { title }
   });
   expect(created.ok()).toBe(true);
@@ -583,7 +584,9 @@ test("conversation rail moves a conversation into another workspace", async ({ p
   await signInViaApi(page, normalUser);
 
   const destinationName = `E2E Move Target ${Date.now()}`;
-  const createdCollaborationWorkspace = await page.request.post(
+  const createdCollaborationWorkspace = await requestWithOrigin(
+    page,
+    "post",
     `${apiBaseUrl}/api/collaboration-workspaces`,
     { data: { name: destinationName, visibility: "private" } }
   );
@@ -593,7 +596,7 @@ test("conversation rail moves a conversation into another workspace", async ({ p
   };
 
   const title = `Move target ${Date.now()}`;
-  const created = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
     data: { title }
   });
   expect(created.ok()).toBe(true);
@@ -661,7 +664,9 @@ test("collaboration workspace settings delete a workspace and fall back to perso
   await signInViaApi(page, normalUser);
 
   const workspaceName = `E2E Delete ${Date.now()}`;
-  const createdCollaborationWorkspace = await page.request.post(
+  const createdCollaborationWorkspace = await requestWithOrigin(
+    page,
+    "post",
     `${apiBaseUrl}/api/collaboration-workspaces`,
     { data: { name: workspaceName, visibility: "discoverable" } }
   );
@@ -855,7 +860,7 @@ test("composer drafts are scoped to the new screen and selected conversations", 
 }) => {
   await signInViaApi(page, normalUser);
   const title = `Draft target ${Date.now()}`;
-  const created = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
     data: { title }
   });
   expect(created.ok()).toBe(true);
@@ -885,10 +890,10 @@ test(
     const suffix = Date.now();
     const sourceTitle = `Streaming source ${suffix}`;
     const targetTitle = `Stable target ${suffix}`;
-    const source = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    const source = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
       data: { title: sourceTitle }
     });
-    const target = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    const target = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
       data: { title: targetTitle }
     });
     expect(source.ok()).toBe(true);
@@ -957,10 +962,10 @@ test(
     const suffix = Date.now();
     const sourceTitle = `Resume source ${suffix}`;
     const targetTitle = `Resume target ${suffix}`;
-    const source = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    const source = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
       data: { title: sourceTitle }
     });
-    const target = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    const target = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
       data: { title: targetTitle }
     });
     expect(source.ok()).toBe(true);
@@ -1014,7 +1019,7 @@ test(
     await signInViaUi(page, normalUser);
     const suffix = Date.now();
     const sourceTitle = `Direct resume source ${suffix}`;
-    const source = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    const source = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
       data: { title: sourceTitle }
     });
     expect(source.ok()).toBe(true);
@@ -1067,7 +1072,7 @@ test(
     await signInViaUi(page, normalUser);
     const suffix = Date.now();
     const targetTitle = `Switch target ${suffix}`;
-    const target = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    const target = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
       data: { title: targetTitle }
     });
     expect(target.ok()).toBe(true);
@@ -1116,10 +1121,10 @@ test(
     const suffix = Date.now();
     const sourceTitle = `Unread source ${suffix}`;
     const targetTitle = `Unread target ${suffix}`;
-    const source = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    const source = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
       data: { title: sourceTitle }
     });
-    const target = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    const target = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
       data: { title: targetTitle }
     });
     expect(source.ok()).toBe(true);
@@ -1191,7 +1196,7 @@ test("conversation rail deletes a conversation", async ({ page }) => {
   });
 
   const title = `Delete target ${Date.now()}`;
-  const created = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
     data: { title }
   });
   expect(created.ok()).toBe(true);
@@ -1242,11 +1247,11 @@ test("conversation rail renames from the menu and a later selected-title click",
   const menuTitle = `${initialTitle} menu`;
   const finalTitle = `${initialTitle} double click`;
   const otherTitle = `Rename navigation target ${Date.now()}`;
-  const created = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
     data: { title: initialTitle }
   });
   expect(created.ok()).toBe(true);
-  const otherCreated = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+  const otherCreated = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
     data: { title: otherTitle }
   });
   expect(otherCreated.ok()).toBe(true);
@@ -1542,7 +1547,9 @@ test("superadmin manages config assets with validation and conflict protection",
     await clickAgent();
     const instructions = fieldControl("Instructions", "textarea");
     const serverInstructions = `${String(originalResearchAgent?.instructions)}\n\nServer change.`;
-    const serverChange = await page.request.put(
+    const serverChange = await requestWithOrigin(
+      page,
+      "put",
       `${apiBaseUrl}/api/admin/config/assets/agent/research_assistant`,
       {
         data: {
@@ -1564,14 +1571,19 @@ test("superadmin manages config assets with validation and conflict protection",
     await expect(versionLabel(original.version + 5)).toBeVisible();
     await expect(fieldControl("Instructions", "textarea")).toHaveValue(serverInstructions);
   } finally {
-    const restored = await page.request.post(`${apiBaseUrl}/api/admin/config/import`, {
-      data: {
-        baseVersion: null,
-        defaultAgentName: original.defaultAgentName,
-        agents: original.agents,
-        skills: original.skills
+    const restored = await requestWithOrigin(
+      page,
+      "post",
+      `${apiBaseUrl}/api/admin/config/import`,
+      {
+        data: {
+          baseVersion: null,
+          defaultAgentName: original.defaultAgentName,
+          agents: original.agents,
+          skills: original.skills
+        }
       }
-    });
+    );
     expect(restored.ok()).toBe(true);
   }
 });
@@ -1589,7 +1601,7 @@ test("normal users are redirected away from superadmin routes", async ({ page })
 test("workspace and superadmin keep page scroll locked", async ({ page }) => {
   await signInViaApi(page, superadminUser);
   for (let index = 0; index < 18; index += 1) {
-    const created = await page.request.post(`${apiBaseUrl}/api/conversations`, {
+    const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
       data: { title: `Scroll lock target ${Date.now()} ${index}` }
     });
     expect(created.ok()).toBe(true);
@@ -1743,7 +1755,7 @@ test("superadmin resets a user's password from the users panel", async ({ page }
   await signInViaApi(page, normalUser);
   const normalMe = await page.request.get(`${apiBaseUrl}/api/me`);
   expect(normalMe.ok()).toBe(true);
-  await page.request.post(`${apiBaseUrl}/api/auth/sign-out`, { data: {} });
+  await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-out`, { data: {} });
   await page.context().clearCookies();
 
   await signInViaUi(page, superadminUser);
@@ -1771,7 +1783,7 @@ test("superadmin resets a user's password from the users panel", async ({ page }
   await expect(page.getByText("E2E User")).toBeVisible();
 
   // Restore the seeded password so reruns against a reused server stay consistent.
-  await page.request.post(`${apiBaseUrl}/api/auth/sign-out`, { data: {} });
+  await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-out`, { data: {} });
   await page.context().clearCookies();
   await signInViaApi(page, superadminUser);
   const usersResponse = await page.request.get(`${apiBaseUrl}/api/superadmin/users`);
@@ -1779,7 +1791,9 @@ test("superadmin resets a user's password from the users panel", async ({ page }
   const administeredUsers = (await usersResponse.json()) as Array<{ id: string; email?: string }>;
   const target = administeredUsers.find((candidate) => candidate.email === normalUser.email);
   expect(target).toBeDefined();
-  const restored = await page.request.post(
+  const restored = await requestWithOrigin(
+    page,
+    "post",
     `${apiBaseUrl}/api/superadmin/users/${target?.id}/password`,
     { data: { password: normalUser.password } }
   );
@@ -1942,7 +1956,7 @@ async function signInViaUi(
 }
 
 async function signInViaApi(page: Page, user: { email: string; password: string }): Promise<void> {
-  const response = await page.request.post(`${apiBaseUrl}/api/auth/sign-in/email`, {
+  const response = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
     data: {
       email: user.email,
       password: user.password,

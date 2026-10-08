@@ -200,6 +200,7 @@ class BetterAuthAdapter implements AuthAdapter {
     }
 
     return {
+      authenticationMethod: "session-cookie",
       id: profile.authUserId,
       externalUserId: profile.externalUserId,
       displayLabel: profile.displayLabel,

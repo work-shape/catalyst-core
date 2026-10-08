@@ -43,6 +43,7 @@ export class IdentityResolvingAuthAdapter implements AuthAdapter {
     });
     return normalizeAuthenticatedUser({
       ...resolved,
+      authenticationMethod: claims.authenticationMethod,
       subjectUserId: resolved.id,
       principal:
         claims.principal?.kind === "service"

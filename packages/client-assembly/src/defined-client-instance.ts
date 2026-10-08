@@ -30,7 +30,7 @@ export interface DefineClientInstanceInput {
   tools?: ToolAssemblyDefinition[];
   capabilities?: ClientInstanceCapability[];
   structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
-  corsOrigin?: string | string[];
+  allowedOrigins?: string | string[];
   loadEnv?: boolean;
   agentRuntimeMode?: CreateClientInstanceAppInput["agentRuntimeMode"];
 }
@@ -51,7 +51,7 @@ export interface DefinedClientInstance {
     port?: number;
     configPath?: string;
     storeMode?: CreateClientInstanceAppInput["storeMode"];
-    corsOrigin?: string | string[];
+    allowedOrigins?: string | string[];
   }): Promise<ClientInstanceApp>;
   createAgentRunWorker(
     input?: Omit<
@@ -130,7 +130,8 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
       capabilities,
       structuredDataPublicationReviewer:
         appInput.structuredDataPublicationReviewer ?? input.structuredDataPublicationReviewer,
-      corsOrigin: appInput.corsOrigin ?? input.corsOrigin,
+      allowedOrigins:
+        appInput.allowedOrigins === undefined ? input.allowedOrigins : appInput.allowedOrigins,
       agentRuntimeMode: appInput.agentRuntimeMode ?? input.agentRuntimeMode
     });
   }
@@ -170,7 +171,7 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
         env: listenInput.env,
         configPath: listenInput.configPath,
         storeMode: listenInput.storeMode,
-        corsOrigin: listenInput.corsOrigin
+        allowedOrigins: listenInput.allowedOrigins
       });
       await app.listen({
         host: listenInput.host,
@@ -188,7 +189,8 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
           env,
           configPath: seedInput.configPath
         }),
-        corsOrigin: seedInput.corsOrigin ?? input.corsOrigin
+        allowedOrigins:
+          seedInput.allowedOrigins === undefined ? input.allowedOrigins : seedInput.allowedOrigins
       });
     }
   };

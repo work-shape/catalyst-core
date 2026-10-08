@@ -60,6 +60,8 @@ export interface DelegatedActor {
 }
 
 export interface AuthenticatedUser {
+  /** Set by adapters when a browser session cookie authenticated this request. */
+  authenticationMethod?: "session-cookie";
   id: string;
   externalUserId: string;
   displayLabel: string;

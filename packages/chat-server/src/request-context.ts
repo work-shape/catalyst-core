@@ -21,11 +21,7 @@ export async function authenticateRequest(
   request: FastifyRequest
 ): Promise<{ user: AuthenticatedUser; context: RuntimeCallContext }> {
   const correlationId = createCorrelationId(request);
-  const identity = await options.authAdapter.authenticate({
-    headers: request.headers,
-    clientInstanceId: options.clientInstanceId,
-    correlationId
-  });
+  const identity = await authenticateIdentity(options, request, correlationId);
   if (isAuthenticatedServicePrincipal(identity)) {
     throw new AppError("FORBIDDEN", "Service principals cannot access user-scoped routes");
   }
@@ -50,11 +46,7 @@ export async function authenticateConfigAssetRequest(
   context: { clientInstanceId: ChatServerOptions["clientInstanceId"]; correlationId: string };
 }> {
   const correlationId = createCorrelationId(request);
-  const authenticated = await options.authAdapter.authenticate({
-    headers: request.headers,
-    clientInstanceId: options.clientInstanceId,
-    correlationId
-  });
+  const authenticated = await authenticateIdentity(options, request, correlationId);
   const identity = isAuthenticatedServicePrincipal(authenticated)
     ? authenticated
     : normalizeAuthenticatedUser(authenticated);
@@ -116,4 +108,32 @@ export function createCorrelationId(request: FastifyRequest): string {
     return existing;
   }
   return createPlatformId("corr");
+}
+
+async function authenticateIdentity(
+  options: ChatServerOptions,
+  request: FastifyRequest,
+  correlationId: string
+): Promise<AuthenticatedIdentity> {
+  const identity = await options.authAdapter.authenticate({
+    headers: request.headers,
+    clientInstanceId: options.clientInstanceId,
+    correlationId
+  });
+  if (
+    !isAuthenticatedServicePrincipal(identity) &&
+    identity.authenticationMethod === "session-cookie" &&
+    !["GET", "HEAD", "OPTIONS"].includes(request.method)
+  ) {
+    const origin = request.headers.origin;
+    const allowed =
+      origin !== undefined
+        ? origin === new URL(`${request.protocol}://${request.host}`).origin ||
+          (options.allowedOrigins ?? []).includes(origin)
+        : request.headers["sec-fetch-site"] === "same-origin";
+    if (!allowed) {
+      throw new AppError("FORBIDDEN", "Session request origin is not allowed");
+    }
+  }
+  return identity;
 }

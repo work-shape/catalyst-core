@@ -86,7 +86,7 @@ export interface ChatServerOptions {
   retentionExpiration?: ConversationRetentionJobOptions;
   runRecovery?: RunRecoveryOptions;
   modelProvider: ModelProvider;
-  corsOrigin?: string | string[];
+  allowedOrigins?: string | string[];
   standaloneAuth?: Pick<
     StandaloneAuthRuntime,
     | "handleRequest"

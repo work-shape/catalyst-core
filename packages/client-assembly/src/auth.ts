@@ -11,6 +11,7 @@ import {
 } from "@vivd-catalyst/auth";
 import {
   AppError,
+  normalizeAllowedOrigins,
   type ApiAccessStore,
   type ClientInstanceId,
   type UserStore
@@ -19,6 +20,7 @@ import { getDevelopmentAuthUsers, type ClientInstanceConfig } from "@vivd-cataly
 import type { ClientInstanceEnv } from "./env";
 
 export interface ClientInstanceAuth {
+  allowedOrigins: string[];
   authAdapter: AuthAdapter;
   standaloneAuth?: Awaited<ReturnType<typeof createStandaloneAuthRuntime>>;
   sessionToken?: {
@@ -35,12 +37,13 @@ export interface CreateClientInstanceAuthInput {
   env: ClientInstanceEnv;
   clientInstanceId: ClientInstanceId;
   userStore: UserStore & ApiAccessStore;
-  corsOrigin?: string | string[];
+  allowedOrigins?: string | string[];
 }
 
 export async function createClientInstanceAuth(
   input: CreateClientInstanceAuthInput
 ): Promise<ClientInstanceAuth> {
+  const allowedOrigins = resolveTrustedOrigins(input);
   const adapters: AuthAdapter[] = [];
   let standaloneAuth: ClientInstanceAuth["standaloneAuth"];
   let sessionToken: ClientInstanceAuth["sessionToken"];
@@ -60,7 +63,10 @@ export async function createClientInstanceAuth(
   }
 
   if (input.config.auth.standalone?.enabled) {
-    standaloneAuth = await createStandaloneAuthRuntimeForClientInstance(input);
+    standaloneAuth = await createStandaloneAuthRuntimeForClientInstance({
+      ...input,
+      allowedOrigins
+    });
     adapters.push(standaloneAuth.authAdapter);
   }
 
@@ -96,6 +102,7 @@ export async function createClientInstanceAuth(
   }
 
   return {
+    allowedOrigins,
     authAdapter: new IdentityResolvingAuthAdapter(
       new CompositeAuthAdapter(adapters),
       input.userStore,
@@ -113,7 +120,7 @@ export async function createStandaloneAuthRuntimeForClientInstance(input: {
   config: ClientInstanceConfig;
   env: ClientInstanceEnv;
   clientInstanceId: ClientInstanceId;
-  corsOrigin?: string | string[];
+  allowedOrigins: string[];
 }): Promise<NonNullable<ClientInstanceAuth["standaloneAuth"]>> {
   if (!input.config.auth.standalone?.enabled) {
     throw new AppError(
@@ -142,7 +149,7 @@ export async function createStandaloneAuthRuntimeForClientInstance(input: {
     databaseUrl,
     secret,
     baseUrl: resolveBetterAuthUrl(input),
-    trustedOrigins: resolveTrustedOrigins(input),
+    trustedOrigins: input.allowedOrigins,
     seedUsers: input.config.auth.standalone.seedUsers.map((seedUser) => ({
       email: resolveSeedEmail(seedUser, input),
       displayLabel: seedUser.displayLabel,
@@ -168,61 +175,25 @@ function resolveBetterAuthUrl(input: {
 export function resolveTrustedOrigins(input: {
   config: ClientInstanceConfig;
   env: ClientInstanceEnv;
-  corsOrigin?: string | string[];
+  allowedOrigins?: string | string[];
 }): string[] {
-  const fromCors = Array.isArray(input.corsOrigin)
-    ? input.corsOrigin
-    : input.corsOrigin
-      ? [input.corsOrigin]
-      : [];
-  const configuredOrigins = [
-    ...fromCors,
-    ...(input.env.CHAT_UI_ORIGIN ? [input.env.CHAT_UI_ORIGIN] : []),
+  const configuredOrigins = normalizeAllowedOrigins([
+    ...normalizeAllowedOrigins(input.allowedOrigins),
+    ...(input.env.CHAT_UI_ORIGIN === undefined ? [] : [input.env.CHAT_UI_ORIGIN]),
     ...(input.config.auth.standalone?.trustedOrigins ?? [])
-  ];
+  ]);
 
-  const origins =
-    input.config.clientInstance.environment === "development"
-      ? configuredOrigins.flatMap(expandDevelopmentLoopbackOrigin)
-      : configuredOrigins.map(normalizeOrigin);
-
-  return [...new Set(origins)];
+  return input.config.clientInstance.environment === "development"
+    ? [...new Set(configuredOrigins.flatMap(expandDevelopmentLoopbackOrigin))]
+    : configuredOrigins;
 }
 
-function expandDevelopmentLoopbackOrigin(value: string): string[] {
-  const origin = normalizeOrigin(value);
-  const url = parseUrl(origin);
-  if (!url || (url.protocol !== "http:" && url.protocol !== "https:")) {
-    return [origin];
-  }
-
-  const loopbackHosts = getLoopbackHostAliases(url.hostname);
-  if (loopbackHosts.length === 0) {
-    return [origin];
-  }
-
+function expandDevelopmentLoopbackOrigin(origin: string): string[] {
+  const url = new URL(origin);
   return [
     origin,
-    ...loopbackHosts
-      .map((hostname) => formatOrigin(url, hostname))
-      .filter((candidate) => candidate !== origin)
+    ...getLoopbackHostAliases(url.hostname).map((hostname) => formatOrigin(url, hostname))
   ];
-}
-
-function normalizeOrigin(value: string): string {
-  const url = parseUrl(value);
-  if (!url || (url.protocol !== "http:" && url.protocol !== "https:")) {
-    return value;
-  }
-  return url.origin;
-}
-
-function parseUrl(value: string): URL | undefined {
-  try {
-    return new URL(value);
-  } catch {
-    return undefined;
-  }
 }
 
 function getLoopbackHostAliases(hostname: string): string[] {

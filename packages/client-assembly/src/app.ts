@@ -77,7 +77,7 @@ export interface CreateClientInstanceAppInput {
   capabilities?: ClientInstanceCapability[];
   structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
   approvalRequestHandlers?: ApprovalRequestHandlerRegistry;
-  corsOrigin?: string | string[];
+  allowedOrigins?: string | string[];
   agentRuntimeMode?: "local" | "worker";
 }
 
@@ -116,13 +116,13 @@ export async function createClientInstanceApp(
           agentRunStore: store,
           runObservationStore: store
         });
-  const { authAdapter, standaloneAuth, sessionToken, serviceAccessToken } =
+  const { authAdapter, standaloneAuth, sessionToken, serviceAccessToken, allowedOrigins } =
     await createClientInstanceAuth({
       config,
       env,
       clientInstanceId,
       userStore: store,
-      corsOrigin: input.corsOrigin
+      allowedOrigins: input.allowedOrigins
     });
   const server = await createChatServer({
     config,
@@ -158,7 +158,7 @@ export async function createClientInstanceApp(
         }
       : undefined,
     modelProvider,
-    corsOrigin: input.corsOrigin,
+    allowedOrigins,
     standaloneAuth,
     mail: createClientInstanceMail({ config, env }),
     sessionToken,
@@ -184,7 +184,7 @@ export async function createClientInstanceApp(
 }
 
 export async function createClientInstanceExecutionAssembly(
-  input: Omit<CreateClientInstanceAppInput, "agentRuntimeMode" | "corsOrigin">
+  input: Omit<CreateClientInstanceAppInput, "agentRuntimeMode" | "allowedOrigins">
 ) {
   const env = input.env ?? process.env;
   const config = input.config ?? (await loadConfig(input.configPath));

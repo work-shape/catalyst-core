@@ -1,11 +1,11 @@
 ---
 title: Auth And Embedding
-description: Connect Vivd Catalyst to users in an existing customer application.
+description: Connect Workshape Catalyst to users in an existing customer application.
 ---
 
 The embedded chat path should rely on the customer application as the login authority.
 
-Vivd Catalyst receives a short-lived chat session token and maps it into a product-owned authenticated user.
+Workshape Catalyst receives a short-lived chat session token and maps it into a product-owned authenticated user.
 
 ## Recommended Embedded Flow
 
@@ -19,6 +19,27 @@ authenticated customer app session
 ```
 
 The browser never receives the customer app's server-to-server credential.
+
+## Browser Origins
+
+Configure each embedding site's exact origin through the client assembly's `allowedOrigins`,
+`CHAT_UI_ORIGIN`, or `auth.standalone.trustedOrigins`. The assembly merges these into one list
+for Better Auth, CORS, and session-cookie origin checks. Development expands configured
+loopback origins to `localhost`, `127.0.0.1`, and `[::1]` at the same port. Without configured
+origins, same-origin requests still work; cross-origin requests receive no CORS grant.
+
+Both the assembly and direct `createChatServer` callers accept `allowedOrigins` as a string
+or an array of strings. Startup validates HTTP and HTTPS URLs, serializes their origins,
+and removes duplicates. Wildcards, opaque origins, and other value types are rejected.
+
+Cookie-authenticated writes require an allowed or same-server `Origin`. When `Origin` is
+absent, only `Sec-Fetch-Site: same-origin` is accepted. GET, HEAD, and OPTIONS are exempt.
+Bearer tokens, API-key exchange, and server credentials do not require this cookie check,
+but browser callers still need their origin configured for CORS. Custom cookie auth adapters
+must return `authenticationMethod: "session-cookie"` on the authenticated user.
+
+The widget transport includes credentials even when it sends a bearer token. If a standalone
+session cookie authenticates the request first, the cookie origin check applies.
 
 ## Token Claims
 

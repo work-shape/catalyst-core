@@ -1,4 +1,5 @@
 import { registerApprovalRequestRoutes } from "./routes/approval-request-routes";
+import { normalizeAllowedOrigins } from "@vivd-catalyst/core";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import Fastify, { type FastifyInstance } from "fastify";
@@ -53,6 +54,8 @@ export type {
 export type { ChatServerOptions } from "./types";
 
 export async function createChatServer(options: ChatServerOptions): Promise<FastifyInstance> {
+  const allowedOrigins = normalizeAllowedOrigins(options.allowedOrigins);
+  options = { ...options, allowedOrigins };
   const app = Fastify({
     logger: true,
     // Assumes the API is reachable only through a reverse proxy on a private network (the
@@ -62,7 +65,7 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
   });
 
   await app.register(cors, {
-    origin: options.corsOrigin ?? true,
+    origin: allowedOrigins,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
     allowedHeaders: ["authorization", "content-type", "x-correlation-id", "x-server-credential"]

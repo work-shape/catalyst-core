@@ -24,6 +24,27 @@ vi.mock(
   }
 );
 
+vi.mock("../packages/auth/node_modules/drizzle-orm/postgres-js/index.js", () => ({
+  drizzle: () => ({
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: async () => [
+            {
+              authUserId: "usr_provisioned",
+              externalUserId: "provisioned",
+              displayLabel: "Provisioned User",
+              roles: ["user"],
+              permissionRefs: [],
+              permissions: []
+            }
+          ]
+        })
+      })
+    })
+  })
+}));
+
 vi.mock("postgres", () => ({
   default: () => ({
     options: { parsers: {}, serializers: {} },
@@ -89,6 +110,32 @@ describe("standalone auth email routes", () => {
     await expect(response.json()).resolves.toMatchObject({
       user: { email }
     });
+  });
+
+  it("marks successful session-cookie authentication on the adapter result", async () => {
+    const response = await postAuth("/api/auth/sign-in/email", { email, password });
+    expect(response.status).toBe(200);
+    const cookie = response.headers
+      .getSetCookie()
+      .map((value) => value.split(";")[0])
+      .join("; ");
+    expect(cookie).not.toBe("");
+    const user = await auth.authAdapter.authenticate({
+      headers: { cookie },
+      clientInstanceId: asClientInstanceId("standalone_auth_test"),
+      correlationId: "cookie-auth-test"
+    });
+    expect(user).toMatchObject({
+      id: "usr_provisioned",
+      authenticationMethod: "session-cookie"
+    });
+    await expect(
+      auth.authAdapter.authenticate({
+        headers: {},
+        clientInstanceId: asClientInstanceId("standalone_auth_test"),
+        correlationId: "no-cookie-test"
+      })
+    ).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
   });
 
   function postAuth(path: string, body: Record<string, string>): Promise<Response> {

@@ -33,6 +33,33 @@ describe("client instance standalone auth trusted origins", () => {
     expect(origins).toEqual(["http://127.0.0.1:5173"]);
   });
 
+  it("merges and normalizes all configured origins into one deduplicated list", () => {
+    expect(
+      resolveTrustedOrigins({
+        config: createTestConfig({
+          environment: "production",
+          trustedOrigins: ["https://login.example.test/path", "https://ui.example.test/"]
+        }),
+        env: { CHAT_UI_ORIGIN: "https://ui.example.test" },
+        allowedOrigins: ["https://embed.example.test/", "https://ui.example.test"]
+      })
+    ).toEqual([
+      "https://embed.example.test",
+      "https://ui.example.test",
+      "https://login.example.test"
+    ]);
+  });
+
+  it("accepts and serializes a single configured origin", () => {
+    expect(
+      resolveTrustedOrigins({
+        config: createTestConfig({ environment: "production", trustedOrigins: [] }),
+        env: {},
+        allowedOrigins: "https://UI.example.test:443/path"
+      })
+    ).toEqual(["https://ui.example.test"]);
+  });
+
   it("rejects development auth in production config", () => {
     expect(() =>
       parseClientInstanceConfig({

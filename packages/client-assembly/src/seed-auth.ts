@@ -4,7 +4,7 @@ import {
   type ClientInstanceConfig
 } from "@vivd-catalyst/config-schema";
 import { AppError } from "@vivd-catalyst/core";
-import { createStandaloneAuthRuntimeForClientInstance } from "./auth";
+import { createStandaloneAuthRuntimeForClientInstance, resolveTrustedOrigins } from "./auth";
 import type { ClientInstanceEnv } from "./env";
 import { createPlatformStore } from "./store";
 
@@ -12,7 +12,7 @@ export interface SeedStandaloneAuthInput {
   config?: ClientInstanceConfig;
   configPath?: string;
   env?: ClientInstanceEnv;
-  corsOrigin?: string | string[];
+  allowedOrigins?: string | string[];
 }
 
 export interface SeedStandaloneAuthResult {
@@ -41,7 +41,7 @@ export async function seedStandaloneAuth(
       config,
       env,
       clientInstanceId: getClientInstanceId(config),
-      corsOrigin: input.corsOrigin
+      allowedOrigins: resolveTrustedOrigins({ config, env, allowedOrigins: input.allowedOrigins })
     });
     try {
       return {
