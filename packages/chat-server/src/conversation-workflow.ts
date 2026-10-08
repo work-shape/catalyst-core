@@ -178,7 +178,7 @@ export class ConversationWorkflow {
         userId: asUserId(getSubjectUserId(user))
       })
     ).id;
-    await this.workspaces.requireActiveMembership(user, collaborationWorkspaceId);
+    await this.workspaces.requireWorkspaceAccess(user, collaborationWorkspaceId);
     const conversations = await this.options.conversationStore.listConversationsForWorkspace({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
@@ -1048,7 +1048,7 @@ export class ConversationWorkflow {
       throw new AppError("NOT_FOUND", "Conversation is not available");
     }
     try {
-      await this.workspaces.requireActiveMembership(user, conversation.collaborationWorkspaceId);
+      await this.workspaces.requireWorkspaceAccess(user, conversation.collaborationWorkspaceId);
     } catch (error) {
       if (isAppError(error) && error.code === "NOT_FOUND") {
         throw new AppError("NOT_FOUND", "Conversation is not available");
@@ -1080,7 +1080,7 @@ export class ConversationWorkflow {
     user: AuthenticatedUser,
     collaborationWorkspaceId: CollaborationWorkspaceId
   ): Promise<CollaborationWorkspace> {
-    await this.workspaces.requireActiveMembership(user, collaborationWorkspaceId);
+    await this.workspaces.requireWorkspaceAccess(user, collaborationWorkspaceId);
     const workspace = await this.options.userStore.getWorkspace(
       this.options.clientInstanceId,
       collaborationWorkspaceId

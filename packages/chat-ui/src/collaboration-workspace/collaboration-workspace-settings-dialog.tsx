@@ -171,7 +171,7 @@ export function CollaborationWorkspaceSettingsDialog({
         <div className="grid gap-5 px-5 pt-5">
           <CollaborationWorkspaceSettingsHeader
             name={collaborationWorkspace.name}
-            role={collaborationWorkspace.role}
+            membershipRole={collaborationWorkspace.membershipRole}
             appearance={
               draft ?? {
                 emoji: collaborationWorkspace.emoji,
@@ -305,11 +305,12 @@ export function CollaborationWorkspaceSettingsDialog({
  */
 export function CollaborationWorkspaceSettingsHeader({
   name,
-  role,
+  membershipRole,
   appearance
 }: {
   name: string;
-  role: WorkspaceMembershipRole;
+  /** Null for a superadmin who manages the workspace without being a member. */
+  membershipRole: WorkspaceMembershipRole | null;
   appearance: CollaborationWorkspaceAppearance;
 }) {
   const { t } = useTranslation();
@@ -324,7 +325,13 @@ export function CollaborationWorkspaceSettingsHeader({
       />
       <div className="grid min-w-0 gap-1">
         <strong className="truncate text-sm font-semibold">{name}</strong>
-        <span className="text-xs text-muted-foreground">{t(roleLabelKeys[role])}</span>
+        <span className="text-xs text-muted-foreground">
+          {t(
+            membershipRole
+              ? roleLabelKeys[membershipRole]
+              : "collaborationWorkspaceRoleSuperadminOnly"
+          )}
+        </span>
       </div>
     </div>
   );
@@ -372,7 +379,8 @@ export function CollaborationWorkspaceGeneralTab({
   const otherOwnerExists = members.some(
     (member) => member.role === "owner" && member.userId !== currentUserId
   );
-  const canLeave = collaborationWorkspace.role !== "owner" || otherOwnerExists;
+  const isMember = collaborationWorkspace.membershipRole !== null;
+  const canLeave = collaborationWorkspace.membershipRole !== "owner" || otherOwnerExists;
   const canDelete = canDeleteCollaborationWorkspace(collaborationWorkspace);
 
   useEffect(() => {
@@ -476,22 +484,27 @@ export function CollaborationWorkspaceGeneralTab({
           />
 
           <div className="grid gap-2 border-t pt-5">
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-9 w-fit justify-start text-destructive hover:bg-destructive/10"
-              disabled={!canLeave || membershipPending}
-              title={canLeave ? undefined : t("collaborationWorkspaceErrorLastOwner")}
-              onClick={() => setConfirmLeaveOpen(true)}
-            >
-              <LogOut size={16} aria-hidden="true" />
-              <span>{t("collaborationWorkspaceLeave")}</span>
-            </Button>
-            {canLeave ? null : (
-              <p className="text-xs text-muted-foreground">
-                {t("collaborationWorkspaceErrorLastOwner")}
-              </p>
-            )}
+            {/* A superadmin without a membership has nothing to leave. */}
+            {isMember ? (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-9 w-fit justify-start text-destructive hover:bg-destructive/10"
+                  disabled={!canLeave || membershipPending}
+                  title={canLeave ? undefined : t("collaborationWorkspaceErrorLastOwner")}
+                  onClick={() => setConfirmLeaveOpen(true)}
+                >
+                  <LogOut size={16} aria-hidden="true" />
+                  <span>{t("collaborationWorkspaceLeave")}</span>
+                </Button>
+                {canLeave ? null : (
+                  <p className="text-xs text-muted-foreground">
+                    {t("collaborationWorkspaceErrorLastOwner")}
+                  </p>
+                )}
+              </>
+            ) : null}
             {canDelete ? (
               <Button
                 type="button"
@@ -515,35 +528,37 @@ export function CollaborationWorkspaceGeneralTab({
         </CollaborationWorkspaceDialogFooter>
       </form>
 
-      <Dialog
-        open={confirmLeaveOpen}
-        title={t("collaborationWorkspaceLeaveTitle")}
-        onClose={() => setConfirmLeaveOpen(false)}
-      >
-        <div className="grid gap-4">
-          <p className="text-sm leading-6 text-muted-foreground">
-            {t("collaborationWorkspaceLeaveDescription", { name: collaborationWorkspace.name })}
-          </p>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setConfirmLeaveOpen(false)}>
-              {t("cancel")}
-            </Button>
-            <Button
-              type="button"
-              variant="danger"
-              disabled={membershipPending}
-              onClick={() => {
-                setConfirmLeaveOpen(false);
-                onLeave();
-              }}
-            >
-              {membershipPending
-                ? t("collaborationWorkspaceLeaving")
-                : t("collaborationWorkspaceLeaveConfirm")}
-            </Button>
+      {isMember ? (
+        <Dialog
+          open={confirmLeaveOpen}
+          title={t("collaborationWorkspaceLeaveTitle")}
+          onClose={() => setConfirmLeaveOpen(false)}
+        >
+          <div className="grid gap-4">
+            <p className="text-sm leading-6 text-muted-foreground">
+              {t("collaborationWorkspaceLeaveDescription", { name: collaborationWorkspace.name })}
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setConfirmLeaveOpen(false)}>
+                {t("cancel")}
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                disabled={membershipPending}
+                onClick={() => {
+                  setConfirmLeaveOpen(false);
+                  onLeave();
+                }}
+              >
+                {membershipPending
+                  ? t("collaborationWorkspaceLeaving")
+                  : t("collaborationWorkspaceLeaveConfirm")}
+              </Button>
+            </div>
           </div>
-        </div>
-      </Dialog>
+        </Dialog>
+      ) : null}
     </>
   );
 }

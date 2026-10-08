@@ -882,6 +882,184 @@ describe("Collaboration Workspace API", () => {
     await app.close();
   });
 
+  it("makes a superadmin Owner of every shared workspace without a membership", async () => {
+    const app = await createWorkspaceApp();
+    const superadmin = await currentUser(app.server, "superadmin");
+    await currentUser(app.server, "instance-admin");
+    const member = await currentUser(app.server, "member");
+    const outsider = await currentUser(app.server, "outsider");
+    const workspaceId = await createSharedWorkspace(app.server, "member", "Team space");
+    await inject(app.server, "outsider", {
+      method: "POST",
+      url: `/api/collaboration-workspaces/${workspaceId}/access-requests`
+    });
+    // Not discoverable from here on: the superadmin's access does not depend on visibility.
+    await inject(app.server, "member", {
+      method: "PATCH",
+      url: `/api/collaboration-workspaces/${workspaceId}`,
+      payload: { visibility: "private" }
+    });
+    const conversationId = await createConversation(app.server, "member", workspaceId, "Team");
+    await seedConversationMessage(app.store, conversationId);
+
+    const workspaceUrl = `/api/collaboration-workspaces/${workspaceId}`;
+    const listWorkspaces = async (actor: string) =>
+      (
+        await inject(app.server, actor, { method: "GET", url: "/api/collaboration-workspaces" })
+      ).json() as Array<Record<string, unknown>>;
+    const listed = (await listWorkspaces("superadmin")).find((row) => row.id === workspaceId);
+    // Pending requests stay a to-do for the workspace's own Owners and Admins.
+    expect(listed).toMatchObject({
+      role: "owner",
+      membershipRole: null,
+      pendingAccessRequestCount: 0
+    });
+    expect((await listWorkspaces("member")).find((row) => row.id === workspaceId)).toMatchObject({
+      role: "owner",
+      membershipRole: "owner",
+      pendingAccessRequestCount: 1
+    });
+
+    // The instance role `admin` gives no workspace access.
+    for (const actor of ["instance-admin", "outsider"]) {
+      expect((await listWorkspaces(actor)).map((row) => row.id)).not.toContain(workspaceId);
+      for (const url of [
+        workspaceUrl,
+        `${workspaceUrl}/members`,
+        `${workspaceUrl}/agents`,
+        `/api/conversations?collaborationWorkspaceId=${workspaceId}`,
+        `/api/conversations/${conversationId}/thread`
+      ]) {
+        expect((await inject(app.server, actor, { method: "GET", url })).statusCode, url).toBe(404);
+      }
+    }
+
+    for (const url of [
+      workspaceUrl,
+      `${workspaceUrl}/members`,
+      `${workspaceUrl}/agents`,
+      `${workspaceUrl}/access-requests`,
+      `${workspaceUrl}/deletion-impact`,
+      `/api/conversations/${conversationId}/thread`
+    ]) {
+      expect((await inject(app.server, "superadmin", { method: "GET", url })).statusCode, url).toBe(
+        200
+      );
+    }
+    const conversations = await inject(app.server, "superadmin", {
+      method: "GET",
+      url: `/api/conversations?collaborationWorkspaceId=${workspaceId}`
+    });
+    expect((conversations.json() as Array<{ id: string }>).map((row) => row.id)).toEqual([
+      conversationId
+    ]);
+
+    const renamed = await inject(app.server, "superadmin", {
+      method: "PATCH",
+      url: workspaceUrl,
+      payload: { name: "Renamed by the superadmin" }
+    });
+    expect(renamed.statusCode).toBe(200);
+    expect(renamed.json()).toMatchObject({
+      name: "Renamed by the superadmin",
+      role: "owner",
+      membershipRole: null,
+      pendingAccessRequestCount: 0
+    });
+    const approved = await inject(app.server, "superadmin", {
+      method: "POST",
+      url: `${workspaceUrl}/access-requests/${outsider.id}/approve`
+    });
+    expect(approved.statusCode).toBe(200);
+    const promoted = await inject(app.server, "superadmin", {
+      method: "PATCH",
+      url: `${workspaceUrl}/members/${outsider.id}`,
+      payload: { role: "owner" }
+    });
+    expect(promoted.statusCode).toBe(200);
+    const audit = await inject(app.server, "superadmin", {
+      method: "GET",
+      url: "/api/audit-events"
+    });
+    expect(audit.json()).toContainEqual(
+      expect.objectContaining({
+        type: "collaboration_workspace.updated",
+        subject: workspaceId,
+        actor: expect.objectContaining({ userId: superadmin.id })
+      })
+    );
+
+    // Without a membership there is nothing to leave, and the access is not a member row.
+    const leaveWithoutMembership = await inject(app.server, "superadmin", {
+      method: "DELETE",
+      url: `${workspaceUrl}/members/me`
+    });
+    expect(leaveWithoutMembership.statusCode).toBe(409);
+    expect(leaveWithoutMembership.json()).toMatchObject({
+      error: { code: "CONFLICT", message: "User is not a workspace member" }
+    });
+    const members = await inject(app.server, "superadmin", {
+      method: "GET",
+      url: `${workspaceUrl}/members`
+    });
+    expect((members.json() as Array<{ userId: string }>).map((row) => row.userId).sort()).toEqual(
+      [member.id, outsider.id].sort()
+    );
+
+    // A membership below Owner does not lower what the superadmin may do, and can be left again.
+    await addWorkspaceMember(app.server, "superadmin", workspaceId, "superadmin@example.test");
+    expect(
+      (await listWorkspaces("superadmin")).find((row) => row.id === workspaceId)
+    ).toMatchObject({ role: "owner", membershipRole: "member" });
+    expect(
+      (
+        await inject(app.server, "superadmin", {
+          method: "PATCH",
+          url: workspaceUrl,
+          payload: { description: "Still editable" }
+        })
+      ).statusCode
+    ).toBe(200);
+    expect(
+      (
+        await inject(app.server, "superadmin", {
+          method: "DELETE",
+          url: `${workspaceUrl}/members/me`
+        })
+      ).statusCode
+    ).toBe(200);
+    expect(
+      (await listWorkspaces("superadmin")).find((row) => row.id === workspaceId)
+    ).toMatchObject({ role: "owner", membershipRole: null });
+
+    // Personal Workspaces stay with their user.
+    const personalWorkspaceId = (await listWorkspaces("member")).find(
+      (row) => row.kind === "personal"
+    )!.id as string;
+    const personalConversationId = await createConversation(
+      app.server,
+      "member",
+      personalWorkspaceId,
+      "Personal"
+    );
+    await seedConversationMessage(app.store, personalConversationId);
+    expect((await listWorkspaces("superadmin")).map((row) => row.id)).not.toContain(
+      personalWorkspaceId
+    );
+    for (const url of [
+      `/api/collaboration-workspaces/${personalWorkspaceId}`,
+      `/api/collaboration-workspaces/${personalWorkspaceId}/agents`,
+      `/api/conversations?collaborationWorkspaceId=${personalWorkspaceId}`,
+      `/api/conversations/${personalConversationId}/thread`
+    ]) {
+      expect((await inject(app.server, "superadmin", { method: "GET", url })).statusCode, url).toBe(
+        404
+      );
+    }
+
+    await app.close();
+  });
+
   it("moves an idle conversation only for members of both workspaces and changes aggregate access", async () => {
     const app = await createWorkspaceApp();
     const owner = await currentUser(app.server, "owner");
@@ -1363,7 +1541,8 @@ describe("Conversation visibility", () => {
     const { app, workspaceId, conversationId, sharedConversationId } = fixture;
     const routes = conversationRoutes(fixture);
 
-    for (const actor of ["owner", "admin", "member", "outsider"]) {
+    // "owner" is a superadmin with a membership, "superadmin" one without.
+    for (const actor of ["owner", "admin", "member", "outsider", "superadmin"]) {
       for (const route of routes) {
         const denied = await route.send(actor, conversationId);
         const missing = await route.send(actor, "conv_missing");
@@ -1383,7 +1562,7 @@ describe("Conversation visibility", () => {
       }
     }
 
-    for (const actor of ["owner", "admin", "member"]) {
+    for (const actor of ["owner", "admin", "member", "superadmin"]) {
       const listed = await inject(app.server, actor, {
         method: "GET",
         url: `/api/conversations?collaborationWorkspaceId=${workspaceId}`
@@ -1682,6 +1861,7 @@ async function createPrivateConversationFixture() {
   const admin = await currentUser(app.server, "admin");
   await currentUser(app.server, "member");
   await currentUser(app.server, "outsider");
+  await currentUser(app.server, "superadmin");
   const author = await currentUser(app.server, "direct");
   const created = await inject(app.server, "owner", {
     method: "POST",
@@ -1854,7 +2034,9 @@ async function createWorkspaceApp(collaborationWorkspacesEnabled = true) {
           testIdentity("member", "member@example.test"),
           testIdentity("outsider", "outsider@example.test"),
           testIdentity("declined", "declined@example.test"),
-          testIdentity("direct", "direct@example.test")
+          testIdentity("direct", "direct@example.test"),
+          testIdentity("superadmin", "superadmin@example.test", ["user", "admin", "superadmin"]),
+          testIdentity("instance-admin", "instance-admin@example.test", ["user", "admin"])
         ]
       },
       executionWorkspaces: { enabled: true }

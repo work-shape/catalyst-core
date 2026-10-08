@@ -1,5 +1,5 @@
 import { ChevronsUpDown, Compass, Plus, Settings } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import type { CollaborationWorkspaceWithRole } from "@vivd-catalyst/api-client";
 import { useTranslation } from "../i18n";
 import { Button } from "../ui/button";
@@ -172,6 +172,22 @@ export function CollaborationWorkspaceSelectorMenu({
   const sharedCollaborationWorkspaces = collaborationWorkspaces
     .filter((collaborationWorkspace) => collaborationWorkspace.kind === "shared")
     .sort((left, right) => left.name.localeCompare(right.name));
+  // A superadmin also reaches Shared Workspaces they are not a member of; those get
+  // their own group so the first one stays the list of workspaces the user belongs to.
+  const sharedCollaborationWorkspaceGroups = [
+    {
+      heading: t("collaborationWorkspaceSharedHeading"),
+      collaborationWorkspaces: sharedCollaborationWorkspaces.filter(
+        (collaborationWorkspace) => collaborationWorkspace.membershipRole !== null
+      )
+    },
+    {
+      heading: t("collaborationWorkspaceOtherHeading"),
+      collaborationWorkspaces: sharedCollaborationWorkspaces.filter(
+        (collaborationWorkspace) => collaborationWorkspace.membershipRole === null
+      )
+    }
+  ].filter((group) => group.collaborationWorkspaces.length > 0);
   const fade = useScrollEdgeFade<HTMLDivElement>([collaborationWorkspaces.length]);
 
   return (
@@ -213,12 +229,10 @@ export function CollaborationWorkspaceSelectorMenu({
               />
             ) : null}
 
-            {sharedCollaborationWorkspaces.length > 0 ? (
-              <>
-                <p className="px-2 pb-1 pt-3 text-xs text-muted-foreground">
-                  {t("collaborationWorkspaceSharedHeading")}
-                </p>
-                {sharedCollaborationWorkspaces.map((collaborationWorkspace) => (
+            {sharedCollaborationWorkspaceGroups.map((group) => (
+              <Fragment key={group.heading}>
+                <p className="px-2 pb-1 pt-3 text-xs text-muted-foreground">{group.heading}</p>
+                {group.collaborationWorkspaces.map((collaborationWorkspace) => (
                   <CollaborationWorkspaceRow
                     key={collaborationWorkspace.id}
                     accentColor={resolveCollaborationWorkspaceAccentColor(collaborationWorkspace)}
@@ -240,8 +254,8 @@ export function CollaborationWorkspaceSelectorMenu({
                     }
                   />
                 ))}
-              </>
-            ) : null}
+              </Fragment>
+            ))}
           </div>
 
           <div className="mt-2 grid grid-cols-2 gap-1 border-t pt-2">

@@ -715,6 +715,44 @@ test("collaboration workspace settings delete a workspace and fall back to perso
   ).toHaveCount(0);
 });
 
+test("a superadmin manages a shared workspace without being a member", async ({
+  page,
+  browser
+}) => {
+  const workspaceName = `E2E Team ${Date.now()}`;
+  const memberContext = await browser.newContext();
+  const memberPage = await memberContext.newPage();
+  await signInViaApi(memberPage, normalUser);
+  const createdCollaborationWorkspace = await requestWithOrigin(
+    memberPage,
+    "post",
+    `${apiBaseUrl}/api/collaboration-workspaces`,
+    { data: { name: workspaceName, visibility: "private" } }
+  );
+  expect(createdCollaborationWorkspace.ok()).toBe(true);
+  const collaborationWorkspace = (await createdCollaborationWorkspace.json()) as { id: string };
+  await memberContext.close();
+
+  await signInViaApi(page, superadminUser);
+  await page.goto("/");
+  const selectorTrigger = page.getByTestId("collaboration-workspace-selector-trigger");
+  await selectorTrigger.click();
+  await expect(page.getByText("Other workspaces")).toBeVisible();
+  await page.getByRole("button", { name: `Settings for ${workspaceName}` }).click();
+  await expect(page.getByText("Superadmin, not a member")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save changes" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Leave workspace" })).toHaveCount(0);
+  await page.getByRole("tab", { name: "Members" }).click();
+  await expect(page.getByText(normalUser.email)).toBeVisible();
+  await page.getByRole("button", { name: "Close dialog" }).click();
+
+  await selectorTrigger.click();
+  await page.getByRole("button", { name: workspaceName, exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/w/${collaborationWorkspace.id}$`, "u"));
+  await expect(selectorTrigger).toContainText(workspaceName);
+  await expect(page.getByPlaceholder("Message")).toBeVisible();
+});
+
 test("first message from the root route moves to the persisted conversation route", async ({
   page
 }) => {

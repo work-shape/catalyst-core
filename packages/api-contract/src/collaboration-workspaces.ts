@@ -41,7 +41,10 @@ export const collaborationWorkspaceSchema = z.object({
 });
 
 export const collaborationWorkspaceWithRoleSchema = collaborationWorkspaceSchema.extend({
+  /** What the caller may do here. A superadmin acts as Owner of every Shared Workspace. */
   role: workspaceMembershipRoleSchema,
+  /** The caller's own Workspace Membership role; null when only the superadmin role gives access. */
+  membershipRole: workspaceMembershipRoleSchema.nullable(),
   pendingAccessRequestCount: z.number().int().nonnegative()
 });
 

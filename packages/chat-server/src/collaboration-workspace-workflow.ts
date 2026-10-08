@@ -32,7 +32,19 @@ const LAST_OWNER_MESSAGE = "A Shared Workspace must retain at least one active o
 const COLLABORATION_WORKSPACES_DISABLED_MESSAGE =
   "Collaboration workspaces are not enabled for this instance";
 
+/**
+ * What a user may do in one Collaboration Workspace. A superadmin acts as Owner of every Shared
+ * Workspace, so `role` can exceed the user's own Workspace Membership or exist without one.
+ */
+export interface WorkspaceAccess {
+  userId: UserRecord["id"];
+  role: WorkspaceMembershipRole;
+  /** The user's own Workspace Membership role; null when only the superadmin role gives access. */
+  membershipRole: WorkspaceMembershipRole | null;
+}
+
 export interface WorkspaceListItem extends CollaborationWorkspaceWithRole {
+  membershipRole: WorkspaceMembershipRole | null;
   pendingAccessRequestCount: number;
 }
 
@@ -93,19 +105,35 @@ export interface UpdateWorkspaceSettingsCommand {
 export class CollaborationWorkspaceWorkflow {
   constructor(private readonly options: ChatServerOptions) {}
 
-  async requireActiveMembership(
+  /**
+   * The single access check for a Collaboration Workspace. Nobody but its user reaches a
+   * Personal Workspace, and private Conversations stay with their author (ADR-0015).
+   */
+  async requireWorkspaceAccess(
     user: AuthenticatedUser,
     collaborationWorkspaceId: CollaborationWorkspaceId
-  ): Promise<WorkspaceMembership> {
+  ): Promise<WorkspaceAccess> {
+    const userId = asUserId(getSubjectUserId(user));
     const membership = await this.options.userStore.getMembership({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
-      userId: asUserId(getSubjectUserId(user))
+      userId
     });
-    if (!membership) {
+    const membershipRole = membership?.role ?? null;
+    // Only a superadmin's access depends on the workspace itself, so only they load it here.
+    const workspace = isSuperadmin(user)
+      ? await this.options.userStore.getWorkspace(
+          this.options.clientInstanceId,
+          collaborationWorkspaceId
+        )
+      : undefined;
+    const role = workspace
+      ? effectiveWorkspaceRole(user, workspace, membershipRole)
+      : membershipRole;
+    if (!role) {
       throw new AppError("NOT_FOUND", "Collaboration Workspace is not available");
     }
-    return membership;
+    return { userId, role, membershipRole };
   }
 
   /** The runtime assets a member sees in this workspace. */
@@ -113,7 +141,7 @@ export class CollaborationWorkspaceWorkflow {
     user: AuthenticatedUser,
     collaborationWorkspaceId: CollaborationWorkspaceId
   ): Promise<RuntimeAssetSnapshot> {
-    await this.requireActiveMembership(user, collaborationWorkspaceId);
+    await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
     return getWorkspaceAssetSnapshot(
       this.options,
       await this.requireWorkspace(collaborationWorkspaceId)
@@ -121,24 +149,31 @@ export class CollaborationWorkspaceWorkflow {
   }
 
   async listWorkspaces(user: AuthenticatedUser): Promise<WorkspaceListItem[]> {
-    const workspaces = await this.options.userStore.listWorkspacesForUser({
+    const userId = asUserId(getSubjectUserId(user));
+    const memberWorkspaces = await this.options.userStore.listWorkspacesForUser({
       clientInstanceId: this.options.clientInstanceId,
-      userId: asUserId(getSubjectUserId(user))
+      userId
     });
-    return Promise.all(
-      workspaces.map(async (workspace) => ({
-        ...workspace,
-        pendingAccessRequestCount:
-          workspace.role === "owner" || workspace.role === "admin"
-            ? (
-                await this.options.userStore.listAccessRequestsForWorkspace({
-                  clientInstanceId: this.options.clientInstanceId,
-                  collaborationWorkspaceId: workspace.id
-                })
-              ).length
-            : 0
-      }))
-    );
+    const memberWorkspaceIds = new Set(memberWorkspaces.map((workspace) => workspace.id));
+    const otherSharedWorkspaces = isSuperadmin(user)
+      ? (
+          await this.options.userStore.listSharedWorkspaces({
+            clientInstanceId: this.options.clientInstanceId
+          })
+        ).filter((workspace) => !memberWorkspaceIds.has(workspace.id))
+      : [];
+    return Promise.all([
+      ...memberWorkspaces.map((workspace) =>
+        this.toListItem(workspace, {
+          userId,
+          role: effectiveWorkspaceRole(user, workspace, workspace.role),
+          membershipRole: workspace.role
+        })
+      ),
+      ...otherSharedWorkspaces.map((workspace) =>
+        this.toListItem(workspace, { userId, role: "owner", membershipRole: null })
+      )
+    ]);
   }
 
   async createSharedWorkspace(
@@ -159,33 +194,23 @@ export class CollaborationWorkspaceWorkflow {
       creatorUserId: asUserId(getSubjectUserId(user))
     });
     await this.record(context, user, workspace.id, "collaboration_workspace.created");
-    return { ...workspace, role: "owner", pendingAccessRequestCount: 0 };
+    return { ...workspace, role: "owner", membershipRole: "owner", pendingAccessRequestCount: 0 };
   }
 
   async getWorkspace(
     user: AuthenticatedUser,
     collaborationWorkspaceId: CollaborationWorkspaceId
   ): Promise<WorkspaceListItem> {
-    const membership = await this.requireActiveMembership(user, collaborationWorkspaceId);
-    const workspace = await this.requireWorkspace(collaborationWorkspaceId);
-    const pendingAccessRequestCount =
-      membership.role === "owner" || membership.role === "admin"
-        ? (
-            await this.options.userStore.listAccessRequestsForWorkspace({
-              clientInstanceId: this.options.clientInstanceId,
-              collaborationWorkspaceId
-            })
-          ).length
-        : 0;
-    return { ...workspace, role: membership.role, pendingAccessRequestCount };
+    const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
+    return this.toListItem(await this.requireWorkspace(collaborationWorkspaceId), access);
   }
 
   async getDeletionImpact(
     user: AuthenticatedUser,
     collaborationWorkspaceId: CollaborationWorkspaceId
   ): Promise<WorkspaceDeletionImpact> {
-    const membership = await this.requireActiveMembership(user, collaborationWorkspaceId);
-    requireOwner(membership);
+    const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
+    requireOwner(access);
     await this.requireSharedWorkspace(collaborationWorkspaceId);
     const [conversations, memberships, accessRequests] = await Promise.all([
       this.options.conversationStore.listConversationsForWorkspace({
@@ -215,8 +240,8 @@ export class CollaborationWorkspaceWorkflow {
     collaborationWorkspaceId: CollaborationWorkspaceId,
     confirmName: string
   ): Promise<WorkspaceDeletionResult> {
-    const membership = await this.requireActiveMembership(user, collaborationWorkspaceId);
-    requireOwner(membership);
+    const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
+    requireOwner(access);
     const workspace = await this.requireSharedWorkspace(collaborationWorkspaceId);
     if (confirmName !== workspace.name) {
       throw new AppError("VALIDATION_FAILED", "Workspace name confirmation does not match");
@@ -337,8 +362,8 @@ export class CollaborationWorkspaceWorkflow {
     collaborationWorkspaceId: CollaborationWorkspaceId,
     command: UpdateWorkspaceSettingsCommand
   ): Promise<WorkspaceListItem> {
-    const membership = await this.requireActiveMembership(user, collaborationWorkspaceId);
-    requireOwnerOrAdmin(membership);
+    const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
+    requireOwnerOrAdmin(access);
     const workspace = await this.requireWorkspace(collaborationWorkspaceId);
     if (workspace.kind === "personal") {
       throw new AppError("VALIDATION_FAILED", "Personal Workspace settings cannot be changed");
@@ -368,21 +393,15 @@ export class CollaborationWorkspaceWorkflow {
     await this.record(context, user, collaborationWorkspaceId, "collaboration_workspace.updated", {
       changedFields
     });
-    const pendingAccessRequestCount = (
-      await this.options.userStore.listAccessRequestsForWorkspace({
-        clientInstanceId: this.options.clientInstanceId,
-        collaborationWorkspaceId
-      })
-    ).length;
-    return { ...updated, role: membership.role, pendingAccessRequestCount };
+    return this.toListItem(updated, access);
   }
 
   async listMembers(
     user: AuthenticatedUser,
     collaborationWorkspaceId: CollaborationWorkspaceId
   ): Promise<WorkspaceMemberItem[]> {
-    const actorMembership = await this.requireActiveMembership(user, collaborationWorkspaceId);
-    requireOwnerOrAdmin(actorMembership);
+    const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
+    requireOwnerOrAdmin(access);
     const [memberships, users] = await Promise.all([
       this.options.userStore.listMemberships({
         clientInstanceId: this.options.clientInstanceId,
@@ -409,8 +428,8 @@ export class CollaborationWorkspaceWorkflow {
     query: string
   ): Promise<WorkspaceMemberCandidate[]> {
     this.requireCollaborationWorkspacesEnabled();
-    const actorMembership = await this.requireActiveMembership(user, collaborationWorkspaceId);
-    requireOwnerOrAdmin(actorMembership);
+    const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
+    requireOwnerOrAdmin(access);
     await this.requireSharedWorkspace(collaborationWorkspaceId);
     const normalizedQuery = query.trim();
     if (normalizedQuery.length < 2) return [];
@@ -429,8 +448,8 @@ export class CollaborationWorkspaceWorkflow {
     email: string
   ): Promise<WorkspaceMemberItem> {
     this.requireCollaborationWorkspacesEnabled();
-    const actorMembership = await this.requireActiveMembership(user, collaborationWorkspaceId);
-    requireOwnerOrAdmin(actorMembership);
+    const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
+    requireOwnerOrAdmin(access);
     await this.requireSharedWorkspace(collaborationWorkspaceId);
     const normalizedEmail = email.trim().toLocaleLowerCase("en-US");
     if (!normalizedEmail) throw new AppError("VALIDATION_FAILED", CANNOT_ADD_MEMBER_MESSAGE);
@@ -501,7 +520,7 @@ export class CollaborationWorkspaceWorkflow {
     targetUserId: UserRecord["id"],
     role: WorkspaceMembershipRole
   ): Promise<WorkspaceMembership> {
-    const actor = await this.requireActiveMembership(user, collaborationWorkspaceId);
+    const actor = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
     if (actor.role !== "owner" && actor.role !== "admin") {
       throw new AppError("FORBIDDEN", "Workspace Owner access is required");
     }
@@ -538,7 +557,7 @@ export class CollaborationWorkspaceWorkflow {
     collaborationWorkspaceId: CollaborationWorkspaceId,
     targetUserId: UserRecord["id"]
   ): Promise<WorkspaceMembership> {
-    const actor = await this.requireActiveMembership(user, collaborationWorkspaceId);
+    const actor = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
     if (actor.role !== "owner" && actor.role !== "admin") {
       throw new AppError("FORBIDDEN", "Workspace Owner or Admin access is required");
     }
@@ -570,22 +589,25 @@ export class CollaborationWorkspaceWorkflow {
     context: RuntimeCallContext,
     collaborationWorkspaceId: CollaborationWorkspaceId
   ): Promise<WorkspaceMembership> {
-    const membership = await this.requireActiveMembership(user, collaborationWorkspaceId);
+    const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
     await this.requireSharedWorkspace(collaborationWorkspaceId);
-    if (membership.role === "owner") {
-      await this.requireAnotherActiveOwner(collaborationWorkspaceId, membership.userId);
+    if (!access.membershipRole) {
+      throw new AppError("CONFLICT", "User is not a workspace member");
+    }
+    if (access.membershipRole === "owner") {
+      await this.requireAnotherActiveOwner(collaborationWorkspaceId, access.userId);
     }
     const removed = await this.options.userStore.removeMembership({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
-      userId: membership.userId
+      userId: access.userId
     });
     await this.record(
       context,
       user,
       collaborationWorkspaceId,
       "collaboration_workspace.member_left",
-      { targetUserId: membership.userId }
+      { targetUserId: access.userId }
     );
     return removed;
   }
@@ -673,8 +695,8 @@ export class CollaborationWorkspaceWorkflow {
     user: AuthenticatedUser,
     collaborationWorkspaceId: CollaborationWorkspaceId
   ): Promise<WorkspaceAccessRequestItem[]> {
-    const membership = await this.requireActiveMembership(user, collaborationWorkspaceId);
-    requireOwnerOrAdmin(membership);
+    const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
+    requireOwnerOrAdmin(access);
     const [requests, users] = await Promise.all([
       this.options.userStore.listAccessRequestsForWorkspace({
         clientInstanceId: this.options.clientInstanceId,
@@ -701,8 +723,8 @@ export class CollaborationWorkspaceWorkflow {
     collaborationWorkspaceId: CollaborationWorkspaceId,
     targetUserId: UserRecord["id"]
   ): Promise<WorkspaceMembership> {
-    const membership = await this.requireActiveMembership(user, collaborationWorkspaceId);
-    requireOwnerOrAdmin(membership);
+    const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
+    requireOwnerOrAdmin(access);
     await this.requireSharedWorkspace(collaborationWorkspaceId);
     const request = await this.options.userStore.getAccessRequest({
       clientInstanceId: this.options.clientInstanceId,
@@ -745,8 +767,8 @@ export class CollaborationWorkspaceWorkflow {
     collaborationWorkspaceId: CollaborationWorkspaceId,
     targetUserId: UserRecord["id"]
   ) {
-    const membership = await this.requireActiveMembership(user, collaborationWorkspaceId);
-    requireOwnerOrAdmin(membership);
+    const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
+    requireOwnerOrAdmin(access);
     const request = await this.options.userStore.deleteAccessRequest({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
@@ -766,6 +788,34 @@ export class CollaborationWorkspaceWorkflow {
     if (!this.options.config.ui.collaborationWorkspaces.enabled) {
       throw new AppError("FORBIDDEN", COLLABORATION_WORKSPACES_DISABLED_MESSAGE);
     }
+  }
+
+  private async toListItem(
+    workspace: CollaborationWorkspace,
+    access: WorkspaceAccess
+  ): Promise<WorkspaceListItem> {
+    return {
+      ...workspace,
+      role: access.role,
+      membershipRole: access.membershipRole,
+      pendingAccessRequestCount: await this.countPendingAccessRequests(
+        workspace.id,
+        access.membershipRole
+      )
+    };
+  }
+
+  /** Pending requests are a to-do for the workspace's own Owners and Admins, nobody else. */
+  private async countPendingAccessRequests(
+    collaborationWorkspaceId: CollaborationWorkspaceId,
+    membershipRole: WorkspaceMembershipRole | null
+  ): Promise<number> {
+    if (membershipRole !== "owner" && membershipRole !== "admin") return 0;
+    const requests = await this.options.userStore.listAccessRequestsForWorkspace({
+      clientInstanceId: this.options.clientInstanceId,
+      collaborationWorkspaceId
+    });
+    return requests.length;
   }
 
   private async requireWorkspace(
@@ -846,14 +896,27 @@ export class CollaborationWorkspaceWorkflow {
   }
 }
 
-function requireOwnerOrAdmin(membership: WorkspaceMembership): void {
-  if (membership.role !== "owner" && membership.role !== "admin") {
+function isSuperadmin(user: AuthenticatedUser): boolean {
+  return user.roles.includes("superadmin");
+}
+
+/** Membership decides, except that a superadmin is Owner of every Shared Workspace. */
+function effectiveWorkspaceRole<Role extends WorkspaceMembershipRole | null>(
+  user: AuthenticatedUser,
+  workspace: Pick<CollaborationWorkspace, "kind">,
+  membershipRole: Role
+): WorkspaceMembershipRole | Role {
+  return isSuperadmin(user) && workspace.kind === "shared" ? "owner" : membershipRole;
+}
+
+function requireOwnerOrAdmin(access: WorkspaceAccess): void {
+  if (access.role !== "owner" && access.role !== "admin") {
     throw new AppError("FORBIDDEN", "Workspace Owner or Admin access is required");
   }
 }
 
-function requireOwner(membership: WorkspaceMembership): void {
-  if (membership.role !== "owner") {
+function requireOwner(access: WorkspaceAccess): void {
+  if (access.role !== "owner") {
     throw new AppError("FORBIDDEN", "Workspace Owner access is required");
   }
 }

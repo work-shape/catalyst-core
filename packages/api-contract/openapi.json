@@ -2706,6 +2706,21 @@
                           "member"
                         ]
                       },
+                      "membershipRole": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "owner",
+                              "admin",
+                              "member"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
                       "pendingAccessRequestCount": {
                         "type": "integer",
                         "minimum": 0,
@@ -2726,6 +2741,7 @@
                       "createdAt",
                       "updatedAt",
                       "role",
+                      "membershipRole",
                       "pendingAccessRequestCount"
                     ],
                     "additionalProperties": false
@@ -2938,6 +2954,21 @@
                         "member"
                       ]
                     },
+                    "membershipRole": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "owner",
+                            "admin",
+                            "member"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "pendingAccessRequestCount": {
                       "type": "integer",
                       "minimum": 0,
@@ -2958,6 +2989,7 @@
                     "createdAt",
                     "updatedAt",
                     "role",
+                    "membershipRole",
                     "pendingAccessRequestCount"
                   ],
                   "additionalProperties": false
@@ -3189,6 +3221,21 @@
                         "member"
                       ]
                     },
+                    "membershipRole": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "owner",
+                            "admin",
+                            "member"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "pendingAccessRequestCount": {
                       "type": "integer",
                       "minimum": 0,
@@ -3209,6 +3256,7 @@
                     "createdAt",
                     "updatedAt",
                     "role",
+                    "membershipRole",
                     "pendingAccessRequestCount"
                   ],
                   "additionalProperties": false
@@ -3426,6 +3474,21 @@
                         "member"
                       ]
                     },
+                    "membershipRole": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "owner",
+                            "admin",
+                            "member"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "pendingAccessRequestCount": {
                       "type": "integer",
                       "minimum": 0,
@@ -3446,6 +3509,7 @@
                     "createdAt",
                     "updatedAt",
                     "role",
+                    "membershipRole",
                     "pendingAccessRequestCount"
                   ],
                   "additionalProperties": false

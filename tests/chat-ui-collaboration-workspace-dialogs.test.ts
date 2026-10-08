@@ -62,6 +62,7 @@ const sharedCollaborationWorkspace: CollaborationWorkspaceWithRole = {
   createdAt: "2026-08-01T10:00:00.000Z",
   updatedAt: "2026-08-01T10:00:00.000Z",
   role: "owner",
+  membershipRole: "owner",
   pendingAccessRequestCount: 1
 };
 
@@ -85,6 +86,7 @@ const secondSharedCollaborationWorkspace: CollaborationWorkspaceWithRole = {
   emoji: null,
   accentColor: "teal",
   role: "member",
+  membershipRole: "member",
   pendingAccessRequestCount: 0
 };
 
@@ -281,6 +283,43 @@ describe("collaboration workspace settings tabs", () => {
     );
   });
 
+  it("offers a superadmin without a membership everything except leaving", () => {
+    const markup = render(
+      "de",
+      createElement(CollaborationWorkspaceGeneralTab, {
+        collaborationWorkspace: { ...sharedCollaborationWorkspace, membershipRole: null },
+        currentUserId: "user_9",
+        members: [members[0]!],
+        savePending: false,
+        membershipPending: false,
+        onSave: noop,
+        onLeave: noop,
+        onRequestDelete: noop
+      })
+    );
+
+    expect(markup).not.toContain("Arbeitsbereich verlassen");
+    expect(markup).not.toContain(
+      "Ein geteilter Arbeitsbereich muss mindestens einen Besitzer behalten."
+    );
+    expect(markup).toContain('data-testid="collaboration-workspace-delete-trigger"');
+    expect(markup).toContain("Änderungen speichern");
+  });
+
+  it("names superadmin access in the header instead of a membership role", () => {
+    const markup = render(
+      "de",
+      createElement(CollaborationWorkspaceSettingsHeader, {
+        name: sharedCollaborationWorkspace.name,
+        membershipRole: null,
+        appearance: { emoji: null, accentColor: "violet" }
+      })
+    );
+
+    expect(markup).toContain("Superadmin, kein Mitglied");
+    expect(markup).not.toContain("Besitzer");
+  });
+
   it("shows member email and role controls for an owner", () => {
     const markup = render(
       "de",
@@ -428,7 +467,11 @@ describe("collaboration workspace settings tabs", () => {
     const markup = render(
       "de",
       createElement(CollaborationWorkspaceMembersTab, {
-        collaborationWorkspace: { ...sharedCollaborationWorkspace, role: "admin" },
+        collaborationWorkspace: {
+          ...sharedCollaborationWorkspace,
+          role: "admin",
+          membershipRole: "admin"
+        },
         currentUserId: "user_3",
         members,
         loading: false,
@@ -514,7 +557,11 @@ describe("collaboration workspace settings tabs", () => {
     const markup = render(
       "de",
       createElement(CollaborationWorkspaceGeneralTab, {
-        collaborationWorkspace: { ...sharedCollaborationWorkspace, role: "admin" },
+        collaborationWorkspace: {
+          ...sharedCollaborationWorkspace,
+          role: "admin",
+          membershipRole: "admin"
+        },
         currentUserId: "user_3",
         members,
         savePending: false,
@@ -1141,7 +1188,7 @@ describe("collaboration workspace appearance preview", () => {
       "de",
       createElement(CollaborationWorkspaceSettingsHeader, {
         name: sharedCollaborationWorkspace.name,
-        role: "owner",
+        membershipRole: "owner",
         appearance: { emoji: "🏦", accentColor: "magenta" }
       })
     );

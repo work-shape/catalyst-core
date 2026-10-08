@@ -26,6 +26,7 @@ function collaborationWorkspace(
     createdAt: "2026-08-01T10:00:00.000Z",
     updatedAt: "2026-08-01T10:00:00.000Z",
     role: "member",
+    membershipRole: overrides.role ?? "member",
     pendingAccessRequestCount: 0,
     ...overrides
   };
@@ -127,6 +128,40 @@ describe("collaboration workspace selector", () => {
     expect(markup).toContain('aria-label="Einstellungen für Administered"');
     expect(markup).not.toContain('aria-label="Einstellungen für Joined"');
     expect(markup).toContain('aria-label="3 offene Zugriffsanfragen"');
+  });
+
+  it("groups the shared workspaces a superadmin reaches without a membership", () => {
+    const markup = renderMenu([
+      personal,
+      collaborationWorkspace({ id: "cw_joined", name: "Joined" }),
+      collaborationWorkspace({
+        id: "cw_other",
+        name: "Anderes Team",
+        role: "owner",
+        membershipRole: null
+      })
+    ]);
+
+    expect(markup.indexOf("Geteilte Arbeitsbereiche")).toBeLessThan(markup.indexOf("Joined"));
+    expect(markup.indexOf("Joined")).toBeLessThan(markup.indexOf("Weitere Arbeitsbereiche"));
+    expect(markup.indexOf("Weitere Arbeitsbereiche")).toBeLessThan(markup.indexOf("Anderes Team"));
+    expect(markup).toContain('aria-label="Einstellungen für Anderes Team"');
+  });
+
+  it("shows each shared workspace heading only when it has rows", () => {
+    const membershipsOnly = renderMenu([
+      personal,
+      collaborationWorkspace({ id: "cw_joined", name: "Joined" })
+    ]);
+    expect(membershipsOnly).toContain("Geteilte Arbeitsbereiche");
+    expect(membershipsOnly).not.toContain("Weitere Arbeitsbereiche");
+
+    const withoutMemberships = renderMenu([
+      personal,
+      collaborationWorkspace({ id: "cw_other", name: "Other", role: "owner", membershipRole: null })
+    ]);
+    expect(withoutMemberships).not.toContain("Geteilte Arbeitsbereiche");
+    expect(withoutMemberships).toContain("Weitere Arbeitsbereiche");
   });
 
   it("never offers a settings action for the personal workspace", () => {

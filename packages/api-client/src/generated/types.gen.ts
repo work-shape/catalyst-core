@@ -769,6 +769,7 @@ export type ListCollaborationWorkspacesResponses = {
         createdAt: string;
         updatedAt: string;
         role: 'owner' | 'admin' | 'member';
+        membershipRole: 'owner' | 'admin' | 'member' | null;
         pendingAccessRequestCount: number;
     }>;
 };
@@ -807,6 +808,7 @@ export type CreateCollaborationWorkspaceResponses = {
         createdAt: string;
         updatedAt: string;
         role: 'owner' | 'admin' | 'member';
+        membershipRole: 'owner' | 'admin' | 'member' | null;
         pendingAccessRequestCount: number;
     };
 };
@@ -888,6 +890,7 @@ export type GetCollaborationWorkspaceResponses = {
         createdAt: string;
         updatedAt: string;
         role: 'owner' | 'admin' | 'member';
+        membershipRole: 'owner' | 'admin' | 'member' | null;
         pendingAccessRequestCount: number;
     };
 };
@@ -928,6 +931,7 @@ export type UpdateCollaborationWorkspaceResponses = {
         createdAt: string;
         updatedAt: string;
         role: 'owner' | 'admin' | 'member';
+        membershipRole: 'owner' | 'admin' | 'member' | null;
         pendingAccessRequestCount: number;
     };
 };

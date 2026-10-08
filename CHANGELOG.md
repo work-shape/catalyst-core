@@ -23,6 +23,12 @@ contain breaking changes; a patch version does not.
   conversations, on every device. A conversation that already ran stays on what its latest run
   used, and a user who never picked anything follows the configured defaults. The pick is
   stored per user (`/api/me/model-preference`); a migration adds `product_users.model_preference`.
+- **Workspaces:** a superadmin is Owner of every Shared Workspace without being a member. The
+  workspace selector lists them under "Other workspaces"; the superadmin can open their
+  settings, manage members and access requests, and read and start conversations there.
+  Private conversations stay with their author and Personal Workspaces with their user. A
+  workspace in the API carries `membershipRole` (`null` without a membership) next to `role`,
+  which is what the caller may do.
 
 ### Changed
 
