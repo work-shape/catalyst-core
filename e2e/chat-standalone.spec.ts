@@ -1741,6 +1741,80 @@ test(
   }
 );
 
+test("the retention clock explains itself on hover, on keyboard focus and in the row menu", async ({
+  page
+}) => {
+  await signInViaApi(page, normalUser);
+  const title = `Retention hint ${Date.now()}`;
+  const { id } = await createListedConversation(page, title);
+  const thread = await page.request.get(
+    `${apiBaseUrl}/api/conversations/${encodeURIComponent(id)}/thread`
+  );
+  expect(thread.ok()).toBe(true);
+  const { conversation } = (await thread.json()) as { conversation: { retainedUntil: string } };
+  // The fixture keeps conversations for one day, so every row is about to be deleted.
+  const sentence = `Will be deleted automatically on ${new Intl.DateTimeFormat("en", {
+    weekday: "long",
+    month: "long",
+    day: "numeric"
+  }).format(new Date(conversation.retainedUntil))}`;
+  await page.goto("/");
+
+  const row = page.getByTestId("conversation-row").filter({ hasText: title });
+  const rowButton = row.getByRole("button").first();
+  const clock = row.getByTestId("conversation-expiry-warning");
+  const hint = page.getByTestId("conversation-expiry-hint");
+  await expect(clock).toBeVisible();
+  // The row's name stays short for a list read aloud; the sentence is its description.
+  await expect(rowButton).toHaveAccessibleName(`${title} will be deleted soon`);
+  await expect(rowButton).toHaveAccessibleDescription(sentence);
+  await expect(hint).toHaveCount(0);
+
+  // The clock carries the colour; the title reads like any other.
+  const color = (locator: Locator) =>
+    locator.evaluate((element) => getComputedStyle(element).color);
+  expect(await color(clock)).not.toBe(await color(row.getByText(title, { exact: true })));
+
+  await clock.hover();
+  await expect(hint).toBeVisible();
+  await expect(hint).toContainText(sentence);
+  await page.getByPlaceholder("Message").hover();
+  await expect(hint).toHaveCount(0);
+
+  const search = page.getByRole("searchbox", { name: "Search conversations" });
+  await search.fill(title);
+  await expect(page.getByTestId("conversation-row")).toHaveCount(1);
+  await page.keyboard.press("Tab");
+  await expect(rowButton).toBeFocused();
+  await expect(hint).toBeVisible();
+  await expect(hint).toContainText(sentence);
+  // The pointer passing over the clock does not take the hint from the keyboard.
+  await clock.hover();
+  await page.getByPlaceholder("Message").hover();
+  await expect(rowButton).toBeFocused();
+  await expect(hint).toBeVisible();
+  // Escape dismisses it, also under the pointer, until the next hover or focus.
+  await clock.hover();
+  await page.keyboard.press("Escape");
+  await expect(hint).toHaveCount(0);
+  await expect(rowButton).toBeFocused();
+  await page.getByPlaceholder("Message").hover();
+  await clock.hover();
+  await expect(hint).toBeVisible();
+  await page.getByPlaceholder("Message").hover();
+  await expect(hint).toHaveCount(0);
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Tab");
+  await expect(rowButton).toBeFocused();
+  await expect(hint).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(hint).toHaveCount(0);
+
+  // Touch has neither hover nor keyboard focus: the row menu says the same.
+  await row.getByRole("button", { name: `Conversation options for ${title}`, exact: true }).click();
+  await expect(page.getByTestId("conversation-expiry-menu-hint")).toHaveText(sentence);
+});
+
 test("conversation rail deletes a conversation", async ({ page }) => {
   await signInViaApi(page, normalUser);
   let deleteConversationRequests = 0;

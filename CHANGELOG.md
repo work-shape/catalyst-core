@@ -33,8 +33,9 @@ contain breaking changes; a patch version does not.
 ### Changed
 
 - **Chat:** the conversation list is a compact single-line list without the last-updated date.
-  A conversation within seven days of its retention date turns amber and carries a warning
-  with the deletion date, on instances with `retention.expireConversations` enabled.
+  A conversation within seven days of its retention date carries an amber clock, on instances
+  with `retention.expireConversations` enabled. Its hint names the deletion date; it opens on
+  hover and on keyboard focus, and the row's menu repeats it for touch.
 - **Administration:** saving an agent or skill confirms it next to the save button until the
   form is edited again.
 - **Chat:** the agent's icon and name sit centred above the composer on the start page; when a

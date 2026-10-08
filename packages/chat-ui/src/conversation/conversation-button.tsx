@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ThreadListItemMorePrimitive } from "@assistant-ui/react";
-import { FolderInput, Lock, MoreHorizontal, Pencil, Trash2, TriangleAlert } from "lucide-react";
+import { Clock, FolderInput, Lock, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import type { ConversationListItem } from "@vivd-catalyst/api-client";
 import { useTranslation } from "../i18n";
 import { Button } from "../ui/button";
 import { cn } from "../ui/cn";
 import { Dialog } from "../ui/dialog";
 import { Spinner } from "../ui/spinner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 /** How long before its retention date a conversation is marked as about to be deleted. */
 export const RETENTION_WARNING_DAYS = 7;
@@ -44,9 +45,19 @@ export function ConversationButton({
   const running = Boolean(conversation.activeRun);
   const unread = Boolean(conversation.unread && !selected);
   const expiresAt = expires ? retentionWarningDate(conversation.retainedUntil) : undefined;
-  const expiryLabel = expiresAt
-    ? t("conversationExpiresOn", { date: formatDeletionDate(expiresAt, locale) })
-    : undefined;
+  // The hourly retention job may not have reached a conversation whose date has passed.
+  const expiryLabel = !expiresAt
+    ? undefined
+    : expiresAt.getTime() <= Date.now()
+      ? t("conversationExpiresShortly")
+      : t("conversationExpiresOn", { date: formatDeletionDate(expiresAt, locale) });
+  const expiryHintId = useId();
+  // The clock opens its hint under the pointer; the row's button opens it for the keyboard.
+  const [expiryHint, setExpiryHint] = useState(retentionHintClosed);
+  const onExpiryHintEvent = useCallback(
+    (event: RetentionHintEvent) => setExpiryHint((state) => retentionHintAfter(state, event)),
+    []
+  );
 
   const exitEditing = useCallback(() => {
     if (saving) {
@@ -165,13 +176,20 @@ export function ConversationButton({
           </form>
         ) : (
           <Button
-            className={cn(
-              "h-auto min-w-0 justify-start px-2 py-2 text-left text-foreground hover:bg-transparent",
-              expiresAt && "text-warning hover:text-warning"
-            )}
+            className="h-auto min-w-0 justify-start px-2 py-2 text-left text-foreground hover:bg-transparent"
             type="button"
             variant="ghost"
-            onClick={onSelect}
+            aria-describedby={expiryLabel ? expiryHintId : undefined}
+            onClick={() => {
+              onExpiryHintEvent("dismiss");
+              onSelect();
+            }}
+            onFocus={(event) => {
+              if (expiryLabel && event.currentTarget.matches(":focus-visible")) {
+                onExpiryHintEvent("focus");
+              }
+            }}
+            onBlur={() => onExpiryHintEvent("blur")}
           >
             <span className="inline-flex min-w-0 items-center gap-1.5">
               {running ? (
@@ -209,15 +227,12 @@ export function ConversationButton({
                 </span>
               ) : null}
               {expiryLabel ? (
-                <span
-                  className="shrink-0"
-                  data-testid="conversation-expiry-warning"
-                  role="img"
-                  aria-label={expiryLabel}
-                  title={expiryLabel}
-                >
-                  <TriangleAlert size={13} aria-hidden="true" />
-                </span>
+                <RetentionClock
+                  name={t("conversationExpiresSoon")}
+                  hint={expiryLabel}
+                  open={retentionHintOpen(expiryHint)}
+                  onHintEvent={onExpiryHintEvent}
+                />
               ) : null}
               {unread ? (
                 <span
@@ -231,6 +246,12 @@ export function ConversationButton({
             </span>
           </Button>
         )}
+        {expiryLabel && !editing ? (
+          // The row's name stays short; the full sentence is its description.
+          <span id={expiryHintId} className="sr-only" data-testid="conversation-expiry-description">
+            {expiryLabel}
+          </span>
+        ) : null}
 
         <ThreadListItemMorePrimitive.Root>
           <ThreadListItemMorePrimitive.Trigger
@@ -258,6 +279,16 @@ export function ConversationButton({
               }
             }}
           >
+            {expiryLabel ? (
+              // Touch has no hover: the menu, always visible there, repeats the hint.
+              <div
+                className="mb-1 flex items-start gap-2 border-b px-2.5 pb-2 pt-1 text-xs text-muted-foreground"
+                data-testid="conversation-expiry-menu-hint"
+              >
+                <Clock size={13} className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
+                <span className="max-w-56">{expiryLabel}</span>
+              </div>
+            ) : null}
             <ThreadListItemMorePrimitive.Item
               className={cn(
                 "flex min-h-9 cursor-default select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none transition-colors",
@@ -341,6 +372,85 @@ export function ConversationButton({
   );
 }
 
+/** What holds the retention hint open: the pointer on the clock, the keyboard on the row. */
+export interface RetentionHintState {
+  hovered: boolean;
+  focused: boolean;
+}
+
+export type RetentionHintEvent = "hover" | "unhover" | "focus" | "blur" | "dismiss";
+
+export const retentionHintClosed: RetentionHintState = { hovered: false, focused: false };
+
+/** The hint shows while either holds. A dismissal hides it until the next hover or focus. */
+export function retentionHintAfter(
+  state: RetentionHintState,
+  event: RetentionHintEvent
+): RetentionHintState {
+  switch (event) {
+    case "hover":
+      return { ...state, hovered: true };
+    case "unhover":
+      return { ...state, hovered: false };
+    case "focus":
+      return { ...state, focused: true };
+    case "blur":
+      return { ...state, focused: false };
+    case "dismiss":
+      return retentionHintClosed;
+  }
+}
+
+export function retentionHintOpen(state: RetentionHintState): boolean {
+  return state.hovered || state.focused;
+}
+
+function RetentionClock({
+  name,
+  hint,
+  open,
+  onHintEvent
+}: {
+  name: string;
+  hint: string;
+  open: boolean;
+  onHintEvent: (event: RetentionHintEvent) => void;
+}) {
+  // The span stays mounted while the hint opens and closes, so its pointer tracking holds.
+  return (
+    <span
+      className="shrink-0 text-warning"
+      data-testid="conversation-expiry-warning"
+      role="img"
+      aria-label={name}
+      onPointerEnter={(event) => {
+        if (event.pointerType !== "touch") {
+          onHintEvent("hover");
+        }
+      }}
+      onPointerLeave={() => onHintEvent("unhover")}
+    >
+      {open ? (
+        // A long list re-renders every row while a run streams, so the tooltip exists only
+        // while it shows.
+        <Tooltip open disableHoverableContent>
+          <TooltipTrigger asChild>
+            <Clock size={13} aria-hidden="true" />
+          </TooltipTrigger>
+          <TooltipContent
+            data-testid="conversation-expiry-hint"
+            onEscapeKeyDown={() => onHintEvent("dismiss")}
+          >
+            {hint}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <Clock size={13} aria-hidden="true" />
+      )}
+    </span>
+  );
+}
+
 function AnimatedConversationTitle({ title }: { title: string }) {
   const { text, typing } = useTypewriterTitle(title);
 
@@ -416,5 +526,7 @@ export function retentionWarningDate(retainedUntil: string, now = Date.now()): D
 }
 
 function formatDeletionDate(date: Date, locale: string): string {
-  return new Intl.DateTimeFormat(locale, { month: "long", day: "numeric" }).format(date);
+  return new Intl.DateTimeFormat(locale, { weekday: "long", month: "long", day: "numeric" }).format(
+    date
+  );
 }

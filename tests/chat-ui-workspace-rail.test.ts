@@ -1,10 +1,18 @@
 import { createElement, type ReactNode } from "../packages/chat-ui/node_modules/react";
 import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
 import type { ConversationListItem, LocaleCode, SafeConfig } from "@vivd-catalyst/api-client";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 import { CollaborationWorkspaceSelector } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-selector";
 import { WorkspaceRail } from "../packages/chat-ui/src/workspace/workspace-rail";
+import {
+  RETENTION_WARNING_DAYS,
+  retentionHintAfter,
+  retentionHintClosed,
+  retentionHintOpen,
+  retentionWarningDate,
+  type RetentionHintEvent
+} from "../packages/chat-ui/src/conversation/conversation-button";
 import { withoutDraftAttachment } from "../packages/chat-ui/src/conversation/draft-attachment-controller";
 import { collaborationWorkspacesAvailableFor } from "../packages/chat-ui/src/chat-workspace";
 import { workspaceSendBlockedReason } from "../packages/chat-ui/src/workspace/workspace-send-blocked-reason";
@@ -516,6 +524,9 @@ describe("workspace rail private conversation marker", () => {
 
 describe("workspace rail conversation rows", () => {
   const day = 24 * 60 * 60 * 1000;
+  // Midday UTC, so the deletion dates below fall on the same calendar day in every time zone.
+  const now = Date.parse("2026-10-08T12:00:00.000Z");
+  const retainedIn = (milliseconds: number) => new Date(now + milliseconds).toISOString();
   const conversation = {
     id: "conv_1",
     clientInstanceId: "client",
@@ -527,19 +538,35 @@ describe("workspace rail conversation rows", () => {
     status: "active",
     createdAt: "2026-08-01T10:00:00.000Z",
     updatedAt: "2026-08-01T10:00:00.000Z",
-    retainedUntil: new Date(Date.now() + 3 * day).toISOString()
+    retainedUntil: retainedIn(3 * day)
   } as ConversationListItem;
-  const later = { ...conversation, id: "conv_2", title: "Notizen" };
-  later.retainedUntil = new Date(Date.now() + 30 * day).toISOString();
+  const later = {
+    ...conversation,
+    id: "conv_2",
+    title: "Notizen",
+    retainedUntil: retainedIn(30 * day)
+  };
 
-  function renderRows(expireConversations: boolean): string {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(now);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function renderRows(
+    expireConversations: boolean,
+    locale: LocaleCode = "en",
+    conversations: ConversationListItem[] = [conversation, later]
+  ): string {
     return renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "en" },
+        { locale },
         createElement(WorkspaceRail, {
           config: { ...railConfig, retention: { expireConversations } } as SafeConfig,
-          conversations: [conversation, later],
+          conversations,
           selectedConversationId: undefined,
           canViewAdministration: false,
           view: "chat",
@@ -559,15 +586,141 @@ describe("workspace rail conversation rows", () => {
     );
   }
 
-  it("warns only on the conversation that retention deletes within a week", () => {
-    const markup = renderRows(true);
+  /** What each row says about its deletion: the clock's short name and the row's description. */
+  function retentionMarksOf(
+    markup: string
+  ): { button: string; clockName?: string; describedBy?: string; description?: string }[] {
+    return markup
+      .split('data-testid="conversation-row"')
+      .slice(1)
+      .map((row) => {
+        const button = /<button[^>]*>/u.exec(row)?.[0] ?? "";
+        const clock = /<span[^>]*data-testid="conversation-expiry-warning"[^>]*>/u.exec(row)?.[0];
+        const describedBy = /aria-describedby="([^"]+)"/u.exec(button)?.[1];
+        return {
+          button,
+          clockName: clock ? /aria-label="([^"]*)"/u.exec(clock)?.[1] : undefined,
+          describedBy,
+          description: describedBy
+            ? row.split(`<span id="${describedBy}"`)[1]?.match(/^[^>]*>([^<]*)<\/span>/u)?.[1]
+            : undefined
+        };
+      });
+  }
 
-    expect(markup.match(/data-testid="conversation-expiry-warning"/gu)).toHaveLength(1);
-    expect(markup).toMatch(/aria-label="Will be deleted on [A-Z][a-z]+ \d+"/u);
+  it("warns from exactly seven days before the retention date", () => {
+    expect(RETENTION_WARNING_DAYS).toBe(7);
+    expect(retentionWarningDate(retainedIn(7 * day), now)).toEqual(new Date(now + 7 * day));
+    expect(retentionWarningDate(retainedIn(7 * day + 1), now)).toBeUndefined();
+    expect(retentionWarningDate(retainedIn(-day), now)).toEqual(new Date(now - day));
+
+    const [atBoundary, justOutside] = retentionMarksOf(
+      renderRows(true, "en", [
+        { ...conversation, retainedUntil: retainedIn(7 * day) },
+        { ...later, retainedUntil: retainedIn(7 * day + 1) }
+      ])
+    );
+    expect(atBoundary?.description).toBe("Will be deleted automatically on Thursday, October 15");
+    expect(justOutside?.clockName).toBeUndefined();
+    expect(justOutside?.description).toBeUndefined();
+  });
+
+  it.each<{ locale: LocaleCode; clockName: string; description: string }>([
+    {
+      locale: "en",
+      clockName: "will be deleted soon",
+      description: "Will be deleted automatically on Sunday, October 11"
+    },
+    {
+      locale: "de",
+      clockName: "wird bald gelöscht",
+      description: "Wird am Sonntag, 11. Oktober automatisch gelöscht"
+    }
+  ])(
+    "marks the near conversation with a clock and describes its deletion date ($locale)",
+    ({ locale, clockName, description }) => {
+      const markup = renderRows(true, locale);
+      const [near, far] = retentionMarksOf(markup);
+
+      expect(markup.match(/data-testid="conversation-expiry-warning"/gu)).toHaveLength(1);
+      // The short name is all the row's name gains; the sentence is its description.
+      expect(near?.clockName).toBe(clockName);
+      expect(near?.description).toBe(description);
+      expect(markup.split(description)).toHaveLength(2);
+      // The clock alone carries the colour; the title stays as calm as its neighbours'.
+      expect(markup).toMatch(
+        /class="[^"]*text-warning[^"]*" data-testid="conversation-expiry-warning"/u
+      );
+      expect(near?.button).not.toContain("text-warning");
+      expect(markup).toContain("lucide-clock");
+      expect(markup).not.toContain("lucide-triangle-alert");
+      expect(far).toEqual({ button: near?.button.replace(/ aria-describedby="[^"]+"/u, "") });
+    }
+  );
+
+  it("gives each expiring row a description of its own", () => {
+    const markup = renderRows(true, "en", [
+      conversation,
+      { ...later, retainedUntil: retainedIn(5 * day) }
+    ]);
+    const [first, second] = retentionMarksOf(markup);
+
+    expect(first?.describedBy).toBeTruthy();
+    expect(second?.describedBy).toBeTruthy();
+    expect(first?.describedBy).not.toBe(second?.describedBy);
+    for (const id of [first?.describedBy, second?.describedBy]) {
+      expect(markup.split(`id="${id}"`)).toHaveLength(2);
+    }
+    expect(first?.description).toBe("Will be deleted automatically on Sunday, October 11");
+    expect(second?.description).toBe("Will be deleted automatically on Tuesday, October 13");
+  });
+
+  it("keeps the hint open while the pointer or the keyboard holds it", () => {
+    const openAfter = (...events: RetentionHintEvent[]) =>
+      retentionHintOpen(events.reduce(retentionHintAfter, retentionHintClosed));
+
+    expect(openAfter()).toBe(false);
+    expect(openAfter("hover")).toBe(true);
+    expect(openAfter("hover", "unhover")).toBe(false);
+    expect(openAfter("focus")).toBe(true);
+    expect(openAfter("focus", "blur")).toBe(false);
+    // Keyboard focus on the row survives the pointer passing over the clock, and the reverse.
+    expect(openAfter("focus", "hover", "unhover")).toBe(true);
+    expect(openAfter("hover", "focus", "blur")).toBe(true);
+    expect(openAfter("focus", "hover", "unhover", "blur")).toBe(false);
+  });
+
+  it("stays dismissed after Escape until the next hover or focus", () => {
+    const openAfter = (...events: RetentionHintEvent[]) =>
+      retentionHintOpen(events.reduce(retentionHintAfter, retentionHintClosed));
+
+    expect(openAfter("focus", "hover", "dismiss")).toBe(false);
+    expect(openAfter("focus", "hover", "dismiss", "unhover")).toBe(false);
+    expect(openAfter("focus", "dismiss", "blur")).toBe(false);
+    expect(openAfter("focus", "hover", "dismiss", "unhover", "hover")).toBe(true);
+    expect(openAfter("hover", "dismiss", "focus")).toBe(true);
+  });
+
+  it.each<{ locale: LocaleCode; description: string }>([
+    { locale: "en", description: "Will be deleted shortly" },
+    { locale: "de", description: "Wird in Kürze gelöscht" }
+  ])("does not name a date that has already passed ($locale)", ({ locale, description }) => {
+    const [due, overdue] = retentionMarksOf(
+      renderRows(true, locale, [
+        { ...conversation, retainedUntil: retainedIn(0) },
+        { ...later, retainedUntil: retainedIn(-3 * day) }
+      ])
+    );
+
+    expect(due?.description).toBe(description);
+    expect(overdue?.description).toBe(description);
   });
 
   it("does not warn on an instance that keeps conversations indefinitely", () => {
-    expect(renderRows(false)).not.toContain("conversation-expiry-warning");
+    const markup = renderRows(false);
+
+    expect(markup).not.toContain("conversation-expiry-warning");
+    expect(markup).not.toContain("aria-describedby");
   });
 
   it("shows the title without the last-updated date", () => {
