@@ -304,7 +304,8 @@ export function AssistantComposer({
             )}
           >
             {showContextIndicator && contextSnapshot ? (
-              <div className="flex h-9 shrink-0 items-center">
+              // Pulled towards the model picker, whose own padding already sets them apart.
+              <div className="-mr-1.5 flex h-9 shrink-0 items-center">
                 <ContextIndicator
                   inputTokens={contextSnapshot.inputTokens}
                   compactThresholdTokens={contextSnapshot.compactThresholdTokens}
