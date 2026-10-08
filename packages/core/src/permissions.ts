@@ -1,5 +1,11 @@
 import { AppError } from "./errors";
-import type { AuthenticatedServicePrincipal, AuthenticatedUser } from "./identity";
+import type {
+  AuthenticatedIdentity,
+  AuthenticatedServicePrincipal,
+  AuthenticatedUser
+} from "./identity";
+import type { ClientInstanceId, UserId } from "./ids";
+import type { ISODateString } from "./time";
 
 export const PERMISSIONS = [
   "agent_skills.approve",
@@ -15,25 +21,131 @@ export const PERMISSIONS = [
 
 export type Permission = (typeof PERMISSIONS)[number];
 
-const ADMIN_PERMISSIONS = PERMISSIONS.filter(
-  (permission) =>
-    permission !== "config_assets.release" &&
-    permission !== "api_access.manage" &&
-    permission !== "agent_models.manage"
-);
+export const ACTIONS = [
+  "agent.read",
+  "agent.write",
+  "agent.delete",
+  "skill.read",
+  "skill.write",
+  "skill.delete",
+  "skill.approve",
+  "users.manage",
+  "usage.view",
+  "audit.view",
+  "api_access.manage",
+  "agent_models.manage",
+  "assets.release"
+] as const;
 
-const SUPERADMIN_PERMISSIONS = PERMISSIONS.filter(
-  (permission) => permission !== "config_assets.release"
-);
+export type PlatformAction = (typeof ACTIONS)[number];
+
+export const LEGACY_PERMISSION_ACTIONS = {
+  "agent_skills.approve": ["skill.approve"],
+  "config_assets.read": ["agent.read", "skill.read"],
+  "config_assets.write": ["agent.write", "agent.delete", "skill.write", "skill.delete"],
+  "config_assets.release": ["assets.release"],
+  "usage.view": ["usage.view"],
+  "users.manage": ["users.manage"],
+  "api_access.manage": ["api_access.manage"],
+  "agent_models.manage": ["agent_models.manage"],
+  "audit.view": ["audit.view"]
+} as const satisfies Record<Permission, readonly PlatformAction[]>;
+
+export function legacyPermissionFor(action: PlatformAction): Permission {
+  for (const permission of PERMISSIONS) {
+    if (LEGACY_PERMISSION_ACTIONS[permission].some((candidate) => candidate === action)) {
+      return permission;
+    }
+  }
+  throw new AppError("VALIDATION_FAILED", `No legacy permission for action '${action}'`);
+}
+
+export const ROLE_DEFAULT_ACTIONS: Record<
+  "user" | "admin" | "superadmin",
+  readonly PlatformAction[]
+> = {
+  user: [],
+  admin: ACTIONS.filter(
+    (action) =>
+      action !== "assets.release" &&
+      action !== "api_access.manage" &&
+      action !== "agent_models.manage"
+  ),
+  superadmin: ACTIONS.filter((action) => action !== "assets.release")
+};
+
+function legacyPermissionsFor(actions: readonly PlatformAction[]): Permission[] {
+  return PERMISSIONS.filter((permission) =>
+    LEGACY_PERMISSION_ACTIONS[permission].every((action) => actions.includes(action))
+  );
+}
 
 export const ROLE_DEFAULT_PERMISSIONS: Record<
   "user" | "admin" | "superadmin",
   readonly Permission[]
 > = {
-  user: [],
-  admin: ADMIN_PERMISSIONS,
-  superadmin: SUPERADMIN_PERMISSIONS
+  user: legacyPermissionsFor(ROLE_DEFAULT_ACTIONS.user),
+  admin: legacyPermissionsFor(ROLE_DEFAULT_ACTIONS.admin),
+  superadmin: legacyPermissionsFor(ROLE_DEFAULT_ACTIONS.superadmin)
 };
+
+export interface PermissionGrant {
+  id: string;
+  clientInstanceId: ClientInstanceId;
+  holderKind: "user" | "service_principal" | "role" | "group";
+  holderId: string;
+  action: string;
+  effect: "allow" | "deny";
+  scopeKind: "instance" | "workspace" | "namespace" | "asset";
+  scopeId?: string;
+  namespace?: string;
+  grantedBy: UserId;
+  createdAt: ISODateString;
+}
+
+export interface Namespace {
+  clientInstanceId: ClientInstanceId;
+  prefix: string;
+  displayName: string;
+  allowedToolNames?: string[];
+  allowedModelBindingIds?: string[];
+  createdBy: UserId;
+  createdAt: ISODateString;
+}
+
+export interface AccessResource {
+  kind?: string;
+  name?: string;
+  assetId?: string;
+  workspaceId?: string;
+}
+
+export type AccessDecision =
+  | { allowed: true; source: "role" | "legacy" | "legacy_ref" | "grant" }
+  | { allowed: false; reason: "no_grant" | "denied" | "unknown_action" | "holder_inactive" };
+
+export interface PersistedAccess {
+  holderActive: boolean;
+  grants: PermissionGrant[];
+  namespaces: Namespace[];
+}
+
+export interface AccessStore {
+  loadPersistedAccess(input: {
+    clientInstanceId: ClientInstanceId;
+    holder: { kind: "user" | "service_principal"; id: string };
+  }): Promise<PersistedAccess>;
+}
+
+export interface ActorAccess {
+  authorize(action: string, resource?: AccessResource): AccessDecision;
+  /** Throws FORBIDDEN with the action and reason. */
+  require(action: string, resource?: AccessResource): void;
+}
+
+export interface Authorizer {
+  forActor(actor: AuthenticatedIdentity): Promise<ActorAccess>;
+}
 
 export function resolveEffectivePermissions(
   subject:

@@ -3,6 +3,7 @@ export type Brand<TValue, TBrand extends string> = TValue & {
 };
 
 export type AgentRunId = Brand<string, "AgentRunId">;
+export type OperationRunId = Brand<string, "OperationRunId">;
 export type ClientInstanceId = Brand<string, "ClientInstanceId">;
 export type ConversationId = Brand<string, "ConversationId">;
 export type CollaborationWorkspaceId = Brand<string, "CollaborationWorkspaceId">;

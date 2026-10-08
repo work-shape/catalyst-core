@@ -39,6 +39,7 @@ export const FIRST_PARTY_AUTH_SCOPES = [
 
 export type ChatSessionAuthScope = (typeof CHAT_SESSION_ALLOWED_AUTH_SCOPES)[number];
 export type FirstPartyAuthScope = (typeof FIRST_PARTY_AUTH_SCOPES)[number];
+export type OperationScope = Exclude<FirstPartyAuthScope, "*">;
 export type AuthScope = FirstPartyAuthScope | (string & {});
 
 export type AuthPrincipalKind = "user" | "service";

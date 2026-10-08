@@ -9,3 +9,5 @@ export * from "./artifact-preview-lifecycle";
 
 export * from "./config-asset-concurrency";
 export * from "./origins";
+export * from "./operations";
+export * from "./events";

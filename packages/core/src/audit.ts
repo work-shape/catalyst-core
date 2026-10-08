@@ -12,6 +12,8 @@ import type { ApiCredentialId, AuditEventId, ClientInstanceId } from "./ids";
 import type { JsonObject } from "./json";
 import type { ISODateString } from "./time";
 
+export type { AuditEventName } from "./events";
+
 export interface AuditActor {
   userId?: string;
   externalUserId?: string;
