@@ -3,7 +3,7 @@
 // contract.
 import {
   findMigrationHistoryChanges,
-  lintCommittedMigrations,
+  lintNewMigrations,
   migrationBaseRef,
   readMigrationPolicy
 } from "./policy.mjs";
@@ -11,7 +11,7 @@ import {
 const policy = readMigrationPolicy();
 const baseRef = migrationBaseRef();
 const changes = findMigrationHistoryChanges({ baseRef });
-const findings = lintCommittedMigrations({ policy });
+const findings = lintNewMigrations({ baseRef, policy });
 
 for (const change of changes) console.error(`immutable history: ${change}`);
 for (const finding of findings)

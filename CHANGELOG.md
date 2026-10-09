@@ -59,11 +59,14 @@ contain breaking changes; a patch version does not.
   `migrateDatabase({ databaseUrl })`, which holds the advisory lock and returns the applied
   names; the `runMigrations` option and the store's `migrate()` are removed.
 - **Operations:** schema changes follow expand and contract. `pnpm check:migrations` rejects
-  a changed, removed or renamed committed migration and, after `historyThrough` in
-  `packages/postgres-store/migration-policy.json`, a drop, a rename, a required column and a
-  blocking index build; a contract step passes under `-- contract-after: <tag>` once the
-  oldest supported release reached that tag. `pnpm test:compatibility` runs the database
-  tests of the previous and the oldest supported release against the new schema, and
+  a changed, removed or renamed committed migration and lints every migration the base branch
+  lacks against an allow list of additive forms. Any other statement, such as a drop, a
+  rename, a type change, `DELETE` or a `DO` block, passes only under
+  `-- contract-after: <tag>` once the oldest supported release in
+  `packages/postgres-store/migration-policy.json` reached that tag; a required column without
+  a default and a blocking index build never pass. A concurrent index build goes in a
+  migration of its own and runs outside a transaction. `pnpm test:compatibility` runs the
+  database tests of the previous and the oldest supported release against the new schema, and
   `pnpm test:upgrade` migrates a database of the oldest supported release.
 - **API (breaking):** every list answers with `{ items, nextCursor }` instead of a bare array.
   `limit` defaults to 50 and accepts 1 to 200, anything else answers 422. `nextCursor` is

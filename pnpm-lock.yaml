@@ -29,6 +29,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^6.0.2
         version: 6.0.2(vite@8.0.16(@types/node@24.13.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1))
+      '@vivd-catalyst/postgres-store':
+        specifier: workspace:*
+        version: link:packages/postgres-store
       '@vivd-catalyst/quality-config':
         specifier: workspace:*
         version: link:packages/quality-config
