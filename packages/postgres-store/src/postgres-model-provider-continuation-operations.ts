@@ -26,6 +26,21 @@ export async function getModelProviderContinuation(
   return row ? mapModelProviderContinuation(row) : undefined;
 }
 
+export async function deleteModelProviderContinuation(
+  db: PostgresConnection,
+  input: Parameters<ModelProviderContinuationStore["deleteModelProviderContinuation"]>[0]
+): Promise<void> {
+  await db
+    .delete(modelProviderContinuations)
+    .where(
+      and(
+        eq(modelProviderContinuations.clientInstanceId, input.clientInstanceId),
+        eq(modelProviderContinuations.conversationId, input.conversationId),
+        eq(modelProviderContinuations.providerId, input.providerId)
+      )
+    );
+}
+
 function mapModelProviderContinuation(
   row: typeof modelProviderContinuations.$inferSelect
 ): ModelProviderContinuationCheckpoint {

@@ -22,6 +22,19 @@ export function readProviderErrorMetadata(
   };
 }
 
+/**
+ * Whether a provider refused the request because an `encrypted_content` string in it is above
+ * the provider's string limit. Read from the error's code and parameter, not from its message.
+ */
+export function isEncryptedContentAboveStringLimit(payload: unknown): boolean {
+  const error = isRecord(payload) ? (isRecord(payload.error) ? payload.error : payload) : {};
+  return (
+    error.code === "string_above_max_length" &&
+    typeof error.param === "string" &&
+    /(?:^|\.)encrypted_content$/u.test(error.param)
+  );
+}
+
 /** `Retry-After` is a number of seconds or an HTTP date; a date in the past means no wait. */
 function retryAfter(value: string | null | undefined): { retryAfterMs?: number } {
   const text = value?.trim();

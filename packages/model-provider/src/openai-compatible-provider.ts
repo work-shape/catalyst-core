@@ -16,6 +16,7 @@ import {
   createProviderToolMetadata,
   createOpenAiResponsesContinuation,
   didOpenAiResponsesCompact,
+  isOpenAiResponsesContinuationAboveStringLimit,
   readOpenAiResponsesCompactionItem,
   readOpenAiResponsesWebMetadata,
   readOpenAiResponsesWebSearchCallCount,
@@ -29,7 +30,7 @@ import {
   toResponsesModelUsage,
   type OpenAiCompatibleProviderTool
 } from "./openai-compatible-mapping";
-import { readProviderErrorMetadata } from "./provider-error";
+import { isEncryptedContentAboveStringLimit, readProviderErrorMetadata } from "./provider-error";
 import { parseToolInput } from "./tool-input";
 import {
   streamOpenAiCompatibleCompletion,
@@ -166,7 +167,7 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     });
 
     if (!response.ok) {
-      throw await this.createProviderError(response);
+      throw await this.createProviderError(response, request);
     }
 
     const payload = (await this.readResponseJson(response)) as OpenAiResponsesResponse;
@@ -203,7 +204,7 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     });
 
     if (!response.ok) {
-      throw await this.createProviderError(response);
+      throw await this.createProviderError(response, request);
     }
     if (!response.body) {
       throw new AppError("INTERNAL", "Model provider stream returned no response body", {
@@ -299,6 +300,13 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     providerTools: OpenAiCompatibleProviderTool[],
     providerNativeTools: ReturnType<typeof createProviderToolMetadata>["providerNativeTools"]
   ): OpenAiResponsesRequestBody {
+    if (isOpenAiResponsesContinuationAboveStringLimit(this.id, request.continuation)) {
+      // The provider would answer 400 to this request, every time. Refuse it before it is sent.
+      throw new AppError("INTERNAL", "Model provider continuation is above the string limit", {
+        providerId: this.id,
+        continuationRejected: true
+      });
+    }
     const model = request.model || this.options.model;
     const reasoningEffort = this.resolveReasoningEffort(request);
     return {
@@ -354,12 +362,28 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     }
   }
 
-  private async createProviderError(response: Response): Promise<AppError> {
+  private async createProviderError(
+    response: Response,
+    request?: ModelCompletionRequest
+  ): Promise<AppError> {
     const payload: unknown = await response.json().catch(() => undefined);
+    const metadata = readProviderErrorMetadata(payload, response.headers);
+    if (response.status === 400 && metadata.providerErrorCode === "context_length_exceeded") {
+      return new AppError(
+        "VALIDATION_FAILED",
+        "This conversation is too long for the model. Start a new conversation.",
+        { providerId: this.id, status: response.status, ...metadata }
+      );
+    }
     return new AppError("INTERNAL", "Model provider request failed", {
       providerId: this.id,
       status: response.status,
-      ...readProviderErrorMetadata(payload, response.headers)
+      ...metadata,
+      ...(request?.continuation &&
+      response.status === 400 &&
+      isEncryptedContentAboveStringLimit(payload)
+        ? { continuationRejected: true }
+        : {})
     });
   }
 }

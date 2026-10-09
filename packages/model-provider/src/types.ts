@@ -1,3 +1,4 @@
+import { AppError } from "@vivd-catalyst/core";
 import type {
   JsonObject,
   MessageCitation,
@@ -91,6 +92,20 @@ export interface ModelCompletionRequest {
 export interface ModelProviderContinuation {
   providerId: string;
   state: unknown;
+}
+
+/**
+ * Whether a provider error says the continuation sent with the request can never be used. The
+ * caller drops that continuation and sends the request again from the conversation's history.
+ */
+export function isModelProviderContinuationRejected(error: unknown): boolean {
+  return (
+    error instanceof AppError &&
+    typeof error.details === "object" &&
+    error.details !== null &&
+    "continuationRejected" in error.details &&
+    error.details.continuationRejected === true
+  );
 }
 
 export interface ModelCompletion {

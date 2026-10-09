@@ -217,4 +217,10 @@ export interface ModelProviderContinuationStore {
     conversationId: ConversationId;
     providerId: string;
   }): Promise<ModelProviderContinuationCheckpoint | undefined>;
+  /** Drops a continuation the provider cannot accept; the conversation goes on from its history. */
+  deleteModelProviderContinuation(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    providerId: string;
+  }): Promise<void>;
 }

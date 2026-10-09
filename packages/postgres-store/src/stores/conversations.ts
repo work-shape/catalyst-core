@@ -27,7 +27,10 @@ import {
   listRecentMessages as listPostgresRecentMessages,
   updateConversationTitle as updatePostgresConversationTitle
 } from "../postgres-conversation-operations";
-import { getModelProviderContinuation as getPostgresModelProviderContinuation } from "../postgres-model-provider-continuation-operations";
+import {
+  deleteModelProviderContinuation as deletePostgresModelProviderContinuation,
+  getModelProviderContinuation as getPostgresModelProviderContinuation
+} from "../postgres-model-provider-continuation-operations";
 import type { ConversationsStore } from "@vivd-catalyst/core";
 import type { PostgresConnection } from "../postgres-database";
 export function createPostgresConversationsStore(db: PostgresConnection): ConversationsStore {
@@ -95,6 +98,11 @@ export function createPostgresConversationsStore(db: PostgresConnection): Conver
       input: Parameters<ModelProviderContinuationStore["getModelProviderContinuation"]>[0]
     ): Promise<ModelProviderContinuationCheckpoint | undefined> {
       return getPostgresModelProviderContinuation(db, input);
+    },
+    async deleteModelProviderContinuation(
+      input: Parameters<ModelProviderContinuationStore["deleteModelProviderContinuation"]>[0]
+    ): Promise<void> {
+      return deletePostgresModelProviderContinuation(db, input);
     },
     async deleteConversation(input: {
       clientInstanceId: ClientInstanceId;

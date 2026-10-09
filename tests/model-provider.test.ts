@@ -3,6 +3,7 @@ import { AppError, asClientInstanceId } from "@vivd-catalyst/core";
 import {
   DeterministicModelProvider,
   ModelProviderRegistry,
+  OPENAI_RESPONSES_STRING_MAX_CHARS,
   OpenAiCompatibleChatProvider,
   type ModelCompletionStreamEvent
 } from "@vivd-catalyst/model-provider";
@@ -801,6 +802,115 @@ describe("OpenAI-compatible model provider", () => {
       type: "compaction",
       encrypted_content: "encrypted-checkpoint"
     });
+  });
+
+  it("does not keep a compaction item above the provider's string limit", async () => {
+    const provider = new OpenAiCompatibleChatProvider({
+      id: "azure-eu",
+      api: "responses",
+      model: "gpt-5.5",
+      baseUrl: "https://example.test/openai/v1",
+      apiKey: "test",
+      contextManagement: { compaction: { compactThresholdTokens: 270_000 } }
+    });
+    const request = {
+      providerId: "azure-eu",
+      model: "gpt-5.5",
+      messages: [{ role: "user" as const, content: "continue" }],
+      tools: []
+    };
+    const answerWith = (encryptedContent: string) =>
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () =>
+          Response.json({
+            output: [
+              { id: "cmp_1", type: "compaction", encrypted_content: encryptedContent },
+              { type: "message", content: [{ type: "output_text", text: "done" }] }
+            ]
+          })
+        )
+      );
+
+    answerWith("x".repeat(OPENAI_RESPONSES_STRING_MAX_CHARS + 1));
+    const aboveLimit = await provider.complete(request, createModelProviderTestContext());
+
+    expect(aboveLimit.text).toBe("done");
+    expect(aboveLimit.continuation).toBeUndefined();
+    expect(aboveLimit.contextManagement).toEqual({ compacted: false });
+
+    answerWith("x".repeat(OPENAI_RESPONSES_STRING_MAX_CHARS));
+    const atLimit = await provider.complete(request, createModelProviderTestContext());
+
+    expect(atLimit.contextManagement).toEqual({ compacted: true });
+    expect(atLimit.continuation).toMatchObject({
+      state: { compactionItem: { id: "cmp_1" } }
+    });
+  });
+
+  it("does not keep a reasoning item above the provider's string limit and refuses a stored one", async () => {
+    const provider = new OpenAiCompatibleChatProvider({
+      id: "azure-eu",
+      api: "responses",
+      model: "gpt-5.5",
+      baseUrl: "https://example.test/openai/v1",
+      apiKey: "test"
+    });
+    const request = {
+      providerId: "azure-eu",
+      model: "gpt-5.5",
+      messages: [{ role: "user" as const, content: "continue" }],
+      tools: [{ name: "lookup", description: "Look up a record" }]
+    };
+    const aboveLimit = "x".repeat(OPENAI_RESPONSES_STRING_MAX_CHARS + 1);
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        output: [
+          { id: "rs_big", type: "reasoning", encrypted_content: aboveLimit },
+          { type: "function_call", call_id: "call_a", name: "lookup", arguments: "{}" },
+          { id: "rs_small", type: "reasoning", encrypted_content: "small" },
+          { type: "function_call", call_id: "call_b", name: "lookup", arguments: "{}" }
+        ]
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const completion = await provider.complete(request, createModelProviderTestContext());
+
+    expect(completion.toolCalls).toHaveLength(2);
+    expect(completion.continuation?.state).toEqual({
+      kind: "openai_responses",
+      encryptedReasoningItems: [
+        {
+          beforeToolCallId: "call_b",
+          item: { id: "rs_small", type: "reasoning", encrypted_content: "small" }
+        }
+      ]
+    });
+
+    // A reasoning item stored before the limit existed is refused before the request is sent.
+    await expect(
+      provider.complete(
+        {
+          ...request,
+          continuation: {
+            providerId: "azure-eu",
+            state: {
+              kind: "openai_responses",
+              compactionItem: { id: "cmp_1", type: "compaction", encrypted_content: "valid" },
+              encryptedReasoningItems: [
+                {
+                  beforeToolCallId: "call_a",
+                  item: { id: "rs_big", type: "reasoning", encrypted_content: aboveLimit }
+                }
+              ]
+            }
+          }
+        },
+        createModelProviderTestContext()
+      )
+    ).rejects.toMatchObject({ details: { continuationRejected: true } });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("keeps visual tool context after sibling tool outputs in Responses input", async () => {

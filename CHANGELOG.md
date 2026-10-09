@@ -352,6 +352,13 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   reports an answer that does not match its operation's schema as `ApiResponseShapeError`, an
   `ApiError` with those paths, and calls `onResponseMismatch`; the interface then shows the
   reload notice, also for an enum value or a stream event of a later release.
+- **Models:** a long conversation no longer fails on every message after the provider compacted
+  its context into an item above the provider's limit of 20,971,520 characters per string. Such
+  an item, and an encrypted reasoning item of that size, is not kept. A stored one, or one the provider refuses with 400
+  `string_above_max_length` on `encrypted_content`, is dropped and the request is sent once more
+  from the conversation's history, so affected conversations answer again without a migration.
+  A provider's 400 `context_length_exceeded` fails the run with "This conversation is too long
+  for the model. Start a new conversation." instead of an internal error.
 - **Retention:** conversation expiry decides under the conversation's row lock and removes
   data only afterwards. A conversation is expired only if it is still due, or still an
   abandoned draft, at that moment, so a message, an upload or a restored draft attachment that

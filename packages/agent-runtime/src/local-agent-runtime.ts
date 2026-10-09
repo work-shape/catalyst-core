@@ -41,6 +41,7 @@ import {
   systemClock
 } from "@vivd-catalyst/core";
 import {
+  isModelProviderContinuationRejected,
   type ModelCompletion,
   type ModelMessage,
   type ModelProvider,
@@ -355,27 +356,26 @@ export class LocalAgentRuntime implements AgentRuntime {
       input.message.attachmentManifest,
       this.modelContextOptions(context)
     );
-    const messages: ModelMessage[] = [
-      {
-        role: "system",
-        content: createSystemInstructions(agent.instructions, context.locale, {
-          currentDate: this.options.clock?.now() ?? systemClock.now(),
-          skills: getSnapshotSkillMetadataForAgent(assets, agent),
-          agentToolNames: agent.toolNames,
-          agentSkillChangesEnabled: this.options.agentSkillChangesEnabled
-        })
-      },
-      ...history.messages,
-      { role: "user", content: userContent }
-    ];
+    const systemMessage: ModelMessage = {
+      role: "system",
+      content: createSystemInstructions(agent.instructions, context.locale, {
+        currentDate: this.options.clock?.now() ?? systemClock.now(),
+        skills: getSnapshotSkillMetadataForAgent(assets, agent),
+        agentToolNames: agent.toolNames,
+        agentSkillChangesEnabled: this.options.agentSkillChangesEnabled
+      })
+    };
+    const userMessage: ModelMessage = { role: "user", content: userContent };
+    let messages: ModelMessage[] = [systemMessage, ...history.messages, userMessage];
 
     const repeatedToolCalls = new Map<string, number>();
     const maxSteps = agent.maxSteps ?? this.options.maxSteps ?? DEFAULT_MAX_STEPS;
     let providerContinuation: ModelCompletion["continuation"] = history.providerContinuation;
+    // True until the first answer: only then does a request carry a continuation from an earlier run.
+    let carriesEarlierContinuation = providerContinuation !== undefined;
     let runCompacted = false;
-
-    for (let step = 0; step < maxSteps; step += 1) {
-      const modelResult = await this.withTransientModelRetry(context, state, (attempt) =>
+    const callModel = () =>
+      this.withTransientModelRetry(context, state, (attempt) =>
         this.beforeEffect("provider_request", runId).then(() =>
           this.options.usageGovernance.runModelCall(context.clientInstanceId, () =>
             this.completeWithProvider(
@@ -396,6 +396,37 @@ export class LocalAgentRuntime implements AgentRuntime {
           )
         )
       );
+
+    for (let step = 0; step < maxSteps; step += 1) {
+      const modelResult = await callModel().catch(async (error: unknown) => {
+        if (!carriesEarlierContinuation || !isModelProviderContinuationRejected(error)) {
+          throw error;
+        }
+        // The provider can never accept this continuation, so every message of the conversation
+        // would fail. Drop it and send the request once more from the conversation's history.
+        carriesEarlierContinuation = false;
+        await this.options.modelProviderContinuationStore?.deleteModelProviderContinuation({
+          clientInstanceId: context.clientInstanceId,
+          conversationId: input.conversationId,
+          providerId: modelSelection.provider.id
+        });
+        this.options.logger?.warn(
+          {
+            type: "model_provider_continuation.dropped",
+            runId,
+            conversationId: input.conversationId,
+            providerId: modelSelection.provider.id
+          },
+          "Model provider continuation dropped; request rebuilt from history"
+        );
+        const rebuilt = await this.loadModelHistory(input, context, modelSelection.provider, {
+          withoutCheckpoint: true
+        });
+        providerContinuation = undefined;
+        messages = [systemMessage, ...rebuilt.messages, userMessage];
+        return callModel();
+      });
+      carriesEarlierContinuation = false;
       await recordModelUsage({
         usageStore: this.options.usageGovernance,
         runId,
@@ -681,7 +712,8 @@ export class LocalAgentRuntime implements AgentRuntime {
   private async loadModelHistory(
     input: StartAgentRunInput,
     context: RuntimeCallContext,
-    provider: ModelProviderConfig
+    provider: ModelProviderConfig,
+    options: { withoutCheckpoint?: boolean } = {}
   ): Promise<{
     messages: ModelMessage[];
     providerContinuation?: ModelCompletion["continuation"];
@@ -694,6 +726,20 @@ export class LocalAgentRuntime implements AgentRuntime {
       dropCurrentSubmittedMessage(persistedMessages, input.message.text, input.inputMessageId)
     );
     const compactionEnabled = getProviderCompactionThreshold(provider) !== undefined;
+    if (options.withoutCheckpoint) {
+      // What a conversation that never compacted sends: all of its history, no continuation.
+      return {
+        messages: await projectAgentVisibleHistory(
+          compactionEnabled
+            ? history
+            : selectRecentCompleteHistory(
+                history,
+                this.options.historyMessageLimit ?? DEFAULT_CONVERSATION_HISTORY_LIMIT
+              ),
+          this.modelContextOptions(context)
+        )
+      };
+    }
     const storedCheckpoint = compactionEnabled
       ? await this.options.modelProviderContinuationStore?.getModelProviderContinuation({
           clientInstanceId: context.clientInstanceId,
