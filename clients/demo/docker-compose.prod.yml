@@ -55,6 +55,8 @@ services:
     build:
       <<: *client-build
       target: api
+    # The job worker in the API takes up to 20 seconds to give its jobs back on SIGTERM.
+    stop_grace_period: 30s
     depends_on:
       migrate:
         condition: service_completed_successfully

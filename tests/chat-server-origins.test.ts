@@ -105,8 +105,7 @@ describe("browser origin policy", () => {
           remoteAddress: "127.0.0.1",
           payload: { title: "New conversation" }
         });
-        const bodyless = await app.call("conversations.title.generate", {
-          params: { conversationId: id },
+        const bodyless = await app.call("workspaces.ensure_personal", {
           remoteAddress: "127.0.0.1",
           headers
         });

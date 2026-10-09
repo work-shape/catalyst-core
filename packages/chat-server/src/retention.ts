@@ -8,7 +8,7 @@ import {
   isAppError
 } from "@vivd-catalyst/core";
 import { attemptConversationDataCleanup } from "./conversation-cleanup";
-import type { ChatServerOptions, ConversationRetentionJobOptions } from "./types";
+import type { ChatServerOptions, ConversationRetentionOptions } from "./types";
 
 export interface ConversationRetentionRunSummary {
   expiredCount: number;
@@ -35,7 +35,6 @@ export interface OrphanedFileCleanupSummary {
 }
 
 const DEFAULT_RETENTION_BATCH_SIZE = 100;
-const DEFAULT_RETENTION_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 /**
  * A Conversation without messages or draft attachments is an abandoned draft: it was created to
  * hold uploads that were removed again. The grace period keeps a conversation that is still
@@ -55,7 +54,7 @@ export class ConversationRetentionWorkflow {
   /** False when the client instance keeps conversations indefinitely. */
   private readonly expireConversations: boolean;
 
-  constructor(options: ChatServerOptions, jobOptions: ConversationRetentionJobOptions = {}) {
+  constructor(options: ChatServerOptions, jobOptions: ConversationRetentionOptions = {}) {
     this.options = options;
     this.expireConversations = options.config.retention.expireConversations;
     this.batchSize = jobOptions.batchSize ?? DEFAULT_RETENTION_BATCH_SIZE;
@@ -97,6 +96,39 @@ export class ConversationRetentionWorkflow {
     }
 
     return summary;
+  }
+
+  /**
+   * One run of retention, as the `conversation.expire` job makes it. The cleanup retry comes
+   * first, so a cleanup that fails during this run's expiry is attempted once in this run and
+   * again in the next. A step that fails does not keep the later steps from running; the run
+   * then fails with the first error.
+   */
+  async run(logger: Logger): Promise<void> {
+    const failures: unknown[] = [];
+    let cleanupPendingCount = 0;
+    try {
+      cleanupPendingCount += (await this.cleanUpPendingConversations()).cleanupPendingCount;
+    } catch (error) {
+      logger.error({ error }, "Conversation data cleanup failed");
+      failures.push(error);
+    }
+    try {
+      cleanupPendingCount += (await this.expireDueConversations()).cleanupPendingCount;
+    } catch (error) {
+      logger.error({ error }, "Conversation retention expiration failed");
+      failures.push(error);
+    }
+    if (cleanupPendingCount > 0) {
+      logger.error({ cleanupPendingCount }, "Conversation data cleanup is pending");
+    }
+    try {
+      await this.deleteOrphanedManagedFiles();
+    } catch (error) {
+      logger.error({ error }, "Orphaned file cleanup failed");
+      failures.push(error);
+    }
+    if (failures.length > 0) throw failures[0];
   }
 
   /**
@@ -268,99 +300,6 @@ export class ConversationRetentionWorkflow {
       }
     });
   }
-}
-
-export class ConversationRetentionJob {
-  private readonly workflow: ConversationRetentionWorkflow;
-  private readonly checkIntervalMs: number;
-  private readonly runOnStartup: boolean;
-  private readonly logger: Logger;
-  private timer: ReturnType<typeof setInterval> | undefined;
-  private running: Promise<void> | undefined;
-
-  constructor(input: {
-    workflow: ConversationRetentionWorkflow;
-    options?: ConversationRetentionJobOptions;
-    logger: Logger;
-  }) {
-    this.workflow = input.workflow;
-    this.checkIntervalMs = input.options?.checkIntervalMs ?? DEFAULT_RETENTION_CHECK_INTERVAL_MS;
-    this.runOnStartup = input.options?.runOnStartup ?? true;
-    this.logger = input.logger;
-  }
-
-  start(): void {
-    if (this.runOnStartup) {
-      this.run();
-    }
-    if (this.checkIntervalMs <= 0 || this.timer) {
-      return;
-    }
-    this.timer = setInterval(() => this.run(), this.checkIntervalMs);
-    this.timer.unref?.();
-  }
-
-  async stop(): Promise<void> {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = undefined;
-    }
-    await this.running;
-  }
-
-  run(): void {
-    if (this.running) {
-      return;
-    }
-    // The retry comes first, so a cleanup that fails during this run's expiry is attempted
-    // once in this run and again in the next.
-    let cleanupPendingCount = 0;
-    const currentRun = this.workflow
-      .cleanUpPendingConversations()
-      .then((retry) => {
-        cleanupPendingCount += retry.cleanupPendingCount;
-      })
-      .catch((error: unknown) => {
-        this.logger.error({ error }, "Conversation data cleanup failed");
-      })
-      .then(() => this.workflow.expireDueConversations())
-      .then((expiry) => {
-        cleanupPendingCount += expiry.cleanupPendingCount;
-      })
-      .catch((error: unknown) => {
-        this.logger.error({ error }, "Conversation retention expiration failed");
-      })
-      .then(() => {
-        if (cleanupPendingCount > 0) {
-          this.logger.error({ cleanupPendingCount }, "Conversation data cleanup is pending");
-        }
-      })
-      .then(() => this.workflow.deleteOrphanedManagedFiles())
-      .then(() => undefined)
-      .catch((error: unknown) => {
-        this.logger.error({ error }, "Orphaned file cleanup failed");
-      })
-      .finally(() => {
-        if (this.running === currentRun) {
-          this.running = undefined;
-        }
-      });
-    this.running = currentRun;
-  }
-}
-
-export function createConversationRetentionJob(
-  options: ChatServerOptions,
-  input: {
-    logger: Logger;
-    jobOptions?: ConversationRetentionJobOptions;
-  }
-): ConversationRetentionJob {
-  return new ConversationRetentionJob({
-    workflow: new ConversationRetentionWorkflow(options, input.jobOptions),
-    options: input.jobOptions,
-    logger: input.logger
-  });
 }
 
 function toAuditErrorMetadata(error: unknown): JsonObject {

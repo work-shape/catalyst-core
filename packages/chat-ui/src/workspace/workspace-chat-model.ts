@@ -799,11 +799,13 @@ export function useWorkspaceChatModel({
       replace: route.kind === "new-conversation"
     });
     setNotice(undefined);
-    runRequestAccepted(response.conversation.id);
+    runRequestAccepted();
   }
 
-  function runRequestAccepted(conversationId: string) {
-    workspaceCache.handleRunRequestAccepted(conversationId);
+  // The server titles a new conversation with a job. The list is refetched every second while
+  // a run is active, and that is where the title arrives.
+  function runRequestAccepted() {
+    workspaceCache.invalidateConversations();
   }
 
   function streamError(conversationId: string, message: string, viewed: boolean) {
@@ -837,7 +839,7 @@ export function useWorkspaceChatModel({
       response.conversation.id
     );
     setNotice(undefined);
-    runRequestAccepted(response.conversation.id);
+    runRequestAccepted();
   }
 
   /** The run did not start: open the composer with the message ready to send. */

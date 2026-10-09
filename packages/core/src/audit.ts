@@ -62,6 +62,11 @@ export interface AuditEventStore {
     type?: string;
     page?: StorePage;
   }): Promise<AuditEvent[]>;
+  /** Removes the events created before the moment and returns how many there were. */
+  deleteAuditEventsBefore(input: {
+    clientInstanceId: ClientInstanceId;
+    createdBefore: ISODateString;
+  }): Promise<number>;
 }
 
 export interface AuditRecorder {

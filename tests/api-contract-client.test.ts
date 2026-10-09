@@ -445,11 +445,14 @@ describe("api client derived from the operation catalog", () => {
         body: { collaborationWorkspaceId: "cws_2", visibility: "private" }
       })
     ).resolves.toEqual(conversation);
-    await client.conversations.title.generate({ params: { conversationId: "conv_1" } });
+    // Only the request matters here: the recorded answer is a conversation, not a workspace.
+    await expect(client.workspaces.ensure_personal()).rejects.toThrow(
+      "API response does not match the contract"
+    );
 
     expect(requests.map((request) => `${request.method} ${pathOf(request)}`)).toEqual([
       "POST /api/v1/conversations/conv%201%2F2/move",
-      "POST /api/v1/conversations/conv_1/title"
+      "POST /api/v1/workspaces/personal"
     ]);
     expect(requests[0]?.headers.get("content-type")).toBe("application/json");
     await expect(requests[0]?.json()).resolves.toEqual({

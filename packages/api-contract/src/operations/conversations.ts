@@ -52,20 +52,6 @@ export const conversationOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "write"
   }),
-  "conversations.title.generate": defineOperation({
-    id: "conversations.title.generate",
-    method: "POST",
-    path: "/api/v1/conversations/:conversationId/title",
-    summary: "Generate a conversation's title from its messages",
-    tag: "Conversations",
-    auth: "user",
-    scope: "conversation:write",
-    requires: [],
-    effect: "changing",
-    response: json(conversationSchema),
-    errors: ["NOT_FOUND"],
-    rateClass: "write"
-  }),
   "conversations.rename": defineOperation({
     id: "conversations.rename",
     method: "PATCH",

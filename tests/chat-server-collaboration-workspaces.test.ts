@@ -2142,7 +2142,6 @@ function conversationRoutes(
         params: { structuredDataResourceId: "sdr_missing" }
       })
     },
-    { name: "generate title", send: json("conversations.title.generate") },
     {
       name: "rename",
       send: json("conversations.rename", { payload: { title: "Renamed by someone else" } })

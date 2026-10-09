@@ -99,7 +99,6 @@ describe("the operation catalog", () => {
         "conversations.runs.start  POST /api/v1/conversations/:conversationId/runs",
         "conversations.structured_data.get  GET /api/v1/conversations/:conversationId/structured-data/:structuredDataResourceId",
         "conversations.thread.get  GET /api/v1/conversations/:conversationId/thread",
-        "conversations.title.generate  POST /api/v1/conversations/:conversationId/title",
         "docs.get  GET /api/v1/docs",
         "health.get  GET /health",
         "instance.workspaces.list  GET /api/v1/instance/workspaces",
@@ -285,10 +284,11 @@ describe("a running instance", () => {
     for (const [method, path] of retiredApiPaths) {
       expect(current.has(`${method} ${path}`), `${method} ${path}`).toBe(false);
     }
-    // Each operation moved; none was dropped beside the alias. The reference of the instance
-    // is the one addition since: it never had an unversioned path.
+    // Each operation moved. Two were dropped: the alias, and the title generation, which is
+    // the job conversation.generate_title now. The reference of the instance is the one
+    // addition since: it never had an unversioned path.
     const added: readonly ApiOperationName[] = ["openapi.get", "docs.get"];
-    expect(retiredApiPaths.length).toBe(versioned.length - added.length + 1);
+    expect(retiredApiPaths.length).toBe(versioned.length - added.length + 2);
   });
 });
 

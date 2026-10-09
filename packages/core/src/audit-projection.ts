@@ -76,6 +76,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
   "conversation.title_generated": "Generated a conversation title",
   "conversation.title_generation_failed": "Conversation title generation failed",
   "storage.orphaned_files_deleted": "Removed orphaned files",
+  "audit.pruned": "Removed expired audit events",
   "storage.orphaned_file_cleanup_failed": "Orphaned file cleanup failed",
   "collaboration_workspace.created": "Created a workspace",
   "collaboration_workspace.delete_failed": "Workspace deletion refused",
@@ -152,6 +153,7 @@ function tierForType(type: string): AuditActivityTier {
     type.startsWith("governance.") ||
     type.startsWith("user.") ||
     type.startsWith("auth.") ||
+    type.startsWith("audit.") ||
     type.startsWith("collaboration_workspace.") ||
     type === "conversation.deleted" ||
     type.startsWith("conversation.cleanup") ||

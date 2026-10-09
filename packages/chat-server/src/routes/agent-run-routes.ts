@@ -33,28 +33,7 @@ export function registerAgentRunRoutes(
   log: FastifyBaseLogger
 ): void {
   const conversations = new ConversationWorkflow(options);
-  const titleGenerationTasks = new Map<string, Promise<Conversation | undefined>>();
   const lifecycleMonitorTasks = new Set<AgentRunId>();
-
-  function generateTitleForConversationOnce(
-    conversationId: ConversationId,
-    user: AuthenticatedUser,
-    context: RuntimeCallContext
-  ): Promise<Conversation | undefined> {
-    const key = `${options.clientInstanceId}:${user.id}:${conversationId}`;
-    const existingTask = titleGenerationTasks.get(key);
-    if (existingTask) {
-      return existingTask;
-    }
-
-    const task = conversations
-      .generateTitleForConversation(conversationId, user, context)
-      .finally(() => {
-        titleGenerationTasks.delete(key);
-      });
-    titleGenerationTasks.set(key, task);
-    return task;
-  }
 
   async function readCurrentConversation(
     conversationId: ConversationId,
@@ -62,14 +41,6 @@ export function registerAgentRunRoutes(
   ): Promise<Conversation> {
     return conversations.requireConversationAccess(conversationId, user);
   }
-
-  route(apiOperations["conversations.title.generate"], async ({ user, context, params }) => {
-    const conversationId = conversationIdParam(params);
-    return (
-      (await generateTitleForConversationOnce(conversationId, user, context)) ??
-      (await readCurrentConversation(conversationId, user))
-    );
-  });
 
   route(
     apiOperations["conversations.runs.cancel"],
@@ -101,14 +72,6 @@ export function registerAgentRunRoutes(
         idempotencyKey: body.idempotencyKey,
         text: body.message.text
       });
-      void generateTitleForConversationOnce(conversationId, user, localizedContext).catch(
-        (error: unknown) => {
-          request.log.warn(
-            { err: error, conversationId, runId: started.runId },
-            "Conversation title generation failed after public run start"
-          );
-        }
-      );
       if (isObservableRunStatus(started.run.status)) {
         monitorRunLifecycleOnce({
           conversationId,
@@ -144,14 +107,6 @@ export function registerAgentRunRoutes(
         collaborationWorkspaceId: body.conversation?.collaborationWorkspaceId
           ? asCollaborationWorkspaceId(body.conversation.collaborationWorkspaceId)
           : undefined
-      }
-    );
-    void generateTitleForConversationOnce(started.conversation.id, user, localizedContext).catch(
-      (error: unknown) => {
-        request.log.warn(
-          { err: error, conversationId: started.conversation.id, runId: started.runId },
-          "Conversation title generation failed after public create-and-run"
-        );
       }
     );
     if (isObservableRunStatus(started.run.status)) {

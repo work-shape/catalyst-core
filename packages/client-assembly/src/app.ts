@@ -14,13 +14,15 @@ import {
   ApprovalCheckRunner,
   ApprovalRequestWorkflow,
   createSkillChangeApprovalHandler,
-  createChatServer
+  createChatServer,
+  createChatServerJobs
 } from "@vivd-catalyst/chat-server";
-import type { ChatAttachmentService } from "@vivd-catalyst/chat-server";
+import type { ChatAttachmentService, ChatServerOptions } from "@vivd-catalyst/chat-server";
 import { createManagedObjectAccess } from "@vivd-catalyst/capability-sdk";
 import {
   AppError,
   type HttpRuntime,
+  type JobWorker,
   type PlatformStores,
   type SecretResolver
 } from "@vivd-catalyst/core";
@@ -62,6 +64,7 @@ import type {
 } from "./capabilities";
 import type { ClientInstanceEnv } from "./env";
 import { createInstanceInfrastructure, createWorkspaceObjectStore } from "./infrastructure";
+import { createJobWorker } from "./job-worker";
 import { createRuntimeFailureReporter } from "./runtime-error-logging";
 import { createPlatformStore } from "./store";
 import { createToolDefinitions } from "./tools";
@@ -88,6 +91,8 @@ export interface CreateClientInstanceAppInput {
 export interface ClientInstanceApp extends HttpRuntime {
   readonly config: ClientInstanceConfig;
   readonly store: PlatformStores;
+  /** Serves the API process's job kinds. `listen` starts it and `close` stops it. */
+  readonly jobs: JobWorker;
 }
 
 export async function createClientInstanceApp(
@@ -126,7 +131,7 @@ export async function createClientInstanceApp(
       userStore: store,
       allowedOrigins: input.allowedOrigins
     });
-  const server = await createChatServer({
+  const serverOptions: ChatServerOptions = {
     logger,
     config,
     clientInstanceId,
@@ -169,20 +174,32 @@ export async function createClientInstanceApp(
     }),
     sessionToken,
     serviceAccessToken
+  };
+  const server = await createChatServer(serverOptions);
+  const jobs = createJobWorker({
+    stores: store,
+    clientInstanceId,
+    logger,
+    ...createChatServerJobs(serverOptions)
   });
 
   return {
     config,
     store,
+    jobs,
     // The server's own function, unwrapped.
     fetch: server.fetch,
-    listen(listenInput = {}) {
-      return server.listen({
+    async listen(listenInput = {}) {
+      const baseUrl = await server.listen({
         host: listenInput.host ?? env.HOST ?? "127.0.0.1",
         port: Number(listenInput.port ?? env.PORT ?? 4100)
       });
+      jobs.start();
+      return baseUrl;
     },
     async close() {
+      // The worker goes first: it gives its jobs back while the database is still open.
+      await jobs.stop();
       await server.close();
       await standaloneAuth?.close();
       await execution.close();

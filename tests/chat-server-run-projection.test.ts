@@ -195,12 +195,7 @@ describe("client instance app vertical slice", () => {
         usageGovernance,
         auditRecorder: new NoopAuditRecorder(),
         agentRuntime: createMissingRuntime(),
-        modelProvider: createUnusedModelProvider(),
-        runRecovery: {
-          staleActiveRunMs: 60_000,
-          runOnStartup: false,
-          watchdogIntervalMs: 60_000
-        }
+        modelProvider: createUnusedModelProvider()
       }
     });
 
@@ -526,12 +521,7 @@ describe("client instance app vertical slice", () => {
         usageGovernance,
         auditRecorder: new NoopAuditRecorder(),
         agentRuntime: createMissingRuntime(),
-        modelProvider: createUnusedModelProvider(),
-        runRecovery: {
-          staleActiveRunMs: 60_000,
-          runOnStartup: false,
-          watchdogIntervalMs: 60_000
-        }
+        modelProvider: createUnusedModelProvider()
       }
     });
 
@@ -676,12 +666,7 @@ describe("client instance app vertical slice", () => {
         usageGovernance,
         auditRecorder: new NoopAuditRecorder(),
         agentRuntime: createMissingRuntime(),
-        modelProvider: createUnusedModelProvider(),
-        runRecovery: {
-          staleActiveRunMs: 60_000,
-          runOnStartup: false,
-          watchdogIntervalMs: 60_000
-        }
+        modelProvider: createUnusedModelProvider()
       }
     });
 

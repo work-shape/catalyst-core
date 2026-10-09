@@ -2,6 +2,7 @@ import type { StorePage } from "@vivd-catalyst/core";
 import { auditActorFromUser, projectAgentRun } from "@vivd-catalyst/core";
 import {
   AppError,
+  JobLeaseLostError,
   type AgentRun,
   type ActiveRunSummary,
   type AgentRunProjection,
@@ -19,11 +20,13 @@ import {
   type ConversationThreadSnapshot,
   type ConversationId,
   type ConversationVisibility,
+  type JobControl,
   type JsonObject,
   type ReasoningEffortConfig,
   type RuntimeCallContext,
   type RunStartCommand,
   type RunStartCommandKind,
+  type UserId,
   addDays,
   asUserId,
   createUserMessageMetadata,
@@ -54,6 +57,7 @@ import {
   normalizeGeneratedConversationTitle
 } from "./conversation-title";
 import { isActiveRun, isMissingLocalRuntimeState, recoverInterruptedRun } from "./run-recovery";
+import { generateConversationTitleJob } from "./job-kinds";
 import type { ChatServerOptions } from "./types";
 
 export interface CreateConversationCommand {
@@ -467,46 +471,64 @@ export class ConversationWorkflow {
       const userMessageId = createPlatformId<"MessageId">("msg");
       const runId = createPlatformId<"AgentRunId">("run");
       const startedAt = new Date().toISOString();
-      const prepared = await this.options.stores.agentRuns.prepareConversationRunStart({
-        clientInstanceId: this.options.clientInstanceId,
-        conversationId,
-        ownerUserId: getSubjectUserId(user),
-        userMessage: {
-          id: userMessageId,
-          text: command.text,
-          metadata: createUserMessageMetadata({ attachmentManifest })
-        },
-        run: {
-          id: runId,
+      // The title job is enqueued in the transaction that writes the first user message, so
+      // the message never exists without it and the job never without the message.
+      const prepared = await this.options.stores.transaction(async (stores) => {
+        const prepared = await stores.agentRuns.prepareConversationRunStart({
           clientInstanceId: this.options.clientInstanceId,
           conversationId,
           ownerUserId: getSubjectUserId(user),
-          inputMessageId: userMessageId,
-          agentName,
-          modelBindingId: command.modelBindingId,
-          reasoningEffort: command.reasoningEffort,
-          locale: context.locale,
-          authorization: {
-            principal: context.principal ?? getAuthPrincipal(user),
-            subjectUserId: context.subjectUserId ?? getSubjectUserId(user),
-            delegatedActor: context.delegatedActor ?? user.delegatedActor,
-            scopes: [...(context.scopes ?? getAuthScopes(user))]
+          userMessage: {
+            id: userMessageId,
+            text: command.text,
+            metadata: createUserMessageMetadata({ attachmentManifest })
           },
-          status: "queued",
-          idempotencyKey: command.idempotencyKey,
-          correlationId: context.correlationId,
-          startedAt
-        },
-        ...(command.idempotencyKey
-          ? {
-              runStartCommand: {
-                idempotencyKey: command.idempotencyKey,
-                commandKind: "start_conversation_run" as const,
-                claimedAt: runStartCommand?.updatedAt
+          run: {
+            id: runId,
+            clientInstanceId: this.options.clientInstanceId,
+            conversationId,
+            ownerUserId: getSubjectUserId(user),
+            inputMessageId: userMessageId,
+            agentName,
+            modelBindingId: command.modelBindingId,
+            reasoningEffort: command.reasoningEffort,
+            locale: context.locale,
+            authorization: {
+              principal: context.principal ?? getAuthPrincipal(user),
+              subjectUserId: context.subjectUserId ?? getSubjectUserId(user),
+              delegatedActor: context.delegatedActor ?? user.delegatedActor,
+              scopes: [...(context.scopes ?? getAuthScopes(user))]
+            },
+            status: "queued",
+            idempotencyKey: command.idempotencyKey,
+            correlationId: context.correlationId,
+            startedAt
+          },
+          ...(command.idempotencyKey
+            ? {
+                runStartCommand: {
+                  idempotencyKey: command.idempotencyKey,
+                  commandKind: "start_conversation_run" as const,
+                  claimedAt: runStartCommand?.updatedAt
+                }
               }
+            : {}),
+          claimReadyDraftAttachments: attachmentManifest.attachments.length > 0
+        });
+        if (prepared.firstUserMessage && this.options.config.conversationTitles.enabled) {
+          await stores.jobs.enqueue(
+            generateConversationTitleJob,
+            { conversationId, userId: getSubjectUserId(user) },
+            {
+              clientInstanceId: this.options.clientInstanceId,
+              subject: conversationId,
+              dedupeKey: conversationId,
+              concurrencyKey: conversationId,
+              correlationId: context.correlationId
             }
-          : {}),
-        claimReadyDraftAttachments: attachmentManifest.attachments.length > 0
+          );
+        }
+        return prepared;
       });
 
       const run = await this.options.agentRuntime.start(
@@ -827,16 +849,39 @@ export class ConversationWorkflow {
     });
   }
 
+  /**
+   * The work of the `conversation.generate_title` job. It finishes without work when the
+   * conversation or the user is gone or the title is no longer the temporary one. The title is
+   * written under the job's lease and only over the title it was generated for, so a rename
+   * during the model call stands. A failure is thrown, so the job is tried again.
+   */
   async generateTitleForConversation(
-    conversationId: ConversationId,
-    user: AuthenticatedUser,
-    context: RuntimeCallContext
-  ): Promise<Conversation | undefined> {
+    input: { conversationId: ConversationId; userId: UserId; correlationId: string },
+    control: Pick<JobControl, "signal" | "transaction">
+  ): Promise<void> {
     if (!this.options.config.conversationTitles.enabled) {
-      return undefined;
+      return;
     }
-
-    const conversation = await this.requireConversationAccess(conversationId, user);
+    const { conversationId } = input;
+    const user = await this.findActiveUser(input.userId);
+    if (!user) {
+      return;
+    }
+    const context: RuntimeCallContext = {
+      user,
+      clientInstanceId: this.options.clientInstanceId,
+      correlationId: input.correlationId,
+      signal: control.signal
+    };
+    let conversation: Conversation;
+    try {
+      conversation = await this.requireConversationAccess(conversationId, user);
+    } catch (error) {
+      if (isAppError(error) && (error.code === "NOT_FOUND" || error.code === "FORBIDDEN")) {
+        return;
+      }
+      throw error;
+    }
     const messages = await this.options.stores.conversations.listMessages({
       clientInstanceId: this.options.clientInstanceId,
       conversationId
@@ -850,7 +895,7 @@ export class ConversationWorkflow {
         temporaryAttachmentTitles(firstUserMessage)
       )
     ) {
-      return undefined;
+      return;
     }
 
     const modelSelection = getModelSelectionForConversationTitles(this.options.config);
@@ -885,15 +930,28 @@ export class ConversationWorkflow {
       );
       const title = normalizeGeneratedConversationTitle(completion.text);
       if (!isUsableGeneratedTitle(title) || title === conversation.title) {
-        return undefined;
+        return;
       }
 
-      const updated = await this.options.stores.conversations.updateConversationTitle({
-        clientInstanceId: this.options.clientInstanceId,
-        conversationId,
-        title,
-        updatedAt: new Date().toISOString()
+      const updated = await control.transaction(async (stores) => {
+        const current = await stores.conversations.getConversation(
+          this.options.clientInstanceId,
+          conversationId
+        );
+        if (current?.title !== conversation.title) {
+          return false;
+        }
+        await stores.conversations.updateConversationTitle({
+          clientInstanceId: this.options.clientInstanceId,
+          conversationId,
+          title,
+          updatedAt: new Date().toISOString()
+        });
+        return true;
       });
+      if (!updated) {
+        return;
+      }
       await this.options.auditRecorder.record({
         type: "conversation.title_generated",
         status: "success",
@@ -908,8 +966,11 @@ export class ConversationWorkflow {
           generatedTitleLength: title.length
         }
       });
-      return updated;
     } catch (error) {
+      // An attempt that lost its lease was taken over; the attempt that holds it reports.
+      if (error instanceof JobLeaseLostError) {
+        throw error;
+      }
       await this.options.auditRecorder.record({
         type: "conversation.title_generation_failed",
         status: "failed",
@@ -923,8 +984,31 @@ export class ConversationWorkflow {
           ...toAuditErrorMetadata(error)
         }
       });
+      throw error;
+    }
+  }
+
+  private async findActiveUser(userId: UserId): Promise<AuthenticatedUser | undefined> {
+    const users = await this.options.stores.users.listUsers({
+      clientInstanceId: this.options.clientInstanceId
+    });
+    const user = users.find((candidate) => candidate.id === userId);
+    if (!user || user.status !== "active") {
       return undefined;
     }
+    const identity = user.identities[0];
+    return {
+      id: user.id,
+      externalUserId: identity?.externalUserId ?? user.id,
+      displayLabel: user.displayLabel,
+      email: user.email,
+      roles: user.roles,
+      permissionRefs: user.permissionRefs,
+      permissions: user.permissions,
+      clientInstanceId: user.clientInstanceId,
+      authSource: identity?.authSource ?? "job",
+      subjectUserId: user.id
+    };
   }
 
   async recordRunFailed(

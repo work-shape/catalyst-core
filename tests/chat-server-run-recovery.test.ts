@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
 import { RunRecoveryWatchdog } from "@vivd-catalyst/chat-server";
 import { createStaticConfigAssetSource } from "./support/static-config-asset-source";
@@ -13,6 +13,7 @@ import {
   parseSseChunks
 } from "./support/chat-server-run-harness";
 import { personalConversationListInput } from "./support/fixtures";
+import { getTestJobs } from "./support/test-instance";
 
 describe("client instance app vertical slice", () => {
   it("reads a stale run without recovery and cancels it explicitly before thread snapshots without duplicate terminal observations", async () => {
@@ -178,9 +179,7 @@ describe("client instance app vertical slice", () => {
   });
 
   it("cancels a fresh durable active run before observing when local runtime state is missing", async () => {
-    const fixture = await createStaleRunRecoveryFixture({
-      staleActiveRunMs: 60 * 60 * 1000
-    });
+    const fixture = await createStaleRunRecoveryFixture();
     const { server, store, conversation, run } = fixture;
     await store.agentRuns.updateAgentRunStatus({
       clientInstanceId: fixture.clientInstanceId,
@@ -220,9 +219,7 @@ describe("client instance app vertical slice", () => {
   });
 
   it("recovers a fresh durable active run when cancellation finds missing local runtime state", async () => {
-    const fixture = await createStaleRunRecoveryFixture({
-      staleActiveRunMs: 60 * 60 * 1000
-    });
+    const fixture = await createStaleRunRecoveryFixture();
     const { server, store, conversation, run } = fixture;
     await store.agentRuns.updateAgentRunStatus({
       clientInstanceId: fixture.clientInstanceId,
@@ -272,10 +269,7 @@ describe("client instance app vertical slice", () => {
       agents: [agent]
     });
     const provider = { id: "test-provider", type: "deterministic" as const, model: "test-model" };
-    // Far from the stale cutoff: only the startup recovery can end this run.
     const fixture = await createStaleRunRecoveryFixture({
-      staleActiveRunMs: 100 * 365 * 24 * 60 * 60 * 1000,
-      runOnStartup: true,
       runtime: (store) => ({
         assetSource,
         agentRuntime: new LocalAgentRuntime({
@@ -327,15 +321,12 @@ describe("client instance app vertical slice", () => {
       ]
     });
 
-    // The first request starts the server, and with it the watchdog.
-    expect(
-      (
-        await server.call("conversations.thread.get", {
-          params: { conversationId: conversation.id }
-        })
-      ).statusCode
-    ).toBe(200);
-    await vi.waitFor(() => expectRunStatus(store, fixture.clientInstanceId, run.id, "failed"));
+    // Far from the stale cutoff: only the recovery of runs lost with the process can end this
+    // run. The first tick of the recovery job in a process does it.
+    await getTestJobs(server, {
+      runRecovery: { staleActiveRunMs: 100 * 365 * 24 * 60 * 60 * 1000 }
+    }).runDue();
+    await expectRunStatus(store, fixture.clientInstanceId, run.id, "failed");
 
     const next = await injectStartConversationRun(server, conversation.id, "after the restart");
     expect(next.run.id).not.toBe(run.id);
@@ -354,9 +345,7 @@ describe("client instance app vertical slice", () => {
   });
 
   it("leaves a run alone while a worker holds a live lease, even without local runtime state", async () => {
-    const fixture = await createStaleRunRecoveryFixture({
-      staleActiveRunMs: 60 * 60 * 1000
-    });
+    const fixture = await createStaleRunRecoveryFixture();
     const { server, store, conversation, run } = fixture;
     const now = Date.now();
     await store.agentRuns.updateAgentRunStatus({
@@ -446,9 +435,7 @@ describe("client instance app vertical slice", () => {
     });
 
     const watchdog = new RunRecoveryWatchdog(fixture.options, undefined, {
-      staleActiveRunMs: 1,
-      runOnStartup: false,
-      watchdogIntervalMs: 60_000
+      staleActiveRunMs: 1
     });
     const summary = await watchdog.sweep(new Date("2026-01-01T00:00:00.000Z"));
     expect(summary.checked).toBe(1);

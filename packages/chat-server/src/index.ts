@@ -27,10 +27,7 @@ import { registerSessionTokenRoutes } from "./routes/session-token-routes";
 import { registerServiceAccessTokenRoutes } from "./routes/service-access-token-routes";
 import { registerSuperadminRoutes } from "./routes/superadmin-routes";
 import { registerUserAccountRoutes } from "./routes/user-account-routes";
-import { createConversationRetentionJob } from "./retention";
-import { RunRecoveryWatchdog } from "./run-recovery";
 import type { ChatServerOptions, ResolvedChatServerOptions } from "./types";
-import { createExecutionWorkspaceCleanupJob } from "./workspace-cleanup";
 
 export type {
   ChatAttachmentService,
@@ -42,22 +39,27 @@ export type {
   ConversationRetentionRunSummary,
   OrphanedFileCleanupSummary
 } from "./retention";
+export { ConversationRetentionWorkflow } from "./retention";
+export { createChatServerJobs } from "./jobs";
+export type { ChatServerJobOptions, ChatServerJobs } from "./jobs";
 export {
-  ConversationRetentionJob,
-  ConversationRetentionWorkflow,
-  createConversationRetentionJob
-} from "./retention";
+  cleanUpExecutionWorkspacesJob,
+  expireConversationsJob,
+  generateConversationTitleJob,
+  pruneAuditEventsJob,
+  pruneJobsJob,
+  recoverAgentRunsJob
+} from "./job-kinds";
 export { RUN_RECOVERY_ERROR, RunRecoveryWatchdog, recoverStaleRun } from "./run-recovery";
 export type { RunRecoverySweepSummary } from "./run-recovery";
 export {
-  ExecutionWorkspaceCleanupJob,
   ExecutionWorkspaceCleanupWorkflow,
   cleanupExecutionWorkspaceForConversation
 } from "./workspace-cleanup";
 export type { ExecutionWorkspaceCleanupRunSummary } from "./workspace-cleanup";
 export type {
   ChatServerOptions,
-  ConversationRetentionJobOptions,
+  ConversationRetentionOptions,
   ExecutionWorkspaceCleanupJobOptions,
   RunRecoveryOptions
 } from "./types";
@@ -94,25 +96,6 @@ export async function createChatServer(input: ChatServerOptions): Promise<HttpRu
   });
 
   installErrorHandler(app);
-  const retentionJob = createConversationRetentionJob(options, {
-    logger: options.logger,
-    jobOptions: options.retentionExpiration
-  });
-  const executionWorkspaceCleanupJob = createExecutionWorkspaceCleanupJob(options, {
-    logger: options.logger
-  });
-  const runRecoveryWatchdog = new RunRecoveryWatchdog(options, options.logger, options.runRecovery);
-  app.addHook("onReady", async () => {
-    retentionJob.start();
-    executionWorkspaceCleanupJob?.start();
-    runRecoveryWatchdog.start();
-  });
-  app.addHook("onClose", async () => {
-    runRecoveryWatchdog.stop();
-    await executionWorkspaceCleanupJob?.stop();
-    await retentionJob.stop();
-  });
-
   registerBetterAuthRoutes(app, options);
   const route = createRoute(app, options);
   registerDevMailRoutes(route, options);

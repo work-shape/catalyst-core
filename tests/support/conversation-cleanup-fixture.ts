@@ -1,8 +1,5 @@
 import { expect } from "vitest";
-import {
-  ConversationRetentionJob,
-  ConversationRetentionWorkflow
-} from "@vivd-catalyst/chat-server";
+import { ConversationRetentionWorkflow } from "@vivd-catalyst/chat-server";
 import {
   asUserId,
   type AuthenticatedUser,
@@ -210,13 +207,8 @@ export async function createConversationCleanupFixture(db: PostgresSuite, label:
       },
       child: () => logger
     };
-    const job = new ConversationRetentionJob({
-      workflow: new ConversationRetentionWorkflow(options),
-      options: { checkIntervalMs: 0, runOnStartup: true },
-      logger
-    });
-    job.start();
-    await job.stop();
+    // A failed step is logged and fails the run; the tests read the log.
+    await new ConversationRetentionWorkflow(options).run(logger).catch(() => undefined);
     return logged;
   };
 

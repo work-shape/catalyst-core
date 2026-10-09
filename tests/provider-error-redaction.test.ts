@@ -1,4 +1,4 @@
-import { addTestRoute, createTestInstance } from "./support/test-instance";
+import { addTestRoute, createTestInstance, getTestJobs } from "./support/test-instance";
 import { createLogger } from "@vivd-catalyst/client-assembly";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -280,7 +280,8 @@ describe("provider error boundary", () => {
         idempotencyKey: "redaction-test"
       });
       await drainRunEvents(app, id, started.run.id);
-      await app.call("conversations.title.generate", { params: { conversationId: id } });
+      // The title job fails with the provider's error; its audit event must not carry it.
+      await getTestJobs(app).runDue();
       const audit = await app.call("audit_events.list", {});
       const events = audit.json<{
         items: Array<{ type: string; metadata: Record<string, unknown> }>;

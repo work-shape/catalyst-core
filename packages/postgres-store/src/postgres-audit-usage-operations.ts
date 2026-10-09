@@ -62,6 +62,21 @@ export async function listAuditEvents(
   return rows.map(mapAuditEvent);
 }
 
+export async function deleteAuditEventsBefore(
+  db: PostgresConnection,
+  input: { clientInstanceId: ClientInstanceId; createdBefore: string }
+): Promise<number> {
+  const removed = await db
+    .delete(auditEvents)
+    .where(
+      and(
+        eq(auditEvents.clientInstanceId, input.clientInstanceId),
+        lt(auditEvents.createdAt, new Date(input.createdBefore))
+      )
+    );
+  return removed.count;
+}
+
 export async function appendModelUsageEvent(
   db: PostgresConnection,
   input: ModelUsageEventRecordInput

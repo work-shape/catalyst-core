@@ -367,6 +367,8 @@ export interface PrepareConversationRunStartInput {
 export interface PreparedConversationRunStart {
   userMessage: ChatMessage;
   run: AgentRun;
+  /** True when the conversation had no user message before this one. */
+  firstUserMessage: boolean;
 }
 
 export interface UpdateAgentRunStatusInput {

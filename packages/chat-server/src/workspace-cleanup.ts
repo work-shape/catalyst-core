@@ -1,4 +1,3 @@
-import type { Logger } from "@vivd-catalyst/core";
 import {
   createPlatformId,
   isAppError,
@@ -15,7 +14,6 @@ export interface ExecutionWorkspaceCleanupRunSummary {
 }
 
 const DEFAULT_CLEANUP_BATCH_SIZE = 100;
-const DEFAULT_CLEANUP_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 
 export class ExecutionWorkspaceCleanupWorkflow {
   private readonly store: ExecutionWorkspaceCleanupStore;
@@ -56,82 +54,6 @@ export class ExecutionWorkspaceCleanupWorkflow {
     }
     return { cleanedCount, failedCount };
   }
-}
-
-export class ExecutionWorkspaceCleanupJob {
-  private readonly workflow: ExecutionWorkspaceCleanupWorkflow;
-  private readonly checkIntervalMs: number;
-  private readonly runOnStartup: boolean;
-  private readonly logger: Logger;
-  private timer: ReturnType<typeof setInterval> | undefined;
-  private running: Promise<void> | undefined;
-
-  constructor(input: {
-    workflow: ExecutionWorkspaceCleanupWorkflow;
-    options?: ExecutionWorkspaceCleanupJobOptions;
-    logger: Logger;
-  }) {
-    this.workflow = input.workflow;
-    this.checkIntervalMs = input.options?.checkIntervalMs ?? DEFAULT_CLEANUP_CHECK_INTERVAL_MS;
-    this.runOnStartup = input.options?.runOnStartup ?? true;
-    this.logger = input.logger;
-  }
-
-  start(): void {
-    if (this.runOnStartup) {
-      this.run();
-    }
-    if (this.checkIntervalMs <= 0 || this.timer) {
-      return;
-    }
-    this.timer = setInterval(() => this.run(), this.checkIntervalMs);
-    this.timer.unref?.();
-  }
-
-  async stop(): Promise<void> {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = undefined;
-    }
-    await this.running;
-  }
-
-  run(): void {
-    if (this.running) {
-      return;
-    }
-    const currentRun = this.workflow
-      .cleanupDeletedConversationWorkspaces()
-      .then(() => undefined)
-      .catch((error: unknown) => {
-        this.logger.error({ error }, "Execution workspace cleanup failed");
-      })
-      .finally(() => {
-        if (this.running === currentRun) {
-          this.running = undefined;
-        }
-      });
-    this.running = currentRun;
-  }
-}
-
-export function createExecutionWorkspaceCleanupJob(
-  options: ChatServerOptions,
-  input: {
-    logger: Logger;
-  }
-): ExecutionWorkspaceCleanupJob | undefined {
-  if (!options.executionWorkspaceCleanup) {
-    return undefined;
-  }
-  return new ExecutionWorkspaceCleanupJob({
-    workflow: new ExecutionWorkspaceCleanupWorkflow(
-      options,
-      options.executionWorkspaceCleanup.jobOptions
-    ),
-    options: options.executionWorkspaceCleanup.jobOptions,
-    logger: input.logger
-  });
 }
 
 export async function cleanupExecutionWorkspaceForConversation(

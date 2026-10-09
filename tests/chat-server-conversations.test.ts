@@ -1,4 +1,4 @@
-import { createTestInstance } from "./support/test-instance";
+import { createTestInstance, getTestJobs } from "./support/test-instance";
 import { Readable } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -48,14 +48,8 @@ describe("client instance app vertical slice", () => {
     });
     await drainRunEvents(app, conversation.id, sent.run.id);
 
-    const generatedTitle = await app.call("conversations.title.generate", {
-      params: { conversationId: conversation.id }
-    });
-    expect(generatedTitle.statusCode).toBe(200);
-    expect(generatedTitle.json()).toMatchObject({
-      id: conversation.id,
-      title: "Please Summarize The Release Notes"
-    });
+    // The first user message enqueued the title job; the worker of the API process runs it.
+    await getTestJobs(app).runDue();
 
     const listed = await app.call("conversations.list", await personalConversationListInput(app));
     expect(listed.statusCode).toBe(200);
@@ -158,6 +152,7 @@ describe("client instance app vertical slice", () => {
       }
     );
     await drainRunEvents(app, conversation.id, sent.run.id);
+    await getTestJobs(app).runDue();
 
     const listed = await app.call("conversations.list", await personalConversationListInput(app));
     expect(listed.statusCode).toBe(200);
@@ -529,6 +524,7 @@ describe("client instance app vertical slice", () => {
       idempotencyKey: "tool-title-generation-run"
     });
     await drainRunEvents(app, conversation.id, sent.run.id);
+    await getTestJobs(app).runDue();
 
     const listed = await app.call("conversations.list", await personalConversationListInput(app));
     expect(listed.statusCode).toBe(200);

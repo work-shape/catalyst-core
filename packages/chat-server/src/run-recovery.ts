@@ -15,7 +15,6 @@ export interface RunRecoveryResult {
 
 const ACTIVE_RUN_STATUSES = new Set(["queued", "running", "waiting_for_permission", "cancelling"]);
 const DEFAULT_STALE_ACTIVE_RUN_MS = 30 * 60 * 1000;
-const DEFAULT_WATCHDOG_INTERVAL_MS = 60 * 1000;
 const DEFAULT_BATCH_SIZE = 50;
 
 export const RUN_RECOVERY_ERROR: AgentRunError = {
@@ -34,10 +33,7 @@ export const RUN_RECOVERY_ERROR: AgentRunError = {
  */
 export class RunRecoveryWatchdog {
   private readonly staleActiveRunMs: number;
-  private readonly watchdogIntervalMs: number;
   private readonly batchSize: number;
-  private readonly runOnStartup: boolean;
-  private timer: NodeJS.Timeout | undefined;
   private running = false;
 
   constructor(
@@ -46,36 +42,7 @@ export class RunRecoveryWatchdog {
     recoveryOptions: RunRecoveryOptions = {}
   ) {
     this.staleActiveRunMs = recoveryOptions.staleActiveRunMs ?? DEFAULT_STALE_ACTIVE_RUN_MS;
-    this.watchdogIntervalMs = recoveryOptions.watchdogIntervalMs ?? DEFAULT_WATCHDOG_INTERVAL_MS;
     this.batchSize = recoveryOptions.batchSize ?? DEFAULT_BATCH_SIZE;
-    this.runOnStartup = recoveryOptions.runOnStartup ?? true;
-  }
-
-  start(): void {
-    if (this.timer) {
-      return;
-    }
-    if (this.runOnStartup) {
-      void this.recoverRunsLostWithProcess()
-        .then(() => this.sweep())
-        .catch((error: unknown) => {
-          this.logger?.warn({ err: error }, "Agent run recovery startup sweep failed");
-        });
-    }
-    this.timer = setInterval(() => {
-      void this.sweep().catch((error: unknown) => {
-        this.logger?.warn({ err: error }, "Agent run recovery watchdog sweep failed");
-      });
-    }, this.watchdogIntervalMs);
-    this.timer.unref?.();
-  }
-
-  stop(): void {
-    if (!this.timer) {
-      return;
-    }
-    clearInterval(this.timer);
-    this.timer = undefined;
   }
 
   /**

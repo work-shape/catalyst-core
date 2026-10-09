@@ -2,10 +2,16 @@ import { createClientInstanceExecutionAssembly } from "../../packages/client-ass
 import { afterAll, afterEach, beforeEach } from "vitest";
 import {
   createClientInstanceApp,
+  createJobWorker,
   createLogger,
   type CreateClientInstanceAppInput
 } from "@vivd-catalyst/client-assembly";
-import { createChatServer, type ChatServerOptions } from "@vivd-catalyst/chat-server";
+import {
+  createChatServer,
+  createChatServerJobs,
+  type ChatServerJobOptions,
+  type ChatServerOptions
+} from "@vivd-catalyst/chat-server";
 import { frameworkBehind } from "../../packages/chat-server/src/http/framework";
 import { buildApiPath, operationPathParamNames } from "@vivd-catalyst/api-contract";
 import {
@@ -13,6 +19,7 @@ import {
   NoopAuditRecorder,
   SecretNotResolvedError,
   type HttpRuntime,
+  type JobWorker,
   type PlatformStores
 } from "@vivd-catalyst/core";
 import { createStaticConfigAssetSource } from "./static-config-asset-source";
@@ -71,6 +78,9 @@ type Metadata = {
   /** The service's public boundary. */
   runtime?: HttpRuntime;
   config?: ClientInstanceConfig;
+  /** The options of a server built here, from which its job worker is made on first use. */
+  serverOptions?: ChatServerOptions;
+  jobs?: JobWorker;
   closed: boolean;
   cleanup(): Promise<void>;
 };
@@ -223,6 +233,7 @@ async function createDefaultInstance(
       },
       stores
     );
+    state.serverOptions = options;
     const server = await createChatServer(options);
     try {
       const framework = testFramework(server);
@@ -277,10 +288,12 @@ async function createConfiguredInstance(
   if ("server" in input) {
     const options = input.server;
     const stores = options.stores;
-    const server = await createChatServer(completeServerOptions(options, stores));
+    const serverOptions = completeServerOptions(options, stores);
+    const server = await createChatServer(serverOptions);
     return bindInstance(stores, {
       server: testFramework(server).app,
       runtime: server,
+      serverOptions,
       config: options.config,
       closed: false,
       async cleanup() {
@@ -300,6 +313,7 @@ async function createConfiguredInstance(
     return bindInstance(app.store, {
       server: testFramework(app).app,
       runtime: app,
+      jobs: app.jobs,
       config: app.config,
       closed: false,
       cleanup: () => app.close()
@@ -380,6 +394,7 @@ function bindInstance<S extends PlatformStores>(
         instances.delete(instance);
         try {
           await starting;
+          if (state.serverOptions) await state.jobs?.stop();
         } finally {
           await state.cleanup();
         }
@@ -390,6 +405,27 @@ function bindInstance<S extends PlatformStores>(
   metadata.set(instance, state);
   instances.add(instance);
   return instance;
+}
+
+/**
+ * The job worker of the instance's API process. No test instance starts it: a test runs what is
+ * due with `runDue()`, or starts the loop itself. An instance built from server options gets
+ * its worker here, with the handlers the product registers.
+ */
+export function getTestJobs(instance: TestInstance, jobOptions?: ChatServerJobOptions): JobWorker {
+  const state = metadata.get(instance);
+  if (!state || state.closed) throw new Error("Test instance is closed");
+  if (!state.jobs) {
+    const options = state.serverOptions;
+    if (!options) throw new Error("This fixture has no API process to serve jobs");
+    state.jobs = createJobWorker({
+      stores: options.stores,
+      clientInstanceId: options.clientInstanceId,
+      logger: options.logger,
+      ...createChatServerJobs(options, jobOptions)
+    });
+  }
+  return state.jobs;
 }
 
 export function getTestConfig(instance: TestInstance): ClientInstanceConfig {

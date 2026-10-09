@@ -84,6 +84,7 @@ export const EVENTS = {
     name: "approval_request.withdrawn",
     subject: "approval_request"
   },
+  "audit.pruned": { ...LEGACY_AUDIT, name: "audit.pruned", subject: "audit" },
   "auth.service_access_token_issued": {
     ...LEGACY_AUDIT,
     name: "auth.service_access_token_issued",

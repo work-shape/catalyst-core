@@ -6,10 +6,8 @@ import { createFailingTestLogger } from "./support/fixtures";
 
 import { describe, expect, it } from "vitest";
 import {
-  ConversationRetentionJob,
   ConversationRetentionWorkflow,
-  ExecutionWorkspaceCleanupWorkflow,
-  createConversationRetentionJob
+  ExecutionWorkspaceCleanupWorkflow
 } from "@vivd-catalyst/chat-server";
 import { createManagedObjectAccess } from "@vivd-catalyst/capability-sdk";
 import {
@@ -38,7 +36,7 @@ import {
 } from "./support/retention-harness";
 
 describe("conversation retention expiration", () => {
-  it("expires due conversations on startup and periodically with object cleanup and audit", async () => {
+  it("expires due conversations on each run with object cleanup and audit", async () => {
     const clientInstanceId = asClientInstanceId("retention-test");
     const store = (await createTestInstance()).stores;
     const byteStore = new RecordingByteStore();
@@ -62,14 +60,8 @@ describe("conversation retention expiration", () => {
       attachments,
       workspaceObjects: byteStore
     });
-    const job = new ConversationRetentionJob({
-      workflow: new ConversationRetentionWorkflow(options),
-      options: {
-        checkIntervalMs: 10,
-        runOnStartup: true
-      },
-      logger: createFailingTestLogger("Retention job failed")
-    });
+    const workflow = new ConversationRetentionWorkflow(options);
+    const logger = createFailingTestLogger("Retention job failed");
 
     const startupConversation = await createExpiredConversation(store, clientInstanceId, "startup");
     const startupObjects = await createAttachedObjects({
@@ -85,89 +77,85 @@ describe("conversation retention expiration", () => {
       conversation: startupConversation
     });
 
-    try {
-      job.start();
-      await waitFor(async () => {
-        await expectConversationStatus(
-          store,
-          clientInstanceId,
-          startupConversation.id,
-          "retention_expired"
-        );
-      });
-
-      await expect(
-        store.conversations.listMessages({
-          clientInstanceId,
-          conversationId: startupConversation.id
-        })
-      ).rejects.toMatchObject({
-        code: "NOT_FOUND"
-      });
-      await waitForRetentionAudit(store, clientInstanceId, startupConversation.id);
-      await expectDeletedManagedObjects(store.files, byteStore, clientInstanceId, startupObjects);
-      await expectDeletedWorkspaceObjects(
-        store,
-        byteStore,
-        clientInstanceId,
-        startupWorkspaceObjects
-      );
-
-      const periodicConversation = await createExpiredConversation(
+    await workflow.run(logger);
+    await waitFor(async () => {
+      await expectConversationStatus(
         store,
         clientInstanceId,
-        "periodic"
+        startupConversation.id,
+        "retention_expired"
       );
-      await waitFor(async () => {
-        await expectConversationStatus(
-          store,
-          clientInstanceId,
-          periodicConversation.id,
-          "retention_expired"
-        );
-      });
-      await waitForRetentionAudit(store, clientInstanceId, periodicConversation.id);
+    });
 
-      const events = await store.audit.listAuditEvents({ clientInstanceId, limit: 10 });
-      const startupAudit = events.find(
+    await expect(
+      store.conversations.listMessages({
+        clientInstanceId,
+        conversationId: startupConversation.id
+      })
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND"
+    });
+    await waitForRetentionAudit(store, clientInstanceId, startupConversation.id);
+    await expectDeletedManagedObjects(store.files, byteStore, clientInstanceId, startupObjects);
+    await expectDeletedWorkspaceObjects(
+      store,
+      byteStore,
+      clientInstanceId,
+      startupWorkspaceObjects
+    );
+
+    const periodicConversation = await createExpiredConversation(
+      store,
+      clientInstanceId,
+      "periodic"
+    );
+    await workflow.run(logger);
+    await waitFor(async () => {
+      await expectConversationStatus(
+        store,
+        clientInstanceId,
+        periodicConversation.id,
+        "retention_expired"
+      );
+    });
+    await waitForRetentionAudit(store, clientInstanceId, periodicConversation.id);
+
+    const events = await store.audit.listAuditEvents({ clientInstanceId, limit: 10 });
+    const startupAudit = events.find(
+      (event) =>
+        event.subject === startupConversation.id && event.type === "conversation.retention_expired"
+    );
+    expect(startupAudit).toMatchObject({
+      type: "conversation.retention_expired",
+      status: "success",
+      metadata: expect.objectContaining({
+        retainedUntil: startupConversation.retainedUntil,
+        attachmentCount: 1,
+        fileCount: 1,
+        artifactCount: 1,
+        workspaceCount: 1,
+        workspaceFileCount: 6,
+        workspaceCommandCount: 1,
+        workspaceObjectCount: 6
+      })
+    });
+    expect(startupAudit).not.toHaveProperty("actor");
+    expect(
+      events.find(
         (event) =>
-          event.subject === startupConversation.id &&
+          event.subject === periodicConversation.id &&
           event.type === "conversation.retention_expired"
-      );
-      expect(startupAudit).toMatchObject({
-        type: "conversation.retention_expired",
-        status: "success",
-        metadata: expect.objectContaining({
-          retainedUntil: startupConversation.retainedUntil,
-          attachmentCount: 1,
-          fileCount: 1,
-          artifactCount: 1,
-          workspaceCount: 1,
-          workspaceFileCount: 6,
-          workspaceCommandCount: 1,
-          workspaceObjectCount: 6
-        })
-      });
-      expect(startupAudit).not.toHaveProperty("actor");
-      expect(
-        events.find(
-          (event) =>
-            event.subject === periodicConversation.id &&
-            event.type === "conversation.retention_expired"
-        )
-      ).toMatchObject({
-        type: "conversation.retention_expired",
-        status: "success",
-        metadata: expect.objectContaining({
-          retainedUntil: periodicConversation.retainedUntil,
-          attachmentCount: 0,
-          fileCount: 0,
-          artifactCount: 0
-        })
-      });
-    } finally {
-      await job.stop();
-    }
+      )
+    ).toMatchObject({
+      type: "conversation.retention_expired",
+      status: "success",
+      metadata: expect.objectContaining({
+        retainedUntil: periodicConversation.retainedUntil,
+        attachmentCount: 0,
+        fileCount: 0,
+        artifactCount: 0
+      })
+    });
   });
 
   it("expires abandoned draft conversations after the grace period", async () => {
@@ -260,46 +248,22 @@ describe("conversation retention expiration", () => {
   it("keeps overdue conversations while expiry is turned off", async () => {
     const clientInstanceId = asClientInstanceId("retention-off-test");
     const store = (await createTestInstance()).stores;
-    const jobInput = {
-      logger: createFailingTestLogger("Retention job failed"),
-      jobOptions: { checkIntervalMs: 10, runOnStartup: true }
-    };
+    const logger = createFailingTestLogger("Retention job failed");
     const conversation = await createExpiredConversation(store, clientInstanceId, "kept");
 
-    const disabledJob = createConversationRetentionJob(
-      createRetentionOptions({ clientInstanceId, store, expireConversations: false }),
-      jobInput
-    );
-    try {
-      disabledJob.start();
-      // Long enough for a startup run and several interval ticks.
-      await new Promise((resolve) => setTimeout(resolve, 60));
-      await expectConversationStatus(store, clientInstanceId, conversation.id, "active");
-      await expect(
-        store.conversations.listMessages({ clientInstanceId, conversationId: conversation.id })
-      ).resolves.toHaveLength(1);
-    } finally {
-      await disabledJob.stop();
-    }
+    await new ConversationRetentionWorkflow(
+      createRetentionOptions({ clientInstanceId, store, expireConversations: false })
+    ).run(logger);
+    await expectConversationStatus(store, clientInstanceId, conversation.id, "active");
+    await expect(
+      store.conversations.listMessages({ clientInstanceId, conversationId: conversation.id })
+    ).resolves.toHaveLength(1);
 
     // The stamped date still stands: turning expiry back on expires it.
-    const enabledJob = createConversationRetentionJob(
-      createRetentionOptions({ clientInstanceId, store }),
-      jobInput
-    );
-    try {
-      enabledJob.start();
-      await waitFor(async () => {
-        await expectConversationStatus(
-          store,
-          clientInstanceId,
-          conversation.id,
-          "retention_expired"
-        );
-      });
-    } finally {
-      await enabledJob.stop();
-    }
+    await new ConversationRetentionWorkflow(
+      createRetentionOptions({ clientInstanceId, store })
+    ).run(logger);
+    await expectConversationStatus(store, clientInstanceId, conversation.id, "retention_expired");
   });
 
   it("expires only abandoned drafts while expiry is turned off", async () => {
@@ -981,18 +945,11 @@ describe("orphaned managed file cleanup", () => {
     expect(byteStore.has(orphan.objectKey)).toBe(false);
   });
 
-  it("runs after conversation expiry in the retention job", async () => {
+  it("runs after conversation expiry in the retention run", async () => {
     const fixture = await createOrphanFixture("orphan-job-test");
     const conversation = await fixture.createConversation("active");
     const orphan = await fixture.createFile(conversation, "orphan.txt");
-    const job = new ConversationRetentionJob({
-      workflow: fixture.laterWorkflow(),
-      options: { checkIntervalMs: 0, runOnStartup: true },
-      logger: createFailingTestLogger("Retention job failed")
-    });
-
-    job.start();
-    await job.stop();
+    await fixture.laterWorkflow().run(createFailingTestLogger("Retention job failed"));
 
     expect(fixture.byteStore.has(orphan.objectKey)).toBe(false);
     await expect(fixture.isAvailable(orphan)).resolves.toBe(false);

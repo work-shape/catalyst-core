@@ -831,6 +831,10 @@ export const clientInstanceConfigSchema = z.object({
        * expiry back on expires everything already past its date.
        */
       expireConversations: z.boolean().default(true),
+      /**
+       * The `audit.prune` job deletes audit events older than this once a day and records
+       * one `audit.pruned` event with the count.
+       */
       auditDays: z.number().int().positive().max(3650).default(365),
       allowUserDelete: z.boolean().default(true)
     })

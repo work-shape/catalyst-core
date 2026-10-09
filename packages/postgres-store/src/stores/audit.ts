@@ -7,6 +7,7 @@ import {
 } from "@vivd-catalyst/core";
 import {
   appendAuditEvent as appendPostgresAuditEvent,
+  deleteAuditEventsBefore as deletePostgresAuditEventsBefore,
   listAuditEvents as listPostgresAuditEvents
 } from "../postgres-audit-usage-operations";
 import type { PostgresConnection } from "../postgres-database";
@@ -22,6 +23,9 @@ export function createPostgresAuditStore(db: PostgresConnection): AuditEventStor
       page?: StorePage;
     }): Promise<AuditEvent[]> {
       return listPostgresAuditEvents(db, input);
+    },
+    async deleteAuditEventsBefore(input): Promise<number> {
+      return deletePostgresAuditEventsBefore(db, input);
     }
   };
 }

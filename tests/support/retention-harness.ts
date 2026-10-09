@@ -109,15 +109,9 @@ export function createRetentionOptions(input: {
       executionWorkspaceCleanup: input.workspaceObjects
         ? {
             store: store.executionWorkspaces,
-            objects: input.workspaceObjects,
-            jobOptions: {
-              checkIntervalMs: 0,
-              runOnStartup: false
-            }
+            objects: input.workspaceObjects
           }
         : undefined,
-      retentionExpiration: { checkIntervalMs: 0, runOnStartup: false },
-      runRecovery: { runOnStartup: false, watchdogIntervalMs: 60 * 60 * 1000 },
       modelProvider: createUnusedModelProvider()
     },
     store

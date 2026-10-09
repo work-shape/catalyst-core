@@ -509,7 +509,6 @@ export interface WorkspaceCacheActions {
   invalidateTerminalRunObservation(observation: RunObservation): void;
   clearDraftAttachments(conversationId: string): void;
   cacheRunStarted(response: StartConversationRunResponse): void;
-  handleRunRequestAccepted(conversationId: string): void;
   invalidateStreamError(conversationId: string): void;
 }
 
@@ -688,49 +687,6 @@ export function useWorkspaceCacheActions(
     [apiBaseUrl, authScope, collaborationWorkspacesAvailable, queryClient]
   );
 
-  const handleRunRequestAccepted = useCallback(
-    (conversationId: string) => {
-      invalidateConversations();
-      void client.conversations.title
-        .generate({ params: { conversationId } })
-        .then((updatedConversation) => {
-          queryClient.setQueryData<ConversationListItem[]>(
-            conversationListCacheKey(
-              apiBaseUrl,
-              authScope,
-              updatedConversation,
-              collaborationWorkspacesAvailable
-            ),
-            (currentConversations = []) => {
-              if (
-                currentConversations.some(
-                  (conversation) => conversation.id === updatedConversation.id
-                )
-              ) {
-                return currentConversations.map((conversation) =>
-                  conversation.id === updatedConversation.id
-                    ? { ...conversation, ...updatedConversation }
-                    : conversation
-                );
-              }
-              return [updatedConversation, ...currentConversations];
-            }
-          );
-        })
-        .catch(() => {
-          invalidateConversations();
-        });
-    },
-    [
-      apiBaseUrl,
-      authScope,
-      client,
-      collaborationWorkspacesAvailable,
-      invalidateConversations,
-      queryClient
-    ]
-  );
-
   const invalidateStreamError = useCallback(
     (conversationId: string) => {
       invalidateConversations();
@@ -751,13 +707,11 @@ export function useWorkspaceCacheActions(
       invalidateTerminalRunObservation,
       clearDraftAttachments,
       cacheRunStarted,
-      handleRunRequestAccepted,
       invalidateStreamError
     }),
     [
       cacheRunStarted,
       clearDraftAttachments,
-      handleRunRequestAccepted,
       invalidateConversationStarted,
       invalidateConversationResources,
       invalidateConversations,

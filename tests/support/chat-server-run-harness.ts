@@ -26,9 +26,6 @@ import { createTestConfig, createTestUser } from "./fixtures";
 
 export async function createStaleRunRecoveryFixture(
   input: {
-    staleActiveRunMs?: number;
-    /** Runs the watchdog's startup recovery when the server starts. */
-    runOnStartup?: boolean;
     /** Replaces the runtime that has lost every run, and the assets a real runtime reads. */
     runtime?: (store: TestStore) => {
       agentRuntime: AgentRuntime;
@@ -80,12 +77,7 @@ export async function createStaleRunRecoveryFixture(
             }
           }
         : {}),
-      modelProvider: createUnusedModelProvider(),
-      runRecovery: {
-        staleActiveRunMs: input.staleActiveRunMs ?? 1,
-        runOnStartup: input.runOnStartup ?? false,
-        watchdogIntervalMs: 60_000
-      }
+      modelProvider: createUnusedModelProvider()
     },
     store
   );

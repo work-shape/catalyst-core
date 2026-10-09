@@ -150,6 +150,17 @@ export async function prepareConversationRunStart(
     }
 
     const createdAt = input.run.startedAt ? new Date(input.run.startedAt) : new Date();
+    const [earlierUserMessage] = await tx
+      .select({ id: messages.id })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.clientInstanceId, input.clientInstanceId),
+          eq(messages.conversationId, input.conversationId),
+          eq(messages.role, "user")
+        )
+      )
+      .limit(1);
     const [messageRow] = await tx
       .insert(messages)
       .values({
@@ -243,7 +254,8 @@ export async function prepareConversationRunStart(
 
     return {
       userMessage: mapMessage(messageRow),
-      run: mapAgentRun(runRow)
+      run: mapAgentRun(runRow),
+      firstUserMessage: earlierUserMessage === undefined
     };
   });
 }

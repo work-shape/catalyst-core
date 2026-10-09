@@ -22,24 +22,20 @@ import type { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import type { ChatAttachmentService } from "./attachments";
 import type { ApprovalRequestWorkflowOptions } from "./approval-request-workflow";
 
-export interface ConversationRetentionJobOptions {
+export interface ConversationRetentionOptions {
   batchSize?: number;
-  checkIntervalMs?: number;
-  runOnStartup?: boolean;
   now?: () => Date;
 }
 
 export interface RunRecoveryOptions {
   staleActiveRunMs?: number;
-  watchdogIntervalMs?: number;
   batchSize?: number;
-  runOnStartup?: boolean;
 }
 
 export interface ExecutionWorkspaceCleanupJobOptions {
   batchSize?: number;
+  /** Milliseconds between two runs of the `execution_workspace.cleanup` job. */
   checkIntervalMs?: number;
-  runOnStartup?: boolean;
   now?: () => Date;
 }
 
@@ -83,8 +79,6 @@ export interface ChatServerOptions {
     };
     jobOptions?: ExecutionWorkspaceCleanupJobOptions;
   };
-  retentionExpiration?: ConversationRetentionJobOptions;
-  runRecovery?: RunRecoveryOptions;
   modelProvider: ModelProvider;
   allowedOrigins?: string | string[];
   standaloneAuth?: Pick<
